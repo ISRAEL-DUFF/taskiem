@@ -54,6 +54,9 @@ const order = {
 };
 
 test("an order from a linked business, answered by its seller", async ({ page }) => {
+  // Five axe passes in both themes across four screens: past the default
+  // minute on a loaded runner.
+  test.setTimeout(180_000);
   await signUp(page);
   const sent: { url: string; body: unknown }[] = [];
   let current: Record<string, unknown> = order;

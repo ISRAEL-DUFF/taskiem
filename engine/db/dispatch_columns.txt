@@ -97,10 +97,13 @@ business_gallery.position
 business_gallery.tenant_id
 business_profile.about
 business_profile.area
+business_profile.delivers
+business_profile.delivery_areas
 business_profile.logo_media
 business_profile.name
 business_profile.tagline
 business_profile.tenant_id
+business_profile.vehicle
 business_links.a_blocked
 business_links.a_tenant
 business_links.answered_actor
@@ -856,6 +859,7 @@ rider_remittance_parts.entry_id
 rider_remittances.settled_at
 rider_remittances.tenant_id
 riders.id
+riders.link_id
 riders.phone
 riders.phone_hash
 riders.retired_at

@@ -370,10 +370,23 @@ test("in the installed app on a phone, dragging down to read older messages scro
         );
       fire("touchstart", 200);
       for (let y = 220; y <= 420; y += 20) fire("touchmove", y);
-      return new Promise<void>((done) =>
+      // Whether "Refreshing" is announced in the moment after the finger
+      // lifts: watched from inside the page, because the status stays for
+      // 0.7 s and a slow runner's round trip can outlast it.
+      const announced = () =>
+        [...document.querySelectorAll("[role=status]")].some((e) =>
+          e.textContent?.includes("Refreshing"),
+        );
+      return new Promise<boolean>((done) =>
         setTimeout(() => {
           fire("touchend", 420);
-          done();
+          const until = Date.now() + 600;
+          const look = () => {
+            if (announced()) return done(true);
+            if (Date.now() > until) return done(false);
+            setTimeout(look, 20);
+          };
+          look();
         }, 50),
       );
     }, sel);
@@ -381,11 +394,12 @@ test("in the installed app on a phone, dragging down to read older messages scro
     .getByRole("status")
     .filter({ hasText: "Refreshing" });
 
-  // On a page that does not scroll inside itself, the drag refreshes.
+  // On a page that does not scroll inside itself, the drag refreshes. The
+  // console's own main, not the sign-in screen's, which shows for a moment
+  // while the session loads and has no pull to refresh.
   await buyer.goto("/home");
-  await expect(buyer.locator("main, .main").first()).toBeVisible();
-  await drag("main, .main");
-  await expect(refreshing).toHaveCount(1);
+  await expect(buyer.locator("main.main")).toBeVisible();
+  expect(await drag("main.main")).toBe(true);
   await expect(refreshing).toHaveCount(0, { timeout: 5000 });
 
   // In a long conversation the same drag, from the top of the thread, is
@@ -399,7 +413,7 @@ test("in the installed app on a phone, dragging down to read older messages scro
     true,
   );
   await stream.evaluate((e) => (e.scrollTop = 0));
-  await drag(".chat-stream .bubble");
+  expect(await drag(".chat-stream .bubble")).toBe(false);
   // Looked at at once and again after a moment, not waited for.
   const status = () =>
     buyer.evaluate(() =>

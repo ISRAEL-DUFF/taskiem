@@ -121,6 +121,9 @@ func TestChatSignIn(t *testing.T) {
 	out = anon.must(200, "POST", "/v1/auth/chat/link", map[string]any{"token": m[1], "bearer": true})
 	linked := &client{t: t, base: w.base, token: out["token"].(string)}
 	linked.must(200, "GET", "/v1/me", nil)
+	// The "You signed in" notice goes in the background: let it land before
+	// the next message, or it is counted among that message's replies.
+	w.srv.WaitBackground()
 	if st, _ := anon.do("POST", "/v1/auth/chat/link", map[string]any{"token": m[1], "bearer": true}); st != 401 {
 		t.Fatalf("a link twice: %d", st)
 	}

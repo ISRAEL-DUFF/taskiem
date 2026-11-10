@@ -32,6 +32,9 @@ func (s *Server) profileRoutes(r chi.Router) {
 	r.With(manage, s.tenantWide).Put("/business-profile/gallery/order", s.orderGallery)
 	r.With(manage, s.tenantWide).Patch("/business-profile/gallery/{id}", s.captionGalleryPhoto)
 	r.With(manage, s.tenantWide).Delete("/business-profile/gallery/{id}", s.removeGalleryPhoto)
+	// A rider's availability (docs/spec/chat-riders.md, phase 3).
+	r.Get("/availability", s.getAvailability)
+	r.With(manage, s.tenantWide).Put("/availability", s.putAvailability)
 }
 
 type profileOut struct {

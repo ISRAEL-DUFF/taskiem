@@ -7,6 +7,8 @@ export const MAX_TAGLINE = 140;
 export const MAX_AREA = 80;
 export const MAX_ABOUT = 1000;
 export const MAX_CAPTION = 120;
+export const MAX_VEHICLE = 40;
+export const MAX_DELIVERY_AREAS = 20;
 
 export interface Photo {
   id: string;
@@ -30,6 +32,37 @@ export interface BusinessProfile {
   logo: Photo | null;
   gallery: GalleryPhoto[];
   max_gallery: number;
+  /** It delivers for other businesses (a rider): with what, and where. */
+  delivers: boolean;
+  vehicle: string;
+  delivery_areas: string[];
+}
+
+/** The words of the profile the owner edits (PUT /v1/business-profile). */
+export interface ProfileWords {
+  name: string;
+  tagline: string;
+  area: string;
+  about: string;
+  delivers: boolean;
+  vehicle: string;
+  delivery_areas: string[];
+}
+
+/** The delivery areas typed as one line, "Lekki, Ajah, VI", as a list. */
+export function splitAreas(line: string): string[] {
+  const out: string[] = [];
+  for (const raw of line.split(/[,\n;]/)) {
+    const a = raw.trim();
+    if (a && !out.some((x) => x.toLowerCase() === a.toLowerCase()))
+      out.push(a);
+  }
+  return out.slice(0, MAX_DELIVERY_AREAS);
+}
+
+/** Whether two lists of areas say the same thing. */
+export function sameAreas(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
 /** A photo's picture through the API (the app's content policy allows images from its own origin only). */

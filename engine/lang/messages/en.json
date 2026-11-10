@@ -2859,6 +2859,36 @@
       "reviewed": true,
       "context": "The owner's add rider was missing the name or phone; keep the command in English"
     },
+    "wa.riders.added_linked": {
+      "text": "{name} is now your rider, and their business is linked with yours: their deliveries reach them in Taskiem.",
+      "reviewed": true,
+      "context": "The owner added a rider whose business is already linked with theirs"
+    },
+    "wa.riders.added_asked": {
+      "text": "{name} is now your rider. Their business is on Taskiem, so I asked it to link with yours: once it says yes, their deliveries reach them in Taskiem.",
+      "reviewed": true,
+      "context": "The owner added a rider whose business is on Taskiem: it was asked to link"
+    },
+    "wa.riders.confirmed": {
+      "text": "Confirmed {reference}: paying {name} {amount}. I will tell you when it lands.",
+      "reviewed": true,
+      "context": "The owner confirmed a delivery; the rider's fee is being paid to their bank"
+    },
+    "wa.riders.confirmed_cash": {
+      "text": "Confirmed {reference}: {name} was paid {amount} in cash. It is in your money log.",
+      "reviewed": true,
+      "context": "The owner confirmed a delivery and handed the fee over in cash"
+    },
+    "wa.riders.confirmed_netted": {
+      "text": "Confirmed {reference}: {name}'s fee of {amount} came out of the cash they held. Nothing more to pay.",
+      "reviewed": true,
+      "context": "The owner confirmed a delivery; the fee was taken from the cash the rider owed"
+    },
+    "wa.riders.confirm_refused": {
+      "text": "I could not confirm that delivery: {reason}",
+      "reviewed": true,
+      "context": "Confirming a delivery was refused; reason is in English"
+    },
     "wa.riders.added": {
       "text": "{name} is now your rider. I sent them a link by SMS to get your deliveries on WhatsApp.",
       "reviewed": true,
@@ -5185,7 +5215,7 @@
       "context": "Sign-up question 2"
     },
     "signup.ask_sells": {
-      "text": "What do you sell or do? Reply with a number:\n1. Food\n2. Provisions\n3. Fashion\n4. Phones and gadgets\n5. School\n6. Salon\n7. Services\n8. Something else",
+      "text": "What do you sell or do? Reply with a number:\n1. Food\n2. Provisions\n3. Fashion\n4. Phones and gadgets\n5. School\n6. Salon\n7. Services\n8. Deliveries (I am a rider)\n9. Something else",
       "reviewed": true,
       "context": "Sign-up question 3, a numbered list"
     },

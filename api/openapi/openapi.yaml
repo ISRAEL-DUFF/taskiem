@@ -6795,7 +6795,7 @@ paths:
       tags:
       - Links
       summary: Take a step on an order from a linked business
-      description: 'accept, decline, change (with lines), ready, dispatched, delivered (with what was delivered), cancel (our own, or yes to the buyer''s request), keep (no to the buyer''s request to cancel), or agree (the buyer''s count of a short delivery). The buyer''s purchase order follows in the same transaction, and the buyer is told. An invoice to the buyer is raised at acceptance or once the delivery is received, as set for the link (PUT /v1/links/{id}/trade), and becomes its bill. 409 when the order''s status does not allow the step.'
+      description: 'accept, decline, change (with lines), ready, dispatched, delivered (with what was delivered), cancel (our own, or yes to the buyer''s request), keep (no to the buyer''s request to cancel), or agree (the buyer''s count of a short delivery). The buyer''s purchase order follows in the same transaction, and the buyer is told. An invoice to the buyer is raised at acceptance or once the delivery is received, as set for the link (PUT /v1/links/{id}/trade), and becomes its bill. 409 when the order''s status does not allow the step. On a delivery for a linked business (the order carries delivery; the rider is a business on Taskiem), the steps are accept, decline or cant, picked_up, arrived and delivered, which may be sent as a multipart form with a photo field when the business asks for proof: each runs on the business''s delivery as the rider''s WhatsApp button would, the customer told, and both sides'' cards follow.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -6814,10 +6814,18 @@ paths:
         required: true
         schema:
           type: string
-          enum: [accept, decline, change, ready, dispatched, delivered, cancel, keep, agree]
+          enum: [accept, decline, cant, change, ready, dispatched, picked_up, arrived, delivered, cancel, keep, agree]
       requestBody:
         required: false
         content:
+          multipart/form-data:
+            schema:
+              type: object
+              description: delivered on a delivery for a linked business, with the proof photo the business asks for
+              properties:
+                photo:
+                  type: string
+                  format: binary
           application/json:
             schema:
               type: object
@@ -9605,7 +9613,7 @@ paths:
       tags:
       - Links
       summary: Businesses to browse
-      description: With q, what a search finds (at most 20) and, for a phone number, the one row that sends a request. Without it, two sections, Near you (findable businesses in our own area) and New on Taskiem (the newest, a page of 12 and more when there is another; section=new or section=near with offset= gives the next page of that section, and near_more says Near you has another). Only businesses that chose to be found are listed, each with its profile, whether it has a logo and how many photos it shows (at most 8). Businesses already linked with are left out of the two sections.
+      description: With q, what a search finds (at most 20) and, for a phone number, the one row that sends a request. Without it, three sections, Near you (findable businesses in our own area), Delivery (businesses that deliver for others, those covering our area first) and New on Taskiem (the newest, a page of 12 and more when there is another; section=new, section=near or section=delivery with offset= gives the next page of that section, and near_more and delivery_more say those have another). A search for delivery words also finds the businesses that deliver. Only businesses that chose to be found are listed, each with its profile, whether it has a logo and how many photos it shows (at most 8). Businesses already linked with are left out of the two sections.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -9621,7 +9629,7 @@ paths:
         required: false
         schema:
           type: string
-          enum: [new, near]
+          enum: [new, near, delivery]
       - name: offset
         in: query
         required: false
@@ -9848,7 +9856,7 @@ paths:
       tags:
       - Links
       summary: Set the profile's words
-      description: Replaces the words. A field left out or empty is cleared, so send all four.
+      description: Replaces the words. A field left out or empty is cleared, so send them all. delivers, vehicle and delivery_areas say the business delivers for other businesses (a rider), with what and where; Explore's Delivery section lists it.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -9876,6 +9884,17 @@ paths:
                 about:
                   type: string
                   maxLength: 1000
+                delivers:
+                  type: boolean
+                vehicle:
+                  type: string
+                  maxLength: 40
+                delivery_areas:
+                  type: array
+                  maxItems: 20
+                  items:
+                    type: string
+                    maxLength: 80
       responses:
         '200':
           description: The profile
@@ -9919,6 +9938,61 @@ paths:
               schema:
                 type: string
                 format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/availability:
+    get:
+      operationId: getAvailability
+      tags:
+      - Riders
+      summary: The business's availability as a rider
+      description: For a business that delivers for others (docs/spec/chat-riders.md). free, busy (till a time, or while it holds deliveries) or off, as the businesses that use it as a rider see it; businesses is how many use it (0 means nothing is kept yet).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The availability
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Availability'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putAvailability
+      tags:
+      - Riders
+      summary: Say whether the business is free, busy or off
+      description: on (or free), off, or busy with until, a clock time today in Lagos ("3pm", "15:30"; left out, the rest of the day). Written for every business that uses it as a rider, as the words on, off and busy till 3 from its WhatsApp are. 409 when no business has linked with it as a rider yet.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: link.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state]
+              properties:
+                state:
+                  type: string
+                  enum: [on, free, "off", busy]
+                until:
+                  type: string
+      responses:
+        '200':
+          description: The availability now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Availability'
         default:
           $ref: '#/components/responses/Error'
   /v1/business-profile/logo:
@@ -10480,7 +10554,7 @@ paths:
       tags:
       - Riders
       summary: Add a rider
-      description: By name and phone, with the areas they cover and their fee per delivery. The rider gets the tap-in link by SMS until they tap it. A retired rider added again comes back; 409 when the phone already rides for the business.
+      description: By name and phone, with the areas they cover and their fee per delivery. The rider gets the tap-in link by SMS until they tap it. A retired rider added again comes back; 409 when the phone already rides for the business. When the phone is a business on Taskiem, the rider is named as that business if it is already linked with (link_id), else it is asked to link as a supplier (link_requested) and named once it says yes.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -10501,10 +10575,13 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [rider]
+                required: [rider, link_requested]
                 properties:
                   rider:
                     $ref: '#/components/schemas/Rider'
+                  link_requested:
+                    type: boolean
+                    description: Whether the rider's business was asked to link
         default:
           $ref: '#/components/responses/Error'
   /v1/riders/{id}:
@@ -13038,6 +13115,57 @@ paths:
                 properties:
                   delivery:
                     $ref: '#/components/schemas/Delivery'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/storefront/orders/{reference}/confirm:
+    post:
+      operationId: confirmOrder
+      tags:
+      - Riders
+      summary: Confirm a delivery and pay the rider's fee
+      description: Riders are paid per delivery (docs/spec/chat-riders.md). The business's word that the order's delivery is done makes a payout of that one delivery. how bank (the default) pays it through the pay-riders workflow set up under Riders > Pay, under the business's approval policy, and answers the run; the cash the rider owes from the door comes off the fee first, and a fee it covers is settled with nothing to pay. how cash records the fee handed over in cash, with no transfer, and a cash payment out in the money log. For a rider that is a business on Taskiem, both sides' cards and the rider's money log follow. 409 when the delivery is not delivered, already confirmed, the rider has no bank account for a bank payment, or paying riders is not set up.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                how:
+                  type: string
+                  enum: [bank, cash]
+      responses:
+        '200':
+          description: The delivery, confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [delivery, net_kobo]
+                properties:
+                  delivery:
+                    $ref: '#/components/schemas/Delivery'
+                  net_kobo:
+                    type: integer
+                    description: What reaches the rider's bank after the cash they owed is taken off
+                  run_id:
+                    type: string
+                    format: uuid
+                    description: The pay-riders run paying it, when one started
         default:
           $ref: '#/components/responses/Error'
   /v1/storefront/bookings:
@@ -28351,7 +28479,7 @@ components:
           description: The alert's key, for Later (its kind and what it is about)
         kind:
           type: string
-          enum: [low_stock, overdue, new_order, rider, unmatched, approval, deal, order_draft]
+          enum: [low_stock, overdue, new_order, rider, confirm, unmatched, approval, deal, order_draft]
         at:
           type: string
           format: date-time
@@ -29640,6 +29768,9 @@ components:
         schools:
           type: boolean
           description: Whether the business has the Schools area on (docs/schools.md).
+        delivers:
+          type: boolean
+          description: The business delivers for other businesses (a rider), so its chat has the Availability tool
         areas:
           type: object
           description: Which parts of Taskiem the business uses, by area name (storefront, orders, stock, money, links, schools), each true when on (docs/spec/business-areas.md). GET /v1/settings/areas has them in plain words.
@@ -31716,10 +31847,10 @@ components:
             true when the deployment has them.
         kinds:
           type: array
-          description: What the business does. Each kind switches on the parts of Taskiem that go with it (shop - the online shop, orders, stock, money and linked businesses; service - money and linked businesses; school - schools, with money). An empty list is just workflows - every part off. Left out, the business has every part. 400 for any other word. The owner changes them later with PUT /v1/settings/areas.
+          description: What the business does. Each kind switches on the parts of Taskiem that go with it (shop - the online shop, orders, stock, money and linked businesses; service - money and linked businesses; delivery - a rider, orders and linked businesses, with the chat tools on and the profile saying it delivers; school - schools, with money). An empty list is just workflows - every part off. Left out, the business has every part. 400 for any other word. The owner changes them later with PUT /v1/settings/areas.
           items:
             type: string
-            enum: [shop, service, school]
+            enum: [shop, service, delivery, school]
     SignupResult:
       type: object
       required:
@@ -33416,6 +33547,18 @@ components:
           enum: [pickup, arrival]
         zone:
           type: string
+        link_order_id:
+          type: string
+          format: uuid
+          description: The rider's own order for it, when the rider is a business on Taskiem
+        confirmed_at:
+          type: string
+          format: date-time
+          description: When the business confirmed the delivery (the fee is payable)
+        fee_paid:
+          type: string
+          enum: [pending, bank, cash]
+          description: How the rider's fee stands once confirmed
     DeliveriesOn:
       type: object
       required: ["on", workflow_id]
@@ -33468,6 +33611,25 @@ components:
           type: integer
           minimum: 0
           maximum: 10000000
+    Availability:
+      type: object
+      required: [state, businesses]
+      properties:
+        state:
+          type: string
+          enum: [free, busy, "off"]
+        until:
+          type: string
+          format: date-time
+        since:
+          type: string
+          format: date-time
+        open:
+          type: integer
+          description: Deliveries it holds now, for any business
+        businesses:
+          type: integer
+          description: How many businesses use it as a rider
     Rider:
       type: object
       required: [id, name, phone, zones, fee_kobo, active, reached, presence, created_at]
@@ -33529,6 +33691,10 @@ components:
           format: date-time
         retired_at:
           $ref: '#/components/schemas/NullableTimestamp'
+        link_id:
+          type: string
+          format: uuid
+          description: The link with the rider's own business on Taskiem, when they have one
     StockSale:
       type: object
       required: [id, reference, lines, amount_kobo, paid_how, status, by, sold_at]
@@ -33951,8 +34117,8 @@ components:
       properties:
         doc:
           type: string
-          enum: [order, purchase, invoice, bill]
-          description: Our own document it names
+          enum: [order, purchase, invoice, bill, delivery, dispatch]
+          description: Our own document it names (delivery, a rider's order for a delivery; dispatch, the business's delivery)
         event:
           type: string
           description: What happened to it (ordered, accept, delivered, bill, queried, resolved, …)
@@ -34953,8 +35119,10 @@ components:
           type: string
         status:
           type: string
-          enum: [proposed, received, changed, accepted, ready, dispatched, delivered, declined, cancelled]
-          description: proposed, drafted by us for the buyer and waiting for its Confirm
+          enum: [proposed, received, changed, accepted, ready, dispatched, arrived, delivered, declined, cancelled]
+          description: proposed, drafted by us for the buyer and waiting for its Confirm; arrived, a delivery at the door
+        delivery:
+          $ref: '#/components/schemas/TradeDelivery'
         change:
           type: array
           items:
@@ -35023,6 +35191,53 @@ components:
         updated_at:
           type: string
           format: date-time
+    TradeDelivery:
+      type: object
+      additionalProperties: false
+      required: [delivery_id, proof_required, door_payment]
+      description: The order is a delivery for the linked business, by a rider that is a business on Taskiem (docs/spec/chat-riders.md)
+      properties:
+        delivery_id:
+          type: string
+          format: uuid
+          description: The business's delivery it is
+        pickup:
+          type: string
+        pickup_link:
+          type: string
+        drop_area:
+          type: string
+        proof_required:
+          type: boolean
+          description: The business asks for a photo on Delivered
+        door_payment:
+          type: boolean
+          description: The customer pays at the door
+        expires_at:
+          type: string
+          format: date-time
+          description: When the offer runs out, while it is received
+        picked_up_at:
+          type: string
+          format: date-time
+        arrived_at:
+          type: string
+          format: date-time
+        customer:
+          description: Who it goes to, while the rider holds it (accepted to arrived)
+          type: object
+          additionalProperties: false
+          properties:
+            name:
+              type: string
+            phone:
+              type: string
+            address:
+              type: string
+            landmark:
+              type: string
+            pin:
+              type: string
     VariantChoice:
       type: object
       additionalProperties: false
@@ -35185,6 +35400,9 @@ components:
           maximum: 10000000
         active:
           type: boolean
+        link_id:
+          type: string
+          description: The link with the rider's own business on Taskiem (an active link of this business), or "" to take it off; their deliveries then reach them as orders there too (docs/spec/chat-riders.md)
     StorefrontAvailability:
       type: object
       additionalProperties: false
@@ -36355,7 +36573,7 @@ components:
     BusinessProfile:
       type: object
       additionalProperties: false
-      required: [name, tagline, area, about, logo, gallery, max_gallery]
+      required: [name, tagline, area, about, logo, gallery, max_gallery, delivers, vehicle, delivery_areas]
       properties:
         name:
           type: string
@@ -36365,6 +36583,15 @@ components:
           type: string
         about:
           type: string
+        delivers:
+          type: boolean
+          description: Whether it delivers for other businesses (a rider)
+        vehicle:
+          type: string
+        delivery_areas:
+          type: array
+          items:
+            type: string
         logo:
           oneOf:
           - $ref: '#/components/schemas/BusinessPhoto'
@@ -36410,10 +36637,23 @@ components:
         v:
           type: string
           description: Changes when its logo or photos do; send it as v on the picture requests so a changed picture is not served from the browser's cache
+        delivers:
+          type: boolean
+          description: It delivers for other businesses (a rider)
+        vehicle:
+          type: string
+        delivery_areas:
+          type: array
+          items:
+            type: string
+        available:
+          type: string
+          enum: [free, busy, "off"]
+          description: A delivery business's state, when a business uses it as a rider
     ExploreResult:
       type: object
       additionalProperties: false
-      required: [results, near, near_more, fresh, more]
+      required: [results, near, near_more, fresh, more, delivery, delivery_more]
       properties:
         results:
           type: array
@@ -36427,9 +36667,16 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ExploreCard'
+        delivery:
+          type: array
+          description: Businesses that deliver for others, those covering our area first
+          items:
+            $ref: '#/components/schemas/ExploreCard'
         near_more:
           type: boolean
         more:
+          type: boolean
+        delivery_more:
           type: boolean
         area:
           type: string
