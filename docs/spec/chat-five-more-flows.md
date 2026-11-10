@@ -337,6 +337,8 @@ Seven phases, each a PR that ships on its own. Phase 0 puts the chat's tools, mo
 6. **Quote to cash.** Quotes built from lines in the chat; sent to customers and linked businesses; accept makes the deposit invoice; the balance follows; a web page to price one.
    - Done when: a caterer quotes ₦840,000 from a customer's message, gets the deposit, and the balance invoice goes out after the event.
 
+Next spec: [the payments flow](chat-payments-flow.md), starting with paying a bill by transfer in the chat.
+
 ## Phase 3 plan: staff and their tasks
 
 Phase 3 builds what tasks stand on first: staff who can be added by phone and reached on WhatsApp, a profile for each, their shifts and when they clocked in, and one page per person. Tasks (flow 2, above) come on top.
