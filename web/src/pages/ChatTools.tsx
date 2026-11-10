@@ -72,6 +72,19 @@ function remember(k: ToolKey) {
 const inScope = (rows: ToolRow[], scope?: string) =>
   scope ? rows.filter((r) => r.link === undefined || r.link === scope) : rows;
 
+/** The row a request or a card points at: by its id anywhere, else by its
+ * number among this business's rows only. A number is the seller's own
+ * (INV-0001 from two suppliers is two bills), so outside a conversation a
+ * number matching more than one row opens none. */
+export function startRow(rows: ToolRow[], rowId: string, scope?: string): ToolRow | undefined {
+  const byId = rows.find((x) => x.id === rowId);
+  if (byId) return byId;
+  const named = inScope(rows, scope).filter(
+    (x) => (x.data as { reference?: string } | undefined)?.reference === rowId,
+  );
+  return named.length === 1 ? named[0] : undefined;
+}
+
 /** A tool's rows, "failed" when they could not be loaded. */
 type Loaded = ToolRow[] | "failed";
 
@@ -553,15 +566,11 @@ export function ToolSheet({
   useEffect(() => {
     if (started.current || !start?.rowId || !Array.isArray(rows)) return;
     started.current = true;
-    // By its id, or by its number (a bill's card names it by its number).
-    const r = rows.find(
-      (x) =>
-        x.id === start.rowId ||
-        (x.data as { reference?: string } | undefined)?.reference ===
-          start.rowId,
-    );
+    // By its id, or by its number (a bill's card names it by its number),
+    // among this business's rows.
+    const r = startRow(rows, start.rowId, scope);
     if (r) setOpen(r);
-  }, [rows, start?.rowId]);
+  }, [rows, start?.rowId, scope]);
   if (!tool) return null;
   // In a business's conversation, the orders and bills with that business.
   const list = Array.isArray(rows) ? inScope(rows, scope) : undefined;
