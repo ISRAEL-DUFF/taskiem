@@ -532,7 +532,18 @@ test.describe("customers' conversations", () => {
     await pane
       .getByRole("button", { name: "More about this conversation" })
       .click();
+    // Each waits for the server's answer before leaving the page: a slow
+    // runner's navigation otherwise cancels the request (CI failed twice).
+    const saved = () =>
+      page.waitForResponse(
+        (r) =>
+          r.request().method() === "PUT" &&
+          /\/v1\/customer-chats\/[^/]+$/.test(new URL(r.url()).pathname) &&
+          r.ok(),
+      );
+    let answer = saved();
     await page.getByRole("menuitem", { name: "Archive" }).click();
+    await answer;
     await page.goto("/chat");
     await expect(row).toHaveCount(0);
     await page.getByRole("button", { name: "Archived (1)" }).click();
@@ -541,7 +552,9 @@ test.describe("customers' conversations", () => {
     await pane
       .getByRole("button", { name: "More about this conversation" })
       .click();
+    answer = saved();
     await page.getByRole("menuitem", { name: "Unarchive" }).click();
+    await answer;
     await page.goto("/chat");
     await expect(row).toBeVisible();
     await row.click();
