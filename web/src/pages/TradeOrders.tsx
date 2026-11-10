@@ -262,7 +262,7 @@ export function TradeOrderPage() {
               >
                 {o.fulfilment === "delivery"
                   ? "Its delivery and riders"
-                  : "It on the Orders page"}
+                  : "See it on the Orders page"}
               </Link>
               {o.fulfilment === "delivery"
                 ? `: a rider takes it to where ${o.buyer_name} said.`
