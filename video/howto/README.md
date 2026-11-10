@@ -13,7 +13,7 @@ timings.
 | 2 | An order in the chat, from both sides: accept, ready, sent, delivered, All came, the invoice | `02-order-in-chat.mjs` (after video 1) |
 | 3 | A bill: question it, the seller takes an amount off, pay outside Taskiem and say so | `03-bills.mjs` (after videos 1 and 2) |
 | 4 | A customer's order from WhatsApp: read into an order card, a delivery fee, confirmed, a reply | `04-customer-whatsapp-order.mjs` (after videos 1 to 3) |
-| 5 | Staff by phone, and clocking in | to do |
+| 5 | Staff by phone, and clocking in: added from the chat, joining from WhatsApp, usual hours, in and Clock in, who is in | `05-staff-and-clocking-in.mjs` (a fresh world; needs none of 1 to 4) |
 | 6 | Tasks for staff | to do |
 | 7 | The morning briefing | to do |
 | 8 | Riders and deliveries | to do |
@@ -29,11 +29,14 @@ node video/howto/02-order-in-chat.mjs          # each video starts where the one
 `world.sh` runs the demo server (`web/e2e/demo/serve-demo.sh`) with
 WhatsApp and the model switched on against stand-ins (`fakes.mjs`), as the
 demo's fake Xenibase stands in for stock and photos. The WhatsApp stand-in
-accepts what is sent and answers for Ada's Kitchen's own number; the model
+accepts what is sent, answers for Ada's Kitchen's own number, and keeps
+what it sent (`GET /demo/sent?to=…`, with a template's buttons) so a
+video can tap them for someone, as Kemi taps Join in video 5; the model
 stand-in gives the order reader its reading of the messages the videos
 send, while matching what was said to the menu and its prices stays
-Taskiem's own code. `whatsapp.mjs` delivers a customer's message as
-WhatsApp's webhook does, signed.
+Taskiem's own code. `whatsapp.mjs` delivers a customer's message, or a
+person's words and taps to Taskiem's own number, as WhatsApp's webhook
+does, signed.
 
 Each script records its acts (`video/out/recording/<act>.mp4`, with
 `<act>.cues.json` holding its captions and their times), then joins them.

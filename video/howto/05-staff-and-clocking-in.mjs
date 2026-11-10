@@ -22,7 +22,18 @@ async function taskiem(who) {
   await page.goto(BASE + "/chat?with=taskiem");
   await later(page);
   await page.waitForTimeout(1200);
+  await quiet(page);
   return page;
+}
+
+// Off camera: what needs Ada (low stock and the like) is put off till
+// later, so the conversation is what shows.
+async function quiet(page) {
+  const later = page.getByTestId("chat-alert").getByRole("button", { name: /^Later/ });
+  for (let i = 0; i < 12 && (await later.count()) > 0; i++) {
+    await later.first().click();
+    await page.waitForTimeout(500);
+  }
 }
 
 async function write(page, text) {
@@ -50,17 +61,19 @@ async function add() {
   await page.context().close();
 }
 
-// Off camera: Kemi taps Join, then agrees to the terms.
+// Off camera: Kemi taps Join.
 async function join() {
   const page = await person("ada");
   const invite = (await sentTo(page.request, KEMI.from)).findLast((m) => m.template === "taskiem_invite");
   if (!invite?.payloads?.length) throw new Error("no invitation reached Kemi's number");
   await taps(page.request, BASE, { ...KEMI, payload: invite.payloads[0], title: "Join" });
   await page.waitForTimeout(1500);
-  const terms = (await sentTo(page.request, KEMI.from)).findLast((m) => m.buttons?.length);
-  if (!terms) throw new Error("Kemi was not asked to agree");
-  await taps(page.request, BASE, { ...KEMI, id: terms.buttons[0].id, title: terms.buttons[0].title });
-  await page.waitForTimeout(1500);
+  // Where Taskiem's terms are on, she agrees to them first.
+  const terms = (await sentTo(page.request, KEMI.from)).at(-1);
+  if (terms?.buttons?.length) {
+    await taps(page.request, BASE, { ...KEMI, id: terms.buttons[0].id, title: terms.buttons[0].title });
+    await page.waitForTimeout(1500);
+  }
   const last = (await sentTo(page.request, KEMI.from)).at(-1);
   if (!/You are in/.test(last?.text ?? "")) throw new Error(`Kemi did not join: ${JSON.stringify(last)}`);
   await page.context().close();
@@ -68,12 +81,19 @@ async function join() {
 
 // 2 · Ada is told, and sets Kemi's usual hours.
 async function hours() {
-  const page = await taskiem("ada");
+  const page = await person("ada");
+  await later(page);
+  await page.waitForTimeout(1200);
   await act(page, "howto05-hours", "Ada · Ada's Kitchen, the owner", async () => {
-    await page.getByText(/^Kemi joined/).last().scrollIntoViewIfNeeded();
-    await say("Kemi tapped Join on her phone. Ada is told in the chat: Kemi joined, as cashier.", 3400);
-    await say("Everyone who works there is on the Staff page.", 600);
-    await page.goto(BASE + "/staff");
+    await say("Kemi tapped Join on her phone. Ada is told: she has a new notification.", 2400);
+    await page.getByRole("button", { name: /^Notifications/ }).first().click();
+    const panel = page.getByRole("dialog", { name: "Notifications" });
+    const told = panel.getByText(/^Kemi joined/).first();
+    await told.waitFor();
+    await sleep(800);
+    await say("Kemi joined Ada's Kitchen, as cashier. It opens the Staff page, where everyone who works there is.", 2600);
+    await told.click();
+    await page.waitForURL(/\/staff/);
     const kemi = page.getByTestId("staff-person").filter({ hasText: "Kemi" });
     await kemi.waitFor();
     await kemi.scrollIntoViewIfNeeded();
@@ -107,7 +127,7 @@ async function kemiIn() {
   await says(page.request, BASE, { ...KEMI, text: "in" });
   await page.waitForTimeout(1500);
   const last = (await sentTo(page.request, KEMI.from)).at(-1);
-  if (!/^Clocked in at/.test(last?.text ?? "")) throw new Error(`Kemi did not clock in: ${JSON.stringify(last)}`);
+  if (!/[Cc]locked in at/.test(last?.text ?? "")) throw new Error(`Kemi did not clock in: ${JSON.stringify(last)}`);
   await page.context().close();
 }
 
@@ -115,7 +135,7 @@ async function kemiIn() {
 async function tile() {
   const page = await taskiem("tunde");
   await act(page, "howto05-in", "Tunde · a cashier at Ada's Kitchen", async () => {
-    await say("Kemi starts her shift with one word on WhatsApp: in. Tunde, another cashier, uses Taskiem on the web.", 1400);
+    await say("Kemi starts her shift with one word on WhatsApp: in. Tunde, another cashier, uses Taskiem on the web.", 3400);
     await page.getByTestId("tools-button").click();
     const tile = page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Clock in/ });
     await tile.waitFor();
@@ -143,6 +163,7 @@ async function who() {
     await say("From any chat, Ada can ask: who is in.", 600);
     await page.goto(BASE + "/chat?with=taskiem");
     await later(page);
+    await quiet(page);
     await sleep(800);
     await write(page, "who is in");
     await page.getByText(/^In now/).last().waitFor({ timeout: 15000 });
