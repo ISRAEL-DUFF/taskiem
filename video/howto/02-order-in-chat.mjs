@@ -109,7 +109,7 @@ async function received() {
     await say("Everything arrived, so Ada taps All came. If something is missing, she opens the order and says Not all came.", 4000);
     await all.click();
     await sleep(600);
-    await say("Grace's invoice is raised by itself…", 600);
+    await say("Ada's stock goes up by what came, and Grace's invoice is raised by itself…", 2200);
     const invoice = pane.getByText(/sent invoice/).last();
     await invoice.waitFor({ timeout: 30000 });
     await sleep(500);
