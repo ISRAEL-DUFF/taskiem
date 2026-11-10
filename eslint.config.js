@@ -15,10 +15,11 @@ export default tseslint.config(
       globals: { window: "readonly", document: "readonly", crypto: "readonly", TextEncoder: "readonly", setTimeout: "readonly", URLSearchParams: "readonly" },
     },
   },
-  // The explainer's renderer (video/README.md) runs on Node; the scenes'
+  // The explainer's renderer, the recordings and the how-to videos
+  // (video/README.md) run on Node; the scenes'
   // timeline runs in Chromium.
   {
-    files: ["video/*.mjs", "video/recording/*.mjs"],
+    files: ["video/*.mjs", "video/recording/*.mjs", "video/howto/*.mjs"],
     languageOptions: { globals: { process: "readonly", console: "readonly", window: "readonly", document: "readonly" } },
   },
   {
