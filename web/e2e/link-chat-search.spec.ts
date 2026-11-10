@@ -194,8 +194,9 @@ test("the calendar goes to a day: the first message of it or after it, and says 
   const first = pane
     .getByTestId("chat-message")
     .filter({ hasText: "The first message" });
-  await expect(first).toBeInViewport();
+  // The flash lasts 1.8 s: looked for first, while the scroll settles.
   await expect(first).toHaveClass(/flash/);
+  await expect(first).toBeInViewport();
   await expect(panel.getByTestId("chat-date-open")).toBeFocused();
 
   // A day after all of it: nothing, and it says so.

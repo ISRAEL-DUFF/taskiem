@@ -291,11 +291,12 @@ test("a quote goes to its message, and a search result opens at its message", as
   });
   await pane.getByTestId("chat-quote").click();
   const target = pane.getByText("Message 3", { exact: true });
-  await expect(target).toBeInViewport();
-  await pageStill(buyer);
+  // The flash lasts 1.8 s: looked for first, while the scroll settles.
   await expect(pane.locator('[data-msg="' + idOf(3) + '"]')).toHaveClass(
     /flash/,
   );
+  await expect(target).toBeInViewport();
+  await pageStill(buyer);
   // Away from the newest page: a button takes the reader back.
   const jump = pane.getByTestId("chat-jump");
   await expect(jump).toContainText("Jump to the latest");
@@ -306,12 +307,14 @@ test("a quote goes to its message, and a search result opens at its message", as
 
   // From a search result: /chat?with=…&msg=…
   await buyer.goto(`/chat?with=${link}&msg=${idOf(40)}`);
-  await expect(
-    buyer.getByTestId("chat-pane").getByText("Message 40", { exact: true }),
-  ).toBeVisible({ timeout: 15_000 });
+  // The flash lasts 1.8 s from the moment the page draws it: looked for
+  // first, with the long wait of a page that is loading.
   await expect(
     buyer.getByTestId("chat-pane").locator('[data-msg="' + idOf(40) + '"]'),
-  ).toHaveClass(/flash/);
+  ).toHaveClass(/flash/, { timeout: 15_000 });
+  await expect(
+    buyer.getByTestId("chat-pane").getByText("Message 40", { exact: true }),
+  ).toBeVisible();
 });
 
 test("more than a page arriving while the reader was away leaves no gap", async ({
@@ -362,10 +365,10 @@ test("a result of the search in a conversation takes the thread to the message, 
     .getByTestId("chat-result")
     .filter({ hasText: /Message 12(?!0)/ })
     .click();
-  await expect(pane.getByText("Message 12", { exact: true })).toBeInViewport();
   await expect(pane.locator('[data-msg="' + idOf(12) + '"]')).toHaveClass(
     /flash/,
   );
+  await expect(pane.getByText("Message 12", { exact: true })).toBeInViewport();
   await pageStill(buyer);
 });
 
