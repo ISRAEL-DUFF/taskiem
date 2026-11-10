@@ -245,6 +245,9 @@ func TestLinkedOrders(t *testing.T) {
 	}
 	seller.must(409, "POST", "/v1/trade-orders/"+ref3+"/keep", nil)
 	buyer.must(200, "POST", "/v1/stock/purchases/"+po3+"/cancel", nil)
+	// The word that it was kept goes in the background: counted before the
+	// cancel, not taken for the cancel's (CI failed on it once).
+	w.srv.WaitBackground()
 	before = len(w.graph.Sent(buyerOn))
 	seller.must(200, "POST", "/v1/trade-orders/"+ref3+"/cancel", nil)
 	if p := purchase(po3); p["status"] != "cancelled" || p["seller_status"] != "cancelled" {
