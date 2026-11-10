@@ -97,6 +97,11 @@ func (s *Server) waInvite(ctx context.Context, c *chat, text string) error {
 	}
 	who, role := strings.TrimSpace(m[1]), staffRole(m[2])
 	inv := &chatInvite{Channel: c.ch.Name(), Roles: []string{role}}
+	if inv.Channel != "slack" && inv.Channel != "telegram" {
+		// A number typed on WhatsApp or in the Taskiem chat on the web is
+		// invited on WhatsApp, as the Staff page invites.
+		inv.Channel = "whatsapp"
+	}
 	if inv.Channel == "slack" {
 		mm := slackMentionRe.FindStringSubmatch(who)
 		team, _, ok := parseSlackAddr(c.addr)

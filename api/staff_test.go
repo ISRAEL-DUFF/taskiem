@@ -100,6 +100,22 @@ func TestStaffByPhone(t *testing.T) {
 		t.Fatalf("Join after cancelling: %+v", got)
 	}
 
+	// From the Taskiem chat on the web: the number is invited on WhatsApp,
+	// as from the Staff page (it was refused, the web being no channel an
+	// invitation goes by).
+	const kemi = "+2348031239405"
+	said := owner.must(200, "POST", "/v1/taskiem-chat", map[string]any{"text": "add Kemi 0803 123 9405 as cashier"})["messages"].([]any)
+	if last := said[len(said)-1].(map[string]any)["text"]; !strings.Contains(fmt.Sprint(last), "Invite Kemi ("+kemi+") to Acme as cashier?") {
+		t.Fatalf("web confirm: %v", said)
+	}
+	said = owner.must(200, "POST", "/v1/taskiem-chat", map[string]any{"text": "yes"})["messages"].([]any)
+	if last := said[len(said)-1].(map[string]any)["text"]; !strings.Contains(fmt.Sprint(last), "Invitation sent to Kemi ("+kemi+")") {
+		t.Fatalf("web sent: %v", said)
+	}
+	if tpl := w.graph.Last(t, kemi); tpl.Template != "taskiem_invite" || !strings.Contains(tpl.Text, "as cashier") {
+		t.Fatalf("Kemi's invitation: %+v", tpl)
+	}
+
 	// Removed: no role left, the business out of reach; not oneself.
 	ownerID := owner.must(200, "GET", "/v1/me", nil)["user"].(map[string]any)["id"].(string)
 	owner.must(409, "POST", "/v1/staff/"+ownerID+"/remove", nil)
