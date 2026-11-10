@@ -305,6 +305,10 @@ test("a bill's card, its query, and the query settled by taking an amount off", 
 });
 
 test("the Taskiem conversation on the web", async ({ browser }) => {
+  // Six axe passes (three moments, both themes), a reply and a reload: more
+  // than the default minute on a loaded runner (CI timed out at 60 s on
+  // e7955c03, a 31-minute run), as the other heavy chat tests allow.
+  test.setTimeout(120_000);
   const page = await (await browser.newContext()).newPage();
   await signUp(page, `Chioma Cakes ${letters()}`);
   await page.goto("/chat");
