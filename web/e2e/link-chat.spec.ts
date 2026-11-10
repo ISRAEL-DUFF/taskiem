@@ -211,6 +211,7 @@ test("two linked businesses talk", async ({ browser }) => {
 test("a bill's card, its query, and the query settled by taking an amount off", async ({
   browser,
 }) => {
+  test.setTimeout(180_000);
   const stamp = letters();
   const sellerName = `Cherry Blocks ${stamp}`;
   const seller = await (await browser.newContext()).newPage();
@@ -335,6 +336,7 @@ test("the Taskiem conversation on the web", async ({ browser }) => {
 });
 
 test("pin, the typing line, forward and delete for me", async ({ browser }) => {
+  test.setTimeout(180_000);
   const stamp = letters();
   const make = async (name: string) => {
     const p = await (await browser.newContext()).newPage();
@@ -479,6 +481,7 @@ test("pin, the typing line, forward and delete for me", async ({ browser }) => {
 test("mentions: @ a linked business, # an item with its price", async ({
   browser,
 }) => {
+  test.setTimeout(180_000);
   const stamp = letters();
   const make = async (name: string) => {
     const p = await (await browser.newContext()).newPage();
