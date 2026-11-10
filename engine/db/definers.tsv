@@ -339,4 +339,4 @@ taskiem_auth_chat_link_issue(uuid,bytea,text,interval,integer)	@ISRAEL-DUFF (ide
 taskiem_auth_chat_link_use(bytea)	@ISRAEL-DUFF (identity)	Uses a sign-in link once: its person and channel (docs/spec/chat-sign-in.md) (00314)
 taskiem_auth_chat_link_peek(bytea)	@ISRAEL-DUFF (identity)	Whether a sign-in link is still good, nothing about whose (docs/spec/chat-sign-in.md) (00314)
 taskiem_auth_passkey_rule(uuid,uuid)	@ISRAEL-DUFF (identity)	What holds a person to passkeys in a business: their own setting, the business's, and whether they have one; for sign-in and each request (docs/spec/optional-passkeys.md) (00315)
-taskiem_staff_tenants()	@ISRAEL-DUFF (staff)	The businesses the staff job has work in: usual hours set, a shift left open, an open task or a live repeat; reads no hours, times or task words (00415, 00416)
+taskiem_staff_tenants()	@ISRAEL-DUFF (staff)	The businesses the staff job has work in: usual hours set, a shift left open, an open task or a live repeat; reads no hours, times or task words (00419, 00420)
