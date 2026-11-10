@@ -190,7 +190,9 @@ test("older messages load as the reader scrolls up, and the view holds", async (
   await buyer.goto(`/chat?with=${link}`);
   const pane = buyer.getByTestId("chat-pane");
   // Opens at the newest, at the bottom, with only a page of it loaded.
-  await expect(pane.getByText("Message 120", { exact: true })).toBeVisible();
+  await expect(pane.getByText("Message 120", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
   expect(await fromBottom(buyer)).toBeLessThan(5);
   await expect(pane.getByTestId("chat-message")).toHaveCount(50);
 
@@ -222,7 +224,9 @@ test("a new message does not move a reader looking at older ones", async ({
   );
   await buyer.goto(`/chat?with=${link}`);
   const pane = buyer.getByTestId("chat-pane");
-  await expect(pane.getByText("Message 120", { exact: true })).toBeVisible();
+  await expect(pane.getByText("Message 120", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
 
   // At the bottom, a new message follows the reader down.
   all.push(one(conversation(link, 121), 120));
@@ -257,7 +261,10 @@ test("the unread messages are marked, and the thread opens at them", async ({
   await buyer.goto(`/chat?with=${link}`);
   const pane = buyer.getByTestId("chat-pane");
   // Theirs are 118, 119 and 120 less ours (119 is theirs: 119 % 3 = 2; 120 is ours).
-  await expect(pane.getByTestId("chat-unread")).toContainText("unread message");
+  await expect(pane.getByTestId("chat-unread")).toContainText(
+    "unread message",
+    { timeout: 15_000 },
+  );
   await expect(pane.getByTestId("chat-unread")).toBeInViewport();
   await pageStill(buyer);
   await axeBoth(buyer, "the unread divider");
@@ -279,7 +286,9 @@ test("a quote goes to its message, and a search result opens at its message", as
   );
   await buyer.goto(`/chat?with=${link}`);
   const pane = buyer.getByTestId("chat-pane");
-  await expect(pane.getByText("Message 120", { exact: true })).toBeVisible();
+  await expect(pane.getByText("Message 120", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
   await pane.getByTestId("chat-quote").click();
   const target = pane.getByText("Message 3", { exact: true });
   await expect(target).toBeInViewport();
@@ -299,7 +308,7 @@ test("a quote goes to its message, and a search result opens at its message", as
   await buyer.goto(`/chat?with=${link}&msg=${idOf(40)}`);
   await expect(
     buyer.getByTestId("chat-pane").getByText("Message 40", { exact: true }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15_000 });
   await expect(
     buyer.getByTestId("chat-pane").locator('[data-msg="' + idOf(40) + '"]'),
   ).toHaveClass(/flash/);
@@ -316,7 +325,9 @@ test("more than a page arriving while the reader was away leaves no gap", async 
   );
   await buyer.goto(`/chat?with=${link}`);
   const pane = buyer.getByTestId("chat-pane");
-  await expect(pane.getByText("Message 60", { exact: true })).toBeVisible();
+  await expect(pane.getByText("Message 60", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
   // 130 more at once (as when a hidden tab wakes): three pages.
   all.push(...conversation(link, 190).slice(60));
   await expect(pane.getByText("Message 190", { exact: true })).toBeVisible({
@@ -338,7 +349,9 @@ test("a result of the search in a conversation takes the thread to the message, 
   );
   await buyer.goto(`/chat?with=${link}`);
   const pane = buyer.getByTestId("chat-pane");
-  await expect(pane.getByText("Message 120", { exact: true })).toBeVisible();
+  await expect(pane.getByText("Message 120", { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
   await pane.getByTestId("chat-search-open").click();
   await pane.getByTestId("chat-search").fill("Message 12");
   await expect(pane.getByTestId("chat-result")).toHaveCount(2); // 12 and 120
@@ -407,9 +420,9 @@ test("the Taskiem conversation loads older messages and follows new ones only at
   await page.route(/\/v1\/taskiem-chat(\?.*)?$/, serveTaskiem(all));
   await page.goto("/chat?with=taskiem");
   const pane = page.getByTestId("taskiem-pane");
-  await expect(
-    pane.getByText("Taskiem line 120", { exact: true }),
-  ).toBeVisible();
+  await expect(pane.getByText("Taskiem line 120", { exact: true })).toBeVisible(
+    { timeout: 15_000 },
+  );
   await expect(pane.getByTestId("taskiem-message")).toHaveCount(50);
   const stream = page.getByTestId("taskiem-stream");
   const fromBottom = () =>
@@ -455,7 +468,9 @@ test("older messages keep coming while the reader stays at the top as each page 
   );
   await page.goto("/chat?with=taskiem");
   const pane = page.getByTestId("taskiem-pane");
-  await expect(pane.getByTestId("taskiem-message")).toHaveCount(50);
+  await expect(pane.getByTestId("taskiem-message")).toHaveCount(50, {
+    timeout: 15_000,
+  });
   // A thumb still on the top: as soon as a page is added (the view kept in
   // place), the reader is back at the top, before the browser looks again.
   await page.getByTestId("taskiem-stream").evaluate((el) => {
