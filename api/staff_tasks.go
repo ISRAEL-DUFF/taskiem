@@ -727,7 +727,7 @@ func (s *Server) doneTask(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		data, err = io.ReadAll(io.LimitReader(f, media.MaxImageBytes+1))
-		f.Close()
+		_ = f.Close()
 		if err != nil || len(data) > media.MaxImageBytes {
 			s.fail(w, r, fmt.Errorf("%w: the photo is over %d MB", errBadRequest, media.MaxImageBytes>>20))
 			return
