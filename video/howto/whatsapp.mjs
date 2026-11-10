@@ -4,7 +4,8 @@
 // signed with the app secret the demo server is started with.
 import { createHmac } from "node:crypto";
 
-export const PLATFORM = { pnid: "106540352242922", token: "EAAdemo" };
+export const PLATFORM = { pnid: "106540352242922", waba: "106540352242900", token: "EAAdemo", display: "+234 800 000 0001" };
+const GRAPH = "http://127.0.0.1:12626";
 export const ADA = { pnid: "222000333444", waba: "333000555666", token: "EAAada", display: "+234 800 000 0010", name: "Ada's Kitchen" };
 export const APP_SECRET = "demo-app-secret";
 
@@ -16,27 +17,51 @@ export const SERVER_ENV = {
   TASKIEM_WHATSAPP_VERIFY_TOKEN: "demo-verify",
   TASKIEM_WHATSAPP_TOKEN_KEY: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=",
   TASKIEM_WHATSAPP_GRAPH_URL: "http://127.0.0.1:12626/v25.0",
-  TASKIEM_WHATSAPP_DISPLAY_NUMBER: "+234 800 000 0001",
+  TASKIEM_WHATSAPP_DISPLAY_NUMBER: PLATFORM.display,
   TASKIEM_WHATSAPP_TEMPLATES_ASSUME_APPROVED: "true",
   TASKIEM_AI_PROVIDER: "selfhosted",
   TASKIEM_AI_BASE_URL: "http://127.0.0.1:12930/v1",
   TASKIEM_AI_MODEL: "demo",
 };
 
-/** A customer's text to Ada's own number, as WhatsApp's webhook sends it. */
-export async function customerSays(request, base, { from, name, text }) {
+// A message to a number, as WhatsApp's webhook delivers it, signed.
+async function deliver(request, base, to, { from, name, message }) {
   const body = JSON.stringify({
     object: "whatsapp_business_account",
-    entry: [{ id: ADA.waba, changes: [{ field: "messages", value: {
+    entry: [{ id: to.waba, changes: [{ field: "messages", value: {
       messaging_product: "whatsapp",
-      metadata: { display_phone_number: ADA.display.replace(/\D/g, ""), phone_number_id: ADA.pnid },
+      metadata: { display_phone_number: to.display.replace(/\D/g, ""), phone_number_id: to.pnid },
       contacts: [{ profile: { name }, wa_id: from }],
-      messages: [{ from, id: `wamid.cust${Date.now()}`, timestamp: String(Math.floor(Date.now() / 1000)), type: "text", text: { body: text } }],
+      messages: [{ from, id: `wamid.in${Date.now()}${Math.random().toString(36).slice(2, 6)}`, timestamp: String(Math.floor(Date.now() / 1000)), ...message }],
     } }] }],
   });
   const sig = "sha256=" + createHmac("sha256", APP_SECRET).update(body).digest("hex");
   const r = await request.post(base + "/channels/whatsapp", { headers: { "Content-Type": "application/json", "X-Hub-Signature-256": sig }, data: body });
   if (r.status() !== 200) throw new Error(`webhook: ${r.status()} ${await r.text()}`);
+}
+
+/** A customer's text to Ada's own number. */
+export async function customerSays(request, base, { from, name, text }) {
+  await deliver(request, base, ADA, { from, name, message: { type: "text", text: { body: text } } });
+}
+
+/** A person's text to Taskiem's own number (staff, owners). */
+export async function says(request, base, { from, name, text }) {
+  await deliver(request, base, PLATFORM, { from, name, message: { type: "text", text: { body: text } } });
+}
+
+/** A person taps a button on Taskiem's number: a template's quick reply (payload) or a message's button (id). */
+export async function taps(request, base, { from, name, payload, id, title = "" }) {
+  const message = payload
+    ? { type: "button", button: { payload, text: title } }
+    : { type: "interactive", interactive: { type: "button_reply", button_reply: { id, title } } };
+  await deliver(request, base, PLATFORM, { from, name, message });
+}
+
+/** What the WhatsApp stand-in sent to a number, oldest first. */
+export async function sentTo(request, number) {
+  const r = await request.get(`${GRAPH}/demo/sent?to=${number}`);
+  return r.json();
 }
 
 // node video/howto/whatsapp.mjs env: the server's environment, as shell exports.
