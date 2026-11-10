@@ -11,7 +11,7 @@ timings.
 | --- | --- | --- |
 | 1 | Link with a supplier, share a price list, order from it | `01-link-and-price-list.mjs` |
 | 2 | An order in the chat, from both sides: accept, ready, sent, delivered, All came, the invoice | `02-order-in-chat.mjs` (after video 1) |
-| 3 | Bills: get one, pay it, query it | to do |
+| 3 | A bill: question it, the seller takes an amount off, pay outside Taskiem and say so | `03-bills.mjs` (after videos 1 and 2) |
 | 4 | Customers' WhatsApp orders | to do |
 | 5 | Staff by phone, and clocking in | to do |
 | 6 | Tasks for staff | to do |
