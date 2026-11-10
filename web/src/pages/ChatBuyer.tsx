@@ -31,11 +31,11 @@ import { answersDelivery } from "../lib/purchases";
 import { buyerSteps, sameName } from "../lib/tradeorders";
 import type { ItemLink, PriceItem, SupplierPrices } from "../lib/pricelists";
 import type { Purchase } from "../lib/purchases";
-import type { StockItem, StockView } from "../lib/stock";
+import type { StockView } from "../lib/stock";
 import type { Supplier } from "../lib/purchases";
 import { formatPrice } from "../lib/storefront";
 import { nairaKobo } from "../lib/toolforms";
-import { ErrorBox, useLoad } from "../ui";
+import { ErrorBox, useAction, useLoad } from "../ui";
 import { initialsOf } from "./ChatAvatar";
 import { useConfirm } from "./ConfirmSheet";
 
@@ -164,14 +164,17 @@ export function OrderSheet({
   const theirs = suppliers.data?.find((x) => x.link_id === link);
   const [who, setWho] = useState<string>();
   const [phone, setPhone] = useState("");
-  const own = useLoad(
+  // Our own stock: an order is kept in it, so it must be on (Keep my stock).
+  const stock = useLoad(
     () =>
-      get<StockView>("/v1/stock").then(
-        (r) => r.items,
-        () => [] as StockItem[],
+      get<StockView>("/v1/stock").catch(
+        (): StockView => ({ keeps_stock: true, catalogue: null, items: [] }),
       ),
     [],
   );
+  const own = { data: stock.data?.items };
+  const stockOff = stock.data?.keeps_stock === false;
+  const startStock = useAction();
   const list = prices.data?.suppliers[0];
   const [qty, setQty] = useState<Record<string, number>>(
     () => start?.qty ?? {},
@@ -371,9 +374,11 @@ export function OrderSheet({
     !!suppliers.data && !theirs && supplierFor === "new" && phone.trim() === "";
   const stops = !loaded
     ? undefined
-    : needPhone
-      ? `Add ${business}'s phone number to place the order.`
-      : undefined;
+    : stockOff
+      ? "Start keeping your stock on Taskiem to place the order."
+      : needPhone
+        ? `Add ${business}'s phone number to place the order.`
+        : undefined;
   return (
     <Sheet
       title={step === "review" ? "Review your order" : `Order from ${business}`}
@@ -443,7 +448,9 @@ export function OrderSheet({
               <button
                 type="button"
                 className="tk-cta"
-                disabled={busy || !loaded || needPhone || !!offerProblem}
+                disabled={
+                  busy || !loaded || stockOff || needPhone || !!offerProblem
+                }
                 onClick={() => void place()}
               >
                 {busy ? "Sending…" : offering ? "Send offer" : "Place order"}
@@ -454,6 +461,34 @@ export function OrderSheet({
       }
     >
       {done && <SavedTick words={done} />}
+      {stockOff && list && (
+        <section
+          className="tk-order-stock"
+          aria-labelledby="order-stock-off"
+          data-testid="order-stock-off"
+        >
+          <h3 id="order-stock-off">First, keep your stock on Taskiem</h3>
+          <p>
+            What you order from {business} is added to your stock when it
+            comes, and they become one of your suppliers. Taskiem keeps your
+            stock in your products table.
+          </p>
+          <button
+            type="button"
+            className="tk-btn"
+            disabled={startStock.busy}
+            onClick={() =>
+              void startStock.run(
+                async () => (await post("/v1/stock/setup"), stock.reload()),
+                "Your stock is kept on Taskiem now",
+              )
+            }
+          >
+            {startStock.busy ? "Starting…" : "Start keeping my stock"}
+          </button>
+          <ErrorBox error={startStock.error} />
+        </section>
+      )}
       {step === "pick" && last.data && bag.lines.length === 0 && list && (
         <div className="tk-order-who">
           <button

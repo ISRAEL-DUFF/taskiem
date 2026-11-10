@@ -324,6 +324,42 @@ test("a supplier added and linked once, a retry that does nothing twice, and the
   expect(sent.find((x) => x.path === "/v1/stock/suppliers")?.body).toEqual({ name, phone: "0803 123 4567" });
 });
 
+test("a buyer that keeps no stock yet is told first, and starts keeping it from the order", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const { buyer, link, name } = await linked(browser, { width: 360, height: 780 });
+  const sent = await trade(buyer, link, name);
+  let keeps = false;
+  await buyer.route("**/v1/stock", (r) =>
+    r.fulfill(json({ keeps_stock: keeps, catalogue: keeps ? "products" : null, items: [] })),
+  );
+  await buyer.route("**/v1/stock/setup", async (r) => {
+    sent.push({ method: "POST", path: "/v1/stock/setup", body: undefined });
+    keeps = true;
+    await r.fulfill(json({ keeps_stock: true, catalogue: "products", columns: {} }));
+  });
+  await buyer.goto(`/chat?with=${link}`);
+  const order = buyer.getByTestId("order-sheet");
+  await openOrder(buyer);
+  // Told on opening, before anything is picked.
+  const first = order.getByTestId("order-stock-off");
+  await expect(first).toContainText("First, keep your stock on Taskiem");
+  await expect(first).toContainText(`What you order from ${name} is added to your stock when it comes`);
+  await axeBoth(buyer, "the order sheet, no stock kept yet");
+  await order.getByRole("button", { name: "One more Rice, 50kg bag" }).click();
+  await order.getByRole("button", { name: "One more Rice, 50kg bag" }).click();
+  await order.getByRole("button", { name: "Review order" }).click();
+  await expect(order).toContainText("Start keeping your stock on Taskiem to place the order.");
+  await expect(order.getByRole("button", { name: "Place order" })).toBeDisabled();
+  await order.getByRole("button", { name: "Start keeping my stock" }).click();
+  await expect(first).toHaveCount(0);
+  expect(sent.filter((x) => x.path === "/v1/stock/setup")).toHaveLength(1);
+  await expect(order.getByRole("button", { name: "Place order" })).toBeEnabled();
+  await order.getByRole("button", { name: "Place order" }).click();
+  await expect(order).toHaveCount(0, { timeout: 5000 });
+  expect(sent.some((x) => x.path === `/v1/supplier-prices/${link}/order`)).toBe(true);
+  expect(await buyer.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test("without leave to send orders, there is no Order, and the card's Order is the prices page", async ({ browser }) => {
   test.setTimeout(120_000);
   const { buyer, link, name } = await linked(browser, { width: 390, height: 844 });
