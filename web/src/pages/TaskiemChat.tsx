@@ -238,9 +238,14 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
             : []),
           // Tasks, given and done (phase 3, step 4).
           { key: "tasks", title: "Tasks", icon: "check", line: "To do, and given", onPick: () => setTasksOpen(true) },
-          // Clocking in and out, as "in" and "out" are said (phase 3).
-          { key: "clock-in", title: "Clock in", icon: "clock", line: "Start your shift", onPick: () => say({ text: "in" }) },
-          { key: "clock-out", title: "Clock out", icon: "clock", line: "End your shift", onPick: () => say({ text: "out" }) },
+          // Clocking in and out, as "in" and "out" are said (phase 3): for
+          // staff; owners and admins say "in" when they keep hours too.
+          ...(can("member.manage")
+            ? []
+            : [
+                { key: "clock-in", title: "Clock in", icon: "clock", line: "Start your shift", onPick: () => say({ text: "in" }) },
+                { key: "clock-out", title: "Clock out", icon: "clock", line: "End your shift", onPick: () => say({ text: "out" }) },
+              ]),
         ]
       : undefined,
     sources: {

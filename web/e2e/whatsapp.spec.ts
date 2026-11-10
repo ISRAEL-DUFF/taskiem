@@ -255,7 +255,7 @@ test("the own number's templates: submit, hear from Meta, check now", async ({
   // cannot go out until then.
   const tpls = section.getByTestId("whatsapp-templates");
   await expect(tpls.getByTestId("whatsapp-templates-summary")).toContainText(
-    "0 of 23 templates approved",
+    "0 of 24 templates approved",
   );
   await expect(tpls.getByTestId("whatsapp-templates-summary")).toContainText(
     "taskiem_invoice",
@@ -305,7 +305,7 @@ test("the own number's templates: submit, hear from Meta, check now", async ({
       .getByTestId("status"),
   ).toHaveText("Approved");
   await expect(section.getByTestId("whatsapp-templates-summary")).toContainText(
-    "1 of 23 templates approved",
+    "1 of 24 templates approved",
   );
 
   // Check now asks Meta: a rejection comes with its reason.
