@@ -21,6 +21,7 @@ import {
   type ChatCard,
 } from "../lib/refs";
 import { customerKey } from "../lib/customerchat";
+import { GiveThis } from "./Tasks";
 
 type OpenTool = (k: ToolKey, from?: DOMRect, start?: { rowId?: string }) => void;
 
@@ -188,6 +189,7 @@ export function RefCard({
               Open<span className="sr-only"> {label}</span>
             </button>
           ))}
+        {c.kind !== "customer" && <GiveThis className="tk-btn soft" link={{ kind: c.kind, id: c.id, name: c.name }} />}
         {c.action && (
           <button
             type="button"

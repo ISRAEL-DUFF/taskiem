@@ -163,6 +163,11 @@ type briefing struct {
 	// Deliveries and Bookings are today's.
 	Deliveries *int `json:"deliveries,omitempty"`
 	Bookings   *int `json:"bookings,omitempty"`
+	// Staff is who is clocked in and who is late, when anyone is either.
+	Staff *staffNow `json:"staff,omitempty"`
+	// Tasks is the open tasks due today and late (staff_tasks.go), when
+	// there are any.
+	Tasks *taskCounts `json:"tasks,omitempty"`
 }
 
 type briefingSales struct {
@@ -268,6 +273,24 @@ func (s *Server) getChatBriefing(w http.ResponseWriter, r *http.Request) {
 			}
 			n := len(list)
 			out.Bookings = &n
+		}
+		// Who is in now and who is late (staff_clock.go), for those who run
+		// the people.
+		if p.Can(PermMemberManage + "|" + PermInvoiceManage) {
+			st, err := staffNowTx(ctx, tx, p.TenantID, now)
+			if err != nil {
+				return err
+			}
+			if len(st.In) > 0 || len(st.Late) > 0 {
+				out.Staff = &st
+			}
+			tc, err := taskCountsTx(ctx, tx, p.TenantID, now)
+			if err != nil {
+				return err
+			}
+			if tc.Today > 0 || tc.Late > 0 {
+				out.Tasks = &tc
+			}
 		}
 		return nil
 	}); err != nil {
@@ -488,11 +511,15 @@ func (s *Server) postChatHandover(w http.ResponseWriter, r *http.Request) {
 		if who = strings.TrimSpace(name); who == "" {
 			who, _, _ = strings.Cut(email, "@")
 		}
-		var sold int64
+		var sold, cash int64
 		if h.Sales != nil {
-			sold = h.Sales.TotalKobo
+			sold, cash = h.Sales.TotalKobo, h.Sales.ByHow["cash"]
 		}
-		return auditTx(r, tx, "chat.handover", h.Day, map[string]any{"cash_counted_kobo": in.Cash, "sales_kobo": sold})
+		// Handing over ends the shift (staff_clock.go).
+		if _, err := clockOutTx(r.Context(), tx, p.TenantID, p.UserID, "handover", s.staffNow()); err != nil {
+			return err
+		}
+		return auditTx(r, tx, "chat.handover", h.Day, map[string]any{"cash_counted_kobo": in.Cash, "sales_kobo": sold, "cash_kobo": cash})
 	}); err != nil {
 		s.fail(w, r, err)
 		return

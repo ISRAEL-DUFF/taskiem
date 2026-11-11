@@ -63,7 +63,7 @@ async function openOrder(page: Page) {
     return;
   }
   await pane.getByRole("button", { name: "Open tools" }).click();
-  await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Order/ }).first().click();
+  await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Their shop/ }).first().click();
 }
 
 for (const [size, viewport] of [
@@ -270,9 +270,10 @@ test("the lowest price on a product, from chat: set, warned when over the trade 
     if (r.request().method() === "PUT") await remember(r);
     return r.fulfill(json({ floors: { s1: 6_900_000 } }));
   });
-  await page.goto(`/chat?with=${link}`);
+  // Her own products: a tool of her Taskiem conversation.
+  await page.goto("/chat?with=taskiem");
   const sheet = page.getByTestId("tool-sheet");
-  await page.getByTestId("chat-pane").getByRole("button", { name: "Open tools" }).click();
+  await page.getByTestId("taskiem-pane").getByRole("button", { name: "Open tools" }).click();
   await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Products/ }).click();
   await sheet.getByRole("button", { name: /Rice, 50kg bag/ }).click();
   const floor = sheet.getByLabel("Lowest price in naira");

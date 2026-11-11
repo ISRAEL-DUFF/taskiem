@@ -104,6 +104,12 @@ briefing through with its "ready" flag on at any hour; everything else is
 as the server says. To record another feature, write its acts in a tour of
 its own beside this one, with `lib.mjs`.
 
+## How-to videos
+
+`howto/` holds short videos that show how to do one thing, step by step,
+recorded from the real app the same way, with a caption under the phone
+for each step and an `.srt` beside each. See [howto/README.md](howto/README.md).
+
 ## Making a new explainer
 
 1. **Start the film:** `cp -r video/films/_template video/films/<film>`. It

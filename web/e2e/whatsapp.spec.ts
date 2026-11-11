@@ -255,7 +255,7 @@ test("the own number's templates: submit, hear from Meta, check now", async ({
   // cannot go out until then.
   const tpls = section.getByTestId("whatsapp-templates");
   await expect(tpls.getByTestId("whatsapp-templates-summary")).toContainText(
-    "0 of 23 templates approved",
+    "0 of 24 templates approved",
   );
   await expect(tpls.getByTestId("whatsapp-templates-summary")).toContainText(
     "taskiem_invoice",
@@ -305,7 +305,7 @@ test("the own number's templates: submit, hear from Meta, check now", async ({
       .getByTestId("status"),
   ).toHaveText("Approved");
   await expect(section.getByTestId("whatsapp-templates-summary")).toContainText(
-    "1 of 23 templates approved",
+    "1 of 24 templates approved",
   );
 
   // Check now asks Meta: a rejection comes with its reason.
@@ -532,7 +532,18 @@ test.describe("customers' conversations", () => {
     await pane
       .getByRole("button", { name: "More about this conversation" })
       .click();
+    // Each waits for the server's answer before leaving the page: a slow
+    // runner's navigation otherwise cancels the request (CI failed twice).
+    const saved = () =>
+      page.waitForResponse(
+        (r) =>
+          r.request().method() === "PUT" &&
+          /\/v1\/customer-chats\/[^/]+$/.test(new URL(r.url()).pathname) &&
+          r.ok(),
+      );
+    let answer = saved();
     await page.getByRole("menuitem", { name: "Archive" }).click();
+    await answer;
     await page.goto("/chat");
     await expect(row).toHaveCount(0);
     await page.getByRole("button", { name: "Archived (1)" }).click();
@@ -541,7 +552,9 @@ test.describe("customers' conversations", () => {
     await pane
       .getByRole("button", { name: "More about this conversation" })
       .click();
+    answer = saved();
     await page.getByRole("menuitem", { name: "Unarchive" }).click();
+    await answer;
     await page.goto("/chat");
     await expect(row).toBeVisible();
     await row.click();

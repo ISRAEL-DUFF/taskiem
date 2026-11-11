@@ -9,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { del, get, post, put } from "../api";
 import { useAuth } from "../auth";
 import {
@@ -42,7 +42,7 @@ import { useConfirm } from "./ConfirmSheet";
 import { DealActions, DealHistory } from "./ChatDeal";
 import { useChatTools } from "../lib/useChatTools";
 import { cardKicker, cardStatus, isDiary, stepsFor } from "../lib/cardframe";
-import { DiaryLine } from "../kit";
+import { DiaryLine, Sheet } from "../kit";
 import {
   chime,
   isGoodMoment,
@@ -60,6 +60,9 @@ import {
   useComposer,
   type Sending,
 } from "./ChatComposer";
+import type { OrderStart } from "./ChatBuyer";
+import type { ExtraTile } from "./ChatTools";
+import { InvoiceAdd } from "./ChatMoney";
 import { priceWords, type PriceItem } from "../lib/pricelists";
 import { firstUnread, startsRun } from "../lib/thread";
 import { useThread } from "../lib/useThread";
@@ -1145,6 +1148,10 @@ export function ConversationPane({
   }, []);
   const [typing, setTyping] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  // Invoice them, from the tools (business-chat-tools.md §3).
+  const [invoicing, setInvoicing] = useState(false);
+  const navigate = useNavigate();
+  const openOrder = useRef<(start: OrderStart) => void>(() => {});
   const logo = conv.logo ? logoSrc(conv.business) : undefined;
   // The business's card (area, what it sells), as its public page shows
   // it: found by the same search, so only a business that lets others find
@@ -1265,6 +1272,50 @@ export function ConversationPane({
       category: it.category,
       words: it.description,
     }));
+  // What "#" and "/product" tag: theirs, with chat tools (§4); without, the
+  // list between us as before.
+  const tagItems =
+    chatTools && priced.data?.whose !== "theirs" ? [] : priceItems;
+  // Ours, about them (§3): what is owed each way, an invoice to them, an
+  // offer on their items. The rest of ours is in the Taskiem chat.
+  const businessTiles: ExtraTile[] = chatTools
+    ? [
+        ...(supplies
+          ? [
+              {
+                key: "offer",
+                title: "Make an offer",
+                icon: "tag",
+                line: "Your price for an order",
+                onPick: () => openOrder.current({ offer: true }),
+              },
+            ]
+          : []),
+        ...(can("invoice.manage")
+          ? [
+              {
+                key: "invoice-them",
+                title: "Invoice them",
+                icon: "invoices",
+                line: `A new invoice to ${conv.name}`,
+                onPick: () => setInvoicing(true),
+              },
+            ]
+          : []),
+        ...(can("invoice.read")
+          ? [
+              {
+                key: "statement",
+                title: "Statement",
+                icon: "money",
+                line: "What is owed each way",
+                onPick: () =>
+                  navigate(`/links/${encodeURIComponent(conv.link)}/statement`),
+              },
+            ]
+          : []),
+      ]
+    : [];
   const c = useComposer<LinkMessage>({
     draftKey: conv.link,
     rules: BUSINESS_FILES,
@@ -1284,7 +1335,10 @@ export function ConversationPane({
           name: o.name,
           sub: chatTools ? linkedLine(roles[o.link]) : undefined,
         })),
-      services: (ownServices.data ?? []).map((x) => ({
+      // Our own services are not offered in a business's conversation
+      // with chat tools: what we offer them goes by Share my prices and
+      // Make an offer (business-chat-tools.md §4).
+      services: (chatTools ? [] : (ownServices.data ?? [])).map((x) => ({
         kind: "service" as const,
         id: x.id,
         name: x.name,
@@ -1295,10 +1349,11 @@ export function ConversationPane({
           .filter(Boolean)
           .join(" · "),
       })),
-      "#": priceItems,
+      // Theirs, with chat tools (§4); without, the list between us as before.
+      "#": tagItems,
       // "/product" is "#"'s items; a customer is never named to another
       // business.
-      refs: { ...shared.data, product: priceItems },
+      refs: { ...shared.data, product: tagItems },
       // A category opens where it can be seen: their list, to order from
       // (supplies), or our own products (table.read); otherwise none is
       // offered, as a tap would open nothing of theirs.
@@ -1313,6 +1368,7 @@ export function ConversationPane({
     grouped: chatTools ? { taskiem: true } : undefined,
     tools: chatTools,
     diaryWhere: conv.link,
+    extras: chatTools ? businessTiles : undefined,
     onDiary: () => afterDiary.current(),
     scope: chatTools
       ? { link: conv.link, name: conv.name, supplies: !!supplies }
@@ -1331,6 +1387,8 @@ export function ConversationPane({
     },
     onSend: (s) => sendMessage(s),
   });
+  openOrder.current = (start) =>
+    c.openTool("order", undefined, { order: start });
   const { setReply } = c;
   const [searchOpen, setSearchOpen] = useState(false);
   const searchButton = useRef<HTMLButtonElement>(null);
@@ -1919,6 +1977,22 @@ export function ConversationPane({
           ) : undefined
         }
       />
+      {invoicing && (
+        <Sheet
+          title={`Invoice ${conv.name}`}
+          onClose={() => setInvoicing(false)}
+          testid="invoice-them"
+        >
+          <InvoiceAdd
+            to={{ name: conv.name, key: `link:${conv.business}` }}
+            onCancel={() => setInvoicing(false)}
+            onSaved={() => {
+              setInvoicing(false);
+              afterDiary.current();
+            }}
+          />
+        </Sheet>
+      )}
       {write ? (
         <ComposerView
           c={c}

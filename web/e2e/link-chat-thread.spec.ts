@@ -240,8 +240,12 @@ test("a new message does not move a reader looking at older ones", async ({
     .getByTestId("chat-stream")
     .evaluate((el) => (el.scrollTop = el.scrollHeight / 2));
   const held = await scrollTop(buyer);
-  all.push(one(conversation(link, 122), 121));
   const jump = pane.getByTestId("chat-jump");
+  // The thread knows the reader is away once its scroll event has run (the
+  // jump button shows): on a slow runner a message arriving before that was
+  // followed down as at the bottom (CI failed on it once).
+  await expect(jump).toBeVisible();
+  all.push(one(conversation(link, 122), 121));
   await expect(jump).toContainText("1 new message", { timeout: 10_000 });
   expect(Math.abs((await scrollTop(buyer)) - held)).toBeLessThan(3);
   await axeBoth(buyer, "the new messages button");
@@ -361,13 +365,34 @@ test("a result of the search in a conversation takes the thread to the message, 
   await axeBoth(buyer, "search results in the panel");
   // The thread is not replaced by them: it is still the conversation, behind the panel.
   await expect(pane.getByTestId("chat-message").first()).toBeVisible();
+  // The flash lasts 1.8 s: on a slow runner the click can take longer to
+  // return, so whether the message flashed is watched from before it.
+  await buyer.evaluate(() => {
+    const w = window as unknown as { flashed: string[] };
+    w.flashed = [];
+    new MutationObserver((changes) => {
+      for (const c of changes) {
+        const el = c.target as HTMLElement;
+        if (el.classList?.contains("flash") && el.dataset.msg)
+          w.flashed.push(el.dataset.msg);
+      }
+    }).observe(document.body, {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+  });
   await pane
     .getByTestId("chat-result")
     .filter({ hasText: /Message 12(?!0)/ })
     .click();
-  await expect(pane.locator('[data-msg="' + idOf(12) + '"]')).toHaveClass(
-    /flash/,
-  );
+  await expect
+    .poll(() =>
+      buyer.evaluate(
+        () => (window as unknown as { flashed: string[] }).flashed,
+      ),
+    )
+    .toContain(idOf(12));
   await expect(pane.getByText("Message 12", { exact: true })).toBeInViewport();
   await pageStill(buyer);
 });
@@ -483,6 +508,10 @@ test("older messages keep coming while the reader stays at the top as each page 
     });
     el.scrollTop = 0;
   });
-  await expect(pane.getByTestId("taskiem-message")).toHaveCount(120);
+  // Two more pages, each read in turn: on a busy runner more than the
+  // default 5 s (run 43067883721 had 50 of 120 at 5 s).
+  await expect(pane.getByTestId("taskiem-message")).toHaveCount(120, {
+    timeout: 30_000,
+  });
   await expect(pane.getByTestId("taskiem-top")).toHaveCount(0);
 });

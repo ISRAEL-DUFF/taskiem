@@ -103,7 +103,11 @@ test("the chat shows a linked business by its profile name and logo; the links l
   );
   await buyer.route("**/v1/link-chats", async (route) => {
     if (route.request().method() !== "GET") return route.continue();
-    const res = await route.fetch();
+    // The page lives on after the test until its context closes, and goes
+    // on asking: a fetch the ended test cannot finish is let go, not left
+    // to fail the next test (pilot.spec.ts, run 43067706602).
+    const res = await route.fetch().catch(() => null);
+    if (!res) return route.abort().catch(() => {});
     const j = (await res.json()) as { conversations: { logo?: boolean }[] };
     for (const c of j.conversations) c.logo = true;
     return route.fulfill({ response: res, json: j });
@@ -148,4 +152,7 @@ test("the chat shows a linked business by its profile name and logo; the links l
       .join(""),
   );
   await expect(row2.locator("img.chat-avatar")).toHaveCount(0);
+  // Closed here, so neither page goes on asking during the next test.
+  await buyer.unrouteAll({ behavior: "ignoreErrors" });
+  await Promise.all([buyer.context().close(), seller.context().close()]);
 });

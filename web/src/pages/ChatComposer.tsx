@@ -26,6 +26,7 @@ import { AttachMenu } from "./AttachMenu";
 import { CameraSheet } from "./CameraSheet";
 import { extrasFor, ToolSheet, ToolsPanel, type ExtraTile } from "./ChatTools";
 import { OrderSheet, type OrderStart } from "./ChatBuyer";
+import { BookSheet } from "./ChatBook";
 import { AvailabilitySheet } from "./ChatAvailability";
 import { HandoverSheet, SellSheet } from "./ChatStaff";
 import { toolsFor, type ToolKey } from "../lib/tools";
@@ -475,9 +476,19 @@ export function ComposerView<R>({
           link={c.o.scope.link}
           business={c.o.scope.name}
           from={c.tool.from}
+          browse={!c.o.scope.supplies}
           start={c.tool.start?.order}
           onClose={() => c.setTool(undefined)}
           onPlaced={() => c.o.onDiary?.(undefined)}
+        />
+      )}
+      {c.tool?.key === "book" && c.o.scope && (
+        <BookSheet
+          link={c.o.scope.link}
+          business={c.o.scope.name}
+          from={c.tool.from}
+          onClose={() => c.setTool(undefined)}
+          onBooked={() => c.o.onDiary?.(undefined)}
         />
       )}
       {c.tool?.key === "sell" && (
@@ -502,7 +513,9 @@ export function ComposerView<R>({
         />
       )}
       {c.tool &&
-        !["order", "sell", "handover", "availability"].includes(c.tool.key) && (
+        !["order", "book", "sell", "handover", "availability"].includes(
+          c.tool.key,
+        ) && (
           <ToolSheet
             tool={c.tool.key}
             from={c.tool.from}
@@ -552,6 +565,7 @@ export function ComposerView<R>({
               leaving={toolsP.leaving}
               scope={c.o.scope?.link}
               supplier={c.o.scope?.supplies ? c.o.scope.name : undefined}
+              business={c.o.scope?.name}
               extras={c.o.extras}
             />
           )}

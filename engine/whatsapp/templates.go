@@ -210,6 +210,18 @@ var (
 		Buttons:  []TemplateButton{{Type: "quick_reply", Text: "Join"}, {Type: "quick_reply", Text: "Stop"}},
 		Purpose:  "An invitation from an owner to join their business, to a number that may never have written to Taskiem; the quick replies carry Join and Stop.",
 	}
+	// A task for a staff member (docs/spec/chat-five-more-flows.md, flow
+	// 2), to someone who has not written in the last 24 hours: their
+	// business is the opt-in; the quick replies carry Done and Can't for
+	// this task.
+	TplStaffTask = Template{
+		Name: "taskiem_staff_task", Category: "UTILITY",
+		Body:     "[{{1}}] {{2}} asked you: {{3}}. Tap Done when it is done, or Can't and say why.",
+		Vars:     []string{"tenant", "giver", "task"},
+		Examples: []string{"Ada Kitchen", "Ada Obi", "count the cash float by 07:00"},
+		Buttons:  []TemplateButton{{Type: "quick_reply", Text: "Done"}, {Type: "quick_reply", Text: "Can't"}},
+		Purpose:  "A task an owner or manager gave a staff member, outside the window; the quick replies carry Done and Can't for this task.",
+	}
 	TplMatchQuestion = Template{
 		Name: "taskiem_match_question", Category: "UTILITY",
 		Body:     "[{{1}}] {{2}} came in on {{3}} through {{4}}. Is this for {{5}}, {{6}} due? {{7}} Tap Yes, match or No, or decide in Taskiem.",
@@ -280,7 +292,7 @@ var (
 
 // AllTemplates lists the library, for documentation, submission and tests.
 var AllTemplates = []Template{TplOTP, TplApprovalRequest, TplStepUpLink, TplRunFailed, TplRunCompleted, TplNeedsReconciliation, TplApprovalWaiting, TplAlert, TplUpdate, TplLinkMessage, TplCustomerReply,
-	TplInvoice, TplBalance, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose, TplInvite}
+	TplInvoice, TplBalance, TplDeliveryOffer, TplMatchQuestion, TplFeeReminder, TplReceipt, TplAccountNumber, TplPlanDecision, TplFamilyLink, TplDailySummary, TplDailyClose, TplInvite, TplStaffTask}
 
 var placeholder = regexp.MustCompile(`\{\{(\d+)\}\}`)
 

@@ -185,21 +185,16 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
-  # The web app in a real browser against the real binary (web/e2e).
-  web:
+  # The web app in a real browser against the real binary (web/e2e), in
+  # three steps: web-build makes the e2e binary and the web app once;
+  # web-e2e runs the browser tests in four shards side by side, each on
+  # its own runner with its own Postgres and server, one test at a time
+  # (web/playwright.config.ts); web is green only when every shard is, and
+  # is the name the image job and branch protection wait on. One runner
+  # for all 305 tests took about 28 minutes; a shard takes about a quarter.
+  web-build:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 2s
-          --health-retries 30
-    env:
-      TASKIEM_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
@@ -214,13 +209,73 @@ jobs:
         run: shellcheck web/e2e/*.sh
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @taskiem/web build
+      # -tags e2e: the test-only commands (the demo school); web/e2e/serve.sh
+      # uses this binary instead of building its own (TASKIEM_E2E_PREBUILT).
+      - run: go build -tags e2e -o bin/taskiem-e2e ./cmd/taskiem
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-build
+          path: |
+            bin/taskiem-e2e
+            web/dist/
+          retention-days: 1
+          if-no-files-found: error
+
+  web-e2e:
+    needs: web-build
+    runs-on: ubuntu-latest
+    # A shard takes about 7-10 minutes; a stuck one stops here instead of
+    # at GitHub's six hours.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-retries 30
+    env:
+      TASKIEM_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      TASKIEM_E2E_PREBUILT: "1"
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: e2e-build
+      # An artifact keeps no file modes.
+      - run: chmod +x bin/taskiem-e2e
       - run: pnpm --filter @taskiem/web exec playwright install --with-deps chromium
-      - run: pnpm --filter @taskiem/web e2e
+      - run: pnpm --filter @taskiem/web exec playwright test --shard=${{ matrix.shard }}/4
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: failure()
         with:
-          name: playwright-traces
+          name: playwright-traces-${{ matrix.shard }}
           path: web/test-results/
+
+  web:
+    needs: web-e2e
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every browser test shard passed
+        env:
+          RESULT: ${{ needs.web-e2e.result }}
+        run: |
+          echo "web-e2e: $RESULT"
+          test "$RESULT" = success
 
   # The image, built once (decision 0032). The docker and vps jobs run this
   # build, and on a push the image job signs and tags this same digest, so

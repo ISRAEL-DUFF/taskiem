@@ -5,7 +5,41 @@ import {
   useRef,
   useState,
 } from "react";
-import { atBottom, followNew, scrollWithin } from "./thread";
+import { atNewest, followNew, newestTop, scrollWithin } from "./thread";
+
+/** How far down the thread's content the newest message ends. */
+function newestEnd(el: HTMLElement): number | undefined {
+  const all = el.querySelectorAll("[data-msg]");
+  const last = all[all.length - 1];
+  if (!last) return undefined;
+  return (
+    last.getBoundingClientRect().bottom -
+    el.getBoundingClientRect().top +
+    el.scrollTop
+  );
+}
+
+/** Scrolls to the newest message: the end of the thread, or, with cards after the messages, the newest message at the view's end. */
+function toNewest(el: HTMLElement) {
+  const end = newestEnd(el);
+  const top =
+    end === undefined
+      ? undefined
+      : newestTop({
+          scrollHeight: el.scrollHeight,
+          clientHeight: el.clientHeight,
+          newestEnd: end,
+        });
+  el.scrollTop = top ?? el.scrollHeight;
+}
+
+const atNewestOf = (el: HTMLElement) =>
+  atNewest({
+    scrollTop: el.scrollTop,
+    scrollHeight: el.scrollHeight,
+    clientHeight: el.clientHeight,
+    newestEnd: newestEnd(el),
+  });
 
 /**
  * How a thread scrolls, as WhatsApp Web's, for any list of messages (a
@@ -84,14 +118,16 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
         scrollWithin(el, target, id ? "center" : "start");
         if (id) setFlashId(id);
       } else el.scrollTop = el.scrollHeight;
-      stick.current = atBottom(el);
+      stick.current = atNewestOf(el);
       setAway(!stick.current);
       prevNewest.current = newest;
       return;
     }
     const f = followNew(prevNewest.current, items, stick.current, isMine);
     if (f.kind === "bottom") {
-      el.scrollTop = el.scrollHeight;
+      // The newest message in view, not what follows it (the Taskiem
+      // conversation's alert cards): an answer is never left out of sight.
+      toNewest(el);
       setNewCount(0);
     } else if (f.kind === "pill") setNewCount((n) => n + f.count);
     prevNewest.current = newest;
@@ -130,7 +166,7 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
   const onScroll = () => {
     const el = stream.current;
     if (!el) return;
-    const near = atBottom(el);
+    const near = atNewestOf(el);
     stick.current = near;
     setAway(!near);
     if (near) setNewCount(0);

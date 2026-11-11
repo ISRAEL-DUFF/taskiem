@@ -305,6 +305,10 @@ test("a bill's card, its query, and the query settled by taking an amount off", 
 });
 
 test("the Taskiem conversation on the web", async ({ browser }) => {
+  // Six axe passes (three moments, both themes), a reply and a reload: more
+  // than the default minute on a loaded runner (CI timed out at 60 s on
+  // e7955c03, a 31-minute run), as the other heavy chat tests allow.
+  test.setTimeout(120_000);
   const page = await (await browser.newContext()).newPage();
   await signUp(page, `Chioma Cakes ${letters()}`);
   await page.goto("/chat");
@@ -426,9 +430,24 @@ test("pin, the typing line, forward and delete for me", async ({ browser }) => {
     clientX: box.x + 20,
     clientY: box.y + 10,
   };
-  await msg.dispatchEvent("pointerdown", finger);
-  await msg.dispatchEvent("pointermove", { ...finger, clientY: box.y + 60 });
-  await msg.dispatchEvent("pointerup", { ...finger, clientY: box.y + 60 });
+  // Down, moved and up in one go in the page: sent one by one, a slow runner
+  // could take longer than the hold (500 ms) between down and move, and the
+  // hold would rightly open the menu (CI failed on it twice).
+  await msg.evaluate((el, f) => {
+    const at = (type: string, y: number) =>
+      el.dispatchEvent(
+        new PointerEvent(type, {
+          ...f,
+          clientY: y,
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+        }),
+      );
+    at("pointerdown", f.clientY);
+    at("pointermove", f.clientY + 50);
+    at("pointerup", f.clientY + 50);
+  }, finger);
   await buyer.waitForTimeout(700);
   await expect(msg.getByTestId("chat-more")).toHaveCount(0);
   await msg.dispatchEvent("pointerdown", finger);

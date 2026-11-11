@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { GiveThis } from "./Tasks";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError, get, post, postOnce } from "../api";
@@ -374,6 +375,9 @@ function AlertCard({
             {step.words}
             {named}
           </button>
+        )}
+        {a.kind === "low_stock" && a.id && (
+          <GiveThis className="tk-alert-soft" link={{ kind: "stock", id: a.id, name: a.title.replace(/ is running low$/, "") }} />
         )}
         <button
           type="button"

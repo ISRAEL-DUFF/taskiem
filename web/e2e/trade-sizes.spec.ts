@@ -53,7 +53,7 @@ async function axeBoth(page: Page, where: string) {
 async function openOrder(page: Page) {
   const pane = page.getByTestId("chat-pane");
   await pane.getByRole("button", { name: "Open tools" }).click();
-  await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Order/ }).first().click();
+  await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Their shop/ }).first().click();
 }
 
 const SIZES = ["40", "41", "42", "43", "44", "45", "46"];

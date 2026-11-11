@@ -13,6 +13,7 @@ import { BillView, PurchaseView } from "./ChatBuyer";
 import { GroupForm } from "./SizesForms";
 import { Link } from "react-router-dom";
 import { get } from "../api";
+import type { ChatRef } from "../lib/refs";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import { InvoiceAdd, InvoiceView, MoneyAdd, MoneyEntryView } from "./ChatMoney";
@@ -21,6 +22,7 @@ import type { MoneyEntry } from "../lib/chatmoney";
 import { tileLetters, toneOf } from "../lib/tone";
 import { KitEmpty, KitLoading, Pill, SavedTick, Sheet } from "../kit";
 import type { Service } from "../lib/bookings";
+import { bookLine, useLinkServices } from "../lib/linkbook";
 import type { PriceList } from "../lib/pricelists";
 import type { StockItem } from "../lib/stock";
 import type { Table } from "../lib/tables";
@@ -35,6 +37,7 @@ import {
   TableTool,
 } from "./ChatToolForms";
 import {
+  BUSINESS_TOOLS,
   filterRows,
   categoryChips,
   toolsFor,
@@ -68,9 +71,80 @@ function remember(k: ToolKey) {
   }
 }
 
-/** The rows with one business (rows with no business stay). */
-const inScope = (rows: ToolRow[], scope?: string) =>
-  scope ? rows.filter((r) => r.link === undefined || r.link === scope) : rows;
+/** The rows with one business. In a business's conversation the tools of
+ * what is between us (BETWEEN_US) show only what is with that business: a
+ * row of it, or one the conversation's things name (an invoice to them, by
+ * its id), and nothing until those are known; another tool's rows (our
+ * price lists, to share) all stay. */
+const inScope = (
+  rows: ToolRow[],
+  scope?: string,
+  key?: ToolKey,
+  ids?: Set<string>,
+): ToolRow[] | undefined => {
+  if (!scope) return rows;
+  const strict = key !== undefined && BETWEEN_US.includes(key);
+  if (strict && !ids) return undefined;
+  return rows.filter((r) =>
+    strict
+      ? r.link === scope || !!ids?.has(r.id)
+      : r.link === undefined || r.link === scope,
+  );
+};
+
+/** The tools whose rows are between us and one business. */
+const BETWEEN_US: ToolKey[] = ["purchases", "orders", "bills", "invoices"];
+
+// What is between us and each business, read once for the panel and its
+// sheet together, and again when the conversation is opened anew.
+const scopeIdsCache = new Map<string, Promise<Set<string>>>();
+
+/** The ids of what is between us and a business (invoices, bills, orders):
+ * what a row with no business of its own is matched to; undefined while
+ * they are read. */
+function useScopeIds(scope?: string): Set<string> | undefined {
+  const [got, setGot] = useState<{ scope: string; ids: Set<string> }>();
+  useEffect(() => {
+    if (!scope) return;
+    let on = true;
+    let p = scopeIdsCache.get(scope);
+    if (!p) {
+      p = get<{ refs: ChatRef[] }>(
+        `/v1/link-chats/${encodeURIComponent(scope)}/refs`,
+      ).then(
+        (r) => new Set((r.refs ?? []).map((x) => x.id)),
+        () => new Set<string>(),
+      );
+      scopeIdsCache.set(scope, p);
+      // Shared by the panel and the sheet it opens, then read again: a new
+      // invoice or order shows the next time either opens.
+      window.setTimeout(() => scopeIdsCache.delete(scope), 5_000);
+    }
+    void p.then((ids) => on && setGot({ scope, ids }));
+    return () => {
+      on = false;
+    };
+  }, [scope]);
+  // Another conversation's, while this one's are read: none yet.
+  return got && got.scope === scope ? got.ids : undefined;
+}
+
+/** The row a request or a card points at: by its id anywhere, else by its
+ * number among this business's rows only. A number is the seller's own
+ * (INV-0001 from two suppliers is two bills), so outside a conversation a
+ * number matching more than one row opens none. */
+export function startRow(
+  rows: ToolRow[],
+  rowId: string,
+  scope?: string,
+): ToolRow | undefined {
+  const byId = rows.find((x) => x.id === rowId);
+  if (byId) return byId;
+  const named = (inScope(rows, scope) ?? []).filter(
+    (x) => (x.data as { reference?: string } | undefined)?.reference === rowId,
+  );
+  return named.length === 1 ? named[0] : undefined;
+}
 
 /** A tool's rows, "failed" when they could not be loaded. */
 type Loaded = ToolRow[] | "failed";
@@ -155,6 +229,7 @@ export function ToolsPanel({
   leaving = false,
   scope,
   supplier,
+  business,
   extras,
 }: {
   /** What follows "/" in the box, when it was typed. */
@@ -166,38 +241,71 @@ export function ToolsPanel({
   scope?: string;
   /** In a supplier's conversation (they share prices): ordering comes first. */
   supplier?: string;
+  /** The business the conversation is with, for the heading. */
+  business?: string;
   extras?: ExtraTile[];
 }) {
   const more = extrasFor(extras, query);
   const { can, me } = useAuth();
-  const listed = toolsFor(can, query, me?.roles, me?.delivers);
+  // In a business's conversation, the tools about that business only
+  // (docs/spec/business-chat-tools.md §3); the rest are in Taskiem's.
+  const listed = toolsFor(can, query, me?.roles, me?.delivers).filter(
+    (t) => !scope || BUSINESS_TOOLS.includes(t.key),
+  );
   const { rows: loaded } = useToolRows(listed);
+  const ids = useScopeIds(scope);
   const rows: typeof loaded = Object.fromEntries(
     Object.entries(loaded).map(([k, r]) => [
       k,
-      Array.isArray(r) ? inScope(r, scope) : r,
+      Array.isArray(r) ? inScope(r, scope, k as ToolKey, ids) : r,
     ]),
   );
   const q = query.trim().toLowerCase();
+  // Their shop, first, for everyone in a business's conversation: to order
+  // from where they may, else to look around (business-chat-tools.md §3).
+  const shopFor = business ?? supplier;
   const ordering =
-    supplier && mayEdit("order", can) && (!q || "order".startsWith(q));
-  const tools: Tool[] = ordering
-    ? [
-        {
-          key: "order",
-          title: "Order",
-          icon: "plus",
-          perm: "storefront.manage",
-          url: "",
-          page: "/storefront/suppliers",
-          rows: () => [],
-          line: () => `From ${supplier}`,
-          more: "",
-        },
-        ...listed,
-      ]
-    : listed;
+    !!shopFor &&
+    (!q || ["order", "their shop", "shop"].some((w) => w.startsWith(q)));
+  // Book, after it: their services, shown only when they offer any.
+  const services = useLinkServices(shopFor ? scope : undefined);
+  const booking =
+    !!shopFor && !!services?.services.length && (!q || "book".startsWith(q));
+  const tools: Tool[] = [
+    ...(ordering
+      ? [
+          {
+            key: "order",
+            title: "Their shop",
+            icon: "plus",
+            perm: "",
+            url: "",
+            page: "/storefront/suppliers",
+            rows: () => [],
+            line: () => `From ${shopFor}`,
+            more: "",
+          } satisfies Tool,
+        ]
+      : []),
+    ...(booking && services
+      ? [
+          {
+            key: "book",
+            title: "Book",
+            icon: "calendar",
+            perm: "",
+            url: "",
+            page: "",
+            rows: () => [],
+            line: () => bookLine(services),
+            more: "",
+          } satisfies Tool,
+        ]
+      : []),
+    ...listed,
+  ];
   if (ordering) rows.order = [];
+  if (booking) rows.book = [];
   const recent = recentTools()
     .map((k) => tools.find((t) => t.key === k))
     .filter((t): t is Tool => !!t);
@@ -251,7 +359,7 @@ export function ToolsPanel({
     >
       <div className="tk-tools-head">
         <h2>Tools</h2>
-        <span>Opens over the chat</span>
+        <span>{business ? `With ${business}` : "Opens over the chat"}</span>
       </div>
       {tools.length + more.length === 0 ? (
         <p className="tk-tools-none">
@@ -546,6 +654,7 @@ export function ToolSheet({
   const [picked, setPicked] = useState<string[]>([]);
   const [grouping, setGrouping] = useState(false);
   const { rows: all, retry } = useToolRows(tool ? [tool] : []);
+  const ids = useScopeIds(scope);
   const rows = all[key];
   useEffect(() => remember(key), [key]);
   // A request about a row opens its form once the rows are here.
@@ -553,18 +662,14 @@ export function ToolSheet({
   useEffect(() => {
     if (started.current || !start?.rowId || !Array.isArray(rows)) return;
     started.current = true;
-    // By its id, or by its number (a bill's card names it by its number).
-    const r = rows.find(
-      (x) =>
-        x.id === start.rowId ||
-        (x.data as { reference?: string } | undefined)?.reference ===
-          start.rowId,
-    );
+    // By its id, or by its number (a bill's card names it by its number),
+    // among this business's rows.
+    const r = startRow(rows, start.rowId, scope);
     if (r) setOpen(r);
-  }, [rows, start?.rowId]);
+  }, [rows, start?.rowId, scope]);
   if (!tool) return null;
   // In a business's conversation, the orders and bills with that business.
-  const list = Array.isArray(rows) ? inScope(rows, scope) : undefined;
+  const list = Array.isArray(rows) ? inScope(rows, scope, key, ids) : undefined;
   const shown = list ? filterRows(list, chip, search) : [];
   const title = list && tool.titleFor ? tool.titleFor(list) : tool.title;
   // The rows' categories, as chips after the tool's own.
@@ -728,7 +833,7 @@ export function ToolSheet({
             </p>
           )}
           <div className="tk-sheet-list">
-            {rows === undefined ? (
+            {rows === undefined || (Array.isArray(rows) && !list) ? (
               <KitLoading label={`Loading ${name}…`} />
             ) : rows === "failed" ? (
               <KitEmpty

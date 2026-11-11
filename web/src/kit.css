@@ -403,6 +403,10 @@ button.tk-table-row { display: grid; gap: 2px; width: 100%; padding: 0; border: 
 .tk-chip-btn { margin-left: auto; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 0; box-shadow: none; background: var(--tk-soft); color: var(--text); font-weight: 600; font-size: 14px; cursor: pointer; }
 .tk-chip-btn:hover:not(:disabled) { background: var(--tk-soft); color: var(--tk-pine-ink); }
 .tk-chip-btn:focus-visible { box-shadow: var(--ring); }
+/* An order sheet's first step when the business keeps no stock yet. */
+.tk-order-stock { margin: 0 20px 16px; padding: 14px 16px; border-radius: 16px; background: var(--tk-soft); color: var(--text); }
+.tk-order-stock h3 { margin: 0 0 6px; font-size: 16px; }
+.tk-order-stock p { margin: 0 0 12px; font-size: 14px; color: var(--muted); }
 /* What still stops an order being placed, above its buttons. */
 .tk-review-stops { margin: 0; font-size: 14px; color: var(--muted); }
 /* A row of an order or a bill: its icon on the tile. */
@@ -828,3 +832,10 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-search input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not([type="range"]):hover:not(:focus):not(:disabled),
 .tk-search input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):not([type="range"]):focus { background-color: transparent; border-color: transparent; box-shadow: none; }
 .tk-tv-search .tk-search input[type="search"] { flex: 1; min-width: 0; min-height: 0; padding: 0; border: 0; font-size: 15px; color: var(--text); }
+
+/* Book (business-chat-tools.md §3): the days scroll in a row of chips; a day's times wrap in a grid. */
+.tk-book-times .tk-chips { padding: 0 8px 10px; }
+.tk-chips.tk-times { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); overflow: visible; }
+.tk-book-head { margin: 8px; font-size: 14px; font-weight: 700; color: var(--muted); }
+.tk-book-closed { padding: 4px 8px 12px; }
+.tk-book-times .tk-row-warn { padding: 0 8px 8px; }

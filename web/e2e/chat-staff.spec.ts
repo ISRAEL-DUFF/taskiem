@@ -82,7 +82,8 @@ async function answer(page: Page) {
       : remember(r, { handover: {}, words: "" }),
   );
   const brief = { ready: true, day: day(0), key: `briefing:${day(0)}`, put_off: false, part: "morning", now: "08:05",
-    sales: { yesterday_kobo: 48_650_000, change_pct: 12, weekday: "Wednesday", week: WEEK }, owed_kobo: 21_200_000, low: 3, deliveries: 4, bookings: 0 };
+    sales: { yesterday_kobo: 48_650_000, change_pct: 12, weekday: "Wednesday", week: WEEK }, owed_kobo: 21_200_000, low: 3, deliveries: 4, bookings: 0,
+    tasks: { today: 2, late: 1 } };
   await page.route("**/v1/chat-briefing", (r) => r.fulfill(json(brief)));
   // Asked for again (the tools menu's Briefing, or "briefing"): back in
   // the afternoon, with the time it was read.
@@ -92,7 +93,7 @@ async function answer(page: Page) {
   return sent;
 }
 
-test("a cashier's tools are Sell, Stock and Orders, and Sell records a sale", async ({ browser }) => {
+test("a cashier's tools are Sell, Stock, Orders, Tasks and clocking in, and Sell records a sale", async ({ browser }) => {
   test.setTimeout(120_000);
   const { member } = await people(browser, "cashier");
   const sent = await answer(member);
@@ -100,7 +101,7 @@ test("a cashier's tools are Sell, Stock and Orders, and Sell records a sale", as
   const pane = member.getByTestId("taskiem-pane");
   await pane.getByRole("button", { name: "Open tools" }).click();
   const panel = member.getByRole("region", { name: "Tools" });
-  await expect(panel.locator(".tk-tile .tk-tile-name")).toHaveText(["Sell", "Stock", "Orders"]);
+  await expect(panel.locator(".tk-tile .tk-tile-name")).toHaveText(["Sell", "Stock", "Orders", "Tasks", "Clock in", "Clock out"]);
   await panel.getByRole("button", { name: /^Sell/ }).click();
   const sheet = member.getByTestId("sell-sheet");
   // Only what has a price.
@@ -176,6 +177,7 @@ for (const [size, viewport] of [
     await expect(card).toContainText("₦212,000");
     await expect(card).toContainText("3 items");
     await expect(card).toContainText("4 today");
+    await expect(card.getByRole("link", { name: /Tasks/ })).toContainText("2 due today · 1 late");
     const chart = owner.getByTestId("chart-card");
     await expect(chart).toContainText("₦2,966,500");
     await expect(chart).toContainText("Up 8% on the week before");
