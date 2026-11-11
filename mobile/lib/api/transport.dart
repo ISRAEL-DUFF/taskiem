@@ -56,21 +56,78 @@ class Transport {
 
   /// Sends one request and answers its JSON (null for 204).
   Future<Object?> send(String method, String path, {Object? body, Map<String, String>? query}) async {
-    final uri = Uri.parse('$base$path').replace(queryParameters: (query == null || query.isEmpty) ? null : query);
-    if (uri.scheme != 'https' && !_local(uri.host)) {
-      throw ArgumentError('Taskiem is only reached over https');
-    }
-    final req = http.Request(method, uri)..headers['Accept'] = 'application/json';
+    final req = http.Request(method, _uri(path, query))..headers['Accept'] = 'application/json';
     if (body != null) {
       req.headers['Content-Type'] = 'application/json';
       req.body = jsonEncode(body);
     }
+    final t = _sign(req);
+    // The whole exchange, waiting for the answer to start included.
+    final res = await _reach(() async => http.Response.fromStream(await _client.send(req)), timeout);
+    return _answer(res.statusCode, utf8.decode(res.bodyBytes), t);
+  }
+
+  /// Sends a file as a multipart form (`file`, and the [fields] beside it)
+  /// and answers the JSON, as [send] does.
+  Future<Object?> upload(String path, {required List<int> bytes, required String filename, required String type, Map<String, String> fields = const {}}) async {
+    final req = http.MultipartRequest('POST', _uri(path))
+      ..headers['Accept'] = 'application/json'
+      ..fields.addAll(fields)
+      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename, contentType: MediaType.parse(type)));
+    final t = _sign(req);
+    // A file takes longer than a message: twice the time.
+    final res = await _reach(() async => http.Response.fromStream(await _client.send(req)), timeout * 2);
+    return _answer(res.statusCode, utf8.decode(res.bodyBytes), t);
+  }
+
+  /// A picture or a file's bytes (a logo, a photo), signed in as the rest.
+  Future<List<int>> bytes(String path) async {
+    final req = http.Request('GET', _uri(path));
+    final t = _sign(req);
+    final res = await _reach(() async => http.Response.fromStream(await _client.send(req)), timeout);
+    if (res.statusCode == 200) return res.bodyBytes;
+    // Not the file: the server's words (in JSON), as any request's.
+    _answer(res.statusCode, utf8.decode(res.bodyBytes, allowMalformed: true), t);
+    throw ApiError(res.statusCode, {'error': 'The server answered ${res.statusCode}.'});
+  }
+
+  /// A long answer read as it comes (the chat's server-sent events): the
+  /// response once its head is here, its body a stream. The head must come
+  /// within the timeout; the body has none (the caller watches for a
+  /// stall). A 401 ends the session as any request's does.
+  Future<http.StreamedResponse> stream(String path, {Map<String, String>? headers}) async {
+    final req = http.Request('GET', _uri(path))
+      ..headers['Accept'] = 'text/event-stream'
+      ..headers.addAll(headers ?? const {});
+    final t = _sign(req);
+    final res = await _reach(() => _client.send(req), timeout);
+    if (res.statusCode == 200) return res;
+    final text = await utf8.decodeStream(res.stream).catchError((Object _) => '');
+    _answer(res.statusCode, text, t);
+    throw ApiError(res.statusCode, {'error': 'The server answered ${res.statusCode}.'});
+  }
+
+  /// Where [path] is; only ever over https, but for development.
+  Uri _uri(String path, [Map<String, String>? query]) {
+    final uri = Uri.parse('$base$path').replace(queryParameters: (query == null || query.isEmpty) ? null : query);
+    if (uri.scheme != 'https' && !_local(uri.host)) {
+      throw ArgumentError('Taskiem is only reached over https');
+    }
+    return uri;
+  }
+
+  /// Signs [req] with the session, if there is one; the token it was
+  /// signed with.
+  String? _sign(http.BaseRequest req) {
     final t = token;
     if (t != null) req.headers['Authorization'] = 'Bearer $t';
-    http.Response res;
+    return t;
+  }
+
+  /// The exchange within [limit]; the network gone, said as [Offline].
+  Future<T> _reach<T>(Future<T> Function() exchange, Duration limit) async {
     try {
-      // The whole exchange, waiting for the answer to start included.
-      res = await (() async => http.Response.fromStream(await _client.send(req)))().timeout(timeout);
+      return await exchange().timeout(limit);
     } on http.ClientException {
       throw const Offline();
     } on IOException {
@@ -78,7 +135,11 @@ class Transport {
     } on TimeoutException {
       throw const Offline();
     }
-    final text = utf8.decode(res.bodyBytes);
+  }
+
+  /// A success's JSON (null for none), or the failure as an [ApiError]: a
+  /// 401 to the session it was sent with ends that session.
+  Object? _answer(int status, String text, String? sentWith) {
     Object? json;
     if (text.isNotEmpty) {
       try {
@@ -87,104 +148,9 @@ class Transport {
         json = null;
       }
     }
-    if (res.statusCode >= 200 && res.statusCode < 300) return json;
-    if (res.statusCode == 401 && t != null && token == t) onSessionEnded?.call();
-    throw ApiError(res.statusCode, json is Map<String, dynamic> ? json : {'error': 'The server answered ${res.statusCode}.'});
-  }
-
-  /// Sends a file as a multipart form (`file`, and the [fields] beside it)
-  /// and answers the JSON, as [send] does.
-  Future<Object?> upload(String path, {required List<int> bytes, required String filename, required String type, Map<String, String> fields = const {}}) async {
-    final uri = Uri.parse('$base$path');
-    if (uri.scheme != 'https' && !_local(uri.host)) {
-      throw ArgumentError('Taskiem is only reached over https');
-    }
-    final req = http.MultipartRequest('POST', uri)
-      ..headers['Accept'] = 'application/json'
-      ..fields.addAll(fields)
-      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename, contentType: MediaType.parse(type)));
-    final t = token;
-    if (t != null) req.headers['Authorization'] = 'Bearer $t';
-    http.Response res;
-    try {
-      // A file takes longer than a message: twice the time.
-      res = await (() async => http.Response.fromStream(await _client.send(req)))().timeout(timeout * 2);
-    } on http.ClientException {
-      throw const Offline();
-    } on IOException {
-      throw const Offline();
-    } on TimeoutException {
-      throw const Offline();
-    }
-    final text = utf8.decode(res.bodyBytes);
-    Object? json;
-    try {
-      json = text.isEmpty ? null : jsonDecode(text);
-    } on FormatException {
-      json = null;
-    }
-    if (res.statusCode >= 200 && res.statusCode < 300) return json;
-    if (res.statusCode == 401 && t != null && token == t) onSessionEnded?.call();
-    throw ApiError(res.statusCode, json is Map<String, dynamic> ? json : {'error': 'The server answered ${res.statusCode}.'});
-  }
-
-  /// A picture or a file's bytes (a logo, a photo), signed in as the rest.
-  Future<List<int>> bytes(String path) async {
-    final uri = Uri.parse('$base$path');
-    if (uri.scheme != 'https' && !_local(uri.host)) {
-      throw ArgumentError('Taskiem is only reached over https');
-    }
-    final req = http.Request('GET', uri);
-    final t = token;
-    if (t != null) req.headers['Authorization'] = 'Bearer $t';
-    http.Response res;
-    try {
-      res = await (() async => http.Response.fromStream(await _client.send(req)))().timeout(timeout);
-    } on http.ClientException {
-      throw const Offline();
-    } on IOException {
-      throw const Offline();
-    } on TimeoutException {
-      throw const Offline();
-    }
-    if (res.statusCode != 200) throw ApiError(res.statusCode, {'error': 'not found'});
-    return res.bodyBytes;
-  }
-
-  /// A long answer read as it comes (the chat's server-sent events): the
-  /// response once its head is here, its body a stream. The head must come
-  /// within the timeout; the body has none (the caller watches for a
-  /// stall). A 401 ends the session as any request's does.
-  Future<http.StreamedResponse> stream(String path, {Map<String, String>? headers}) async {
-    final uri = Uri.parse('$base$path');
-    if (uri.scheme != 'https' && !_local(uri.host)) {
-      throw ArgumentError('Taskiem is only reached over https');
-    }
-    final req = http.Request('GET', uri)
-      ..headers['Accept'] = 'text/event-stream'
-      ..headers.addAll(headers ?? const {});
-    final t = token;
-    if (t != null) req.headers['Authorization'] = 'Bearer $t';
-    http.StreamedResponse res;
-    try {
-      res = await _client.send(req).timeout(timeout);
-    } on http.ClientException {
-      throw const Offline();
-    } on IOException {
-      throw const Offline();
-    } on TimeoutException {
-      throw const Offline();
-    }
-    if (res.statusCode == 200) return res;
-    final text = await utf8.decodeStream(res.stream).catchError((Object _) => '');
-    Object? json;
-    try {
-      json = text.isEmpty ? null : jsonDecode(text);
-    } on FormatException {
-      json = null;
-    }
-    if (res.statusCode == 401 && t != null && token == t) onSessionEnded?.call();
-    throw ApiError(res.statusCode, json is Map<String, dynamic> ? json : {'error': 'The server answered ${res.statusCode}.'});
+    if (status >= 200 && status < 300) return json;
+    if (status == 401 && sentWith != null && token == sentWith) onSessionEnded?.call();
+    throw ApiError(status, json is Map<String, dynamic> ? json : {'error': 'The server answered $status.'});
   }
 
   // Plain http only to a server on this machine or the emulator's host,

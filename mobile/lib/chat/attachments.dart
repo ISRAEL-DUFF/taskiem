@@ -85,11 +85,40 @@ class ChatFile {
   final Size? size;
 }
 
-/// The files of the conversations, fetched as they are shown.
+/// The files of the conversations, fetched as they are shown. At most
+/// [limit] bytes are kept, those drawn least lately let go first (drawn
+/// again, they are fetched again); a file that could not be fetched is not
+/// asked for again on every redraw, only after a minute or when pressed.
 class ChatFiles extends ChangeNotifier {
-  ChatFiles(this.transport);
+  ChatFiles(this.transport, {DateTime Function()? now, this.limit = 50 << 20}) : now = now ?? DateTime.now;
   final Transport transport;
+  final DateTime Function() now;
+  final int limit;
+
+  /// Oldest drawn first (a LinkedHashMap keeps the order things go in).
   final Map<String, ChatFile?> _got = {};
+  final Map<String, DateTime> _failed = {};
+  int _kept = 0;
+
+  /// How many bytes are kept now.
+  int get kept => _kept;
+
+  void _put(String id, ChatFile f) {
+    final was = _got.remove(id);
+    if (was != null) _kept -= was.bytes.length;
+    _got[id] = f;
+    _kept += f.bytes.length;
+    // The least lately drawn go, never the one just put; those on their
+    // way (null) are left to come.
+    for (final k in _got.keys.toList()) {
+      if (_kept <= limit) break;
+      if (k == id) continue;
+      final g = _got[k];
+      if (g == null) continue;
+      _got.remove(k);
+      _kept -= g.bytes.length;
+    }
+  }
 
   static String path(LinkMessage m) => '/v1/link-chats/${Uri.encodeComponent(m.link)}/files/${Uri.encodeComponent(m.id)}';
 
@@ -105,13 +134,21 @@ class ChatFiles extends ChangeNotifier {
     } on Object {
       size = null;
     }
-    _got[id] = ChatFile(bytes, size);
+    _put(id, ChatFile(bytes, size));
     notifyListeners();
   }
 
-  /// The file, or null while it comes (asked for once).
+  /// The file, or null while it comes (asked for once, and after a
+  /// failure not again for a minute).
   ChatFile? of(LinkMessage m) {
-    if (_got.containsKey(m.id)) return _got[m.id];
+    if (_got.containsKey(m.id)) {
+      final f = _got.remove(m.id);
+      // Drawn now: the last to go.
+      _got[m.id] = f;
+      return f;
+    }
+    final failed = _failed[m.id];
+    if (failed != null && now().difference(failed) < const Duration(minutes: 1)) return null;
     _got[m.id] = null;
     unawaited(fetch(m));
     return null;
@@ -129,11 +166,13 @@ class ChatFiles extends ChangeNotifier {
         codec.dispose();
       }
       final f = ChatFile(b, size);
-      _got[m.id] = f;
+      _failed.remove(m.id);
+      _put(m.id, f);
       notifyListeners();
       return f;
     } on Object {
-      _got.remove(m.id);
+      if (_got.containsKey(m.id) && _got[m.id] == null) _got.remove(m.id);
+      _failed[m.id] = now();
       return null;
     }
   }

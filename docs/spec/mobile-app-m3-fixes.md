@@ -52,7 +52,22 @@ started alone, and a stop that fails is no note.
 | B11 | **A tap recogniser made on every build, never disposed** (a leak per rebuild) | `chat/conversation.dart:1343` | Keep the recognisers in the State and dispose them | Widget test: rebuilt many times, no growth (or by reading) |
 | B12 | **Searches sent again when only the cursor moves.** The search boxes listen to the controller, which also tells of cursor and selection | `chat/explore.dart:137`, `chat/chats.dart:350` | Search only when the text changed | Moving the cursor sends nothing |
 
+**Done: B8–B12** (`test/explore_test.dart`, `test/cache_test.dart`).
+Explore draws its cards from the chats as they change. A logo or a file
+that failed is asked for again a minute later (or a file when pressed),
+never on every redraw; a business with no logo is not asked again. At most
+50 MB of files is kept, the least lately drawn going first. The links in a
+message's words keep their tap recognisers in a State and let them go. The
+searches ask only when the words change. B11 is checked by reading: a
+recogniser's life cannot be watched from a test.
+
 ## 3. Cleanups found in the same reading
+
+**Done: C1–C2.** The transport's four ways of asking share one check of
+the address, one signing, one timeout and one reading of the answer (a
+logo's 401 now ends the session as any request's does). Show more copies
+Explore's page with its constructor, not through JSON.
+
 
 | # | What | Where | Fix |
 | --- | --- | --- | --- |

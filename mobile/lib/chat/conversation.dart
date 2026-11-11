@@ -1209,6 +1209,48 @@ class _DiaryRunState extends State<_DiaryRun> {
 
 /// Conversation.tsx Bubble: a message, its time in the corner of its last
 /// line, and our ticks.
+/// Owns the tap recognisers of a text's links: made once, kept while the
+/// text is, and let go with it (a span's recogniser is the caller's to
+/// dispose; made afresh on every build, each was left behind).
+class _Taps extends StatefulWidget {
+  const _Taps({required this.builder});
+  final Widget Function(BuildContext context, TapGestureRecognizer Function(String key, VoidCallback onTap) tap) builder;
+
+  @override
+  State<_Taps> createState() => _TapsState();
+}
+
+class _TapsState extends State<_Taps> {
+  final _all = <String, TapGestureRecognizer>{};
+
+  @override
+  void dispose() {
+    for (final r in _all.values) {
+      r.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final used = <String>{};
+    final w = widget.builder(context, (key, onTap) {
+      used.add(key);
+      return (_all[key] ??= TapGestureRecognizer())..onTap = onTap;
+    });
+    // Those no longer in the text: let go once the old text is replaced.
+    final gone = [for (final k in _all.keys) if (!used.contains(k)) k].map((k) => _all.remove(k)!).toList();
+    if (gone.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        for (final r in gone) {
+          r.dispose();
+        }
+      });
+    }
+    return w;
+  }
+}
+
 class _Bubble extends StatelessWidget {
   const _Bubble({
     required this.m,
@@ -1326,7 +1368,8 @@ class _Bubble extends StatelessWidget {
     // line is as tall as both, 22.7 px; Flutter draws whole pixels a line.
     // ReadMore.tsx: a long message folded, "… Read more" unfolding it.
     final fold = reveal(body, taps);
-    Widget text = Text.rich(
+    Widget text = _Taps(
+      builder: (context, tap) => Text.rich(
       TextSpan(
         children: [
           // Mentions.tsx MentionText: a business (its conversation), an
@@ -1341,7 +1384,7 @@ class _Bubble extends StatelessWidget {
                   TextSpan(
                     text: p.text,
                     recognizer: p.tag!.kind == 'business' && p.tag!.link != null && onOpenLink != null
-                        ? (TapGestureRecognizer()..onTap = () => onOpenLink!(p.tag!.link!))
+                        ? tap(p.tag!.link!, () => onOpenLink!(p.tag!.link!))
                         : null,
                   ),
                   if (p.tag!.kind == 'item' && p.tag!.priceKobo != null)
@@ -1370,6 +1413,7 @@ class _Bubble extends StatelessWidget {
         ],
       ),
       style: tkText(size: 16, lineHeight: 23 / 16, color: t.text),
+      ),
     );
     if (fold.folded) {
       text = Semantics(

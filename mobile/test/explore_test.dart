@@ -125,6 +125,37 @@ void main() {
       await t.pump(const Duration(seconds: 5));
     });
 
+    testWidgets('a request to link arriving while Explore is open: its card offers Accept at once', (t) async {
+      final f = Fixture('explore');
+      var arrived = false;
+      await open(
+        t,
+        also: (req) async {
+          if (req.method != 'GET' || req.url.path != '/v1/links') return null;
+          final j = f.json('/v1/links');
+          if (!arrived) (j['links'] as List).removeWhere((l) => (l as Map)['name'] == "Kola's Bakery");
+          return _answer(j);
+        },
+      );
+      final accept = find.bySemanticsLabel("Accept Kola's Bakery's request to link");
+      final list = t.state<ScrollableState>(_list);
+      Future<bool> seen() async {
+        list.position.jumpTo(0);
+        await t.pump();
+        while (accept.evaluate().isEmpty && list.position.pixels < list.position.maxScrollExtent) {
+          list.position.jumpTo((list.position.pixels + 300).clamp(0, list.position.maxScrollExtent));
+          await t.pump();
+        }
+        return accept.evaluate().isNotEmpty;
+      }
+
+      expect(await seen(), isFalse, reason: 'not asked yet');
+      arrived = true;
+      await t.widget<ChatsScreen>(find.byType(ChatsScreen, skipOffstage: false)).data.load();
+      await _settle(t);
+      expect(await seen(), isTrue);
+    });
+
     testWidgets('searched: a linked business messaged, in Explore\'s place', (t) async {
       final (_, opened) = await open(t);
       await t.enterText(find.byType(EditableText), 'rice');

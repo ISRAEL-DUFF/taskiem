@@ -187,16 +187,27 @@ class ChatsData extends ChangeNotifier {
     }
   }
 
-  /// A business's logo, fetched once with the session.
+  /// A business's logo, fetched once with the session. A business with
+  /// none (404) is not asked again; one that failed (offline, the server
+  /// down) is asked again a minute later.
   Uint8List? logo(String business) {
     if (logos.containsKey(business)) return logos[business];
+    final failed = _logoFailed[business];
+    if (failed != null && now().difference(failed) < const Duration(minutes: 1)) return null;
     logos[business] = null;
     auth.transport.bytes('/v1/links/$business/logo').then((b) {
       logos[business] = Uint8List.fromList(b);
+      _logoFailed.remove(business);
       notifyListeners();
-    }, onError: (_) {});
+    }, onError: (Object e) {
+      if (e is ApiError && e.status == 404) return;
+      logos.remove(business);
+      _logoFailed[business] = now();
+    });
     return null;
   }
+
+  final _logoFailed = <String, DateTime>{};
 
   /// Links.tsx answer: a request to link accepted, declined or blocked
   /// (POST /v1/links/{id}/{answer}); the list read again. Null when done,
@@ -294,7 +305,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
     super.dispose();
   }
 
+  /// The words last searched for: the box also tells of the cursor moving.
+  String _was = '';
+
   void _typed() {
+    if (_q.text == _was) return;
+    _was = _q.text;
     setState(() {});
     _searchSoon?.cancel();
     final q = _query;

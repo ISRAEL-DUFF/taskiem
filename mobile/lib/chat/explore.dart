@@ -152,7 +152,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   String _say(Object e) => e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.';
 
+  /// The words last searched for: the box also tells of the cursor moving.
+  String _was = '';
+
   void _typing() {
+    if (_q.text == _was) return;
+    _was = _q.text;
     setState(() {});
     _soon?.cancel();
     final q = _typed;
@@ -250,16 +255,19 @@ class _ExploreScreenState extends State<ExploreScreen> {
     if (mounted) setState(() => _busy = false);
   }
 
+  /// The start page with a section grown by Show more; the rest as it was.
   ExploreResult _with(ExploreResult s, {List<ExploreCard>? near, bool? nearMore, List<ExploreCard>? delivery, bool? deliveryMore, List<ExploreCard>? fresh, bool? more}) =>
-      ExploreResult.fromJson({
-        ...s.toJson(),
-        'near': [for (final c in near ?? s.near) c.toJson()],
-        'near_more': nearMore ?? s.nearMore,
-        'delivery': [for (final c in delivery ?? s.delivery) c.toJson()],
-        'delivery_more': deliveryMore ?? s.deliveryMore,
-        'fresh': [for (final c in fresh ?? s.fresh) c.toJson()],
-        'more': more ?? s.more,
-      });
+      ExploreResult(
+        area: s.area,
+        blind: s.blind,
+        results: s.results,
+        near: near ?? s.near,
+        nearMore: nearMore ?? s.nearMore,
+        delivery: delivery ?? s.delivery,
+        deliveryMore: deliveryMore ?? s.deliveryMore,
+        fresh: fresh ?? s.fresh,
+        more: more ?? s.more,
+      );
 
   Widget _card(ExploreCard c) {
     final state = _states[c.business] ?? c.state;
@@ -280,8 +288,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
     );
   }
 
+  /// The page, drawn again whenever the chats change (a request to link
+  /// arriving or answered changes what each card offers).
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => ListenableBuilder(listenable: d, builder: (context, _) => _page(context));
+
+  Widget _page(BuildContext context) {
     final t = TkTheme.tokens(context);
     final pad = MediaQuery.paddingOf(context);
     final typed = _typed;
@@ -409,9 +421,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
         namesRoute: true,
         explicitChildNodes: true,
         label: 'Find a business',
-        child: ListenableBuilder(
-          listenable: d,
-          builder: (context, _) => Column(
+        child: Builder(
+          builder: (context) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // `.tk-x-head`: back, the title, and the search under them.
