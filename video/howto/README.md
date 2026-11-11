@@ -15,7 +15,7 @@ timings.
 | 4 | A customer's order from WhatsApp: read into an order card, a delivery fee, confirmed, a reply | `04-customer-whatsapp-order.mjs` (after videos 1 to 3) |
 | 5 | Staff by phone, and clocking in: added from the chat, joining from WhatsApp, usual hours, in and Clock in, who is in | `05-staff-and-clocking-in.mjs` (a fresh world; needs none of 1 to 4) |
 | 6 | Tasks for staff: given by tagging in the chat, a daily one, Done from the chat, the Tasks page | `06-tasks-for-staff.mjs` (a fresh world; needs none of 1 to 5) |
-| 7 | The morning briefing | to do |
+| 7 | The morning briefing: the card, a tile, Got it and back, how did we do this week | `07-morning-briefing.mjs` (a fresh world, after 8:00 Lagos time; needs none of 1 to 6) |
 | 8 | Riders and deliveries | to do |
 
 ## Making one

@@ -35,9 +35,9 @@ async function brief() {
   await card.waitFor();
   await card.scrollIntoViewIfNeeded();
   await act(page, "howto07-brief", "Ada · Ada's Kitchen, the owner", async () => {
-    await say("Every morning from 8, Ada's Taskiem chat opens on the day's briefing.", 3200);
+    await say("From 8 every morning, Ada's Taskiem chat opens on the day's briefing. It greets her by the hour.", 3600);
     await say("Sales yesterday, against the same day last week, with the last seven days as bars.", 3600);
-    await say("Then what she is owed, what is running low, today's deliveries and tasks.", 3400);
+    await say("Then what she is owed, what is running low and today's deliveries. With staff, their tasks and who is in.", 3400);
     await say("Each one opens what it counts. Low stock opens the Stock tool.", 600);
     await card.getByRole("button", { name: /Low stock/ }).click();
     const sheet = page.getByTestId("tool-sheet");
@@ -66,7 +66,7 @@ async function week() {
   await page.waitForTimeout(1500);
   await quiet(page);
   await act(page, "howto07-week", "Ada · Ada's Kitchen, the owner", async () => {
-    await say("Ada can ask about any stretch in her own words.", 600);
+    await say("Ada can also ask how the business did, in her own words.", 600);
     const box = page.getByLabel(/^Message|Ask Taskiem/).first();
     await box.click();
     await box.pressSequentially("how did we do this week", { delay: 60 });
