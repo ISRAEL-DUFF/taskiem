@@ -615,7 +615,10 @@ func (s *Server) linkChatPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 	data, ctype, err := s.Media.FetchPublic(r.Context(), seller, src)
 	if err != nil {
-		s.fail(w, r, err)
+		// Their storage gone or not answering: no picture, the tile shows
+		// its icon; not our fault to report.
+		s.Logger.Debug("links: a linked business's photo", "link", link, "err", err)
+		s.fail(w, r, pgx.ErrNoRows)
 		return
 	}
 	w.Header().Set("Content-Type", ctype)

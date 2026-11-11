@@ -630,11 +630,20 @@ func StorefrontChangedTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error
 		if h, ok := written[l.ID]; (ok && h == now) || (!ok && len(items) == 0) {
 			continue
 		}
-		if err := dueTx(ctx, tx, tenant, "prices", l.ID, StorefrontSettle); err != nil {
+		if err := dueSoonTx(ctx, tx, tenant, l.ID, StorefrontSettle); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// dueSoonTx puts a link's prices on the list to mirror after a while,
+// keeping an earlier time already there: changes coming faster than the
+// wait never push the copy back for ever.
+func dueSoonTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID, after time.Duration) error {
+	_, err := tx.Exec(ctx, `INSERT INTO link_orders_due (tenant_id, kind, object_id, due_at) VALUES ($1, 'prices', $2, now() + $3 * interval '1 second')
+		ON CONFLICT (tenant_id, kind, object_id) DO UPDATE SET due_at = LEAST(link_orders_due.due_at, EXCLUDED.due_at), tries = 0`, tenant, link, int64(after/time.Second))
+	return err
 }
 
 // StorefrontSettle is how long after a storefront change its copies are

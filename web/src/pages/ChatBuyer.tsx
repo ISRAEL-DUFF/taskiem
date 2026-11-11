@@ -612,6 +612,11 @@ export function OrderSheet({
                               src={`/v1/link-chats/${encodeURIComponent(link)}/photo?item=${encodeURIComponent(it.item_id)}&w=320`}
                               alt=""
                               loading="lazy"
+                              onError={(e) => {
+                                // Their picture cannot be read: no broken
+                                // image, the tile's colour alone.
+                                e.currentTarget.hidden = true;
+                              }}
                             />
                           ) : (
                             <Icon name="package" />

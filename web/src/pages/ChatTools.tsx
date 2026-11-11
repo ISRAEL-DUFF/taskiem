@@ -116,8 +116,9 @@ function useScopeIds(scope?: string): Set<string> | undefined {
         () => new Set<string>(),
       );
       scopeIdsCache.set(scope, p);
-      // Kept for a minute: what changes (a new invoice) is read again.
-      window.setTimeout(() => scopeIdsCache.delete(scope), 60_000);
+      // Shared by the panel and the sheet it opens, then read again: a new
+      // invoice or order shows the next time either opens.
+      window.setTimeout(() => scopeIdsCache.delete(scope), 5_000);
     }
     void p.then((ids) => on && setGot({ scope, ids }));
     return () => {
