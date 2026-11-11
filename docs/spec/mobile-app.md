@@ -1,8 +1,8 @@
 # The Taskiem phone app (Flutter): a chat app, complete in itself
 
-Status: **proposal for the founder's review** (2026-11-11). Nothing here is
-built. The decision it asks for is [0066](../decisions/0066-a-flutter-phone-app.md)
-(proposed). It builds on [chat push](chat-push.md), [offline](offline.md),
+Status: **agreed with the founder** (2026-11-11; every question in §13
+settled). Nothing here is built. Decision [0066](../decisions/0066-a-flutter-phone-app.md)
+(accepted). It builds on [chat push](chat-push.md), [offline](offline.md),
 [chat tools](chat-tools.md), [chat as the way in](chat-way-in.md) and
 [chat sign-in](chat-sign-in.md).
 
@@ -47,8 +47,9 @@ moment, on every change.
   that changes most (about 17,000 of the web app's 88,000 lines), and the
   everyday part of the pages the chat's tools link to. §9 is how the two stay
   the same.
-- **Order.** Android first, iPhone from the same code and released after.
-  Milestones in §10.
+- **Android and iPhone together.** Flutter builds both from the same code;
+  each milestone is built and tested on both, and both are released together
+  (§10). What the iPhone needs beyond the code is in §4.2.
 
 ## 2. Who uses it
 
@@ -141,7 +142,7 @@ draw, each for a reason that is not the app's to remove:
 | --- | --- |
 | `connect <service>` for a service that signs in (Google and others) | OAuth runs in a browser by the provider's rules: the chat's one-time connect link (`/c/<token>`, [decision 0058](../decisions/0058-chat-as-a-way-in.md)) opens in the phone's browser tab and comes back to the app. A key-based service (Paystack, Termii…) gets a secure form in the app, as Telegram's Mini App is, never a chat message |
 | A saved workflow's **open it** | The workflow canvas, for the few who want to change a draft's steps by hand; everything else about a workflow is done in the chat |
-| `plan` then **Pay** | The chat sends a checkout link today. Apple and Google have rules on paying for digital subscriptions inside an app; until §13 question 6 is settled the app shows the plan and opens the checkout in the browser, as the web chat does |
+| (none for paying) | A plan is paid from the business's Taskiem wallet (§5.7): `plan` and **Pay** in the chat charge it there after a **yes**, so nothing about a plan opens a browser |
 
 **Never in the app:** a copy of the business kept on the phone (§5.5).
 
@@ -244,6 +245,20 @@ the phone's own share sheet, camera and photo picker, notifications on the
 lock screen, the system's text-selection handles, and the browser tab of
 §3.5.
 
+### 4.2 What the iPhone needs beyond the code
+
+The same code runs on both; around it, the iPhone needs:
+
+- the Apple Developer Program account (A3) and the app's signing, from M1;
+- builds on macOS: CI builds and tests the iPhone app on a macOS runner on
+  every pull request touching `mobile/`, and runs the parity test on an
+  iPhone simulator beside the Android emulator;
+- Apple's notification service behind Firebase: an APNs key in the Firebase
+  project (A4);
+- the `apple-app-site-association` file for links and passkeys (S6);
+- App Store review, with a test business for the reviewers;
+- a real iPhone in the test phones (A8), from M3.
+
 ## 5. What the server needs
 
 Each is a change of its own, with its tests, before or with the milestone
@@ -336,6 +351,19 @@ serves `/.well-known/assetlinks.json` and
 let the platform passkey APIs use the web's passkeys in the app; the server's
 WebAuthn origins gain the Android app's signing-key origin.
 
+### 5.7 S7: a plan paid from the business's Taskiem wallet
+
+Settled by the founder: paying for a plan is internal to Taskiem, charged to
+the business's funded Taskiem wallet ([decision 0052](../decisions/0052-taskiem-as-a-collection-rail.md)),
+not by a card checkout. Not built: billing today charges a saved card through
+Paystack ([billing](../billing.md)). It moves money, so it gets a plan and a
+decision of its own before M8, covering: the renewal charged to the wallet,
+the **yes** (and step-up where the policy asks) for a first charge or a change
+of plan, what happens when the wallet is short (the chat says how to fund it,
+by a transfer to the business's account number, and dunning as today), the
+receipt and the audit, and the card kept for the web where a business wants
+it. In the app it is the chat's `plan` and **Pay**, with no checkout.
+
 ## 6. The chat in the app
 
 - **Live**: while the app is open it holds `GET /v1/chat/stream` open, with
@@ -412,13 +440,13 @@ for one engineer who knows Flutter.
 | M5 | **Linked businesses** (§3.3): Explore, cards, linking, your profile, the tools' picker and sheets | M | Two businesses find each other and link from the app alone |
 | M6 | **Selling** (§3.3): products and stock, Sell, Handover, services and bookings, price lists and deals | L | A shop keeps its products, stock and prices from the app alone for a week |
 | M7 | **Orders and deliveries** (§3.3): orders from linked businesses and from customers' messages, deliveries and availability, their cards | L | An order goes from a buyer's message to delivered and received with both sides in the app |
-| M8 | **Money** (§3.3): invoices (new, send, payments, PDF), bills and Pay from Taskiem, purchases and suppliers, money and matching, approvals with step-up, tables | L | An order is invoiced, sent, paid and matched, and a bill paid with a passkey, from the app alone |
-| M9 | **Android release**: closed testing with the design partners, then the Play Store | M | Ten businesses run their day from the app for two weeks without opening the web, with no lost message and no crash a person reports |
-| M10 | **iPhone release**: TestFlight, then the App Store | S–M | The same, on iPhones |
+| M8 | **Money** (§3.3, S7): invoices (new, send, payments, PDF), bills and Pay from Taskiem, purchases and suppliers, money and matching, approvals with step-up, tables | L | An order is invoiced, sent, paid and matched, and a bill paid with a passkey, from the app alone |
+| M9 | **Release, Android and iPhone**: closed testing with the design partners (Play's testing track and TestFlight), then the Play Store and the App Store | M | Ten businesses, on both kinds of phone, run their day from the app for two weeks without opening the web, with no lost message and no crash a person reports |
 | — | **What the web chat gains** (§3.4): tasks, receipts, quotes, restocking, paying people and payroll, riders | — | Each in the app within one milestone of the web |
 
 For one engineer who knows Flutter: M1 to M4 about two and a half months,
-M5 to M8 about four more, so a first Android release in about seven. Two
+M5 to M8 about four more, and the release a few weeks after: about seven
+months to both stores, the iPhone's share of the work (§4.2) included. Two
 engineers bring it to about four: after M3, one takes M5 and M6 while the
 other takes M7 and M8, since they divide by screen.
 
@@ -428,8 +456,8 @@ other takes M7 and M8, since they divide by screen.
 | --- | --- | --- | --- |
 | A1 | **The name.** "Taskiem" is a working name pending a trademark search (L3, [what needs people](../needs-people.md)); a store listing and an app ID are hard to change once people have installed the app | Leadership, counsel | Everything public |
 | A2 | Google Play developer account (an organisation account needs a D-U-N-S number) | Founders | M9 |
-| A3 | Apple Developer Program as an organisation (also a D-U-N-S number) | Founders | M10 |
-| A4 | A Firebase project for Taskiem, and its data-processing terms (notifications pass through Google, as Web Push in Chrome already does) | Founders | M4 |
+| A3 | Apple Developer Program as an organisation (also a D-U-N-S number) | Founders | M1 |
+| A4 | A Firebase project for Taskiem, and its data-processing terms (notifications pass through Google, as Web Push in Chrome already does); an APNs key from the Apple account in it | Founders | M4 |
 | A5 | App signing keys, held as the release secrets and backed up offline | Founders, ops | M9 |
 | A6 | Store listing: words, screenshots, the privacy policy's address, a support email | Founders, design | M9 |
 | A7 | A Flutter engineer (or two) | Founders | M1 |
@@ -443,7 +471,8 @@ other takes M7 and M8, since they divide by screen.
 | The app slows the chat's pace on the web | The app follows the web by up to one milestone; the web is not held back for it |
 | The app drifts from the web chat's look, and from the films | The parity test (§4.1) on every pull request touching either; the theme generated from the web's own CSS |
 | Two engines never draw text the same | A threshold set on the first screens and kept; Inter bundled in both; differences that are the phone's own are listed (§4.1) |
-| Store review rejects the app (payments wording, the account deletion rule, reviewers who cannot sign in) | A test business and account for reviewers; account deletion from the app, as both stores require; a plan's checkout in the browser until §13 question 6 is settled |
+| Store review rejects the app (payments wording, the account deletion rule, reviewers who cannot sign in) | A test business and account for reviewers; account deletion from the app, as both stores require |
+| A reviewer reads a plan paid from the wallet in the app as a digital purchase that should go through the store | The plan is charged to a wallet the business funds by bank transfer, for a business tool; counsel reads Apple's and Google's rules on this before M9, and the words in the app say what it is plainly |
 | Phones without Google's services | Told plainly; WhatsApp and Telegram still reach them |
 | The name changes after launch | A1 before M9; the app ID chosen to survive a new display name |
 | A lost or shared phone | The app lock, device sessions listed and ended from the web, nothing of the business kept on the phone |
@@ -451,27 +480,22 @@ other takes M7 and M8, since they divide by screen.
 | A web chat link with no screen in the app | The test of §9, point 3 |
 | Cost of two stores and their reviews on every release | Releases every two weeks at most, from `main`, by CI |
 
-## 13. Decisions to take
+## 13. Decisions
 
-1. **The app at all, and in Flutter** (decision 0066). The case against is in
-   0066 too: the web app on the home screen, with chat push and offline, may
-   be enough, and the critical path is still the people items of the chat-first
-   strategy, not code.
-2. **Android first**, iPhone released after (recommended), or both at once.
-3. **The app is the web chat, all of it** (settled by the founder, 11
-   November 2026): §3, opening a browser only as in §3.5.
-4. **Signing up and signing in in the app** (settled by the founder, 11
-   November 2026): §3.6.
-5. **The look is the web chat's**, in every screen, motion, sound and haptic
-   (settled by the founder, 11 November 2026): §4.1, checked by the parity
-   test.
-6. **Paying for a plan from the app.** The web chat's **Pay** opens a
-   checkout; Apple's and Google's rules on digital subscriptions bought in an
-   app need counsel's reading for a business tool sold in Nigeria. Until then,
-   the checkout opens in the browser (§3.5).
-7. **A cache of conversations on the phone** (§5.5): not in the first release
-   (recommended), or a decision of its own before M3.
-8. **Device sessions** (§5.2): 30 days unused, 180 at most (recommended), or
-   other numbers.
-9. **Notifications through Firebase** (§5.3), including for iPhones, rather
-   than Apple's service directly (recommended: one transport, one key).
+All settled with the founder on 11 November 2026.
+
+1. **A native app, in Flutter** (decision 0066).
+2. **Android and iPhone together**: built and tested on both from M1,
+   released together at M9 (§4.2).
+3. **The app is the web chat, all of it**: §3, opening a browser only as in
+   §3.5.
+4. **Signing up and signing in in the app**: §3.6.
+5. **The look is the web chat's**, in every screen, motion, sound and haptic:
+   §4.1, checked by the parity test.
+6. **A plan is paid from the business's Taskiem wallet**, internal to
+   Taskiem, never a store purchase or a checkout: S7, §5.7.
+7. **Nothing of the business kept on the phone** in the first release (§5.5);
+   a cache is a decision of its own, later.
+8. **Device sessions**: 30 days unused, 180 at most (§5.2).
+9. **Notifications through Firebase**, for iPhones too, through Apple's
+   service behind it (§5.3).
