@@ -6,6 +6,10 @@ const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined;
 
 export default defineConfig({
   testDir: "e2e",
+  // On CI, one test at a time: two workers, the e2e server, Postgres and
+  // two Chromiums starve one hosted runner of CPU, and tests time out or
+  // the runner is stopped (PR 186). Locally, Playwright's default.
+  workers: process.env.CI ? 1 : undefined,
   timeout: 60_000,
   retries: 0,
   reporter: [["list"]],

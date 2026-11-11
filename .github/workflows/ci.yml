@@ -188,6 +188,9 @@ jobs:
   # The web app in a real browser against the real binary (web/e2e).
   web:
     runs-on: ubuntu-latest
+    # One test at a time (web/playwright.config.ts) takes about 45-50
+    # minutes; a stuck run stops here instead of at GitHub's six hours.
+    timeout-minutes: 75
     services:
       postgres:
         image: postgres:16
