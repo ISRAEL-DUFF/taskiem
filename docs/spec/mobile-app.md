@@ -798,6 +798,9 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   tools' sheets are M5 to M8), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
   the milestones), and the chat tools: M5 to M8.
+- **Review** (11 November 2026): the bugs and gaps found reading the app
+  and setting it against the web chat, and the work to finish M3, are in
+  [Finishing M3](mobile-app-m3-fixes.md).
 
 ## 11. What needs people
 
