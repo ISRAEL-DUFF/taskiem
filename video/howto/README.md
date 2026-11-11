@@ -24,6 +24,7 @@ timings.
 | 13 | Your own WhatsApp number: Settings, WhatsApp number, the guide, the ids and keys from Meta, Connect, the addresses and templates; a customer writes to the number and Ada replies from it | `13-own-whatsapp-number.mjs` (a fresh world: Ada's number not yet connected; needs none of 1 to 12) |
 | 14 | Deals: a lower price for 50 or more and the lowest price; Rivers Foods orders 50 and makes an offer; Tunde counters; Rivers counters under the lowest price; Tunde accepts, it waits for Ada's OK; she agrees in her Taskiem chat | `14-deals.mjs` (a fresh world; needs none of 1 to 13) |
 | 15 | Explore and connecting: Find a business, search by what they sell, a card with photos, Connect and Requested; the other side accepts; a business that asked you: Accept, Decline or Block | `15-explore-and-connect.mjs` (a fresh world: Kola's Bakery has asked Ada, Mallam Musa Suya Spot is not linked; needs none of 1 to 14) |
+| 16 | Tags in the chat: # one of a business's items, @ a product (a card with Order and your own stock), /bill a bill, and @ in the Taskiem chat finding a business you don't trade with yet | `16-tags-in-the-chat.mjs` (a fresh world; needs none of 1 to 15) |
 
 ## Making one
 

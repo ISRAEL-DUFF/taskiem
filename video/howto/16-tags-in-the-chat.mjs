@@ -44,7 +44,7 @@ async function hash() {
     await sleep(600);
     await box.press("Enter");
     await sleep(3400);
-    await say("It goes with the item named, so neither side has to guess which.", 3400);
+    await say("It goes as a card for the item, at his price, with Order: neither side has to guess which.", 3400);
   });
   await page.context().close();
 }
@@ -65,7 +65,7 @@ async function at() {
     await card.waitFor({ timeout: 10000 });
     await card.evaluate((el) => el.scrollIntoView({ behavior: "smooth", block: "center" }));
     await sleep(1200);
-    await say("A product goes as a card, with its price and an Order button.", 3800);
+    await say("Her own stock shows on the card too: 4 bags left of the rice she needs.", 3800);
   });
   await page.context().close();
 }
