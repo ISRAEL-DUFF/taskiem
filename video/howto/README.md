@@ -17,6 +17,7 @@ timings.
 | 6 | Tasks for staff: given by tagging in the chat, a daily one, Done from the chat, the Tasks page | `06-tasks-for-staff.mjs` (a fresh world; needs none of 1 to 5) |
 | 7 | The morning briefing: the card, a tile, Got it and back, how did we do this week | `07-morning-briefing.mjs` (a fresh world, after 8:00 Lagos time; needs none of 1 to 6) |
 | 8 | Riders and deliveries: the order needs a rider, Assign rider, Kunle on WhatsApp (accept, picked up, arrived, cash received), the Deliveries page | `08-riders-and-deliveries.mjs` (a fresh world; needs none of 1 to 7) |
+| 9 | Selling at the counter and the shift handover: Sell in the chat's tools (pick, how it was paid, record), Handover (the shift's sales, cash counted, short or over, a note) | `09-selling-and-handover.mjs` (a fresh world; needs none of 1 to 8) |
 
 ## Making one
 
