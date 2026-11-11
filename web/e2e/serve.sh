@@ -12,7 +12,10 @@ cd "$root"
 # -tags e2e builds in the test-only commands (the demo school below), into
 # a binary of its own so that bin/taskiem stays what make build made.
 taskiem=bin/taskiem-e2e
-go build -tags e2e -o "$taskiem" ./cmd/taskiem
+# CI builds it once for all the shards (.github/workflows/ci.yml, web-build).
+if [ -z "${TASKIEM_E2E_PREBUILT:-}" ] || [ ! -x "$taskiem" ]; then
+  go build -tags e2e -o "$taskiem" ./cmd/taskiem
+fi
 export TASKIEM_DATABASE_URL="$dsn"
 export TASKIEM_LOCAL_KMS_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
 "$taskiem" migrate >/dev/null
