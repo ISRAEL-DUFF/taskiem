@@ -97,6 +97,17 @@ const SCREENS: { name: string; path: string; fixture?: string; ready: (p: Page) 
       await p.waitForLoadState("networkidle");
     },
   },
+  {
+    // A conversation with a linked business: Mama Tunde's Market's, as Ada.
+    name: "chat-tunde",
+    path: "/chat?with=3af349e2-b776-4306-bdb8-10df59687c55",
+    fixture: "chat-tunde",
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-message").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
 ];
 const FIXTURES = resolve(here, "../../mobile/test/parity/fixtures");
 

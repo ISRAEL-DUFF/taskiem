@@ -27,7 +27,9 @@ import 'package:taskiem/app/auth.dart';
 import 'package:taskiem/app/session.dart';
 import 'package:taskiem/kit/kit.dart';
 import 'package:taskiem/main.dart';
+import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/chat/chats.dart';
+import 'package:taskiem/chat/conversation.dart';
 import 'package:taskiem/screens/sign_in.dart';
 import 'package:taskiem/screens/sign_up.dart';
 import 'package:taskiem/theme/theme.dart';
@@ -101,6 +103,21 @@ final screens = <String, Screen>{
     },
     drive: (t) async {
       // The logos: fetched and decoded for real, outside the test's clock.
+      for (var i = 0; i < 5; i++) {
+        await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 60)));
+        await t.pump();
+      }
+      await t.pumpAndSettle();
+    },
+  ),
+  'chat-tunde': (
+    build: () {
+      final f = Fixture('chat-tunde');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      final conv = ListLinkChatsResponse.fromJson(f.json('/v1/link-chats')).conversations.firstWhere((c) => c.name == "Mama Tunde's Market");
+      return ConversationScreen(data: ConversationData(chats, conv, follow: false));
+    },
+    drive: (t) async {
       for (var i = 0; i < 5; i++) {
         await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 60)));
         await t.pump();

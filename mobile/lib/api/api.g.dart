@@ -136,6 +136,29 @@ class TaskiemApi {
     final j = await _t.send('GET', '/v1/link-settings');
     return LinkSettings.fromJson(j as Map<String, dynamic>);
   }
+
+  /// A page of a conversation (`GET /v1/link-chats/{link}/messages`)
+  Future<LinkMessagesResponse> linkMessages({required String link, String? before, String? after, String? around, String? q, String? limit}) async {
+    final j = await _t.send('GET', '/v1/link-chats/${Uri.encodeComponent(link)}/messages', query: {'before': ?before, 'after': ?after, 'around': ?around, 'q': ?q, 'limit': ?limit});
+    return LinkMessagesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Send a message to a linked business (`POST /v1/link-chats/{link}/messages`)
+  Future<SendLinkMessageResponse> sendLinkMessage({required SendLinkMessageRequest body, required String link}) async {
+    final j = await _t.send('POST', '/v1/link-chats/${Uri.encodeComponent(link)}/messages', body: body.toJson());
+    return SendLinkMessageResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Read a conversation (`POST /v1/link-chats/{link}/read`)
+  Future<ReadLinkChatResponse> readLinkChat({required String link}) async {
+    final j = await _t.send('POST', '/v1/link-chats/${Uri.encodeComponent(link)}/read');
+    return ReadLinkChatResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Say we are typing (`POST /v1/link-chats/{link}/typing`)
+  Future<void> linkTyping({required String link}) async {
+    await _t.send('POST', '/v1/link-chats/${Uri.encodeComponent(link)}/typing');
+  }
 }
 
 class AppConfig {
@@ -1565,5 +1588,107 @@ class LinkSettings {
         'findable': ?findable,
         'findable_now': findableNow,
         'url': ?url,
+      };
+}
+
+class LinkMessagesResponse {
+  const LinkMessagesResponse({required this.messages, this.typing});
+
+  final List<LinkMessage> messages;
+  /// Someone on the other side is typing now
+  final bool? typing;
+
+  factory LinkMessagesResponse.fromJson(Map<String, dynamic> j) => LinkMessagesResponse(
+        messages: (j['messages'] as List).map((e) => LinkMessage.fromJson(e as Map<String, dynamic>)).toList(),
+        typing: j['typing'] == null ? null : j['typing'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((e) => e.toJson()).toList(),
+        'typing': ?typing,
+      };
+}
+
+class SendLinkMessageRequest {
+  const SendLinkMessageRequest({this.clientId, this.mentions, this.replyTo, required this.text});
+
+  final String? clientId;
+  /// Each a business you are linked with ({kind: business, link}), an item of
+  /// this conversation's price list ({kind: item, item_id}), one of your own
+  /// services ({kind: service, service_id}), or an invoice, bill, order or
+  /// purchase between you and this business ({kind, ref}: one of
+  /// /link-chats/{link}/refs), named in the text as @Name (any but a business
+  /// also #Name); one the text does not name is left out.
+  final List<SendLinkMessageRequestMentionsItem>? mentions;
+  final String? replyTo;
+  final String text;
+
+  factory SendLinkMessageRequest.fromJson(Map<String, dynamic> j) => SendLinkMessageRequest(
+        clientId: j['client_id'] == null ? null : j['client_id'] as String,
+        mentions: j['mentions'] == null ? null : (j['mentions'] as List).map((e) => SendLinkMessageRequestMentionsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'client_id': ?clientId,
+        'mentions': ?mentions?.map((e) => e.toJson()).toList(),
+        'reply_to': ?replyTo,
+        'text': text,
+      };
+}
+
+class SendLinkMessageRequestMentionsItem {
+  const SendLinkMessageRequestMentionsItem({this.itemId, required this.kind, this.link, this.ref, this.serviceId});
+
+  final String? itemId;
+  final String kind;
+  final String? link;
+  /// An invoice's or an order's id, from /link-chats/{link}/refs
+  final String? ref;
+  final String? serviceId;
+
+  factory SendLinkMessageRequestMentionsItem.fromJson(Map<String, dynamic> j) => SendLinkMessageRequestMentionsItem(
+        itemId: j['item_id'] == null ? null : j['item_id'] as String,
+        kind: j['kind'] as String,
+        link: j['link'] == null ? null : j['link'] as String,
+        ref: j['ref'] == null ? null : j['ref'] as String,
+        serviceId: j['service_id'] == null ? null : j['service_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'item_id': ?itemId,
+        'kind': kind,
+        'link': ?link,
+        'ref': ?ref,
+        'service_id': ?serviceId,
+      };
+}
+
+class SendLinkMessageResponse {
+  const SendLinkMessageResponse({required this.message});
+
+  final LinkMessage message;
+
+  factory SendLinkMessageResponse.fromJson(Map<String, dynamic> j) => SendLinkMessageResponse(
+        message: LinkMessage.fromJson(j['message'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'message': message.toJson(),
+      };
+}
+
+class ReadLinkChatResponse {
+  const ReadLinkChatResponse({required this.read});
+
+  final int read;
+
+  factory ReadLinkChatResponse.fromJson(Map<String, dynamic> j) => ReadLinkChatResponse(
+        read: (j['read'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'read': read,
       };
 }

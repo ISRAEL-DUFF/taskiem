@@ -11,7 +11,9 @@ import 'app/config.dart';
 import 'app/lock.dart';
 import 'app/prefs.dart';
 import 'app/session.dart';
+import 'api/api.g.dart';
 import 'chat/chats.dart';
+import 'chat/conversation.dart';
 import 'screens/signed_in.dart';
 import 'screens/sign_in.dart';
 import 'screens/sign_up.dart';
@@ -210,6 +212,36 @@ class _HomeState extends State<_Home> {
       onMenu: () => Navigator.of(context).push(PageRouteBuilder<void>(
         pageBuilder: (_, _, _) => SignedInScreen(auth: widget.auth, prefs: widget.prefs),
       )),
+      // On a phone the web shows the conversation in the list's place, at
+      // once: no transition either way.
+      onOpen: (c) => Navigator.of(context).push(PageRouteBuilder<void>(
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c),
+      )),
     );
   }
+}
+
+/// An open conversation: its data lives while it is open.
+class _Open extends StatefulWidget {
+  const _Open({required this.chats, required this.conv});
+  final ChatsData chats;
+  final LinkConversation conv;
+
+  @override
+  State<_Open> createState() => _OpenState();
+}
+
+class _OpenState extends State<_Open> {
+  late final ConversationData _data = ConversationData(widget.chats, widget.conv);
+
+  @override
+  void dispose() {
+    _data.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => ConversationScreen(data: _data);
 }

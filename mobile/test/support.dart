@@ -48,17 +48,23 @@ class Fixture {
   /// The recorded answer for a request, as the web half finds it.
   Map<String, dynamic>? answerFor(Uri u) => answers[u.path + (u.query.isEmpty ? '' : '?${u.query}').replaceAll(RegExp(r'after=[^&]*'), 'after=*')];
 
-  /// A stand-in server answering from the fixture; anything else is 404.
-  http.Client client() => MockClient((req) async {
+  /// A stand-in server answering from the fixture; anything else is 404,
+  /// unless [also] answers it first (a test's sends).
+  http.Client client({Future<http.Response?> Function(http.Request req)? also}) => MockClient((req) async {
+        final own = await also?.call(req);
+        if (own != null) return own;
         final a = req.method == 'GET' ? answerFor(req.url) : null;
         if (a == null) return http.Response(jsonEncode({'error': 'not in the fixture'}), 404);
         return http.Response.bytes(File('$dir/${a['file']}').readAsBytesSync(), a['status'] as int, headers: {'content-type': a['type'] as String});
       });
 
+  /// A recorded answer's JSON.
+  Map<String, dynamic> json(String path) => jsonDecode(File('$dir/${answers[path]!['file']}').readAsStringSync()) as Map<String, dynamic>;
+
   /// Signed in as the fixture's person, who-am-I read from it.
-  Auth auth() {
+  Auth auth({Future<http.Response?> Function(http.Request req)? also}) {
     final a = Auth(
-      transport: Transport(base: 'http://localhost', token: 'fixture', client: client()),
+      transport: Transport(base: 'http://localhost', token: 'fixture', client: client(also: also)),
       store: SessionStore(MemoryKeyStore(), describe: () async => (name: 'Test phone', platform: 'android')),
     );
     final me = answers['/v1/me'];

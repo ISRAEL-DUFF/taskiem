@@ -27,3 +27,9 @@ listLinks
 getChatAlerts
 getChatTools
 getLinkSettings
+
+# A conversation (M3)
+linkMessages
+sendLinkMessage
+readLinkChat
+linkTyping

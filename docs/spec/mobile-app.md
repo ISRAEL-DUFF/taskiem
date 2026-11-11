@@ -491,6 +491,36 @@ other takes M7 and M8, since they divide by screen.
   not hidden; the terms' checkbox has no parity picture (the browser tests'
   server asks no terms); the app's CI has not yet run on GitHub.
 
+### As built: M3 so far (11 November 2026)
+
+M3 is built in slices, each held to the web by the parity test with the
+demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
+
+- **The chats** (`lib/chat/chats.dart`): the web's list as it draws on a
+  phone: the head, search, the chips, Taskiem's row with what needs you, the
+  businesses asking to link, the conversations (logo or initials, time,
+  ticks, preview, unread, pin, mute) and Find a business. The web's icons and
+  the words a card's event is said in are generated from the web
+  (`tools/mobilegen`); its previews, times and tones are ported
+  (`lib/chat/words.dart`, held to the web's answers by `words_test.dart`).
+- **A conversation** (`lib/chat/conversation.dart`): opened from the list in
+  its place, as the web does on a phone (no transition); the head (back,
+  logo, name, the link's role or typing…), the wallpaper with its dots, the
+  days, where the unread begin, the bubbles (the tail's corner on the first
+  of a run, the time in the corner of the last line, two ticks, blue once
+  read) and the box (tools, attach, camera, the mic, Send once there are
+  words). Opening reads it; what is newer is asked for every 3 seconds;
+  a message shows at once with a clock and the server's copy takes its
+  place, or it shows not sent with Retry and Delete (the same client id, so
+  a retry is never a second message). Parity: Mama Tunde's Market's
+  conversation, light and dark, two sizes.
+- **Not yet in M3**: cards and their actions, photos, files and voice notes,
+  replies, reactions, the message menu, stars, search, the contact sheet,
+  forwarding, the live stream (`/v1/chat/stream`; the app polls), older pages
+  as the reader scrolls up, the day chip staying at the top while scrolling,
+  the chat tools, `@Taskiem`, customers' conversations, and the list's
+  search, chips and answers to requests (drawn, not yet working).
+
 ## 11. What needs people
 
 | # | Item | Who | Unblocks |

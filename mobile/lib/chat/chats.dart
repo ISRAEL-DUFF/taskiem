@@ -91,11 +91,14 @@ class ChatsData extends ChangeNotifier {
 enum ChatFilter { all, unread, starred, archived }
 
 class ChatsScreen extends StatefulWidget {
-  const ChatsScreen({super.key, required this.data, this.onMenu, this.onFind});
+  const ChatsScreen({super.key, required this.data, this.onMenu, this.onFind, this.onOpen});
 
   final ChatsData data;
   final VoidCallback? onMenu;
   final VoidCallback? onFind;
+
+  /// A conversation with a linked business, opened.
+  final ValueChanged<LinkConversation>? onOpen;
 
   @override
   State<ChatsScreen> createState() => _ChatsScreenState();
@@ -183,6 +186,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                 unread: c.unread,
                                 pinned: c.pinned,
                                 muted: c.muted,
+                                onTap: widget.onOpen == null ? null : () => widget.onOpen!(c),
                               ),
                           ],
                         ),
@@ -440,10 +444,13 @@ class _AccentAvatar extends StatelessWidget {
 
 /// ChatAvatar.tsx: the logo, else the initials on the name's tone.
 class ChatAvatar extends StatelessWidget {
-  const ChatAvatar({super.key, required this.name, this.logo, this.size = 52});
+  const ChatAvatar({super.key, required this.name, this.logo, this.size = 52, this.letterSize});
   final String name;
   final Uint8List? logo;
   final double size;
+
+  /// The initials' size: the row's 20 px at 52, the head's 15 px.
+  final double? letterSize;
 
   @override
   Widget build(BuildContext context) {
@@ -458,7 +465,7 @@ class ChatAvatar extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
       alignment: Alignment.center,
-      child: Text(initialsOf(name), style: tkText(size: size * 20 / 52, weight: 800, letterSpacing: 0.2, color: ink)),
+      child: Text(initialsOf(name), style: tkText(size: letterSize ?? size * 20 / 52, weight: 800, letterSpacing: 0.2, color: ink)),
     );
   }
 }
