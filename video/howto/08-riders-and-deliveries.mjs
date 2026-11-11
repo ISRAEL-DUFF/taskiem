@@ -57,10 +57,19 @@ async function prepare() {
 async function kunleTaps(want) {
   const page = await person("ada");
   for (let i = 0; i < 20; i++) {
-    const last = (await sentTo(page.request, KUNLE.from)).findLast((m) => m.buttons?.some((b) => b.title === want));
+    const sent = await sentTo(page.request, KUNLE.from);
+    // The offer can come as a template, its Accept a quick reply.
+    const offer = want === "Accept" && sent.findLast((m) => m.template === "taskiem_delivery_offer" && m.payloads?.length);
+    if (offer) {
+      await taps(page.request, BASE, { ...KUNLE, payload: offer.payloads[0], title: "Accept", on: offer.from });
+      await page.waitForTimeout(1500);
+      await page.context().close();
+      return;
+    }
+    const last = sent.findLast((m) => m.buttons?.some((b) => b.title === want));
     if (last) {
       const b = last.buttons.find((x) => x.title === want);
-      await taps(page.request, BASE, { ...KUNLE, id: b.id, title: b.title });
+      await taps(page.request, BASE, { ...KUNLE, id: b.id, title: b.title, on: last.from });
       await page.waitForTimeout(1500);
       await page.context().close();
       return;
@@ -128,7 +137,11 @@ const PARTS = [
 ];
 
 // No argument: everything. "build": only join.
-if (process.argv[2] !== "build") {
+if (process.argv[2] === "rest") {
+  // After the assign act: Kunle's taps and the follow act.
+  for (const step of ["Accept", "Picked up", "Arrived", "Delivered"]) await kunleTaps(step);
+  await follow();
+} else if (process.argv[2] !== "build") {
   await prepare();
   await assign();
   for (const step of ["Accept", "Picked up", "Arrived", "Delivered"]) await kunleTaps(step);

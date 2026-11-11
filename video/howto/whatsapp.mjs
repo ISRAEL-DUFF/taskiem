@@ -50,12 +50,12 @@ export async function says(request, base, { from, name, text }) {
   await deliver(request, base, PLATFORM, { from, name, message: { type: "text", text: { body: text } } });
 }
 
-/** A person taps a button on Taskiem's number: a template's quick reply (payload) or a message's button (id). */
-export async function taps(request, base, { from, name, payload, id, title = "" }) {
+/** A person taps a button: a template's quick reply (payload) or a message's button (id), on the number the message came from (`on`, its phone number id; Taskiem's own number by default). */
+export async function taps(request, base, { from, name, payload, id, title = "", on = PLATFORM.pnid }) {
   const message = payload
     ? { type: "button", button: { payload, text: title } }
     : { type: "interactive", interactive: { type: "button_reply", button_reply: { id, title } } };
-  await deliver(request, base, PLATFORM, { from, name, message });
+  await deliver(request, base, on === ADA.pnid ? ADA : PLATFORM, { from, name, message });
 }
 
 /** What the WhatsApp stand-in sent to a number, oldest first. */

@@ -8,7 +8,8 @@
 //   Kitchen's own number. Messages sent are accepted (and logged); the own
 //   number answers who it is. Nothing leaves the machine. GET /demo/sent
 //   ?to=… gives what was sent to a number, with a template's quick-reply
-//   payloads and a message's button ids, for a video to tap them.
+//   payloads, a message's button ids and the number it came from (its
+//   phone number id), for a video to tap them on that number.
 // - A model at 127.0.0.1:12930 (OpenAI-compatible, TASKIEM_AI_PROVIDER=
 //   selfhosted): it answers the order reader for the messages the videos
 //   send, with the reading a model gives for them. Matching what was said
@@ -64,7 +65,7 @@ const graph = createServer((req, res) => {
       const payloads = (m.template?.components ?? []).filter((c) => c.type === "button").flatMap((c) => (c.parameters ?? []).map((p) => p.payload).filter(Boolean));
       const buttons = (m.interactive?.action?.buttons ?? []).map((b) => ({ id: b.reply?.id, title: b.reply?.title }));
       const text = m.text?.body ?? m.interactive?.body?.text ?? "";
-      outbox.push({ to: String(m.to).replace(/^\+/, ""), type: m.type, text, template: m.template?.name, payloads, buttons });
+      outbox.push({ to: String(m.to).replace(/^\+/, ""), from: url.pathname.split("/")[2], type: m.type, text, template: m.template?.name, payloads, buttons });
       log("whatsapp.send", { to: m.to, type: m.type, text, template: m.template?.name, payloads, buttons });
       return json(200, { messaging_product: "whatsapp", contacts: [{ input: m.to, wa_id: String(m.to).replace(/^\+/, "") }], messages: [{ id: `wamid.demo${++sent}` }] });
     }
