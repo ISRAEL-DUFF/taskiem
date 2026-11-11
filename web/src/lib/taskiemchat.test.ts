@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   boldParts,
+  forgetInflight,
+  inflight,
   inflightOutcome,
+  keepInflight,
   mergeTaskiem,
   type TaskiemMessage,
 } from "./taskiemchat";
@@ -139,5 +142,31 @@ describe("inflightOutcome", () => {
       created_at: "2025-12-01T10:00:00Z",
     } as TaskiemMessage;
     expect(inflightOutcome([old], f)).toBe("not-sent");
+  });
+});
+
+describe("forgetInflight", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const store = () => {
+    const m = new Map<string, string>();
+    vi.stubGlobal("sessionStorage", {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+      removeItem: (k: string) => void m.delete(k),
+    });
+  };
+  const last = { text: "status", at: "2026-01-01T10:00:00Z" };
+  it("forgets the last page's message when it is still the one kept", () => {
+    store();
+    keepInflight(last);
+    forgetInflight(last);
+    expect(inflight()).toBeUndefined();
+  });
+  it("keeps a message this page has sent since", () => {
+    store();
+    const mine = { text: "status", at: "2026-01-01T10:00:05Z" };
+    keepInflight(mine);
+    forgetInflight(last);
+    expect(inflight()).toEqual(mine);
   });
 });

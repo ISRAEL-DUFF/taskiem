@@ -45,6 +45,7 @@ import { Icon, TaskiemMark } from "../icons";
 import { clock } from "../lib/linkchat";
 import {
   boldParts,
+  forgetInflight,
   inflight,
   inflightOutcome,
   keepInflight,
@@ -306,6 +307,12 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
     setParams({ with: "taskiem" }, { replace: true });
     // Once, when the switch is known.
   }, [chatTools]);
+  // A message the last page left on its way, read as this page is first
+  // drawn: before anything is sent from it. Read when the history comes
+  // instead, a message sent quickly from this page (before the history
+  // came) would be taken for the last page's, missing from a history asked
+  // for before it went, and put back in the box as not sent.
+  const [left] = useState(inflight);
   // The newest page: the view is placed at its end.
   useEffect(() => {
     get<{ messages: TaskiemMessage[] }>("/v1/taskiem-chat")
@@ -316,9 +323,9 @@ export function TaskiemPane({ onBack }: { onBack: () => void }) {
         setMessages(mergeTaskiem([], out.messages));
         // A message that was on its way when the page went away: Taskiem
         // has it, or the words come back to the box, for the person to check.
-        const f = inflight();
+        const f = left;
         if (f) {
-          keepInflight(undefined);
+          forgetInflight(f);
           if (inflightOutcome(out.messages, f) === "not-sent") {
             // Kept as the draft too: the pane may be shown again (a page
             // that is drawn twice as it loads) before this is read.
