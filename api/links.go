@@ -283,6 +283,9 @@ func (s *Server) answerLink(w http.ResponseWriter, r *http.Request) {
 	}
 	s.tellLinkAnswered(r.Context(), other, id, answer)
 	s.claimLinkedRiders(r.Context(), other, answer)
+	if answer == links.Accept {
+		s.shopsDue(r.Context(), id, p.TenantID, other)
+	}
 	if name != "" {
 		s.diaryChange(r.Context(), p, linkWords(answer, name))
 	}
@@ -797,4 +800,22 @@ func linkWords(step, name string) string {
 		return fmt.Sprintf("Unblocked %s", name)
 	}
 	return ""
+}
+
+// shopsDue puts a link just made active on both sides' lists to mirror:
+// each sees what the other offers it from now (its shared list, else its
+// storefront; docs/spec/business-chat-tools.md §2). The worker writes the
+// copies; a failure here is logged, and the next storefront change
+// mirrors the link anyway.
+func (s *Server) shopsDue(ctx context.Context, link uuid.UUID, sides ...uuid.UUID) {
+	for _, t := range sides {
+		if t == uuid.Nil {
+			continue
+		}
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{t}, func(tx pgx.Tx) error {
+			return links.PricesDueTx(ctx, tx, t, link)
+		}); err != nil {
+			s.Logger.Warn("links: putting a new link's prices to mirror", "tenant", t, "link", link, "err", err)
+		}
+	}
 }

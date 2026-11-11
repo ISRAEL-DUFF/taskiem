@@ -158,7 +158,9 @@ func AsProposed(lines []OrderLine) bool {
 }
 
 // linkPrices is the price list the seller in scope shares with a link, by
-// the seller's item: what a linked buyer's order is priced at first.
+// the seller's item: what a linked buyer's order is priced at first. With
+// no list shared, a line is priced at the seller's catalogue (MatchItemsTx),
+// which is the storefront's price the buyer was shown (ShopPricesTx).
 func linkPrices(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) (map[string]PriceItem, error) {
 	_, items, ok, err := LinkPricesTx(ctx, tx, seller, link)
 	if err != nil || !ok {

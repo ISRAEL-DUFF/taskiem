@@ -137,19 +137,24 @@ func TestPriceLists(t *testing.T) {
 		t.Fatalf("no such supplier: %q", r)
 	}
 
-	// Withdrawn: gone from the buyer, and nothing is ordered from it.
+	// Withdrawn: the list is gone from the buyer, who sees the seller's
+	// storefront in its place (business-chat-tools.md §2), and orders from
+	// it at the storefront's prices.
 	seller.must(200, "PUT", "/v1/price-lists/"+list+"/links", map[string]any{"links": []string{}})
-	if got := buyer.must(200, "GET", "/v1/supplier-prices", nil)["suppliers"].([]any); len(got) != 0 {
+	if got := buyer.must(200, "GET", "/v1/supplier-prices", nil)["suppliers"].([]any); len(got) != 1 || got[0].(map[string]any)["name"] != "Storefront prices" {
 		t.Fatalf("withdrawn: %v", got)
 	}
-	buyer.must(409, "POST", "/v1/supplier-prices/"+link+"/order", map[string]any{"lines": []any{map[string]any{"seller_item_id": sRice, "quantity": 5}}},
-		"Idempotency-Key", "o6")
+	// Ordered now from the storefront, at the storefront's price.
+	if po := buyer.must(201, "POST", "/v1/supplier-prices/"+link+"/order", map[string]any{"lines": []any{map[string]any{"seller_item_id": sRice, "quantity": 5}}},
+		"Idempotency-Key", "o6")["purchase"].(map[string]any); po["total_kobo"] != float64(22500000) {
+		t.Fatalf("ordered from the storefront: %v", po)
+	}
 	buyer.must(204, "DELETE", "/v1/item-links/"+link+"/"+rice, nil)
 	// Shared again, then the list deleted: gone again.
 	seller.must(200, "PUT", "/v1/price-lists/"+list+"/links", map[string]any{"links": []string{sellerLink}})
 	prices()
 	seller.must(200, "DELETE", "/v1/price-lists/"+list, nil)
-	if got := buyer.must(200, "GET", "/v1/supplier-prices", nil)["suppliers"].([]any); len(got) != 0 {
+	if got := buyer.must(200, "GET", "/v1/supplier-prices", nil)["suppliers"].([]any); len(got) != 1 || got[0].(map[string]any)["name"] != "Storefront prices" {
 		t.Fatalf("deleted: %v", got)
 	}
 	// Only the business's own: a buyer cannot read the seller's lists.

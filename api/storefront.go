@@ -18,6 +18,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -271,6 +272,7 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 		}); err != nil {
 			return err
 		}
+		s.storefrontToLinks(ctx, tenant)
 		if err := s.syncLists(ctx, tenant); err != nil {
 			return err
 		}
@@ -323,6 +325,9 @@ func (s *Server) SyncStorefront(ctx context.Context, tenant uuid.UUID) error {
 		}
 		return storefront.SyncCatalogue(ctx, tx, tenant, checked.items)
 	})
+	if err == nil {
+		s.storefrontToLinks(ctx, tenant)
+	}
 	if err != nil {
 		return err
 	}
@@ -996,4 +1001,17 @@ func (s *Server) storefrontQR(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "image/svg+xml")
 	_, _ = io.WriteString(w, svg)
+}
+
+// storefrontToLinks puts the business's links that share no price list on
+// the list to mirror: they see its storefront, which has just been copied
+// again (docs/spec/business-chat-tools.md §2). On its own transaction, so
+// a link that cannot be read never undoes the storefront's copy; a failure
+// is logged, and the next copy tries again.
+func (s *Server) storefrontToLinks(ctx context.Context, tenant uuid.UUID) {
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return links.StorefrontChangedTx(ctx, tx, tenant)
+	}); err != nil {
+		s.Logger.Warn("links: putting storefront prices to mirror", "tenant", tenant, "err", err)
+	}
 }
