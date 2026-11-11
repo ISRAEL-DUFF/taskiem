@@ -240,8 +240,12 @@ test("a new message does not move a reader looking at older ones", async ({
     .getByTestId("chat-stream")
     .evaluate((el) => (el.scrollTop = el.scrollHeight / 2));
   const held = await scrollTop(buyer);
-  all.push(one(conversation(link, 122), 121));
   const jump = pane.getByTestId("chat-jump");
+  // The thread knows the reader is away once its scroll event has run (the
+  // jump button shows): on a slow runner a message arriving before that was
+  // followed down as at the bottom (CI failed on it once).
+  await expect(jump).toBeVisible();
+  all.push(one(conversation(link, 122), 121));
   await expect(jump).toContainText("1 new message", { timeout: 10_000 });
   expect(Math.abs((await scrollTop(buyer)) - held)).toBeLessThan(3);
   await axeBoth(buyer, "the new messages button");
