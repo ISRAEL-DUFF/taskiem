@@ -28,12 +28,19 @@ Future<void> showChatSearch(
   required Future<String?> Function(String day) firstOn,
   required DateTime Function() now,
 }) {
-  final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
   return Navigator.of(context).push<void>(
-    PageRouteBuilder<void>(
+    sideRoute((context) => ChatSearchScreen(name: name, search: search, onJump: onJump, firstOn: firstOn, now: now), context),
+  );
+}
+
+/// `.chat-info { animation: slide-side 0.2s ease-out }`: a panel over the
+/// conversation, in from 16 px to the right, gone at once when closed.
+PageRouteBuilder<T> sideRoute<T>(WidgetBuilder builder, BuildContext context) {
+  final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+  return PageRouteBuilder<T>(
       transitionDuration: still ? Duration.zero : const Duration(milliseconds: 200),
       reverseTransitionDuration: Duration.zero,
-      pageBuilder: (context, _, _) => ChatSearchScreen(name: name, search: search, onJump: onJump, firstOn: firstOn, now: now),
+      pageBuilder: (context, _, _) => builder(context),
       transitionsBuilder: (context, a, _, child) {
         final e = CurvedAnimation(parent: a, curve: Curves.easeOut);
         return FadeTransition(
@@ -45,7 +52,6 @@ Future<void> showChatSearch(
           ),
         );
       },
-    ),
   );
 }
 

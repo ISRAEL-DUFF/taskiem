@@ -2118,7 +2118,8 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .chat-info-head .icon-button:hover:not(:disabled) { background: var(--chat-select); }
 .chat-info-head .icon-button:focus-visible { box-shadow: var(--ring); }
 .chat-search-row .icon-button[aria-expanded="true"] { background: var(--chat-select); }
-@media (max-width: 899px) { .chat-search { width: 100%; border-left: 0; } }
+/* On a phone the panels (search, contact info) take the whole screen, as WhatsApp's do. */
+@media (max-width: 899px) { .chat-info, .chat-search { width: 100%; border-left: 0; } }
 .chat-date-anchor { position: relative; flex: none; }
 .chat-date-note { padding: 0 16px 6px 56px; margin: 0; }
 .day-picker { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: min(330px, calc(100vw - 24px)); padding: 10px 12px 14px; background: var(--panel); border-radius: 14px; box-shadow: 0 4px 18px var(--chat-shadow); border: 1px solid var(--border); animation: pop-in 0.12s ease-out; }

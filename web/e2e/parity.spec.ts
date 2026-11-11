@@ -25,7 +25,14 @@ const CODE_SENT = "If this number is on a Taskiem account, we have sent a code t
  * from the demo world): every API answer comes from there and the clock is
  * stopped at the moment they were recorded, so the picture never changes
  * with the data or the time. */
-const SCREENS: { name: string; path: string; fixture?: string; ready: (p: Page) => Promise<void> }[] = [
+const SCREENS: {
+  name: string;
+  path: string;
+  fixture?: string;
+  /** Seen as a touch phone sees it (no hover: a computer's Keyboard entry hidden). */
+  touch?: boolean;
+  ready: (p: Page) => Promise<void>;
+}[] = [
   {
     name: "sign-in",
     path: "/login",
@@ -161,6 +168,80 @@ const SCREENS: { name: string; path: string; fixture?: string; ready: (p: Page) 
       await expect(p.locator(".chat-photo img")).toBeVisible();
       await p.locator(".chat-photo img").evaluate((i: HTMLImageElement) => i.decode());
       await p.waitForLoadState("networkidle");
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // Contact info, the whole screen on a phone: the logo, name, role, Search
+    // and Pin, About (its card), Starred, Media and files, Mute, Archive, End
+    // link. (The files' recording with its card and a starred message added.)
+    name: "chat-info",
+    path: "/chat?with=828e255f-dc0f-4dd3-bb19-0ba2764778d3",
+    fixture: "chat-info",
+    ready: async (p) => {
+      await expect(p.locator(".chat-photo img")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "About Mama Tunde's Market" }).click();
+      await expect(p.getByTestId("chat-info")).toBeVisible();
+      await expect(p.locator(".info-count").first()).toHaveText("1");
+      await p.waitForLoadState("networkidle");
+      await p.waitForTimeout(300);
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // Its Media and files opened: every photo, voice note and file.
+    name: "chat-info-media",
+    path: "/chat?with=828e255f-dc0f-4dd3-bb19-0ba2764778d3",
+    fixture: "chat-info",
+    ready: async (p) => {
+      await expect(p.locator(".chat-photo img")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "About Mama Tunde's Market" }).click();
+      await expect(p.getByTestId("chat-info")).toBeVisible();
+      await expect(p.locator(".info-count").first()).toHaveText("1");
+      await p.getByTestId("info-media").click();
+      await expect(p.locator(".info-media-all")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.waitForTimeout(300);
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // Its Starred messages.
+    name: "chat-info-starred",
+    path: "/chat?with=828e255f-dc0f-4dd3-bb19-0ba2764778d3",
+    fixture: "chat-info",
+    ready: async (p) => {
+      await expect(p.locator(".chat-photo img")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "About Mama Tunde's Market" }).click();
+      await expect(p.getByTestId("chat-info")).toBeVisible();
+      await expect(p.locator(".info-count").first()).toHaveText("1");
+      await p.getByTestId("info-starred").click();
+      await expect(p.getByTestId("chat-starred")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.waitForTimeout(300);
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // The head's menu: Contact info, Pin, Mute, Archive.
+    name: "chat-head-menu",
+    path: "/chat?with=828e255f-dc0f-4dd3-bb19-0ba2764778d3",
+    fixture: "chat-info",
+    touch: true,
+    ready: async (p) => {
+      await expect(p.locator(".chat-photo img")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "More about this conversation" }).click();
+      await expect(p.getByRole("button", { name: "Contact info" })).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.waitForTimeout(300);
+      await p.mouse.move(0, 0);
       await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     },
   },
@@ -488,7 +569,13 @@ for (const s of SCREENS)
     for (const size of SIZES) {
       const file = `${s.name}-${theme}-${size.width}x${size.height}.png`;
       test(`parity: ${file}`, async ({ browser }) => {
-        const ctx = await browser.newContext({ viewport: size, deviceScaleFactor: 1, reducedMotion: "reduce", timezoneId: "UTC" });
+        const ctx = await browser.newContext({
+          viewport: size,
+          deviceScaleFactor: 1,
+          reducedMotion: "reduce",
+          timezoneId: "UTC",
+          ...(s.touch ? { hasTouch: true, isMobile: true } : {}),
+        });
         const page = await ctx.newPage();
         // Dark is the person's choice on the web (theme.ts).
         await page.addInitScript((t) => {

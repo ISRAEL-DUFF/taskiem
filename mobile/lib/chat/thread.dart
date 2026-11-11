@@ -50,7 +50,23 @@ class Wallpaper extends CustomPainter {
 /// ChatHead.tsx: Back, the avatar, the name with a line under it (or
 /// "typing…"), the head's own buttons, and the menu.
 class ChatHeadBar extends StatelessWidget {
-  const ChatHeadBar({super.key, required this.avatar, required this.title, this.subtitle, this.typing = false, this.actions = const [], this.onBack});
+  const ChatHeadBar({
+    super.key,
+    required this.avatar,
+    required this.title,
+    this.subtitle,
+    this.typing = false,
+    this.actions = const [],
+    this.onBack,
+    this.onMore,
+    this.onAvatar,
+  });
+
+  /// The ⋯ menu's button pressed: where it is on the screen.
+  final ValueChanged<Rect>? onMore;
+
+  /// The picture pressed (`.chat-avatar-btn`: About the business).
+  final VoidCallback? onAvatar;
 
   final Widget avatar;
   final String title;
@@ -86,7 +102,14 @@ class ChatHeadBar extends StatelessWidget {
         children: [
           iconButton('Back to the chats', TkIcon('back', size: 20, color: t.text), onBack ?? () => Navigator.of(context).maybePop()),
           const SizedBox(width: 6),
-          avatar,
+          if (onAvatar != null)
+            Semantics(
+              button: true,
+              label: 'About $title',
+              child: GestureDetector(onTap: onAvatar, child: avatar),
+            )
+          else
+            avatar,
           const SizedBox(width: 6),
           Expanded(
             child: Column(
@@ -116,7 +139,18 @@ class ChatHeadBar extends StatelessWidget {
           ),
           for (final a in actions) ...[const SizedBox(width: 6), a],
           const SizedBox(width: 6),
-          iconButton('More about this conversation', RotatedBox(quarterTurns: 1, child: TkIcon('more', size: 18, stroke: 3, color: t.text)), null),
+          Builder(
+            builder: (context) => iconButton(
+              'More about this conversation',
+              RotatedBox(quarterTurns: 1, child: TkIcon('more', size: 18, stroke: 3, color: t.text)),
+              onMore == null
+                  ? null
+                  : () {
+                      final box = context.findRenderObject()! as RenderBox;
+                      onMore!(box.localToGlobal(Offset.zero) & box.size);
+                    },
+            ),
+          ),
         ],
       ),
     );
@@ -653,4 +687,77 @@ class BubbleFrame extends StatelessWidget {
       },
     );
   }
+}
+
+/// ChatHead.tsx HeadMenu (`.chat-menu`): the head's ⋯ menu, under its
+/// button and against its right edge; its entries, then nothing more on a
+/// phone (Keyboard is a computer's). A tap elsewhere or Back closes it.
+Future<void> showHeadMenu(BuildContext context, {required Rect at, required List<(String, VoidCallback)> items}) {
+  return Navigator.of(context).push<void>(
+    PageRouteBuilder<void>(
+      opaque: false,
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
+      pageBuilder: (context, _, _) {
+        final t = TkTheme.tokens(context);
+        final width = MediaQuery.sizeOf(context).width;
+        return Stack(
+          children: [
+            Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => Navigator.of(context).pop())),
+            Positioned(
+              right: width - at.right,
+              top: at.bottom + 4,
+              child: Semantics(
+                container: true,
+                explicitChildNodes: true,
+                child: Container(
+                  constraints: const BoxConstraints(minWidth: 160),
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: t.panel,
+                    border: Border.all(color: t.border),
+                    borderRadius: BorderRadius.circular(Tk.radius),
+                    boxShadow: t.shadowMd,
+                  ),
+                  child: IntrinsicWidth(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final (label, onTap) in items)
+                          Semantics(
+                            button: true,
+                            label: label,
+                            excludeSemantics: true,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {
+                                Navigator.of(context).pop();
+                                onTap();
+                              },
+                              child: Container(
+                                // `.chat-menu button`: 10 px 12 px, 40 px; the
+                                // site's button shadow under each.
+                                constraints: const BoxConstraints(minHeight: 40),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                alignment: Alignment.centerLeft,
+                                decoration: BoxDecoration(
+                                  color: t.panel,
+                                  borderRadius: BorderRadius.circular(6),
+                                  boxShadow: const [BoxShadow(color: Color(0x0A0E0F0C), offset: Offset(0, 1), blurRadius: 2)],
+                                ),
+                                child: Text(label, style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: t.text)),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }

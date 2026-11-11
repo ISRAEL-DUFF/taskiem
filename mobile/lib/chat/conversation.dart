@@ -24,6 +24,7 @@ import 'composer.dart';
 import 'thread.dart';
 import 'live.dart';
 import 'menu.dart';
+import 'contact.dart';
 import 'search.dart';
 import 'words.dart';
 
@@ -180,6 +181,47 @@ class ConversationData extends ChangeNotifier {
     openedAt = at >= 0 ? id : null;
     epoch++;
     _changed();
+  }
+
+  /// The conversation as the list has it now (pinned, muted, archived
+  /// change as they are set).
+  LinkConversation get current => chats.conversations.where((c) => c.link == conv.link).firstOrNull ?? conv;
+
+  /// The link with this business (its role, when it was answered).
+  BusinessLink? get link => chats.links.where((l) => l.id == conv.link).firstOrNull;
+
+  /// Conversation.tsx settings: pinned, muted or archived set
+  /// (PUT /v1/link-chats/{link}); the list read again. Null when done.
+  Future<String?> setting(Map<String, dynamic> body) async {
+    try {
+      await chats.auth.transport.send('PUT', '/v1/link-chats/${Uri.encodeComponent(conv.link)}', body: body);
+    } on Object catch (e) {
+      return _say(e);
+    }
+    await chats.load();
+    _changed();
+    return null;
+  }
+
+  /// The business's card (area, what it sells) as its public page shows
+  /// it: found by the same search, so only a business that may be found
+  /// has one.
+  Future<LinkCard?> card() async {
+    try {
+      final r = await api.searchLinks(q: conv.name);
+      return r.results.where((c) => c.business == conv.business).firstOrNull;
+    } on Object {
+      return null;
+    }
+  }
+
+  /// The messages starred in this conversation.
+  Future<List<LinkMessage>> starred() async {
+    try {
+      return (await api.starredLinkMessages()).messages.where((m) => m.link == conv.link).toList();
+    } on Object {
+      return const [];
+    }
   }
 
   /// The messages that say [q] (ChatSearch.tsx).
@@ -537,6 +579,37 @@ class _ConversationScreenState extends State<ConversationScreen> {
   /// The message whose menu is open, and the one being answered.
   String? _menuFor;
 
+  void _search() {
+    final d = widget.data;
+    showChatSearch(context, name: d.conv.name, search: d.search, onJump: d.jump, firstOn: d.firstOn, now: d.chats.now);
+  }
+
+  void _contact() => showContactInfo(context, data: widget.data, onSearch: _search, onJump: widget.data.jump);
+
+  /// The head's ⋯ menu: Contact info; Pin, Mute and Archive for those who
+  /// may trade in the chat.
+  void _more(Rect at) {
+    final d = widget.data;
+    final c = d.current;
+    Future<void> set(Map<String, dynamic> body, String done) async {
+      final why = await d.setting(body);
+      if (mounted) showTkToast(context, why ?? done, error: why != null);
+    }
+
+    showHeadMenu(
+      context,
+      at: at,
+      items: [
+        ('Contact info', _contact),
+        if (d.chats.auth.can('chat.trade')) ...[
+          (c.pinned ? 'Unpin' : 'Pin', () => set({'pinned': !c.pinned}, c.pinned ? 'Unpinned' : 'Pinned')),
+          (c.muted ? 'Unmute' : 'Mute', () => set({'muted': !c.muted}, c.muted ? 'Unmuted' : 'Muted')),
+          (c.archived ? 'Unarchive' : 'Archive', () => set({'archived': !c.archived}, c.archived ? 'Unarchived' : 'Archived')),
+        ],
+      ],
+    );
+  }
+
   /// How far each long message is unfolded, by its id.
   final _taps = <String, int>{};
 
@@ -765,19 +838,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     listenable: Listenable.merge([d, d.chats]),
                     builder: (context, _) => ChatHeadBar(
                       onBack: widget.onBack,
-                      avatar: Semantics(
-                        button: true,
-                        label: 'About ${c.name}',
-                        child: ChatAvatar(name: c.name, logo: c.logo ? d.chats.logo(c.business) : null, size: 40, letterSize: 15),
-                      ),
+                      avatar: ChatAvatar(name: c.name, logo: c.logo ? d.chats.logo(c.business) : null, size: 40, letterSize: 15),
                       title: c.name,
                       subtitle: d.headLine,
                       typing: d.typingNow,
-                      actions: [ChatHeadBar.iconButton(
-                          'Search this conversation',
-                          TkIcon('search', size: 18, color: t.text),
-                          () => showChatSearch(context, name: d.conv.name, search: d.search, onJump: d.jump, firstOn: d.firstOn, now: d.chats.now),
-                        )],
+                      actions: [ChatHeadBar.iconButton('Search this conversation', TkIcon('search', size: 18, color: t.text), _search)],
+                      onAvatar: _contact,
+                      onMore: _more,
                     ),
                   ),
                 ),

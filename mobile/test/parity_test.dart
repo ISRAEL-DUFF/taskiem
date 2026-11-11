@@ -301,6 +301,31 @@ final screens = <String, Screen>{
       await t.pumpAndSettle();
     },
   ),
+  'chat-info': (build: () => _conversation('chat-info', "Mama Tunde's Market"), drive: (t) => _contact(t)),
+  'chat-info-media': (
+    build: () => _conversation('chat-info', "Mama Tunde's Market"),
+    drive: (t) async {
+      await _contact(t);
+      await t.tap(find.bySemanticsLabel('Media and files'));
+      await _loaded(t);
+    },
+  ),
+  'chat-info-starred': (
+    build: () => _conversation('chat-info', "Mama Tunde's Market"),
+    drive: (t) async {
+      await _contact(t);
+      await t.tap(find.bySemanticsLabel('Starred messages'));
+      await t.pumpAndSettle();
+    },
+  ),
+  'chat-head-menu': (
+    build: () => _conversation('chat-info', "Mama Tunde's Market"),
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('More about this conversation'));
+      await t.pumpAndSettle();
+    },
+  ),
   'chat-pick': (
     build: () => _conversation('chat-tunde', "Mama Tunde's Market"),
     drive: (t) async {
@@ -434,6 +459,13 @@ Widget _conversation(String fixture, String name) {
   final chats = ChatsData(f.auth(), now: () => f.at)..load();
   final conv = ListLinkChatsResponse.fromJson(f.json('/v1/link-chats')).conversations.firstWhere((c) => c.name == name);
   return ConversationScreen(data: ConversationData(chats, conv, follow: false));
+}
+
+/// Opens the conversation's contact info, its card, stars and photos read.
+Future<void> _contact(WidgetTester t) async {
+  await _loaded(t);
+  await t.tap(find.bySemanticsLabel("About Mama Tunde's Market"));
+  await _loaded(t);
 }
 
 /// Waits for what is fetched and decoded for real (logos, photos), outside

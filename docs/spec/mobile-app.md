@@ -705,11 +705,28 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   Found: on the web the calendar's grid took the site's table look (a
   rounded box, and on a phone `display: block`, so its days did not fill
   its width and the line under the weekdays stopped short); fixed.
+- **Contact info and the head's menu** (`lib/chat/contact.dart`), as the
+  web's ContactInfo on a phone: the picture opens it over the conversation
+  (in from the side): the logo, name, how we trade, when linked; Search and
+  Pin as round buttons; About (the business's tagline, area and what it
+  sells, as its public card says, when it may be found); Starred messages
+  (this chat's, each opening the thread at it); Media and files (the latest
+  photos, opened to every photo, voice note and file); Mute as a switch;
+  Archive; and End link, in red, asked first. Each setting is said in the
+  web's toast. The head's ⋯ opens the web's menu: Contact info, Pin, Mute,
+  Archive (not Keyboard, which is a computer's). Parity: contact info, its
+  media opened, its starred messages, and the menu (the files' recording
+  with the card's answer and a starred message added), light and dark, two
+  sizes; held by `contact_test.dart`. Found: on the web contact info left
+  a strip of the conversation showing on a phone (only search was made the
+  whole screen there); fixed. The parity spec can now see a screen as a
+  touch phone does (`touch`). Not yet: the ⋯ menus of Taskiem's and a
+  customer's conversations.
 - **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
-  the milestones), a deal's offers and counters, the contact sheet,
+  the milestones), a deal's offers and counters,
   the chat tools, the "@" and "#" tags, and Find a business (the web's Explore).
 
 ## 11. What needs people
