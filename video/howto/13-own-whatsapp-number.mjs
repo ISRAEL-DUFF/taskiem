@@ -10,7 +10,7 @@
 // connected. The WhatsApp stand-in (fakes.mjs) plays Meta.
 import { person, BASE, sleep } from "../recording/lib.mjs";
 import { act, build, say } from "./howto.mjs";
-import { ADA, APP_SECRET, customerSays } from "./whatsapp.mjs";
+import { ADA, ADA_APP_SECRET, customerSays } from "./whatsapp.mjs";
 
 const SLUG = "13-own-whatsapp-number";
 const later = (page) => page.getByRole("button", { name: "Remind me later" }).click({ timeout: 3000 }).catch(() => {});
@@ -43,10 +43,10 @@ async function connect() {
     await say("From Meta: the phone number id, the WhatsApp Business Account id and a system user's token.", 300);
     await type(box.getByLabel("Phone number id"), ADA.pnid, 70);
     await type(box.getByLabel("WhatsApp Business Account id"), ADA.waba, 70);
-    await type(box.getByLabel("System user access token"), "EAAada-demo-token", 40);
+    await type(box.getByLabel("System user access token"), ADA.token, 90);
     await sleep(600);
     await say("On her own Meta app, the app secret too, and a verify token she makes up.", 300);
-    await type(box.getByLabel("App secret"), APP_SECRET, 40);
+    await type(box.getByLabel("App secret"), ADA_APP_SECRET, 30);
     await type(box.getByLabel("Verify token"), "adas-kitchen-verify-2026", 40);
     await sleep(800);
     await say("Connect.", 600);
@@ -65,7 +65,7 @@ async function connect() {
 // 2 · A customer writes to the new number.
 async function hear() {
   const page = await person("ada");
-  await customerSays(page.request, BASE, { from: "2348039876543", name: "Funmi", text: "Good evening, do you deliver to Yaba?" });
+  await customerSays(page.request, BASE, { from: "2348039876543", name: "Funmi", text: "Good evening, do you deliver to Yaba?", ownApp: true });
   await page.goto(BASE + "/chat");
   await later(page);
   const row = page.getByRole("link", { name: /Funmi/ }).first();
