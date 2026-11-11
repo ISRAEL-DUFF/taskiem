@@ -98,14 +98,16 @@ test("while an answer is being made there is a clock on the message and Taskiem 
   await page.goto("/chat?with=taskiem");
   await page.route("**/v1/taskiem-chat", async (route) => {
     if (route.request().method() !== "POST") return route.continue();
-    await new Promise((r) => setTimeout(r, 1500));
+    // Long enough that the clock is still there when it is looked for on a
+    // cold first page (1.5 s was not, one run in four).
+    await new Promise((r) => setTimeout(r, 4000));
     return route.continue();
   });
   await pane(page).locator("#taskiem-text").fill("status");
   await pane(page).locator("#taskiem-text").press("Enter");
   await expect(pane(page).getByTestId("taskiem-typing")).toBeVisible();
   await expect(ours(page).getByRole("img", { name: "Sending" })).toBeVisible();
-  await expect(theirs(page).last()).toBeVisible({ timeout: 8000 });
+  await expect(theirs(page).last()).toBeVisible({ timeout: 15_000 });
   await expect(pane(page).getByTestId("taskiem-typing")).toHaveCount(0);
   await expect(ours(page)).toHaveCount(1); // not twice
   await expect(ours(page).getByRole("img", { name: "Read" })).toBeVisible();
