@@ -326,6 +326,18 @@ final screens = <String, Screen>{
       await t.pumpAndSettle();
     },
   ),
+  'chat-tagged': (
+    build: () => _conversation('chat-tag', 'Bayo Rice Mills'),
+    drive: (t) async {
+      await _loaded(t);
+      // To its end, where the message is.
+      final thread = t.state<ThreadViewState<ThreadMessage>>(find.byType(ThreadView<ThreadMessage>));
+      thread.scroll.jumpTo(thread.scroll.position.maxScrollExtent);
+      await _loaded(t);
+    },
+  ),
+  'chat-tag': (build: () => _conversation('chat-tag', 'Bayo Rice Mills'), drive: (t) => _typeTag(t, '@')),
+  'chat-tag-hash': (build: () => _conversation('chat-tag', 'Bayo Rice Mills'), drive: (t) => _typeTag(t, '#')),
   'chat-pick': (
     build: () => _conversation('chat-tunde', "Mama Tunde's Market"),
     drive: (t) async {
@@ -459,6 +471,16 @@ Widget _conversation(String fixture, String name) {
   final chats = ChatsData(f.auth(), now: () => f.at)..load();
   final conv = ListLinkChatsResponse.fromJson(f.json('/v1/link-chats')).conversations.firstWhere((c) => c.name == name);
   return ConversationScreen(data: ConversationData(chats, conv, follow: false));
+}
+
+/// Types a tag's mark in the box, as the web half fills it; the keyboard
+/// put away (the web half's box is blurred).
+Future<void> _typeTag(WidgetTester t, String mark) async {
+  await _loaded(t);
+  await t.enterText(find.byType(EditableText), mark);
+  await t.pump();
+  FocusManager.instance.primaryFocus?.unfocus();
+  await _loaded(t);
 }
 
 /// Opens the conversation's contact info, its card, stars and photos read.

@@ -264,6 +264,24 @@ class TaskiemApi {
     final j = await _t.send('GET', '/v1/customer-chats/search', query: {'q': ?q});
     return SearchCustomerChatsResponse.fromJson(j as Map<String, dynamic>);
   }
+
+  /// What "#" names in a conversation (`GET /v1/link-chats/{link}/items`)
+  Future<LinkChatItemsResponse> linkChatItems({required String link}) async {
+    final j = await _t.send('GET', '/v1/link-chats/${Uri.encodeComponent(link)}/items');
+    return LinkChatItemsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The services as booking pages show them, and the availability in effect (`GET /v1/storefront/services`)
+  Future<GetStorefrontServicesResponse> getStorefrontServices() async {
+    final j = await _t.send('GET', '/v1/storefront/services');
+    return GetStorefrontServicesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The shop's items and their stock (`GET /v1/stock`)
+  Future<GetStockResponse> getStock() async {
+    final j = await _t.send('GET', '/v1/stock');
+    return GetStockResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -2337,5 +2355,501 @@ class SearchCustomerChatsResponseMessagesItem {
         'message_id': messageId,
         'mine': mine,
         'name': name,
+      };
+}
+
+class LinkChatItemsResponse {
+  const LinkChatItemsResponse({required this.items, this.whose});
+
+  final List<PriceItem> items;
+  final String? whose;
+
+  factory LinkChatItemsResponse.fromJson(Map<String, dynamic> j) => LinkChatItemsResponse(
+        items: (j['items'] as List).map((e) => PriceItem.fromJson(e as Map<String, dynamic>)).toList(),
+        whose: j['whose'] == null ? null : j['whose'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'items': items.map((e) => e.toJson()).toList(),
+        'whose': ?whose,
+      };
+}
+
+class PriceItem {
+  const PriceItem({required this.available, this.breaks, this.category, this.choices, this.description, required this.itemId, required this.minQuantity, required this.name, this.overridden, required this.priceKobo, this.sizes, this.unit, this.variant, this.variantOf});
+
+  final bool available;
+  /// Lower prices from a quantity up (from 10 bags ₦39,500), quantity going
+  /// up and price going down; none on a link's own price
+  final List<PriceItemBreaksItem>? breaks;
+  /// The seller's category for it
+  final String? category;
+  /// A product sold in sizes and colours, listed once - its choices, with only
+  /// the values its sizes on sale have
+  final List<VariantChoice>? choices;
+  /// The seller's words for it (its storefront description), for search
+  final String? description;
+  /// The seller's own item
+  final String itemId;
+  final int minQuantity;
+  final String name;
+  /// This link's own price, not the list's
+  final bool? overridden;
+  final int priceKobo;
+  /// Its sizes and colours on sale, each ordered on its own row (an order line
+  /// names the size's item_id), at the product's price unless it has its own;
+  /// the product's breaks and minimum count its sizes together
+  final List<PriceItemSizesItem>? sizes;
+  final String? unit;
+  final Map<String, dynamic>? variant;
+  /// On a size as an order line prices it, its product's item
+  final String? variantOf;
+
+  factory PriceItem.fromJson(Map<String, dynamic> j) => PriceItem(
+        available: j['available'] as bool,
+        breaks: j['breaks'] == null ? null : (j['breaks'] as List).map((e) => PriceItemBreaksItem.fromJson(e as Map<String, dynamic>)).toList(),
+        category: j['category'] == null ? null : j['category'] as String,
+        choices: j['choices'] == null ? null : (j['choices'] as List).map((e) => VariantChoice.fromJson(e as Map<String, dynamic>)).toList(),
+        description: j['description'] == null ? null : j['description'] as String,
+        itemId: j['item_id'] as String,
+        minQuantity: (j['min_quantity'] as num).toInt(),
+        name: j['name'] as String,
+        overridden: j['overridden'] == null ? null : j['overridden'] as bool,
+        priceKobo: (j['price_kobo'] as num).toInt(),
+        sizes: j['sizes'] == null ? null : (j['sizes'] as List).map((e) => PriceItemSizesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        unit: j['unit'] == null ? null : j['unit'] as String,
+        variant: j['variant'] == null ? null : j['variant'] as Map<String, dynamic>,
+        variantOf: j['variant_of'] == null ? null : j['variant_of'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'available': available,
+        'breaks': ?breaks?.map((e) => e.toJson()).toList(),
+        'category': ?category,
+        'choices': ?choices?.map((e) => e.toJson()).toList(),
+        'description': ?description,
+        'item_id': itemId,
+        'min_quantity': minQuantity,
+        'name': name,
+        'overridden': ?overridden,
+        'price_kobo': priceKobo,
+        'sizes': ?sizes?.map((e) => e.toJson()).toList(),
+        'unit': ?unit,
+        'variant': ?variant,
+        'variant_of': ?variantOf,
+      };
+}
+
+class PriceItemBreaksItem {
+  const PriceItemBreaksItem({required this.minQuantity, required this.priceKobo});
+
+  final int minQuantity;
+  final int priceKobo;
+
+  factory PriceItemBreaksItem.fromJson(Map<String, dynamic> j) => PriceItemBreaksItem(
+        minQuantity: (j['min_quantity'] as num).toInt(),
+        priceKobo: (j['price_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'min_quantity': minQuantity,
+        'price_kobo': priceKobo,
+      };
+}
+
+class VariantChoice {
+  const VariantChoice({required this.name, required this.values});
+
+  final String name;
+  final List<String> values;
+
+  factory VariantChoice.fromJson(Map<String, dynamic> j) => VariantChoice(
+        name: j['name'] as String,
+        values: (j['values'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'values': values.map((e) => e).toList(),
+      };
+}
+
+class PriceItemSizesItem {
+  const PriceItemSizesItem({required this.available, required this.itemId, required this.name, this.priceKobo, required this.variant});
+
+  final bool available;
+  final String itemId;
+  /// Written out in full - Air Max 90 – 42, Black
+  final String name;
+  /// Its own price on the list; absent, the product's
+  final int? priceKobo;
+  final Map<String, dynamic> variant;
+
+  factory PriceItemSizesItem.fromJson(Map<String, dynamic> j) => PriceItemSizesItem(
+        available: j['available'] as bool,
+        itemId: j['item_id'] as String,
+        name: j['name'] as String,
+        priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
+        variant: j['variant'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'available': available,
+        'item_id': itemId,
+        'name': name,
+        'price_kobo': ?priceKobo,
+        'variant': variant,
+      };
+}
+
+class GetStorefrontServicesResponse {
+  const GetStorefrontServicesResponse({required this.availability, this.error, required this.items, this.syncedAt});
+
+  final StorefrontAvailability availability;
+  final Object? error;
+  final List<StorefrontItem> items;
+  final Object? syncedAt;
+
+  factory GetStorefrontServicesResponse.fromJson(Map<String, dynamic> j) => GetStorefrontServicesResponse(
+        availability: StorefrontAvailability.fromJson(j['availability'] as Map<String, dynamic>),
+        error: j['error'],
+        items: (j['items'] as List).map((e) => StorefrontItem.fromJson(e as Map<String, dynamic>)).toList(),
+        syncedAt: j['synced_at'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'availability': availability.toJson(),
+        'error': ?error,
+        'items': items.map((e) => e.toJson()).toList(),
+        'synced_at': ?syncedAt,
+      };
+}
+
+class StorefrontAvailability {
+  const StorefrontAvailability({this.aheadDays, this.autoConfirm, this.cutoffMinutes, this.days, this.off, this.soonestMinutes});
+
+  final int? aheadDays;
+  final bool? autoConfirm;
+  final int? cutoffMinutes;
+  /// Booking hours, Monday first; every day empty means the opening hours
+  final List<Object?>? days;
+  final List<String>? off;
+  final int? soonestMinutes;
+
+  factory StorefrontAvailability.fromJson(Map<String, dynamic> j) => StorefrontAvailability(
+        aheadDays: j['ahead_days'] == null ? null : (j['ahead_days'] as num).toInt(),
+        autoConfirm: j['auto_confirm'] == null ? null : j['auto_confirm'] as bool,
+        cutoffMinutes: j['cutoff_minutes'] == null ? null : (j['cutoff_minutes'] as num).toInt(),
+        days: j['days'] == null ? null : (j['days'] as List).map((e) => e).toList(),
+        off: j['off'] == null ? null : (j['off'] as List).map((e) => e as String).toList(),
+        soonestMinutes: j['soonest_minutes'] == null ? null : (j['soonest_minutes'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'ahead_days': ?aheadDays,
+        'auto_confirm': ?autoConfirm,
+        'cutoff_minutes': ?cutoffMinutes,
+        'days': ?days?.map((e) => e).toList(),
+        'off': ?off?.map((e) => e).toList(),
+        'soonest_minutes': ?soonestMinutes,
+      };
+}
+
+class StorefrontItem {
+  const StorefrontItem({required this.available, this.bufferMinutes, this.capacity, this.category, this.description, this.durationMinutes, required this.id, required this.name, this.photo, this.priceKobo, this.stock});
+
+  final bool available;
+  final int? bufferMinutes;
+  final int? capacity;
+  final String? category;
+  final String? description;
+  final int? durationMinutes;
+  final String id;
+  final String name;
+  final Map<String, dynamic>? photo;
+  final int? priceKobo;
+  /// How many are left, when the catalogue tracks stock
+  final int? stock;
+
+  factory StorefrontItem.fromJson(Map<String, dynamic> j) => StorefrontItem(
+        available: j['available'] as bool,
+        bufferMinutes: j['buffer_minutes'] == null ? null : (j['buffer_minutes'] as num).toInt(),
+        capacity: j['capacity'] == null ? null : (j['capacity'] as num).toInt(),
+        category: j['category'] == null ? null : j['category'] as String,
+        description: j['description'] == null ? null : j['description'] as String,
+        durationMinutes: j['duration_minutes'] == null ? null : (j['duration_minutes'] as num).toInt(),
+        id: j['id'] as String,
+        name: j['name'] as String,
+        photo: j['photo'] == null ? null : j['photo'] as Map<String, dynamic>,
+        priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
+        stock: j['stock'] == null ? null : (j['stock'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'available': available,
+        'buffer_minutes': ?bufferMinutes,
+        'capacity': ?capacity,
+        'category': ?category,
+        'description': ?description,
+        'duration_minutes': ?durationMinutes,
+        'id': id,
+        'name': name,
+        'photo': ?photo,
+        'price_kobo': ?priceKobo,
+        'stock': ?stock,
+      };
+}
+
+class GetStockResponse {
+  const GetStockResponse({this.catalogue, this.columns, required this.items, required this.keepsStock, this.low, this.published, this.stuck});
+
+  final Object? catalogue;
+  final StorefrontColumns? columns;
+  final List<StockItem> items;
+  final bool keepsStock;
+  final int? low;
+  final bool? published;
+  final List<StockMovement>? stuck;
+
+  factory GetStockResponse.fromJson(Map<String, dynamic> j) => GetStockResponse(
+        catalogue: j['catalogue'],
+        columns: j['columns'] == null ? null : StorefrontColumns.fromJson(j['columns'] as Map<String, dynamic>),
+        items: (j['items'] as List).map((e) => StockItem.fromJson(e as Map<String, dynamic>)).toList(),
+        keepsStock: j['keeps_stock'] as bool,
+        low: j['low'] == null ? null : (j['low'] as num).toInt(),
+        published: j['published'] == null ? null : j['published'] as bool,
+        stuck: j['stuck'] == null ? null : (j['stuck'] as List).map((e) => StockMovement.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'catalogue': ?catalogue,
+        'columns': ?columns?.toJson(),
+        'items': items.map((e) => e.toJson()).toList(),
+        'keeps_stock': keepsStock,
+        'low': ?low,
+        'published': ?published,
+        'stuck': ?stuck?.map((e) => e.toJson()).toList(),
+      };
+}
+
+class StorefrontColumns {
+  const StorefrontColumns({this.available, this.buffer, this.capacity, this.category, this.choices, this.costPrice, this.description, this.duration, this.name, this.photo, this.price, this.priceUnit, this.reorderLevel, this.sort, this.stock, this.supplier, this.targetLevel, this.unit, this.variant, this.variantOf});
+
+  final String? available;
+  /// Minutes kept free after each booking (default 0)
+  final String? buffer;
+  /// Customers a service takes at once (default 1)
+  final String? capacity;
+  final String? category;
+  /// A product's choices and their values, as JSON
+  final String? choices;
+  final String? costPrice;
+  final String? description;
+  /// A services table's length in minutes (required there)
+  final String? duration;
+  final String? name;
+  final String? photo;
+  final String? price;
+  final String? priceUnit;
+  final String? reorderLevel;
+  final String? sort;
+  /// An integer column of how many are left; lowered when an order is accepted
+  final String? stock;
+  final String? supplier;
+  final String? targetLevel;
+  /// Stock by chat's columns (docs/stock.md), none shown on the page
+  final String? unit;
+  /// A size or colour's values, as JSON
+  final String? variant;
+  /// A size or colour's product row (sizes and colours)
+  final String? variantOf;
+
+  factory StorefrontColumns.fromJson(Map<String, dynamic> j) => StorefrontColumns(
+        available: j['available'] == null ? null : j['available'] as String,
+        buffer: j['buffer'] == null ? null : j['buffer'] as String,
+        capacity: j['capacity'] == null ? null : j['capacity'] as String,
+        category: j['category'] == null ? null : j['category'] as String,
+        choices: j['choices'] == null ? null : j['choices'] as String,
+        costPrice: j['cost_price'] == null ? null : j['cost_price'] as String,
+        description: j['description'] == null ? null : j['description'] as String,
+        duration: j['duration'] == null ? null : j['duration'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+        photo: j['photo'] == null ? null : j['photo'] as String,
+        price: j['price'] == null ? null : j['price'] as String,
+        priceUnit: j['price_unit'] == null ? null : j['price_unit'] as String,
+        reorderLevel: j['reorder_level'] == null ? null : j['reorder_level'] as String,
+        sort: j['sort'] == null ? null : j['sort'] as String,
+        stock: j['stock'] == null ? null : j['stock'] as String,
+        supplier: j['supplier'] == null ? null : j['supplier'] as String,
+        targetLevel: j['target_level'] == null ? null : j['target_level'] as String,
+        unit: j['unit'] == null ? null : j['unit'] as String,
+        variant: j['variant'] == null ? null : j['variant'] as String,
+        variantOf: j['variant_of'] == null ? null : j['variant_of'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'available': ?available,
+        'buffer': ?buffer,
+        'capacity': ?capacity,
+        'category': ?category,
+        'choices': ?choices,
+        'cost_price': ?costPrice,
+        'description': ?description,
+        'duration': ?duration,
+        'name': ?name,
+        'photo': ?photo,
+        'price': ?price,
+        'price_unit': ?priceUnit,
+        'reorder_level': ?reorderLevel,
+        'sort': ?sort,
+        'stock': ?stock,
+        'supplier': ?supplier,
+        'target_level': ?targetLevel,
+        'unit': ?unit,
+        'variant': ?variant,
+        'variant_of': ?variantOf,
+      };
+}
+
+class StockItem {
+  const StockItem({required this.available, this.category, this.choices, this.costKobo, this.description, required this.id, this.low, required this.name, this.ownPrice, this.priceKobo, this.reorderLevel, this.stock, this.suggest, this.supplier, this.targetLevel, this.unit, this.variant, this.variantOf, this.waiting});
+
+  final bool available;
+  /// The kind of thing it is ("Sneakers"), when the catalogue has a category
+  /// column
+  final String? category;
+  /// A product's choices, when it has sizes and colours (it keeps no stock of
+  /// its own then)
+  final List<VariantChoice>? choices;
+  /// The last price paid for one
+  final int? costKobo;
+  /// Its words on the storefront, when the catalogue maps them
+  final String? description;
+  final String id;
+  final bool? low;
+  final String name;
+  /// On a product, its sizes and colours with a price of their own, each as its
+  /// values in lower case ("colour=black|size=42"); the others follow the
+  /// product's price
+  final List<String>? ownPrice;
+  final int? priceKobo;
+  final int? reorderLevel;
+  final Object? stock;
+  /// How many to order, when low
+  final int? suggest;
+  final String? supplier;
+  final int? targetLevel;
+  final String? unit;
+  /// Its values: {"Size": "42", "Colour": "Black"}
+  final Map<String, dynamic>? variant;
+  /// The product this is a size or colour of
+  final String? variantOf;
+  /// Its movements not yet in the table
+  final int? waiting;
+
+  factory StockItem.fromJson(Map<String, dynamic> j) => StockItem(
+        available: j['available'] as bool,
+        category: j['category'] == null ? null : j['category'] as String,
+        choices: j['choices'] == null ? null : (j['choices'] as List).map((e) => VariantChoice.fromJson(e as Map<String, dynamic>)).toList(),
+        costKobo: j['cost_kobo'] == null ? null : (j['cost_kobo'] as num).toInt(),
+        description: j['description'] == null ? null : j['description'] as String,
+        id: j['id'] as String,
+        low: j['low'] == null ? null : j['low'] as bool,
+        name: j['name'] as String,
+        ownPrice: j['own_price'] == null ? null : (j['own_price'] as List).map((e) => e as String).toList(),
+        priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
+        reorderLevel: j['reorder_level'] == null ? null : (j['reorder_level'] as num).toInt(),
+        stock: j['stock'],
+        suggest: j['suggest'] == null ? null : (j['suggest'] as num).toInt(),
+        supplier: j['supplier'] == null ? null : j['supplier'] as String,
+        targetLevel: j['target_level'] == null ? null : (j['target_level'] as num).toInt(),
+        unit: j['unit'] == null ? null : j['unit'] as String,
+        variant: j['variant'] == null ? null : j['variant'] as Map<String, dynamic>,
+        variantOf: j['variant_of'] == null ? null : j['variant_of'] as String,
+        waiting: j['waiting'] == null ? null : (j['waiting'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'available': available,
+        'category': ?category,
+        'choices': ?choices?.map((e) => e.toJson()).toList(),
+        'cost_kobo': ?costKobo,
+        'description': ?description,
+        'id': id,
+        'low': ?low,
+        'name': name,
+        'own_price': ?ownPrice?.map((e) => e).toList(),
+        'price_kobo': ?priceKobo,
+        'reorder_level': ?reorderLevel,
+        'stock': ?stock,
+        'suggest': ?suggest,
+        'supplier': ?supplier,
+        'target_level': ?targetLevel,
+        'unit': ?unit,
+        'variant': ?variant,
+        'variant_of': ?variantOf,
+        'waiting': ?waiting,
+      };
+}
+
+class StockMovement {
+  const StockMovement({this.after, this.before, required this.by, this.change, required this.createdAt, this.delta, this.doneAt, this.error, required this.id, required this.item, required this.itemId, this.note, required this.reason, this.reference, this.setTo, this.short, required this.status});
+
+  final Object? after;
+  final Object? before;
+  final String by;
+  final Object? change;
+  final DateTime createdAt;
+  final int? delta;
+  final Object? doneAt;
+  final String? error;
+  final String id;
+  final String item;
+  final String itemId;
+  final String? note;
+  final String reason;
+  final String? reference;
+  final int? setTo;
+  final int? short;
+  final String status;
+
+  factory StockMovement.fromJson(Map<String, dynamic> j) => StockMovement(
+        after: j['after'],
+        before: j['before'],
+        by: j['by'] as String,
+        change: j['change'],
+        createdAt: DateTime.parse(j['created_at'] as String),
+        delta: j['delta'] == null ? null : (j['delta'] as num).toInt(),
+        doneAt: j['done_at'],
+        error: j['error'] == null ? null : j['error'] as String,
+        id: j['id'] as String,
+        item: j['item'] as String,
+        itemId: j['item_id'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        reason: j['reason'] as String,
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        setTo: j['set_to'] == null ? null : (j['set_to'] as num).toInt(),
+        short: j['short'] == null ? null : (j['short'] as num).toInt(),
+        status: j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'after': ?after,
+        'before': ?before,
+        'by': by,
+        'change': ?change,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'delta': ?delta,
+        'done_at': ?doneAt,
+        'error': ?error,
+        'id': id,
+        'item': item,
+        'item_id': itemId,
+        'note': ?note,
+        'reason': reason,
+        'reference': ?reference,
+        'set_to': ?setTo,
+        'short': ?short,
+        'status': status,
       };
 }

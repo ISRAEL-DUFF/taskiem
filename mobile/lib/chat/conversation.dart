@@ -6,6 +6,7 @@
 
 import 'dart:async';
 
+import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -25,6 +26,9 @@ import 'thread.dart';
 import 'live.dart';
 import 'menu.dart';
 import 'contact.dart';
+import 'live_card.dart';
+import 'tag_picker.dart';
+import 'tags.dart';
 import 'search.dart';
 import 'words.dart';
 
@@ -39,10 +43,13 @@ const _every = Duration(seconds: 3);
 /// not sent, with Retry and Delete. Its client id makes a retry the same
 /// message to the server, never a second one.
 class Outgoing {
-  Outgoing(this.clientId, this.body, this.at, {this.file, this.reply});
+  Outgoing(this.clientId, this.body, this.at, {this.file, this.reply, this.tags = const []});
   final String clientId;
   final String body;
   final DateTime at;
+
+  /// The things and businesses it tags (a message of words only).
+  final List<SendLinkMessageRequestMentionsItem> tags;
 
   /// The message it answers (quoted).
   final LinkMessage? reply;
@@ -149,8 +156,50 @@ class ConversationData extends ChangeNotifier {
       ),
   ];
 
+  /// The conversation's price list and whose it is ("ours" or "theirs");
+  /// our own services and stock (chat tools, each only to those who may
+  /// see it): what "@" and "#" offer, and what a tagged thing's card reads.
+  List<PriceItem> priceList = const [];
+  String priceWhose = '';
+  List<StorefrontItem> services = const [];
+  List<StockItem> stock = const [];
+
+  Future<void> _tagSources() async {
+    if (!chats.loaded) await chats.load();
+    final can = chats.auth.can;
+    await Future.wait([
+      () async {
+        try {
+          final r = await api.linkChatItems(link: conv.link);
+          priceList = r.items;
+          priceWhose = r.whose ?? '';
+        } on Object {
+          // None offered.
+        }
+      }(),
+      if (chats.chatTools && can('storefront.manage'))
+        () async {
+          try {
+            services = (await api.getStorefrontServices()).items.where((x) => x.available).toList();
+          } on Object {
+            // None offered.
+          }
+        }(),
+      if (chats.chatTools && can('table.read'))
+        () async {
+          try {
+            stock = (await api.getStock()).items;
+          } on Object {
+            // No stock on the cards.
+          }
+        }(),
+    ]);
+    _changed();
+  }
+
   /// Opens at [focus], or at the newest page; then follows it.
   Future<void> open() async {
+    unawaited(_tagSources());
     if (focus != null) {
       try {
         await openAt(focus!);
@@ -390,10 +439,10 @@ class ConversationData extends ChangeNotifier {
 
   /// Sent at once: it shows with a clock, then the server's copy takes its place.
   /// Sent at once with a clock; a file with its caption.
-  Future<void> send(String text, {PickedFile? file, LinkMessage? reply}) async {
+  Future<void> send(String text, {PickedFile? file, LinkMessage? reply, List<SendLinkMessageRequestMentionsItem> tags = const []}) async {
     final body = text.trim();
     if (body.isEmpty && file == null) return;
-    final o = Outgoing(uuid4(), body, chats.now(), file: file, reply: reply);
+    final o = Outgoing(uuid4(), body, chats.now(), file: file, reply: reply, tags: file == null ? tags : const []);
     // Sent from away from the newest page: back to it, where it shows.
     if (detached) unawaited(openNewest());
     outbox.add(o);
@@ -430,7 +479,7 @@ class ConversationData extends ChangeNotifier {
       } else {
         sent = (await api.sendLinkMessage(
           link: conv.link,
-          body: SendLinkMessageRequest(text: o.body, clientId: o.clientId, replyTo: o.reply?.id),
+          body: SendLinkMessageRequest(text: o.body, clientId: o.clientId, replyTo: o.reply?.id, mentions: o.tags.isEmpty ? null : o.tags),
         )).message;
       }
       outbox.remove(o);
@@ -533,10 +582,13 @@ class ConversationData extends ChangeNotifier {
 
 /// The conversation's screen.
 class ConversationScreen extends StatefulWidget {
-  const ConversationScreen({super.key, required this.data, this.onBack, this.onOpenDoc, this.pickers = const Pickers(), this.recorder});
+  const ConversationScreen({super.key, required this.data, this.onBack, this.onOpenDoc, this.pickers = const Pickers(), this.recorder, this.onOpenLink});
 
   final ConversationData data;
   final VoidCallback? onBack;
+
+  /// A business tagged in a message: its conversation opened, by link.
+  final ValueChanged<String>? onOpenLink;
 
   /// A card's document opened (View order, View invoice, Pay).
   final void Function(LinkDocCard card)? onOpenDoc;
@@ -567,6 +619,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   @override
   void initState() {
     super.initState();
+    _text.addListener(_typed);
     if (widget.data.messages == null) widget.data.open();
   }
 
@@ -574,6 +627,74 @@ class _ConversationScreenState extends State<ConversationScreen> {
   void dispose() {
     _text.dispose();
     super.dispose();
+  }
+
+  // Tags (Mentions.tsx useMentions): what is being typed after "@" or "#",
+  // and what was picked (sent with the words while they still name it).
+  TagQuery? _tag;
+  final _picked = <TagSuggestion>[];
+  final _pickerShown = OverlayPortalController();
+  final _boxTop = LayerLink();
+
+  /// The words changed by a pick, not by typing: the picker stays shut
+  /// until the next keystroke (the web reads the tag on input only).
+  bool _tagging = false;
+
+  void _typed() {
+    if (_tagging) return;
+    final v = _text.value;
+    final caret = v.selection.baseOffset < 0 ? v.text.length : v.selection.baseOffset;
+    final q = tagQuery(v.text, caret);
+    if (q == _tag) return;
+    setState(() => _tag = q);
+    if (_grouped) {
+      _pickerShown.show();
+    } else {
+      _pickerShown.hide();
+    }
+  }
+
+  /// What "@" and "#" offer here: the price list's items on sale, our own
+  /// services, and the other linked businesses (with the tools, not this
+  /// one: it gets the message already).
+  ({List<TagSuggestion> items, List<TagSuggestion> services, List<TagSuggestion> businesses}) _tagSources() {
+    final d = widget.data;
+    final tools = d.chats.chatTools;
+    final roles = {for (final l in d.chats.links) l.id: l.role};
+    return (
+      items: [
+        for (final it in d.priceList)
+          if (it.available) TagSuggestion(kind: 'item', id: it.itemId, name: it.name, sub: priceWords(it), category: it.category, words: it.description),
+      ],
+      services: [
+        for (final x in d.services)
+          TagSuggestion(
+            kind: 'service',
+            id: x.id,
+            name: x.name,
+            sub: [x.priceKobo != null ? naira(x.priceKobo!) : 'Price on the day', if (x.durationMinutes != null && x.durationMinutes! > 0) '${x.durationMinutes} min'].join(' · '),
+          ),
+      ],
+      businesses: [
+        for (final o in d.chats.conversations)
+          if (o.state == 'active' && !(tools && (o.link == d.conv.link || !d.chats.auth.can('chat.trade'))))
+            TagSuggestion(kind: 'business', id: o.link, name: o.name, sub: tools ? linkedLine(roles[o.link]) : null),
+      ],
+    );
+  }
+
+  void _pickTag(TagSuggestion s) {
+    final q = _tag;
+    if (q == null) return;
+    final v = _text.value;
+    final caret = v.selection.baseOffset < 0 ? v.text.length : v.selection.baseOffset;
+    final next = insertTag(v.text, q, caret < q.start + 1 + q.query.length ? q.start + 1 + q.query.length : caret, s.name);
+    if (s.kind != 'taskiem') _picked.add(s);
+    _tagging = true;
+    _text.value = TextEditingValue(text: next.text, selection: TextSelection.collapsed(offset: next.caret));
+    _tagging = false;
+    setState(() => _tag = null);
+    _pickerShown.hide();
   }
 
   /// The message whose menu is open, and the one being answered.
@@ -852,6 +973,27 @@ class _ConversationScreenState extends State<ConversationScreen> {
               Expanded(
                 child: ListenableBuilder(listenable: d, builder: (context, _) => _thread(context, d)),
               ),
+              if (_tag != null && !_grouped) ListenableBuilder(listenable: d, builder: (context, _) => _plainList()),
+              // The tools' picker floats over the thread from the box, 8 px
+              // above it, its shadow over the box too (`.composer > .tk-picker`).
+              OverlayPortal(
+                controller: _pickerShown,
+                overlayChildBuilder: (context) => Positioned(
+                  left: 0,
+                  top: 0,
+                  child: CompositedTransformFollower(
+                    link: _boxTop,
+                    targetAnchor: Alignment.topLeft,
+                    followerAnchor: Alignment.bottomLeft,
+                    offset: const Offset(10, -8),
+                    child: SizedBox(
+                      width: MediaQuery.sizeOf(context).width - 20,
+                      child: ListenableBuilder(listenable: d, builder: (context, _) => _grouped ? _picker() : const SizedBox.shrink()),
+                    ),
+                  ),
+                ),
+                child: CompositedTransformTarget(link: _boxTop, child: const SizedBox(width: double.infinity)),
+              ),
               Composer(
                 key: composerKey,
                 text: _text,
@@ -859,8 +1001,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 onCancelReply: () => setState(() => _reply = null),
                 onSend: (words, file) {
                   final r = _reply;
+                  final tags = tagRefs(words, _picked);
+                  _picked.clear();
                   setState(() => _reply = null);
-                  d.send(words, file: file, reply: r);
+                  d.send(words, file: file, reply: r, tags: tags);
                 },
                 bottom: pad.bottom,
                 pickers: widget.pickers,
@@ -871,6 +1015,28 @@ class _ConversationScreenState extends State<ConversationScreen> {
         ),
       ),
     );
+  }
+
+  /// With the tools, "@" opens the grouped picker; "#" the plain list.
+  bool get _grouped => _tag != null && _tag!.mark == '@' && widget.data.chats.chatTools;
+
+  Widget _picker() {
+    final q = _tag!;
+    final src = _tagSources();
+    final groups = groupTags(q.query, items: src.items, services: src.services, businesses: src.businesses, taskiem: true);
+    final shown = [for (final g in groups) ...g.items];
+    // What Enter takes: the first, the Taskiem row only when "Taskiem" is
+    // what is being typed.
+    final first = shown.where((s) => s.kind != 'taskiem' || (q.query.isNotEmpty && 'taskiem'.startsWith(q.query.toLowerCase()))).firstOrNull;
+    return TagPicker(query: q.query, groups: groups, first: first, onPick: _pickTag);
+  }
+
+  Widget _plainList() {
+    final q = _tag!;
+    final src = _tagSources();
+    final shown = suggest(q.mark == '@' ? src.businesses : src.items, q.query);
+    if (shown.isEmpty) return const SizedBox.shrink();
+    return TagList(mark: q.mark, items: shown, onPick: _pickTag);
   }
 
   /// The thread: bubbles, cards, and our own changes as diary lines.
@@ -952,6 +1118,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
             onReply: _write ? () => setState(() => _reply = m.m) : null,
             onReact: _write ? (e) => d.react(m.m, e) : null,
             taps: _taps[m.id] ?? 0,
+            live: d.chats.chatTools ? (items: d.priceList, whose: d.priceWhose, stock: d.stock) : null,
+            onOpenLink: widget.onOpenLink,
             onMore: () => setState(() => _taps[m.id] = (_taps[m.id] ?? 0) + 1),
           ),
         );
@@ -1051,7 +1219,16 @@ class _Bubble extends StatelessWidget {
     this.onReact,
     this.taps = 0,
     this.onMore,
+    this.live,
+    this.onOpenLink,
   });
+
+  /// With chat tools: what a tagged thing's card reads (the price list,
+  /// whose it is, our stock).
+  final ({List<PriceItem> items, String whose, List<StockItem> stock})? live;
+
+  /// A tagged business opens its conversation.
+  final ValueChanged<String>? onOpenLink;
   final ThreadMessage m;
 
   /// How often its "Read more" was tapped (a long message folded).
@@ -1143,7 +1320,28 @@ class _Bubble extends StatelessWidget {
     Widget text = Text.rich(
       TextSpan(
         children: [
-          TextSpan(text: fold.shown),
+          // Mentions.tsx MentionText: a business (its conversation), an
+          // item with its price; `.bubble .mention`: 600, the tint's ink.
+          for (final p in tagParts(fold.shown, msg.mentions))
+            if (p.tag == null)
+              TextSpan(text: p.text)
+            else
+              TextSpan(
+                style: TextStyle(color: t.tintText, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]),
+                children: [
+                  TextSpan(
+                    text: p.text,
+                    recognizer: p.tag!.kind == 'business' && p.tag!.link != null && onOpenLink != null
+                        ? (TapGestureRecognizer()..onTap = () => onOpenLink!(p.tag!.link!))
+                        : null,
+                  ),
+                  if (p.tag!.kind == 'item' && p.tag!.priceKobo != null)
+                    TextSpan(
+                      text: ' (${naira(p.tag!.priceKobo!)}${(p.tag!.unit ?? '').isNotEmpty ? ' a ${p.tag!.unit}' : ''})',
+                      style: tkText(size: 13, weight: 600, color: t.muted),
+                    ),
+                ],
+              ),
           if (fold.folded) ...[
             const TextSpan(text: '… '),
             TextSpan(
@@ -1250,6 +1448,8 @@ class _Bubble extends StatelessWidget {
                                   ),
                                 if (msg.reply != null) _Quote(reply: msg.reply!, mine: mine, other: other),
                                 if (msg.attachment != null) AttachmentView(m: msg, files: files, other: other, room: max - 24, local: out?.file),
+                                if (live != null && liveTag(msg.mentions) != null)
+                                  LiveCard(m: liveTag(msg.mentions)!, items: live!.items, whose: live!.whose, stock: live!.stock),
                                 if (body.isNotEmpty) text,
                                 if (!inline)
                                   Padding(

@@ -160,6 +160,52 @@ const SCREENS: {
     },
   },
   {
+    // A message with tags: an item with its price, a linked business.
+    // (Bayo's recording with the message added.)
+    name: "chat-tagged",
+    path: "/chat?with=ef99249d-9322-40ca-91c2-e24fdd450c15",
+    fixture: "chat-tag",
+    touch: true,
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-card").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      // To its end, where the message is.
+      await p.getByTestId("chat-stream").evaluate((e) => (e.scrollTop = e.scrollHeight));
+      await p.waitForTimeout(200);
+
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // "@" typed: things and businesses to tag, in groups, Taskiem last.
+    name: "chat-tag",
+    path: "/chat?with=ef99249d-9322-40ca-91c2-e24fdd450c15",
+    fixture: "chat-tag",
+    touch: true,
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-card").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.locator(".composer textarea").fill("@");
+      await expect(p.getByTestId("mention-list")).toBeVisible();
+      await p.waitForTimeout(400);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // "#" typed: the items of the price list, with their prices.
+    name: "chat-tag-hash",
+    path: "/chat?with=ef99249d-9322-40ca-91c2-e24fdd450c15",
+    fixture: "chat-tag",
+    touch: true,
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-card").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.locator(".composer textarea").fill("#");
+      await expect(p.getByTestId("mention-list")).toBeVisible();
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
     // A photo with its caption, a voice note and a PDF: Mama Tunde's again.
     name: "chat-files",
     path: "/chat?with=828e255f-dc0f-4dd3-bb19-0ba2764778d3",

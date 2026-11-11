@@ -294,7 +294,19 @@ class _OpenState extends State<_Open> {
   }
 
   @override
-  Widget build(BuildContext context) => ConversationScreen(data: _data);
+  Widget build(BuildContext context) => ConversationScreen(
+    data: _data,
+    // A business tagged in a message: its conversation, in this one's place.
+    onOpenLink: (link) {
+      final c = widget.chats.conversations.where((c) => c.link == link).firstOrNull;
+      if (c == null) return;
+      Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, _, _) => _Open(chats: widget.chats, conv: c),
+      ));
+    },
+  );
 }
 
 /// Taskiem's conversation, open: its data lives while it is open.

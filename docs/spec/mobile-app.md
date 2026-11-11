@@ -731,12 +731,32 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   or at their end depending on which loaded first (the parity picture
   changed between runs); fixed in useThread, and the app now opens it at
   the end, cards and all, as the web now always does.
+- **Tags: "@" and "#"** (`lib/chat/tags.dart`, `tag_picker.dart`,
+  `live_card.dart`), as the web's Mentions and ChatLiveCard: in a
+  business's conversation "@" opens, with chat tools, the designs' picker
+  over the thread (the price list's products, our services, the other
+  linked businesses with how we trade, Taskiem last; the first drawn ready
+  to take; "Matches for …" as words are typed), and "#" the plain list of
+  the price list's items with their prices above the box. A pick puts
+  the name in the words; the things and businesses still named when it is
+  sent go with the message (`mentions`), a name typed over is dropped. A
+  message's tags are drawn marked: an item with its price ("#Rice, 50kg
+  bag (₦78,000 a bag)"), a business that opens its conversation; with chat
+  tools the first product or service tagged has its live card above the
+  words (the price on the list today and what it was, our stock of it,
+  Order when we buy from them). The tag logic is held to the web's own
+  tests (`tags_test.dart`). Parity: "@", "#", and a tagged message with its
+  card (Bayo's recording with the message added), seen as a touch phone,
+  light and dark, two sizes. Not yet: businesses not linked found by
+  Explore, categories, and "/invoice" and the like (with the tools);
+  Order on the card says ordering is not in the app yet (the Order sheet
+  is a tool's).
 - **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
   the milestones), a deal's offers and counters,
-  the chat tools, the "@" and "#" tags, and Find a business (the web's Explore).
+  the chat tools, and Find a business (the web's Explore).
 
 ## 11. What needs people
 

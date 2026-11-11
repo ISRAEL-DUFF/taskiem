@@ -59,3 +59,8 @@ starredLinkMessages
 searchLinkChats
 searchLinks
 searchCustomerChats
+
+# Tags: the price list, our services and stock (M3)
+linkChatItems
+getStorefrontServices
+getStock
