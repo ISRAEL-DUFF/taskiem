@@ -172,4 +172,38 @@ void main() {
     expect(lateTooLong('x' * 901, false), isTrue);
     expect(lateTooLong('x' * 901, true), isFalse);
   });
+
+  testWidgets('the head\'s menu: Archive, said, and back to the list', (t) async {
+    phone(t);
+    final f = Fixture('customer-chidi');
+    final puts = <Object?>[];
+    var popped = false;
+    final data = CustomerData(
+      ChatsData(
+        f.auth(also: (req) async {
+          if (req.method == 'PUT') {
+            puts.add(jsonDecode(req.body));
+            return http.Response(jsonEncode({'archived': true}), 200, headers: {'content-type': 'application/json'});
+          }
+          return null;
+        }),
+        now: () => f.at,
+      ),
+      _chidi,
+      follow: false,
+    );
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: CustomerScreen(data: data, onBack: () => popped = true)));
+    await settle(t);
+    await t.tap(find.bySemanticsLabel('More about this conversation'));
+    await t.pumpAndSettle();
+    expect(find.text('Archive'), findsOneWidget);
+    await t.tap(find.text('Archive'));
+    await settle(t);
+    expect(puts, [
+      {'archived': true},
+    ]);
+    expect(find.text('Archived'), findsOneWidget);
+    expect(popped, isTrue);
+    await t.pump(const Duration(seconds: 5));
+  });
 }

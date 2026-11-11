@@ -29,6 +29,9 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
   const stream = useRef<HTMLDivElement>(null);
   const topMark = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  // Kept at the bottom as what is below grows: opened at the end, or
+  // scrolled there by the reader (not opened at the unread or a message).
+  const hold = useRef(false);
   const placed = useRef(false);
   const anchor = useRef<{ h: number; top: number } | null>(null);
   const prevNewest = useRef<string>(undefined);
@@ -85,6 +88,7 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
         if (id) setFlashId(id);
       } else el.scrollTop = el.scrollHeight;
       stick.current = atBottom(el);
+      hold.current = !target;
       setAway(!stick.current);
       prevNewest.current = newest;
       return;
@@ -127,10 +131,40 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
     // The oldest is what changes when a page is added above.
   }, [hasOlder, hasItems, loadOlder, oldest]);
 
+  // A reader at the bottom stays there as what is below grows after the
+  // thread was placed: Taskiem's cards arriving after its messages, a photo
+  // that loads. (Without this, where the thread opened depended on which
+  // came first.)
+  useEffect(() => {
+    const el = stream.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const keep = () => {
+      if (placed.current && hold.current && stick.current && !anchor.current)
+        el.scrollTop = el.scrollHeight;
+    };
+    const sizes = new ResizeObserver(keep);
+    const watch = () => {
+      sizes.disconnect();
+      for (const c of Array.from(el.children)) sizes.observe(c);
+    };
+    watch();
+    const kids =
+      typeof MutationObserver === "undefined"
+        ? undefined
+        : new MutationObserver(() => (watch(), keep()));
+    kids?.observe(el, { childList: true });
+    return () => {
+      sizes.disconnect();
+      kids?.disconnect();
+    };
+  }, []);
+
   const onScroll = () => {
     const el = stream.current;
     if (!el) return;
     const near = atBottom(el);
+    // Moved by the reader: kept at the bottom only from there.
+    if (stick.current !== near || !near) hold.current = near;
     stick.current = near;
     setAway(!near);
     if (near) setNewCount(0);

@@ -138,6 +138,9 @@ class ChatHeadBar extends StatelessWidget {
             ),
           ),
           for (final a in actions) ...[const SizedBox(width: 6), a],
+          // With no menu of its own (Taskiem's), no ⋯ on a phone: the web's
+          // holds only Keyboard there, which a phone hides.
+          if (onMore != null) ...[
           const SizedBox(width: 6),
           Builder(
             builder: (context) => iconButton(
@@ -151,6 +154,7 @@ class ChatHeadBar extends StatelessWidget {
                     },
             ),
           ),
+          ],
         ],
       ),
     );
@@ -271,7 +275,6 @@ class ThreadView<T> extends StatefulWidget {
     this.empty,
     this.errors = const [],
     this.tail,
-    this.placeAtMessagesEnd = false,
     this.hasOlder = false,
     this.onOlder,
     this.focus,
@@ -308,10 +311,6 @@ class ThreadView<T> extends StatefulWidget {
   /// After the messages: Taskiem's briefing and alert cards.
   final Widget? tail;
 
-  /// Opened at the end of the messages rather than of everything: the web's
-  /// view is placed before the cards after them have loaded.
-  final bool placeAtMessagesEnd;
-
   @override
   State<ThreadView<T>> createState() => ThreadViewState<T>();
 }
@@ -327,6 +326,14 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   bool _placed = false;
   DateTime? _newest;
   bool _away = false;
+
+  /// At the bottom, as the reader last left it: kept there as what is below
+  /// grows (useThread's: Taskiem's cards arriving, a photo loading).
+  bool _stick = true;
+
+  /// Kept at the bottom as what is below grows: opened at the end, or
+  /// scrolled there by the reader (not opened at the unread or a message).
+  bool _keep = false;
   int _newCount = 0;
   ({String label, double top})? _stuck;
   bool _loadingOlder = false;
@@ -347,6 +354,7 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   void didUpdateWidget(ThreadView<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
     _follow(oldWidget.items);
+    _hold();
   }
 
   @override
@@ -393,9 +401,23 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
     });
   }
 
+  /// Kept at the bottom after this frame, if the reader is there.
+  void _hold() {
+    if (!_placed || !_stick || !_keep) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !scroll.hasClients || !_stick || !_keep) return;
+      final end = scroll.position.maxScrollExtent;
+      if (scroll.offset != end) scroll.jumpTo(end);
+    });
+  }
+
   void _onScroll() {
     _maybeOlder();
-    final away = !_atBottom;
+    final near = _atBottom;
+    // Moved by the reader: kept at the bottom only from there.
+    if (_placed && (_stick != near || !near)) _keep = near;
+    _stick = near;
+    final away = !near;
     final stuck = _sticky();
     if (away != _away || stuck != _stuck || (!away && _newCount > 0)) {
       setState(() {
@@ -424,8 +446,8 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
         _placed = true;
         final view = _viewport.currentContext?.findRenderObject();
         final at = _unreadKey.currentContext?.findRenderObject();
-        final end = _endKey.currentContext?.findRenderObject();
         final focus = _focusKey.currentContext?.findRenderObject();
+        var atEnd = false;
         if (widget.focus != null && focus is RenderBox && view is RenderBox) {
           // scrollIntoView({ block: "center" }), then the flash.
           final mid = focus.localToGlobal(Offset(0, focus.size.height / 2), ancestor: view).dy;
@@ -434,13 +456,13 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
         } else if (at is RenderBox && view is RenderBox) {
           final top = at.localToGlobal(Offset.zero, ancestor: view).dy;
           scroll.jumpTo((scroll.offset + top - 40).clamp(0.0, scroll.position.maxScrollExtent));
-        } else if (widget.placeAtMessagesEnd && end is RenderBox && view is RenderBox) {
-          final bottom = end.localToGlobal(Offset(0, end.size.height + 8), ancestor: view).dy;
-          scroll.jumpTo((scroll.offset + bottom - view.size.height).clamp(0.0, scroll.position.maxScrollExtent));
         } else {
           scroll.jumpTo(scroll.position.maxScrollExtent);
+          atEnd = true;
         }
         _onScroll();
+        // Opened at the end: kept there as what is below arrives.
+        _keep = atEnd;
         return;
       }
       if (prev == null) return;

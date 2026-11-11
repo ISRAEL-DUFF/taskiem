@@ -436,7 +436,6 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
         unread: d.unread,
         hasOlder: d.hasOlder,
         onOlder: d.older,
-        placeAtMessagesEnd: true,
         tail: d.briefing == null && d.alerts.isEmpty
             ? null
             : Column(

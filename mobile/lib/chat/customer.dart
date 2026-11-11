@@ -16,6 +16,7 @@ import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/modal.dart';
 import '../theme/theme.dart';
 import 'chats.dart';
 import 'thread.dart';
@@ -204,14 +205,16 @@ class CustomerData extends ChangeNotifier {
     }
   }
 
-  /// Archive, or bring back to the chats.
-  Future<void> setArchived(bool archived) async {
+  /// Archive, or bring back to the chats; false if it could not be.
+  Future<bool> setArchived(bool archived) async {
     try {
       await api.putCustomerChat(id: id, body: PutCustomerChatRequest(archived: archived));
       unawaited(chats.load());
       await _chat();
+      return true;
     } on Object catch (e) {
       _fail(e);
+      return false;
     }
   }
 
@@ -296,6 +299,25 @@ class _CustomerScreenState extends State<CustomerScreen> {
                       padding: EdgeInsets.only(top: pad.top),
                       child: ChatHeadBar(
                         onBack: widget.onBack,
+                        // CustomerChat.tsx's menu: Archive, or Unarchive.
+                        onMore: c == null
+                            ? null
+                            : (at) => showHeadMenu(
+                                context,
+                                at: at,
+                                items: [
+                                  (
+                                    c.archived ? 'Unarchive' : 'Archive',
+                                    () async {
+                                      final ok = await d.setArchived(!c.archived);
+                                      if (!ok || !context.mounted) return;
+                                      showTkToast(context, c.archived ? 'Brought back to the chats' : 'Archived');
+                                      // Archived, it leaves the open chat for the list.
+                                      if (!c.archived) (widget.onBack ?? () => Navigator.of(context).maybePop())();
+                                    },
+                                  ),
+                                ],
+                              ),
                         avatar: ChatAvatar(name: c == null ? 'Customer' : customerLetter(c), size: 42, letterSize: 15),
                         title: title,
                         subtitle: c == null

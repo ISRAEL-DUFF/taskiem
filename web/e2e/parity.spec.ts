@@ -297,6 +297,7 @@ const SCREENS: {
     // The person's own conversation with Taskiem: the conversation, then
     // the briefing and the cards of what needs them, as Ada.
     name: "chat-taskiem",
+    touch: true,
     path: "/chat?with=taskiem",
     fixture: "chat-taskiem",
     ready: async (p) => {
@@ -309,6 +310,7 @@ const SCREENS: {
   {
     // The same, scrolled to its end: the briefing and the cards.
     name: "chat-taskiem-cards",
+    touch: true,
     path: "/chat?with=taskiem",
     fixture: "chat-taskiem",
     ready: async (p) => {
@@ -325,6 +327,7 @@ const SCREENS: {
   {
     // The same, the approval at the thread's top: Decline and Approve.
     name: "chat-taskiem-approval",
+    touch: true,
     path: "/chat?with=taskiem",
     fixture: "chat-taskiem",
     ready: async (p) => {
@@ -340,6 +343,7 @@ const SCREENS: {
   {
     // Approve pressed on the approval: its sheet, asking to confirm.
     name: "chat-taskiem-approve",
+    touch: true,
     path: "/chat?with=taskiem",
     fixture: "chat-taskiem",
     ready: async (p) => {

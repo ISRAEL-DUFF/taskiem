@@ -720,8 +720,17 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   sizes; held by `contact_test.dart`. Found: on the web contact info left
   a strip of the conversation showing on a phone (only search was made the
   whole screen there); fixed. The parity spec can now see a screen as a
-  touch phone does (`touch`). Not yet: the ⋯ menus of Taskiem's and a
-  customer's conversations.
+  touch phone does (`touch`). A customer's ⋯ offers Archive (or
+  Unarchive; archived, the chat goes back to the list); Taskiem's has
+  nothing of its own, so on a phone it shows no ⋯ (on the web it held only
+  Keyboard, hidden on a phone, and opened an empty box; fixed).
+- **Where a thread opens, steadily**: a reader at the bottom stays there as
+  what is below grows (Taskiem's cards arriving after its messages, a
+  photo loading), unless the thread opened at the first unread or at a
+  message. Found: on the web Taskiem's conversation opened above its cards
+  or at their end depending on which loaded first (the parity picture
+  changed between runs); fixed in useThread, and the app now opens it at
+  the end, cards and all, as the web now always does.
 - **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
