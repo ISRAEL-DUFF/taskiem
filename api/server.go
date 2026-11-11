@@ -88,6 +88,9 @@ type Server struct {
 	// AllowSignup enables POST /v1/signup (self-serve tenants; off by default
 	// until Phase 4).
 	AllowSignup bool
+	// AppMinVersion is the lowest phone app version this server serves
+	// (TASKIEM_APP_MIN_VERSION, GET /v1/app/config); empty is the first.
+	AppMinVersion string
 	// SignupPerAddress is how many signups one client address may make a
 	// day, across every replica (TASKIEM_SIGNUP_PER_ADDRESS); 0 is the
 	// default (5), negative is no limit.
@@ -363,6 +366,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/sso/saml/acs", s.samlACSHandler)
 		r.Get("/auth/sso/saml/{id}/metadata", s.samlMetadata)
 		r.Get("/signup", s.signupOptions)
+		r.Get("/app/config", s.appConfig) // the phone app's config (app_config.go)
 		if s.AllowSignup {
 			r.Post("/signup", s.signup) // self-serve signup (onboarding.go)
 		}

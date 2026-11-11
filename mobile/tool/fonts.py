@@ -33,7 +33,7 @@ def main() -> int:
         f.flavor = None
         f.save(os.path.join(OUT, f"Inter-{s}.ttf"))
     lic = os.path.join(SRC[0], "LICENSE")
-    with open(lic, encoding="utf-8") as r, open(os.path.join(OUT, "OFL.txt"), "w", encoding="utf-8") as w:
+    with open(lic, encoding="utf-8") as r, open(os.path.join(OUT, "LICENSE-OFL.txt"), "w", encoding="utf-8") as w:
         w.write(r.read())
     print("wrote", len(SUBSETS), "fonts from", SRC[0])
     return 0

@@ -94,6 +94,8 @@ type config struct {
 	WebDir                            string
 	AnchorKey, AnchorDir              string
 	SecureCookies, TrustProxy, Signup bool
+	// AppMinVersion is the lowest phone app version served (TASKIEM_APP_MIN_VERSION).
+	AppMinVersion string
 	// PublicURL is where people reach the web app; passkeys are bound to it.
 	PublicURL, PasskeyRPID string
 	RequireAdminPasskeys   bool
@@ -455,6 +457,7 @@ func loadConfig() (config, error) {
 		SecureCookies: flag("TASKIEM_SECURE_COOKIES", true),
 		TrustProxy:    flag("TASKIEM_TRUST_PROXY", false),
 		Signup:        flag("TASKIEM_ALLOW_SIGNUP", false),
+		AppMinVersion: os.Getenv("TASKIEM_APP_MIN_VERSION"),
 		Queues:        strings.Split(env("TASKIEM_WORKER_QUEUES", "connector,sandbox,ai"), ","),
 		Connectors: builtin.Options{
 			PaystackURL: os.Getenv("TASKIEM_PAYSTACK_URL"),
@@ -1186,7 +1189,7 @@ func serve(ctx context.Context, args []string) error {
 		// Checking a key before it is saved calls the connector as a run
 		// would, so it reaches the same test fakes.
 		srv := &api.Server{Store: e.store, Vault: e.vault, Registry: e.registry, Connectors: e.connectors, Logger: log,
-			AllowSignup: cfg.Signup, SecureCookies: cfg.SecureCookies, TrustProxy: cfg.TrustProxy,
+			AllowSignup: cfg.Signup, AppMinVersion: cfg.AppMinVersion, SecureCookies: cfg.SecureCookies, TrustProxy: cfg.TrustProxy,
 			Egress: &egress.Guard{Logger: log, Loopback: connectorLoopback(e.registry, log)}, ReceivePayoutFeeKobo: cfg.ISWallet.PayoutFeeKobo}
 		if signer, _ := cfg.anchorSigner(); signer != nil {
 			srv.AnchorKey = signer.PublicKey()

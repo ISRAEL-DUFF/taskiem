@@ -1,0 +1,4 @@
+tags:
+  # The parity test (test/parity_test.dart): compared with pictures the web
+  # half takes on Linux.
+  parity:

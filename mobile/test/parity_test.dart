@@ -5,7 +5,11 @@
 // is close: two engines never draw a letter's edge alike.
 //
 // On a failure the app's picture and the difference are written to
-// build/parity/ beside the web's.
+// build/parity/ beside the web's. Run on Linux, where the web half's
+// pictures are taken: macOS draws text with its own engine.
+
+@Tags(['parity'])
+library;
 
 import 'dart:io';
 import 'dart:typed_data';

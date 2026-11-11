@@ -100,6 +100,7 @@ Switches take `true` or `false`, `1` or `0`, `yes` or `no`, `on` or `off`, in an
 | `TASKIEM_EGRESS_PROXY`, `TASKIEM_EGRESS_PROXY_USER`, `TASKIEM_EGRESS_PROXY_PASSWORD` | — | An explicit `CONNECT` proxy for tenant traffic (`http://host:port` or `https://host:port`, port required; credentials from the Secret). The egress guard still vets every destination and connects to the vetted IP, never a name. A badly set value stops the process. Set on every role ([cloud](cloud.md#an-explicit-egress-proxy), decision 0028) |
 | `TASKIEM_TRUST_PROXY` | `false` | Take the client address from the last `X-Forwarded-For` hop (behind a load balancer only). |
 | `TASKIEM_ALLOW_SIGNUP` | `false` | Self-serve signup ([onboarding](onboarding.md)). Needs email (`TASKIEM_SMTP_URL`, `TASKIEM_ALERT_FROM`, a public URL) for confirmation links |
+| `TASKIEM_APP_MIN_VERSION` | `0.1.0` | The lowest phone app version this server serves (`GET /v1/app/config`, [the phone app](spec/mobile-app.md#51-s1-what-the-app-is-told-about-itself)); an older app asks to be updated |
 | `TASKIEM_SIGNUP_PER_ADDRESS` | `5` | Signups per client address a day, across replicas; negative: no limit |
 | `TASKIEM_SIGNUP_BLOCKED_DOMAINS` | — | Email domains that may not sign up, besides the built-in throwaway services (comma-separated) |
 | `TASKIEM_DOCS_URL` | — | The public docs site the web app's help panels link to: the site's `/docs` (`https://example.ng/docs`) |

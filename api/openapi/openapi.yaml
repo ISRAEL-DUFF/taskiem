@@ -24403,6 +24403,24 @@ paths:
           description: Redirects the browser
         default:
           $ref: '#/components/responses/Error'
+  /v1/app/config:
+    get:
+      operationId: appConfig
+      tags:
+      - Authentication
+      summary: What the phone app is told about this server
+      description: Read by the phone app before anyone signs in (docs/spec/mobile-app.md §5.1). An app older than
+        `min_version` asks to be updated.
+      security: []
+      responses:
+        '200':
+          description: The app's config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppConfig'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/signup:
     get:
       operationId: signupOptions
@@ -31162,6 +31180,23 @@ components:
           type: array
           items:
             type: string
+    AppConfig:
+      type: object
+      required:
+      - min_version
+      - passkeys
+      - signup
+      properties:
+        min_version:
+          type: string
+          description: The lowest app version this server serves (TASKIEM_APP_MIN_VERSION; 0.1.0 when unset).
+          example: 0.1.0
+        passkeys:
+          type: boolean
+          description: Whether passkeys are on (a relying party and its origins are configured).
+        signup:
+          type: boolean
+          description: Whether self-serve signup is open (TASKIEM_ALLOW_SIGNUP).
     SignupOptions:
       type: object
       required:

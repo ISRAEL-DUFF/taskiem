@@ -90,6 +90,11 @@
       "ecosystem": "vendored",
       "licence": "OFL-1.1",
       "reason": "The public website's typefaces (Plus Jakarta Sans, JetBrains Mono), self-hosted as font files, unmodified, with their licences: the same fonts and basis as the npm @fontsource-variable exceptions (PR 53, 2026-10-21). Material Symbols, in the same directory, is Apache-2.0."
+    },
+    "mobile/assets/fonts": {
+      "ecosystem": "vendored",
+      "licence": "OFL-1.1",
+      "reason": "The phone app's typeface: Inter, the console's, unpacked unchanged from the web's own @fontsource-variable/inter files (mobile/tool/fonts.py) so the app draws the same letters (docs/spec/mobile-app.md §4.1); the same font and basis as the npm @fontsource-variable/inter exception, approved by the founder on 2026-10-08."
     }
   },
   "vendored": {
@@ -106,6 +111,10 @@
     "tools/docsite/assets/fonts": {
       "licences": [],
       "reason": "The public website's font files, self-hosted (docs/strategy/website.md)."
+    },
+    "mobile/assets/fonts": {
+      "licences": [],
+      "reason": "The phone app's Inter, from the web's @fontsource-variable/inter (mobile/tool/fonts.py), with its licence (LICENSE-OFL.txt)."
     }
   }
 }

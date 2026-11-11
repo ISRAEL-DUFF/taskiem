@@ -1,10 +1,13 @@
 // Command licencecheck enforces the licence gate (decision 0007) for Go
 // modules linked into this repository's packages, code copied into the
 // repository itself (third_party/, the vendored CPython build, fonts), and,
-// optionally, npm packages reported by `pnpm licenses list --json`.
+// optionally, npm packages reported by `pnpm licenses list --json` and the
+// phone app's Dart packages (mobile/pubspec.lock, read from the pub cache
+// after `flutter pub get`).
 //
 //	go run ./tools/licencecheck                       # Go and vendored code
 //	go run ./tools/licencecheck -npm npm-licences.json
+//	go run ./tools/licencecheck -pub mobile/pubspec.lock
 //
 // The policy (policy.json) has three parts. "allowed" is the allow-list: an
 // entry is a licence (allowed for every ecosystem) or {"licence", "ecosystems",
@@ -31,6 +34,7 @@ import (
 	"strings"
 
 	"github.com/google/licensecheck"
+	"sigs.k8s.io/yaml"
 )
 
 // The ecosystems a finding, an allow-list entry or an exception belongs to.
@@ -38,9 +42,10 @@ const (
 	ecoGo       = "go"
 	ecoNPM      = "npm"
 	ecoVendored = "vendored"
+	ecoPub      = "pub"
 )
 
-var ecosystems = map[string]bool{ecoGo: true, ecoNPM: true, ecoVendored: true}
+var ecosystems = map[string]bool{ecoGo: true, ecoNPM: true, ecoVendored: true, ecoPub: true}
 
 type allowEntry struct {
 	Licence    string   `json:"licence"`
@@ -177,6 +182,7 @@ type finding struct {
 func main() {
 	policyPath := flag.String("policy", "tools/licencecheck/policy.json", "policy file")
 	npmPath := flag.String("npm", "", "output of `pnpm licenses list --json` to check as well")
+	pubPath := flag.String("pub", "", "a pubspec.lock whose packages (in the pub cache) to check as well")
 	root := flag.String("root", ".", "repository root, searched for vendored code")
 	verbose := flag.Bool("v", false, "list every dependency and its licence")
 	flag.Parse()
@@ -213,6 +219,16 @@ func main() {
 			all = append(all, finding{ecoNPM, name, strings.Join(ls, " OR "), pol.checkAny(ecoNPM, name, ls)})
 		}
 	}
+	if *pubPath != "" {
+		pub, err := pubPackages(*pubPath, pubCache())
+		if err != nil {
+			fatal(err)
+		}
+		for _, p := range pub {
+			ls := detect(p.dir)
+			all = append(all, finding{ecoPub, p.name + "@" + p.version, strings.Join(ls, " AND "), pol.check(ecoPub, p.name, ls)})
+		}
+	}
 	sort.Slice(all, func(i, j int) bool { return all[i].ecosystem+all[i].name < all[j].ecosystem+all[j].name })
 
 	bad := 0
@@ -232,7 +248,7 @@ func main() {
 
 // skipDirs are never searched for vendored code: installed packages, build
 // output, and directories starting with a dot (.git, .claude).
-var skipDirs = map[string]bool{"node_modules": true, "dist": true, "bin": true, "test-results": true, "playwright-report": true}
+var skipDirs = map[string]bool{"node_modules": true, "dist": true, "bin": true, "test-results": true, "playwright-report": true, "Pods": true}
 
 // vendored checks the code copied into the repository under root. Every
 // directory holding a licence file must be listed in the policy's vendored
@@ -249,7 +265,7 @@ func vendored(root string, pol *policy) ([]finding, error) {
 		rel, _ := filepath.Rel(root, path)
 		rel = filepath.ToSlash(rel)
 		if d.IsDir() {
-			if rel != "." && (strings.HasPrefix(d.Name(), ".") || skipDirs[d.Name()] || rel == "site") {
+			if rel != "." && (strings.HasPrefix(d.Name(), ".") || skipDirs[d.Name()] || rel == "site" || rel == "mobile/build") {
 				return filepath.SkipDir
 			}
 			return nil
@@ -403,6 +419,57 @@ func npmPackages(path string) (map[string][]string, error) {
 		}
 	}
 	return out, nil
+}
+
+type pubPackage struct{ name, version, dir string }
+
+// pubPackages reads a pubspec.lock: every package hosted on a pub server,
+// with its folder in the pub cache. The SDK's own packages (flutter,
+// flutter_test) come with Flutter, under its licence, and are not listed.
+func pubPackages(lock, cache string) ([]pubPackage, error) {
+	raw, err := os.ReadFile(lock)
+	if err != nil {
+		return nil, err
+	}
+	var l struct {
+		Packages map[string]struct {
+			Source      string `json:"source"`
+			Version     string `json:"version"`
+			Description any    `json:"description"`
+		} `json:"packages"`
+	}
+	if err := yaml.Unmarshal(raw, &l); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", lock, err)
+	}
+	var out []pubPackage
+	for name, p := range l.Packages {
+		if p.Source != "hosted" {
+			continue
+		}
+		host := "pub.dev"
+		if d, ok := p.Description.(map[string]any); ok {
+			if u, ok := d["url"].(string); ok && u != "https://pub.dev" && u != "https://pub.dartlang.org" {
+				host = strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://")
+			}
+		}
+		dir := filepath.Join(cache, "hosted", host, name+"-"+p.Version)
+		if _, err := os.Stat(dir); err != nil {
+			return nil, fmt.Errorf("%s %s is not in the pub cache (%s): run `flutter pub get` first", name, p.Version, dir)
+		}
+		out = append(out, pubPackage{name, p.Version, dir})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].name < out[j].name })
+	return out, nil
+}
+
+// pubCache is where `flutter pub get` keeps packages: PUB_CACHE, or
+// ~/.pub-cache.
+func pubCache() string {
+	if c := os.Getenv("PUB_CACHE"); c != "" {
+		return c
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".pub-cache")
 }
 
 func fatal(err error) {
