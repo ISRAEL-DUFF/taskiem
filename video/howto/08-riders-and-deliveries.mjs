@@ -101,7 +101,7 @@ async function assign() {
   await card.scrollIntoViewIfNeeded();
   await act(page, "howto08-assign", "Ada · Ada's Kitchen, the owner", async () => {
     await say("Chioma's order is confirmed for delivery, paid at the door. The Taskiem chat says it needs a rider.", 3600);
-    await say("Assign rider shows Ada's riders, each with their areas and fee.", 600);
+    await say("Assign rider shows Ada's riders and the areas they cover.", 600);
     await card.getByRole("button", { name: /^Assign rider/ }).click();
     const sheet = page.getByTestId("rider-sheet");
     await sheet.waitFor();
@@ -122,9 +122,10 @@ async function follow() {
   await later(page);
   await act(page, "howto08-follow", "Ada · Ada's Kitchen, the owner", async () => {
     await page.waitForTimeout(1200);
-    await say("Kunle tapped Accept, Picked up, Arrived and Delivered on WhatsApp, one button after the other.", 3800);
+    await say("Kunle tapped Accept (and got the address), Picked up and Arrived on WhatsApp, one button after the other.", 3800);
+    await say("At the door he was asked for the ₦13,600. He took it in cash and tapped Cash received: delivered.", 3800);
     await say("On the Deliveries page: who has which order, and how far it has got.", 3600);
-    await say("Chioma was told each step on WhatsApp. Kunle took the payment at the door.", 3600);
+    await say("Chioma heard on WhatsApp when it left with Kunle, and when it was delivered, with a link to rate it.", 3800);
   });
   await page.context().close();
 }
@@ -137,14 +138,19 @@ const PARTS = [
 ];
 
 // No argument: everything. "build": only join.
-if (process.argv[2] === "rest") {
-  // After the assign act: Kunle's taps and the follow act.
-  for (const step of ["Accept", "Picked up", "Arrived", "Delivered"]) await kunleTaps(step);
+// Kunle's buttons in turn. The order is paid at the door: at Arrived he is
+// asked for it, and Cash received delivers it.
+const STEPS = ["Accept", "Picked up", "Arrived", "Cash received"];
+if (process.argv[2] === "follow") {
+  await follow();
+} else if (process.argv[2] === "rest") {
+  // After the assign act: Kunle's taps (from a step on, if named) and the follow act.
+  for (const step of STEPS.slice(Math.max(0, STEPS.indexOf(process.argv[3] ?? "Accept")))) await kunleTaps(step);
   await follow();
 } else if (process.argv[2] !== "build") {
   await prepare();
   await assign();
-  for (const step of ["Accept", "Picked up", "Arrived", "Delivered"]) await kunleTaps(step);
+  for (const step of STEPS) await kunleTaps(step);
   await follow();
 }
 console.log(build(SLUG, PARTS));
