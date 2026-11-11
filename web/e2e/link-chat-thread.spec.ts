@@ -508,6 +508,10 @@ test("older messages keep coming while the reader stays at the top as each page 
     });
     el.scrollTop = 0;
   });
-  await expect(pane.getByTestId("taskiem-message")).toHaveCount(120);
+  // Two more pages, each read in turn: on a busy runner more than the
+  // default 5 s (run 43067883721 had 50 of 120 at 5 s).
+  await expect(pane.getByTestId("taskiem-message")).toHaveCount(120, {
+    timeout: 30_000,
+  });
   await expect(pane.getByTestId("taskiem-top")).toHaveCount(0);
 });
