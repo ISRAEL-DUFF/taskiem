@@ -40,14 +40,40 @@ class PickedFile {
   LinkMessageAttachment get attachment => LinkMessageAttachment(kind: voice ? 'voice' : (photo ? 'photo' : 'file'), type: type, size: bytes.length, name: name);
 }
 
-/// ChatComposer.tsx BUSINESS_FILES: what may be sent to a business.
-const maxFileBytes = 25 * 1024 * 1024;
-final fileTypes = RegExp(r'^(image/(jpeg|png|webp)|application/pdf|audio/)');
+/// ChatComposer.tsx FileRules: what a conversation takes.
+class FileRules {
+  const FileRules({required this.max, required this.maxWords, required this.types, required this.typesMessage, required this.documents});
+  final int max;
+  final String maxWords;
+  final String types;
+  final String typesMessage;
+
+  /// The clip's menu offers a document.
+  final bool documents;
+}
+
+/// ChatComposer.tsx BUSINESS_FILES: a photo, a PDF or a voice note, to 25 MB.
+const businessFiles = FileRules(
+  max: 25 * 1024 * 1024,
+  maxWords: '25 MB',
+  types: r'^(image/(jpeg|png|webp)|application/pdf|audio/)',
+  typesMessage: 'Send a photo (JPEG, PNG or WebP), a PDF or a voice note.',
+  documents: true,
+);
+
+/// ChatComposer.tsx TASKIEM_FILES: a photo or a voice note, to 10 MB.
+const taskiemFiles = FileRules(
+  max: 10 * 1024 * 1024,
+  maxWords: '10 MB',
+  types: r'^(image/(jpeg|png|webp)|audio/)',
+  typesMessage: 'Send a photo (JPEG, PNG or WebP) or a voice note.',
+  documents: false,
+);
 
 /// Why a file cannot be sent, in words for the person; null when it can.
-String? fileProblem(PickedFile f) {
-  if (f.bytes.length > maxFileBytes) return '${f.name} is larger than 25 MB.';
-  if (!fileTypes.hasMatch(f.type)) return 'Send a photo (JPEG, PNG or WebP), a PDF or a voice note.';
+String? fileProblem(PickedFile f, [FileRules rules = businessFiles]) {
+  if (f.bytes.length > rules.max) return '${f.name} is larger than ${rules.maxWords}.';
+  if (!RegExp(rules.types).hasMatch(f.type)) return rules.typesMessage;
   return null;
 }
 

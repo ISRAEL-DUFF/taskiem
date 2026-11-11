@@ -15,6 +15,7 @@ import 'api/api.g.dart';
 import 'chat/chats.dart';
 import 'chat/conversation.dart';
 import 'chat/live.dart';
+import 'chat/taskiem.dart';
 import 'screens/signed_in.dart';
 import 'screens/sign_in.dart';
 import 'screens/sign_up.dart';
@@ -245,6 +246,11 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
       )),
       // On a phone the web shows the conversation in the list's place, at
       // once: no transition either way.
+      onOpenTaskiem: () => Navigator.of(context).push(PageRouteBuilder<void>(
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats),
+      )),
       onOpen: (c) => Navigator.of(context).push(PageRouteBuilder<void>(
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
@@ -275,4 +281,26 @@ class _OpenState extends State<_Open> {
 
   @override
   Widget build(BuildContext context) => ConversationScreen(data: _data);
+}
+
+/// Taskiem's conversation, open: its data lives while it is open.
+class _OpenTaskiem extends StatefulWidget {
+  const _OpenTaskiem({required this.chats});
+  final ChatsData chats;
+
+  @override
+  State<_OpenTaskiem> createState() => _OpenTaskiemState();
+}
+
+class _OpenTaskiemState extends State<_OpenTaskiem> {
+  late final TaskiemData _data = TaskiemData(widget.chats);
+
+  @override
+  void dispose() {
+    _data.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => TaskiemScreen(data: _data);
 }

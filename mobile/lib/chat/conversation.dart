@@ -19,6 +19,7 @@ import 'attachments.dart';
 import 'cards.dart';
 import 'chats.dart';
 import 'composer.dart';
+import 'thread.dart';
 import 'live.dart';
 import 'words.dart';
 
@@ -314,126 +315,23 @@ class ConversationScreen extends StatefulWidget {
   State<ConversationScreen> createState() => _ConversationScreenState();
 }
 
-/// lib/thread.ts NEAR_BOTTOM: how close to the bottom still counts as there.
-const _nearBottom = 80.0;
-
-/// Where a stuck day chip sits under the thread's top: the stream's 8 px
-/// and the chip's `top: 6px`.
-const _stickTop = 14.0;
-
 class _ConversationScreenState extends State<ConversationScreen> {
-  final _scroll = ScrollController();
   final _text = TextEditingController();
-  final _viewport = GlobalKey();
 
   /// The box to write in (a test hands it a file, as a picker would).
   final composerKey = GlobalKey<ComposerState>();
-  final _unreadKey = GlobalKey();
-  final _chipKeys = <String, GlobalKey>{};
-  final _groupKeys = <String, GlobalKey>{};
   late final CardActs _acts = CardActs(auth: widget.data.chats.auth, onDone: () => widget.data.pull(), onOpen: widget.onOpenDoc);
-  bool _placed = false;
-  DateTime? _newest;
-  bool _away = false;
-  int _newCount = 0;
-  ({String label, double top})? _stuck;
 
   @override
   void initState() {
     super.initState();
-    widget.data.addListener(_follow);
-    _scroll.addListener(_onScroll);
-    if (widget.data.messages == null) {
-      widget.data.open();
-    } else {
-      _follow();
-    }
-    _text.addListener(() => setState(() {}));
+    if (widget.data.messages == null) widget.data.open();
   }
 
   @override
   void dispose() {
-    widget.data.removeListener(_follow);
-    _scroll.dispose();
     _text.dispose();
     super.dispose();
-  }
-
-  bool get _atBottom => !_scroll.hasClients || _scroll.position.maxScrollExtent - _scroll.position.pixels <= _nearBottom;
-
-  void _onScroll() {
-    final away = !_atBottom;
-    final stuck = _sticky();
-    if (away != _away || stuck != _stuck || (!away && _newCount > 0)) {
-      setState(() {
-        _away = away;
-        if (!away) _newCount = 0;
-        _stuck = stuck;
-      });
-    }
-  }
-
-  /// lib/useThread.ts: opened at the first unread, 40 px under the top
-  /// (clear of the day chip), or at the bottom; afterwards the thread
-  /// follows new messages only while the reader is at the bottom or when
-  /// they sent them, and counts the others on the round button.
-  void _follow() {
-    final items = widget.data.thread;
-    if (widget.data.messages == null) return;
-    final newest = items.isEmpty ? null : items.last.m.createdAt;
-    final stick = _atBottom;
-    final prev = _newest;
-    _newest = newest;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scroll.hasClients) return;
-      if (!_placed) {
-        _placed = true;
-        final at = _unreadKey.currentContext?.findRenderObject();
-        final view = _viewport.currentContext?.findRenderObject();
-        if (at is RenderBox && view is RenderBox) {
-          final top = at.localToGlobal(Offset.zero, ancestor: view).dy;
-          _scroll.jumpTo((_scroll.offset + top - 40).clamp(0.0, _scroll.position.maxScrollExtent));
-        } else {
-          _scroll.jumpTo(_scroll.position.maxScrollExtent);
-        }
-        _onScroll();
-        return;
-      }
-      if (prev == null) return;
-      final arrived = items.where((m) => m.m.createdAt.isAfter(prev)).toList();
-      if (arrived.isEmpty) return;
-      if (stick || arrived.any((m) => m.m.mine)) {
-        _scroll.jumpTo(_scroll.position.maxScrollExtent);
-        setState(() => _newCount = 0);
-      } else {
-        setState(() => _newCount += arrived.where((m) => !m.m.mine).length);
-      }
-    });
-  }
-
-  /// CSS `position: sticky` on `.chat-day` (top 6 px in its day's group):
-  /// the chip of the day under the top stays there until its day's end
-  /// pushes it up.
-  ({String label, double top})? _sticky() {
-    final view = _viewport.currentContext?.findRenderObject();
-    if (view is! RenderBox) return null;
-    ({String label, double top})? out;
-    for (final e in _chipKeys.entries) {
-      final chip = e.value.currentContext?.findRenderObject();
-      final group = _groupKeys[e.key]?.currentContext?.findRenderObject();
-      if (chip is! RenderBox || group is! RenderBox) continue;
-      final natural = chip.localToGlobal(Offset.zero, ancestor: view).dy;
-      final end = group.localToGlobal(Offset(0, group.size.height), ancestor: view).dy;
-      if (end <= 0 || natural >= _stickTop) continue;
-      final top = _stickTop < end - 6 - chip.size.height ? _stickTop : end - 6 - chip.size.height;
-      if (top > natural + 0.01) out = (label: e.key, top: top);
-    }
-    return out;
-  }
-
-  void _toBottom() {
-    _scroll.jumpTo(_scroll.position.maxScrollExtent);
-    setState(() => _newCount = 0);
   }
 
   @override
@@ -442,59 +340,40 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final dark = TkTheme.of(context).mode == TkMode.dark;
     final pad = MediaQuery.paddingOf(context);
     final d = widget.data;
+    final c = d.conv;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: Semantics(
-        label: 'Conversation with ${d.conv.name}',
+        label: 'Conversation with ${c.name}',
         container: true,
         child: CustomPaint(
           // `.chat-mode .chat-pane { background: var(--chat-pattern), var(--chat-wallpaper) }`
-          painter: _Wallpaper(t.chatWallpaper, t.chatDoodle),
+          painter: Wallpaper(t.chatWallpaper, t.chatDoodle),
           child: Column(
             children: [
               ColoredBox(
                 color: t.panel,
                 child: Padding(
                   padding: EdgeInsets.only(top: pad.top),
-                  child: _ConversationHead(data: d, onBack: widget.onBack),
+                  child: ListenableBuilder(
+                    listenable: Listenable.merge([d, d.chats]),
+                    builder: (context, _) => ChatHeadBar(
+                      onBack: widget.onBack,
+                      avatar: Semantics(
+                        button: true,
+                        label: 'About ${c.name}',
+                        child: ChatAvatar(name: c.name, logo: c.logo ? d.chats.logo(c.business) : null, size: 40, letterSize: 15),
+                      ),
+                      title: c.name,
+                      subtitle: d.headLine,
+                      typing: d.typingNow,
+                      actions: [ChatHeadBar.iconButton('Search this conversation', TkIcon('search', size: 18, color: t.text), null)],
+                    ),
+                  ),
                 ),
               ),
               Expanded(
-                child: ListenableBuilder(
-                  listenable: d,
-                  builder: (context, _) => Stack(
-                    children: [
-                      Positioned.fill(
-                        child: KeyedSubtree(
-                          key: _viewport,
-                          child: _Stream(
-                            data: d,
-                            scroll: _scroll,
-                            unreadKey: _unreadKey,
-                            chipKeys: _chipKeys,
-                            groupKeys: _groupKeys,
-                            stuck: _stuck?.label,
-                            acts: _acts,
-                            changed: () => setState(() {}),
-                          ),
-                        ),
-                      ),
-                      if (_stuck != null)
-                        Positioned(
-                          top: _stuck!.top,
-                          left: 0,
-                          right: 0,
-                          child: IgnorePointer(child: Center(child: _DayChip(_stuck!.label, margin: false))),
-                        ),
-                      if (_away)
-                        Positioned(
-                          right: 16,
-                          bottom: 16,
-                          child: _Jump(count: _newCount, onTap: _toBottom),
-                        ),
-                    ],
-                  ),
-                ),
+                child: ListenableBuilder(listenable: d, builder: (context, _) => _thread(context, d)),
               ),
               Composer(
                 key: composerKey,
@@ -510,323 +389,83 @@ class _ConversationScreenState extends State<ConversationScreen> {
       ),
     );
   }
-}
 
-/// ThreadParts.tsx ThreadJump (`.chat-jump`): the round button over the
-/// thread's corner, with the number that came while the reader was up.
-class _Jump extends StatelessWidget {
-  const _Jump({required this.count, required this.onTap});
-  final int count;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
+  /// The thread: bubbles, cards, and our own changes as diary lines.
+  Widget _thread(BuildContext context, ConversationData d) {
     final t = TkTheme.tokens(context);
-    return Semantics(
-      button: true,
-      label: count > 0 ? '$count new ${count == 1 ? 'message' : 'messages'}: scroll to the newest' : 'Scroll to the newest messages',
-      excludeSemantics: true,
-      child: TkPress(
-        onTap: onTap,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: t.chatIn,
-                shape: BoxShape.circle,
-                border: Border.all(color: t.border),
-                boxShadow: t.shadowMd,
-              ),
-              alignment: Alignment.center,
-              child: TkIcon('down', size: 20, color: t.text),
-            ),
-            if (count > 0) Positioned(top: -6, right: -4, child: UnreadCount(count)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// styles.css `--chat-pattern`: two grids of soft dots, 28 px apart, the
-/// second set 14 px in, over the wallpaper.
-class _Wallpaper extends CustomPainter {
-  _Wallpaper(this.ground, this.doodle);
-  final Color ground;
-  final Color doodle;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = ground);
-    // `radial-gradient(var(--chat-doodle) 1.2px, transparent 1.7px)`
-    // centred in each 28 px tile.
-    final clear = doodle.withValues(alpha: 0);
-    void dot(double x, double y) {
-      final c = Offset(x, y);
-      canvas.drawCircle(
-        c,
-        1.7,
-        Paint()..shader = RadialGradient(colors: [doodle, doodle, clear], stops: const [0, 1.2 / 1.7, 1]).createShader(Rect.fromCircle(center: c, radius: 1.7)),
-      );
-    }
-
-    for (var y = 0.0; y < size.height + 28; y += 28) {
-      for (var x = 0.0; x < size.width + 28; x += 28) {
-        dot(x + 14, y + 14);
-        dot(x, y);
+    final now = d.chats.now();
+    final chatTools = d.chats.chatTools;
+    final items = d.messages == null ? null : d.thread;
+    // Our own changes made close together on one day are one line.
+    bool diary(LinkMessage m) => m.kind == 'diary' || (chatTools && m.card != null && isDiary(m.card!, m.mine));
+    final runs = <String, List<LinkMessage>>{};
+    final member = <String>{};
+    List<LinkMessage>? run;
+    for (final x in items ?? const <ThreadMessage>[]) {
+      final m = x.m;
+      final last = run?.last;
+      if (diary(m) &&
+          run != null &&
+          last != null &&
+          dayLabel(last.createdAt, now) == dayLabel(m.createdAt, now) &&
+          m.createdAt.difference(last.createdAt) <= _diaryRun) {
+        run.add(m);
+        member.add(m.id);
+      } else if (diary(m)) {
+        run = [m];
+        runs[m.id] = run;
+      } else {
+        run = null;
       }
     }
-  }
-
-  @override
-  bool shouldRepaint(_Wallpaper old) => old.ground != ground || old.doodle != doodle;
-}
-
-/// ChatHead.tsx: Back, the avatar, the name with who they are under it,
-/// search and the menu.
-class _ConversationHead extends StatelessWidget {
-  const _ConversationHead({required this.data, this.onBack});
-  final ConversationData data;
-  final VoidCallback? onBack;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    final c = data.conv;
-    Widget iconButton(String label, Widget icon, VoidCallback? onTap) => Semantics(
-      button: true,
-      label: label,
-      child: TkPress(
-        onTap: onTap ?? () {},
-        child: SizedBox(width: 40, height: 40, child: Center(child: icon)),
-      ),
-    );
-    return Container(
-      // `.chat-head`: 12 px 16 px, a line under it.
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: t.border)),
-      ),
-      child: Row(
-        children: [
-          iconButton('Back to the chats', TkIcon('back', size: 20, color: t.text), onBack ?? () => Navigator.of(context).maybePop()),
-          const SizedBox(width: 6),
-          Semantics(
-            button: true,
-            label: 'About ${c.name}',
-            child: ListenableBuilder(
-              listenable: data.chats,
-              builder: (context, _) => ChatAvatar(name: c.name, logo: c.logo ? data.chats.logo(c.business) : null, size: 40, letterSize: 15),
-            ),
+    // A card's actions are on its document's newest card only, and every
+    // card of a document shows where it is now.
+    final newest = <String>{};
+    final current = <String, LinkDocCard>{};
+    for (final x in (items ?? const <ThreadMessage>[]).reversed) {
+      final card = x.m.card;
+      if (x.m.kind != 'card' || card == null) continue;
+      final key = '${card.doc}:${card.reference}';
+      if (current.containsKey(key)) continue;
+      current[key] = card;
+      newest.add(x.id);
+    }
+    return ThreadView<ThreadMessage>(
+      items: items,
+      of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
+      now: now,
+      unread: d.unread,
+      empty: Text('No messages yet. Say hello to ${d.conv.name}.', style: tkHint(t)),
+      errors: [?d.error, ?_acts.error],
+      render: (m, prev) {
+        if (member.contains(m.id)) return null;
+        final lead = runs[m.id];
+        if (lead != null) return _DiaryRun(run: lead, other: d.conv.name, onOpen: _acts.onOpen);
+        final first = prev == null || _startsRun(prev.m, m.m);
+        final card = m.m.kind == 'card' ? m.m.card : null;
+        return Padding(
+          padding: EdgeInsets.only(top: first ? 6 : 0),
+          child: _Bubble(
+            m: m,
+            other: d.conv.name,
+            first: first,
+            now: now,
+            latest: newest.contains(m.id),
+            current: card == null ? null : current['${card.doc}:${card.reference}'],
+            acts: _acts,
+            changed: () => setState(() {}),
+            files: d.chats.files,
+            onRetry: m.out == null ? null : () => d.retry(m.out!),
+            onDiscard: m.out == null ? null : () => d.discard(m.out!),
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: ListenableBuilder(
-              listenable: data,
-              builder: (context, _) {
-                final sub = data.typingNow ? 'typing…' : data.headLine;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Semantics(
-                      header: true,
-                      child: Text(
-                        c.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: tkText(size: 16, weight: 600, lineHeight: 1.35, letterSpacing: -0.16, color: t.text),
-                      ),
-                    ),
-                    if (sub != null)
-                      Text(
-                        sub,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: data.typingNow
-                            ? tkText(size: 13, weight: 600, lineHeight: 1.25, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand)
-                            : tkText(size: 13, lineHeight: 1.25, color: t.muted),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ),
-          const SizedBox(width: 6),
-          iconButton('Search this conversation', TkIcon('search', size: 18, color: t.text), null),
-          const SizedBox(width: 6),
-          iconButton('More about this conversation', RotatedBox(quarterTurns: 1, child: TkIcon('more', size: 18, stroke: 3, color: t.text)), null),
-        ],
-      ),
+        );
+      },
     );
   }
 }
 
 /// Conversation.tsx DIARY_RUN_MS: diary lines this close are one line.
 const _diaryRun = Duration(minutes: 5);
-
-/// ChatStream.tsx: the days (each chip staying at the top while its day
-/// is under it), where the unread begin, and the messages: bubbles, cards,
-/// and our own changes as diary lines.
-class _Stream extends StatelessWidget {
-  const _Stream({
-    required this.data,
-    required this.scroll,
-    required this.unreadKey,
-    required this.chipKeys,
-    required this.groupKeys,
-    required this.acts,
-    required this.changed,
-    this.stuck,
-  });
-  final ConversationData data;
-  final ScrollController scroll;
-  final GlobalKey unreadKey;
-  final Map<String, GlobalKey> chipKeys;
-  final Map<String, GlobalKey> groupKeys;
-  final CardActs acts;
-  final VoidCallback changed;
-
-  /// The day whose chip is drawn stuck at the top (its own is hidden).
-  final String? stuck;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    final now = data.chats.now();
-    final chatTools = data.chats.chatTools;
-    final items = data.messages == null ? null : data.thread;
-    final children = <Widget>[];
-    if (items == null) {
-      // Loading: the web's skeleton, plainly nothing yet.
-    } else if (items.isEmpty) {
-      children.add(
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text('No messages yet. Say hello to ${data.conv.name}.', style: tkHint(t)),
-          ),
-        ),
-      );
-    } else {
-      // Our own changes made close together on one day are one line.
-      bool diary(LinkMessage m) => m.kind == 'diary' || (chatTools && m.card != null && isDiary(m.card!, m.mine));
-      final runs = <String, List<LinkMessage>>{};
-      final member = <String>{};
-      List<LinkMessage>? run;
-      for (final x in items) {
-        final m = x.m;
-        final last = run?.last;
-        if (diary(m) &&
-            run != null &&
-            last != null &&
-            dayLabel(last.createdAt, now) == dayLabel(m.createdAt, now) &&
-            m.createdAt.difference(last.createdAt) <= _diaryRun) {
-          run.add(m);
-          member.add(m.id);
-        } else if (diary(m)) {
-          run = [m];
-          runs[m.id] = run;
-        } else {
-          run = null;
-        }
-      }
-      // A card's actions are on its document's newest card only, and every
-      // card of a document shows where it is now.
-      final newest = <String>{};
-      final current = <String, LinkDocCard>{};
-      for (final x in items.reversed) {
-        final c = x.m.card;
-        if (x.m.kind != 'card' || c == null) continue;
-        final key = '${c.doc}:${c.reference}';
-        if (current.containsKey(key)) continue;
-        current[key] = c;
-        newest.add(x.id);
-      }
-
-      String? day;
-      ThreadMessage? prev;
-      final group = <Widget>[];
-      void close() {
-        if (group.isEmpty) return;
-        children.add(
-          KeyedSubtree(
-            key: groupKeys.putIfAbsent(day!, GlobalKey.new),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _gapped(List.of(group), 2)),
-          ),
-        );
-        group.clear();
-      }
-
-      for (final m in items) {
-        final label = dayLabel(m.m.createdAt, now);
-        if (label != day) {
-          close();
-          day = label;
-          prev = null;
-          group.add(
-            Center(
-              child: Opacity(
-                opacity: stuck == label ? 0 : 1,
-                child: _DayChip(label, chipKey: chipKeys.putIfAbsent(label, GlobalKey.new)),
-              ),
-            ),
-          );
-        }
-        if (data.unread?.id == m.id) group.add(_UnreadMark(data.unread!.count, markKey: unreadKey));
-        if (member.contains(m.id)) continue;
-        final lead = runs[m.id];
-        if (lead != null) {
-          group.add(_DiaryRun(run: lead, other: data.conv.name, onOpen: acts.onOpen));
-          prev = m;
-          continue;
-        }
-        final first = prev == null || _startsRun(prev.m, m.m);
-        final card = m.m.kind == 'card' ? m.m.card : null;
-        group.add(
-          Padding(
-            padding: EdgeInsets.only(top: first ? 6 : 0),
-            child: _Bubble(
-              m: m,
-              other: data.conv.name,
-              first: first,
-              now: now,
-              latest: newest.contains(m.id),
-              current: card == null ? null : current['${card.doc}:${card.reference}'],
-              acts: acts,
-              changed: changed,
-              files: data.chats.files,
-              onRetry: m.out == null ? null : () => data.retry(m.out!),
-              onDiscard: m.out == null ? null : () => data.discard(m.out!),
-            ),
-          ),
-        );
-        prev = m;
-      }
-      close();
-    }
-    return Semantics(
-      label: 'Chat history',
-      liveRegion: true,
-      child: SingleChildScrollView(
-        controller: scroll,
-        // `.chat-stream`: 8 px 10 px, 2 px between groups.
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [if (data.error != null) TkErrorBox(data.error!), if (acts.error != null) TkErrorBox(acts.error!), ..._gapped(children, 2)],
-        ),
-      ),
-    );
-  }
-}
-
-List<Widget> _gapped(List<Widget> list, double gap) => [
-  for (var i = 0; i < list.length; i++) ...[if (i > 0) SizedBox(height: gap), list[i]],
-];
 
 /// How much taller a line of a bubble's text is in the app than in Chrome,
 /// half of it for each of two lines.
@@ -838,55 +477,6 @@ Widget _maybeIntrinsic(bool on, Widget child) => on ? IntrinsicWidth(child: chil
 bool _startsRun(LinkMessage prev, LinkMessage m) {
   if (prev.kind == 'card' || m.kind == 'card') return true;
   return prev.mine != m.mine || prev.senderName != m.senderName;
-}
-
-/// `.chat-day`: the day, in a soft pill, 6 px above and below.
-class _DayChip extends StatelessWidget {
-  const _DayChip(this.label, {this.chipKey, this.margin = true});
-  final String label;
-  final Key? chipKey;
-  final bool margin;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    final chip = Container(
-      key: chipKey,
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 3),
-      decoration: BoxDecoration(
-        color: cssMix(t.panel, const Color(0x00000000), 0.92),
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 0.5)],
-      ),
-      child: Text(label, style: tkText(size: 12, color: t.muted)),
-    );
-    return margin ? Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: chip) : chip;
-  }
-}
-
-/// `.chat-unread`: where the unread messages begin.
-class _UnreadMark extends StatelessWidget {
-  const _UnreadMark(this.count, {this.markKey});
-  final int count;
-  final Key? markKey;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Container(
-        key: markKey,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(color: t.tint, borderRadius: BorderRadius.circular(8)),
-        child: Text(
-          count == 1 ? '1 unread message' : '$count unread messages',
-          textAlign: TextAlign.center,
-          style: tkText(size: 12, weight: 600, color: t.tintText),
-        ),
-      ),
-    );
-  }
 }
 
 /// Conversation.tsx DiaryRun: the newest change shows; the ones before it

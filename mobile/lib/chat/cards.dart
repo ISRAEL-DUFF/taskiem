@@ -343,18 +343,17 @@ class DiaryLine extends StatelessWidget {
                         borderRadius: BorderRadius.circular(999),
                         boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 2), blurRadius: 8)],
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                      // `display: inline-flex; flex-wrap: wrap; justify-content:
+                      // center; gap: 4px 8px`: words too long to sit beside the
+                      // tick put it on a line of its own, above them.
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 4,
                         children: [
                           TkIcon('tick', size: 16, color: t.ok),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text.rich(
-                              TextSpan(children: spans),
-                              textAlign: TextAlign.center,
-                              style: tkText(size: 13, color: t.text),
-                            ),
-                          ),
+                          Text.rich(TextSpan(children: spans), style: tkText(size: 13, color: t.text)),
                         ],
                       ),
                     ),

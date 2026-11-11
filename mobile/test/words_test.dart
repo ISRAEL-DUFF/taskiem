@@ -103,4 +103,30 @@ void main() {
     expect(breakAfterHyphens('accepted order P-9XTV54'), 'accepted order P-\u200B9XTV54');
     expect(breakAfterHyphens('a - b'), 'a - b');
   });
+
+  test('long messages fold as readmore.ts folds them', () {
+    expect(reveal('short', 0), (shown: 'short', folded: false));
+    final long = List.generate(200, (i) => 'word$i').join(' ');
+    final r = reveal(long, 0);
+    expect(r.folded, isTrue);
+    expect(r.shown.length, lessThanOrEqualTo(600));
+    expect(long.startsWith(r.shown), isTrue);
+    expect(r.shown.endsWith(' '), isFalse);
+    expect(reveal(long, 1).shown, long, reason: 'a tap shows 1,200 more');
+    final lines = List.generate(30, (i) => 'line $i').join('\n');
+    expect(reveal(lines, 0).shown.split('\n').length, 10);
+    expect(reveal('${'a' * 590} ${'b' * 100}', 0).folded, isFalse, reason: 'what is left is too short to fold');
+  });
+
+  test('Taskiem: bold, change, bars', () {
+    expect(boldParts('Sales *today*: ₦5,000'), [(text: 'Sales ', bold: false), (text: 'today', bold: true), (text: ': ₦5,000', bold: false)]);
+    expect(boldParts('*a* and *b*').where((p) => p.bold).map((p) => p.text), ['a', 'b']);
+    expect(boldParts('no * marks'), [(text: 'no * marks', bold: false)]);
+    expect(changeWords(17, 'the week before'), 'Up 17% on the week before');
+    expect(changeWords(-5, 'yesterday'), 'Down 5% on yesterday');
+    expect(changeWords(0, 'yesterday'), 'The same as yesterday');
+    expect(changeWords(null, 'x'), isNull);
+    expect(barHeights([0, 0]), [0.04, 0.04]);
+    expect(barHeights([50, 100, 1]), [0.5, 1.0, 0.04]);
+  });
 }

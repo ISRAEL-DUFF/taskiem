@@ -98,7 +98,18 @@ const _lift = [BoxShadow(color: Color(0x140E1A14), offset: Offset(0, 1), blurRad
 
 /// The box to write in.
 class Composer extends StatefulWidget {
-  const Composer({super.key, required this.text, required this.onSend, required this.bottom, this.pickers = const Pickers(), this.recorder});
+  const Composer({
+    super.key,
+    required this.text,
+    required this.onSend,
+    required this.bottom,
+    this.pickers = const Pickers(),
+    this.recorder,
+    this.hint = 'Message',
+    this.label = 'Message',
+    this.rules = businessFiles,
+    this.busy = false,
+  });
 
   final TextEditingController text;
 
@@ -109,6 +120,18 @@ class Composer extends StatefulWidget {
   final double bottom;
   final Pickers pickers;
   final Recorder? recorder;
+
+  /// The box's hint on a phone: the words before its comma (`hint()`).
+  final String hint;
+
+  /// What a screen reader calls the box.
+  final String label;
+
+  /// What may be sent here.
+  final FileRules rules;
+
+  /// Sending: Send waits.
+  final bool busy;
 
   @override
   State<Composer> createState() => ComposerState();
@@ -147,7 +170,7 @@ class ComposerState extends State<Composer> {
   /// A file chosen: it waits above the box for its caption.
   void choose(PickedFile? f) {
     if (f == null) return;
-    final problem = fileProblem(f);
+    final problem = fileProblem(f, widget.rules);
     setState(() {
       _error = problem;
       _file = problem == null ? f : null;
@@ -315,7 +338,7 @@ class ComposerState extends State<Composer> {
                     child: Material(
                       type: MaterialType.transparency,
                       child: Semantics(
-                        label: 'Message',
+                        label: widget.label,
                         textField: true,
                         child: TextField(
                           controller: widget.text,
@@ -329,7 +352,7 @@ class ComposerState extends State<Composer> {
                           showCursor: !TkField.debugHideCaret,
                           style: tkText(size: 15.5, lineHeight: 1.4, color: t.text),
                           decoration: InputDecoration.collapsed(
-                            hintText: file != null ? 'Add a caption' : 'Message',
+                            hintText: file != null ? 'Add a caption' : widget.hint,
                             hintStyle: tkText(size: 15.5, lineHeight: 1.4, color: t.muted),
                           ),
                         ),
@@ -339,7 +362,7 @@ class ComposerState extends State<Composer> {
                 ),
                 OverlayPortal(
                   controller: _menu,
-                  overlayChildBuilder: (context) => _AttachMenu(link: _clip, onChoose: _attach, onClose: _menu.hide),
+                  overlayChildBuilder: (context) => _AttachMenu(link: _clip, onChoose: _attach, onClose: _menu.hide, documents: widget.rules.documents),
                   child: CompositedTransformTarget(
                     link: _clip,
                     child: Semantics(expanded: _menu.isShowing, child: small('attach', 'Attach', () => setState(_menu.toggle))),
@@ -355,7 +378,7 @@ class ComposerState extends State<Composer> {
           Semantics(
             button: true,
             label: 'Send',
-            child: TkPress(onTap: _send, child: _round(t, dark, 'arrow-up')),
+            child: TkPress(onTap: widget.busy ? null : _send, child: _round(t, dark, 'arrow-up')),
           )
         else
           // MicButton: hold to record, release to send; tap to record and
@@ -597,8 +620,11 @@ class _PendingPhotoState extends State<_PendingPhoto> {
 /// AttachMenu.tsx `.attach-menu`: above the clip, its left edge at the
 /// clip's: Photo, Document, Camera.
 class _AttachMenu extends StatelessWidget {
-  const _AttachMenu({required this.link, required this.onChoose, required this.onClose});
+  const _AttachMenu({required this.link, required this.onChoose, required this.onClose, this.documents = true});
   final LayerLink link;
+
+  /// Document is offered (a business's conversation, not Taskiem's).
+  final bool documents;
   final void Function(String what) onChoose;
   final VoidCallback onClose;
 
@@ -656,7 +682,7 @@ class _AttachMenu extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [item('photo', 'image', 'Photo'), item('document', 'file', 'Document'), item('camera', 'camera', 'Camera')],
+                  children: [item('photo', 'image', 'Photo'), if (documents) item('document', 'file', 'Document'), item('camera', 'camera', 'Camera')],
                 ),
               ),
             ),

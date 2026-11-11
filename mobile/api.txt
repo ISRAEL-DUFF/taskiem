@@ -33,3 +33,9 @@ linkMessages
 sendLinkMessage
 readLinkChat
 linkTyping
+
+# Taskiem's conversation (M3)
+taskiemHistory
+taskiemSay
+getChatBriefing
+chatRefs

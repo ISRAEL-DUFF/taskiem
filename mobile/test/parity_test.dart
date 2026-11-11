@@ -32,6 +32,7 @@ import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/attachments.dart';
 import 'package:taskiem/chat/composer.dart';
 import 'package:taskiem/chat/conversation.dart';
+import 'package:taskiem/chat/taskiem.dart';
 import 'package:taskiem/screens/sign_in.dart';
 import 'package:taskiem/screens/sign_up.dart';
 import 'package:taskiem/theme/theme.dart';
@@ -170,6 +171,14 @@ final screens = <String, Screen>{
       t.state<ComposerState>(find.byType(Composer)).choose(PickedFile(bytes: bytes, name: 'tomatoes.jpg', type: 'image/jpeg'));
       await _loaded(t);
     },
+  ),
+  'chat-taskiem': (
+    build: () {
+      final f = Fixture('chat-taskiem');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: _loaded,
   ),
   'sign-up': (
     build: () => SignUpScreen(auth: fakeAuth()),

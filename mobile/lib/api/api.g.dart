@@ -159,6 +159,30 @@ class TaskiemApi {
   Future<void> linkTyping({required String link}) async {
     await _t.send('POST', '/v1/link-chats/${Uri.encodeComponent(link)}/typing');
   }
+
+  /// Your conversation with Taskiem (`GET /v1/taskiem-chat`)
+  Future<TaskiemChat> taskiemHistory({String? before, String? after}) async {
+    final j = await _t.send('GET', '/v1/taskiem-chat', query: {'before': ?before, 'after': ?after});
+    return TaskiemChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Say something to Taskiem on the web (`POST /v1/taskiem-chat`)
+  Future<TaskiemChat> taskiemSay({required TaskiemSayRequest body}) async {
+    final j = await _t.send('POST', '/v1/taskiem-chat', body: body.toJson());
+    return TaskiemChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The morning briefing card (`GET /v1/chat-briefing`)
+  Future<GetChatBriefingResponse> getChatBriefing({String? show}) async {
+    final j = await _t.send('GET', '/v1/chat-briefing', query: {'show': ?show});
+    return GetChatBriefingResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// What "/" may tag in the Taskiem chat (`GET /v1/chat-refs`)
+  Future<ChatRefsResponse> chatRefs() async {
+    final j = await _t.send('GET', '/v1/chat-refs');
+    return ChatRefsResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -1690,5 +1714,226 @@ class ReadLinkChatResponse {
 
   Map<String, dynamic> toJson() => {
         'read': read,
+      };
+}
+
+class TaskiemChat {
+  const TaskiemChat({required this.messages});
+
+  final List<TaskiemChatMessagesItem> messages;
+
+  factory TaskiemChat.fromJson(Map<String, dynamic> j) => TaskiemChat(
+        messages: (j['messages'] as List).map((e) => TaskiemChatMessagesItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((e) => e.toJson()).toList(),
+      };
+}
+
+class TaskiemChatMessagesItem {
+  const TaskiemChatMessagesItem({this.buttons, required this.channel, required this.createdAt, required this.id, required this.inbound, required this.kind, required this.text});
+
+  final List<TaskiemChatMessagesItemButtonsItem>? buttons;
+  final String channel;
+  final DateTime createdAt;
+  final String id;
+  /// The person said it (else Taskiem did)
+  final bool inbound;
+  final String kind;
+  final String text;
+
+  factory TaskiemChatMessagesItem.fromJson(Map<String, dynamic> j) => TaskiemChatMessagesItem(
+        buttons: j['buttons'] == null ? null : (j['buttons'] as List).map((e) => TaskiemChatMessagesItemButtonsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        channel: j['channel'] as String,
+        createdAt: DateTime.parse(j['created_at'] as String),
+        id: j['id'] as String,
+        inbound: j['inbound'] as bool,
+        kind: j['kind'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'buttons': ?buttons?.map((e) => e.toJson()).toList(),
+        'channel': channel,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'id': id,
+        'inbound': inbound,
+        'kind': kind,
+        'text': text,
+      };
+}
+
+class TaskiemChatMessagesItemButtonsItem {
+  const TaskiemChatMessagesItemButtonsItem({this.id, required this.title});
+
+  /// Only on an answer just given; press it by sending it as reply
+  final String? id;
+  final String title;
+
+  factory TaskiemChatMessagesItemButtonsItem.fromJson(Map<String, dynamic> j) => TaskiemChatMessagesItemButtonsItem(
+        id: j['id'] == null ? null : j['id'] as String,
+        title: j['title'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': ?id,
+        'title': title,
+      };
+}
+
+class TaskiemSayRequest {
+  const TaskiemSayRequest({this.reply, this.text});
+
+  final String? reply;
+  final String? text;
+
+  factory TaskiemSayRequest.fromJson(Map<String, dynamic> j) => TaskiemSayRequest(
+        reply: j['reply'] == null ? null : j['reply'] as String,
+        text: j['text'] == null ? null : j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'reply': ?reply,
+        'text': ?text,
+      };
+}
+
+class GetChatBriefingResponse {
+  const GetChatBriefingResponse({this.bookings, required this.day, this.deliveries, required this.key, this.low, required this.now, this.owedKobo, required this.part, required this.putOff, required this.ready, this.sales});
+
+  final int? bookings;
+  final String day;
+  final int? deliveries;
+  final String key;
+  final int? low;
+  /// The Lagos time its numbers were read at, "14:05".
+  final String now;
+  final int? owedKobo;
+  /// The part of the day it is in Lagos, for the greeting.
+  final String part;
+  final bool putOff;
+  final bool ready;
+  final GetChatBriefingResponseSales? sales;
+
+  factory GetChatBriefingResponse.fromJson(Map<String, dynamic> j) => GetChatBriefingResponse(
+        bookings: j['bookings'] == null ? null : (j['bookings'] as num).toInt(),
+        day: j['day'] as String,
+        deliveries: j['deliveries'] == null ? null : (j['deliveries'] as num).toInt(),
+        key: j['key'] as String,
+        low: j['low'] == null ? null : (j['low'] as num).toInt(),
+        now: j['now'] as String,
+        owedKobo: j['owed_kobo'] == null ? null : (j['owed_kobo'] as num).toInt(),
+        part: j['part'] as String,
+        putOff: j['put_off'] as bool,
+        ready: j['ready'] as bool,
+        sales: j['sales'] == null ? null : GetChatBriefingResponseSales.fromJson(j['sales'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'bookings': ?bookings,
+        'day': day,
+        'deliveries': ?deliveries,
+        'key': key,
+        'low': ?low,
+        'now': now,
+        'owed_kobo': ?owedKobo,
+        'part': part,
+        'put_off': putOff,
+        'ready': ready,
+        'sales': ?sales?.toJson(),
+      };
+}
+
+class GetChatBriefingResponseSales {
+  const GetChatBriefingResponseSales({this.changePct, this.week, this.weekday, this.yesterdayKobo});
+
+  final Object? changePct;
+  final List<DaySales>? week;
+  final String? weekday;
+  final int? yesterdayKobo;
+
+  factory GetChatBriefingResponseSales.fromJson(Map<String, dynamic> j) => GetChatBriefingResponseSales(
+        changePct: j['change_pct'],
+        week: j['week'] == null ? null : (j['week'] as List).map((e) => DaySales.fromJson(e as Map<String, dynamic>)).toList(),
+        weekday: j['weekday'] == null ? null : j['weekday'] as String,
+        yesterdayKobo: j['yesterday_kobo'] == null ? null : (j['yesterday_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'change_pct': ?changePct,
+        'week': ?week?.map((e) => e.toJson()).toList(),
+        'weekday': ?weekday,
+        'yesterday_kobo': ?yesterdayKobo,
+      };
+}
+
+class DaySales {
+  const DaySales({required this.day, required this.kobo, required this.label});
+
+  final String day;
+  final int kobo;
+  final String label;
+
+  factory DaySales.fromJson(Map<String, dynamic> j) => DaySales(
+        day: j['day'] as String,
+        kobo: (j['kobo'] as num).toInt(),
+        label: j['label'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'day': day,
+        'kobo': kobo,
+        'label': label,
+      };
+}
+
+class ChatRefsResponse {
+  const ChatRefsResponse({required this.refs});
+
+  final List<ChatRef> refs;
+
+  factory ChatRefsResponse.fromJson(Map<String, dynamic> j) => ChatRefsResponse(
+        refs: (j['refs'] as List).map((e) => ChatRef.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'refs': refs.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// A thing "/" may tag
+class ChatRef {
+  const ChatRef({required this.id, required this.kind, required this.name, this.party, this.status, this.totalKobo, required this.when});
+
+  final String id;
+  final String kind;
+  /// Its number or reference, or a customer's name
+  final String name;
+  /// Who it is with (a person masked, a business in full); a customer's number,
+  /// masked
+  final String? party;
+  final String? status;
+  final int? totalKobo;
+  final DateTime when;
+
+  factory ChatRef.fromJson(Map<String, dynamic> j) => ChatRef(
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        name: j['name'] as String,
+        party: j['party'] == null ? null : j['party'] as String,
+        status: j['status'] == null ? null : j['status'] as String,
+        totalKobo: j['total_kobo'] == null ? null : (j['total_kobo'] as num).toInt(),
+        when: DateTime.parse(j['when'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': kind,
+        'name': name,
+        'party': ?party,
+        'status': ?status,
+        'total_kobo': ?totalKobo,
+        'when': when.toUtc().toIso8601String(),
       };
 }

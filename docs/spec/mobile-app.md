@@ -561,12 +561,30 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   (only debug and profile builds had it), fixed. A voice note recorded on
   the web is WebM or Ogg Opus, which an iPhone does not play: it needs the
   server to keep an MP4 copy (not yet).
-- **Not yet in M3**: the documents the cards open (View order, View
+- **`@Taskiem`, its conversation** (`lib/chat/taskiem.dart`), as the web's
+  TaskiemPane: opened from the list's Taskiem row; its history from every
+  channel (diary lines, Taskiem named on the first of its answers, *bold*
+  marked, a long answer folded with Read more, the channel a message came
+  by, "how did we do?" as its sales chart); words sent at once with a clock
+  ("typing…" while Taskiem answers) and given back to the box if they could
+  not go; a reply button sends its id with its title as the words, the
+  choice ticked after; the person's ticks blue once Taskiem has answered; a
+  photo or a voice note sent as one on WhatsApp; what Taskiem said since
+  the person last looked marked, and counted on the list's row (kept while
+  the app runs: not yet across restarts). The thread is now one piece for
+  every conversation (`lib/chat/thread.dart`, as the web's ChatStream and
+  useThread), the business's conversation moved onto it with its pictures
+  unchanged. Its parity pictures come with the cards under it (next): the
+  web's view is placed before those cards load, so without them the
+  pictures differ.
+- **Not yet in M3**: Taskiem's briefing and alert cards (approvals with the
+  chat PIN among them), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
   the milestones), Decline (it asks first: with the app's confirmation
   sheet), a deal's offers and counters, replies, reactions, the message menu, stars, search, the contact sheet,
-  forwarding, older pages as the reader scrolls up, the chat tools, `@Taskiem`, customers'
-  conversations, and the list's search, chips and answers to requests
+  forwarding, older pages as the reader scrolls up, a business's long
+  message folded (Taskiem's are), the chat tools, the "@" and "#" tags,
+  customers' conversations, and the list's search, chips and answers to requests
   (drawn, not yet working).
 
 ## 11. What needs people

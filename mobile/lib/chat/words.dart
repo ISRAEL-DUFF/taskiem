@@ -252,3 +252,67 @@ String cardSub(LinkDocCard c) => [
 /// "9XTV54"); Flutter's breaker does not (UAX 14's LB25). A zero-width
 /// space after each hyphen between word characters lets it break there too.
 String breakAfterHyphens(String s) => s.replaceAllMapped(RegExp(r'(?<=\w)-(?=\w)'), (_) => '-\u200B');
+
+// --- long messages (web/src/lib/readmore.ts) ---
+
+/// What the first view holds, and what each "Read more" adds.
+const _firstChars = 600, _firstLines = 10, _stepChars = 1200, _stepLines = 20;
+
+/// Not worth a fold: what is left is shorter than this.
+const _tail = 150;
+
+/// readmore.ts reveal: what is shown after [taps] of "Read more", and
+/// whether more is left; cut where a word ends, never inside an emoji.
+({String shown, bool folded}) reveal(String text, int taps) {
+  final chars = _firstChars + taps * _stepChars;
+  final lines = _firstLines + taps * _stepLines;
+  var cut = text.length;
+  if (text.length > chars) cut = chars;
+  var n = 0;
+  for (var i = 0; i < (cut < text.length ? cut : text.length); i++) {
+    if (text.codeUnitAt(i) == 10 && ++n >= lines) {
+      cut = i;
+      break;
+    }
+  }
+  if (cut >= text.length || text.length - cut < _tail) return (shown: text, folded: false);
+  var end = cut;
+  final floor = cut - 60 < 0 ? 0 : cut - 60;
+  while (end > floor && !RegExp(r'\s').hasMatch(text[end])) {
+    end--;
+  }
+  if (end <= floor) end = cut;
+  final hi = text.codeUnitAt(end - 1);
+  if (hi >= 0xd800 && hi <= 0xdbff) end--;
+  return (shown: text.substring(0, end).trimRight(), folded: true);
+}
+
+// --- Taskiem (web/src/lib/taskiemchat.ts, lib/staff.ts) ---
+
+/// taskiemchat.ts boldParts: a message's text in parts, WhatsApp's *bold* marked.
+List<({String text, bool bold})> boldParts(String text) {
+  final out = <({String text, bool bold})>[];
+  final re = RegExp(r'\*[^*\n]+\*');
+  var at = 0;
+  for (final m in re.allMatches(text)) {
+    if (m.start > at) out.add((text: text.substring(at, m.start), bold: false));
+    out.add((text: text.substring(m.start + 1, m.end - 1), bold: true));
+    at = m.end;
+  }
+  if (at < text.length) out.add((text: text.substring(at), bold: false));
+  return out;
+}
+
+/// staff.ts changeWords: "Up 17% on the week before".
+String? changeWords(num? pct, String than) {
+  if (pct == null) return null;
+  if (pct > 0) return 'Up $pct% on $than';
+  if (pct < 0) return 'Down ${-pct}% on $than';
+  return 'The same as $than';
+}
+
+/// staff.ts barHeights: each bar 0 to 1 of the tallest (a quiet day still shows).
+List<double> barHeights(List<int> kobo) {
+  final top = kobo.fold<int>(0, (a, b) => a > b ? a : b);
+  return [for (final k in kobo) top == 0 ? 0.04 : (k / top < 0.04 ? 0.04 : k / top)];
+}

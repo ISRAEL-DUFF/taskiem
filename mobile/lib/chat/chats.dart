@@ -21,9 +21,23 @@ import 'words.dart';
 /// What the list shows, loaded as the web's page loads it.
 class ChatsData extends ChangeNotifier {
   ChatsData(this.auth, {DateTime Function()? now, this.live}) : now = now ?? DateTime.now {
+    // taskiemSeen.ts: a first visit begins at now.
+    taskiemSeen = this.now();
     _liveSub = live?.events.listen((e) {
       // A message, one gone, a conversation's settings: the list again,
       // once for a burst (ChatLive.tsx reloadSoon).
+      if (e is LiveTaskiem) {
+        // taskiemSeen.ts addTaskiemUnread: what Taskiem says after the
+        // newest seen, while the person is not looking at it.
+        final seen = taskiemSeen;
+        if (seen != null && !viewingTaskiem) {
+          final said = e.messages.where((m) => m['inbound'] != true && DateTime.parse(m['created_at'] as String).isAfter(seen)).length;
+          if (said > 0) {
+            taskiemUnread += said;
+            notifyListeners();
+          }
+        }
+      }
       if (e is LiveMessage || e is LiveGone || e is LiveConversation) {
         _soon?.cancel();
         _soon = Timer(const Duration(milliseconds: 400), load);
@@ -40,6 +54,23 @@ class ChatsData extends ChangeNotifier {
   StreamSubscription<LiveEvent>? _liveSub;
   Timer? _soon;
   Timer? _every;
+
+  /// When the person last saw Taskiem's conversation at its newest end
+  /// (taskiemSeen.ts): what Taskiem said after it is unread.
+  DateTime? taskiemSeen;
+
+  /// What Taskiem said since, as the list's row counts it.
+  int taskiemUnread = 0;
+
+  /// The newest seen.
+  void markTaskiemSeen(DateTime at) {
+    if (taskiemSeen != null && !at.isAfter(taskiemSeen!)) return;
+    taskiemSeen = at;
+    if (taskiemUnread != 0) {
+      taskiemUnread = 0;
+      notifyListeners();
+    }
+  }
 
   /// Whether a conversation's other side is typing: from the stream while
   /// it is connected, else as the list was last told.
@@ -69,6 +100,9 @@ class ChatsData extends ChangeNotifier {
   bool loaded = false;
   String? error;
   final Map<String, Uint8List?> logos = {};
+
+  /// Taskiem's conversation is open and in front.
+  bool viewingTaskiem = false;
 
   /// The conversations' photos, voice notes and PDFs, fetched as shown.
   late final ChatFiles files = ChatFiles(auth.transport);
@@ -132,7 +166,7 @@ class ChatsData extends ChangeNotifier {
 enum ChatFilter { all, unread, starred, archived }
 
 class ChatsScreen extends StatefulWidget {
-  const ChatsScreen({super.key, required this.data, this.onMenu, this.onFind, this.onOpen});
+  const ChatsScreen({super.key, required this.data, this.onMenu, this.onFind, this.onOpen, this.onOpenTaskiem});
 
   final ChatsData data;
   final VoidCallback? onMenu;
@@ -140,6 +174,9 @@ class ChatsScreen extends StatefulWidget {
 
   /// A conversation with a linked business, opened.
   final ValueChanged<LinkConversation>? onOpen;
+
+  /// Taskiem's conversation, opened.
+  final VoidCallback? onOpenTaskiem;
 
   @override
   State<ChatsScreen> createState() => _ChatsScreenState();
@@ -185,6 +222,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         child: ChatRow(
                           accent: true,
                           title: 'Taskiem',
+                          unread: d.taskiemUnread,
+                          onTap: widget.onOpenTaskiem,
                           preview: d.waiting > 0
                               ? Text(
                                   d.waiting == 1 ? '1 thing needs you' : '${d.waiting} things need you',
