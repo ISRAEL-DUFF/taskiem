@@ -93,7 +93,7 @@ func parsePolicy(raw []byte) (*policy, error) {
 		}
 		for _, e := range a.Ecosystems {
 			if !ecosystems[e] {
-				return nil, fmt.Errorf("allowed %s: unknown ecosystem %q (go, npm or vendored)", a.Licence, e)
+				return nil, fmt.Errorf("allowed %s: unknown ecosystem %q (go, npm, pub or vendored)", a.Licence, e)
 			}
 		}
 	}

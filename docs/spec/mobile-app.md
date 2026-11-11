@@ -179,7 +179,10 @@ draw, each for a reason that is not the app's to remove:
   is checked by the licence gate: `tools/licencecheck` learns `pubspec.lock`
   (decision 0007). Inter, the typeface, is already allowed under its font
   licence for the web; the exception is widened to the app's bundled font,
-  which needs the founder's approval as the policy says.
+  which needs the founder's approval as the policy says. The app's own
+  packages need not meet the server's and web's gate in full (the founder,
+  11 November 2026): MPL-2.0, file-level copyleft, is allowed for `pub`
+  packages only.
 - **Taskiem's look** is the web chat's, exactly: §4.1.
 - **Plain words.** The words an owner never sees (Appendix C of
   [no-technical-steps](no-technical-steps.md)) are checked in the app's

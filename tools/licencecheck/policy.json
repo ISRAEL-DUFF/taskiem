@@ -18,6 +18,13 @@
         "npm"
       ],
       "reason": "Decision 0007: TypeScript's dependency tree only."
+    },
+    {
+      "licence": "MPL-2.0",
+      "ecosystems": [
+        "pub"
+      ],
+      "reason": "Founder, 11 November 2026: the phone app's Dart packages need not meet the server's and web's gate in full. MPL-2.0 is file-level: only changes to its own files would have to be shared, and the app ships compiled (file_picker's Linux part, dbus, is one)."
     }
   ],
   "exceptions": {
