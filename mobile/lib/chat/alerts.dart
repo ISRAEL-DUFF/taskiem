@@ -11,6 +11,8 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/sheet.dart';
+import 'approve.dart';
 import '../theme/theme.dart';
 import 'cards.dart' show CardPill;
 import 'words.dart';
@@ -44,8 +46,8 @@ String ago(DateTime at, DateTime now) {
 
 /// approvals.ts subjectWords: the amount, who it goes to and the account,
 /// when the approval's subject names them.
-({String? amount, String? to, String? account}) subjectWords(Object? subject) {
-  if (subject is! Map) return (amount: null, to: null, account: null);
+({String? amount, String? to, String? account, List<(String, String)> rest}) subjectWords(Object? subject) {
+  if (subject is! Map) return (amount: null, to: null, account: null, rest: const []);
   final s = subject.cast<String, Object?>();
   String? first(List<String> keys, bool Function(Object?) ok) {
     for (final k in keys) {
@@ -69,7 +71,27 @@ String ago(DateTime at, DateTime now) {
     final digits = '${s[accKey]}'.replaceAll(RegExp(r'\D'), '');
     account = '${bankKey != null ? '${s[bankKey]} ' : ''}••${digits.substring(digits.length - 4)}';
   }
-  return (amount: amount, to: toKey == null ? null : s[toKey] as String, account: account);
+  // Every other plain field, as label and value.
+  final used = {?amountKey, ?toKey, ?accKey, if (accKey != null && bankKey != null) bankKey};
+  final rest = <(String, String)>[
+    for (final e in s.entries)
+      if (!used.contains(e.key) && (e.value is String || e.value is num || e.value is bool)) (fieldLabel(e.key), fieldValue(e.key, e.value!)),
+  ];
+  return (amount: amount, to: toKey == null ? null : s[toKey] as String, account: account, rest: rest);
+}
+
+/// approvals.ts fieldLabel: "amount_kobo" is "Amount", "due_date" "Due date".
+String fieldLabel(String key) {
+  final words = key.replaceAll(RegExp(r'_kobo$'), '').replaceAll(RegExp(r'[_-]+'), ' ').trim();
+  return words.isEmpty ? key : words[0].toUpperCase() + words.substring(1);
+}
+
+/// approvals.ts fieldValue: kobo as naira, numbers grouped, yes and no.
+String fieldValue(String key, Object v) {
+  if (v is num && key.endsWith('_kobo')) return naira(v.toInt());
+  if (v is num) return _grouped(v);
+  if (v is bool) return v ? 'Yes' : 'No';
+  return '$v';
 }
 
 String _grouped(num v) => v.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
@@ -362,7 +384,14 @@ class _AlertCardsState extends State<AlertCards> {
             children: _gaps([
               for (final a in shown)
                 a.kind == 'approval'
-                    ? _ApprovalCard(a: a, now: widget.now, onDecide: (d) => widget.onOpen?.call(d, a))
+                    ? _ApprovalCard(
+                        a: a,
+                        now: widget.now,
+                        onDecide: (d) async {
+                          final decided = await showTkSheet<bool>(context, (_) => ApproveSheet(a: a, decision: d, auth: widget.auth));
+                          if (decided == true) _done(a);
+                        },
+                      )
                     : _AlertCard(a: a, auth: widget.auth, onDone: () => _done(a), onOpen: widget.onOpen),
             ], 12),
           ),

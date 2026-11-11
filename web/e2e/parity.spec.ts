@@ -223,6 +223,25 @@ const SCREENS: { name: string; path: string; fixture?: string; ready: (p: Page) 
       await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     },
   },
+  {
+    // Approve pressed on the approval: its sheet, asking to confirm.
+    name: "chat-taskiem-approve",
+    path: "/chat?with=taskiem",
+    fixture: "chat-taskiem",
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-approval")).toBeAttached();
+      await p.waitForLoadState("networkidle");
+      // The approval at the thread's top, then Approve.
+      await p.getByTestId("chat-approval").evaluate((c) => {
+        const s = c.closest(".chat-stream") as HTMLElement;
+        s.scrollTop += c.getBoundingClientRect().top - s.getBoundingClientRect().top;
+      });
+      await p.getByTestId("chat-approval").getByRole("button", { name: /^Approve/ }).click();
+      await expect(p.getByTestId("approve-sheet")).toBeVisible();
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
 ];
 const FIXTURES = resolve(here, "../../mobile/test/parity/fixtures");
 

@@ -588,8 +588,17 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   account, a first payment or a step-up said, Decline and Approve). Later,
   Got it, Send reminder, Agree and Confirm work from the card. Parity: the
   conversation, its cards and its approval, light and dark, two sizes.
-- **Not yet in M3**: approving or declining from the card (the confirmation
-  with the chat PIN or passkey: next); the steps that open a tool's sheet
+- **Approvals** (`lib/chat/approve.dart`, `lib/kit/sheet.dart`): Approve or
+  Decline on the card opens the web's sheet, which every tool will open in
+  too (up from the bottom over a dimmed, softly blurred veil, the grab bar,
+  the head with Close, a foot of two buttons; rising on the spring, leaving
+  down; closed by the veil, Close, Back or a pull): what is asked, who asks,
+  every field of the request, a first payment's warning, a comment, and the
+  confirmation the approval's rule asks for, as the server says it: a code
+  from the person's authenticator (a passkey comes with M4; a decision that
+  needs one says to make it on a device with it). The tick, then the card
+  goes. Parity: the sheet over Taskiem's conversation, light and dark.
+- **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in

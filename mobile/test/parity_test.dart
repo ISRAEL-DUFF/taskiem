@@ -215,6 +215,24 @@ final screens = <String, Screen>{
       await t.pumpAndSettle();
     },
   ),
+  'chat-taskiem-approve': (
+    build: () {
+      final f = Fixture('chat-taskiem');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      // As the web half: the approval at the thread's top, then Approve.
+      final thread = t.state<ThreadViewState<TaskiemLine>>(find.byType(ThreadView<TaskiemLine>));
+      final view = t.renderObject<RenderBox>(find.byType(SingleChildScrollView));
+      final card = t.renderObject<RenderBox>(find.bySemanticsLabel(RegExp('^Needs your OK')));
+      thread.scroll.jumpTo(thread.scroll.offset + card.localToGlobal(Offset.zero, ancestor: view).dy);
+      await t.pumpAndSettle();
+      await t.tap(find.bySemanticsLabel(RegExp('^Approve: ')));
+      await t.pumpAndSettle();
+    },
+  ),
   'sign-up': (
     build: () => SignUpScreen(auth: fakeAuth()),
     drive: (t) async {

@@ -196,10 +196,99 @@ void main() {
     expect(ago(now.subtract(const Duration(hours: 30)), now), 'Yesterday');
     expect(ago(DateTime.utc(2026, 11, 2, 9), now), '2 Nov');
     final w = subjectWords({'account_name': 'Bayo Rice Mills', 'account_number': '0123456789', 'bank': 'GTBank', 'amount_kobo': 45000000});
-    expect(w, (amount: '₦450,000', to: 'Bayo Rice Mills', account: 'GTBank ••6789'));
+    expect((w.amount, w.to, w.account), ('₦450,000', 'Bayo Rice Mills', 'GTBank ••6789'));
+    expect(subjectWords({'amount_kobo': 100, 'bank_code': '058', 'due_on': '2026-11-12', 'urgent': true, 'n': 1200}).rest,
+        [('Bank code', '058'), ('Due on', '2026-11-12'), ('Urgent', 'Yes'), ('N', '1,200')]);
     expect(subjectWords({'total': 1500}).amount, '1,500');
-    expect(subjectWords('not a map'), (amount: null, to: null, account: null));
+    expect(subjectWords('not a map').amount, isNull);
     expect(firstName('Ada Obi', 'ada@demo.test'), 'Ada');
     expect(firstName(null, 'ada@demo.test'), 'ada');
+  });
+
+  Future<List<Map<String, dynamic>>> openApproval(WidgetTester t, String button, {bool stepUp = false}) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-taskiem');
+    final decided = <Map<String, dynamic>>[];
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (req.method == 'POST' && req.url.path == '/v1/approvals/01a1cac4-7150-72ec-bfd6-2ac7455b506b/ok') {
+          final body = jsonDecode(req.body) as Map<String, dynamic>;
+          decided.add(body);
+          // A rule asking for a confirmation: the server says which.
+          if (stepUp && body['totp'] == null) {
+            return http.Response(jsonEncode({'error': 'This needs your passkey or a code.', 'step_up': 'passkey_or_totp'}), 403);
+          }
+          return http.Response('{}', 200);
+        }
+        if (req.method == 'POST') return http.Response('{}', 200);
+        return null;
+      }),
+      now: () => f.at,
+    )..load();
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: TaskiemScreen(data: TaskiemData(chats, follow: false))));
+    await settle(t);
+    final b = find.bySemanticsLabel(RegExp('^$button: Pay Bayo'));
+    await t.ensureVisible(b);
+    await t.pumpAndSettle();
+    await t.tap(b);
+    await t.pumpAndSettle();
+    return decided;
+  }
+
+  testWidgets('approving from the card: the sheet, the decision with its comment, the tick, the card gone', (t) async {
+    final decided = await openApproval(t, 'Approve');
+    expect(find.text('Approve it?'), findsOneWidget);
+    expect(find.text('Bank code'), findsOneWidget);
+    expect(find.text('First payment to this account.'), findsOneWidget);
+    await t.enterText(find.byType(EditableText).last, 'Checked with Bayo');
+    await t.tap(find.bySemanticsLabel('Approve'));
+    await settle(t);
+    expect(decided.single, {'decision': 'approved', 'comment': 'Checked with Bayo'});
+    expect(find.text('Approved'), findsOneWidget, reason: 'the tick');
+    await t.pump(const Duration(milliseconds: 1300));
+    await t.pumpAndSettle();
+    await settle(t);
+    expect(find.text('Approve it?'), findsNothing);
+    expect(find.bySemanticsLabel(RegExp('^Needs your OK')), findsNothing);
+  });
+
+  testWidgets('a rule asking for a code: the field comes, and the code goes with the decision', (t) async {
+    final decided = await openApproval(t, 'Approve', stepUp: true);
+    await t.tap(find.bySemanticsLabel('Approve'));
+    await settle(t);
+    expect(find.text('This needs your passkey or a code.'), findsOneWidget);
+    expect(find.text('Or a code from your authenticator app'), findsOneWidget);
+    await t.enterText(find.byType(EditableText).last, '12345');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Approve'));
+    await settle(t);
+    expect(decided.length, 1, reason: 'not five digits');
+    await t.enterText(find.byType(EditableText).last, '123456');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Approve'));
+    await settle(t);
+    expect(decided.last, {'decision': 'approved', 'totp': '123456'});
+    await t.pump(const Duration(seconds: 2));
+    await t.pumpAndSettle();
+  });
+
+  testWidgets('declining: the red Decline, and Not now leaves it be', (t) async {
+    var decided = await openApproval(t, 'Decline');
+    expect(find.text('Decline it?'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Not now'));
+    await t.pumpAndSettle();
+    expect(find.text('Decline it?'), findsNothing);
+    expect(decided, isEmpty);
+    final b = find.bySemanticsLabel(RegExp('^Decline: Pay Bayo'));
+    await t.tap(b);
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Decline'));
+    await settle(t);
+    expect(decided.single, {'decision': 'rejected'});
+    expect(find.text('Declined'), findsOneWidget);
+    await t.pump(const Duration(seconds: 2));
+    await t.pumpAndSettle();
   });
 }
