@@ -323,6 +323,38 @@ const SCREENS: { name: string; path: string; fixture?: string; ready: (p: Page) 
     },
   },
   {
+    // Search in a conversation (the whole screen on a phone): "tomato", the
+    // messages found with the words marked. (Mama Tunde's recording with
+    // the search's answer added.)
+    name: "chat-search",
+    path: "/chat?with=3af349e2-b776-4306-bdb8-10df59687c55",
+    fixture: "chat-search",
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-message").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("chat-search-open").click();
+      await p.getByTestId("chat-search").fill("tomato");
+      await expect(p.getByTestId("chat-result").first()).toBeVisible();
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // Its calendar, to go to a day: this month, today filled in.
+    name: "chat-calendar",
+    path: "/chat?with=3af349e2-b776-4306-bdb8-10df59687c55",
+    fixture: "chat-search",
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-message").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("chat-search-open").click();
+      await p.getByTestId("chat-date-open").click();
+      await expect(p.getByTestId("chat-calendar")).toBeVisible();
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
     // The menu's "+": every emoji in the menu's place, over the bubble.
     // Its search box takes the focus on the web; the picture is taken
     // without it (a phone would raise its keyboard).

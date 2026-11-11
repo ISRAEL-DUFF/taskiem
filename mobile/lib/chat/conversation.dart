@@ -24,6 +24,7 @@ import 'composer.dart';
 import 'thread.dart';
 import 'live.dart';
 import 'menu.dart';
+import 'search.dart';
 import 'words.dart';
 
 /// Conversation.tsx PAGE: a page of messages.
@@ -179,6 +180,35 @@ class ConversationData extends ChangeNotifier {
     openedAt = at >= 0 ? id : null;
     epoch++;
     _changed();
+  }
+
+  /// The messages that say [q] (ChatSearch.tsx).
+  Future<List<LinkMessage>> search(String q) async => (await api.linkMessages(link: conv.link, q: q)).messages;
+
+  /// Conversation.tsx jumpToDay: the first message on [day] ("2026-11-04",
+  /// a local day) or after it.
+  Future<String?> firstOn(String day) async {
+    final start = DateTime.parse('${day}T00:00:00');
+    final before = start.subtract(const Duration(milliseconds: 1)).toUtc().toIso8601String();
+    final out = await api.linkMessages(link: conv.link, after: before, limit: '1');
+    return out.messages.firstOrNull?.id;
+  }
+
+  /// Conversation.tsx jump: to a message, flashed; in the thread already,
+  /// placed there, else the page around it.
+  Future<void> jump(String id) async {
+    if (messages?.any((m) => m.id == id) ?? false) {
+      openedAt = id;
+      epoch++;
+      _changed();
+      return;
+    }
+    try {
+      await openAt(id);
+    } on Object {
+      error = 'That message is no longer here.';
+      _changed();
+    }
   }
 
   /// Back to the newest page (the round button, away from it).
@@ -743,7 +773,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       title: c.name,
                       subtitle: d.headLine,
                       typing: d.typingNow,
-                      actions: [ChatHeadBar.iconButton('Search this conversation', TkIcon('search', size: 18, color: t.text), null)],
+                      actions: [ChatHeadBar.iconButton(
+                          'Search this conversation',
+                          TkIcon('search', size: 18, color: t.text),
+                          () => showChatSearch(context, name: d.conv.name, search: d.search, onJump: d.jump, firstOn: d.firstOn, now: d.chats.now),
+                        )],
                     ),
                   ),
                 ),

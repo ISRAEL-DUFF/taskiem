@@ -277,6 +277,30 @@ final screens = <String, Screen>{
   ),
   'chat-menu': (build: () => _conversation('chat-tunde', "Mama Tunde's Market"), drive: (t) => _hold(t)),
   'chat-long': (build: () => _conversation('chat-long', "Mama Tunde's Market"), drive: _loaded),
+  'chat-search': (
+    build: () => _conversation('chat-search', "Mama Tunde's Market"),
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Search this conversation'));
+      await t.pumpAndSettle();
+      await t.enterText(find.byType(EditableText).last, 'tomato');
+      // Searched 250 ms after the typing stops.
+      await t.pump(const Duration(milliseconds: 300));
+      await _loaded(t);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await t.pumpAndSettle();
+    },
+  ),
+  'chat-calendar': (
+    build: () => _conversation('chat-search', "Mama Tunde's Market"),
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Search this conversation'));
+      await t.pumpAndSettle();
+      await t.tap(find.bySemanticsLabel('Search by date'));
+      await t.pumpAndSettle();
+    },
+  ),
   'chat-pick': (
     build: () => _conversation('chat-tunde', "Mama Tunde's Market"),
     drive: (t) async {

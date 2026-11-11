@@ -2128,7 +2128,7 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .day-picker .dp-head .icon-button:disabled { color: var(--muted); opacity: 0.4; }
 .day-picker .dp-head .icon-button:hover:not(:disabled) { background: var(--chat-select); }
 .day-picker .dp-head .icon-button:focus-visible { box-shadow: var(--ring); }
-.dp-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.dp-grid, .main table.dp-grid { display: table; width: 100%; border-collapse: collapse; table-layout: fixed; border: 0; border-radius: 0; background: none; overflow: visible; }
 .dp-grid th { height: 32px; padding: 0 0 6px; font-size: 13px; font-weight: 500; color: var(--muted); border-bottom: 1px solid var(--border); background: none; text-align: center; }
 .dp-grid td { padding: 2px 0; text-align: center; border: 0; height: auto; }
 .dp-day { width: 38px; height: 38px; min-height: 38px; padding: 0; border: 0; border-radius: 50%; background: none; box-shadow: none; color: var(--text); font-size: 15px; font-variant-numeric: tabular-nums; }

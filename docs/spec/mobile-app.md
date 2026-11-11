@@ -690,11 +690,26 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   searched (the chats' recording with its answers added), light and dark,
   two sizes; held by `chats_test.dart`. Finding a business (the Find a
   business button) opens the web's Explore screen, not yet built.
+- **Search in a conversation** (`lib/chat/search.dart`), as the web's
+  ChatSearch on a phone: the head's search opens it over the conversation
+  (in from the side), with Close, a pill box searched 250 ms after the
+  typing stops, and the messages found as rows (who, when, the words
+  around the hit with the words in bold, three lines at most); a row
+  closes it and takes the thread to that message, flashed (in the thread
+  already, or the page around it). The calendar beside the box goes to a
+  day (the web's DayPicker: the month and its arrows, today filled in, the
+  days after it not to be chosen); its first message, or "No messages on
+  or after that day." Back closes the calendar first. Parity: "tomato"
+  found, and the calendar open (Mama Tunde's recording with the search's
+  answer added), light and dark, two sizes; held by `search_test.dart`.
+  Found: on the web the calendar's grid took the site's table look (a
+  rounded box, and on a phone `display: block`, so its days did not fill
+  its width and the line under the weekdays stopped short); fixed.
 - **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
-  the milestones), a deal's offers and counters, search, the contact sheet,
+  the milestones), a deal's offers and counters, the contact sheet,
   the chat tools, the "@" and "#" tags, and Find a business (the web's Explore).
 
 ## 11. What needs people

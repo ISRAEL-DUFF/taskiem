@@ -1,0 +1,110 @@
+{
+ "at": "2026-11-11T12:28:39.958Z",
+ "answers": {
+  "/v1/me": {
+   "file": "000.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/billing/status": {
+   "file": "001.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/settings/chat-tools": {
+   "file": "002.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats": {
+   "file": "003.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats?archived=1": {
+   "file": "004.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/links": {
+   "file": "005.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/taskiem-chat?after=*": {
+   "file": "006.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats/unread": {
+   "file": "007.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-settings": {
+   "file": "008.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats": {
+   "file": "025.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/form-requests": {
+   "file": "010.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/notifications/count": {
+   "file": "011.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/onboarding": {
+   "file": "012.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/links/01a1ca85-e40e-799d-8623-3110112a28d1/logo": {
+   "file": "015.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/chat-alerts": {
+   "file": "016.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/storefront/services": {
+   "file": "017.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats/3af349e2-b776-4306-bdb8-10df59687c55/items": {
+   "file": "018.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats/3af349e2-b776-4306-bdb8-10df59687c55/refs": {
+   "file": "019.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats/3af349e2-b776-4306-bdb8-10df59687c55/messages": {
+   "file": "020.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/stock": {
+   "file": "022.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats/3af349e2-b776-4306-bdb8-10df59687c55/messages?q=tomato": {
+   "file": "910.json",
+   "status": 200,
+   "type": "application/json"
+  }
+ }
+}

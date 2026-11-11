@@ -403,3 +403,81 @@ LinkMessage changedMessage(LinkMessage m, {List<LinkReaction>? reactions, bool? 
   if (starred != null) j['starred'] = starred;
   return LinkMessage.fromJson(jsonDecode(jsonEncode(j)) as Map<String, dynamic>);
 }
+
+// --- a search result's line (web/src/lib/snippet.ts) ---
+
+/// snippet.ts terms: the query's words, longest first.
+List<String> searchTerms(String q) {
+  final t = q.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toSet().toList();
+  t.sort((a, b) => b.length.compareTo(a.length));
+  return t;
+}
+
+/// snippet.ts highlight: [text] in parts, the query's words marked.
+List<({String text, bool hit})> highlight(String text, String q) {
+  final t = searchTerms(q);
+  if (t.isEmpty) return [(text: text, hit: false)];
+  final re = RegExp(t.map(RegExp.escape).join('|'), caseSensitive: false);
+  final out = <({String text, bool hit})>[];
+  var at = 0;
+  for (final m in re.allMatches(text)) {
+    if (m.start > at) out.add((text: text.substring(at, m.start), hit: false));
+    out.add((text: m[0]!, hit: true));
+    at = m.end;
+  }
+  if (at < text.length) out.add((text: text.substring(at), hit: false));
+  return out;
+}
+
+/// snippet.ts around: the words around the first hit, [width] characters
+/// at most, with "…" where cut.
+String around(String text, String q, {int width = 140}) {
+  final flat = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (flat.length <= width) return flat;
+  final low = flat.toLowerCase();
+  var at = -1;
+  for (final t in searchTerms(q)) {
+    final i = low.indexOf(t);
+    if (i >= 0 && (at < 0 || i < at)) at = i;
+  }
+  if (at < 0) at = 0;
+  final start = (at - 30).clamp(0, flat.length - width);
+  final end = (start + width).clamp(0, flat.length);
+  return '${start > 0 ? '…' : ''}${flat.substring(start, end).trim()}${end < flat.length ? '…' : ''}';
+}
+
+// --- a month as a calendar shows it (web/src/lib/calendar.ts) ---
+
+/// calendar.ts WEEKDAYS.
+const weekdays = _longDays;
+
+DateTime startOfDay(DateTime d) => DateTime(d.year, d.month, d.day);
+DateTime addDays(DateTime d, int n) => DateTime(d.year, d.month, d.day + n);
+
+/// n months on, the same day of the month or the last of a shorter one.
+DateTime addMonths(DateTime d, int n) {
+  final first = DateTime(d.year, d.month + n, 1);
+  final last = DateTime(first.year, first.month + 1, 0).day;
+  return DateTime(first.year, first.month, d.day < last ? d.day : last);
+}
+
+bool sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+bool sameMonth(DateTime a, DateTime b) => a.year == b.year && a.month == b.month;
+
+/// "2026-11-04", for a day.
+String dayKey(DateTime d) => '${d.year}-${_pad(d.month)}-${_pad(d.day)}';
+
+/// The six weeks that show a month, from Sunday.
+List<List<DateTime>> monthGrid(int year, int month) {
+  final first = DateTime(year, month, 1);
+  final start = addDays(first, -(first.weekday % 7));
+  return [
+    for (var w = 0; w < 6; w++) [for (var i = 0; i < 7; i++) addDays(start, w * 7 + i)],
+  ];
+}
+
+/// "November 2026".
+String monthLabel(DateTime d) => '${_longMonths[d.month - 1]} ${d.year}';
+
+/// "Wednesday 4 November 2026", for a day button's name.
+String calendarDayLabel(DateTime d) => '${_longDays[d.weekday % 7]} ${d.day} ${_longMonths[d.month - 1]} ${d.year}';
