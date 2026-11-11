@@ -37,7 +37,7 @@ const SIZES = [
  * letter's edge alike). Worked out by Chromium itself: no image library. */
 export async function differs(page: Page, a: Buffer, b: Buffer): Promise<number> {
   return page.evaluate(
-    async ([x, y]) => {
+    async ({ x, y }) => {
       const load = async (b64: string) => {
         // An <img>, not fetch: the app's content policy allows data: images only.
         const img = new Image();
@@ -58,12 +58,8 @@ export async function differs(page: Page, a: Buffer, b: Buffer): Promise<number>
             const jj = j + dy;
             if (ii < 0 || jj < 0 || ii >= t.w || jj >= t.h) continue;
             const k = (jj * t.w + ii) * 4;
-            if (
-              Math.abs(s.d[o] - t.d[k]) <= 24 &&
-              Math.abs(s.d[o + 1] - t.d[k + 1]) <= 24 &&
-              Math.abs(s.d[o + 2] - t.d[k + 2]) <= 24
-            )
-              return true;
+            const close = (c: number) => Math.abs((s.d[o + c] ?? 0) - (t.d[k + c] ?? 0)) <= 24;
+            if (close(0) && close(1) && close(2)) return true;
           }
         return false;
       };
@@ -72,7 +68,7 @@ export async function differs(page: Page, a: Buffer, b: Buffer): Promise<number>
         for (let i = 0; i < p.w; i++) if (!near(p, q, i, j) && !near(q, p, i, j)) n++;
       return n / (p.w * p.h);
     },
-    [a.toString("base64"), b.toString("base64")],
+    { x: a.toString("base64"), y: b.toString("base64") },
   );
 }
 
