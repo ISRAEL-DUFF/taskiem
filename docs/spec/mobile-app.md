@@ -9,29 +9,37 @@ built. The decision it asks for is [0066](../decisions/0066-a-flutter-phone-app.
 ## 1. Summary
 
 A native app for Android and iPhone, written in Flutter, for owners and their
-staff. **It is a chat app, like WhatsApp, with every chat tool working in it,
-and nothing else.** It is complete in itself: whatever the chat leads to (an
-invoice, an order, a product, a bill, a delivery) opens as a screen of the
-app, built from how the web does it today. The app does not send people to
-the web, except for the few set-up tasks listed in §3.5, each for a reason.
+staff. **It is the web chat as a phone app, like WhatsApp: everything the web
+chat does today, and nothing else.** That is already almost the whole
+business, because Taskiem's chat is how a business runs:
 
-- **What it is for.** The chat, its tools and their screens, quick on a cheap
-  Android phone; notifications that arrive when nothing is open; a camera,
-  voice notes, photos and sharing that feel like the phone's own; a place in
-  the Play Store.
-- **What it is not.** It does not replace WhatsApp, Telegram or Slack as the
-  way most traders use Taskiem ([chat-first strategy](../strategy/chat-first-nigeria.md)).
-  It has no Home, dashboards, reports, workflow builder or business set-up:
-  those are not the chat.
-- **Where its screens come from.** The web chat today opens a tool's sheet,
-  a form for a row, and a card's view inside the chat; for anything more it
-  links to a full web page (each sheet's **Open invoices**, **Open stock**…,
-  and some cards). Those links are where the app has to build screens of its
-  own. §3 lists every one, from the web's code.
+- **`@Taskiem`** is the same conversation as Taskiem on WhatsApp. In it a
+  person sets up the shop and its fronts, adds products, stock, services and
+  hours, builds a workflow with AI and publishes it, connects Paystack or
+  Google, invites staff, sees their plan, sends invoices, records expenses
+  and cash, keeps tables, approves payments, switches business and language,
+  and talks by voice note.
+- **The conversations with linked businesses and customers** carry the trade:
+  orders, deals, deliveries, bills, payments, with every chat tool and its
+  cards and sheets.
+- **The screens those lead to** (an invoice, an order, a product, a bill)
+  are the app's own, built from the web's.
+
+The app does not send people to the web. It opens a browser only where the
+chat itself does, for a reason the app cannot remove (§3.5).
+
+- **What it is for.** The chat quick on a cheap Android phone; notifications
+  when nothing is open; a camera, voice notes, photos and sharing that feel
+  like the phone's own; a place in the Play Store.
+- **What it is not.** It does not replace WhatsApp, Telegram or Slack, where
+  most traders will still talk to Taskiem
+  ([chat-first strategy](../strategy/chat-first-nigeria.md)). It has nothing
+  the web chat does not: no dashboards, Money's reports, or the workflow
+  canvas.
 - **What it costs.** A second client for the chat, the part of the product
-  that changes most (about 17,000 of the web app's 88,000 lines), plus the
-  everyday parts of the pages the chat links to. §9 is how the two stay the
-  same.
+  that changes most (about 17,000 of the web app's 88,000 lines), and the
+  everyday part of the pages the chat's tools link to. §9 is how the two stay
+  the same.
 - **Order.** Android first, iPhone from the same code and released after.
   Milestones in §10.
 
@@ -39,88 +47,110 @@ the web, except for the few set-up tasks listed in §3.5, each for a reason.
 
 | Person | What they do in it |
 | --- | --- |
-| Owner | Chat with `@Taskiem`, linked businesses and customers; every tool their role allows; act on alerts and approvals; the invoices, orders, products, bills and money the chat leads to |
-| Staff | The same within their role: sell, record stock, take and fulfil orders, hand over a shift, their tasks |
+| Owner | Everything above: runs the business from `@Taskiem` and the conversations |
+| Staff | The same within their role (`cashier`, `shift_manager`, and the roles a business gives): sell, stock, orders, handover, their tasks |
 | A business that delivers | Its deliveries and availability, which are chat orders and a tool ([decision 0065](../decisions/0065-riders-are-organisations.md)) |
 
-## 3. The app's screens
+## 3. What the app does: what the web chat does
 
-The rule: **a screen is in the app if the chat leads to it.** Each is built
-from the web's own screens and endpoints named here, doing what the web
-does there for the everyday work; set-up that belongs to a business's first
-day, or to a back office, is in §3.5.
+Drawn from the web chat's code and the chat's plans. The rule: **if the web
+chat does it, the app does it, in the same words and with the same
+confirmations; if the web chat links to a page for it, the app has that page
+as a screen of its own.**
 
-### 3.1 The chat itself
+### 3.1 The conversations
 
-| Screen | What | From the web |
+| Part | What | In the web chat |
 | --- | --- | --- |
-| Sign in | A code to your WhatsApp or Telegram; email and password; a passkey; staying signed in (§5.2). Sign-up stays in the chat apps | `Login.tsx`; `/v1/auth/chat/start`, `/verify`, `/v1/auth/login`, `/v1/auth/passkey` with `bearer: true` |
-| Chats | `@Taskiem` first, then linked businesses and customers; unread, drafts, pinned, muted, archived; search across chats; the business switcher | `Conversation.tsx` list, `ChatRow`, `ChatSearch`, `/v1/link-chats` |
-| A conversation | Text, photos, camera, voice notes, files, replies, reactions, ticks, typing, forward, star, delete for me, mentions (`@` and `#`), requests typed as words | `Conversation.tsx`, `ChatComposer`, `ThreadParts`, `BubbleShell`, `Mentions`, `RequestChip`, `/v1/chat/stream` |
-| `@Taskiem` | Taskiem's chat, reply buttons, voice notes, the briefing | `TaskiemChat.tsx`, `/v1/taskiem-chat` |
-| A customer's conversation | On the business's own WhatsApp number, with their orders | `CustomerChat.tsx`, `CustomerOrders.tsx` |
-| Cards in the chat | Live cards, reference cards (an invoice, order, bill or purchase named in a message), deals, money, alerts and approvals, the briefing and the chart, a delivery | `ChatLiveCard`, `ChatRefCard`, `ChatDeal`, `ChatMoney`, `ChatAlerts`, `ChatStaff` |
-| Tools | The picker and each tool's sheet with its chips, search and rows, as on the web | `ChatTools.tsx`, `lib/tools.ts` |
+| Sign in | A code to your WhatsApp or Telegram; email and password; a passkey; staying signed in (§5.2) | `Login.tsx`; `/v1/auth/chat/*`, `/v1/auth/login`, `/v1/auth/passkey` with `bearer: true` |
+| Chats | `@Taskiem` first, then linked businesses and customers; unread, drafts, pinned, muted, archived; search across chats; the business switcher | `Conversation.tsx`, `ChatRow`, `ChatSearch`, `/v1/link-chats` |
+| A conversation | Text, photos, camera, voice notes, files, replies, reactions, ticks, typing, forward, star, delete for me, `@` and `#` mentions, requests typed as words | `Conversation.tsx`, `ChatComposer`, `ThreadParts`, `BubbleShell`, `Mentions`, `RequestChip`, `/v1/chat/stream` |
+| A customer's conversation | On the business's own WhatsApp number: replies within the 24-hour window, templates outside it, STOP honoured; **orders read from their messages**, confirmed, paid, sent out | `CustomerChat.tsx`, `CustomerOrders.tsx` ([five flows](chat-five-more-flows.md), phases 1 and 2) |
+| Cards | Live cards, reference cards, deals, money, alerts and approvals, the briefing and its chart, orders and deliveries | `ChatLiveCard`, `ChatRefCard`, `ChatDeal`, `ChatMoney`, `ChatAlerts`, `ChatStaff`, `CustomerOrders` |
 
-### 3.2 Linked businesses
+### 3.2 `@Taskiem`
 
-| Screen | What | From the web |
-| --- | --- | --- |
-| Explore | Find a business, its card, Connect | `Explore.tsx` |
-| A business's card and contact info | Who they are, what they sell, the conversation's settings, credit terms between you | `BusinessCardSheet`, `ContactInfo` |
-| Linked businesses | Requests to link, accept, end; your QR code and code to be added | `Links.tsx` (`/settings/links`), `/v1/link-settings/qr` |
-| Your business profile | Name, logo, words, what you sell, as others see you | `BusinessProfile.tsx` (`/settings/links/profile`) |
+The web's Taskiem conversation (`TaskiemChat.tsx`, `/v1/taskiem-chat`) is the
+conversation Taskiem has on WhatsApp, Telegram and Slack (`converse`,
+`api/whatsapp_chat.go`): messages are text with reply buttons, and what a
+command needs is asked one thing at a time. The app draws the same messages,
+so **every command works in the app as soon as the conversation does**, and
+each new one the server learns works in the app the same day. Today they are
+([WhatsApp](../whatsapp.md#for-people-using-taskiem-on-whatsapp)):
 
-### 3.3 What the tools open (the web's full pages, built in the app)
-
-Today each tool's sheet ends with a link to a web page. In the app that page
-is a screen of its own, with the everyday work of the web page:
-
-| Tool | The web page it links to today | The app's screens: what they do |
-| --- | --- | --- |
-| Invoices | `/invoices`, `/invoices/{id}` (`Invoices.tsx`) | The list with filters; an invoice: lines, what is due, status, payments, **send it** (to the chat, or shared as a PDF through the phone), record a payment, undo one, give a discount, amend, void; **a new invoice**, from the chat or from an order; a customer's credit and open bills |
-| Money | `/money` (`Money.tsx`, `ChatMoney`) | The money in and out (the tool's entries), cash and expenses recorded, transfers to confirm, payments to match to invoices (`MatchSheet`) |
-| Orders (from linked businesses) | `/trade-orders`, `/trade-orders/{id}` (`TradeOrders.tsx`) | The list; an order: accept, decline, propose a change, can't fulfil, delivered and received, what they counted, raise its invoice, its documents; their statement; credit limit and days to pay |
-| Orders (from customers) | `/storefront/orders/{ref}` (`StorefrontOrders.tsx`) | The list with filters; an order: items, payment, fulfilment, decide it, money matched |
-| Deliveries | `/storefront/deliveries` | A business's deliveries and their steps; the rider's side with **Availability** |
-| Products and stock | `/storefront/stock` (`StorefrontStock.tsx`, `ChatToolForms`) | Products: add, change, price, photos, category, sizes and colours, hide; stock: count, stock in, take off or add with a reason, reorder level, low stock, today's sales, every change |
-| Sell, Handover | `/storefront/stock` | As the chat's Sell and Handover sheets, with the stock screen behind them |
-| Services and bookings | `/storefront/bookings` (`StorefrontBookings.tsx`) | Services: add, change, price, minutes; bookings: upcoming, move to a new date or time, days off, booking hours |
-| Price lists | `/storefront/price-lists` (`PriceLists.tsx`) | Your price lists, items and prices, who sees each, offers from buyers, the largest discount staff can agree |
-| Purchases and suppliers | `/purchases/{id}`, `/storefront/suppliers` (`StockPurchases.tsx`, `StorefrontSuppliers.tsx`, `ChatBuyer`) | Orders to suppliers: make, send, counter, cancel, all came; record what was paid; suppliers, linked or not, add one; the second-person threshold; a supplier's prices |
-| Bills | `/bills`, `/bills/{id}` (`Bills.tsx`, `ChatBuyer`) | Bills to pay and paid; a bill: pay by transfer or cash, **Pay from Taskiem** with step-up, what is wrong with it |
-| Tables | `/tables/{id}` (`Tables.tsx`) | A table's rows: search, add, change, remove after a **yes**, as the chat already does |
-| Approvals | the approval cards (`ChatAlerts`) | Approve or reject on the card, with a passkey or the chat PIN where the policy asks |
-| Briefing tiles | `/invoices`, `/storefront/deliveries`, `/storefront/bookings` (`ChatStaff`) | Open the app's own screens above |
-
-### 3.4 The app's own settings
-
-Notifications on this phone and showing what a message says (§5.3); the app
-lock; **Your phones** (§5.2); the chat PIN; your name; the chats you have
-linked (WhatsApp, Telegram, Slack: today `/account`, linked from
-`ChatDoors` and `ChatAlerts`); the chat tools switch for owners and admins;
-sign out.
-
-### 3.5 What stays on the web, and why
-
-Only set-up a business does once, back-office work, and what the stores do
-not allow. The app says in plain words that it is done on the web; it opens
-the web page in the phone's browser only for the ones marked **link**, where
-nothing in the app can stand in.
-
-| What | Why not in the app |
+| For | Commands |
 | --- | --- |
-| Signing up a business | Done in the chat apps (WhatsApp, Telegram, Slack) and on the web, as today; the app signs in |
-| Connecting a service (Paystack, Google…): **link** | Keys are typed only in a secure form and OAuth runs in a browser ([decision 0058](../decisions/0058-chat-as-a-way-in.md)): the app opens the one-time connect link (`/c/<token>`) the chat already sends |
-| Buying or changing a Taskiem plan | App store rules on digital subscriptions; plans are bought on the web |
-| Workflows: building, runs, templates | Not the chat; a large screen's work |
-| The storefront website: fronts, domains, embed sites, publishing | A business's set-up |
-| Invoice settings: numbering, payment connection, account numbers' wallet | A business's set-up |
-| Money's back office: statement uploads, leaks, fees, exports | Not the chat |
-| Tables' design: columns, imports, data projects | A business's set-up |
-| Members and roles, keys, audit, governance, schools, billing history | Not the chat (§13, question 6 asks about adding staff from the app) |
+| The day | `help`, `status`, `approvals` (with the chat PIN, or a passkey in the app), the morning briefing, yesterday's money |
+| Selling | `make my page`, `add product …` (or a photo with a caption), `price`, `hide`, `show`, `hours …`, `close shop`, `open shop`, `qr`; fronts (`add front …`, `add dish …`, `sold out …`, `turn on orders for …`, tickets, hire, spaces, quotes); `orders`, `order <ref> ready` |
+| Stock | `add 50 cartons of Indomie at 8,500`, `stock …`, `how many … do I have?`, `adjust … -2 spoilt` |
+| Bookings | `bookings`, `today`, `move <ref> to …`, `booking <ref> cancel`, `off 25 Dec`, `refund <ref>` |
+| Money | `invoice Ada 25,000 for …`, `spent 12k on diesel`, `cash in …`, `cash out …`, debts kept as invoices (*Ada owes 5,000*, `who owes me?`, `send Ada her balance`), payments to match |
+| Records | `tables`, `add to <table>`, `find <table> …`, questions answered from the rows |
+| Automation | `build …` or the goal in words ("every Friday text my customers who owe me"): the AI's draft as plain steps, the details asked one by one, saved on **yes**, tables made, settings asked, **Publish it now?**; `run <workflow>` with its inputs; `publish <workflow>` |
+| Set-up | `connect <service>`; `invite …` (staff, with their role); `plan`, `pay`; `email`; `switch <business>`; `language …`; the chat PIN |
+| Voice | A voice note, read as if typed |
+
+### 3.3 The tools, and the screens they lead to
+
+Every chat tool (`lib/tools.ts`, [chat tools](chat-tools.md) phases 1 to 7,
+[categories and variants](chat-categories-and-variants.md)) works in the app
+as in the web chat: the picker, each tool's sheet with chips, search and rows,
+its form for a row, its saving tick and diary line. Where the web sheet ends
+with a link to a full page (**Open invoices**, **Open stock**…) or a card
+links to one, the app has that page as a screen, doing its everyday work:
+
+| Tool | The web page it links to | The app's screens |
+| --- | --- | --- |
+| Invoices | `/invoices`, `/invoices/{id}` (`Invoices.tsx`) | The list and filters; an invoice: lines, what is due, status, payments, send it (to the chat, or as a PDF through the phone's share sheet), record or undo a payment, discount, amend, void; a new invoice; a customer's credit and open bills |
+| Money | `/money` (`Money.tsx`, `ChatMoney`) | Money in and out, cash and expenses, transfers to confirm, payments to match (`MatchSheet`) |
+| Orders from linked businesses | `/trade-orders/{id}` (`TradeOrders.tsx`) | The list; an order: accept, decline, propose a change, can't fulfil, delivered and received, what they counted, raise its invoice, documents; their statement; credit limit and days to pay |
+| Orders from customers | `/storefront/orders/{ref}` (`StorefrontOrders.tsx`) | The list; an order: items, payment, fulfilment, decide it, money matched |
+| Deliveries, Availability | `/storefront/deliveries` | Deliveries and their steps; the rider's side and availability |
+| Products, Stock, Sell, Handover | `/storefront/stock` (`StorefrontStock.tsx`, `ChatToolForms`) | Products with price, photos, category, sizes and colours, hide; stock counted, in, taken off or added with a reason, reorder level, low, today's sales, every change |
+| Services and bookings | `/storefront/bookings` (`StorefrontBookings.tsx`) | Services; bookings upcoming, moved, days off, booking hours |
+| Price lists and deals | `/storefront/price-lists` (`PriceLists.tsx`) | Lists, items, prices and quantity breaks, who sees each, offers from buyers, staff's discount limit |
+| Purchases, suppliers, Order | `/purchases/{id}`, `/storefront/suppliers` (`ChatBuyer`, `StockPurchases.tsx`, `StorefrontSuppliers.tsx`) | Orders to suppliers: make, send, counter, cancel, all came, paid; suppliers linked or not; the second-person threshold; a supplier's prices |
+| Bills | `/bills/{id}` (`Bills.tsx`, `ChatBuyer`) | Bills to pay and paid; pay by transfer or cash, Pay from Taskiem with step-up, what is wrong |
+| Tables | `/tables/{id}` (`Tables.tsx`) | A table's rows: search, add, change, remove after **yes** |
+| Explore and links | `/settings/links`, `/settings/links/profile` (`Explore`, `Links`, `BusinessProfile`) | Find a business and connect; requests; your QR; your business profile |
+| Briefing tiles | `/invoices`, `/storefront/deliveries`, `/storefront/bookings` | The screens above |
+
+### 3.4 What the web chat is gaining, and the app with it
+
+The chat's plans in progress come to the app as they are built on the web
+(§9): **tasks for staff**, **expenses from a receipt photo**, **quote to
+cash**, **restocking that drafts itself** ([five flows](chat-five-more-flows.md),
+phases 3 to 6), **paying people and payroll** from the chat
+([paying people](chat-pay-people.md)), and **riders** as participants
+([riders](chat-riders.md)). Each adds cards, sheets and screens on the same
+pattern; the app's milestone for each follows the web's.
+
+### 3.5 Where the app opens a browser, and why
+
+Only where the web chat itself sends a person to a page that the app cannot
+draw, each for a reason that is not the app's to remove:
+
+| When | Why a browser |
+| --- | --- |
+| `connect <service>` for a service that signs in (Google and others) | OAuth runs in a browser by the provider's rules: the chat's one-time connect link (`/c/<token>`, [decision 0058](../decisions/0058-chat-as-a-way-in.md)) opens in the phone's browser tab and comes back to the app. A key-based service (Paystack, Termii…) gets a secure form in the app, as Telegram's Mini App is, never a chat message |
+| A saved workflow's **open it** | The workflow canvas, for the few who want to change a draft's steps by hand; everything else about a workflow is done in the chat |
+| `plan` then **Pay** | The chat sends a checkout link today. Apple and Google have rules on paying for digital subscriptions inside an app; until §13 question 5 is settled the app shows the plan and opens the checkout in the browser, as the web chat does |
 
 **Never in the app:** a copy of the business kept on the phone (§5.5).
+
+### 3.6 Signing up, and the app's own settings
+
+- **Signing up in the app**, as on Taskiem's WhatsApp number: a stranger
+  proves their phone with a code to their WhatsApp or Telegram, then has the
+  sign-up conversation with Taskiem (what they sell, **Yes** to the terms,
+  the first template), under the rules of [chat as the way in](chat-way-in.md):
+  consent recorded, limits per phone, hour and country, off unless the
+  operator turns it on. §13 question 4.
+- **Settings**: notifications on this phone and showing what a message says
+  (§5.3); the app lock; **Your phones** (§5.2); the chat PIN; your name and
+  email; the chats you have linked (WhatsApp, Telegram, Slack; on the web
+  under Account, linked from `ChatDoors` and `ChatAlerts`); the chat tools
+  switch for owners and admins; sign out.
 
 ## 4. How it is built
 
@@ -221,6 +251,10 @@ both. Each is listed in the milestone that needs it.
 PDFs (an invoice, an order's documents) come from the endpoints the web uses
 and are shown and shared with the phone's own viewer and share sheet.
 
+Connecting a key-based service in the app's own secure form posts to the
+connect link's endpoint (`POST /v1/connect/{token}`), as the web's connect
+page and Telegram's Mini App do, so the key never becomes a chat message.
+
 ### 5.5 S5: what is kept on the phone
 
 The rule of [offline](offline.md) holds: **nothing of the business is kept
@@ -229,7 +263,7 @@ in memory while the app is open and fetched again when it opens. What is
 kept: the token (secure storage), the person's settings, a draft being typed
 (as the web keeps one), and a message not yet sent until it is sent or
 deleted. A cache of conversations for speed and bad signal is a later
-decision of its own (§13, question 4): what is kept, for how long, encrypted
+decision of its own (§13, question 6): what is kept, for how long, encrypted
 how, and wiped when.
 
 ### 5.6 S6: links that open the app
@@ -313,15 +347,16 @@ for one engineer who knows Flutter.
 | --- | --- | --- | --- |
 | M0 | **People and decisions** (§11, §13) | — | The name is cleared, both store accounts and the Firebase project exist, decision 0066 is accepted |
 | M1 | **Foundation**: `mobile/`, the generated client and theme, CI building an Android app, the licence gate for Dart, S1 | M | A build from `main` installs on a phone and shows the sign-in screen in Taskiem's look |
-| M2 | **Signed in, and staying signed in**: chat code, password, passkey; S2; the app lock; the business switcher; the app's settings (§3.4) | M | An owner signs in with a WhatsApp code on a real phone and is still signed in a week later |
-| M3 | **The chat** (§3.1): chats, a conversation, sending, files, voice notes, the stream; `@Taskiem`; customers' conversations | L | Two businesses chat from two phones, and every web chat e2e scenario on the shared list passes in the app |
+| M2 | **Signed in, and staying signed in**: chat code, password, passkey; S2; the app lock; the business switcher; the app's settings and signing up (§3.6) | M | An owner signs in with a WhatsApp code on a real phone and is still signed in a week later |
+| M3 | **The chat** (§3.1, §3.2): chats, a conversation, sending, files, voice notes, the stream; customers' conversations; `@Taskiem` with every command, reply buttons, voice notes, approvals with the chat PIN, and connecting (§3.5) | L | Two businesses chat from two phones; an owner sets up their shop, adds products and publishes a workflow by talking to `@Taskiem` in the app; every web chat e2e scenario on the shared list passes |
 | M4 | **Notifications and links** (S3, S6): the switch, **Your phones**, the icon's count, links that open the app | M | A message to a closed app shows on a real Android phone's lock screen in under 5 seconds and opens that conversation |
-| M5 | **Linked businesses** (§3.2): Explore, cards, linking, your profile | M | Two businesses find each other and link from the app alone |
-| M6 | **Selling**: products and stock, Sell, Handover, services and bookings, price lists and deals (§3.3) | L | A shop keeps its products, stock and prices from the app alone for a week |
-| M7 | **Orders and deliveries**: orders from linked businesses and from customers, deliveries and availability, their cards | L | An order goes from a buyer's message to delivered and received with both sides in the app |
-| M8 | **Money**: invoices (new, send, payments, PDF), bills and Pay from Taskiem, purchases and suppliers, money and matching, approvals with step-up, tables | L | An order is invoiced, sent, paid and matched, and a bill paid with a passkey, from the app alone |
+| M5 | **Linked businesses** (§3.3): Explore, cards, linking, your profile, the tools' picker and sheets | M | Two businesses find each other and link from the app alone |
+| M6 | **Selling** (§3.3): products and stock, Sell, Handover, services and bookings, price lists and deals | L | A shop keeps its products, stock and prices from the app alone for a week |
+| M7 | **Orders and deliveries** (§3.3): orders from linked businesses and from customers' messages, deliveries and availability, their cards | L | An order goes from a buyer's message to delivered and received with both sides in the app |
+| M8 | **Money** (§3.3): invoices (new, send, payments, PDF), bills and Pay from Taskiem, purchases and suppliers, money and matching, approvals with step-up, tables | L | An order is invoiced, sent, paid and matched, and a bill paid with a passkey, from the app alone |
 | M9 | **Android release**: closed testing with the design partners, then the Play Store | M | Ten businesses run their day from the app for two weeks without opening the web, with no lost message and no crash a person reports |
 | M10 | **iPhone release**: TestFlight, then the App Store | S–M | The same, on iPhones |
+| — | **What the web chat gains** (§3.4): tasks, receipts, quotes, restocking, paying people and payroll, riders | — | Each in the app within one milestone of the web |
 
 For one engineer who knows Flutter: M1 to M4 about two and a half months,
 M5 to M8 about four more, so a first Android release in about seven. Two
@@ -347,11 +382,11 @@ other takes M7 and M8, since they divide by screen.
 | --- | --- |
 | The two chats drift apart | §9: the server owns behaviour, a feature is done in both, one scenario list |
 | The app slows the chat's pace on the web | The app follows the web by up to one milestone; the web is not held back for it |
-| Store review rejects the app (payments wording, the account deletion rule, reviewers who cannot sign in) | A test business and account for reviewers; account deletion from the app, as both stores require; no plan purchases in the app |
+| Store review rejects the app (payments wording, the account deletion rule, reviewers who cannot sign in) | A test business and account for reviewers; account deletion from the app, as both stores require; a plan's checkout in the browser until §13 question 5 is settled |
 | Phones without Google's services | Told plainly; WhatsApp and Telegram still reach them |
 | The name changes after launch | A1 before M9; the app ID chosen to survive a new display name |
 | A lost or shared phone | The app lock, device sessions listed and ended from the web, nothing of the business kept on the phone |
-| The screens of §3.3 are a large part of the web app to build again | Built from the web's own screens and endpoints, the everyday work only (§3.5 keeps set-up on the web); M6 to M8 can be divided between two engineers |
+| The screens of §3.3 are a large part of the web app to build again | Built from the web's own screens and endpoints, the everyday work only; set-up is done by talking to `@Taskiem`, which costs the app nothing per command (§3.2); M6 to M8 can be divided between two engineers |
 | A web chat link with no screen in the app | The test of §9, point 3 |
 | Cost of two stores and their reviews on every release | Releases every two weeks at most, from `main`, by CI |
 
@@ -362,16 +397,17 @@ other takes M7 and M8, since they divide by screen.
    be enough, and the critical path is still the people items of the chat-first
    strategy, not code.
 2. **Android first**, iPhone released after (recommended), or both at once.
-3. **The app is the chat and everything the chat leads to** (settled by the
-   founder, 11 November 2026): §3, with no links to the web but §3.5.
-4. **The list in §3.5**: is anything there needed in the app (invoice
-   settings, say, if owners change them often), or anything in §3.3 not
-   needed?
-5. **A cache of conversations on the phone** (§5.5): not in the first release
+3. **The app is the web chat, all of it** (settled by the founder, 11
+   November 2026): §3, opening a browser only as in §3.5.
+4. **Signing up in the app** (§3.6), as on Taskiem's WhatsApp number
+   (recommended), or signing in only, with sign-up left to the chat apps and
+   the web.
+5. **Paying for a plan from the app.** The web chat's **Pay** opens a
+   checkout; Apple's and Google's rules on digital subscriptions bought in an
+   app need counsel's reading for a business tool sold in Nigeria. Until then,
+   the checkout opens in the browser (§3.5).
+6. **A cache of conversations on the phone** (§5.5): not in the first release
    (recommended), or a decision of its own before M3.
-6. **Adding staff from the app.** Owners add staff on the web today (Members);
-   staff are the chat's second users, so inviting one from the app may be
-   worth a screen.
 7. **Device sessions** (§5.2): 30 days unused, 180 at most (recommended), or
    other numbers.
 8. **Notifications through Firebase** (§5.3), including for iPhones, rather
