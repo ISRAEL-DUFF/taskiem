@@ -71,6 +71,16 @@ const SCREENS: { name: string; path: string; ready: (p: Page) => Promise<void> }
       await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     },
   },
+  {
+    // Signing up: a business type chosen.
+    name: "sign-up",
+    path: "/signup",
+    ready: async (p) => {
+      await expect(p.getByRole("heading", { name: "Start with Taskiem" })).toBeVisible();
+      await p.getByText("I bill customers for a service").click();
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
 ];
 const SIZES = [
   { width: 390, height: 844 },

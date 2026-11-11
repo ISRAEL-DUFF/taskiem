@@ -288,3 +288,122 @@ class TkLinkButton extends StatelessWidget {
     );
   }
 }
+
+/// A choice among several, as the web shows one: Chrome's own radio, tinted
+/// with `accent-color: var(--primary)` (styles.css). Chrome adjusts the
+/// accent for its controls (a darker pine's dot in light, a lighter lime in
+/// dark), so these colours are measured from its drawing, 16 px across with
+/// a 1 px ring and an 8 px dot; the parity test keeps them true.
+class TkRadio extends StatelessWidget {
+  const TkRadio({super.key, required this.checked});
+  final bool checked;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    return SizedBox(width: 16, height: 16, child: CustomPaint(painter: _RadioPainter(checked: checked, dark: dark)));
+  }
+}
+
+class _RadioPainter extends CustomPainter {
+  _RadioPainter({required this.checked, required this.dark});
+  final bool checked;
+  final bool dark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final fill = dark ? const Color(0xFF3B3B3B) : const Color(0xFFFFFFFF);
+    final ring = checked
+        ? (dark ? const Color(0xFFD8F29A) : const Color(0xFF0B1512))
+        : (dark ? const Color(0xFF858585) : const Color(0xFF767676));
+    canvas.drawCircle(c, 7.5, Paint()..color = fill);
+    canvas.drawCircle(c, 7.5, Paint()
+      ..color = ring
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1);
+    if (checked) canvas.drawCircle(c, 4, Paint()..color = dark ? const Color(0xFFDBF69C) : const Color(0xFF030D0A));
+  }
+
+  @override
+  bool shouldRepaint(_RadioPainter old) => old.checked != checked || old.dark != dark;
+}
+
+/// A yes-or-no, as Chrome draws a checkbox with the web's accent: 16 px, a
+/// 1 px border and 2 px corners, filled with the accent and ticked when on.
+class TkCheckbox extends StatelessWidget {
+  const TkCheckbox({super.key, required this.checked});
+  final bool checked;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    return SizedBox(width: 16, height: 16, child: CustomPaint(painter: _CheckPainter(checked: checked, dark: dark)));
+  }
+}
+
+class _CheckPainter extends CustomPainter {
+  _CheckPainter({required this.checked, required this.dark});
+  final bool checked;
+  final bool dark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = RRect.fromRectAndRadius(const Rect.fromLTWH(0.5, 0.5, 15, 15), const Radius.circular(2));
+    final accent = dark ? const Color(0xFFDBF69C) : const Color(0xFF030D0A);
+    if (checked) {
+      canvas.drawRRect(r, Paint()..color = accent);
+      final tick = Path()
+        ..moveTo(3.5, 8)
+        ..lineTo(6.5, 11)
+        ..lineTo(12.5, 5);
+      canvas.drawPath(tick, Paint()
+        ..color = dark ? const Color(0xFF151614) : const Color(0xFFFFFFFF)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round);
+      return;
+    }
+    canvas.drawRRect(r, Paint()..color = dark ? const Color(0xFF3B3B3B) : const Color(0xFFFFFFFF));
+    canvas.drawRRect(r, Paint()
+      ..color = dark ? const Color(0xFF858585) : const Color(0xFF767676)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1);
+  }
+
+  @override
+  bool shouldRepaint(_CheckPainter old) => old.checked != checked || old.dark != dark;
+}
+
+/// The web's `label.row` with a radio or checkbox in it: the box (with
+/// Chrome's margins: 3 px above and right, 5 px left), 8 px, the words;
+/// 16 px below. The whole row is pressed.
+class TkChoiceRow extends StatelessWidget {
+  const TkChoiceRow({super.key, required this.control, required this.label, required this.onTap, this.radio = true});
+  final Widget control;
+  final Widget label;
+  final VoidCallback onTap;
+  final bool radio;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Semantics(
+        inMutuallyExclusiveGroup: radio,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Row(
+            children: [
+              Padding(padding: const EdgeInsets.fromLTRB(5, 3, 3, 0), child: control),
+              const SizedBox(width: 8),
+              Expanded(child: label),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

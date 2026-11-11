@@ -11,6 +11,7 @@ import 'app/config.dart';
 import 'app/session.dart';
 import 'screens/signed_in.dart';
 import 'screens/sign_in.dart';
+import 'screens/sign_up.dart';
 import 'theme/theme.dart';
 
 void main() {
@@ -71,9 +72,38 @@ class _Root extends StatelessWidget {
       builder: (context, _) => switch (auth.state) {
         // Opening: the pine the sign-in page starts with, for a moment.
         AuthState.checking => ColoredBox(color: TkTheme.tokens(context).brand),
-        AuthState.signedOut => SignInScreen(auth: auth),
+        AuthState.signedOut => _SignedOut(auth: auth),
         AuthState.signedIn => SignedInScreen(auth: auth),
       },
     );
+  }
+}
+
+/// Signed out: signing in, or signing up when the server has it open
+/// (GET /v1/signup), as the web offers "Create an account".
+class _SignedOut extends StatefulWidget {
+  const _SignedOut({required this.auth});
+  final Auth auth;
+
+  @override
+  State<_SignedOut> createState() => _SignedOutState();
+}
+
+class _SignedOutState extends State<_SignedOut> {
+  bool _signup = false;
+  bool _open = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.auth.api.signupOptions().then((o) {
+      if (mounted) setState(() => _open = o.enabled);
+    }, onError: (_) {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_signup) return SignUpScreen(auth: widget.auth, onSignIn: () => setState(() => _signup = false));
+    return SignInScreen(auth: widget.auth, signup: _open, onSignUp: () => setState(() => _signup = true));
   }
 }

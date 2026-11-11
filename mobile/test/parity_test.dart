@@ -28,6 +28,7 @@ import 'package:taskiem/app/session.dart';
 import 'package:taskiem/kit/kit.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/screens/sign_in.dart';
+import 'package:taskiem/screens/sign_up.dart';
 import 'package:taskiem/theme/theme.dart';
 
 import 'support.dart';
@@ -46,6 +47,9 @@ Auth fakeAuth() {
         return http.Response(jsonEncode({'expires_in': 600, 'status': codeSent}), 202);
       case 'POST /v1/auth/login':
         return http.Response(jsonEncode({'error': 'invalid email or password'}), 401);
+      case 'GET /v1/signup':
+        // As web/e2e/serve.sh's server: open, with no terms to agree to.
+        return http.Response(jsonEncode({'enabled': true}), 200);
     }
     return http.Response(jsonEncode({'error': 'not found'}), 404);
   });
@@ -87,6 +91,14 @@ final screens = <String, Screen>{
       await t.enterText(find.byType(TextField).at(0), 'ada@parity.test');
       await t.enterText(find.byType(TextField).at(1), 'not the password');
       await _tap(t, 'Sign in');
+    },
+  ),
+  'sign-up': (
+    build: () => SignUpScreen(auth: fakeAuth()),
+    drive: (t) async {
+      await _tap(t, 'I bill customers for a service');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await t.pumpAndSettle();
     },
   ),
 };
