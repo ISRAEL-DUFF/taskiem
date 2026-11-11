@@ -112,7 +112,8 @@ class CustomerData extends ChangeNotifier {
 
   Future<void> open() async {
     await Future.wait([_chat(), _pull(first: true)]);
-    if (follow) {
+    // Closed before the first page came: nothing to follow.
+    if (follow && !_disposed) {
       _timer = Timer.periodic(_poll, (_) {
         _pull(first: false);
         _chat();
@@ -196,7 +197,8 @@ class CustomerData extends ChangeNotifier {
       unawaited(chats.load());
     } on Object catch (e) {
       messages = messages?.where((m) => m != mine).toList();
-      _back.add(words);
+      // Given back only while the screen is there to take it.
+      if (!_back.isClosed) _back.add(words);
       _fail(e);
       unawaited(_chat());
     } finally {

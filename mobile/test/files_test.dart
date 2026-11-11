@@ -46,6 +46,28 @@ class _Recorder extends Recorder {
   }
 }
 
+/// The phone's microphone, its start held until [go] (a slow phone, the
+/// microphone question showing).
+class _SlowRecorder extends Recorder {
+  final go = Completer<void>();
+  bool ended = false;
+  @override
+  Future<bool> mayRecord() async => true;
+  @override
+  Future<String> place() async => '/tmp/voice.m4a';
+  @override
+  Future<void> begin(String path) => go.future;
+  @override
+  Future<String?> end() async {
+    ended = true;
+    return path;
+  }
+
+  String get path => '/tmp/voice.m4a';
+  @override
+  Future<Uint8List?> take(String path, {required bool keep}) async => keep ? Uint8List.fromList(List.filled(2048, 1)) : null;
+}
+
 /// What the stand-in server was sent: each upload's fields and file.
 class _Sent {
   final uploads = <({Map<String, String> fields, String filename, String type, int size})>[];
@@ -160,6 +182,21 @@ void main() {
     await settle(t);
     expect(sent.uploads.single.type, 'audio/mp4');
     expect(sent.uploads.single.fields.containsKey('text'), isFalse);
+  });
+
+  testWidgets('a voice note let go before the microphone has started: nothing sent, nothing left recording', (t) async {
+    final rec = _SlowRecorder();
+    final (sent, _) = await open(t, recorder: rec);
+    final g = await t.startGesture(t.getCenter(find.bySemanticsLabel('Record a voice note')));
+    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 450)));
+    await g.up();
+    await settle(t);
+    rec.go.complete();
+    await settle(t);
+    expect(sent.uploads, isEmpty);
+    expect(rec.ended, isTrue, reason: 'the microphone stopped once it had started');
+    expect(find.text('Recording 0:00', findRichText: true), findsNothing);
+    expect(find.bySemanticsLabel('Record a voice note'), findsOneWidget);
   });
 
   testWidgets('a voice note held and slid left is thrown away', (t) async {

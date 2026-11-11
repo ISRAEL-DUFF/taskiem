@@ -210,7 +210,8 @@ class ConversationData extends ChangeNotifier {
     } else {
       await openNewest();
     }
-    if (!follow) return;
+    // Closed before the first page came: nothing to follow.
+    if (!follow || _disposed) return;
     _liveSub ??= _live?.events.listen(_onLive);
     _live?.addListener(_reschedule);
     _reschedule();

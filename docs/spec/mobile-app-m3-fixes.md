@@ -32,6 +32,14 @@ Settings, Explore, search, contact info) is pushed above it. What happens to
 
 ## 2. Bugs: lifetimes and failures
 
+**Done: B4–B7** (`test/lifetime_test.dart`, `test/files_test.dart`). Each
+conversation's `open()` follows nothing once it is closed; the words are
+given back only while the screen is there. Opening the app signs out on
+anything it cannot read, and the opening screen never stays. The recorder
+knows when it is still starting: a stop then waits for the start, stops
+it and keeps nothing. The composer leaves a recording stopped before it
+started alone, and a stop that fails is no note.
+
 | # | Bug | Where | Fix | Test |
 | --- | --- | --- | --- | --- |
 | B4 | **Polls leak when a conversation is left before it loads.** `open()` checks nothing after its awaits: closed before the first page comes, it still listens to the stream and starts its 3 s and 9 s timers, which nothing cancels; one pair more for every quick back | `chat/conversation.dart:213` (`open`), `chat/taskiem.dart:187`, `chat/customer.dart:116` | `if (_disposed) return;` after every await in each `open()`, before listening or starting timers | Each: open with the first page held, dispose, answer it: no timer, no listener, no request after |

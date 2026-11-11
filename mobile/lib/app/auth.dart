@@ -66,10 +66,17 @@ class Auth extends ChangeNotifier {
     try {
       final c = await api.appConfig();
       if (olderThan(version, c.minVersion)) return _set(AuthState.outdated);
-    } on Exception {
-      // Asked again next time the app opens.
+    } on Object {
+      // Asked again next time the app opens (an answer not understood too).
     }
-    final t = await store.token();
+    final String? t;
+    try {
+      t = await store.token();
+    } on Object {
+      // The phone's secure storage could not be read (on Android, its keys
+      // lost after a backup is restored): the token is as good as gone.
+      return _forgetQuietly();
+    }
     if (t == null) return _set(AuthState.signedOut);
     transport.token = t;
     restored = true;
@@ -81,12 +88,25 @@ class Auth extends ChangeNotifier {
       // Only 401 means the session has ended. A 403 is a session that is
       // good but held (an administrator asked to add a passkey): kept.
       if (e.status == 401) {
-        await _forget();
+        await _forgetQuietly();
       } else {
         _set(AuthState.signedIn);
       }
     } on Offline {
       _set(AuthState.signedIn);
+    } on Object {
+      // An answer this app cannot read: signing in again is the way on,
+      // never the opening screen for good.
+      await _forgetQuietly();
+    }
+  }
+
+  /// Forgets the session even if the phone's storage will not take it.
+  Future<void> _forgetQuietly() async {
+    try {
+      await _forget();
+    } on Object {
+      if (state != AuthState.signedOut) _set(AuthState.signedOut);
     }
   }
 

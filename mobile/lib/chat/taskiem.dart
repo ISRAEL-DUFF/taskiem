@@ -184,7 +184,8 @@ class TaskiemData extends ChangeNotifier {
       error = 'You’re offline. The conversation shows when you’re back online.';
       _changed();
     }
-    if (!follow) return;
+    // Closed before the history came: nothing to follow.
+    if (!follow || _disposed) return;
     _live ??= chats.live?.events.listen((e) {
       if (e is LiveTaskiem) {
         _merge(e.messages.map(TaskiemChatMessagesItem.fromJson).toList());
@@ -262,7 +263,8 @@ class TaskiemData extends ChangeNotifier {
   void _unsent(TaskiemLine? mine, String? reply) {
     if (mine == null) return;
     messages = messages?.where((x) => x != mine).toList();
-    if (reply == null) _giveBack.add(mine.m.text);
+    // Given back only while the screen is there to take it.
+    if (reply == null && !_giveBack.isClosed) _giveBack.add(mine.m.text);
   }
 
   /// A voice note or a photo: read as one sent on WhatsApp.

@@ -55,34 +55,82 @@ class Pickers {
 }
 
 /// The microphone, for a voice note: AAC in MP4, which the server takes and
-/// both kinds of phone play.
+/// both kinds of phone play. A stop that comes while it is still starting
+/// (a slow phone, the microphone question showing) waits for the start and
+/// keeps nothing: there is no note yet, and nothing is left recording.
 class Recorder {
   Recorder();
   AudioRecorder? _rec;
   String? _path;
+  Future<bool>? _starting;
+  bool _began = false;
 
-  /// Starts; false when the phone's microphone may not be used.
-  Future<bool> start() async {
-    final r = _rec ??= AudioRecorder();
-    if (!await r.hasPermission()) return false;
-    final dir = await getTemporaryDirectory();
-    _path = '${dir.path}/voice-${DateTime.now().microsecondsSinceEpoch}.m4a';
-    await r.start(const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 48000, numChannels: 1), path: _path!);
-    return true;
+  /// The phone's part, each a step a test can stand in for.
+  @protected
+  Future<bool> mayRecord() => (_rec ??= AudioRecorder()).hasPermission();
+  @protected
+  Future<String> place() async => '${(await getTemporaryDirectory()).path}/voice-${DateTime.now().microsecondsSinceEpoch}.m4a';
+  @protected
+  Future<void> begin(String path) =>
+      (_rec ??= AudioRecorder()).start(const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 48000, numChannels: 1), path: path);
+  @protected
+  Future<String?> end() async => _rec?.stop();
+
+  /// The note's bytes when kept; the file is removed either way.
+  @protected
+  Future<Uint8List?> take(String path, {required bool keep}) async {
+    final f = File(path);
+    if (!f.existsSync()) return null;
+    final bytes = keep ? await f.readAsBytes() : null;
+    f.deleteSync();
+    return bytes;
   }
 
-  /// Stops: the note when kept, nothing when thrown away.
+  /// Starts; false when the phone's microphone may not be used.
+  Future<bool> start() {
+    _began = false;
+    final s = () async {
+      if (!await mayRecord()) return false;
+      final p = await place();
+      _path = p;
+      await begin(p);
+      _began = true;
+      return true;
+    }();
+    _starting = s;
+    return s;
+  }
+
+  /// Stops: the note when kept, nothing when thrown away (or when stopped
+  /// before it had begun).
   Future<PickedFile?> stop({required bool keep}) async {
-    final path = await _rec?.stop() ?? _path;
-    if (path == null) return null;
-    final f = File(path);
-    if (!keep) {
-      if (f.existsSync()) f.deleteSync();
+    final starting = _starting;
+    _starting = null;
+    if (starting == null) return null;
+    final early = !_began;
+    bool began;
+    try {
+      began = await starting;
+    } on Object {
+      began = false;
+    }
+    final path = _path;
+    _path = null;
+    _began = false;
+    if (!began) return null;
+    String? at;
+    try {
+      at = await end() ?? path;
+    } on Object {
+      at = path;
+    }
+    if (at == null) return null;
+    try {
+      final bytes = await take(at, keep: keep && !early);
+      return bytes == null ? null : PickedFile(bytes: bytes, name: 'Voice note.m4a', type: 'audio/mp4');
+    } on Object {
       return null;
     }
-    final bytes = await f.readAsBytes();
-    f.deleteSync();
-    return PickedFile(bytes: bytes, name: 'Voice note.m4a', type: 'audio/mp4');
   }
 
   void dispose() => _rec?.dispose();
@@ -152,6 +200,10 @@ class ComposerState extends State<Composer> {
 
   /// Recording: the seconds so far (null when not), and whether it is held.
   int? _secs;
+
+  /// Counts the recordings: one stopped before it had started is not
+  /// begun after all when its start comes.
+  int _take = 0;
   bool _holding = false;
   Timer? _tick;
   DateTime? _pressedAt;
@@ -216,12 +268,15 @@ class ComposerState extends State<Composer> {
 
   Future<void> _record() async {
     setState(() => _error = null);
+    final take = ++_take;
     bool ok;
     try {
       ok = await _recorder.start();
     } on Object {
       ok = false;
     }
+    // Stopped (or thrown away) while it was starting: that one is over.
+    if (!mounted || take != _take) return;
     if (!ok) {
       setState(() {
         _holding = false;
@@ -239,8 +294,14 @@ class ComposerState extends State<Composer> {
   /// Done keeps it to send with a caption; a held note released goes now;
   /// Cancel, or sliding away, throws it away.
   Future<void> _stop({required bool keep, bool send = false}) async {
+    _take++;
     _tick?.cancel();
-    final f = await _recorder.stop(keep: keep);
+    PickedFile? f;
+    try {
+      f = await _recorder.stop(keep: keep);
+    } on Object {
+      f = null;
+    }
     if (!mounted) return;
     setState(() {
       _secs = null;
