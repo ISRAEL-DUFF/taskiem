@@ -224,6 +224,16 @@ label.field > span { display: block; font-size: 13px; font-weight: 500; color: v
 label.inline { display: inline-flex; gap: 8px; align-items: center; margin-right: 16px; }
 .hint { color: var(--muted); font-size: 13px; }
 label.field > .hint { margin-top: 6px; }
+/* PasswordInput: a password box with Show / Hide inside its right edge. */
+label.field > span.pw-box, span.pw-box { position: relative; display: block; margin: 0; font-size: inherit; font-weight: inherit; }
+span.pw-box > input { padding-right: 84px; }
+span.pw-box > .pw-toggle {
+  position: absolute; top: 50%; right: 4px; transform: translateY(-50%); min-height: 28px; padding: 0 10px;
+  display: inline-flex; align-items: center; gap: 5px; border: 0; box-shadow: none; background: none;
+  color: var(--accent); font-size: 13px; font-weight: 600;
+}
+span.pw-box > .pw-toggle:active:not(:disabled) { transform: translateY(-50%) scale(0.98); }
+span.pw-box > .pw-toggle span { margin: 0; }
 .row { display: flex; gap: 12px; }
 .row > * { flex: 1; }
 .row > button { flex: 0 0 auto; align-self: flex-end; margin-bottom: 16px; }

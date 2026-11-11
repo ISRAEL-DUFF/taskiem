@@ -4,7 +4,7 @@ import { ApiError, get, post } from "../api";
 import { useAuth } from "../auth";
 import { safeNext } from "../lib/safePath";
 import { passkeysSupported } from "../passkeys";
-import { ErrorBox, Field, useAction } from "../ui";
+import { ErrorBox, Field, useAction, PasswordInput } from "../ui";
 
 export function Login() {
   const { login, loginWithPasskey } = useAuth();
@@ -73,7 +73,7 @@ export function Login() {
         {(!sso?.required || breakGlass) && (
           <>
             <Field label="Password">
-              <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+              <PasswordInput autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
             </Field>
             <ErrorBox error={act.error} />
             <button className={sso ? "" : "primary"} type="submit" disabled={act.busy} style={{ width: "100%" }}>
