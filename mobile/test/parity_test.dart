@@ -32,7 +32,9 @@ import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/attachments.dart';
 import 'package:taskiem/chat/composer.dart';
 import 'package:taskiem/chat/conversation.dart';
+import 'package:taskiem/chat/alerts.dart';
 import 'package:taskiem/chat/taskiem.dart';
+import 'package:taskiem/chat/thread.dart';
 import 'package:taskiem/screens/sign_in.dart';
 import 'package:taskiem/screens/sign_up.dart';
 import 'package:taskiem/theme/theme.dart';
@@ -179,6 +181,39 @@ final screens = <String, Screen>{
       return TaskiemScreen(data: TaskiemData(chats, follow: false));
     },
     drive: _loaded,
+  ),
+  'chat-taskiem-cards': (
+    build: () {
+      final f = Fixture('chat-taskiem');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      // As the web half: the thread alone scrolled, the briefing at its top.
+      final thread = t.state<ThreadViewState<TaskiemLine>>(find.byType(ThreadView<TaskiemLine>));
+      final view = t.renderObject<RenderBox>(find.byType(SingleChildScrollView));
+      final card = t.renderObject<RenderBox>(find.byType(BriefingCard));
+      final top = card.localToGlobal(Offset.zero, ancestor: view).dy;
+      thread.scroll.jumpTo(thread.scroll.offset + top);
+      await t.pumpAndSettle();
+    },
+  ),
+  'chat-taskiem-approval': (
+    build: () {
+      final f = Fixture('chat-taskiem');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      final thread = t.state<ThreadViewState<TaskiemLine>>(find.byType(ThreadView<TaskiemLine>));
+      final view = t.renderObject<RenderBox>(find.byType(SingleChildScrollView));
+      final card = t.renderObject<RenderBox>(find.bySemanticsLabel(RegExp('^Needs your OK')));
+      final top = card.localToGlobal(Offset.zero, ancestor: view).dy;
+      thread.scroll.jumpTo(thread.scroll.offset + top);
+      await t.pumpAndSettle();
+    },
   ),
   'sign-up': (
     build: () => SignUpScreen(auth: fakeAuth()),

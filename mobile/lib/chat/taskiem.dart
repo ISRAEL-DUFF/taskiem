@@ -19,6 +19,7 @@ import '../api/transport.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
+import 'alerts.dart';
 import 'attachments.dart';
 import 'cards.dart';
 import 'chats.dart';
@@ -116,7 +117,30 @@ class TaskiemData extends ChangeNotifier {
   bool _disposed = false;
   int _localN = 0;
 
+  /// The day's briefing, for those who sell or bill, with chat tools on.
+  GetChatBriefingResponse? briefing;
+
+  /// What needs the person, as cards after the conversation.
+  List<ChatAlert> alerts = const [];
+
+  /// TaskiemChat.tsx briefs: the briefing card is for those who sell or bill.
+  bool get briefs => chats.chatTools && chats.auth.can('storefront.manage|invoice.manage');
+
+  /// The briefing and the cards, read again (after one is dealt with).
+  Future<void> loadCards() async {
+    if (!chats.loaded) await chats.load();
+    if (!chats.chatTools) return;
+    try {
+      alerts = (await api.getChatAlerts()).alerts;
+      if (briefs) briefing = await api.getChatBriefing();
+    } on Object {
+      // The conversation stands without them.
+    }
+    _changed();
+  }
+
   Future<void> open() async {
+    unawaited(loadCards());
     try {
       final out = await api.taskiemHistory();
       final list = mergeTaskiem(const [], out.messages);
@@ -381,6 +405,26 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
         now: d.chats.now(),
         unread: d.unread,
         placeAtMessagesEnd: true,
+        tail: d.briefing == null && d.alerts.isEmpty
+            ? null
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (d.briefing != null) ...[
+                    BriefingCard(briefing: d.briefing!, auth: d.chats.auth, onAsk: (w) => d.say(text: w)),
+                    const SizedBox(height: 2),
+                  ],
+                  AlertCards(
+                    alerts: d.alerts,
+                    auth: d.chats.auth,
+                    now: d.chats.now(),
+                    onChanged: () {
+                      d.loadCards();
+                      d.pull();
+                    },
+                  ),
+                ],
+              ),
         errors: [?d.error],
         empty: Text.rich(
           TextSpan(

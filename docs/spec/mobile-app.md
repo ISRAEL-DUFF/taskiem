@@ -574,11 +574,21 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   the app runs: not yet across restarts). The thread is now one piece for
   every conversation (`lib/chat/thread.dart`, as the web's ChatStream and
   useThread), the business's conversation moved onto it with its pictures
-  unchanged. Its parity pictures come with the cards under it (next): the
-  web's view is placed before those cards load, so without them the
-  pictures differ.
-- **Not yet in M3**: Taskiem's briefing and alert cards (approvals with the
-  chat PIN among them), the documents the cards open (View order, View
+  unchanged.
+- **Taskiem's cards** (`lib/chat/alerts.dart`): after its conversation, as
+  the web's: the day's briefing on pine (the greeting, yesterday's sales
+  with the week's bars, what is owed, low and out today, Got it putting it
+  away for the day), then a card for each thing that needs the person
+  (overdue, a payment to match, a new order, low stock, a rider, a deal, a
+  delivery to confirm, a customer's draft order), each with its next step
+  and Later, and approvals (who asks for what, the amount, to whom and the
+  account, a first payment or a step-up said, Decline and Approve). Later,
+  Got it, Send reminder, Agree and Confirm work from the card. Parity: the
+  conversation, its cards and its approval, light and dark, two sizes.
+- **Not yet in M3**: approving or declining from the card (the confirmation
+  with the chat PIN or passkey: next); the steps that open a tool's sheet
+  (Record stock in, Reorder, Review order, Match it, Assign rider: the
+  tools' sheets are M5 to M8), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
   the milestones), Decline (it asks first: with the app's confirmation
   sheet), a deal's offers and counters, replies, reactions, the message menu, stars, search, the contact sheet,

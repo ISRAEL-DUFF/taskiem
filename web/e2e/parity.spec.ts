@@ -179,6 +179,50 @@ const SCREENS: { name: string; path: string; fixture?: string; ready: (p: Page) 
       await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     },
   },
+  {
+    // The person's own conversation with Taskiem: the conversation, then
+    // the briefing and the cards of what needs them, as Ada.
+    name: "chat-taskiem",
+    path: "/chat?with=taskiem",
+    fixture: "chat-taskiem",
+    ready: async (p) => {
+      await expect(p.getByTestId("taskiem-stream")).toBeVisible();
+      await expect(p.getByTestId("chat-alerts")).toBeAttached();
+      await p.waitForLoadState("networkidle");
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // The same, scrolled to its end: the briefing and the cards.
+    name: "chat-taskiem-cards",
+    path: "/chat?with=taskiem",
+    fixture: "chat-taskiem",
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-alerts")).toBeAttached();
+      await p.waitForLoadState("networkidle");
+      // The thread alone scrolled, the briefing at its top.
+      await p.getByTestId("briefing-card").evaluate((c) => {
+        const s = c.closest(".chat-stream") as HTMLElement;
+        s.scrollTop += c.getBoundingClientRect().top - s.getBoundingClientRect().top;
+      });
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // The same, the approval at the thread's top: Decline and Approve.
+    name: "chat-taskiem-approval",
+    path: "/chat?with=taskiem",
+    fixture: "chat-taskiem",
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-approval")).toBeAttached();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("chat-approval").evaluate((c) => {
+        const s = c.closest(".chat-stream") as HTMLElement;
+        s.scrollTop += c.getBoundingClientRect().top - s.getBoundingClientRect().top;
+      });
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
 ];
 const FIXTURES = resolve(here, "../../mobile/test/parity/fixtures");
 

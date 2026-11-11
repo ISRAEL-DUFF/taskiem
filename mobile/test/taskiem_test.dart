@@ -12,6 +12,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/api/api.g.dart';
+import 'package:taskiem/chat/alerts.dart';
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/taskiem.dart';
 import 'package:taskiem/main.dart';
@@ -115,6 +116,7 @@ void main() {
     await t.pump();
     await t.tap(find.bySemanticsLabel('Send'));
     await settle(t);
+    await t.ensureVisible(find.bySemanticsLabel('Yes'));
     await t.tap(find.bySemanticsLabel('Yes'));
     await settle(t);
     expect(said.last, {'text': 'Yes', 'reply': 'b-yes'});
@@ -146,5 +148,58 @@ void main() {
     expect(list.firstWhere((x) => x.id == 'q').m.buttons!.single.id, 'x', reason: 'the copy with the ids stays');
     expect(unreadAfter(list, DateTime.utc(2026, 11, 11, 13, 0, 30))?.count, 2);
     expect(unreadAfter(list, null), isNull);
+  });
+
+  testWidgets('the cards: Later puts one off, Send reminder sends and puts it off a day, Got it puts the briefing away', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-taskiem');
+    final posts = <String, List<Object?>>{};
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (req.method == 'POST') {
+          posts.putIfAbsent(req.url.path, () => []).add(req.body.isEmpty ? null : jsonDecode(req.body));
+          return http.Response('{}', 200);
+        }
+        return null;
+      }),
+      now: () => f.at,
+    )..load();
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: TaskiemScreen(data: TaskiemData(chats, follow: false))));
+    await settle(t);
+    final later = find.bySemanticsLabel('Later: A payment of ₦37,500 is not matched yet');
+    await t.ensureVisible(later);
+    await t.tap(later);
+    await settle(t);
+    expect(posts['/v1/chat-alerts/later']!.single, {'key': 'unmatched:2d7bbc40-0d31-460b-af3e-9a833cc5cae8'});
+    final remind = find.bySemanticsLabel('Send reminder: Invoice INV-0002 is overdue');
+    await t.ensureVisible(remind);
+    await t.tap(remind);
+    await settle(t);
+    expect(posts['/v1/invoices/a3da21d9-9d94-4443-bade-0a95d57bf3f4/send'], hasLength(1));
+    expect(posts['/v1/chat-alerts/later']!.last, {'key': 'overdue:a3da21d9-9d94-4443-bade-0a95d57bf3f4', 'hours': 24});
+    final gotIt = find.bySemanticsLabel('Got it: put the briefing away for today');
+    await t.ensureVisible(gotIt);
+    await t.tap(gotIt);
+    await settle(t);
+    expect(posts['/v1/chat-alerts/later']!.last, {'key': 'briefing:2026-11-11', 'hours': 24});
+    expect(find.byType(BriefingCard), findsOneWidget);
+    expect(find.text('Got it'), findsNothing, reason: 'put away');
+  });
+
+  test('the cards\' words, as alerts.ts, approvals.ts and staff.ts say them', () {
+    final now = DateTime.utc(2026, 11, 11, 12);
+    expect(ago(now.subtract(const Duration(seconds: 30)), now), 'Just now');
+    expect(ago(now.subtract(const Duration(minutes: 3)), now), '3 min ago');
+    expect(ago(now.subtract(const Duration(hours: 2)), now), '2 h ago');
+    expect(ago(now.subtract(const Duration(hours: 30)), now), 'Yesterday');
+    expect(ago(DateTime.utc(2026, 11, 2, 9), now), '2 Nov');
+    final w = subjectWords({'account_name': 'Bayo Rice Mills', 'account_number': '0123456789', 'bank': 'GTBank', 'amount_kobo': 45000000});
+    expect(w, (amount: '₦450,000', to: 'Bayo Rice Mills', account: 'GTBank ••6789'));
+    expect(subjectWords({'total': 1500}).amount, '1,500');
+    expect(subjectWords('not a map'), (amount: null, to: null, account: null));
+    expect(firstName('Ada Obi', 'ada@demo.test'), 'Ada');
+    expect(firstName(null, 'ada@demo.test'), 'ada');
   });
 }
