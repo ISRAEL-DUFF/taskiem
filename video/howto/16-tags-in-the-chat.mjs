@@ -27,11 +27,10 @@ async function bayo() {
 }
 
 const picker = (page) => page.getByTestId("mention-list").first();
-const lastMine = (pane) => pane.getByTestId("chat-card").last();
 
 // 1 · # an item.
 async function hash() {
-  const { page, pane, box } = await bayo();
+  const { page, box } = await bayo();
   await act(page, "howto16-hash", ADA, async () => {
     await say("In her chat with Bayo Rice Mills. # tags one of his items: type # and a few letters.", 300);
     await box.click();
