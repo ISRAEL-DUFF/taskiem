@@ -66,6 +66,14 @@ func main() {
 		fmt.Fprintln(os.Stderr, "mobilegen:", err)
 		os.Exit(1)
 	}
+	emoji, err := GenerateEmoji(root)
+	if err == nil {
+		err = os.WriteFile(filepath.Join(root, EmojiOut), []byte(emoji), 0o644) //nolint:gosec // a source file
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "mobilegen:", err)
+		os.Exit(1)
+	}
 	icons, err := GenerateIcons(root)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "mobilegen:", err)

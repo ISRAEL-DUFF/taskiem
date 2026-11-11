@@ -250,6 +250,14 @@ final screens = <String, Screen>{
     drive: _loaded,
   ),
   'chat-menu': (build: () => _conversation('chat-tunde', "Mama Tunde's Market"), drive: (t) => _hold(t)),
+  'chat-pick': (
+    build: () => _conversation('chat-tunde', "Mama Tunde's Market"),
+    drive: (t) async {
+      await _hold(t);
+      await t.tap(find.bySemanticsLabel('More reactions'));
+      await t.pumpAndSettle();
+    },
+  ),
   'chat-reply': (
     build: () => _conversation('chat-tunde', "Mama Tunde's Market"),
     drive: (t) async {

@@ -279,6 +279,23 @@ const SCREENS: { name: string; path: string; fixture?: string; ready: (p: Page) 
     },
   },
   {
+    // The menu's "+": every emoji in the menu's place, over the bubble.
+    // Its search box takes the focus on the web; the picture is taken
+    // without it (a phone would raise its keyboard).
+    name: "chat-pick",
+    path: "/chat?with=3af349e2-b776-4306-bdb8-10df59687c55",
+    fixture: "chat-tunde",
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-message").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("chat-message").first().click({ button: "right", position: { x: 40, y: 20 } });
+      await p.getByRole("button", { name: "More reactions" }).click();
+      await expect(p.getByTestId("emoji-panel")).toBeVisible();
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
     // Reply chosen from the menu: what is being answered, over the box.
     name: "chat-reply",
     path: "/chat?with=3af349e2-b776-4306-bdb8-10df59687c55",

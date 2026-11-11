@@ -147,3 +147,18 @@ func TestMotionMustNotDifferInDark(t *testing.T) {
 		t.Fatal("a duration that differs in dark is refused")
 	}
 }
+
+func TestEmojiIsCurrent(t *testing.T) {
+	root := filepath.Join("..", "..")
+	want, err := GenerateEmoji(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(root, EmojiOut))
+	if err != nil || string(got) != want {
+		t.Fatalf("%s is stale: run `go run ./tools/mobilegen` from the repository root", EmojiOut)
+	}
+	if n := strings.Count(want, "\n  (\n"); n != 9 {
+		t.Fatalf("%d groups, want the web's 9", n)
+	}
+}

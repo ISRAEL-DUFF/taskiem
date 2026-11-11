@@ -419,6 +419,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   /// The message whose menu is open, and the one being answered.
   String? _menuFor;
+
+  /// The menu's "+" chosen: the chevron goes with the card (the web shows
+  /// it only with the card).
+  bool _picking = false;
   LinkMessage? _reply;
 
   ConversationData get _d => widget.data;
@@ -437,7 +441,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final body = m.body ?? '';
     final other = _d.conv.name;
     final mineEmoji = m.reactions?.where((r) => r.mine == true).firstOrNull?.emoji;
-    setState(() => _menuFor = m.id);
+    setState(() {
+      _menuFor = m.id;
+      _picking = false;
+    });
     await showMessageMenu(
       context,
       bubble: at,
@@ -445,6 +452,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
       what: card != null ? cardLine(card, m.mine, other) : previewLine(m, other),
       mineEmoji: mineEmoji,
       onReact: _write ? (e) => _d.react(m, e) : null,
+      onPicking: () => setState(() => _picking = true),
       items: [
         MenuItem('info', 'Message info', () => _info(m)),
         if (_write) MenuItem('reply', 'Reply', () => setState(() => _reply = m)),
@@ -741,7 +749,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
             files: d.chats.files,
             onRetry: m.out == null ? null : () => d.retry(m.out!),
             onDiscard: m.out == null ? null : () => d.discard(m.out!),
-            menuOpen: _menuFor == m.id,
+            menuOpen: _menuFor == m.id && !_picking,
             onHold: (at) => _menu(m, at),
             onReply: _write ? () => setState(() => _reply = m.m) : null,
             onReact: _write ? (e) => d.react(m.m, e) : null,

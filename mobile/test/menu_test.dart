@@ -12,6 +12,7 @@ import 'package:http/http.dart' as http;
 import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/conversation.dart';
+import 'package:taskiem/chat/emoji_panel.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
@@ -88,6 +89,54 @@ void main() {
     await settle(t);
     expect(calls.last.$1, 'DELETE');
     expect(chip, findsNothing);
+  });
+
+  testWidgets('"+": any emoji, found by its words, kept as recently used', (t) async {
+    EmojiMemory.recent = [];
+    final calls = await open(t);
+    await hold(t);
+    await t.tap(find.bySemanticsLabel('More reactions'));
+    await t.pumpAndSettle();
+    expect(find.bySemanticsLabel('Options for Good morning ma, tomatoes are cheaper today. ₦28,000 a basket.'), findsNothing,
+        reason: 'the card goes while picking');
+    // The kind's tab, and its emoji named after it.
+    expect(find.bySemanticsLabel('Smileys and emotion'), findsNWidgets(2));
+    await t.tap(find.bySemanticsLabel('Food and drink'));
+    await t.pump();
+    expect(find.bySemanticsLabel('grapes'), findsOneWidget);
+    await t.enterText(find.byType(EditableText).last, 'fire');
+    await t.pump();
+    expect(find.bySemanticsLabel('Kinds of emoji'), findsNothing, reason: 'no kinds while searching');
+    await t.tap(find.bySemanticsLabel('fire'));
+    await settle(t);
+    expect(calls.single.$1, 'PUT');
+    expect(calls.single.$3, {'emoji': '🔥'});
+    expect(EmojiMemory.recent, ['🔥']);
+    // Taken back from its chip, then "+" opens at what was used lately.
+    await t.tap(find.bySemanticsLabel(RegExp('^🔥 1: You')));
+    await settle(t);
+    await hold(t);
+    await t.tap(find.bySemanticsLabel('More reactions'));
+    await t.pumpAndSettle();
+    expect(find.bySemanticsLabel('Recently used'), findsNWidgets(2));
+    expect(find.bySemanticsLabel('fire'), findsOneWidget);
+  });
+
+  testWidgets('"+": a hand in the tone chosen', (t) async {
+    EmojiMemory.tone = 0;
+    final calls = await open(t);
+    await hold(t);
+    await t.tap(find.bySemanticsLabel('More reactions'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('People').first);
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Medium-dark skin tone'));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('thumbs up'));
+    await settle(t);
+    expect(calls.single.$3, {'emoji': '👍🏾'});
+    expect(EmojiMemory.tone, 4);
+    EmojiMemory.tone = 0;
   });
 
   testWidgets('a star, shown by the time', (t) async {

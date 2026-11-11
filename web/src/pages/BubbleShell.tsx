@@ -197,33 +197,44 @@ export function BubbleShell({
   }>({});
   useLayoutEffect(() => {
     if (!more || !bubbleEl.current) return;
-    const r = bubbleEl.current.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const gap = 6;
-    const edge = 8;
-    const place = (w: number) =>
-      Math.max(edge, Math.min(mine ? r.right - w : r.left, vw - w - edge));
-    const next: typeof pos = {};
-    let below = r.bottom + gap;
-    if (pill.current) {
-      const w = pill.current.offsetWidth;
-      const h = pill.current.offsetHeight;
-      let top = r.top - h - gap;
-      if (top < edge) {
-        top = r.bottom + gap; // no room above: under the bubble
-        below = top + h + gap;
+    const bubble = bubbleEl.current;
+    const placeAll = () => {
+      const r = bubble.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const gap = 6;
+      const edge = 8;
+      const place = (w: number) =>
+        Math.max(edge, Math.min(mine ? r.right - w : r.left, vw - w - edge));
+      const next: typeof pos = {};
+      let below = r.bottom + gap;
+      if (pill.current) {
+        const w = pill.current.offsetWidth;
+        const h = pill.current.offsetHeight;
+        let top = r.top - h - gap;
+        if (top < edge) {
+          top = r.bottom + gap; // no room above: under the bubble
+          below = top + h + gap;
+        }
+        next.pill = { top, left: place(w) };
       }
-      next.pill = { top, left: place(w) };
-    }
-    if (card.current) {
-      const w = card.current.offsetWidth;
-      const h = card.current.offsetHeight;
-      let top = below;
-      if (top + h > vh - edge) top = Math.max(edge, vh - h - edge);
-      next.card = { top, left: place(w) };
-    }
-    setPos(next);
+      if (card.current) {
+        const w = card.current.offsetWidth;
+        const h = card.current.offsetHeight;
+        let top = below;
+        if (top + h > vh - edge) top = Math.max(edge, vh - h - edge);
+        next.card = { top, left: place(w) };
+      }
+      setPos(next);
+    };
+    placeAll();
+    // Placed again as what floats changes size: the emoji panel loads after
+    // its placeholder is placed, and would otherwise grow over the bubble.
+    if (typeof ResizeObserver === "undefined") return;
+    const sizes = new ResizeObserver(placeAll);
+    if (pill.current) sizes.observe(pill.current);
+    if (card.current) sizes.observe(card.current);
+    return () => sizes.disconnect();
   }, [more, mine]);
   useEffect(() => {
     if (!more) return;

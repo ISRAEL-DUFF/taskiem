@@ -1889,6 +1889,8 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
    target, the camera. */
 .emoji-panel { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--border); background: var(--panel); max-height: 280px; }
 .emoji-search { width: 100%; }
+/* The search, the kinds and the tones keep their height; the grid scrolls. */
+.emoji-search, .emoji-tabs, .emoji-tones { flex: none; }
 .emoji-tabs { display: flex; gap: 2px; overflow-x: auto; }
 .emoji-tab { flex: none; width: 36px; height: 34px; min-height: 34px; padding: 0; border: 0; background: none; font-size: 18px; border-radius: 8px; filter: grayscale(1); opacity: .7; }
 .emoji-tab[aria-pressed="true"] { background: var(--chat-select); filter: none; opacity: 1; }

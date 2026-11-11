@@ -11,6 +11,7 @@ import 'package:flutter/widgets.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
+import 'emoji_panel.dart';
 
 /// linkchat.ts REACTIONS, and Conversation.tsx's names for them.
 const reactions = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
@@ -41,6 +42,7 @@ Future<void> showMessageMenu(
   required List<MenuItem> items,
   ValueChanged<String>? onReact,
   String? mineEmoji,
+  VoidCallback? onPicking,
 }) {
   HapticFeedback.selectionClick();
   return Navigator.of(context).push<void>(
@@ -49,14 +51,17 @@ Future<void> showMessageMenu(
       // `animation: pop-in 0.12s ease-out`; none with motion turned down.
       transitionDuration: (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ? Duration.zero : const Duration(milliseconds: 120),
       reverseTransitionDuration: Duration.zero,
-      pageBuilder: (context, _, _) => _Menu(bubble: bubble, mine: mine, what: what, items: items, onReact: onReact, mineEmoji: mineEmoji),
+      pageBuilder: (context, _, _) => _Menu(bubble: bubble, mine: mine, what: what, items: items, onReact: onReact, mineEmoji: mineEmoji, onPicking: onPicking),
       transitionsBuilder: (context, a, _, child) => FadeTransition(opacity: a, child: child),
     ),
   );
 }
 
 class _Menu extends StatefulWidget {
-  const _Menu({required this.bubble, required this.mine, required this.what, required this.items, this.onReact, this.mineEmoji});
+  const _Menu({required this.bubble, required this.mine, required this.what, required this.items, this.onReact, this.mineEmoji, this.onPicking});
+
+  /// Told when the "+" is chosen.
+  final VoidCallback? onPicking;
   final Rect bubble;
   final bool mine;
   final String what;
@@ -73,6 +78,19 @@ class _MenuState extends State<_Menu> {
   final _card = GlobalKey();
   Offset? _pillAt;
   Offset? _cardAt;
+
+  /// The "+" chosen: every emoji in the reactions' place, the card gone.
+  bool _picking = false;
+
+  void _pickAny() {
+    widget.onPicking?.call();
+    setState(() {
+      _picking = true;
+      _pillAt = null;
+      _cardAt = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _place());
+  }
 
   @override
   void initState() {
@@ -123,7 +141,6 @@ class _MenuState extends State<_Menu> {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    final placed = _cardAt != null;
     Widget at(Offset? o, Widget child) =>
         o == null ? Positioned(left: 0, top: 0, child: Opacity(opacity: 0, child: child)) : Positioned(left: o.dx, top: o.dy, child: child);
     return Stack(
@@ -131,7 +148,29 @@ class _MenuState extends State<_Menu> {
         Positioned.fill(
           child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: _close, onVerticalDragStart: (_) => _close()),
         ),
-        if (widget.onReact != null)
+        if (widget.onReact != null && _picking)
+          at(
+            _pillAt,
+            // `.pop-picker { width: min(360px, calc(100vw - 16px)); border-radius: 14px }`
+            Container(
+              key: _pill,
+              width: (MediaQuery.sizeOf(context).width - 16).clamp(0.0, 360.0),
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: t.panel,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 4), blurRadius: 18)],
+              ),
+              child: EmojiPanel(
+                maxHeight: 330,
+                onPick: (e) {
+                  _close();
+                  widget.onReact!(e);
+                },
+              ),
+            ),
+          ),
+        if (widget.onReact != null && !_picking)
           at(
             _pillAt,
             Semantics(
@@ -160,17 +199,20 @@ class _MenuState extends State<_Menu> {
                       ),
                       const SizedBox(width: 2),
                     ],
-                    // "+": every emoji (the picker comes next).
+                    // "+": every emoji.
                     Semantics(
                       button: true,
                       label: 'More reactions',
                       excludeSemantics: true,
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(color: t.chatSelect, shape: BoxShape.circle),
-                        alignment: Alignment.center,
-                        child: TkIcon('plus', size: 20, color: t.muted),
+                      child: TkPress(
+                        onTap: _pickAny,
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(color: t.chatSelect, shape: BoxShape.circle),
+                          alignment: Alignment.center,
+                          child: TkIcon('plus', size: 20, color: t.muted),
+                        ),
                       ),
                     ),
                   ],
@@ -178,41 +220,41 @@ class _MenuState extends State<_Menu> {
               ),
             ),
           ),
-        at(
-          _cardAt,
-          Semantics(
-            container: true,
-            label: 'Options for ${widget.what}',
-            child: Container(
-              key: _card,
-              constraints: const BoxConstraints(minWidth: 220),
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              decoration: BoxDecoration(
-                color: t.panel,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 4), blurRadius: 18)],
-              ),
-              child: IntrinsicWidth(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final i in widget.items) ...[
-                      if (i.separated) Container(height: 1, margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), color: t.border),
-                      _Item(
-                        item: i,
-                        onTap: () {
-                          if (i.done == null) _close();
-                          i.onTap();
-                        },
-                      ),
+        if (!_picking)
+          at(
+            _cardAt,
+            Semantics(
+              container: true,
+              label: 'Options for ${widget.what}',
+              child: Container(
+                key: _card,
+                constraints: const BoxConstraints(minWidth: 220),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                decoration: BoxDecoration(
+                  color: t.panel,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 4), blurRadius: 18)],
+                ),
+                child: IntrinsicWidth(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final i in widget.items) ...[
+                        if (i.separated) Container(height: 1, margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), color: t.border),
+                        _Item(
+                          item: i,
+                          onTap: () {
+                            if (i.done == null) _close();
+                            i.onTap();
+                          },
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-        if (!placed) const SizedBox.shrink(),
       ],
     );
   }

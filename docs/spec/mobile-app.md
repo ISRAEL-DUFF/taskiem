@@ -632,12 +632,22 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   chip hangs 12 px under its bubble, outside what Flutter takes taps in,
   so the bubble keeps the room under it; and Flutter draws no rounded
   border of two colours (the toast's), so the toast is drawn clipped.
+  The pill's "+" opens every emoji in its place (`lib/chat/emoji_panel.dart`,
+  the web's EmojiPanel): a search by the web's words ("okada", "naija"),
+  the recently used first, the groups as tabs (grey until chosen), a skin
+  tone for the hands; the list is the web's, copied by `tools/mobilegen`
+  (`emoji.g.dart`) and held to the web's tests (`emoji_test.dart`). What
+  was picked lately and the tone are kept while the app runs (the web keeps
+  them in the browser). Parity: the "+" open. Found: on the web the panel's
+  tabs were squashed to a sliver (its column shrank them to fit), and the
+  picker was placed by its loading placeholder and grew over the bubble;
+  both fixed on the web, which the app copies.
 - **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
   the milestones), Decline (it asks first: with the app's confirmation
-  sheet), a deal's offers and counters, the "+" for any emoji, search, the contact sheet,
+  sheet), a deal's offers and counters, search, the contact sheet,
   older pages as the reader scrolls up, a business's long
   message folded (Taskiem's are), the chat tools, the "@" and "#" tags, and the list's search, chips and answers to requests
   (drawn, not yet working).
