@@ -166,7 +166,7 @@ services:
   clamav:
     <<: *hardening
     profiles: [public, mail]
-    image: ${CLAMAV_IMAGE:-clamav/clamav:1.4.6@sha256:8ad6197396974726c35d017e50aaaaf4b91745726a04faec8480c203edd98052}
+    image: ${CLAMAV_IMAGE:-clamav/clamav:1.5.3@sha256:d06c1d6a451d616e1dd79b42f44c8c8c291bba9cf4e75ebc4d0e43c1c6dd87bb}
     volumes:
       - clamav_db:/var/lib/clamav
     healthcheck:
