@@ -25,6 +25,7 @@ timings.
 | 14 | Deals: a lower price for 50 or more and the lowest price; Rivers Foods orders 50 and makes an offer; Tunde counters; Rivers counters under the lowest price; Tunde accepts, it waits for Ada's OK; she agrees in her Taskiem chat | `14-deals.mjs` (a fresh world; needs none of 1 to 13) |
 | 15 | Explore and connecting: Find a business, search by what they sell, a card with photos, Connect and Requested; the other side accepts; a business that asked you: Accept, Decline or Block | `15-explore-and-connect.mjs` (a fresh world: Kola's Bakery has asked Ada, Mallam Musa Suya Spot is not linked; needs none of 1 to 14) |
 | 16 | Tags in the chat: # one of a business's items, @ a product (a card with Order and your own stock), /bill a bill, and @ in the Taskiem chat finding a business you don't trade with yet | `16-tags-in-the-chat.mjs` (a fresh world; needs none of 1 to 15) |
+| 17 | The tools in a chat with a business: in Ada's chat with Bayo Rice Mills the tools are about Bayo (his shop at his prices for her, orders and bills between them, the statement, Invoice them); Bayo looks around Ada's storefront (her prices, how many are left) and books one of her services (day, time, phone, note); her own tools stay in her Taskiem chat | `17-business-chat-tools.mjs` (a fresh world; it turns Ada's online bookings on first; needs none of 1 to 16) |
 
 ## Making one
 
