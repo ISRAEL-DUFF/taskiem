@@ -109,7 +109,7 @@ async function offer() {
     await sleep(800);
     await order.getByPlaceholder(/Search/).pressSequentially("small", { delay: 90 });
     await sleep(700);
-    await say("At least 20 a time. Rivers wants 50: the price for 50 or more applies by itself.", 300);
+    await say("Ada's Kitchen takes at least 20. Rivers wants 50: the price for 50 or more applies by itself.", 300);
     // The first + puts in the least Ada's Kitchen takes (20); then one at a time to 50.
     const more = order.getByRole("button", { name: /^One more Small chops pack/ });
     const row = more.locator("xpath=..");
@@ -200,11 +200,11 @@ async function agree() {
   await center(ask);
   await page.waitForTimeout(1200);
   await act(page, "howto14-agree", ADA, async () => {
-    await say("Ada's Taskiem chat asks her. She can agree, or keep to her price.", 4200);
+    await say("Ada's Taskiem chat asks her: Tunde would agree ₦93,000, under her lowest price. Agree, or Later.", 4200);
     await ask.getByRole("button", { name: /^(Agree|Approve)/ }).first().click();
     await page.getByText(/Agreed ₦93,000/).first().waitFor({ timeout: 15000 });
     await sleep(800);
-    await say("Agreed: the order goes ahead at ₦93,000, and Rivers hears so in the chat.", 4200);
+    await say("Agreed: the deal stands at ₦93,000.", 4200);
   });
   await page.context().close();
 }
