@@ -151,11 +151,31 @@ narrowed by their role.
   only what is between the two), Price lists (all of ours, to share), Make an
   offer (where the person may order: Their shop with the offer asked at
   review), Invoice them (an invoice to the business, by its link key; no
-  phone asked), Statement (the statement page for this business). Book: see
-  below.
+  phone asked), Statement (the statement page for this business), Book
+  (below).
 - Their shop shows their photos, "3 left" where the storefront counts, and
   "Sold out"; titled "Their storefront prices" when no list is shared.
 - "@" offers no services of ours, and "#" and "/product" only their items, in
   a business's conversation with chat tools on.
 - Our own tools (Products, Stock, Services, Sell, Tables and the rest) are in
   the Taskiem conversation only.
+
+**Book.** Shown after Their shop when they have services on their
+storefront ("Not taking bookings online" when their booking form is off).
+The sheet goes service, then a day and a time from their availability, then
+a check (our phone, a note), then Book.
+
+- `GET /v1/link-chats/{link}/services` and `.../services/{id}/times?day=` read
+  their services and free times through the door in a transaction that is
+  rolled back: looking leaves nothing in either business, and only whether a
+  time is free is shown, never who has it.
+- `POST /v1/link-chats/{link}/bookings` (Idempotency-Key; `chat.trade`)
+  holds the slot under their storefront's lock and puts the booking in their
+  storefront inbox (`taskiem_link_book`, migration 00422), recorded by the
+  same worker as one from their page: our business the customer, paid at the
+  appointment or as agreed. Service length, capacity and price come from
+  their services copy, never from the request. A time taken is 409
+  `slot_taken`; the same key again answers with the first booking
+  (`link_bookings`). A message in the conversation tells both sides.
+- Taken when their storefront is unpublished or a draft (§7.1) and the booking
+  form is on; refused when it is closed, suspended or its orders are paused.
