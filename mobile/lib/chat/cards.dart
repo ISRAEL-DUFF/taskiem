@@ -192,7 +192,7 @@ class CardButton extends StatelessWidget {
 /// What a card's buttons do: a step taken from the card, as the web's
 /// CardActions takes it, and the document opened.
 class CardActs {
-  CardActs({required this.auth, required this.onDone, this.onOpen});
+  CardActs({required this.auth, required this.onDone, this.onOpen, this.ask, this.said});
 
   final Auth auth;
 
@@ -202,15 +202,29 @@ class CardActs {
   /// A document of ours opened in the app (View order, View invoice, Pay).
   final void Function(LinkDocCard card)? onOpen;
 
+  /// Asks first (the web's confirmation): true to go on.
+  final Future<bool> Function(String title, String ok)? ask;
+
+  /// Says a step is done (the web's toast).
+  final void Function(String words)? said;
+
   bool busy = false;
   String? error;
 
-  Future<void> post(String path, [Map<String, dynamic>? body]) async {
+  /// A step sent; [done] said once it is.
+  Future<void> post(String path, [Map<String, dynamic>? body, String? done]) async {
     busy = true;
     error = null;
     try {
       await auth.transport.send('POST', path, body: body ?? const {});
-      await onDone();
+      if (done != null) said?.call(done);
+      // Done: what is newer is asked for, and its own failure is the
+      // conversation's to say, not the step's.
+      try {
+        await onDone();
+      } on Object {
+        // Asked again on the next turn.
+      }
     } on ApiError catch (e) {
       error = e.message;
     } on Offline {
@@ -227,13 +241,15 @@ List<Widget> cardActions(LinkDocCard card, CardActs acts, VoidCallback changed) 
   final can = acts.auth.can;
   final id = Uri.encodeComponent(card.id ?? card.reference);
   final ref = card.reference;
-  Widget step(String label, String path, {bool primary = true, Map<String, dynamic>? body}) => CardButton(
+  // Each says what it did, as the web's do; Decline asks first.
+  Widget step(String label, String path, String done, {bool primary = true, Map<String, dynamic>? body, String? askFirst}) => CardButton(
     label: label,
     primary: primary,
     busy: acts.busy,
     semantics: '$label $ref',
     onTap: () async {
-      final f = acts.post(path, body);
+      if (askFirst != null && !(await acts.ask?.call(askFirst, label) ?? true)) return;
+      final f = acts.post(path, body, done);
       changed();
       await f;
       changed();
@@ -242,30 +258,34 @@ List<Widget> cardActions(LinkDocCard card, CardActs acts, VoidCallback changed) 
   if (card.doc == 'delivery' && can('storefront.manage|order.handle')) {
     switch (card.event) {
       case 'offered':
-        return [step('Accept', '/v1/trade-orders/$id/accept'), step('Can’t', '/v1/trade-orders/$id/cant', primary: false)];
+        return [step('Accept', '/v1/trade-orders/$id/accept', 'Accept'), step('Can’t', '/v1/trade-orders/$id/cant', 'Passed on $ref', primary: false)];
       case 'accepted':
-        return [step('Picked up', '/v1/trade-orders/$id/picked_up')];
+        return [step('Picked up', '/v1/trade-orders/$id/picked_up', 'Picked up')];
       case 'picked_up':
-        return [step('Arrived', '/v1/trade-orders/$id/arrived')];
+        return [step('Arrived', '/v1/trade-orders/$id/arrived', 'Arrived')];
       case 'arrived':
-        return [step('Delivered', '/v1/trade-orders/$id/delivered')];
+        return [step('Delivered', '/v1/trade-orders/$id/delivered', 'Delivered')];
     }
   }
   if (card.doc == 'dispatch' && card.event == 'delivered' && can('storefront.manage')) {
     final r = Uri.encodeComponent(ref);
     return [
-      step('Confirm, pay the fee', '/v1/storefront/orders/$r/confirm'),
-      step('Paid in cash', '/v1/storefront/orders/$r/confirm', primary: false, body: {'how': 'cash'}),
+      step('Confirm, pay the fee', '/v1/storefront/orders/$r/confirm', 'Confirmed $ref'),
+      step('Paid in cash', '/v1/storefront/orders/$r/confirm', '$ref paid in cash', primary: false, body: {'how': 'cash'}),
     ];
   }
   switch ('${card.doc}:${card.event}') {
     case 'order:ordered':
-      // Decline asks first (the web's confirmation): with the app's sheets.
-      if (can('storefront.manage|order.handle')) return [step('Accept', '/v1/trade-orders/$id/accept')];
+      if (can('storefront.manage|order.handle')) {
+        return [
+          step('Accept', '/v1/trade-orders/$id/accept', '$ref accepted'),
+          step('Decline', '/v1/trade-orders/$id/decline', '$ref declined', primary: false, askFirst: 'Decline $ref?'),
+        ];
+      }
     case 'purchase:change':
-      if (card.wasKobo == null && can('storefront.manage')) return [step('Accept the change', '/v1/stock/purchases/$id/accept-change')];
+      if (card.wasKobo == null && can('storefront.manage')) return [step('Accept the change', '/v1/stock/purchases/$id/accept-change', 'Change accepted')];
     case 'purchase:delivered':
-      if (can('table.edit')) return [step('All came', '/v1/stock/purchases/$id/all-came')];
+      if (can('table.edit')) return [step('All came', '/v1/stock/purchases/$id/all-came', 'Received, and your stock is up')];
     case 'bill:bill':
       if (can('invoice.manage')) {
         return [

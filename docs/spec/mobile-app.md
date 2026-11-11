@@ -642,12 +642,18 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   tabs were squashed to a sliver (its column shrank them to fit), and the
   picker was placed by its loading placeholder and grew over the bubble;
   both fixed on the web, which the app copies.
+- **Decline, and what a step did** (`lib/chat/cards.dart`): an order that
+  came in has Decline beside Accept, as on the web; it asks first, in the
+  web's confirmation ("Decline ORD-7?", red), and Cancel sends nothing.
+  Every step on a card now says what it did in the web's toast, in the
+  web's words ("ORD-7 accepted", "Received, and your stock is up"). A step
+  the server took is done even when asking for what is newer then fails
+  (it is asked again on the next turn). Held by `cards_test.dart`.
 - **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
-  the milestones), Decline (it asks first: with the app's confirmation
-  sheet), a deal's offers and counters, search, the contact sheet,
+  the milestones), a deal's offers and counters, search, the contact sheet,
   older pages as the reader scrolls up, a business's long
   message folded (Taskiem's are), the chat tools, the "@" and "#" tags, and the list's search, chips and answers to requests
   (drawn, not yet working).

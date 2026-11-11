@@ -403,7 +403,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   /// The box to write in (a test hands it a file, as a picker would).
   final composerKey = GlobalKey<ComposerState>();
-  late final CardActs _acts = CardActs(auth: widget.data.chats.auth, onDone: () => widget.data.pull(), onOpen: widget.onOpenDoc);
+  late final CardActs _acts = CardActs(
+    auth: widget.data.chats.auth,
+    onDone: () => widget.data.pull(),
+    onOpen: widget.onOpenDoc,
+    ask: (title, ok) => showTkConfirm(context, title: title, ok: ok, danger: true),
+    said: (words) {
+      if (mounted) showTkToast(context, words);
+    },
+  );
 
   @override
   void initState() {
