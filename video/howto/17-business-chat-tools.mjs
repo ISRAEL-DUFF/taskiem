@@ -24,7 +24,7 @@ const BAYO = "Bayo · Bayo Rice Mills, the owner";
 async function bookingsOn() {
   let cookie = "";
   const call = async (method, path, body) => {
-    const r = await fetch(BASE + path, {
+    const r = await globalThis.fetch(BASE + path, {
       method,
       headers: { "X-Taskiem-Request": "1", "Content-Type": "application/json", cookie },
       body: body ? JSON.stringify(body) : undefined,
