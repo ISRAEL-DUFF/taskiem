@@ -164,7 +164,7 @@ for (const [size, viewport] of [
     const tool = async (title: string) => {
       await pane.getByRole("button", { name: "Open tools" }).click();
       const panel = buyer.getByRole("region", { name: "Tools" });
-      await expect(panel.getByRole("button", { name: /^Order From/ })).toContainText(`From ${name}`);
+      await expect(panel.getByRole("button", { name: /^Their shop From/ })).toContainText(`From ${name}`);
       await panel.getByRole("button", { name: new RegExp(`^${title}`) }).first().click();
     };
     const sheet = buyer.getByTestId("tool-sheet");
@@ -377,7 +377,7 @@ test("without leave to send orders, there is no Order, and the card's Order is t
   await pane.getByRole("button", { name: "Open tools" }).click();
   const panel = buyer.getByRole("region", { name: "Tools" });
   await expect(panel.getByRole("button", { name: /^Your orders/ })).toBeVisible();
-  await expect(panel.getByRole("button", { name: /^Order From/ })).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: /^Their shop From/ })).toHaveCount(0);
 });
 
 /** Order with a supplier: the head's Order on a computer, the Order tool on
@@ -391,5 +391,5 @@ async function openOrder(page: Page) {
   }
   await expect(pane.getByTestId("chat-order")).toBeHidden();
   await pane.getByRole("button", { name: "Open tools" }).click();
-  await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Order/ }).first().click();
+  await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Their shop/ }).first().click();
 }

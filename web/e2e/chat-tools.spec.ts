@@ -130,11 +130,17 @@ for (const [size, viewport] of [
     await expect(box).toHaveValue("@Taskiem ");
     await box.fill("");
 
-    // The tools: the button, or "/" and a word.
+    // The tools in a business's conversation are that business's
+    // (docs/spec/business-chat-tools.md): their shop and the dealings
+    // between the two, none of the buyer's own shop.
     await pane.getByRole("button", { name: "Open tools" }).click();
     const tools = buyer.getByRole("region", { name: "Tools" });
-    await expect(tools.getByRole("button", { name: /Stock/ })).toContainText("1 low");
-    await axeBoth(buyer, "the tools");
+    await expect(tools).toContainText(/With Dangote Depot/);
+    await expect(tools.getByRole("button", { name: /^Their shop/ })).toBeVisible();
+    await expect(tools.getByRole("button", { name: /^Your orders/ })).toBeVisible();
+    for (const own of [/^Stock/, /^Products/, /^Sell/, /^Services/])
+      await expect(tools.getByRole("button", { name: own })).toHaveCount(0);
+    await axeBoth(buyer, "a business's tools");
     await pane.getByRole("button", { name: "Close tools" }).click();
     await expect(tools).toHaveCount(0);
     await box.fill("/5");
@@ -142,8 +148,22 @@ for (const [size, viewport] of [
     await box.press("Enter");
     await expect(pane.locator('[data-testid="chat-message"][data-mine="true"]').last()).toContainText("/5");
     await box.fill("/pro");
+    await expect(tools.getByRole("button")).toHaveCount(0);
+    await box.fill("");
+
+    // Her own tools are in her Taskiem conversation: the button, or "/"
+    // and a word.
+    await buyer.goto("/chat?with=taskiem");
+    await expect(pane).toBeVisible();
+    await pane.getByRole("button", { name: "Open tools" }).click();
+    await expect(tools.getByRole("button", { name: /Stock/ })).toContainText("1 low");
+    await axeBoth(buyer, "the tools");
+    await pane.getByRole("button", { name: "Close tools" }).click();
+    await expect(tools).toHaveCount(0);
+    const own = pane.getByRole("textbox").first();
+    await own.fill("/pro");
     await expect(tools.getByRole("button")).toHaveCount(1);
-    await box.press("Enter");
+    await own.press("Enter");
     await buyer.keyboard.press("Enter");
 
     // The sheet: its list, its chips, its search; Esc closes it and only it.
@@ -152,7 +172,7 @@ for (const [size, viewport] of [
     await axeBoth(buyer, "a tool's sheet");
     if (viewport.width >= 1200) {
       // Beside the chat, not over it: the chat can still be used.
-      await pane.getByLabel("Message").click();
+      await own.click();
       await expect(sheet).toBeVisible();
       await sheet.getByLabel("Search products").click();
     }
@@ -176,11 +196,12 @@ for (const [size, viewport] of [
 }
 
 test("a tool that cannot load says so, and tries again", async ({ browser }) => {
-  const { buyer, link } = await linked(browser);
+  const { buyer } = await linked(browser);
   await buyer.request.put("/v1/settings/chat-tools", { headers: H, data: { chat_tools: true } });
   let fail = true;
   await buyer.route("**/v1/stock", (r) => (fail ? r.fulfill({ status: 500, body: "{}" }) : r.fulfill(json(stock))));
-  await buyer.goto(`/chat?with=${link}`);
+  // Her own products: a tool of her Taskiem conversation.
+  await buyer.goto("/chat?with=taskiem");
   const pane = buyer.getByTestId("chat-pane");
   await pane.getByRole("button", { name: "Open tools" }).click();
   const tools = buyer.getByRole("region", { name: "Tools" });
