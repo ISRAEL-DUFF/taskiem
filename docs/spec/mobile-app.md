@@ -658,13 +658,18 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   a short page ends it. The web's 1 px mark at the top while there are
   older ones is kept, so the thread sits where the web's does. Held by
   `older_test.dart`.
+- **A business's long message, folded** (`lib/chat/conversation.dart`),
+  as the web's ReadMore: the first ten lines or 600 characters, cut where
+  a word ends, then "… Read more", each tap adding twenty lines or 1,200
+  characters (readmore.ts, as Taskiem's answers already were). Parity:
+  Mama Tunde's conversation with a price list added to its recording
+  (`chat-long`), light and dark, two sizes; held by `fold_test.dart`.
 - **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
   the milestones), a deal's offers and counters, search, the contact sheet,
-  a business's long
-  message folded (Taskiem's are), the chat tools, the "@" and "#" tags, and the list's search, chips and answers to requests
+  the chat tools, the "@" and "#" tags, and the list's search, chips and answers to requests
   (drawn, not yet working).
 
 ## 11. What needs people

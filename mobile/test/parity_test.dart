@@ -250,6 +250,7 @@ final screens = <String, Screen>{
     drive: _loaded,
   ),
   'chat-menu': (build: () => _conversation('chat-tunde', "Mama Tunde's Market"), drive: (t) => _hold(t)),
+  'chat-long': (build: () => _conversation('chat-long', "Mama Tunde's Market"), drive: _loaded),
   'chat-pick': (
     build: () => _conversation('chat-tunde', "Mama Tunde's Market"),
     drive: (t) async {

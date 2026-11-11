@@ -279,6 +279,17 @@ const SCREENS: { name: string; path: string; fixture?: string; ready: (p: Page) 
     },
   },
   {
+    // A long message from them, folded: its first ten lines, "… Read more".
+    // (Mama Tunde's conversation with a price list added to the recording.)
+    name: "chat-long",
+    path: "/chat?with=3af349e2-b776-4306-bdb8-10df59687c55",
+    fixture: "chat-long",
+    ready: async (p) => {
+      await expect(p.getByRole("button", { name: "Read more" })).toBeVisible();
+      await p.waitForLoadState("networkidle");
+    },
+  },
+  {
     // The menu's "+": every emoji in the menu's place, over the bubble.
     // Its search box takes the focus on the web; the picture is taken
     // without it (a phone would raise its keyboard).

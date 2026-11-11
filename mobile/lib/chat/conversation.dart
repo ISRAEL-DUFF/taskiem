@@ -449,6 +449,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
   /// The message whose menu is open, and the one being answered.
   String? _menuFor;
 
+  /// How far each long message is unfolded, by its id.
+  final _taps = <String, int>{};
+
   /// The menu's "+" chosen: the chevron goes with the card (the web shows
   /// it only with the card).
   bool _picking = false;
@@ -784,6 +787,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
             onHold: (at) => _menu(m, at),
             onReply: _write ? () => setState(() => _reply = m.m) : null,
             onReact: _write ? (e) => d.react(m.m, e) : null,
+            taps: _taps[m.id] ?? 0,
+            onMore: () => setState(() => _taps[m.id] = (_taps[m.id] ?? 0) + 1),
           ),
         );
       },
@@ -880,8 +885,14 @@ class _Bubble extends StatelessWidget {
     this.onHold,
     this.onReply,
     this.onReact,
+    this.taps = 0,
+    this.onMore,
   });
   final ThreadMessage m;
+
+  /// How often its "Read more" was tapped (a long message folded).
+  final int taps;
+  final VoidCallback? onMore;
 
   /// Its menu is open: the chevron shows, as the web's does then.
   final bool menuOpen;
@@ -963,10 +974,19 @@ class _Bubble extends StatelessWidget {
     );
     // `.bubble .text` (16 px, 1.4) in a block of the body's type: CSS's
     // line is as tall as both, 22.7 px; Flutter draws whole pixels a line.
-    final text = Text.rich(
+    // ReadMore.tsx: a long message folded, "… Read more" unfolding it.
+    final fold = reveal(body, taps);
+    Widget text = Text.rich(
       TextSpan(
         children: [
-          TextSpan(text: body),
+          TextSpan(text: fold.shown),
+          if (fold.folded) ...[
+            const TextSpan(text: '… '),
+            TextSpan(
+              text: 'Read more',
+              style: TextStyle(color: t.accent, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]),
+            ),
+          ],
           // `.stamp-gap`: room kept at the end of the text for the time.
           if (inline)
             WidgetSpan(
@@ -980,6 +1000,13 @@ class _Bubble extends StatelessWidget {
       ),
       style: tkText(size: 16, lineHeight: 23 / 16, color: t.text),
     );
+    if (fold.folded) {
+      text = Semantics(
+        button: true,
+        label: 'Read more',
+        child: GestureDetector(onTap: onMore, child: text),
+      );
+    }
     final radius = BorderRadius.only(
       topLeft: Radius.circular(first && !mine ? 4 : 16),
       topRight: Radius.circular(first && mine ? 4 : 16),
