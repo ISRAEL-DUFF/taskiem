@@ -1,4 +1,4 @@
-# The Taskiem phone app (Flutter): the plan
+# The Taskiem phone app (Flutter): the chat first
 
 Status: **proposal for the founder's review** (2026-11-11). Nothing here is
 built. The decision it asks for is [0066](../decisions/0066-a-flutter-phone-app.md)
@@ -9,9 +9,11 @@ built. The decision it asks for is [0066](../decisions/0066-a-flutter-phone-app.
 ## 1. Summary
 
 A native app for Android and iPhone, written in Flutter, for the people who
-run a business from their phone: owners and their staff. It does what they do
-many times a day (the chat, approvals, today's money and orders) natively,
-and it opens the web app, already signed in, for the rest.
+run a business from their phone: owners and their staff. **For now it is the
+chat and nothing else**: Taskiem's chat, the conversations with linked
+businesses and with customers, and the chat tools, with what the chat cannot
+work without (signing in and notifications). Other parts of Taskiem come to
+the app after the chat, one at a time, each by a decision of its own (§3.3).
 
 - **What it is for.** Notifications that arrive when nothing is open, on
   every Android phone that has Google's services. A camera, voice notes and
@@ -19,56 +21,67 @@ and it opens the web app, already signed in, for the rest.
   in the Play Store, which traders trust more than "add to home screen".
 - **What it is not.** It does not replace WhatsApp, Telegram or Slack as the
   way most traders use Taskiem; the strategy still starts in the chat
-  ([chat-first strategy](../strategy/chat-first-nigeria.md)). It does not
-  copy the whole web app: the builder, settings, billing, schools and the
-  operator console stay on the web.
+  ([chat-first strategy](../strategy/chat-first-nigeria.md)). It is not the
+  web app on a phone: Home, Money, Orders, invoices, the builder, settings,
+  billing and schools stay on the web for now.
 - **What it costs.** A second client for the chat, the part of the product
   that changes most. The chat is about 17,000 lines of the web app's 88,000.
   §9 is how the two stay the same; §12 is the risk.
 - **Order.** Android first (most Nigerian phones), iPhone built from the
   same code all along and released once Android is in use. Eight milestones
-  (§10); the first a person can use is M3, the chat with notifications.
+  (§10); the first a person can use is M3, the chat itself.
 
 ## 2. Who uses it, and for what
 
 | Person | What they do on the phone today | In the app |
 | --- | --- | --- |
-| Owner | Chat with linked businesses, customers and `@Taskiem`; approve payouts; look at today's money and orders | All of it, natively |
-| Staff | Chat, sell, record stock, take orders, their tasks ([chat tools](chat-tools.md) phase 5) | All of it, natively, within their role |
-| Rider | Deliveries ([decision 0065](../decisions/0065-riders-are-organisations.md)) | Later (§11): their own small app or a mode of this one |
-| Admin, builder, accountant | Build workflows, settings, reports, billing | Opened on the web from the app, signed in (§5.4) |
+| Owner | Chat with linked businesses, customers and `@Taskiem`, with the chat tools; act on the alerts and approvals the chat brings | The chat, natively |
+| Staff | Chat, and their tools in it: sell, record stock, take orders, their tasks ([chat tools](chat-tools.md) phase 5) | The chat, natively, within their role |
+| Rider | Deliveries, which are chat orders ([decision 0065](../decisions/0065-riders-are-organisations.md)) | With the chat when their cards are built; a mode of their own is a later question (§13) |
+| Anyone, for anything else | Home, Money, Orders, invoices, settings, the builder | The web, as today; not in the app for now |
 
 ## 3. What is in it
 
-### 3.1 Native in the first release
+### 3.1 The first release: the chat
 
 | Area | What | Built on |
 | --- | --- | --- |
-| Sign in | A code sent to your WhatsApp or Telegram; email and password; a passkey; staying signed in on this phone (§5.2) | `POST /v1/auth/chat/start` and `/verify`, `/v1/auth/login`, `/v1/auth/passkey`, all with `bearer: true` |
-| Chat | The conversations list; a conversation with a linked business, with a customer on the business's own number, and with `@Taskiem`; text, photos, voice notes, files, replies, reactions, ticks, typing, search, pin, mute, archive | `/v1/link-chats/…`, `/v1/taskiem-chat`, `GET /v1/chat/stream` (server-sent events) |
-| Chat tools | The picker, the cards and the tool sheets, phase by phase as on the web | [chat-tools.md](chat-tools.md) |
-| Approvals | Waiting approvals; approve or reject with a passkey or the chat PIN where the policy asks | `/v1/approvals`, step-up |
-| Home | Today's money in and out, what needs you, today's orders | The endpoints Home uses |
-| Orders | The order list and an order, with its status | The storefront and trade order endpoints |
-| Notifications | A chat message, an approval waiting, a new order, when the app is closed; the count on the icon | §5.3 |
-| Business switcher | A person in two businesses switches between them | `tenant_id` on sign-in, as the web does |
+| Sign in | A code sent to your WhatsApp or Telegram; email and password; a passkey; staying signed in on this phone (§5.2). Signing up stays in the chat apps and on the web | `POST /v1/auth/chat/start` and `/verify`, `/v1/auth/login`, `/v1/auth/passkey`, all with `bearer: true` |
+| The conversations | The list: `@Taskiem` first, then linked businesses and customers, with unread counts, drafts, pinned, muted and archived | `/v1/link-chats`, `/v1/taskiem-chat`, the customers' conversations |
+| A conversation | Text, photos, voice notes, files, replies, reactions, ticks, typing, search, forward, star, delete for me | `/v1/link-chats/{link}/messages` and its siblings, `GET /v1/chat/stream` (server-sent events) |
+| `@Taskiem` | Taskiem's chat, with its reply buttons and voice notes, as on WhatsApp | `/v1/taskiem-chat` |
+| Chat tools | The picker, the cards and the tool sheets, phase by phase as on the web, alerts and approvals included: an approval that comes as a card is decided on the card, with step-up where the policy asks | [chat-tools.md](chat-tools.md) |
+| Chat notifications | A new message when the app is closed, the count on the icon, a tap opening that conversation | §5.3 |
+| Business switcher | A person in two businesses switches between their chats | `tenant_id` on sign-in, as the web does |
+| Settings for the chat only | Notifications on this phone, showing what a message says, the app lock, signing out, **Your phones** | §5.2, §5.3 |
 
-### 3.2 On the web, opened from the app
+### 3.2 When the chat points elsewhere
 
-Everything else: the workflow builder and runs, Money's other tabs, invoices
-in full, settings, members, connections, billing, schools, storefront set-up,
-the operator console. The app opens them in the phone's own browser tab
-(Custom Tabs on Android, `SFSafariViewController` on iPhone), already signed
-in (§5.4). A page moves into the app only when people open it from the app
-often enough to say so (§9.3).
+A card or a message sometimes names something that lives on a web page (an
+invoice in full, a workflow run). In the first release the app opens that
+page in the phone's own browser tab (Custom Tabs on Android,
+`SFSafariViewController` on iPhone), where the person signs in as on the web
+if they are not already. Opening it already signed in is a later step (§5.4).
+A card is never left without somewhere to go.
 
-### 3.3 Not in the app at all
+### 3.3 After the chat
 
-- **Buying or changing a Taskiem plan.** Apple and Google take a share of
-  digital subscriptions bought in an app, and their rules on linking out
-  change often. Plans are bought on the web, as now; the app says where,
-  in plain words, and does not link to a price.
-- **A copy of the business on the phone** (§5.5).
+Each of these comes to the app only after the chat is released and in use,
+in an order chosen then from what people ask for and what the app's numbers
+show (§9.3), each with its own plan:
+
+- **Approvals as a screen of their own**, beyond the cards in the chat.
+- **Home**: today's money in and out, what needs you.
+- **Orders**, as a list and an order, beyond the order cards in the chat.
+- **Opening the web signed in** from the app (§5.4).
+- **Notifications for things other than chat messages** (a new order, an
+  approval waiting), unless they already come as a chat message.
+- **Riders' own mode**, if riders need more than their cards in the chat.
+
+**Never in the app:** buying or changing a Taskiem plan. Apple and Google
+take a share of digital subscriptions bought in an app, and their rules on
+linking out change often; plans are bought on the web, as now. And **a copy
+of the business on the phone** (§5.5).
 
 ## 4. How it is built
 
@@ -136,7 +149,7 @@ means signing in again every morning, which no one will do twice.
   a phone number can be given to someone else. A device session unused for
   30 days ends; signing in again with a chat code proves the number again.
 
-### 5.3 S3: notifications to the app
+### 5.3 S3: chat notifications to the app
 
 [Chat push](chat-push.md) sends Web Push to browsers. The app needs Firebase
 Cloud Messaging, which also carries notifications to iPhones through Apple.
@@ -146,9 +159,9 @@ Cloud Messaging, which also carries notifications to iPhones through Apple.
   push spec stays: who gets a push, when, the words, the switch for showing
   what the message says, one notification per conversation, a muted
   conversation silent, devices removed when the last role ends.
-- **What is pushed grows** past chat messages, as chat push §10 foresaw: an
-  approval waiting, a new order. Each is a call from `tellHolders` with its
-  own words.
+- **What is pushed is a chat message only**, as chat push pushes today
+  (alerts and approvals that come as chat messages included). Other kinds
+  (an order, an approval waiting) come after the chat (§3.3).
 - **The sender** is `engine/push` with a second transport, behind the same
   egress guard and metrics. Its service-account key is a secret like any
   other (`TASKIEM_FCM_CREDENTIALS`), and a deployment without it sends
@@ -157,9 +170,9 @@ Cloud Messaging, which also carries notifications to iPhones through Apple.
   app tells them so on the Notifications page, and their WhatsApp or
   Telegram still tells them, as it does today.
 
-### 5.4 S4: opening a web page signed in
+### 5.4 S4, after the chat: opening a web page signed in
 
-`POST /v1/me/web-link {path}` (device session only, `path` an allow-listed
+Not in the first release (§3.2). When it comes: `POST /v1/me/web-link {path}` (device session only, `path` an allow-listed
 page of the app) answers a one-time link for one minute, like the chat's
 **sign in** link ([chat-sign-in.md](chat-sign-in.md)), whose page already
 reads the token from the fragment and signs in with a POST. The web session
@@ -178,8 +191,8 @@ how, and wiped when.
 
 ### 5.6 S6: links that open the app
 
-`https://<host>/chat?with=…` and the other pages the app has open in the app
-when it is installed (Android App Links, iOS Universal Links). The server
+`https://<host>/chat` and `https://<host>/chat?with=…` open in the app
+when it is installed (only the chat: every other address stays the web's) (Android App Links, iOS Universal Links). The server
 serves `/.well-known/assetlinks.json` and
 `/.well-known/apple-app-site-association` from configuration. The same files
 let the platform passkey APIs use the web's passkeys in the app; the server's
@@ -207,8 +220,8 @@ WebAuthn origins gain the Android app's signing-key origin.
 - No analytics or crash reporting library that sends data to a third party
   in the first release. Crashes are reported to Taskiem's own server
   (`POST /v1/app/crash`, no message content), with the person's consent.
-- Screenshots of the approvals screen are blocked on Android (`FLAG_SECURE`)
-  while a payout is shown; elsewhere the phone's own rules apply.
+- Screenshots are blocked on Android (`FLAG_SECURE`) while a payout approval
+  card is open with its step-up; elsewhere the phone's own rules apply.
 - The stores' privacy forms (Google's Data safety, Apple's privacy labels)
   are filled from this section and kept in `mobile/STORE.md`; the NDPA
   review covers the app as part of the product.
@@ -240,9 +253,10 @@ stops them.
    written only in a client is a bug.
 2. **A chat feature is done when it is in both**, or when its spec says why
    the app does not have it. The spec's **As built** says which.
-3. **The app earns pages.** A page moves from the web into the app when the
-   app's own numbers (which pages are opened from the app, §5.4) show people
-   need it there.
+3. **The app earns pages, after the chat.** Nothing but the chat comes into
+   the app until the chat is released and in use (§3.3). Then a part moves in
+   when people ask for it and the app's own numbers show it (which web pages
+   are opened from the chat's cards, §3.2).
 
 ## 10. Milestones
 
@@ -254,26 +268,26 @@ for one engineer who knows Flutter.
 | M0 | **People and decisions** (§11, §13) | — | The name is cleared, both store accounts and the Firebase project exist, decision 0066 is accepted |
 | M1 | **Foundation**: `mobile/`, the generated client and theme, CI building an Android app, the licence gate for Dart, S1 | M | A build from `main` installs on a phone and shows the sign-in screen in Taskiem's look |
 | M2 | **Signed in, and staying signed in**: chat code, password, passkey sign-in; S2; the app lock; the business switcher | M | An owner signs in with a WhatsApp code on a real phone and is still signed in a week later |
-| M3 | **The chat**: conversations, a conversation, sending, files, voice notes, the stream; `@Taskiem`; customers' conversations | L | Two businesses chat from two phones, and every web chat e2e scenario on the shared list passes in the app |
-| M4 | **Notifications**: S3, the switch and device list, the icon's count, links that open the app (S6) | M | A message to a closed app shows on the lock screen of a real Android phone in under 5 seconds, and opens that conversation |
-| M5 | **Approvals, Home and Orders**, with step-up, and opening the web signed in (S4) | M | An owner approves a payout with a passkey from the app, and opens the builder on the web without signing in |
-| M6 | **Chat tools**, in the web's phase order | L | Each phase's web tests pass in the app |
-| M7 | **Android release**: closed testing with the design partners, then the Play Store | M | Ten businesses use the app for two weeks with no lost message and no crash a person reports |
-| M8 | **iPhone release**: TestFlight, then the App Store | S–M | The same, on iPhones |
+| M3 | **The chat**: the conversations, a conversation, sending, files, voice notes, the stream; `@Taskiem`; customers' conversations | L | Two businesses chat from two phones, and every web chat e2e scenario on the shared list passes in the app |
+| M4 | **Chat notifications**: S3, the switch and device list, the icon's count, links that open the chat (S6) | M | A message to a closed app shows on the lock screen of a real Android phone in under 5 seconds, and opens that conversation |
+| M5 | **Chat tools**, in the web's phase order, alerts and approvals with step-up included | L | Each phase's web tests pass in the app; an owner approves a payout on its card with a passkey |
+| M6 | **Android release**: closed testing with the design partners, then the Play Store | M | Ten businesses use the app's chat for two weeks with no lost message and no crash a person reports |
+| M7 | **iPhone release**: TestFlight, then the App Store | S–M | The same, on iPhones |
+| — | **After the chat** (§3.3): each part by a plan of its own | — | — |
 
-M1 to M5 are about three months for one engineer; with M6 and M7, four to
-five. A second engineer shortens M3 and M6, which divide by screen.
+M1 to M4 are about two and a half months for one engineer; with M5 and M6,
+four to five. A second engineer shortens M3 and M5, which divide by screen.
 
 ## 11. What needs people
 
 | # | Item | Who | Unblocks |
 | --- | --- | --- | --- |
 | A1 | **The name.** "Taskiem" is a working name pending a trademark search (L3, [what needs people](../needs-people.md)); a store listing and an app ID are hard to change once people have installed the app | Leadership, counsel | Everything public |
-| A2 | Google Play developer account (an organisation account needs a D-U-N-S number) | Founders | M7 |
-| A3 | Apple Developer Program as an organisation (also a D-U-N-S number) | Founders | M8 |
+| A2 | Google Play developer account (an organisation account needs a D-U-N-S number) | Founders | M6 |
+| A3 | Apple Developer Program as an organisation (also a D-U-N-S number) | Founders | M7 |
 | A4 | A Firebase project for Taskiem, and its data-processing terms (notifications pass through Google, as Web Push in Chrome already does) | Founders | M4 |
-| A5 | App signing keys, held as the release secrets and backed up offline | Founders, ops | M7 |
-| A6 | Store listing: words, screenshots, the privacy policy's address, a support email | Founders, design | M7 |
+| A5 | App signing keys, held as the release secrets and backed up offline | Founders, ops | M6 |
+| A6 | Store listing: words, screenshots, the privacy policy's address, a support email | Founders, design | M6 |
 | A7 | A Flutter engineer (or two) | Founders | M1 |
 | A8 | Three test phones: a cheap Android, a mid-range Android, an iPhone | Ops | M3 |
 
@@ -285,8 +299,9 @@ five. A second engineer shortens M3 and M6, which divide by screen.
 | The app slows the chat's pace on the web | The app follows the web by up to one milestone; the web is not held back for it |
 | Store review rejects the app (payments wording, the account deletion rule, reviewers who cannot sign in) | A test business and account for reviewers; account deletion from the app, as both stores require; no plan purchases in the app |
 | Phones without Google's services | Told plainly; WhatsApp and Telegram still reach them |
-| The name changes after launch | A1 before M7; the app ID chosen to survive a new display name |
+| The name changes after launch | A1 before M6; the app ID chosen to survive a new display name |
 | A lost or shared phone | The app lock, device sessions listed and ended from the web, nothing of the business kept on the phone |
+| A chat-only app feels thin to an owner who wants today's money on the phone | The web on the home screen still does everything; the chat's cards and `@Taskiem` already answer "how much came in today?"; Home is one of the first candidates once the chat is in use (§3.3) |
 | Cost of two stores and their reviews on every release | Releases every two weeks at most, from `main`, by CI |
 
 ## 13. Decisions to take
@@ -296,13 +311,14 @@ five. A second engineer shortens M3 and M6, which divide by screen.
    be enough, and the critical path is still the people items of the chat-first
    strategy, not code.
 2. **Android first**, iPhone released after (recommended), or both at once.
-3. **The first release's scope** in §3.1: chat, approvals, Home, Orders,
-   notifications, with the rest opened on the web.
+3. **The first release is the chat only** (settled by the founder, 11
+   November 2026): §3.1. What comes after it, and in what order, is decided
+   once the chat is in use (§3.3).
 4. **A cache of conversations on the phone** (§5.5): not in the first release
    (recommended), or a decision of its own before M3.
 5. **Device sessions** (§5.2): 30 days unused, 180 at most (recommended), or
    other numbers.
 6. **Notifications through Firebase** (§5.3), including for iPhones, rather
    than Apple's service directly (recommended: one transport, one key).
-7. **Riders**: a mode of this app, or an app of their own, after the first
-   release.
+7. **Riders**: their delivery cards in the chat with the chat tools, and a
+   mode of their own only if they need more, after the chat.
