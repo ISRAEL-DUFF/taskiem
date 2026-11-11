@@ -70,18 +70,20 @@ function remember(k: ToolKey) {
   }
 }
 
-/** The rows with one business. In a business's conversation its own tools
- * (BUSINESS_TOOLS) show only what is with that business: a row of it, or
- * one the conversation's things name (an invoice to them, by its id);
- * another tool's rows with no business stay. */
+/** The rows with one business. In a business's conversation the tools of
+ * what is between us (BETWEEN_US) show only what is with that business: a
+ * row of it, or one the conversation's things name (an invoice to them, by
+ * its id), and nothing until those are known; another tool's rows (our
+ * price lists, to share) all stay. */
 const inScope = (
   rows: ToolRow[],
   scope?: string,
   key?: ToolKey,
   ids?: Set<string>,
-) => {
+): ToolRow[] | undefined => {
   if (!scope) return rows;
-  const strict = key !== undefined && BUSINESS_TOOLS.includes(key);
+  const strict = key !== undefined && BETWEEN_US.includes(key);
+  if (strict && !ids) return undefined;
   return rows.filter((r) =>
     strict
       ? r.link === scope || !!ids?.has(r.id)
@@ -89,24 +91,40 @@ const inScope = (
   );
 };
 
+/** The tools whose rows are between us and one business. */
+const BETWEEN_US: ToolKey[] = ["purchases", "orders", "bills", "invoices"];
+
+// What is between us and each business, read once for the panel and its
+// sheet together, and again when the conversation is opened anew.
+const scopeIdsCache = new Map<string, Promise<Set<string>>>();
+
 /** The ids of what is between us and a business (invoices, bills, orders):
- * what a row with no business of its own is matched to. */
+ * what a row with no business of its own is matched to; undefined while
+ * they are read. */
 function useScopeIds(scope?: string): Set<string> | undefined {
-  const [ids, setIds] = useState<Set<string>>();
+  const [got, setGot] = useState<{ scope: string; ids: Set<string> }>();
   useEffect(() => {
     if (!scope) return;
     let on = true;
-    get<{ refs: ChatRef[] }>(
-      `/v1/link-chats/${encodeURIComponent(scope)}/refs`,
-    ).then(
-      (r) => on && setIds(new Set((r.refs ?? []).map((x) => x.id))),
-      () => on && setIds(new Set()),
-    );
+    let p = scopeIdsCache.get(scope);
+    if (!p) {
+      p = get<{ refs: ChatRef[] }>(
+        `/v1/link-chats/${encodeURIComponent(scope)}/refs`,
+      ).then(
+        (r) => new Set((r.refs ?? []).map((x) => x.id)),
+        () => new Set<string>(),
+      );
+      scopeIdsCache.set(scope, p);
+      // Kept for a minute: what changes (a new invoice) is read again.
+      window.setTimeout(() => scopeIdsCache.delete(scope), 60_000);
+    }
+    void p.then((ids) => on && setGot({ scope, ids }));
     return () => {
       on = false;
     };
   }, [scope]);
-  return ids;
+  // Another conversation's, while this one's are read: none yet.
+  return got && got.scope === scope ? got.ids : undefined;
 }
 
 /** The row a request or a card points at: by its id anywhere, else by its
@@ -116,7 +134,7 @@ function useScopeIds(scope?: string): Set<string> | undefined {
 export function startRow(rows: ToolRow[], rowId: string, scope?: string): ToolRow | undefined {
   const byId = rows.find((x) => x.id === rowId);
   if (byId) return byId;
-  const named = inScope(rows, scope).filter(
+  const named = (inScope(rows, scope) ?? []).filter(
     (x) => (x.data as { reference?: string } | undefined)?.reference === rowId,
   );
   return named.length === 1 ? named[0] : undefined;
@@ -237,19 +255,23 @@ export function ToolsPanel({
     ]),
   );
   const q = query.trim().toLowerCase();
+  // Their shop, first, for everyone in a business's conversation: to order
+  // from where they may, else to look around (business-chat-tools.md §3).
+  const shopFor = business ?? supplier;
   const ordering =
-    supplier && mayEdit("order", can) && (!q || "order".startsWith(q));
+    !!shopFor &&
+    (!q || ["order", "their shop", "shop"].some((w) => w.startsWith(q)));
   const tools: Tool[] = ordering
     ? [
         {
           key: "order",
           title: "Their shop",
           icon: "plus",
-          perm: "storefront.manage",
+          perm: "",
           url: "",
           page: "/storefront/suppliers",
           rows: () => [],
-          line: () => `From ${supplier}`,
+          line: () => `From ${shopFor}`,
           more: "",
         },
         ...listed,
@@ -783,7 +805,7 @@ export function ToolSheet({
             </p>
           )}
           <div className="tk-sheet-list">
-            {rows === undefined ? (
+            {rows === undefined || (Array.isArray(rows) && !list) ? (
               <KitLoading label={`Loading ${name}…`} />
             ) : rows === "failed" ? (
               <KitEmpty

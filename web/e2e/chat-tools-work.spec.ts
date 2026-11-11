@@ -87,7 +87,7 @@ for (const [size, viewport] of [
     const { owner, seller, link } = await linked(browser, viewport);
     const sent = await shop(owner);
     await owner.goto("/chat?with=taskiem");
-    const pane = owner.getByTestId("chat-pane");
+    const pane = owner.getByTestId("taskiem-pane");
     const sheet = owner.getByTestId("tool-sheet");
     const tool = async (name: string) => {
       await pane.getByRole("button", { name: "Open tools" }).click();
@@ -325,7 +325,7 @@ test("a product's trade price list price and who it is shared with, saved from c
     await r.fulfill(json({ lists: [] }));
   });
   await owner.goto("/chat?with=taskiem");
-  const pane = owner.getByTestId("chat-pane");
+  const pane = owner.getByTestId("taskiem-pane");
   const sheet = owner.getByTestId("tool-sheet");
   await pane.getByRole("button", { name: "Open tools" }).click();
   await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Products/ }).click();
@@ -361,7 +361,7 @@ test("in dark, every product tile keeps its own initials' colour (the lime tile 
   );
   await owner.addInitScript(() => localStorage.setItem("taskiem-theme", "dark"));
   await owner.goto("/chat?with=taskiem");
-  await owner.getByTestId("chat-pane").getByRole("button", { name: "Open tools" }).click();
+  await owner.getByTestId("taskiem-pane").getByRole("button", { name: "Open tools" }).click();
   await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Products/ }).click();
   const tiles = owner.getByTestId("tool-sheet").locator(".tk-row-tile[data-tone]");
   await expect(tiles).toHaveCount(8);

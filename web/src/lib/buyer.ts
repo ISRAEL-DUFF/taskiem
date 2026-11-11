@@ -191,6 +191,16 @@ export function reorderQty(
 export const priceLine = (it: PriceItem) =>
   `${formatPrice(it.price_kobo)}${it.unit ? ` a ${it.unit}` : ""}${it.min_quantity > 1 ? ` · min ${it.min_quantity}` : ""}`;
 
-/** An order row's line, as the Buyer board draws it: "₦78,000 · min 2". */
+/** An order row's line, as the Buyer board draws it: "₦78,000 · min 2";
+ * from a storefront that counts them, how many are left ("· 3 left"). */
 export const orderLine = (it: PriceItem) =>
-  `${formatPrice(it.price_kobo)}${it.min_quantity > 1 ? ` · min ${it.min_quantity}` : ""}`;
+  `${formatPrice(it.price_kobo)}${it.min_quantity > 1 ? ` · min ${it.min_quantity}` : ""}${it.left !== undefined && it.left > 0 ? ` · ${it.left} left` : ""}`;
+
+/** What an item that cannot be ordered now says: sold out, where the
+ * storefront counts it to none, else not available. */
+export const notNowLine = (it: PriceItem) =>
+  it.left === 0 ? "Sold out" : "Not available now";
+
+/** The storefront's name for a seller's offer with no shared list
+ * (engine/links StorefrontListName). */
+export const STOREFRONT_PRICES = "Storefront prices";

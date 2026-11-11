@@ -154,13 +154,13 @@ for (const [size, viewport] of [
     // Her own tools are in her Taskiem conversation: the button, or "/"
     // and a word.
     await buyer.goto("/chat?with=taskiem");
-    await expect(pane).toBeVisible();
-    await pane.getByRole("button", { name: "Open tools" }).click();
+    const home = buyer.getByTestId("taskiem-pane");
+    await home.getByRole("button", { name: "Open tools" }).click();
     await expect(tools.getByRole("button", { name: /Stock/ })).toContainText("1 low");
     await axeBoth(buyer, "the tools");
-    await pane.getByRole("button", { name: "Close tools" }).click();
+    await home.getByRole("button", { name: "Close tools" }).click();
     await expect(tools).toHaveCount(0);
-    const own = pane.getByRole("textbox").first();
+    const own = home.getByRole("textbox").first();
     await own.fill("/pro");
     await expect(tools.getByRole("button")).toHaveCount(1);
     await own.press("Enter");
@@ -183,11 +183,11 @@ for (const [size, viewport] of [
     await expect(sheet.getByRole("listitem")).toHaveCount(1);
     await buyer.keyboard.press("Escape");
     await expect(sheet).toHaveCount(0);
-    await expect(pane).toBeVisible();
+    await expect(home).toBeVisible();
     expect(await buyer.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
 
     // Opened again from the panel's recent row, and closed with its button.
-    await pane.getByRole("button", { name: "Open tools" }).click();
+    await home.getByRole("button", { name: "Open tools" }).click();
     await tools.getByRole("button", { name: "Products", exact: true }).last().click();
     await expect(sheet).toBeVisible();
     await sheet.getByRole("button", { name: viewport.width >= 1200 ? "Close panel" : "Close" }).click();
@@ -202,7 +202,7 @@ test("a tool that cannot load says so, and tries again", async ({ browser }) => 
   await buyer.route("**/v1/stock", (r) => (fail ? r.fulfill({ status: 500, body: "{}" }) : r.fulfill(json(stock))));
   // Her own products: a tool of her Taskiem conversation.
   await buyer.goto("/chat?with=taskiem");
-  const pane = buyer.getByTestId("chat-pane");
+  const pane = buyer.getByTestId("taskiem-pane");
   await pane.getByRole("button", { name: "Open tools" }).click();
   const tools = buyer.getByRole("region", { name: "Tools" });
   await expect(tools.getByRole("button", { name: /^Products/ })).toContainText("Could not load");

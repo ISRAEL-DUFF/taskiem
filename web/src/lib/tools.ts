@@ -597,8 +597,6 @@ export function roleTools(
   return new Set(roles.flatMap((r) => ROLE_TOOLS[r] ?? []));
 }
 
-/** The tools a person may open, matching what follows "/" (a word's start),
- * shaped to their role when they are staff. */
 /** The tools a business's conversation shows (docs/spec/business-chat-
  * tools.md §3): what is between us and them, and ours only where it is
  * about them. The rest of our own tools are in the Taskiem conversation. */
@@ -610,6 +608,8 @@ export const BUSINESS_TOOLS: ToolKey[] = [
   "prices",
 ];
 
+/** The tools a person may open, matching what follows "/" (a word's start),
+ * shaped to their role when they are staff. */
 export function toolsFor(
   can: (perm: string) => boolean,
   query = "",

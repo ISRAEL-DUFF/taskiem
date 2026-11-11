@@ -8456,7 +8456,7 @@ paths:
       tags:
       - Links
       summary: What "#" names in a conversation
-      description: 'The price list the other business shares with you (whose: theirs), else the one you share with them (ours), each item with its unit and price.'
+      description: 'What the other business offers you (whose: theirs): the price list it shares with you, or else its storefront at the storefront''s prices; else the list you share with them (ours). Each item with its unit and price.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -8485,6 +8485,52 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/PriceItem'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/photo:
+    get:
+      operationId: linkChatPhoto
+      tags:
+      - Links
+      summary: The photo of one of the other business's items
+      description: The picture of an item on the other business's storefront, as your copy of it names it, fetched from their storage. Only an item of theirs you can see.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: item
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: w
+        in: query
+        schema:
+          type: string
+          enum: ['320', '800', '2000']
+      responses:
+        '200':
+          description: The picture
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
         default:
           $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/refs:
@@ -34232,6 +34278,10 @@ components:
                 description: Its own price on the list; absent, the product's
               available:
                 type: boolean
+              left:
+                type: integer
+                minimum: 0
+                description: How many of this size are left, on a storefront offered to a linked business, where the storefront counts them
         variant_of:
           type: string
           description: On a size as an order line prices it, its product's item
@@ -34239,6 +34289,15 @@ components:
           type: object
           additionalProperties:
             type: string
+        photo:
+          type: object
+          description: On a storefront offered to a linked business, its photo's addresses by width; the picture comes through GET /v1/link-chats/{link}/photo
+          additionalProperties:
+            type: string
+        left:
+          type: integer
+          minimum: 0
+          description: On a storefront offered to a linked business, how many are left where the storefront counts them
     PriceList:
       type: object
       additionalProperties: false

@@ -27,6 +27,11 @@ export interface PriceItem {
    * unless it has its own; breaks and the minimum count them together. */
   choices?: { name: string; values: string[] }[];
   sizes?: PriceSize[];
+  /** On a linked business's storefront: its photo's addresses by width,
+   * shown through GET /v1/link-chats/{link}/photo, and how many are left
+   * where the storefront counts them. */
+  photo?: Record<string, string>;
+  left?: number;
 }
 
 export interface PriceSize {
@@ -37,6 +42,8 @@ export interface PriceSize {
   /** Its own price on the list; absent, the product's. */
   price_kobo?: number;
   available: boolean;
+  /** How many of this size are left, on a linked business's storefront. */
+  left?: number;
 }
 
 export interface PriceList {

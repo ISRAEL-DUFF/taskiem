@@ -10,6 +10,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -560,4 +561,64 @@ func (s *Server) linkChatItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// linkChatPhoto is GET /v1/link-chats/{link}/photo?item=&w=: the photo of
+// one of the other business's items, as our copy of its storefront names
+// it (business-chat-tools.md §2). The picture is in their storage, which
+// the app's pages may not load: it comes through here, fetched with their
+// connection from the address their own storefront wrote, never one the
+// caller gives.
+func (s *Server) linkChatPhoto(w http.ResponseWriter, r *http.Request) {
+	link, err := linkParam(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if s.Media == nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	item := r.URL.Query().Get("item")
+	width := r.URL.Query().Get("w")
+	p := principalFrom(r.Context())
+	var seller uuid.UUID
+	var urls map[string]string
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		l, err := links.GetTx(r.Context(), tx, link)
+		if err != nil {
+			return err
+		}
+		seller = l.Business
+		var raw []byte
+		if err := tx.QueryRow(r.Context(), `SELECT photo FROM supplier_prices WHERE tenant_id = $1 AND link_id = $2 AND item_id = $3`,
+			p.TenantID, link, item).Scan(&raw); err != nil {
+			return err
+		}
+		if len(raw) == 0 {
+			return pgx.ErrNoRows
+		}
+		return json.Unmarshal(raw, &urls)
+	}); err != nil {
+		s.fail(w, r, linkMessageErr(err))
+		return
+	}
+	src := urls[width]
+	for _, k := range []string{"320", "800", "2000"} {
+		if src == "" {
+			src = urls[k]
+		}
+	}
+	if src == "" {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	data, ctype, err := s.Media.FetchPublic(r.Context(), seller, src)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", ctype)
+	w.Header().Set("Cache-Control", "private, max-age=86400")
+	_, _ = w.Write(data) //nolint:gosec // a JPEG or PNG by its bytes (FetchPublic), sent as that type with nosniff
 }

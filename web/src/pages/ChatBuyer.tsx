@@ -14,7 +14,9 @@ import {
 } from "../lib/bills";
 import {
   bagOf,
+  notNowLine,
   orderLine,
+  STOREFRONT_PRICES,
   purchaseState,
   quoteText,
   reorderQty,
@@ -111,6 +113,7 @@ export function OrderSheet({
   business,
   start,
   from,
+  browse = false,
   onClose,
   onPlaced,
 }: {
@@ -118,6 +121,9 @@ export function OrderSheet({
   business: string;
   start?: OrderStart;
   from?: DOMRect | null;
+  /** Someone who may not order looks around their shop: no bag, no
+   * steppers (docs/spec/business-chat-tools.md §3). */
+  browse?: boolean;
   onClose: () => void;
   onPlaced?: (words: string) => void;
 }) {
@@ -368,6 +374,8 @@ export function OrderSheet({
     new Date(list.updated_at).toDateString() === new Date().toDateString()
       ? "updated today"
       : "as they share them";
+  // No list shared: their storefront, at its prices.
+  const storefront = list?.name === STOREFRONT_PRICES;
   // Everything placing reads is here; what still stops it, said.
   const loaded = !!suppliers.data && !!own.data && !!links.data;
   const needPhone =
@@ -381,7 +389,13 @@ export function OrderSheet({
         : undefined;
   return (
     <Sheet
-      title={step === "review" ? "Review your order" : `Order from ${business}`}
+      title={
+        step === "review"
+          ? "Review your order"
+          : browse
+            ? `${business}'s shop`
+            : `Order from ${business}`
+      }
       from={from}
       onClose={onClose}
       onBack={step === "review" ? () => setStep("pick") : undefined}
@@ -397,9 +411,15 @@ export function OrderSheet({
           />
         ) : undefined
       }
-      sub={step === "pick" ? `Your prices · ${updated}` : undefined}
+      sub={
+        step === "pick"
+          ? storefront
+            ? `Their storefront prices · ${updated}`
+            : `Your prices · ${updated}`
+          : undefined
+      }
       footer={
-        step === "pick" ? (
+        browse ? undefined : step === "pick" ? (
           <div className="tk-bag" data-testid="order-bag">
             <span>
               <span className="tk-bag-count">
@@ -489,7 +509,7 @@ export function OrderSheet({
           <ErrorBox error={startStock.error} />
         </section>
       )}
-      {step === "pick" && last.data && bag.lines.length === 0 && list && (
+      {!browse && step === "pick" && last.data && bag.lines.length === 0 && list && (
         <div className="tk-order-who">
           <button
             type="button"
@@ -518,18 +538,22 @@ export function OrderSheet({
       ) : !list ? (
         <KitEmpty
           icon="tag"
-          title={`${business} shares no price list with you`}
+          title={`Nothing on ${business}'s storefront yet`}
         >
-          Ask them in the chat to share one.
+          Ask them in the chat what they sell, or to share a price list.
         </KitEmpty>
       ) : step === "pick" ? (
         <>
           <label className="tk-search">
             <Icon name="search" />
-            <span className="sr-only">Search their price list</span>
+            <span className="sr-only">
+              {storefront ? "Search their shop" : "Search their price list"}
+            </span>
             <input
               type="search"
-              placeholder="Search their price list"
+              placeholder={
+                storefront ? "Search their shop" : "Search their price list"
+              }
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -581,7 +605,15 @@ export function OrderSheet({
                           aria-hidden="true"
                           data-tone="sand"
                         >
-                          <Icon name="package" />
+                          {it.photo ? (
+                            <img
+                              src={`/v1/link-chats/${encodeURIComponent(link)}/photo?item=${encodeURIComponent(it.item_id)}&w=320`}
+                              alt=""
+                              loading="lazy"
+                            />
+                          ) : (
+                            <Icon name="package" />
+                          )}
                         </span>
                         <span className="tk-row-words">
                           <span className="tk-row-name">{it.name}</span>
@@ -589,15 +621,20 @@ export function OrderSheet({
                             {it.available &&
                             !(soldInSizes(it) && !it.sizes?.length)
                               ? orderLine(it)
-                              : "Not available now"}
+                              : notNowLine(it)}
                           </span>
+                          {browse && it.description && (
+                            <span className="tk-row-sub">
+                              {it.description}
+                            </span>
+                          )}
                           {it.available && !!it.breaks?.length && (
                             <span className="tk-row-sub tk-breaks">
                               {breakWords(it)}
                             </span>
                           )}
                         </span>
-                        {soldInSizes(it) ? (
+                        {browse ? null : soldInSizes(it) ? (
                           <button
                             type="button"
                             className="tk-btn soft"

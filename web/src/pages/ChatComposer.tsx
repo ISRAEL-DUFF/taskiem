@@ -475,6 +475,7 @@ export function ComposerView<R>({
           link={c.o.scope.link}
           business={c.o.scope.name}
           from={c.tool.from}
+          browse={!c.o.scope.supplies}
           start={c.tool.start?.order}
           onClose={() => c.setTool(undefined)}
           onPlaced={() => c.o.onDiary?.(undefined)}

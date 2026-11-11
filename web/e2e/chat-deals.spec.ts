@@ -273,7 +273,7 @@ test("the lowest price on a product, from chat: set, warned when over the trade 
   // Her own products: a tool of her Taskiem conversation.
   await page.goto("/chat?with=taskiem");
   const sheet = page.getByTestId("tool-sheet");
-  await page.getByTestId("chat-pane").getByRole("button", { name: "Open tools" }).click();
+  await page.getByTestId("taskiem-pane").getByRole("button", { name: "Open tools" }).click();
   await page.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Products/ }).click();
   await sheet.getByRole("button", { name: /Rice, 50kg bag/ }).click();
   const floor = sheet.getByLabel("Lowest price in naira");

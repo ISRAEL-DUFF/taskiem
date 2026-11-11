@@ -1265,6 +1265,10 @@ export function ConversationPane({
       category: it.category,
       words: it.description,
     }));
+  // What "#" and "/product" tag: theirs, with chat tools (§4); without, the
+  // list between us as before.
+  const tagItems =
+    chatTools && priced.data?.whose !== "theirs" ? [] : priceItems;
   const c = useComposer<LinkMessage>({
     draftKey: conv.link,
     rules: BUSINESS_FILES,
@@ -1284,7 +1288,10 @@ export function ConversationPane({
           name: o.name,
           sub: chatTools ? linkedLine(roles[o.link]) : undefined,
         })),
-      services: (ownServices.data ?? []).map((x) => ({
+      // Our own services are not offered in a business's conversation
+      // with chat tools: what we offer them goes by Share my prices and
+      // Make an offer (business-chat-tools.md §4).
+      services: (chatTools ? [] : (ownServices.data ?? [])).map((x) => ({
         kind: "service" as const,
         id: x.id,
         name: x.name,
@@ -1295,10 +1302,11 @@ export function ConversationPane({
           .filter(Boolean)
           .join(" · "),
       })),
-      "#": priceItems,
+      // Theirs, with chat tools (§4); without, the list between us as before.
+      "#": tagItems,
       // "/product" is "#"'s items; a customer is never named to another
       // business.
-      refs: { ...shared.data, product: priceItems },
+      refs: { ...shared.data, product: tagItems },
       // A category opens where it can be seen: their list, to order from
       // (supplies), or our own products (table.read); otherwise none is
       // offered, as a tap would open nothing of theirs.

@@ -11,10 +11,13 @@ package links
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"time"
 
@@ -69,6 +72,12 @@ type PriceItem struct {
 	// (Flat), its product's item and its values.
 	VariantOf string            `json:"variant_of,omitempty"`
 	Variant   map[string]string `json:"variant,omitempty"`
+	// Photo and Left are, on a seller's storefront offered to a linked
+	// business (business-chat-tools.md §2), its photo (the storefront's
+	// urls by width) and how many are left where the storefront counts
+	// them.
+	Photo map[string]string `json:"photo,omitempty"`
+	Left  *int64            `json:"left,omitempty"`
 }
 
 // PriceSize is one of a listed product's sizes and colours.
@@ -79,6 +88,8 @@ type PriceSize struct {
 	// PriceKobo is its own price on the list; 0 is the product's.
 	PriceKobo int64 `json:"price_kobo,omitempty"`
 	Available bool  `json:"available"`
+	// Left is how many of this size are left, on a storefront's offer.
+	Left *int64 `json:"left,omitempty"`
 }
 
 // MaxListSizes is how many sizes and colours one listed product carries.
@@ -257,6 +268,23 @@ func scanPriceItem(r pgx.CollectableRow) (PriceItem, error) {
 	var raw, sizes []byte
 	if err := r.Scan(&it.ItemID, &it.Name, &it.Unit, &it.Category, &it.Description, &it.PriceKobo, &it.MinQuantity, &it.Available, &raw, &sizes); err != nil {
 		return it, err
+	}
+	if err := scanBreaks(raw, &it); err != nil {
+		return it, err
+	}
+	return it, scanSizes(sizes, &it)
+}
+
+// scanSupplierPrice reads the buyer's copy of a seller's item, with the
+// storefront's photo and count where it came from one.
+func scanSupplierPrice(r pgx.CollectableRow) (PriceItem, error) {
+	var it PriceItem
+	var raw, sizes, photo []byte
+	if err := r.Scan(&it.ItemID, &it.Name, &it.Unit, &it.Category, &it.Description, &it.PriceKobo, &it.MinQuantity, &it.Available, &raw, &sizes, &photo, &it.Left); err != nil {
+		return it, err
+	}
+	if len(photo) > 0 {
+		_ = json.Unmarshal(photo, &it.Photo)
 	}
 	if err := scanBreaks(raw, &it); err != nil {
 		return it, err
@@ -492,16 +520,24 @@ func storefrontItemsTx(ctx context.Context, tx pgx.Tx, seller uuid.UUID) ([]Pric
 	out := []PriceItem{}
 	for _, it := range cat {
 		// Hidden from the storefront (Show on your storefront off): not
-		// shown here either. Shown but none left: shown, sold out.
-		if !it.Available || it.PriceKobo == nil || *it.PriceKobo <= 0 || it.DurationMinutes > 0 || it.VariantOf != "" {
+		// shown here either. Shown but none left: shown, sold out. A dish
+		// with options to pick, or an event with a date, is bought on the
+		// storefront itself: a trade order has no room for either.
+		if !it.Available || it.PriceKobo == nil || *it.PriceKobo <= 0 || it.DurationMinutes > 0 || it.VariantOf != "" ||
+			len(it.Options) > 0 || it.Starts != nil {
 			continue
 		}
-		pi := PriceItem{ItemID: it.ID, Name: cutRunes(it.Name, 120), Category: cutRunes(it.Category, 60), Description: cutRunes(it.Description, 500),
-			PriceKobo: *it.PriceKobo, MinQuantity: 1, Available: it.Stock == nil || *it.Stock > 0}
+		pi := PriceItem{ItemID: it.ID, Name: cutRunes(it.Name, 120), Unit: cutRunes(it.Unit, 40), Category: cutRunes(it.Category, 60),
+			Description: cutRunes(it.Description, 500), PriceKobo: *it.PriceKobo, MinQuantity: 1, Available: it.Stock == nil || *it.Stock > 0,
+			Left: it.Stock}
+		if len(it.Photo) > 0 {
+			pi.Photo = map[string]string(it.Photo)
+		}
 		if len(it.Sizes) > 0 {
 			pi.Choices = it.Choices
 			for _, z := range it.Sizes {
-				ps := PriceSize{ItemID: z.ID, Name: variants.Name(it.Name, z.Variant, it.Choices), Variant: z.Variant, Available: z.Stock == nil || *z.Stock > 0}
+				ps := PriceSize{ItemID: z.ID, Name: variants.Name(it.Name, z.Variant, it.Choices), Variant: z.Variant,
+					Available: z.Stock == nil || *z.Stock > 0, Left: z.Stock}
 				if z.PriceKobo != nil && *z.PriceKobo != *it.PriceKobo {
 					ps.PriceKobo = *z.PriceKobo
 				}
@@ -517,6 +553,14 @@ func storefrontItemsTx(ctx context.Context, tx pgx.Tx, seller uuid.UUID) ([]Pric
 		}
 	}
 	return out, nil
+}
+
+// shopHash is what a storefront offers, in short: a link whose copy was
+// written from the same is not written again (StorefrontChangedTx).
+func shopHash(items []PriceItem) string {
+	b, _ := json.Marshal(items)
+	h := sha256.Sum256(b)
+	return hex.EncodeToString(h[:])
 }
 
 // ShopPricesTx is what a link is offered by the seller in scope: the list it
@@ -537,8 +581,11 @@ func ShopPricesTx(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) (name 
 }
 
 // StorefrontChangedTx puts on the list to mirror every active link of the
-// business in scope that it shares no price list with: those links see
-// its storefront, which has changed.
+// business in scope that it shares no price list with and whose copy of
+// its storefront differs from the storefront now: those links see its
+// storefront. A sale that changes nothing they see (a count the
+// storefront does not show, the same prices) writes nothing. The copies
+// are written a little later, so a run of changes is written once.
 func StorefrontChangedTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
 	list, _, err := ListTx(ctx, tx)
 	if err != nil {
@@ -552,30 +599,52 @@ func StorefrontChangedTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error
 	if err != nil {
 		return err
 	}
+	items, err := storefrontItemsTx(ctx, tx, tenant)
+	if err != nil {
+		return err
+	}
+	now := shopHash(items)
+	rows, err = tx.Query(ctx, `SELECT link_id, hash FROM link_shop_offers WHERE tenant_id = $1`, tenant)
+	if err != nil {
+		return err
+	}
+	written := map[uuid.UUID]string{}
+	for rows.Next() {
+		var l uuid.UUID
+		var h string
+		if err := rows.Scan(&l, &h); err != nil {
+			rows.Close()
+			return err
+		}
+		written[l] = h
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
 	for _, l := range list {
-		if l.State != Active || slicesContains(shared, l.ID) {
+		if l.State != Active || slices.Contains(shared, l.ID) {
 			continue
 		}
-		if err := dueTx(ctx, tx, tenant, "prices", l.ID, 0); err != nil {
+		// Nothing to offer, and nothing written before: nothing to do.
+		if h, ok := written[l.ID]; (ok && h == now) || (!ok && len(items) == 0) {
+			continue
+		}
+		if err := dueTx(ctx, tx, tenant, "prices", l.ID, StorefrontSettle); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+// StorefrontSettle is how long after a storefront change its copies are
+// written: changes within it are written together.
+var StorefrontSettle = 30 * time.Second
+
 // PricesDueTx puts one link on the business in scope's list to mirror
 // (a link just made active: each side's offer reaches the other).
 func PricesDueTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) error {
 	return dueTx(ctx, tx, tenant, "prices", link, 0)
-}
-
-func slicesContains(xs []uuid.UUID, x uuid.UUID) bool {
-	for _, y := range xs {
-		if y == x {
-			return true
-		}
-	}
-	return false
 }
 
 // MirrorPricesTx rewrites the buyer's view of a link's prices from the
@@ -592,6 +661,17 @@ func MirrorPricesTx(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) erro
 		return err
 	}
 	name, items, fromStorefront, shared, err := ShopPricesTx(ctx, tx, seller, link)
+	if err != nil {
+		return err
+	}
+	// What this link's copy is written from, in the seller's scope: its
+	// storefront (so an unchanged one is not written again), or not.
+	if fromStorefront {
+		_, err = tx.Exec(ctx, `INSERT INTO link_shop_offers (tenant_id, link_id, hash) VALUES ($1, $2, $3)
+			ON CONFLICT (tenant_id, link_id) DO UPDATE SET hash = EXCLUDED.hash, updated_at = now()`, seller, link, shopHash(items))
+	} else {
+		_, err = tx.Exec(ctx, `DELETE FROM link_shop_offers WHERE tenant_id = $1 AND link_id = $2`, seller, link)
+	}
 	if err != nil {
 		return err
 	}
@@ -649,9 +729,13 @@ func MirrorPricesTx(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) erro
 				it.Sizes[j].PriceKobo = 0
 			}
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO supplier_prices (tenant_id, link_id, item_id, name, unit, price_kobo, min_quantity, available, position, breaks, category, description, sizes)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`, buyer, link, it.ItemID, it.Name, it.Unit, it.PriceKobo, it.MinQuantity, it.Available, i, breaksJSON(breaks),
-			cutRunes(it.Category, 60), cutRunes(it.Description, 500), sizesJSON(it)); err != nil {
+		var photo any
+		if len(it.Photo) > 0 {
+			photo, _ = json.Marshal(it.Photo)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO supplier_prices (tenant_id, link_id, item_id, name, unit, price_kobo, min_quantity, available, position, breaks, category, description, sizes, photo, left_count)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`, buyer, link, it.ItemID, it.Name, it.Unit, it.PriceKobo, it.MinQuantity, it.Available, i, breaksJSON(breaks),
+			cutRunes(it.Category, 60), cutRunes(it.Description, 500), sizesJSON(it), photo, it.Left); err != nil {
 			return err
 		}
 	}
@@ -699,12 +783,12 @@ func SupplierPricesTx(ctx context.Context, tx pgx.Tx, tenant, link uuid.UUID) ([
 			continue // a link no longer active: its prices are not offered
 		}
 		p.Business = n
-		rows, err := tx.Query(ctx, `SELECT item_id, name, unit, category, description, price_kobo, min_quantity, available, breaks, sizes FROM supplier_prices WHERE tenant_id = $1 AND link_id = $2
-			ORDER BY position, lower(name)`, tenant, p.LinkID)
+		rows, err := tx.Query(ctx, `SELECT item_id, name, unit, category, description, price_kobo, min_quantity, available, breaks, sizes, photo, left_count
+			FROM supplier_prices WHERE tenant_id = $1 AND link_id = $2 ORDER BY position, lower(name)`, tenant, p.LinkID)
 		if err != nil {
 			return nil, err
 		}
-		if p.Items, err = pgx.CollectRows(rows, scanPriceItem); err != nil {
+		if p.Items, err = pgx.CollectRows(rows, scanSupplierPrice); err != nil {
 			return nil, err
 		}
 		if p.Items == nil {

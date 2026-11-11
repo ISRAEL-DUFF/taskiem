@@ -138,6 +138,9 @@ type Item struct {
 	PhotoIDs  []string `json:"photo_ids,omitempty"`
 	Available bool     `json:"available"`
 	Category  string   `json:"category,omitempty"`
+	// Unit is what one is (bag, carton), where the catalogue says: for a
+	// linked business ordering from the storefront, never on the page.
+	Unit string `json:"unit,omitempty"`
 	// Stock is how many are left, when the catalogue tracks it.
 	Stock *int64 `json:"stock,omitempty"`
 	// A service's length, customers at once and time kept free after.
@@ -546,6 +549,9 @@ func Items(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, rows []map[string]a
 		}
 		if m.Category != "" {
 			it.Category = str(r[m.Category])
+		}
+		if m.Unit != "" {
+			it.Unit = str(r[m.Unit])
 		}
 		if m.Available != "" {
 			if b, ok := r[m.Available].(bool); ok {
