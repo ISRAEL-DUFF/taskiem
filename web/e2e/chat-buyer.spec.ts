@@ -360,7 +360,7 @@ test("a buyer that keeps no stock yet is told first, and starts keeping it from 
   expect(await buyer.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("without leave to send orders, there is no Order, and the card's Order is the prices page", async ({ browser }) => {
+test("without leave to send orders, their shop is to look around, and the card's Order is the prices page", async ({ browser }) => {
   test.setTimeout(120_000);
   const { buyer, link, name } = await linked(browser, { width: 390, height: 844 });
   await trade(buyer, link, name);
@@ -377,7 +377,16 @@ test("without leave to send orders, there is no Order, and the card's Order is t
   await pane.getByRole("button", { name: "Open tools" }).click();
   const panel = buyer.getByRole("region", { name: "Tools" });
   await expect(panel.getByRole("button", { name: /^Your orders/ })).toBeVisible();
-  await expect(panel.getByRole("button", { name: /^Their shop From/ })).toHaveCount(0);
+  // Their shop, to look around (business-chat-tools.md §3): no bag, no
+  // steppers, nothing to send; no offer to make.
+  await expect(panel.getByRole("button", { name: /^Make an offer/ })).toHaveCount(0);
+  await panel.getByRole("button", { name: /^Their shop From/ }).click();
+  const shop = buyer.getByTestId("order-sheet");
+  await expect(shop.getByRole("heading", { name: `${name}'s shop` })).toBeVisible();
+  await expect(shop.getByTestId("order-row").first()).toBeVisible();
+  await expect(shop.getByRole("button", { name: /^One more/ })).toHaveCount(0);
+  await expect(shop.getByTestId("order-bag")).toHaveCount(0);
+  await axeBoth(buyer, "their shop, to look around");
 });
 
 /** Order with a supplier: the head's Order on a computer, the Order tool on

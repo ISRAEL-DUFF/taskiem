@@ -96,3 +96,57 @@ func TestStorefrontPricesForLinks(t *testing.T) {
 		t.Fatalf("unshared, the storefront again: %v", shop["name"])
 	}
 }
+
+// Each side sees the other's storefront (business-chat-tools.md §2): what
+// is sold out shows as sold out, with none left; a storefront refreshed
+// with nothing changed writes nothing again.
+func TestStorefrontBothWays(t *testing.T) {
+	w := shopWorld(t)
+	withStock(w.world)
+	withPurchases(w.world)
+	withLinkedOrders(w.world)
+	seller, buyer, _, _ := linkedPair(t, w.waWorld)
+
+	seller.must(200, "POST", "/v1/stock/setup", nil)
+	seller.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice 50kg", "quantity": 3, "unit": "bag", "price_kobo": 8000000},
+		"Idempotency-Key", "sr")
+	seller.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Garri 25kg", "quantity": 0, "unit": "bag", "price_kobo": 2500000},
+		"Idempotency-Key", "sg")
+	seller.must(200, "POST", "/v1/storefront/catalogue/refresh", nil)
+	buyer.must(200, "POST", "/v1/stock/setup", nil)
+	buyer.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Jollof rice", "quantity": 12, "unit": "plate", "price_kobo": 350000},
+		"Idempotency-Key", "bj")
+	buyer.must(200, "POST", "/v1/storefront/catalogue/refresh", nil)
+	w.srv.WaitBackground()
+	drainLinked(t, w.world)
+
+	// The buyer sees the seller's: counts, units, sold out.
+	link := buyer.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)["id"].(string)
+	shop := buyer.must(200, "GET", "/v1/supplier-prices?link="+link, nil)["suppliers"].([]any)[0].(map[string]any)
+	byName := map[string]map[string]any{}
+	for _, x := range shop["items"].([]any) {
+		it := x.(map[string]any)
+		byName[it["name"].(string)] = it
+	}
+	if r := byName["Rice 50kg"]; r == nil || r["left"] != float64(3) || r["unit"] != "bag" || r["available"] != true {
+		t.Fatalf("the rice, 3 bags left: %v", r)
+	}
+	if g := byName["Garri 25kg"]; g == nil || g["left"] != float64(0) || g["available"] != false {
+		t.Fatalf("the garri, sold out: %v", g)
+	}
+	// And the seller sees the buyer's.
+	sellerLink := seller.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)["id"].(string)
+	theirs := seller.must(200, "GET", "/v1/supplier-prices?link="+sellerLink, nil)["suppliers"].([]any)
+	if len(theirs) != 1 || theirs[0].(map[string]any)["items"].([]any)[0].(map[string]any)["name"] != "Jollof rice" {
+		t.Fatalf("the seller sees the buyer's storefront: %v", theirs)
+	}
+
+	// Refreshed with nothing changed: the buyer's copy is not written again.
+	was := shop["updated_at"]
+	seller.must(200, "POST", "/v1/storefront/catalogue/refresh", nil)
+	w.srv.WaitBackground()
+	drainLinked(t, w.world)
+	if again := buyer.must(200, "GET", "/v1/supplier-prices?link="+link, nil)["suppliers"].([]any)[0].(map[string]any); again["updated_at"] != was {
+		t.Fatalf("written again with nothing changed: %v, then %v", was, again["updated_at"])
+	}
+}

@@ -55,6 +55,8 @@ export interface OrderStart {
   last?: Purchase;
   /** A category picked in "@": the list opens showing it. */
   category?: string;
+  /** Make an offer, from its tile: the review asks our price. */
+  offer?: boolean;
 }
 
 /** An order from a supplier's price list: pick, review, place (or ask them
@@ -202,7 +204,7 @@ export function OrderSheet({
   );
   const [note, setNote] = useState("");
   // Make an offer (phase 7): our own price for the whole order.
-  const [offering, setOffering] = useState(false);
+  const [offering, setOffering] = useState(!!start?.offer);
   const [offerText, setOfferText] = useState("");
   const [mine, setMine] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);

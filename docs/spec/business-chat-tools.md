@@ -1,6 +1,6 @@
 # Business chat tools: a conversation with a business is about that business
 
-Status: **agreed, not built**. Agreed with the founder in conversation
+Status: **built** (web), see §8. Agreed with the founder in conversation
 (11 Nov 2026), with the decisions in §7. It amends
 [chat-tools.md](chat-tools.md) §5 (the buyer's tools) and §3 (the panel and
 the picker) for conversations with another business. The Taskiem conversation
@@ -119,3 +119,43 @@ narrowed by their role.
    at the storefront prices; they accept it or change it, as today.
 3. **Stock**: whatever the storefront shows, counts included ("3 left"), is
    public, and the conversation shows it too.
+
+## 8. As built
+
+**Server.**
+
+- A seller with no price list shared with a link offers its storefront: every
+  item marked to show on it, published or not, at the storefront's price, with
+  its unit, photo, sizes and how many are left (`engine/links/prices.go`,
+  `ShopPricesTx`, `storefrontItemsTx`). Services, dishes with options to pick
+  and dated events are left out of ordering: a trade order has no room for
+  either (services are booked; the others are bought on the storefront).
+- The other side's copy (`supplier_prices`, under the name "Storefront
+  prices") is written by the linked-order worker, as a shared list's is. A
+  storefront refresh puts on that list only the links whose copy differs
+  from the storefront now (a hash per link, `link_shop_offers`), 30 seconds
+  later, so a run of changes is written once and a sale that changes nothing
+  they see writes nothing. A link made active is written at once, both ways;
+  links already active were put on the list once by migration 00421.
+- An order with no list shared is priced at the seller's catalogue, which is
+  the storefront's price the buyer saw; the seller accepts it or changes it.
+- Their photos come through `GET /v1/link-chats/{link}/photo?item=&w=`,
+  fetched with the seller's connection from the address the seller's own
+  storefront wrote (the app's image proxy reads only its own storage).
+
+**Web (the conversation with a business, chat tools on).**
+
+- The panel's heading says who it is with ("With John's Superstore") and
+  shows: Their shop (everyone; to order where the person may, else to look
+  around: no bag, no steppers), Your orders, Orders, Bills, Invoices (each
+  only what is between the two), Price lists (all of ours, to share), Make an
+  offer (where the person may order: Their shop with the offer asked at
+  review), Invoice them (an invoice to the business, by its link key; no
+  phone asked), Statement (the statement page for this business). Book: see
+  below.
+- Their shop shows their photos, "3 left" where the storefront counts, and
+  "Sold out"; titled "Their storefront prices" when no list is shared.
+- "@" offers no services of ours, and "#" and "/product" only their items, in
+  a business's conversation with chat tools on.
+- Our own tools (Products, Stock, Services, Sell, Tables and the rest) are in
+  the Taskiem conversation only.
