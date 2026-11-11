@@ -87,8 +87,19 @@ class ChatsData extends ChangeNotifier {
     _every = on ? Timer.periodic(const Duration(seconds: 30), (_) => load()) : null;
   }
 
+  /// Let go (signed out, another business): a screen still closing may
+  /// ask it for things for a moment; it answers nothing more.
+  bool get disposed => _disposed;
+  bool _disposed = false;
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
   @override
   void dispose() {
+    _disposed = true;
     _liveSub?.cancel();
     _soon?.cancel();
     _every?.cancel();
@@ -135,6 +146,7 @@ class ChatsData extends ChangeNotifier {
   bool get manage => auth.can('link.manage') && linksOn;
 
   Future<void> load() async {
+    if (_disposed) return;
     error = null;
     await Future.wait([
       _try(() async {

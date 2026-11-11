@@ -13,6 +13,12 @@ sections is the order of the work.
 
 ## 1. Bugs: how the app's screens are put together (first)
 
+**Done** (B1–B3, `test/stack_test.dart`): the lock sits over the app's
+Navigator and hides the screens beneath without closing them; each session
+(signed in, another business, signed out) is counted in `Auth.session`, and
+a change closes every screen on top and starts the chats afresh; the chats
+are let go a frame later, once the screens closing with them are gone.
+
 One cause under B1–B3: the signed-in app is the `home` of the app's only
 Navigator, and every other screen (a conversation, Taskiem's, a customer's,
 Settings, Explore, search, contact info) is pushed above it. What happens to

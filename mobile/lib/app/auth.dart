@@ -51,6 +51,11 @@ class Auth extends ChangeNotifier {
   /// now: the app lock asks for the phone's lock only then.
   bool restored = false;
 
+  /// Counts the sessions this app has had: a new one on signing in, on
+  /// switching business and on signing out. What belongs to a session (the
+  /// chats, the stream, the screens open on it) starts afresh with each.
+  int session = 0;
+
   /// Opening the app: a kept token is checked; one the server no longer
   /// knows (ended, expired) is forgotten and the person signs in again.
   /// Offline, a kept token is trusted until the server can be asked.
@@ -68,6 +73,7 @@ class Auth extends ChangeNotifier {
     if (t == null) return _set(AuthState.signedOut);
     transport.token = t;
     restored = true;
+    session++;
     try {
       me = await api.me();
       _set(AuthState.signedIn);
@@ -131,6 +137,7 @@ class Auth extends ChangeNotifier {
     transport.token = token;
     await store.keep(token);
     restored = false;
+    session++;
     // Signed in: the session is good even if who-am-I cannot be read just
     // now (offline, held); the screens read it again.
     try {
@@ -146,6 +153,7 @@ class Auth extends ChangeNotifier {
   Future<void> _forget() async {
     transport.token = null;
     me = null;
+    session++;
     await store.keep(null);
     _set(AuthState.signedOut);
   }

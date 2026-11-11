@@ -37,7 +37,7 @@ void main() {
 }
 
 class TaskiemApp extends StatelessWidget {
-  const TaskiemApp({super.key, this.mode = TkMode.light, this.home, this.auth, this.unlocker, this.prefs});
+  const TaskiemApp({super.key, this.mode = TkMode.light, this.home, this.auth, this.unlocker, this.prefs, this.now = DateTime.now});
 
   /// The theme when there are no [prefs] (tests show one theme).
   final TkMode mode;
@@ -54,6 +54,9 @@ class TaskiemApp extends StatelessWidget {
   /// The phone's own unlock, for the app lock.
   final Unlocker? unlocker;
 
+  /// The clock the lock counts time away by (a test's own).
+  final DateTime Function() now;
+
   @override
   Widget build(BuildContext context) {
     // MaterialApp only for what text fields need (localizations, selection);
@@ -68,36 +71,75 @@ class TaskiemApp extends StatelessWidget {
         child: Builder(
           builder: (context) => DefaultTextStyle(
             style: tkText(size: 14, color: TkTheme.tokens(context).text).copyWith(decoration: TextDecoration.none),
-            child: child!,
+            // The lock over every screen, not only the first.
+            child: auth == null || unlocker == null || home != null
+                ? child!
+                : ListenableBuilder(
+                    listenable: auth!,
+                    builder: (context, _) => AppLock(
+                      active: auth!.state == AuthState.signedIn,
+                      unlocker: unlocker!,
+                      startLocked: auth!.restored,
+                      now: now,
+                      child: child!,
+                    ),
+                  ),
           ),
         ),
       ),
-      home: home ?? (auth == null ? const SignInScreen() : _Root(auth: auth!, unlocker: unlocker, prefs: prefs)),
+      home: home ?? (auth == null ? const SignInScreen() : _Root(auth: auth!, prefs: prefs)),
     );
   }
 }
 
-/// Sign in, or the app: whichever the session says.
-class _Root extends StatelessWidget {
-  const _Root({required this.auth, this.unlocker, this.prefs});
+/// Sign in, or the app: whichever the session says. The screens opened on
+/// top of the chats belong to the session they were opened in: signed out,
+/// or moved to another business, they are closed, and the chats start
+/// afresh for the new session.
+class _Root extends StatefulWidget {
+  const _Root({required this.auth, this.prefs});
   final Auth auth;
-  final Unlocker? unlocker;
   final Prefs? prefs;
 
   @override
+  State<_Root> createState() => _RootState();
+}
+
+class _RootState extends State<_Root> {
+  late int _session;
+
+  @override
+  void initState() {
+    super.initState();
+    _session = widget.auth.session;
+    widget.auth.addListener(_changed);
+  }
+
+  @override
+  void dispose() {
+    widget.auth.removeListener(_changed);
+    super.dispose();
+  }
+
+  void _changed() {
+    final auth = widget.auth;
+    if (auth.session != _session || auth.state != AuthState.signedIn) {
+      _session = auth.session;
+      Navigator.of(context).popUntil((r) => r.isFirst);
+    }
+    setState(() {});
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: auth,
-      builder: (context, _) => switch (auth.state) {
-        // Opening: the pine the sign-in page starts with, for a moment.
-        AuthState.checking => ColoredBox(color: TkTheme.tokens(context).brand),
-        AuthState.signedOut => _SignedOut(auth: auth),
-        AuthState.outdated => const _Outdated(),
-        AuthState.signedIn => unlocker == null
-            ? _Home(auth: auth, prefs: prefs)
-            : AppLock(active: true, unlocker: unlocker!, startLocked: auth.restored, child: _Home(auth: auth, prefs: prefs)),
-      },
-    );
+    final auth = widget.auth;
+    return switch (auth.state) {
+      // Opening: the pine the sign-in page starts with, for a moment.
+      AuthState.checking => ColoredBox(color: TkTheme.tokens(context).brand),
+      AuthState.signedOut => _SignedOut(auth: auth),
+      AuthState.outdated => const _Outdated(),
+      AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs),
+    };
   }
 }
 
@@ -197,7 +239,7 @@ class _Outdated extends StatelessWidget {
 
 /// Signed in: the chats; the menu opens the app's settings.
 class _Home extends StatefulWidget {
-  const _Home({required this.auth, this.prefs});
+  const _Home({super.key, required this.auth, this.prefs});
   final Auth auth;
   final Prefs? prefs;
 
@@ -233,8 +275,15 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _chats.dispose();
-    _live.dispose();
+    // Stopped now; let go once the screens closed with this session (which
+    // may still hold them this frame) are gone.
+    _chats.follow(false);
+    _live.stop();
+    final chats = _chats, live = _live;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      chats.dispose();
+      live.dispose();
+    });
     super.dispose();
   }
 

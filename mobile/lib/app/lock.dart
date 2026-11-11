@@ -50,8 +50,11 @@ class PhoneUnlocker implements Unlocker {
   }
 }
 
-/// Covers [child] while locked. [active] is whether there is anything to
-/// lock (signed in); [now] is the clock, replaceable in tests.
+/// Covers [child] while locked, keeping it as it was underneath (every
+/// screen open stays open, its place kept). It sits above the app's
+/// screens, so nothing opened on top of the chats shows past it. [active]
+/// is whether there is anything to lock (signed in); [now] is the clock,
+/// replaceable in tests.
 class AppLock extends StatefulWidget {
   const AppLock({super.key, required this.child, required this.active, required this.unlocker, this.startLocked = true, this.now = DateTime.now});
 
@@ -81,6 +84,16 @@ class AppLockState extends State<AppLock> with WidgetsBindingObserver {
   }
 
   @override
+  void didUpdateWidget(AppLock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active == widget.active) return;
+    // Signed in (a kept session opened, or signed in just now), or out.
+    _away = null;
+    setState(() => locked = widget.active && widget.startLocked);
+    _ask();
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -91,11 +104,13 @@ class AppLockState extends State<AppLock> with WidgetsBindingObserver {
     switch (state) {
       case AppLifecycleState.hidden:
       case AppLifecycleState.paused:
-        _away ??= widget.now();
+        if (widget.active) _away ??= widget.now();
       case AppLifecycleState.resumed:
         final away = _away;
         _away = null;
         if (away != null && widget.now().difference(away) >= lockAfter) {
+          // The keyboard goes too: nothing typed shows over the lock.
+          FocusManager.instance.primaryFocus?.unfocus();
           setState(() => locked = true);
           _ask();
         }
@@ -119,8 +134,15 @@ class AppLockState extends State<AppLock> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.active || !locked) return widget.child;
-    return _LockScreen(onUnlock: _ask);
+    final covered = widget.active && locked;
+    // Offstage: not drawn, not pressed, not read out, but kept.
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Offstage(offstage: covered, child: TickerMode(enabled: !covered, child: widget.child)),
+        if (covered) _LockScreen(onUnlock: _ask),
+      ],
+    );
   }
 }
 

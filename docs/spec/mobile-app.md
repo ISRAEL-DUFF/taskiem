@@ -287,7 +287,10 @@ means signing in again every morning, which no one will do twice.
 - **The token** is kept in the phone's secure storage, never in plain files
   or logs. The app locks itself after 5 minutes away and opens with the
   phone's own fingerprint, face or PIN; that lock is on the phone and is not
-  the server's step-up.
+  the server's step-up. The lock covers every screen, whatever is open on
+  top of the chats, and keeps them as they were underneath. Signing out, or
+  the session ending, closes every screen; switching business closes them
+  and starts the chats afresh for the other business.
 - **Step-up is unchanged.** What asks for a fresh proof today (a payout
   approval under a policy, keys) asks the same of the app: a passkey, an
   authenticator code, or the chat PIN.
