@@ -10,14 +10,34 @@ import '../api/api.g.dart';
 import '../api/transport.dart';
 import 'session.dart';
 
-enum AuthState { checking, signedOut, signedIn }
+enum AuthState { checking, signedOut, signedIn, outdated }
+
+/// Whether version [a] is older than [b] ("0.1.0" < "0.10.0"), by number.
+bool olderThan(String a, String b) {
+  List<int> parts(String v) => v.split('+').first.split('.').map((x) => int.tryParse(x) ?? 0).toList();
+  final x = parts(a), y = parts(b);
+  for (var i = 0; i < 3; i++) {
+    final p = i < x.length ? x[i] : 0, q = i < y.length ? y[i] : 0;
+    if (p != q) return p < q;
+  }
+  return false;
+}
 
 class Auth extends ChangeNotifier {
-  Auth({required this.transport, required this.store}) : api = TaskiemApi(transport);
+  Auth({required this.transport, required this.store, this.version = '0.1.0'}) : api = TaskiemApi(transport) {
+    // A session that ends while the app is open (signed out from another
+    // phone, a password changed) signs this phone out at once.
+    transport.onSessionEnded = () {
+      if (state == AuthState.signedIn) _forget();
+    };
+  }
 
   final Transport transport;
   final SessionStore store;
   final TaskiemApi api;
+
+  /// This app's version, checked against the lowest the server serves.
+  final String version;
 
   AuthState state = AuthState.checking;
 
@@ -32,6 +52,15 @@ class Auth extends ChangeNotifier {
   /// knows (ended, expired) is forgotten and the person signs in again.
   /// Offline, a kept token is trusted until the server can be asked.
   Future<void> start() async {
+    // An app older than the server serves asks to be updated, rather than
+    // failing in ways nobody can see (GET /v1/app/config). Offline, or the
+    // server not saying, the app goes on.
+    try {
+      final c = await api.appConfig();
+      if (olderThan(version, c.minVersion)) return _set(AuthState.outdated);
+    } on Exception {
+      // Asked again next time the app opens.
+    }
     final t = await store.token();
     if (t == null) return _set(AuthState.signedOut);
     transport.token = t;
@@ -40,7 +69,9 @@ class Auth extends ChangeNotifier {
       me = await api.me();
       _set(AuthState.signedIn);
     } on ApiError catch (e) {
-      if (e.status == 401 || e.status == 403) {
+      // Only 401 means the session has ended. A 403 is a session that is
+      // good but held (an administrator asked to add a passkey): kept.
+      if (e.status == 401) {
         await _forget();
       } else {
         _set(AuthState.signedIn);
@@ -97,7 +128,15 @@ class Auth extends ChangeNotifier {
     transport.token = token;
     await store.keep(token);
     restored = false;
-    me = await api.me();
+    // Signed in: the session is good even if who-am-I cannot be read just
+    // now (offline, held); the screens read it again.
+    try {
+      me = await api.me();
+    } on ApiError {
+      me = null;
+    } on Offline {
+      me = null;
+    }
     _set(AuthState.signedIn);
   }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/israel-duff/taskiem/engine/db"
 )
@@ -70,8 +71,23 @@ func deviceOf(ctx context.Context) *deviceReq {
 	return d
 }
 
+// endPhone ends a person's live sessions on one phone, in every business
+// they belong to: signing in again on a phone replaces its session wherever
+// the earlier one was (a copied token does not outlive a fresh sign-in).
+func (s *Server) endPhone(ctx context.Context, user, device uuid.UUID) error {
+	return s.inPersonsTenants(ctx, user, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at = now() WHERE device_id = $1 AND user_id = $2 AND revoked_at IS NULL`, device, user)
+		return err
+	})
+}
+
+// errPhoneBusy is two sign-ins on one phone at once: the second loses
+// (sessions_one_per_phone) and is asked to try again.
+var errPhoneBusy = errors.New("this phone is already signing in: try again")
+
 // insertSession stores a new session in tx: a device session when the
-// request carries a device (askDevice), ending that phone's earlier one.
+// request carries a device (askDevice), its earlier sessions ended first by
+// createSession (endPhone).
 func insertSession(ctx context.Context, tx pgx.Tx, r *http.Request, tok string, user, tenant uuid.UUID, method string) error {
 	d := deviceOf(ctx)
 	if d == nil {
@@ -79,12 +95,13 @@ func insertSession(ctx context.Context, tx pgx.Tx, r *http.Request, tok string, 
 			hashToken(tok), user, tenant, sessionTTL.String(), clientIP(r), method)
 		return err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at = now() WHERE device_id = $1 AND user_id = $2 AND revoked_at IS NULL`, d.ID, user); err != nil {
-		return err
-	}
 	_, err := tx.Exec(ctx, `INSERT INTO sessions (token_hash, user_id, tenant_id, expires_at, ip, auth_method, device_id, device_name, device_platform, last_used_at)
 		VALUES ($1, $2, $3, now() + $4::interval, $5, $6, $7, $8, $9, now())`,
 		hashToken(tok), user, tenant, deviceTTL.String(), clientIP(r), method, d.ID, d.Name, d.Platform)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.SQLState() == "23505" {
+		return errPhoneBusy
+	}
 	return err
 }
 

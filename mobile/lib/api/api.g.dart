@@ -151,8 +151,9 @@ class LoginRequest {
 
 /// The phone the app is on (docs/spec/mobile-app.md §5.2). The session stays
 /// signed in on that phone 30 days without use, renewed by use up to 180 days
-/// from signing in, and ends the phone's earlier session. Only with `"bearer":
-/// true`.
+/// from signing in, and ends the person's earlier sessions on that phone in
+/// every business. Only with `"bearer": true`. Two sign-ins on one phone at
+/// once: the second is 409.
 class DeviceRequest {
   const DeviceRequest({required this.id, required this.name, required this.platform});
 

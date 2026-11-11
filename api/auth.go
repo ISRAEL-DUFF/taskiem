@@ -381,15 +381,16 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		}
 		return nil, err
 	}
-	if p.Device {
-		// A phone's session is renewed by use (devices.go).
-		s.touchDevice(ctx, tok, lastUsed)
-	}
 	if err := s.loadRoles(ctx, &p); err != nil {
 		return nil, err
 	}
 	if len(p.Roles) == 0 {
 		return nil, errors.New("no membership")
+	}
+	if p.Device {
+		// A phone's session is renewed by use (devices.go): a member's use,
+		// not a request refused for having none.
+		s.touchDevice(ctx, tok, lastUsed)
 	}
 	// Held to passkeys (passkey_rule.go): without one, a session that did
 	// not sign in with a passkey can only add one; with one, a password or

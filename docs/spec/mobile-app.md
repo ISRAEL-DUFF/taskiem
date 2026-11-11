@@ -468,11 +468,28 @@ other takes M7 and M8, since they divide by screen.
   chat comes (M3). Parity: sign-in, its chat steps, a wrong password and
   sign-up, light and dark, at two sizes (20 pictures). The parity test found
   one web bug, fixed: the code's field did not take the focus.
+- **Reviewed** after building (an independent read of the server side, and
+  the app's own): fixed that signing in again on a phone ended its earlier
+  session only in the business signed in to; that a single sign-on session
+  could switch into another business (and so skip its passkey rule: such a
+  session now does not switch); races between two sign-ins on one phone or
+  two switches from one session (one live session per person per phone is
+  now a unique index; switching ends the old session first); renewal before
+  the membership check; and in the app, a session ended elsewhere not
+  noticed while open, no network timeout, a held session (403) forgotten on
+  opening, the lowest served version never checked, Android's back leaving
+  the app from signing up, the status bar unreadable on settings, errors
+  lost, Appearance (light, dark, match the phone) missing, and two CI gaps.
 - **Not yet in M2**: passkeys (they need the app's link to Taskiem's address,
   §5.6, and its signing key: with M4; the button says so); signing up with a
   phone number instead of an email (the chat apps' way: a stranger's
-  WhatsApp needs an approved code template, a people item); the terms'
-  checkbox has no parity picture (the browser tests' server asks no terms).
+  WhatsApp needs an approved code template, a people item); a person with no
+  business yet who accepts an invitation on the phone gets a 12-hour session,
+  not a phone's (invitee sessions keep no device); an administrator held to
+  passkeys who has none can sign in on the phone but do nothing until they
+  add one on the web; the app's picture in the phone's list of open apps is
+  not hidden; the terms' checkbox has no parity picture (the browser tests'
+  server asks no terms); the app's CI has not yet run on GitHub.
 
 ## 11. What needs people
 

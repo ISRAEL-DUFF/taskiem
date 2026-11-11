@@ -95,7 +95,8 @@ void main() {
     await a.start();
     expect(a.state, AuthState.signedIn);
     expect(a.restored, isTrue);
-    expect(server.calls.single.auth, 'Bearer kept');
+    expect(server.calls.last.path, '/v1/me');
+    expect(server.calls.last.auth, 'Bearer kept');
 
     server.answers['GET /v1/me'] = () => json({'error': 'unauthenticated'}, 401);
     final b = auth();
@@ -117,7 +118,8 @@ void main() {
     final a = auth();
     await a.start();
     expect(a.state, AuthState.signedOut);
-    expect(server.calls, isEmpty);
+    // Only the app's config was asked for: nothing with a session.
+    expect(server.calls.map((c) => c.path), ['/v1/app/config']);
   });
 
   test('signing out ends the session on the server, and forgets it here even offline', () async {
@@ -154,5 +156,55 @@ void main() {
     expect(a.me!.tenantName, 'Bayo Rice');
     // Not a new sign-in: the lock's view of it is unchanged.
     expect(a.restored, isTrue);
+  });
+
+  test('versions compare by number', () {
+    expect(olderThan('0.1.0', '0.1.0'), isFalse);
+    expect(olderThan('0.1.0', '0.2.0'), isTrue);
+    expect(olderThan('0.9.0', '0.10.0'), isTrue);
+    expect(olderThan('1.0.0+5', '0.10.0'), isFalse);
+    expect(olderThan('0.1', '0.1.1'), isTrue);
+  });
+
+  test('an app older than the server serves asks to be updated', () async {
+    keys.values['token'] = 'kept';
+    server.answers['GET /v1/app/config'] = () => json({'min_version': '0.2.0', 'passkeys': false, 'signup': true});
+    final a = auth();
+    await a.start();
+    expect(a.state, AuthState.outdated);
+    server.answers['GET /v1/app/config'] = () => json({'min_version': '0.1.0', 'passkeys': false, 'signup': true});
+    final b = auth();
+    await b.start();
+    expect(b.state, AuthState.signedIn);
+  });
+
+  test('a session ended while the app is open signs this phone out', () async {
+    keys.values['token'] = 'kept';
+    final a = auth();
+    await a.start();
+    expect(a.state, AuthState.signedIn);
+    server.answers['GET /v1/me/devices'] = () => json({'error': 'unauthenticated'}, 401);
+    await expectLater(a.api.listDevices(), throwsA(isA<ApiError>()));
+    await Future<void>.delayed(Duration.zero);
+    expect(a.state, AuthState.signedOut);
+    expect(keys.values['token'], isNull);
+  });
+
+  test('a 403 on opening keeps the session: held, not ended', () async {
+    keys.values['token'] = 'kept';
+    server.answers['GET /v1/me'] = () => json({'error': 'administrators sign in with a passkey: add one to continue', 'enrol_passkey': true}, 403);
+    final a = auth();
+    await a.start();
+    expect(a.state, AuthState.signedIn);
+    expect(keys.values['token'], 'kept');
+  });
+
+  test('no network answer in time counts as offline', () async {
+    final slow = Transport(
+      base: 'http://localhost',
+      timeout: const Duration(milliseconds: 50),
+      client: MockClient((_) => Future.delayed(const Duration(seconds: 2), () => http.Response('{}', 200))),
+    );
+    await expectLater(slow.send('GET', '/v1/me'), throwsA(isA<Offline>()));
   });
 }

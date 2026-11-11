@@ -304,6 +304,9 @@ func (s *Server) chatSigninFinish(w http.ResponseWriter, r *http.Request, user u
 	case errors.Is(err, errSSORequired):
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": err.Error(), "sso_required": true})
 		return
+	case errors.Is(err, errPhoneBusy):
+		writeErr(w, http.StatusConflict, err.Error())
+		return
 	case errors.Is(err, errNoMembership), errors.Is(err, errNotMember):
 		writeErr(w, http.StatusUnauthorized, err.Error())
 		return

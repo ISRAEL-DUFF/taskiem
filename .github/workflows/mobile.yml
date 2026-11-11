@@ -3,16 +3,17 @@ name: mobile
 # The phone app (docs/spec/mobile-app.md): analysed, tested (its half of the
 # parity test included), its Dart packages through the licence gate, and
 # built for Android and for iPhone. The web half of the parity test runs with
-# the browser tests in ci.yml. Run when the app, its theme's generator or the
-# web's look changes; the iPhone build needs macOS, so it is not run on every
+# the browser tests in ci.yml. Run when the app, its theme's generator, the
+# web's look or the API description (the app's client is generated from it)
+# changes; the iPhone build needs macOS, so it is not run on every
 # change to the repository.
 
 on:
   push:
     branches: [main]
-    paths: ['mobile/**', 'tools/mobilegen/**', 'tools/licencecheck/**', 'web/src/**', 'web/public/brand/**', '.github/workflows/mobile.yml']
+    paths: ['mobile/**', 'tools/mobilegen/**', 'tools/licencecheck/**', 'web/src/**', 'web/public/brand/**', 'api/openapi/openapi.yaml', '.github/workflows/mobile.yml']
   pull_request:
-    paths: ['mobile/**', 'tools/mobilegen/**', 'tools/licencecheck/**', 'web/src/**', 'web/public/brand/**', '.github/workflows/mobile.yml']
+    paths: ['mobile/**', 'tools/mobilegen/**', 'tools/licencecheck/**', 'web/src/**', 'web/public/brand/**', 'api/openapi/openapi.yaml', '.github/workflows/mobile.yml']
 
 permissions:
   contents: read

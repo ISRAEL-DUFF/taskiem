@@ -201,3 +201,91 @@ func TestSwitchBusiness(t *testing.T) {
 	_ = other
 	_ = bayo
 }
+
+// What the review found (findings 1, 2 and 4): signing in again on a phone
+// ends its session in every business; one live session per person per
+// phone even when two race; a single sign-on session does not switch; two
+// switches from one session leave one; a role ending ends the phone's
+// session there.
+func TestDeviceSessionsAcrossBusinesses(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	w.tenant(t, "Ada Foods", "ada@across.test")
+	bayo := w.tenant(t, "Bayo Rice", "bayo@across.test")
+	var ada, adaFoods, bayoRice string
+	for q, dst := range map[string]*string{
+		`SELECT id FROM users WHERE email = 'ada@across.test'`: &ada,
+		`SELECT id FROM tenants WHERE name = 'Ada Foods'`:      &adaFoods,
+		`SELECT id FROM tenants WHERE name = 'Bayo Rice'`:      &bayoRice,
+	} {
+		if err := w.env.DB.Admin.QueryRow(ctx, q).Scan(dst); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO memberships (tenant_id, user_id, role) VALUES ($1, $2, 'viewer')`, bayoRice, ada); err != nil {
+		t.Fatal(err)
+	}
+	anon := &client{t: t, base: w.base}
+	device := map[string]any{"id": "0192f000-0000-7000-8000-00000000c001", "name": "Ada's Tecno", "platform": "android"}
+	signIn := func(tenant string) *client {
+		t.Helper()
+		out := anon.must(200, "POST", "/v1/auth/login", map[string]any{"email": "ada@across.test", "password": "correct horse battery", "bearer": true, "tenant_id": tenant, "device": device})
+		return &client{t: t, base: w.base, token: out["token"].(string)}
+	}
+
+	// Signed in to Bayo Rice on the phone, then again to Ada Foods: the Bayo
+	// Rice session ends too, though it is in another business.
+	inBayo := signIn(bayoRice)
+	inAda := signIn(adaFoods)
+	if st, _ := inBayo.do("GET", "/v1/me", nil); st != 401 {
+		t.Fatalf("the phone's session in the other business survived signing in again: %d", st)
+	}
+	inAda.must(200, "GET", "/v1/me", nil)
+
+	// The database holds it too: a second live session for the same person
+	// on the same phone is refused, so two sign-ins racing cannot leave two.
+	_, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO sessions (token_hash, user_id, tenant_id, expires_at, auth_method, device_id, device_name, device_platform)
+		VALUES (sha256('race'::bytea), $1, $2, now() + interval '1 day', 'password', $3, 'x', 'android')`, ada, adaFoods, device["id"])
+	if err == nil {
+		t.Fatal("two live sessions for one person on one phone")
+	}
+
+	// Two switches from one session at once: one moves it, the other finds
+	// nothing to move.
+	results := make(chan int, 2)
+	for range 2 {
+		go func() {
+			st, _ := inAda.do("POST", "/v1/me/switch", map[string]any{"tenant_id": bayoRice})
+			results <- st
+		}()
+	}
+	a, b := <-results, <-results
+	if a+b != 200+401 || (a != 200 && b != 200) {
+		t.Fatalf("two switches from one session: %d and %d", a, b)
+	}
+	var live int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM sessions WHERE device_id = $1 AND revoked_at IS NULL`, device["id"]).Scan(&live); err != nil || live != 1 {
+		t.Fatalf("live sessions on the phone after racing switches: %d (%v)", live, err)
+	}
+
+	// A session that signed in with single sign-on does not switch: it would
+	// carry one business's sign-on into another's rules.
+	viaSSO := signIn(adaFoods)
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE sessions SET auth_method = 'sso' WHERE token_hash = sha256($1::bytea)`, []byte(viaSSO.token)); err != nil {
+		t.Fatal(err)
+	}
+	viaSSO.must(409, "POST", "/v1/me/switch", map[string]any{"tenant_id": bayoRice})
+	viaSSO.must(200, "GET", "/v1/me", nil)
+
+	// Bayo removes Ada's role: her phone's session in Bayo Rice ends.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE sessions SET auth_method = 'password' WHERE token_hash = sha256($1::bytea)`, []byte(viaSSO.token)); err != nil {
+		t.Fatal(err)
+	}
+	sw := viaSSO.must(200, "POST", "/v1/me/switch", map[string]any{"tenant_id": bayoRice})
+	inBayoAgain := &client{t: t, base: w.base, token: sw["token"].(string)}
+	inBayoAgain.must(200, "GET", "/v1/me", nil)
+	bayo.must(204, "DELETE", "/v1/members/"+ada+"/roles/viewer", nil, "X-Taskiem-Request", "1")
+	if st, _ := inBayoAgain.do("GET", "/v1/me", nil); st != 401 {
+		t.Fatalf("the phone's session outlived Ada's role at Bayo Rice: %d", st)
+	}
+}

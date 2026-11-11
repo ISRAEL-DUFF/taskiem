@@ -142,6 +142,11 @@ for (const s of SCREENS)
         await s.ready(page);
         const shot = await page.screenshot({ animations: "disabled", caret: "hide" });
         const kept = resolve(KEPT, file);
+        // In CI a screen with no kept picture fails: writing one there would
+        // pass unseen, and the app's half would have nothing to match.
+        if (!UPDATE && !existsSync(kept) && process.env.CI) {
+          throw new Error(`${file} is not kept: run the parity spec with PARITY_UPDATE=1 and commit mobile/test/parity/web/${file}`);
+        }
         if (UPDATE || !existsSync(kept)) {
           mkdirSync(KEPT, { recursive: true });
           writeFileSync(kept, shot);

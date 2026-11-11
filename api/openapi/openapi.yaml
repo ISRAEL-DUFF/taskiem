@@ -18742,7 +18742,7 @@ paths:
       - Authentication
       summary: Your businesses
       description: The businesses the person belongs to, by name, the one this session is in marked (the phone app's
-        switcher).
+        switcher). An API key is refused (403).
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -18780,8 +18780,9 @@ paths:
       description: 'Ends this session and answers one in the other business, as signing in does (the token with a bearer
         session, the cookie with a cookie one). The new session is the same in every other way: the person, how and
         when they signed in (which step-up reads), the phone and its expiry. Not a fresh sign-in. 401 `sso_required`
-        when that business signs in with single sign-on. Audited as `auth.switch`. An API key is refused (403): it
-        belongs to one business.'
+        when that business signs in with single sign-on; 409 when this session signed in with single sign-on (it vouches
+        for one business only: sign in to the other). Audited as `auth.switch`. An API key is refused (403): it belongs
+        to one business.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -18814,7 +18815,7 @@ paths:
       - Authentication
       summary: Your phones
       description: The person's phones signed in to the app (device sessions), in every business they belong to, the most
-        recently used first.
+        recently used first. An API key is refused (403).
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -29189,8 +29190,8 @@ components:
     DeviceRequest:
       type: object
       description: 'The phone the app is on (docs/spec/mobile-app.md §5.2). The session stays signed in on that phone
-        30 days without use, renewed by use up to 180 days from signing in, and ends the phone''s earlier session. Only
-        with `"bearer": true`.'
+        30 days without use, renewed by use up to 180 days from signing in, and ends the person''s earlier sessions on
+        that phone in every business. Only with `"bearer": true`. Two sign-ins on one phone at once: the second is 409.'
       required: [id, name, platform]
       properties:
         id:

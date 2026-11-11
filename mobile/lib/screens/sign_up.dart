@@ -104,6 +104,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
       _error = e.message;
     } on Offline {
       _error = 'You’re offline. Check your connection and try again.';
+    } catch (_) {
+      _error = 'Something went wrong. Try again.';
     } finally {
       if (mounted) setState(() => _busy = false);
     }

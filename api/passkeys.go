@@ -805,6 +805,11 @@ func (s *Server) createSession(r *http.Request, user, want uuid.UUID, method str
 		}
 	}
 	tok := newToken()
+	if d := deviceOf(ctx); d != nil {
+		if err := s.endPhone(ctx, user, d.ID); err != nil {
+			return session{}, err
+		}
+	}
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if err := insertSession(ctx, tx, r, tok, user, tenant, method); err != nil {
 			return err
@@ -857,6 +862,9 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, user, want
 		return
 	case errors.Is(err, errNoMembership), errors.Is(err, errNotMember):
 		writeErr(w, http.StatusUnauthorized, err.Error())
+		return
+	case errors.Is(err, errPhoneBusy):
+		writeErr(w, http.StatusConflict, err.Error())
 		return
 	case err != nil:
 		s.fail(w, r, err)

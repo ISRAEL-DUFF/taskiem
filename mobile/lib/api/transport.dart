@@ -2,7 +2,9 @@
 // token as a bearer (docs/spec/mobile-app.md §5.2). The generated client
 // (api.g.dart) calls send; everything about the wire is here.
 
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show IOException;
 
 import 'package:http/http.dart' as http;
 
@@ -33,7 +35,16 @@ class Offline implements Exception {
 }
 
 class Transport {
-  Transport({required this.base, this.token, http.Client? client}) : _client = client ?? http.Client();
+  Transport({required this.base, this.token, http.Client? client, this.timeout = const Duration(seconds: 30)})
+      : _client = client ?? http.Client();
+
+  /// How long an answer may take before the network counts as gone: on a
+  /// weak connection a request must not hang with its button spinning.
+  final Duration timeout;
+
+  /// Told when the server says the session has ended (401 on a request made
+  /// with one): signed out from another phone, a password changed.
+  void Function()? onSessionEnded;
 
   /// Where Taskiem is, as `https://host` (no trailing slash).
   final String base;
@@ -58,8 +69,13 @@ class Transport {
     if (t != null) req.headers['Authorization'] = 'Bearer $t';
     http.Response res;
     try {
-      res = await http.Response.fromStream(await _client.send(req));
+      // The whole exchange, waiting for the answer to start included.
+      res = await (() async => http.Response.fromStream(await _client.send(req)))().timeout(timeout);
     } on http.ClientException {
+      throw const Offline();
+    } on IOException {
+      throw const Offline();
+    } on TimeoutException {
       throw const Offline();
     }
     final text = utf8.decode(res.bodyBytes);
@@ -72,6 +88,7 @@ class Transport {
       }
     }
     if (res.statusCode >= 200 && res.statusCode < 300) return json;
+    if (res.statusCode == 401 && t != null && token == t) onSessionEnded?.call();
     throw ApiError(res.statusCode, json is Map<String, dynamic> ? json : {'error': 'The server answered ${res.statusCode}.'});
   }
 

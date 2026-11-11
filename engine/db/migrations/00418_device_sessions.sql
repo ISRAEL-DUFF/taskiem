@@ -8,6 +8,12 @@
 -- Renewal happens while authenticating, before any tenant scope exists, so
 -- it is a definer: taskiem_auth_session_touch extends only a live device
 -- session, by its token's hash, at most once an hour, and answers nothing.
+-- taskiem_dispatch may already update any session (dispatch_revoke, 00032,
+-- for revoking); it is that function's WHERE clause, not a policy, that
+-- keeps renewal to device sessions.
+--
+-- One live session per person per phone: the unique index makes a second
+-- sign-in or switch racing the first fail rather than leave two.
 
 -- +goose Up
 ALTER TABLE sessions
@@ -18,11 +24,10 @@ ALTER TABLE sessions
   ADD CONSTRAINT sessions_device_named CHECK ((device_id IS NULL) = (device_platform IS NULL));
 
 CREATE INDEX sessions_device ON sessions (device_id) WHERE device_id IS NOT NULL;
+CREATE UNIQUE INDEX sessions_one_per_phone ON sessions (user_id, device_id) WHERE device_id IS NOT NULL AND revoked_at IS NULL;
 
 GRANT SELECT (device_id, last_used_at) ON sessions TO taskiem_dispatch;
 GRANT UPDATE (expires_at, last_used_at) ON sessions TO taskiem_dispatch;
-CREATE POLICY dispatch_touch ON sessions FOR UPDATE TO taskiem_dispatch
-  USING (device_id IS NOT NULL) WITH CHECK (device_id IS NOT NULL);
 
 DROP FUNCTION taskiem_auth_session(bytea);
 -- +goose StatementBegin
@@ -56,6 +61,9 @@ REVOKE EXECUTE ON FUNCTION taskiem_auth_session_touch(bytea) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION taskiem_auth_session_touch(bytea) TO taskiem_app;
 
 -- +goose Down
+-- Without the columns a phone's session would be an ordinary one with up to
+-- 30 days left: ended instead, the phone signs in again.
+UPDATE sessions SET revoked_at = now() WHERE device_id IS NOT NULL AND revoked_at IS NULL;
 DROP FUNCTION taskiem_auth_session_touch(bytea);
 DROP FUNCTION taskiem_auth_session(bytea);
 -- +goose StatementBegin
@@ -71,9 +79,9 @@ $$;
 ALTER FUNCTION taskiem_auth_session(bytea) OWNER TO taskiem_dispatch;
 REVOKE EXECUTE ON FUNCTION taskiem_auth_session(bytea) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION taskiem_auth_session(bytea) TO taskiem_app;
-DROP POLICY dispatch_touch ON sessions;
 REVOKE UPDATE (expires_at, last_used_at) ON sessions FROM taskiem_dispatch;
 REVOKE SELECT (device_id, last_used_at) ON sessions FROM taskiem_dispatch;
+DROP INDEX sessions_one_per_phone;
 DROP INDEX sessions_device;
 ALTER TABLE sessions DROP CONSTRAINT sessions_device_named,
   DROP COLUMN last_used_at, DROP COLUMN device_platform, DROP COLUMN device_name, DROP COLUMN device_id;

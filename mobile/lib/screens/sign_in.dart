@@ -96,6 +96,9 @@ mixin _Acting<T extends StatefulWidget> on State<T> {
       passkeyRequired = e.has('passkey_required');
     } on Offline {
       error = 'You’re offline. Check your connection and try again.';
+    } catch (_) {
+      // Anything else (an answer the app could not read): said, never lost.
+      error = 'Something went wrong. Try again.';
     } finally {
       if (mounted) setState(() => busy = false);
     }
