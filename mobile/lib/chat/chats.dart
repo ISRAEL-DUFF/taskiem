@@ -13,6 +13,7 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/modal.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'customer.dart';
@@ -120,13 +121,13 @@ class ChatsData extends ChangeNotifier {
   List<CustomerChat> archivedCustomerChats = const [];
 
   /// Requests to link we sent to businesses not yet on Taskiem.
-  int sent = 0;
+  List<BlindLinkRequest> sent = const [];
 
   /// Whether other businesses may find this one, and whether it was asked.
   LinkSettings? linkSettings;
 
   /// Links.tsx: nothing linked, asked, waiting or sent.
-  bool get noLinks => links.where((l) => const ['asked_us', 'active', 'requested', 'not_accepted'].contains(l.state)).isEmpty && sent == 0;
+  bool get noLinks => links.where((l) => const ['asked_us', 'active', 'requested', 'not_accepted'].contains(l.state)).isEmpty && sent.isEmpty;
 
   /// The person may answer requests to link (link.manage, as the web's `can`).
   bool get manage => auth.can('link.manage') && linksOn;
@@ -140,7 +141,7 @@ class ChatsData extends ChangeNotifier {
       _try(() async {
         final r = linksOn ? await api.listLinks() : null;
         links = r?.links ?? const [];
-        sent = r?.sent.length ?? 0;
+        sent = r?.sent ?? const [];
       }),
       _try(() async {
         chatTools = (await api.getChatTools()).chatTools;
@@ -183,8 +184,50 @@ class ChatsData extends ChangeNotifier {
     return null;
   }
 
+  /// Links.tsx answer: a request to link accepted, declined or blocked
+  /// (POST /v1/links/{id}/{answer}); the list read again. Null when done,
+  /// else why not.
+  Future<String?> answer(BusinessLink l, String a) async {
+    try {
+      await auth.transport.send('POST', '/v1/links/${Uri.encodeComponent(l.id)}/$a', body: const {});
+    } on ApiError catch (e) {
+      return e.message;
+    } on Offline {
+      return 'You’re offline. Try again when you’re back online.';
+    }
+    await load();
+    return null;
+  }
+
   /// Links.tsx: the requests to answer.
   List<BusinessLink> get asked => links.where((l) => l.state == 'asked_us').toList();
+
+  /// The messages this person starred (the Starred chip), newest first;
+  /// null until read.
+  List<LinkMessage>? starred;
+
+  /// Read again each time the Starred chip is chosen (a star may have
+  /// changed since).
+  Future<void> loadStarred() async {
+    starred = null;
+    notifyListeners();
+    try {
+      starred = (await api.starredLinkMessages()).messages;
+    } on ApiError catch (e) {
+      starred = const [];
+      error = e.message;
+    } on Offline {
+      starred = const [];
+      error = 'You’re offline. Your chats show when you’re back online.';
+    }
+    notifyListeners();
+  }
+
+  /// The name of a linked business's conversation ("They" when unknown).
+  String nameOf(String link) => conversations.where((c) => c.link == link).firstOrNull?.name ?? 'They';
+
+  /// links.ts groups: the businesses we asked, waiting (or not accepted).
+  List<BusinessLink> get waitingLinks => links.where((l) => l.state == 'requested' || l.state == 'not_accepted').toList();
   int get unreadCount => conversations.where((c) => !c.archived && c.unread > 0).length;
   int get archivedCount => conversations.where((c) => c.archived).length + archivedCustomers;
 }
@@ -192,7 +235,7 @@ class ChatsData extends ChangeNotifier {
 enum ChatFilter { all, unread, starred, archived }
 
 class ChatsScreen extends StatefulWidget {
-  const ChatsScreen({super.key, required this.data, this.onMenu, this.onFind, this.onOpen, this.onOpenTaskiem, this.onOpenCustomer});
+  const ChatsScreen({super.key, required this.data, this.onMenu, this.onFind, this.onOpen, this.onOpenTaskiem, this.onOpenCustomer, this.onOpenAt});
 
   final ChatsData data;
   final VoidCallback? onMenu;
@@ -207,12 +250,26 @@ class ChatsScreen extends StatefulWidget {
   /// A customer's conversation, opened.
   final ValueChanged<CustomerChat>? onOpenCustomer;
 
+  /// A linked business's conversation, opened at one of its messages (a
+  /// starred message, a search's hit).
+  final void Function(LinkConversation c, String message)? onOpenAt;
+
   @override
   State<ChatsScreen> createState() => _ChatsScreenState();
 }
 
 class _ChatsScreenState extends State<ChatsScreen> {
   ChatFilter _filter = ChatFilter.all;
+  bool _answering = false;
+
+  Future<void> _answer(BusinessLink l, String a, String done) async {
+    if (_answering) return;
+    _answering = true;
+    final why = await widget.data.answer(l, a);
+    _answering = false;
+    if (!mounted) return;
+    showTkToast(context, why ?? done, error: why != null);
+  }
 
   @override
   void initState() {
@@ -243,7 +300,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     _Head(name: d.auth.me?.tenantName, onMenu: widget.onMenu),
                     const _Search(),
                     if (d.loaded && (d.conversations.isNotEmpty || d.customers.isNotEmpty || d.archivedCustomers > 0))
-                      _Chips(filter: _filter, unread: d.unreadCount, archived: d.archivedCount, onPick: (f) => setState(() => _filter = f)),
+                      _Chips(
+                        filter: _filter,
+                        unread: d.unreadCount,
+                        archived: d.archivedCount,
+                        onPick: (f) {
+                          setState(() => _filter = f);
+                          if (f == ChatFilter.starred) d.loadStarred();
+                        },
+                      ),
                     if (d.error != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: TkErrorBox(d.error!)),
                     if (!archived && _filter != ChatFilter.starred)
                       Padding(
@@ -270,7 +335,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     else if (d.asked.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: _Asked(links: d.asked, manage: d.manage, now: d.now()),
+                        child: _Asked(links: d.asked, manage: d.manage, now: d.now(), onAnswer: _answer),
+                      ),
+                    if (_filter == ChatFilter.starred && !d.noLinks)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _Starred(data: d, onOpenAt: widget.onOpenAt, afterCard: d.asked.isNotEmpty),
                       ),
                     if (_filter != ChatFilter.starred && d.conversations.isNotEmpty && !d.noLinks)
                       Padding(
@@ -302,6 +372,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
                               ),
                           ],
                         ),
+                      ),
+                    if (d.linksOn && !d.noLinks && (d.waitingLinks.isNotEmpty || d.sent.isNotEmpty))
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _Waiting(links: d.waitingLinks, sent: d.sent, now: d.now()),
                       ),
                     if (d.manage && d.linkSettings != null && d.linkSettings!.askedAt == null && _filter != ChatFilter.starred) _Findable(data: d),
                   ],
@@ -621,16 +696,32 @@ class ChatAvatar extends StatelessWidget {
 };
 
 /// Links.tsx: the businesses asking to link, each with its answers.
-class _Asked extends StatelessWidget {
-  const _Asked({required this.links, required this.manage, required this.now});
-  final List<BusinessLink> links;
-  final bool manage;
-  final DateTime now;
+/// One row of a section of links (ui.tsx Row): a tinted letter or icon,
+/// the name and its state's badge, a line under them, and its buttons.
+typedef _LinkRow = ({String? letter, String? icon, Tone tone, String title, String badge, Tone badgeTone, String sub, Widget? actions});
+
+/// Links.tsx's sections of links (Asks to link, Waiting for an answer): a
+/// heading, then the rows in a card.
+class _LinkSection extends StatelessWidget {
+  const _LinkSection({required this.title, required this.rows});
+  final String title;
+  final List<_LinkRow> rows;
 
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    final badge = stateWords('asked_us')!;
+    Color ink(Tone tone) => switch (tone) {
+      Tone.warn => t.warn,
+      Tone.info => t.info,
+      Tone.ok => t.ok,
+      Tone.muted => t.muted,
+    };
+    // `.list-icon.warn` / `.list-icon.info`.
+    (Color, Color) tinted(Tone tone) => switch (tone) {
+      Tone.warn => (t.tintWarn, t.tintWarnText),
+      Tone.info => (cssMix(t.info, t.panel, 0.12), cssMix(t.info, t.text, 0.85)),
+      _ => (t.tint, t.tintText),
+    };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -638,7 +729,7 @@ class _Asked extends StatelessWidget {
           padding: const EdgeInsets.only(top: 32, bottom: 12),
           child: Semantics(
             header: true,
-            child: Text('Asks to link', style: tkText(size: 15, weight: 600, lineHeight: 1.35, letterSpacing: -0.15, color: t.text)),
+            child: Text(title, style: tkText(size: 15, weight: 600, lineHeight: 1.35, letterSpacing: -0.15, color: t.text)),
           ),
         ),
         Container(
@@ -650,7 +741,7 @@ class _Asked extends StatelessWidget {
           ),
           child: Column(
             children: [
-              for (final l in links)
+              for (final r in rows)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   child: Row(
@@ -659,12 +750,14 @@ class _Asked extends StatelessWidget {
                       Container(
                         width: 40,
                         height: 40,
-                        decoration: BoxDecoration(color: t.tintWarn, borderRadius: BorderRadius.circular(12)),
+                        decoration: BoxDecoration(color: tinted(r.tone).$1, borderRadius: BorderRadius.circular(12)),
                         alignment: Alignment.center,
-                        child: Text(
-                          l.name.isEmpty ? '' : String.fromCharCode(l.name.runes.first).toUpperCase(),
-                          style: tkText(size: 16, weight: 700, color: t.tintWarnText),
-                        ),
+                        child: r.icon != null
+                            ? TkIcon(r.icon!, size: 20, color: tinted(r.tone).$2)
+                            : Text(
+                                r.letter!.isEmpty ? '' : String.fromCharCode(r.letter!.runes.first).toUpperCase(),
+                                style: tkText(size: 16, weight: 700, color: tinted(r.tone).$2),
+                              ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -677,35 +770,20 @@ class _Asked extends StatelessWidget {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      l.name,
+                                      r.title,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: tkText(size: 15, weight: 600, color: t.text),
                                     ),
                                   ),
                                   const SizedBox(width: 12),
-                                  TkBadge(badge.label, tone: t.warn),
+                                  TkBadge(r.badge, tone: ink(r.badgeTone)),
                                 ],
                               ),
                             ),
                             const SizedBox(height: 3),
-                            Text('${roleLine(l.role)} · asked ${whenWords(l.requestedAt, now)}', style: tkHint(t)),
-                            const SizedBox(height: 3),
-                            if (manage)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: Row(
-                                  children: [
-                                    TkSmallButton(label: 'Accept', primary: true, onPressed: () {}),
-                                    const SizedBox(width: 8),
-                                    TkSmallButton(label: 'Decline', onPressed: () {}),
-                                    const SizedBox(width: 8),
-                                    TkSmallButton(label: 'Block', danger: true, onPressed: () {}),
-                                  ],
-                                ),
-                              )
-                            else
-                              Text('An owner or admin answers this.', style: tkHint(t)),
+                            Text(r.sub, style: tkHint(t)),
+                            if (r.actions != null) ...[const SizedBox(height: 3), r.actions!],
                           ],
                         ),
                       ),
@@ -715,6 +793,175 @@ class _Asked extends StatelessWidget {
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// Links.tsx's Asks to link: who asks, and Accept, Decline or Block for
+/// those who may answer (an owner or admin answers it, for the others).
+class _Asked extends StatelessWidget {
+  const _Asked({required this.links, required this.manage, required this.now, this.onAnswer});
+  final List<BusinessLink> links;
+  final bool manage;
+  final DateTime now;
+
+  /// A request answered: the answer, and what is said once it is done.
+  final void Function(BusinessLink l, String answer, String done)? onAnswer;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final badge = stateWords('asked_us')!;
+    return _LinkSection(
+      title: 'Asks to link',
+      rows: [
+        for (final l in links)
+          (
+            letter: l.name,
+            icon: null,
+            tone: Tone.warn,
+            title: l.name,
+            badge: badge.label,
+            badgeTone: badge.tone,
+            sub: '${roleLine(l.role)} · asked ${whenWords(l.requestedAt, now)}',
+            actions: manage
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(
+                      children: [
+                        TkSmallButton(
+                          label: 'Accept',
+                          semantics: 'Accept ${l.name}',
+                          primary: true,
+                          onPressed: onAnswer == null ? null : () => onAnswer!(l, 'accept', 'Linked with ${l.name}'),
+                        ),
+                        const SizedBox(width: 8),
+                        TkSmallButton(
+                          label: 'Decline',
+                          semantics: 'Decline ${l.name}',
+                          onPressed: onAnswer == null ? null : () => onAnswer!(l, 'decline', 'Declined. They are not told.'),
+                        ),
+                        const SizedBox(width: 8),
+                        TkSmallButton(
+                          label: 'Block',
+                          semantics: 'Block ${l.name}',
+                          danger: true,
+                          onPressed: onAnswer == null
+                              ? null
+                              : () async {
+                                  final yes = await showTkConfirm(
+                                    context,
+                                    title: 'Block ${l.name}?',
+                                    body: 'Their requests will not reach you, and they are not told.',
+                                    ok: 'Block',
+                                    danger: true,
+                                  );
+                                  if (yes) onAnswer!(l, 'block', 'Blocked');
+                                },
+                        ),
+                      ],
+                    ),
+                  )
+                : Text('An owner or admin answers this.', style: tkHint(t)),
+          ),
+      ],
+    );
+  }
+}
+
+/// Links.tsx's Starred messages: each by its business, opened at it.
+class _Starred extends StatelessWidget {
+  const _Starred({required this.data, this.onOpenAt, this.afterCard = false});
+  final ChatsData data;
+
+  /// Under the Asks to link card: its 16 px margin below collapses into
+  /// the heading's 32 above (CSS margins).
+  final bool afterCard;
+  final void Function(LinkConversation c, String message)? onOpenAt;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final list = data.starred;
+    return Semantics(
+      container: true,
+      label: 'Starred messages',
+      explicitChildNodes: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(top: afterCard ? 16 : 32, bottom: 12),
+            child: Semantics(
+              header: true,
+              child: Text('Starred messages', style: tkText(size: 15, weight: 600, lineHeight: 1.35, letterSpacing: -0.15, color: t.text)),
+            ),
+          ),
+          if (list == null)
+            const SizedBox(height: 120)
+          else if (list.isEmpty)
+            Text('Nothing starred yet. Open a message’s menu and choose Star to keep it here.', style: tkHint(t))
+          else
+            for (final m in list)
+              ChatRow(
+                title: data.nameOf(m.link),
+                letter: data.nameOf(m.link),
+                time: listTime(m.createdAt, data.now()),
+                preview: Text(
+                  previewLine(m, data.nameOf(m.link)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: false,
+                  style: tkText(size: 14.5, color: t.muted),
+                ),
+                onTap: () {
+                  final c = data.conversations.where((c) => c.link == m.link).firstOrNull;
+                  if (c != null) onOpenAt?.call(c, m.id);
+                },
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Links.tsx's Waiting for an answer: the businesses asked, and the
+/// requests sent to those not yet on Taskiem.
+class _Waiting extends StatelessWidget {
+  const _Waiting({required this.links, required this.sent, required this.now});
+  final List<BusinessLink> links;
+  final List<BlindLinkRequest> sent;
+  final DateTime now;
+
+  @override
+  Widget build(BuildContext context) {
+    final sentWords = stateWords('sent')!;
+    return _LinkSection(
+      title: 'Waiting for an answer',
+      rows: [
+        for (final l in links)
+          (
+            letter: l.name,
+            icon: null,
+            tone: Tone.info,
+            title: l.name,
+            badge: stateWords(l.state)!.label,
+            badgeTone: stateWords(l.state)!.tone,
+            sub: 'Asked ${whenWords(l.requestedAt, now)}',
+            actions: null,
+          ),
+        for (final b in sent)
+          (
+            letter: null,
+            icon: 'chat',
+            tone: Tone.info,
+            title: b.shown,
+            badge: sentWords.label,
+            badgeTone: sentWords.tone,
+            sub: 'Sent ${whenWords(b.createdAt, now)}',
+            actions: null,
+          ),
       ],
     );
   }

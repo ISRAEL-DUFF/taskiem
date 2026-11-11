@@ -262,22 +262,30 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
         reverseTransitionDuration: Duration.zero,
         pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c),
       )),
+      onOpenAt: (c, message) => Navigator.of(context).push(PageRouteBuilder<void>(
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c, focus: message),
+      )),
     );
   }
 }
 
 /// An open conversation: its data lives while it is open.
 class _Open extends StatefulWidget {
-  const _Open({required this.chats, required this.conv});
+  const _Open({required this.chats, required this.conv, this.focus});
   final ChatsData chats;
   final LinkConversation conv;
+
+  /// Opened at this message.
+  final String? focus;
 
   @override
   State<_Open> createState() => _OpenState();
 }
 
 class _OpenState extends State<_Open> {
-  late final ConversationData _data = ConversationData(widget.chats, widget.conv);
+  late final ConversationData _data = ConversationData(widget.chats, widget.conv, focus: widget.focus);
 
   @override
   void dispose() {

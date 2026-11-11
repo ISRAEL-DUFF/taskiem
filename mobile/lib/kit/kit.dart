@@ -437,8 +437,12 @@ class TkBadge extends StatelessWidget {
 /// The web's `button.small` in a list's row: a pill 36 px tall, 11.9 px words;
 /// pine (lime on dark) when [primary], the danger colour's words when [danger].
 class TkSmallButton extends StatelessWidget {
-  const TkSmallButton({super.key, required this.label, this.onPressed, this.primary = false, this.danger = false});
+  const TkSmallButton({super.key, required this.label, this.onPressed, this.primary = false, this.danger = false, this.semantics});
   final String label;
+
+  /// What a screen reader hears, when more than the words (the web's
+  /// `sr-only` name after them).
+  final String? semantics;
   final VoidCallback? onPressed;
   final bool primary;
   final bool danger;
@@ -448,6 +452,8 @@ class TkSmallButton extends StatelessWidget {
     final t = TkTheme.tokens(context);
     return Semantics(
       button: true,
+      label: semantics,
+      excludeSemantics: semantics != null,
       child: TkPress(
         onTap: onPressed ?? () {},
         child: Container(

@@ -53,3 +53,9 @@ unreactLinkMessage
 starLinkMessage
 unstarLinkMessage
 hideLinkMessage
+
+# The chats list: starred messages and its search (M3)
+starredLinkMessages
+searchLinkChats
+searchLinks
+searchCustomerChats

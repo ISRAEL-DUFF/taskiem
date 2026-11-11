@@ -116,6 +116,17 @@ final screens = <String, Screen>{
       await t.pumpAndSettle();
     },
   ),
+  'chats-starred': (
+    build: () {
+      final f = Fixture('chats-starred');
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel(RegExp('^Starred')));
+      await _loaded(t);
+    },
+  ),
   'chat-tunde': (
     build: () {
       final f = Fixture('chat-tunde');

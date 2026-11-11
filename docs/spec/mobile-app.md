@@ -664,13 +664,25 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   characters (readmore.ts, as Taskiem's answers already were). Parity:
   Mama Tunde's conversation with a price list added to its recording
   (`chat-long`), light and dark, two sizes; held by `fold_test.dart`.
+- **The chats list's answers and Starred** (`lib/chat/chats.dart`): a
+  request to link answered from the list (Accept; Decline; Block, asked
+  first), said in the web's toast ("Linked with Kola's Bakery"), the list
+  read again; Waiting for an answer under the chats (the businesses asked,
+  the requests sent to those not on Taskiem), as the web lists them. The
+  Starred chip lists the messages starred, by business, read afresh each
+  time it is chosen; one opens its conversation at it (`?msg=` on the
+  web): the page around it, it in the middle with the web's accent ring
+  for 1.8 s, and, with newer messages beyond that page, the round button
+  showing "Jump to the latest messages" (nothing newer followed until
+  then; sending from there goes back to the newest). Parity: the Starred
+  view (the chats' recording with two starred messages added), light and
+  dark, two sizes; held by `chats_test.dart`.
 - **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
   the milestones), a deal's offers and counters, search, the contact sheet,
-  the chat tools, the "@" and "#" tags, and the list's search, chips and answers to requests
-  (drawn, not yet working).
+  the chat tools, the "@" and "#" tags, and the list's search (drawn, not yet working).
 
 ## 11. What needs people
 

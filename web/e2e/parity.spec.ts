@@ -98,6 +98,21 @@ const SCREENS: { name: string; path: string; fixture?: string; ready: (p: Page) 
     },
   },
   {
+    // The Starred chip: the messages this person starred, by business.
+    // (The chats' recording with two starred messages added.)
+    name: "chats-starred",
+    path: "/chat",
+    fixture: "chats-starred",
+    ready: async (p) => {
+      await expect(p.getByText("Bayo Rice Mills").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "Starred", exact: true }).click();
+      await expect(p.getByTestId("starred-message").first()).toBeVisible();
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
     // A conversation with a linked business: Mama Tunde's Market's, as Ada.
     name: "chat-tunde",
     path: "/chat?with=3af349e2-b776-4306-bdb8-10df59687c55",

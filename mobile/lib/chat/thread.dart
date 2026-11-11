@@ -176,16 +176,23 @@ class UnreadMark extends StatelessWidget {
 /// ThreadParts.tsx ThreadJump (`.chat-jump`): the round button over the
 /// thread's corner, with the number that came while the reader was up.
 class ThreadJump extends StatelessWidget {
-  const ThreadJump({super.key, required this.count, required this.onTap});
+  const ThreadJump({super.key, required this.count, required this.onTap, this.detached = false});
   final int count;
   final VoidCallback onTap;
+
+  /// Away from the newest page (opened at a message): back to it.
+  final bool detached;
 
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     return Semantics(
       button: true,
-      label: count > 0 ? '$count new ${count == 1 ? 'message' : 'messages'}: scroll to the newest' : 'Scroll to the newest messages',
+      label: detached
+          ? 'Jump to the latest messages'
+          : count > 0
+          ? '$count new ${count == 1 ? 'message' : 'messages'}: scroll to the newest'
+          : 'Scroll to the newest messages',
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,
@@ -233,7 +240,19 @@ class ThreadView<T> extends StatefulWidget {
     this.placeAtMessagesEnd = false,
     this.hasOlder = false,
     this.onOlder,
+    this.focus,
+    this.detached = false,
+    this.onLatest,
   });
+
+  /// Opened at this message (a search's hit, a starred message): placed in
+  /// the middle and flashed, as useThread's jump does.
+  final String? focus;
+
+  /// Away from the newest page: the round button shows, and goes back to it
+  /// ([onLatest]).
+  final bool detached;
+  final VoidCallback? onLatest;
 
   /// There are older messages than these: asked for as the reader nears
   /// the top ([onOlder]), the reader's place kept as they land above.
@@ -263,7 +282,7 @@ class ThreadView<T> extends StatefulWidget {
   State<ThreadView<T>> createState() => ThreadViewState<T>();
 }
 
-class ThreadViewState<T> extends State<ThreadView<T>> {
+class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderStateMixin {
   /// The thread's scrolling (a test scrolls it as the web half does).
   final scroll = ScrollController();
   final _viewport = GlobalKey();
@@ -277,6 +296,11 @@ class ThreadViewState<T> extends State<ThreadView<T>> {
   int _newCount = 0;
   ({String label, double top})? _stuck;
   bool _loadingOlder = false;
+  final _focusKey = GlobalKey();
+
+  /// `.bubble.flash`: the ring round the message opened at, 1.8 s.
+  late final AnimationController _flash = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800));
+  String? _flashId;
 
   @override
   void initState() {
@@ -293,8 +317,16 @@ class ThreadViewState<T> extends State<ThreadView<T>> {
 
   @override
   void dispose() {
+    _flash.dispose();
     scroll.dispose();
     super.dispose();
+  }
+
+  void _flashAt(String id) {
+    setState(() => _flashId = id);
+    _flash.forward(from: 0).whenCompleteOrCancel(() {
+      if (mounted) setState(() => _flashId = null);
+    });
   }
 
   bool get _atBottom => !scroll.hasClients || scroll.position.maxScrollExtent - scroll.position.pixels <= _nearBottom;
@@ -359,7 +391,13 @@ class ThreadViewState<T> extends State<ThreadView<T>> {
         final view = _viewport.currentContext?.findRenderObject();
         final at = _unreadKey.currentContext?.findRenderObject();
         final end = _endKey.currentContext?.findRenderObject();
-        if (at is RenderBox && view is RenderBox) {
+        final focus = _focusKey.currentContext?.findRenderObject();
+        if (widget.focus != null && focus is RenderBox && view is RenderBox) {
+          // scrollIntoView({ block: "center" }), then the flash.
+          final mid = focus.localToGlobal(Offset(0, focus.size.height / 2), ancestor: view).dy;
+          scroll.jumpTo((scroll.offset + mid - view.size.height / 2).clamp(0.0, scroll.position.maxScrollExtent));
+          _flashAt(widget.focus!);
+        } else if (at is RenderBox && view is RenderBox) {
           final top = at.localToGlobal(Offset.zero, ancestor: view).dy;
           scroll.jumpTo((scroll.offset + top - 40).clamp(0.0, scroll.position.maxScrollExtent));
         } else if (widget.placeAtMessagesEnd && end is RenderBox && view is RenderBox) {
@@ -448,11 +486,14 @@ class ThreadViewState<T> extends State<ThreadView<T>> {
         if (widget.unread?.id == of.id(m)) group.add(UnreadMark(widget.unread!.count, markKey: _unreadKey));
         final w = widget.render(m, prev);
         prev = m;
-        if (w != null) group.add(w);
+        if (w != null) group.add(widget.focus == of.id(m) ? KeyedSubtree(key: _focusKey, child: w) : w);
       }
       close();
     }
-    return Stack(
+    return ThreadFlash(
+      id: _flashId,
+      ring: _flash,
+      child: Stack(
       children: [
         Positioned.fill(
           child: KeyedSubtree(
@@ -489,10 +530,56 @@ class ThreadViewState<T> extends State<ThreadView<T>> {
             right: 0,
             child: IgnorePointer(child: Center(child: DayChip(_stuck!.label, margin: false))),
           ),
-        if (_away) Positioned(right: 16, bottom: 16, child: ThreadJump(count: _newCount, onTap: _toBottom)),
+        if (_away || widget.detached)
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: ThreadJump(
+              count: _newCount,
+              detached: widget.detached,
+              onTap: widget.detached && widget.onLatest != null ? widget.onLatest! : _toBottom,
+            ),
+          ),
       ],
+      ),
     );
   }
+}
+
+/// The message being flashed in a thread, and how far its ring has faded.
+class ThreadFlash extends InheritedWidget {
+  const ThreadFlash({super.key, required this.id, required this.ring, required super.child});
+  final String? id;
+  final Animation<double> ring;
+
+  static ThreadFlash? of(BuildContext context) => context.dependOnInheritedWidgetOfExactType<ThreadFlash>();
+
+  @override
+  bool updateShouldNotify(ThreadFlash old) => old.id != id;
+}
+
+/// `.bubble.flash`: `0 0 0 3px var(--accent)`, held to 60% of 1.8 s, then
+/// faded out (held throughout with motion turned down), round a bubble.
+Widget flashRing(BuildContext context, String id, BorderRadius radius, Widget child) {
+  final f = ThreadFlash.of(context);
+  if (f == null || f.id != id) return child;
+  final accent = TkTheme.tokens(context).accent;
+  final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+  return AnimatedBuilder(
+    animation: f.ring,
+    builder: (context, child) {
+      final v = f.ring.value;
+      final a = still || v <= 0.6 ? 1.0 : 1 - Curves.easeOut.transform((v - 0.6) / 0.4);
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          boxShadow: [BoxShadow(color: accent.withValues(alpha: accent.a * a), spreadRadius: 3)],
+        ),
+        child: child,
+      );
+    },
+    child: child,
+  );
 }
 
 /// A flex column's `gap`.

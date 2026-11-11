@@ -240,6 +240,30 @@ class TaskiemApi {
   Future<void> hideLinkMessage({required String link, required String id}) async {
     await _t.send('POST', '/v1/link-chats/${Uri.encodeComponent(link)}/messages/${Uri.encodeComponent(id)}/hide');
   }
+
+  /// Your starred messages (`GET /v1/link-chats/starred`)
+  Future<StarredLinkMessagesResponse> starredLinkMessages() async {
+    final j = await _t.send('GET', '/v1/link-chats/starred');
+    return StarredLinkMessagesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Messages that say something, across conversations (`GET /v1/link-chats/search`)
+  Future<SearchLinkChatsResponse> searchLinkChats({String? q}) async {
+    final j = await _t.send('GET', '/v1/link-chats/search', query: {'q': ?q});
+    return SearchLinkChatsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Search businesses on Taskiem (`GET /v1/links/search`)
+  Future<SearchLinksResponse> searchLinks({String? q}) async {
+    final j = await _t.send('GET', '/v1/links/search', query: {'q': ?q});
+    return SearchLinksResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Search customers' conversations (`GET /v1/customer-chats/search`)
+  Future<SearchCustomerChatsResponse> searchCustomerChats({String? q}) async {
+    final j = await _t.send('GET', '/v1/customer-chats/search', query: {'q': ?q});
+    return SearchCustomerChatsResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -2155,5 +2179,163 @@ class UnstarLinkMessageResponse {
 
   Map<String, dynamic> toJson() => {
         'starred': starred,
+      };
+}
+
+class StarredLinkMessagesResponse {
+  const StarredLinkMessagesResponse({required this.messages});
+
+  final List<LinkMessage> messages;
+
+  factory StarredLinkMessagesResponse.fromJson(Map<String, dynamic> j) => StarredLinkMessagesResponse(
+        messages: (j['messages'] as List).map((e) => LinkMessage.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((e) => e.toJson()).toList(),
+      };
+}
+
+class SearchLinkChatsResponse {
+  const SearchLinkChatsResponse({required this.messages});
+
+  final List<LinkMessage> messages;
+
+  factory SearchLinkChatsResponse.fromJson(Map<String, dynamic> j) => SearchLinkChatsResponse(
+        messages: (j['messages'] as List).map((e) => LinkMessage.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((e) => e.toJson()).toList(),
+      };
+}
+
+class SearchLinksResponse {
+  const SearchLinksResponse({this.blind, required this.results});
+
+  final SearchLinksResponseBlind? blind;
+  final List<LinkCard> results;
+
+  factory SearchLinksResponse.fromJson(Map<String, dynamic> j) => SearchLinksResponse(
+        blind: j['blind'] == null ? null : SearchLinksResponseBlind.fromJson(j['blind'] as Map<String, dynamic>),
+        results: (j['results'] as List).map((e) => LinkCard.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'blind': ?blind?.toJson(),
+        'results': results.map((e) => e.toJson()).toList(),
+      };
+}
+
+class SearchLinksResponseBlind {
+  const SearchLinksResponseBlind({required this.kind, required this.shown});
+
+  final String kind;
+  final String shown;
+
+  factory SearchLinksResponseBlind.fromJson(Map<String, dynamic> j) => SearchLinksResponseBlind(
+        kind: j['kind'] as String,
+        shown: j['shown'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind,
+        'shown': shown,
+      };
+}
+
+class LinkCard {
+  const LinkCard({this.area, required this.business, required this.items, required this.name, this.slug, required this.state, this.tagline});
+
+  final String? area;
+  final String business;
+  /// Up to three published items that matched, with the prices their page shows
+  final List<LinkCardItemsItem> items;
+  final String name;
+  final String? slug;
+  final String state;
+  final String? tagline;
+
+  factory LinkCard.fromJson(Map<String, dynamic> j) => LinkCard(
+        area: j['area'] == null ? null : j['area'] as String,
+        business: j['business'] as String,
+        items: (j['items'] as List).map((e) => LinkCardItemsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        name: j['name'] as String,
+        slug: j['slug'] == null ? null : j['slug'] as String,
+        state: j['state'] as String,
+        tagline: j['tagline'] == null ? null : j['tagline'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': ?area,
+        'business': business,
+        'items': items.map((e) => e.toJson()).toList(),
+        'name': name,
+        'slug': ?slug,
+        'state': state,
+        'tagline': ?tagline,
+      };
+}
+
+class LinkCardItemsItem {
+  const LinkCardItemsItem({required this.name, this.priceKobo});
+
+  final String name;
+  final Object? priceKobo;
+
+  factory LinkCardItemsItem.fromJson(Map<String, dynamic> j) => LinkCardItemsItem(
+        name: j['name'] as String,
+        priceKobo: j['price_kobo'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'price_kobo': ?priceKobo,
+      };
+}
+
+class SearchCustomerChatsResponse {
+  const SearchCustomerChatsResponse({required this.chats, required this.messages});
+
+  final List<CustomerChat> chats;
+  final List<SearchCustomerChatsResponseMessagesItem> messages;
+
+  factory SearchCustomerChatsResponse.fromJson(Map<String, dynamic> j) => SearchCustomerChatsResponse(
+        chats: (j['chats'] as List).map((e) => CustomerChat.fromJson(e as Map<String, dynamic>)).toList(),
+        messages: (j['messages'] as List).map((e) => SearchCustomerChatsResponseMessagesItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chats': chats.map((e) => e.toJson()).toList(),
+        'messages': messages.map((e) => e.toJson()).toList(),
+      };
+}
+
+class SearchCustomerChatsResponseMessagesItem {
+  const SearchCustomerChatsResponseMessagesItem({required this.body, required this.chatId, required this.createdAt, required this.messageId, required this.mine, required this.name});
+
+  final String body;
+  final String chatId;
+  final DateTime createdAt;
+  final String messageId;
+  final bool mine;
+  final String name;
+
+  factory SearchCustomerChatsResponseMessagesItem.fromJson(Map<String, dynamic> j) => SearchCustomerChatsResponseMessagesItem(
+        body: j['body'] as String,
+        chatId: j['chat_id'] as String,
+        createdAt: DateTime.parse(j['created_at'] as String),
+        messageId: j['message_id'] as String,
+        mine: j['mine'] as bool,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'body': body,
+        'chat_id': chatId,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'message_id': messageId,
+        'mine': mine,
+        'name': name,
       };
 }

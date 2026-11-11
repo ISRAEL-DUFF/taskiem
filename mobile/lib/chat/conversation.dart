@@ -71,7 +71,20 @@ class ThreadMessage {
 
 /// What a conversation shows, loaded and followed as the web's pane does.
 class ConversationData extends ChangeNotifier {
-  ConversationData(this.chats, this.conv, {this.follow = true});
+  ConversationData(this.chats, this.conv, {this.follow = true, this.focus});
+
+  /// Opened at this message (a search's hit, a starred message).
+  final String? focus;
+
+  /// Away from the newest page: what is newer is not followed until the
+  /// reader goes back to it ([toLatest]).
+  bool detached = false;
+
+  /// Where the thread is placed: changed each time it is opened afresh.
+  int epoch = 0;
+
+  /// The message the thread was last opened at.
+  String? openedAt;
 
   final ChatsData chats;
   final LinkConversation conv;
@@ -116,6 +129,8 @@ class ConversationData extends ChangeNotifier {
 
   List<ThreadMessage> get thread => [
     for (final m in messages ?? const <LinkMessage>[]) ThreadMessage(m),
+    // Not after a window away from the newest page.
+    if (!detached)
     for (final o in outbox)
       ThreadMessage(
         LinkMessage(
@@ -132,10 +147,52 @@ class ConversationData extends ChangeNotifier {
       ),
   ];
 
-  /// Opens at the newest page, the first unread marked (lib/thread.ts firstUnread).
+  /// Opens at [focus], or at the newest page; then follows it.
   Future<void> open() async {
+    if (focus != null) {
+      try {
+        await openAt(focus!);
+      } on Object {
+        await openNewest();
+      }
+    } else {
+      await openNewest();
+    }
+    if (!follow) return;
+    _liveSub ??= _live?.events.listen(_onLive);
+    _live?.addListener(_reschedule);
+    _reschedule();
+  }
+
+  /// Conversation.tsx openAt: the page around a message, it in the middle;
+  /// newer ones beyond the page leave the view away from the newest.
+  Future<void> openAt(String id) async {
+    final out = await api.linkMessages(link: conv.link, around: id, limit: '$_page');
+    if (_disposed) return;
+    final at = out.messages.indexWhere((m) => m.id == id);
+    const half = _page ~/ 2;
+    detached = at >= 0 && out.messages.length - at - 1 >= _page - half;
+    hasOlder = at >= half;
+    unread = null;
+    error = null;
+    messages = out.messages;
+    openedAt = at >= 0 ? id : null;
+    epoch++;
+    _changed();
+  }
+
+  /// Back to the newest page (the round button, away from it).
+  Future<void> toLatest() => openNewest();
+
+  /// Opens at the newest page, the first unread marked (lib/thread.ts firstUnread).
+  Future<void> openNewest() async {
     try {
       final out = await api.linkMessages(link: conv.link);
+      if (_disposed) return;
+      detached = false;
+      openedAt = null;
+      error = null;
+      epoch++;
       typing = out.typing ?? false;
       hasOlder = out.messages.length >= _page;
       final unseen = out.messages.where((m) => !m.mine && m.readAt == null).toList();
@@ -150,10 +207,6 @@ class ConversationData extends ChangeNotifier {
       error = 'You’re offline. The conversation shows when you’re back online.';
       _changed();
     }
-    if (!follow) return;
-    _liveSub ??= _live?.events.listen(_onLive);
-    _live?.addListener(_reschedule);
-    _reschedule();
   }
 
   bool _wasConnected = false;
@@ -177,7 +230,8 @@ class ConversationData extends ChangeNotifier {
   void _onLive(LiveEvent e) {
     if (e is LiveMessage && e.message.link == conv.link) {
       final m = e.message;
-      _merge([m]);
+      // Not into a window away from the newest page: it would leave a gap.
+      if (!detached) _merge([m]);
       // Ours, sent from here, told by the stream before the send's answer
       // came: the outbox's copy gives way to it.
       if (m.mine) {
@@ -198,6 +252,7 @@ class ConversationData extends ChangeNotifier {
 
   /// The newest page again: read marks and reactions change in place.
   Future<void> refresh() async {
+    if (detached) return;
     final out = await api.linkMessages(link: conv.link);
     if (_disposed) return;
     _merge(out.messages);
@@ -206,6 +261,7 @@ class ConversationData extends ChangeNotifier {
 
   /// What is newer than the newest we have; read while seen.
   Future<void> pull() async {
+    if (detached) return;
     final last = messages?.isNotEmpty == true ? messages!.last.createdAt : null;
     final out = await api.linkMessages(link: conv.link, after: last?.toUtc().toIso8601String());
     if (_disposed) return;
@@ -266,6 +322,8 @@ class ConversationData extends ChangeNotifier {
     final body = text.trim();
     if (body.isEmpty && file == null) return;
     final o = Outgoing(uuid4(), body, chats.now(), file: file, reply: reply);
+    // Sent from away from the newest page: back to it, where it shows.
+    if (detached) unawaited(openNewest());
     outbox.add(o);
     _changed();
     await _send(o);
@@ -755,12 +813,17 @@ class _ConversationScreenState extends State<ConversationScreen> {
       newest.add(x.id);
     }
     return ThreadView<ThreadMessage>(
+      // Opened afresh (at a message, or back at the newest): placed afresh.
+      key: ValueKey(d.epoch),
       items: items,
       of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
       now: now,
       unread: d.unread,
       hasOlder: d.hasOlder,
       onOlder: d.older,
+      focus: d.openedAt,
+      detached: d.detached,
+      onLatest: d.toLatest,
       empty: Text('No messages yet. Say hello to ${d.conv.name}.', style: tkHint(t)),
       errors: [?d.error, ?_acts.error, ?d.actionError],
       render: (m, prev) {
@@ -1029,6 +1092,8 @@ class _Bubble extends StatelessWidget {
                 // `.reactions`: the chips over the bubble's foot, 12 px below it.
                 below: reacted ? _Reactions(list: msg.reactions!, onReact: onReact) : null,
                 mine: mine,
+                id: msg.id,
+                radius: radius,
                 child: Semantics(
                   label: mine ? null : (first && msg.senderName != null ? '${msg.senderName}: ' : null),
                   child: Container(
@@ -1276,13 +1341,19 @@ class _Quote extends StatelessWidget {
 /// `.bubble.has-reactions { margin-bottom: 11px }` kept under it: the chips
 /// inside what is laid out (all but a pixel), so a tap on them is theirs.
 class _Overhung extends StatelessWidget {
-  const _Overhung({required this.child, required this.below, required this.mine});
-  final Widget child;
+  const _Overhung({required this.child, required this.below, required this.mine, required this.id, required this.radius});
   final Widget? below;
   final bool mine;
 
+  /// The message, and its bubble's corners: the ring round it while it is
+  /// the one flashed (opened at it).
+  final String id;
+  final BorderRadius radius;
+  final Widget child;
+
   @override
   Widget build(BuildContext context) {
+    final child = flashRing(context, id, radius, this.child);
     if (below == null) return child;
     return Stack(
       clipBehavior: Clip.none,
