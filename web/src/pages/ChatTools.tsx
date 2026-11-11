@@ -22,6 +22,7 @@ import type { MoneyEntry } from "../lib/chatmoney";
 import { tileLetters, toneOf } from "../lib/tone";
 import { KitEmpty, KitLoading, Pill, SavedTick, Sheet } from "../kit";
 import type { Service } from "../lib/bookings";
+import { bookLine, useLinkServices } from "../lib/linkbook";
 import type { PriceList } from "../lib/pricelists";
 import type { StockItem } from "../lib/stock";
 import type { Table } from "../lib/tables";
@@ -131,7 +132,11 @@ function useScopeIds(scope?: string): Set<string> | undefined {
  * number among this business's rows only. A number is the seller's own
  * (INV-0001 from two suppliers is two bills), so outside a conversation a
  * number matching more than one row opens none. */
-export function startRow(rows: ToolRow[], rowId: string, scope?: string): ToolRow | undefined {
+export function startRow(
+  rows: ToolRow[],
+  rowId: string,
+  scope?: string,
+): ToolRow | undefined {
   const byId = rows.find((x) => x.id === rowId);
   if (byId) return byId;
   const named = (inScope(rows, scope) ?? []).filter(
@@ -261,23 +266,45 @@ export function ToolsPanel({
   const ordering =
     !!shopFor &&
     (!q || ["order", "their shop", "shop"].some((w) => w.startsWith(q)));
-  const tools: Tool[] = ordering
-    ? [
-        {
-          key: "order",
-          title: "Their shop",
-          icon: "plus",
-          perm: "",
-          url: "",
-          page: "/storefront/suppliers",
-          rows: () => [],
-          line: () => `From ${shopFor}`,
-          more: "",
-        },
-        ...listed,
-      ]
-    : listed;
+  // Book, after it: their services, shown only when they offer any.
+  const services = useLinkServices(shopFor ? scope : undefined);
+  const booking =
+    !!shopFor && !!services?.services.length && (!q || "book".startsWith(q));
+  const tools: Tool[] = [
+    ...(ordering
+      ? [
+          {
+            key: "order",
+            title: "Their shop",
+            icon: "plus",
+            perm: "",
+            url: "",
+            page: "/storefront/suppliers",
+            rows: () => [],
+            line: () => `From ${shopFor}`,
+            more: "",
+          } satisfies Tool,
+        ]
+      : []),
+    ...(booking && services
+      ? [
+          {
+            key: "book",
+            title: "Book",
+            icon: "calendar",
+            perm: "",
+            url: "",
+            page: "",
+            rows: () => [],
+            line: () => bookLine(services),
+            more: "",
+          } satisfies Tool,
+        ]
+      : []),
+    ...listed,
+  ];
   if (ordering) rows.order = [];
+  if (booking) rows.book = [];
   const recent = recentTools()
     .map((k) => tools.find((t) => t.key === k))
     .filter((t): t is Tool => !!t);

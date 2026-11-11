@@ -8533,6 +8533,173 @@ paths:
                 format: binary
         default:
           $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/services:
+    get:
+      operationId: linkServices
+      tags:
+      - Links
+      summary: The other business's services you can book
+      description: 'Their services as their storefront shows them (each marked to show on it, whether the storefront is published or not), with a length; and whether they take bookings online now (open; closed says so when not). phone is the number a booking gives them: your storefront''s, where it has one. Only for an active link; nothing is changed in either business by looking.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Their services
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [services, open, phone]
+                properties:
+                  services:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkService'
+                  open:
+                    type: boolean
+                  closed:
+                    type: string
+                  phone:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/services/{id}/times:
+    get:
+      operationId: linkServiceTimes
+      tags:
+      - Links
+      summary: Free times for one of their services
+      description: 'The days with a free time for the service, in their booking hours and how far ahead they take bookings, and the free times of one day (day, or the first with any). Only whether a time is free, never who booked.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: day
+        in: query
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: The days and times
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [service, days, times]
+                properties:
+                  service:
+                    $ref: '#/components/schemas/LinkService'
+                  days:
+                    type: array
+                    items:
+                      type: string
+                      format: date
+                  day:
+                    type: string
+                    format: date
+                  times:
+                    type: array
+                    items:
+                      type: string
+                      format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/bookings:
+    post:
+      operationId: bookLinkService
+      tags:
+      - Links
+      summary: Book one of their services
+      description: 'Books the service at a free time through their storefront''s booking, your business the customer (its name, and phone or your storefront''s phone); they see it in their bookings like any other, and a message in the conversation says so to both sides. Paid at the appointment, or as you agree. Needs an Idempotency-Key: the same key answers the first booking (200). A time taken since answers 409 slot_taken; a time not offered 422 pick_time; no phone 422 phone_needed; not taking bookings 409 bookings_closed.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key answers the same booking'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [service_id, start]
+              properties:
+                service_id:
+                  type: string
+                start:
+                  type: string
+                  format: date-time
+                note:
+                  type: string
+                  maxLength: 500
+                phone:
+                  type: string
+      responses:
+        '201':
+          description: Booked
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [booking]
+                properties:
+                  booking:
+                    $ref: '#/components/schemas/LinkBooking'
+        '200':
+          description: The same booking, from an earlier request with this Idempotency-Key
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [booking]
+                properties:
+                  booking:
+                    $ref: '#/components/schemas/LinkBooking'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/refs:
     get:
       operationId: linkChatRefs
@@ -34208,6 +34375,46 @@ components:
               type: string
               format: date-time
               description: When the offer lapses unless answered
+    LinkService:
+      type: object
+      additionalProperties: false
+      description: One of a linked business's services, as its storefront shows it
+      required: [id, name, minutes]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        minutes:
+          type: integer
+          description: How long it takes
+        price_kobo:
+          type: integer
+          description: Its storefront price; none when paid on the day
+        description:
+          type: string
+        category:
+          type: string
+    LinkBooking:
+      type: object
+      additionalProperties: false
+      description: A booking made with a linked business from the conversation
+      required: [reference, service_id, service_name, starts_at, ends_at]
+      properties:
+        reference:
+          type: string
+        service_id:
+          type: string
+        service_name:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        price_kobo:
+          type: integer
     PriceItem:
       type: object
       additionalProperties: false

@@ -521,6 +521,7 @@ func (s *Server) Handler() http.Handler {
 			s.linkOrderRoutes(r)    // their orders (link_orders.go)
 			s.tradeDealRoutes(r)    // their price deliberation (trade_deals.go)
 			s.linkChatRoutes(r)     // their conversations (link_chat.go)
+			s.linkBookingRoutes(r)  // booking their services from it (link_bookings.go)
 			s.customerChatRoutes(r) // customers' conversations (customer_chat.go)
 			s.orderDraftRoutes(r)   // orders read from them (order_drafts.go)
 			s.taskiemChatRoutes(r)  // the Taskiem conversation on the web (chat_history.go)

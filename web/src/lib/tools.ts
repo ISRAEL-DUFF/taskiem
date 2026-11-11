@@ -40,7 +40,8 @@ export type ToolKey =
   | "order"
   | "sell"
   | "handover"
-  | "availability";
+  | "availability"
+  | "book";
 
 export type PillTone = "warn" | "lime" | "plain";
 
