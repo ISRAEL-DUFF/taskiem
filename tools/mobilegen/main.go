@@ -1,4 +1,5 @@
-// Command mobilegen writes the phone app's theme from the web chat's own CSS
+// Command mobilegen writes the phone app's theme from the web chat's own CSS,
+// and its API client from the API description (api.go)
 // (docs/spec/mobile-app.md §4.1): every colour token light and dark, the
 // shadows, the sizes, and every motion token and curve, read from
 // web/src/styles.css, kit.css and motion.css. The app is checked against the
@@ -36,6 +37,19 @@ func main() {
 		os.Exit(1)
 	}
 	if err := os.WriteFile(out, []byte(src), 0o644); err != nil { //nolint:gosec // a source file
+		fmt.Fprintln(os.Stderr, "mobilegen:", err)
+		os.Exit(1)
+	}
+	client, err := GenerateAPI(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "mobilegen:", err)
+		os.Exit(1)
+	}
+	if err := os.MkdirAll(filepath.Join(root, filepath.Dir(APIOut)), 0o755); err != nil { //nolint:gosec // a source directory
+		fmt.Fprintln(os.Stderr, "mobilegen:", err)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(filepath.Join(root, APIOut), []byte(client), 0o644); err != nil { //nolint:gosec // a source file
 		fmt.Fprintln(os.Stderr, "mobilegen:", err)
 		os.Exit(1)
 	}

@@ -11,6 +11,12 @@ dependencies:
     sdk: flutter
   # The brand's own SVG files (assets/brand), never redrawn. MIT.
   flutter_svg: 2.3.0
+  # HTTPS to Taskiem (lib/api/transport.dart). BSD-3-Clause.
+  http: 1.6.0
+  # The session token in the phone's Keychain or Keystore (lib/app/session.dart). BSD-3-Clause.
+  flutter_secure_storage: 11.2.0
+  # The phone's name for Your phones (lib/app/session.dart). BSD-3-Clause.
+  device_info_plus: 13.3.0
 
 dev_dependencies:
   flutter_test:

@@ -1,0 +1,154 @@
+// Signed in: the app's own settings (docs/spec/mobile-app.md §3.6) with Your
+// phones (§5.2). Until the chat comes (M3) this is the screen the app opens
+// on; then it moves behind the chat's menu.
+
+import 'package:flutter/widgets.dart';
+
+import '../api/api.g.dart';
+import '../api/transport.dart';
+import '../app/auth.dart';
+import '../kit/kit.dart';
+import '../theme/theme.dart';
+
+class SignedInScreen extends StatefulWidget {
+  const SignedInScreen({super.key, required this.auth});
+  final Auth auth;
+
+  @override
+  State<SignedInScreen> createState() => _SignedInScreenState();
+}
+
+class _SignedInScreenState extends State<SignedInScreen> {
+  List<Phone>? _phones;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final r = await widget.auth.api.listDevices();
+      if (mounted) setState(() => _phones = r.devices);
+    } on ApiError catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } on Offline {
+      if (mounted) setState(() => _error = 'You’re offline. Your phones show when you’re back online.');
+    }
+  }
+
+  Future<void> _remove(Phone p) async {
+    try {
+      await widget.auth.api.removeDevice(id: p.id);
+      await _load();
+    } on ApiError catch (e) {
+      setState(() => _error = e.message);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final me = widget.auth.me;
+    final phones = _phones;
+    return ColoredBox(
+      color: t.bg,
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 24, 16, 32),
+          children: [
+            Text('Settings', style: tkText(size: 24, weight: 700, lineHeight: 1.2, letterSpacing: -0.24, color: t.text)),
+            if (me?.tenantName != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('Signed in to ${me!.tenantName}', style: tkHint(t)),
+              ),
+            const SizedBox(height: 20),
+            _Card(
+              title: 'Your phones',
+              children: [
+                if (_error != null) TkErrorBox(_error!),
+                if (phones == null && _error == null) Text('Loading…', style: tkHint(t)),
+                if (phones != null)
+                  for (final p in phones)
+                    _PhoneRow(phone: p, onRemove: p.this_ == true ? null : () => _remove(p)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TkButton(label: 'Sign out of this phone', minHeight: 44, onPressed: widget.auth.signOut),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Card extends StatelessWidget {
+  const _Card({required this.title, required this.children});
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    // The web's `.card`: the panel, its border, the radius; 20 px by 22.
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
+      decoration: BoxDecoration(
+        color: t.panel,
+        border: Border.all(color: t.border),
+        borderRadius: BorderRadius.circular(Tk.radius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(title, style: tkText(size: 16, weight: 600, lineHeight: 1.3, color: t.text)),
+          ),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _PhoneRow extends StatelessWidget {
+  const _PhoneRow({required this.phone, this.onRemove});
+  final Phone phone;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final kind = phone.platform == 'ios' ? 'iPhone' : 'Android';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(phone.name, style: tkText(size: 14, weight: 500, color: t.text)),
+                Text(phone.this_ == true ? '$kind · this phone' : '$kind · last used ${_when(phone.lastUsedAt)}', style: tkHint(t)),
+              ],
+            ),
+          ),
+          if (onRemove != null) TkButton(label: 'Sign out', onPressed: onRemove),
+        ],
+      ),
+    );
+  }
+
+  static String _when(DateTime d) {
+    final ago = DateTime.now().difference(d);
+    if (ago.inMinutes < 2) return 'just now';
+    if (ago.inHours < 1) return '${ago.inMinutes} minutes ago';
+    if (ago.inDays < 1) return '${ago.inHours} hours ago';
+    if (ago.inDays == 1) return 'yesterday';
+    return '${ago.inDays} days ago';
+  }
+}

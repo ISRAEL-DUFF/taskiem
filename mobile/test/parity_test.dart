@@ -11,13 +11,20 @@
 @Tags(['parity'])
 library;
 
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/material.dart' show TextField;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:taskiem/api/transport.dart';
+import 'package:taskiem/app/auth.dart';
+import 'package:taskiem/app/session.dart';
 import 'package:taskiem/kit/kit.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/screens/sign_in.dart';
@@ -28,9 +35,60 @@ import 'support.dart';
 /// How much may differ: under 1% of the screen.
 const allowed = 0.01;
 
+/// What the server says when a code is asked for (api/chat_signin.go).
+const codeSent = 'If this number is on a Taskiem account, we have sent a code to it on WhatsApp or Telegram.';
+
+/// Signing in against a stand-in for the server, answering as it does.
+Auth fakeAuth() {
+  final client = MockClient((req) async {
+    switch ('${req.method} ${req.url.path}') {
+      case 'POST /v1/auth/chat/start':
+        return http.Response(jsonEncode({'expires_in': 600, 'status': codeSent}), 202);
+      case 'POST /v1/auth/login':
+        return http.Response(jsonEncode({'error': 'invalid email or password'}), 401);
+    }
+    return http.Response(jsonEncode({'error': 'not found'}), 404);
+  });
+  return Auth(
+    transport: Transport(base: 'http://localhost', client: client),
+    store: SessionStore(MemoryKeyStore(), describe: () async => (name: 'Test phone', platform: 'android')),
+  );
+}
+
+/// A screen of the app, and what a person does to bring it to the state the
+/// web half's picture shows (web/e2e/parity.spec.ts, the same steps).
+typedef Screen = ({Widget Function() build, Future<void> Function(WidgetTester t) drive});
+
+Future<void> _none(WidgetTester t) async {}
+
+Future<void> _tap(WidgetTester t, String words) async {
+  await t.tap(find.text(words));
+  await t.pumpAndSettle();
+}
+
 /// The app's screens by the web half's names.
-final screens = <String, Widget Function()>{
-  'sign-in': () => const SignInScreen(),
+final screens = <String, Screen>{
+  'sign-in': (build: () => SignInScreen(auth: fakeAuth()), drive: _none),
+  'sign-in-chat': (
+    build: () => SignInScreen(auth: fakeAuth()),
+    drive: (t) => _tap(t, 'Sign in with WhatsApp or Telegram'),
+  ),
+  'sign-in-chat-code': (
+    build: () => SignInScreen(auth: fakeAuth()),
+    drive: (t) async {
+      await _tap(t, 'Sign in with WhatsApp or Telegram');
+      await t.enterText(find.byType(TextField).first, '08031234567');
+      await _tap(t, 'Send me a code');
+    },
+  ),
+  'sign-in-wrong': (
+    build: () => SignInScreen(auth: fakeAuth()),
+    drive: (t) async {
+      await t.enterText(find.byType(TextField).at(0), 'ada@parity.test');
+      await t.enterText(find.byType(TextField).at(1), 'not the password');
+      await _tap(t, 'Sign in');
+    },
+  ),
 };
 
 final kept = RegExp(r'^([a-z-]+)-(light|dark)-(\d+)x(\d+)\.png$');
@@ -61,17 +119,16 @@ void main() {
       addTearDown(tester.view.reset);
       final shot = GlobalKey();
       final mode = m.group(2) == 'dark' ? TkMode.dark : TkMode.light;
+      // Shadows as the app draws them (flutter_test makes them solid shapes
+      // otherwise), from the first frame; put back before the test ends.
+      debugDisableShadows = false;
       await tester.pumpWidget(RepaintBoundary(
         key: shot,
-        child: TaskiemApp(mode: mode, home: screens[m.group(1)]!()),
+        child: TaskiemApp(mode: mode, home: screens[m.group(1)]!.build()),
       ));
       await tester.pumpAndSettle();
+      await screens[m.group(1)]!.drive(tester);
       final boundary = tester.renderObject(find.byKey(shot)) as RenderRepaintBoundary;
-      // Shadows as the app draws them (flutter_test makes them solid shapes
-      // otherwise), drawn again, and the switch put back before the test ends.
-      debugDisableShadows = false;
-      boundary.markNeedsPaint();
-      await tester.pump();
       final result = await tester.runAsync(() async {
         final app = await boundary.toImage();
         final a = await _rgba(app);

@@ -24,6 +24,19 @@ func TestThemeIsCurrent(t *testing.T) {
 	}
 }
 
+// The app's API client is the API description's.
+func TestAPIClientIsCurrent(t *testing.T) {
+	root := filepath.Join("..", "..")
+	want, err := GenerateAPI(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(root, APIOut))
+	if err != nil || string(got) != want {
+		t.Fatalf("%s is stale: run `go run ./tools/mobilegen` from the repository root", APIOut)
+	}
+}
+
 // The brand's files in the app are the web's, byte for byte.
 func TestBrandIsCurrent(t *testing.T) {
 	root := filepath.Join("..", "..")

@@ -120,6 +120,8 @@ class TkField extends StatefulWidget {
     this.autofill,
     this.minHeight = 36,
     this.onSubmitted,
+    this.onChanged,
+    this.digits,
   });
 
   final String label;
@@ -130,6 +132,10 @@ class TkField extends StatefulWidget {
   final Iterable<String>? autofill;
   final double minHeight;
   final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;
+
+  /// Only digits, at most this many (a code).
+  final int? digits;
 
   @override
   State<TkField> createState() => _TkFieldState();
@@ -184,11 +190,14 @@ class _TkFieldState extends State<TkField> {
               keyboardType: widget.keyboard,
               autofillHints: widget.autofill,
               onSubmitted: widget.onSubmitted,
+              onChanged: widget.onChanged,
               cursorColor: t.text,
               showCursor: !TkField.debugHideCaret,
               style: tkText(size: 14, color: t.text),
               decoration: const InputDecoration.collapsed(hintText: null),
-              inputFormatters: const <TextInputFormatter>[],
+              inputFormatters: widget.digits == null
+                  ? const <TextInputFormatter>[]
+                  : [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(widget.digits)],
             ),
           ),
         ),
@@ -219,6 +228,61 @@ class TkLink extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Text(label, style: tkText(size: 13, color: t.accent, decoration: TextDecoration.underline)),
+        ),
+      ),
+    );
+  }
+}
+
+/// The web's `ErrorBox` (`.error`): the server's words in the danger colour
+/// on its faint tint, a thin border, 12 px above and below.
+class TkErrorBox extends StatelessWidget {
+  const TkErrorBox(this.message, {super.key});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Semantics(
+        liveRegion: true,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          decoration: BoxDecoration(
+            color: cssMix(t.danger, t.panel, 0.06),
+            border: Border.all(color: cssMix(t.danger, const Color(0x00000000), 0.25)),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(message, style: tkText(size: 14, color: cssMix(t.danger, t.text, 0.82))),
+        ),
+      ),
+    );
+  }
+}
+
+/// The web's `button.link`: a button that reads as a link (13.5 px,
+/// weight 500, the accent colour, underlined), 40 px tall to press, with the
+/// button's faint shadow and nothing else.
+class TkLinkButton extends StatelessWidget {
+  const TkLinkButton({super.key, required this.label, this.onPressed});
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Semantics(
+      button: true,
+      child: TkPress(
+        onTap: onPressed ?? () {},
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 40),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(Tk.radiusSm), boxShadow: t.shadow),
+          child: Text(label, style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: t.accent, decoration: TextDecoration.underline)),
         ),
       ),
     );

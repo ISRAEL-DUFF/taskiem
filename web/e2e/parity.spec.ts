@@ -16,6 +16,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const KEPT = resolve(here, "../../mobile/test/parity/web");
 const UPDATE = process.env.PARITY_UPDATE === "1";
 
+/** What the server says when a code is asked for, whatever the number. */
+const CODE_SENT = "If this number is on a Taskiem account, we have sent a code to it on WhatsApp or Telegram.";
+
 /** The screens the app copies: its name in the app's test, and where the web shows it. */
 const SCREENS: { name: string; path: string; ready: (p: Page) => Promise<void> }[] = [
   {
@@ -24,6 +27,48 @@ const SCREENS: { name: string; path: string; ready: (p: Page) => Promise<void> }
     ready: async (p) => {
       await expect(p.getByRole("heading", { name: "Sign in to Taskiem" })).toBeVisible();
       await expect(p.getByLabel("Email")).toBeFocused();
+    },
+  },
+  {
+    // Signing in with the chat: the phone number.
+    name: "sign-in-chat",
+    path: "/login",
+    ready: async (p) => {
+      await p.getByRole("button", { name: "Sign in with WhatsApp or Telegram" }).click();
+      await expect(p.getByLabel("Phone number")).toBeFocused();
+    },
+  },
+  {
+    // The code, after the server's answer (the same for any number).
+    name: "sign-in-chat-code",
+    path: "/login",
+    ready: async (p) => {
+      // The server's answer, word for word (api/chat_signin.go), stood in
+      // for: codes are limited per address, and every browser test asks
+      // from 127.0.0.1. The app's half stands in with the same.
+      await p.route("**/v1/auth/chat/start", (r) =>
+        r.fulfill({
+          status: 202,
+          contentType: "application/json",
+          body: JSON.stringify({ expires_in: 600, status: CODE_SENT }),
+        }),
+      );
+      await p.getByRole("button", { name: "Sign in with WhatsApp or Telegram" }).click();
+      await p.getByLabel("Phone number").fill("08031234567");
+      await p.getByRole("button", { name: "Send me a code" }).click();
+      await expect(p.getByLabel("Code")).toBeFocused();
+    },
+  },
+  {
+    // A wrong password: the server's words in the error box.
+    name: "sign-in-wrong",
+    path: "/login",
+    ready: async (p) => {
+      await p.getByLabel("Email").fill("ada@parity.test");
+      await p.getByLabel("Password").fill("not the password");
+      await p.getByRole("button", { name: "Sign in", exact: true }).click();
+      await expect(p.getByRole("alert")).toHaveText("invalid email or password");
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     },
   },
 ];

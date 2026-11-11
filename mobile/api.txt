@@ -1,0 +1,18 @@
+# The operations the app uses, by operationId (api/openapi/openapi.yaml).
+# tools/mobilegen writes lib/api/api.g.dart from them.
+
+# The app's config (S1)
+appConfig
+
+# Signing in and out, staying signed in (M2)
+login
+chatSigninStart
+chatSigninVerify
+passkeyLoginOptions
+passkeyLogin
+signupOptions
+signup
+me
+logout
+listDevices
+removeDevice

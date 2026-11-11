@@ -76,3 +76,13 @@ FontWeight _weight(double w) {
   final i = ((w / 100).round().clamp(1, 9)) - 1;
   return FontWeight.values[i];
 }
+
+/// CSS `color-mix(in srgb, a p%, b)`, as the browser works it out (and as
+/// tools/mobilegen does for the tokens): for the web's colours mixed in a
+/// rule rather than kept as a token.
+Color cssMix(Color a, Color b, double p) {
+  final alpha = a.a * p + b.a * (1 - p);
+  if (alpha == 0) return const Color(0x00000000);
+  double ch(double x, double y) => (x * a.a * p + y * b.a * (1 - p)) / alpha;
+  return Color.from(alpha: alpha, red: ch(a.r, b.r), green: ch(a.g, b.g), blue: ch(a.b, b.b));
+}
