@@ -1,4 +1,4 @@
-# 0066 — A phone app in Flutter for owners and staff, the chat first and only the chat until it is in use
+# 0066 — A phone app in Flutter: a chat app like WhatsApp, complete in itself, with every chat tool and the screens they lead to
 
 Date: 2026-11-11 · Status: **Proposed** · Plan: [the Taskiem phone app](../spec/mobile-app.md)
 
@@ -6,12 +6,13 @@ Date: 2026-11-11 · Status: **Proposed** · Plan: [the Taskiem phone app](../spe
 
 Taskiem reaches a business's people in three ways: WhatsApp, Telegram and Slack, where most traders are; the web app, which can be added to a phone's home screen; and the field agent. The web app's chat has grown into the business's control room ([chat tools](../spec/chat-tools.md), phases 1 to 7, and the flows after them), about 17,000 of its 88,000 lines. [Chat push](../spec/chat-push.md) and [offline](../spec/offline.md) give the home-screen app notifications and an honest offline page, but on a phone the web app still signs out every 12 hours, its notifications depend on the browser, and it is not in the Play Store, where traders look for apps.
 
-The founder asked, on 11 November 2026, for a native app in Flutter, and settled its scope the same day: the chat only for now, other features after the chat.
+The founder asked, on 11 November 2026, for a native app in Flutter, and settled its scope the same day: a chat-only app like WhatsApp, with all the chat tools working seamlessly, implementing every screen the chat needs (invoices, orders, products…) as the web does them today, and no linking to the web unless absolutely necessary.
 
 ## Decision
 
 1. **A native app, in Flutter**, for Android and iPhone from one code base, in `mobile/` in this repository.
-2. **The chat, and only the chat, for now**: Taskiem's chat, the conversations with linked businesses and customers, and the chat tools (alerts and approvals that come as cards included), with signing in and chat notifications. Everything else stays on the web; a card that points to a web page opens it in the phone's browser. Other parts (Home, Orders, approvals as a screen, opening the web signed in) come after the chat is released and in use, each by a plan of its own.
+2. **A chat app, complete in itself.** Taskiem's chat, the conversations with linked businesses and customers, every chat tool, and every screen the chat leads to (invoices, money, orders, deliveries, products and stock, services and bookings, price lists, purchases, suppliers, bills, tables, linked businesses), built from the web's own screens and endpoints. Nothing else: no dashboards, reports, workflows or business set-up.
+   **No links to the web**, except connecting a service (a secure form or OAuth in a browser, as decision 0058 requires); set-up a business does once, back-office work and plan purchases are done on the web and the app says so ([plan §3.5](../spec/mobile-app.md#35-what-stays-on-the-web-and-why)). A test fails when the web chat links somewhere the app has no screen for.
 3. **The server owns behaviour.** The app is a client of the public API, through a client generated from the API description; a rule that exists only in the app is a bug. A chat feature is done when it is in the web and the app, or its spec says why not.
 4. **Nothing of the business is kept on the phone** in the first release, as on the web ([offline](../spec/offline.md)); a cache is a decision of its own.
 5. **Staying signed in** is a device session the server lists and can end, opened with the phone's own lock; step-up for money is unchanged.
@@ -27,12 +28,13 @@ The founder asked, on 11 November 2026, for a native app in Flutter, and settled
 | The web app inside a native shell (a WebView with native notifications) | Store presence and native push quickly, with no second chat; but the chat would still feel like a web page on a cheap phone, and app stores reject thin shells. Kept as the way the app opens pages it does not have, in the phone's own browser tab, not inside the app |
 | React Native, sharing code with the web app | Shares the language, not the screens: the web's chat is built on the DOM. Flutter draws the same on every phone and is quick on cheap Android ones; Xenibase already ships a Dart SDK |
 | The whole web app in the app | Doubles everything for pages rarely opened on a phone. The chat first; other parts move in after it when people and the app's numbers show they are needed |
-| The chat, approvals, Home and Orders in the first release | The first draft of this plan. Narrowed by the founder to the chat: the chat is where the product is changing and where people are, and a smaller first release reaches phones sooner |
+| The chat, approvals, Home and Orders in the first release | The first draft of this plan. The founder chose the chat instead, with everything it leads to |
+| The chat only, opening the web for what its cards and tools link to | The second draft. Rejected by the founder, who wants the app complete in itself: no linking to the web unless absolutely necessary |
 | An app per kind of user (owner, staff, rider) | Three listings and three reviews for one account model; roles already decide what a person sees |
 
 ## Consequences
 
-- Server changes, each with its tests ([plan §5](../spec/mobile-app.md#5-what-the-server-needs)): `GET /v1/app/config`; device sessions and **Your phones** under Account; FCM beside Web Push in `engine/push` and a `kind` on `push_subscriptions`; the `.well-known` files for links that open the chat and for passkeys, and the app's origin among the WebAuthn origins. `POST /v1/me/web-link` waits for after the chat.
+- Server changes, each with its tests ([plan §5](../spec/mobile-app.md#5-what-the-server-needs)): `GET /v1/app/config`; device sessions and **Your phones** under Account; FCM beside Web Push in `engine/push` and a `kind` on `push_subscriptions`; the `.well-known` files for links that open the app's screens and for passkeys, and the app's origin among the WebAuthn origins; reads that answer a screen in one call where the web needs several.
 - `tools/licencecheck` reads `pubspec.lock`; the font exception for Inter covers the app's bundled font (founder's approval).
 - A Go command in `tools/` generates the app's API client and its theme from the web's tokens; tests fail when either is stale.
 - CI builds the Android app and runs its tests against the same server the web's browser tests use.
