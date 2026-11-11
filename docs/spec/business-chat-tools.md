@@ -1,7 +1,7 @@
 # Business chat tools: a conversation with a business is about that business
 
-Status: **proposed, not built**. Agreed with the founder in conversation
-(11 Nov 2026); three points below are still open (§7). It amends
+Status: **agreed, not built**. Agreed with the founder in conversation
+(11 Nov 2026), with the decisions in §7. It amends
 [chat-tools.md](chat-tools.md) §5 (the buyer's tools) and §3 (the panel and
 the picker) for conversations with another business. The Taskiem conversation
 does not change.
@@ -28,13 +28,17 @@ price, invoice and pay.
 
 - **Their storefront, without a price list.** A linked business sees the other's
   products and services as their storefront shows them: names, photos,
-  descriptions, categories, sizes and colours, the storefront price, and whether
-  each can be ordered now (available, sold out). Nothing has to be shared first.
+  descriptions, categories, sizes and colours, the storefront price, and how
+  many are left where the storefront shows it (or available, sold out).
+  Nothing has to be shared first, and the storefront need not be published: a
+  linked business sees every item marked to show on it, as the published page
+  would show it. What a storefront shows is public, so the conversation shows
+  all of it.
 - **Their price for you, where they share one.** Where John shares a price list
   with Ada, his price for her (and his lower price for more, his least) is shown
   instead of the storefront price for those items, as ordering from a price list
   does today.
-- **Never:** their stock counts, their costs, their lowest prices, their
+- **Never:** stock their storefront does not show, their costs, their lowest prices, their
   other customers, their other orders, invoices and bills, their staff, or their
   money.
 
@@ -98,20 +102,20 @@ narrowed by their role.
    storefront's public copy of the catalogue and services, with the price for
    us from a shared list where there is one. Linked only; nothing private.
 2. Ordering at the storefront price from the conversation where no list is
-   shared, as a trade order (the order's lines say which price they used).
+   shared, as a trade order sent straight to them: they accept it or change
+   it, as with any order today (the order's lines say which price they used).
 3. Booking from the conversation, through the storefront's booking.
 4. The panel, "/", "#" and "@" switched by who the conversation is with.
 5. Tests: two businesses, one sharing a price list and one not; each side's
    panel shows the other's shop and the dealings between them, and nothing of
    either's other customers; staff see their role's part.
 
-## 7. Open
+## 7. Decisions
 
-1. **A storefront that is not published** (draft, closed, or never set up): do
-   linked businesses see its products anyway (those marked to show on the
-   storefront), or only once it is published?
-2. **Ordering at the storefront price**: when no price list is shared, does
-   an order from the conversation go straight to them at the storefront price
-   (they accept or change it, as today), or as a request for their price first?
-3. **Sold out and stock**: show only "available" or "sold out", never a
-   count, even where the storefront shows "3 left"?
+1. **A storefront that is not published** (draft, closed, or never set up):
+   linked businesses see its products and services anyway, those marked to
+   show on the storefront.
+2. **Ordering without a shared price list**: the order goes straight to them
+   at the storefront prices; they accept it or change it, as today.
+3. **Stock**: whatever the storefront shows, counts included ("3 left"), is
+   public, and the conversation shows it too.
