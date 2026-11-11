@@ -69,6 +69,15 @@ class Auth extends ChangeNotifier {
     await _signedIn(s.token);
   }
 
+  /// Moves this phone's session to another of the person's businesses: the
+  /// same session in every way but the business (POST /v1/me/switch).
+  Future<void> switchTo(String tenantId) async {
+    final s = await api.switchBusiness(body: SwitchBusinessRequest(tenantId: tenantId));
+    final restoredBefore = restored;
+    await _signedIn(s.token);
+    restored = restoredBefore;
+  }
+
   /// A session made by signing up (or another way in that answers one).
   Future<void> signedInWith(String? token) => _signedIn(token);
 

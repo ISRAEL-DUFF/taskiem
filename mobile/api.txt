@@ -16,3 +16,5 @@ me
 logout
 listDevices
 removeDevice
+listBusinesses
+switchBusiness

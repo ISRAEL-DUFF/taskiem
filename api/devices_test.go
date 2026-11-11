@@ -123,3 +123,81 @@ func TestDeviceSessions(t *testing.T) {
 		t.Fatalf("a phone outlives a password change: %d", st)
 	}
 }
+
+// Switching business: the session moves to the other business, the same in
+// every way but the business; never a fresh sign-in.
+func TestSwitchBusiness(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	w.tenant(t, "Ada Foods", "ada@switch.test")
+	bayo := w.tenant(t, "Bayo Rice", "bayo@switch.test")
+	var ada, adaFoods, bayoRice string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id FROM users WHERE email = 'ada@switch.test'`).Scan(&ada); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id FROM tenants WHERE name = 'Ada Foods'`).Scan(&adaFoods); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id FROM tenants WHERE name = 'Bayo Rice'`).Scan(&bayoRice); err != nil {
+		t.Fatal(err)
+	}
+	// Ada also works at Bayo Rice.
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO memberships (tenant_id, user_id, role) VALUES ($1, $2, 'viewer')`, bayoRice, ada); err != nil {
+		t.Fatal(err)
+	}
+	anon := &client{t: t, base: w.base}
+	out := anon.must(200, "POST", "/v1/auth/login", map[string]any{"email": "ada@switch.test", "password": "correct horse battery", "bearer": true, "tenant_id": adaFoods,
+		"device": map[string]any{"id": "0192f000-0000-7000-8000-00000000b001", "name": "Ada's Tecno", "platform": "android"}})
+	phone := &client{t: t, base: w.base, token: out["token"].(string)}
+
+	list := phone.must(200, "GET", "/v1/me/businesses", nil)["businesses"].([]any)
+	if len(list) != 2 {
+		t.Fatalf("businesses: %v", list)
+	}
+	for _, b := range list {
+		m := b.(map[string]any)
+		if (m["current"] == true) != (m["id"] == adaFoods) {
+			t.Fatalf("current marked wrong: %v", list)
+		}
+	}
+	// It signed in 100 days ago: switching must not make it recent.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE sessions SET created_at = now() - interval '100 days' WHERE token_hash = sha256($1::bytea)`, []byte(phone.token)); err != nil {
+		t.Fatal(err)
+	}
+
+	sw := phone.must(200, "POST", "/v1/me/switch", map[string]any{"tenant_id": bayoRice})
+	moved := &client{t: t, base: w.base, token: sw["token"].(string)}
+	if got := moved.must(200, "GET", "/v1/me", nil)["tenant_id"]; got != bayoRice {
+		t.Fatalf("switched to %v", got)
+	}
+	if st, _ := phone.do("GET", "/v1/me", nil); st != 401 {
+		t.Fatalf("the session switched from still works: %d", st)
+	}
+	var signed time.Time
+	var device *string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT created_at, device_id::text FROM sessions WHERE token_hash = sha256($1::bytea)`, []byte(moved.token)).Scan(&signed, &device); err != nil {
+		t.Fatal(err)
+	}
+	if time.Since(signed) < 99*24*time.Hour || device == nil || *device != "0192f000-0000-7000-8000-00000000b001" {
+		t.Fatalf("not the same session in another business: signed in %v ago, device %v", time.Since(signed), device)
+	}
+	// Still one phone under Your phones.
+	if got := moved.must(200, "GET", "/v1/me/devices", nil)["devices"].([]any); len(got) != 1 {
+		t.Fatalf("phones after switching: %v", got)
+	}
+	var audited int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE action = 'auth.switch' AND tenant_id = $1`, bayoRice).Scan(&audited); err != nil || audited != 1 {
+		t.Fatalf("audited %d (%v)", audited, err)
+	}
+
+	// Not a business of theirs: refused, and nothing ends.
+	other := w.tenant(t, "Chi Stores", "chi@switch.test")
+	var chiStores string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT id FROM tenants WHERE name = 'Chi Stores'`).Scan(&chiStores); err != nil {
+		t.Fatal(err)
+	}
+	moved.must(404, "POST", "/v1/me/switch", map[string]any{"tenant_id": chiStores})
+	moved.must(200, "GET", "/v1/me", nil)
+	_ = other
+	_ = bayo
+}

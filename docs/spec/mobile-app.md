@@ -450,6 +450,30 @@ months to both stores, the iPhone's share of the work (§4.2) included. Two
 engineers bring it to about four: after M3, one takes M5 and M6 while the
 other takes M7 and M8, since they divide by screen.
 
+### As built: M1 and M2 (11 November 2026)
+
+- **M1**: `mobile/` (Flutter, Android 8+ and iOS); `tools/mobilegen` writes
+  the theme from the web's CSS and copies the brand's files; the web's Inter
+  unpacked from its own files; the parity test in two halves
+  (`web/e2e/parity.spec.ts`, `mobile/test/parity_test.dart`);
+  `GET /v1/app/config`; the licence gate reads `pubspec.lock`;
+  `.github/workflows/mobile.yml`.
+- **M2**: device sessions (§5.2, migration 00418); the generated API client
+  (`mobile/api.txt` → `lib/api/api.g.dart`); signing in with a password or a
+  WhatsApp or Telegram code, signing up as the web does, staying signed in
+  (the token in the phone's secure storage, checked on opening), signing
+  out, Your phones, the app lock, and switching business (`GET
+  /v1/me/businesses`, `POST /v1/me/switch`: the same session in the other
+  business, never a fresh sign-in). The app opens on its settings until the
+  chat comes (M3). Parity: sign-in, its chat steps, a wrong password and
+  sign-up, light and dark, at two sizes (20 pictures). The parity test found
+  one web bug, fixed: the code's field did not take the focus.
+- **Not yet in M2**: passkeys (they need the app's link to Taskiem's address,
+  §5.6, and its signing key: with M4; the button says so); signing up with a
+  phone number instead of an email (the chat apps' way: a stranger's
+  WhatsApp needs an approved code template, a people item); the terms'
+  checkbox has no parity picture (the browser tests' server asks no terms).
+
 ## 11. What needs people
 
 | # | Item | Who | Unblocks |

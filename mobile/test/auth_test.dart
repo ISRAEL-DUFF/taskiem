@@ -138,4 +138,21 @@ void main() {
     expect(keys.values['token'], isNull);
     expect(b.state, AuthState.signedOut);
   });
+
+  test('switching business keeps this phone signed in, in the other business', () async {
+    keys.values['token'] = 'kept';
+    server.answers['POST /v1/me/switch'] = () => json({'token': 'tok-b', 'tenant_id': 't2', 'user_id': 'u1'});
+    final a = auth();
+    await a.start();
+    expect(a.restored, isTrue);
+    server.answers['GET /v1/me'] = () => json({...me, 'tenant_id': 't2', 'tenant_name': 'Bayo Rice'});
+    await a.switchTo('t2');
+    final sw = server.calls.firstWhere((c) => c.path == '/v1/me/switch');
+    expect(sw.body!['tenant_id'], 't2');
+    expect(sw.auth, 'Bearer kept');
+    expect(keys.values['token'], 'tok-b');
+    expect(a.me!.tenantName, 'Bayo Rice');
+    // Not a new sign-in: the lock's view of it is unchanged.
+    expect(a.restored, isTrue);
+  });
 }

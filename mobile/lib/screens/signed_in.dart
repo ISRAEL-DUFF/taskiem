@@ -20,6 +20,7 @@ class SignedInScreen extends StatefulWidget {
 
 class _SignedInScreenState extends State<SignedInScreen> {
   List<Phone>? _phones;
+  List<ListBusinessesResponseBusinessesItem> _businesses = const [];
   String? _error;
 
   @override
@@ -31,11 +32,28 @@ class _SignedInScreenState extends State<SignedInScreen> {
   Future<void> _load() async {
     try {
       final r = await widget.auth.api.listDevices();
-      if (mounted) setState(() => _phones = r.devices);
+      final b = await widget.auth.api.listBusinesses();
+      if (mounted) {
+        setState(() {
+          _phones = r.devices;
+          _businesses = b.businesses;
+        });
+      }
     } on ApiError catch (e) {
       if (mounted) setState(() => _error = e.message);
     } on Offline {
       if (mounted) setState(() => _error = 'You’re offline. Your phones show when you’re back online.');
+    }
+  }
+
+  Future<void> _switch(ListBusinessesResponseBusinessesItem b) async {
+    try {
+      await widget.auth.switchTo(b.id);
+      await _load();
+    } on ApiError catch (e) {
+      setState(() => _error = e.message);
+    } on Offline {
+      setState(() => _error = 'You’re offline. Switch when you’re back online.');
     }
   }
 
@@ -66,6 +84,24 @@ class _SignedInScreenState extends State<SignedInScreen> {
                 child: Text('Signed in to ${me!.tenantName}', style: tkHint(t)),
               ),
             const SizedBox(height: 20),
+            if (_businesses.length > 1) ...[
+              _Card(
+                title: 'Your businesses',
+                children: [
+                  for (final b in _businesses)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          Expanded(child: Text(b.name, style: tkText(size: 14, weight: 500, color: t.text))),
+                          if (b.current == true) Text('Here now', style: tkHint(t)) else TkButton(label: 'Switch', onPressed: () => _switch(b)),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
             _Card(
               title: 'Your phones',
               children: [

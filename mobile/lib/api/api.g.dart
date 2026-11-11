@@ -82,6 +82,18 @@ class TaskiemApi {
   Future<void> removeDevice({required String id}) async {
     await _t.send('DELETE', '/v1/me/devices/${Uri.encodeComponent(id)}');
   }
+
+  /// Your businesses (`GET /v1/me/businesses`)
+  Future<ListBusinessesResponse> listBusinesses() async {
+    final j = await _t.send('GET', '/v1/me/businesses');
+    return ListBusinessesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Switch business (`POST /v1/me/switch`)
+  Future<Session> switchBusiness({required SwitchBusinessRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/switch', body: body.toJson());
+    return Session.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -666,5 +678,53 @@ class Phone {
         'platform': platform,
         'signed_in_at': signedInAt.toUtc().toIso8601String(),
         'this': ?this_,
+      };
+}
+
+class ListBusinessesResponse {
+  const ListBusinessesResponse({required this.businesses});
+
+  final List<ListBusinessesResponseBusinessesItem> businesses;
+
+  factory ListBusinessesResponse.fromJson(Map<String, dynamic> j) => ListBusinessesResponse(
+        businesses: (j['businesses'] as List).map((e) => ListBusinessesResponseBusinessesItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'businesses': businesses.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ListBusinessesResponseBusinessesItem {
+  const ListBusinessesResponseBusinessesItem({this.current, required this.id, required this.name});
+
+  final bool? current;
+  final String id;
+  final String name;
+
+  factory ListBusinessesResponseBusinessesItem.fromJson(Map<String, dynamic> j) => ListBusinessesResponseBusinessesItem(
+        current: j['current'] == null ? null : j['current'] as bool,
+        id: j['id'] as String,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'current': ?current,
+        'id': id,
+        'name': name,
+      };
+}
+
+class SwitchBusinessRequest {
+  const SwitchBusinessRequest({required this.tenantId});
+
+  final String tenantId;
+
+  factory SwitchBusinessRequest.fromJson(Map<String, dynamic> j) => SwitchBusinessRequest(
+        tenantId: j['tenant_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'tenant_id': tenantId,
       };
 }

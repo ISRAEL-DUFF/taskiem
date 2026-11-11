@@ -18735,6 +18735,78 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/businesses:
+    get:
+      operationId: listBusinesses
+      tags:
+      - Authentication
+      summary: Your businesses
+      description: The businesses the person belongs to, by name, the one this session is in marked (the phone app's
+        switcher).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The businesses
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [businesses]
+                properties:
+                  businesses:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        current:
+                          type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/switch:
+    post:
+      operationId: switchBusiness
+      tags:
+      - Authentication
+      summary: Switch business
+      description: 'Ends this session and answers one in the other business, as signing in does (the token with a bearer
+        session, the cookie with a cookie one). The new session is the same in every other way: the person, how and
+        when they signed in (which step-up reads), the phone and its expiry. Not a fresh sign-in. 401 `sso_required`
+        when that business signs in with single sign-on. Audited as `auth.switch`. An API key is refused (403): it
+        belongs to one business.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenant_id]
+              properties:
+                tenant_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Switched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/devices:
     get:
       operationId: listDevices
