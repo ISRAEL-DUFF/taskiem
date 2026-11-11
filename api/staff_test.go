@@ -639,3 +639,43 @@ func TestStaffTasksFixes(t *testing.T) {
 		t.Fatalf("clocked in by a location: %d %v", shifts, err)
 	}
 }
+
+// A task for someone on no chat app reaches their Taskiem chat on the web,
+// with Done and Can't that work there (it reached only the bell before).
+func TestStaffTaskOnTheWeb(t *testing.T) {
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(200, "PUT", "/v1/settings/chat-tools", map[string]any{"chat_tools": true})
+	cashier := w.member(t, owner, "web@acme.test", "cashier")
+	cashID := cashier.must(200, "GET", "/v1/me", nil)["user"].(map[string]any)["id"].(string)
+	task := owner.must(201, "POST", "/v1/staff/tasks", map[string]any{"what": "restock the drinks fridge", "to_user": cashID})["task"].(map[string]any)
+	w.srv.WaitBackground()
+
+	msgs := cashier.must(200, "GET", "/v1/taskiem-chat", nil)["messages"].([]any)
+	if len(msgs) == 0 {
+		t.Fatal("nothing in the cashier's Taskiem chat")
+	}
+	last := msgs[len(msgs)-1].(map[string]any)
+	if !strings.Contains(fmt.Sprint(last["text"]), "asked you: restock the drinks fridge") {
+		t.Fatalf("the task in the chat: %v", last)
+	}
+	var done string
+	for _, b := range last["buttons"].([]any) {
+		if m := b.(map[string]any); m["title"] == "Done" {
+			done, _ = m["id"].(string)
+		}
+	}
+	if done == "" {
+		t.Fatalf("no Done to press: %v", last)
+	}
+	cashier.must(200, "POST", "/v1/taskiem-chat", map[string]any{"reply": done, "text": "Done"})
+	state := ""
+	for _, x := range cashier.must(200, "GET", "/v1/staff/tasks", nil)["tasks"].([]any) {
+		if m := x.(map[string]any); m["id"] == task["id"] {
+			state, _ = m["state"].(string)
+		}
+	}
+	if state != "done" {
+		t.Fatalf("the task after Done in the chat: %q", state)
+	}
+}

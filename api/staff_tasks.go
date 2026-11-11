@@ -358,6 +358,13 @@ func (s *Server) tellAbout(ctx context.Context, tenant uuid.UUID, users []uuid.U
 				}
 			}
 		}
+		// Someone on no chat app hears in their Taskiem chat on the web,
+		// with the same buttons.
+		for _, u := range users {
+			if !slices.ContainsFunc(to, func(t taskTold) bool { return t.user == u }) {
+				to = append(to, taskTold{channel: "web", addr: webAddr(u), user: u})
+			}
+		}
 		return nil
 	})
 	if err != nil {
@@ -370,7 +377,7 @@ func (s *Server) tellAbout(ctx context.Context, tenant uuid.UUID, users []uuid.U
 			continue
 		}
 		m := linkPhoneMessage(tenant, ch.Prefix(""), title, body, buttons)
-		if task != nil {
+		if task != nil && t.channel != "web" {
 			tpl := whatsapp.TplStaffTask
 			m.Template, m.Vars = &tpl, map[string]string{"tenant": business, "giver": task.Giver, "task": clip(task.line(s.staffNow()), 300)}
 			m.Payloads = []string{taskPrefix + "done:" + task.ID.String(), taskPrefix + "cant:" + task.ID.String()}
