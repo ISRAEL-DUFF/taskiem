@@ -2,6 +2,7 @@
 // panel and what each one's sheet lists. Phase 1 shows each tool's list in
 // the sheet frame, with "Open full page"; phase 2 makes them work in place.
 
+import { shortWhen } from "./time";
 import { categoriesOf } from "./mentions";
 import { hasSizes, sizesLine, sizesWords } from "./variants";
 import { formatPrice } from "./storefront";
@@ -13,6 +14,17 @@ import type { Table } from "./tables";
 import type { Purchase } from "./purchases";
 import type { Bill } from "./bills";
 import { purchaseState } from "./buyer";
+import type { CustomerInvoice } from "./invoices";
+import {
+  entryName,
+  entryPill,
+  entrySub,
+  entryTags,
+  invoicePill,
+  invoiceSub,
+  invoiceTags,
+  type MoneyEntry,
+} from "./chatmoney";
 
 export type ToolKey =
   | "products"
@@ -23,11 +35,39 @@ export type ToolKey =
   | "tables"
   | "purchases"
   | "bills"
+  | "invoices"
+  | "money"
   | "order"
   | "sell"
-  | "handover";
+  | "handover"
+  | "availability";
 
 export type PillTone = "warn" | "lime" | "plain";
+
+/** A rider's business's availability (GET /v1/availability). */
+export interface Availability {
+  state: "free" | "busy" | "off";
+  until?: string;
+  since?: string;
+  open?: number;
+  /** How many businesses use it as a rider; 0 means nothing is kept yet. */
+  businesses: number;
+}
+
+/** "Free", "Busy till 15:30", "Busy, 2 deliveries", "Off today". */
+export function availabilityWord(a: Availability): string {
+  switch (a.state) {
+    case "off":
+      return "Off today";
+    case "busy":
+      if (a.until) return `Busy till ${shortWhen(new Date(a.until))}`;
+      if (a.open)
+        return `Busy, ${a.open} ${a.open === 1 ? "delivery" : "deliveries"}`;
+      return "Busy";
+    default:
+      return "Free";
+  }
+}
 
 /** One row of a tool's sheet. */
 export interface ToolRow {
@@ -53,6 +93,9 @@ export interface ToolRow {
 export interface Tool {
   key: ToolKey;
   title: string;
+  /** The title from the rows, when it depends on them (Orders is
+   * Deliveries for a business whose orders are all deliveries). */
+  titleFor?: (rows: ToolRow[]) => string;
   icon: string;
   /** The permission it needs. */
   perm: string;
@@ -73,6 +116,8 @@ export interface Tool {
   rowIcon?: string;
   /** Only for the staff whose role gives it (Handover). */
   staffOnly?: boolean;
+  /** Only for a business that delivers for others (Availability). */
+  deliversOnly?: boolean;
 }
 
 const count = (n: number, one: string, many = `${one}s`) =>
@@ -150,6 +195,7 @@ const ORDER_WORD: Record<string, string> = {
   accepted: "Accepted",
   ready: "Ready",
   dispatched: "On the way",
+  arrived: "At the door",
   delivered: "Delivered",
   declined: "Declined",
   cancelled: "Cancelled",
@@ -183,6 +229,40 @@ export const TOOLS: Tool[] = [
     line: () => "Hand the shift over",
     staffOnly: true,
     more: "Open stock",
+  },
+  {
+    // A rider's business: free, busy till a time, or off (docs/spec/
+    // chat-riders.md, phase 3). One row, the state, so the tile reads it.
+    key: "availability",
+    title: "Availability",
+    icon: "clock",
+    perm: "link.manage",
+    url: "/v1/availability",
+    page: "/chat",
+    rows: (data) => {
+      const a = data as Availability | undefined;
+      return a
+        ? [
+            {
+              id: "me",
+              name: availabilityWord(a),
+              sub: "",
+              href: "/chat",
+              tags: a.state === "free" ? [] : [a.state],
+              data: a,
+            },
+          ]
+        : [];
+    },
+    line: (r) => r[0]?.name ?? "Free",
+    badge: (r) => {
+      const a = r[0]?.data as Availability | undefined;
+      return a && a.state !== "free"
+        ? { text: a.state === "off" ? "Off" : "Busy", tone: "warn" }
+        : undefined;
+    },
+    deliversOnly: true,
+    more: "Open chat",
   },
   {
     key: "products",
@@ -282,9 +362,14 @@ export const TOOLS: Tool[] = [
         (o) => ({
           id: o.id,
           name: o.order_reference,
-          sub: `${o.buyer_name} · ${formatPrice(o.total_kobo)}`,
+          sub: o.delivery
+            ? `${o.buyer_name} · Delivery${o.delivery.drop_area ? ` to ${o.delivery.drop_area}` : ""} · ${formatPrice(o.total_kobo)}`
+            : `${o.buyer_name} · ${formatPrice(o.total_kobo)}`,
           pill: {
-            text: ORDER_WORD[o.status] ?? o.status,
+            text:
+              o.delivery && o.status === "received"
+                ? "Offered"
+                : (ORDER_WORD[o.status] ?? o.status),
             tone:
               o.status === "received"
                 ? "lime"
@@ -298,6 +383,11 @@ export const TOOLS: Tool[] = [
         }),
       ),
     line: () => "From businesses",
+    titleFor: (rows) =>
+      rows.length > 0 &&
+      rows.every((r) => (r.data as TradeOrder | undefined)?.delivery)
+        ? "Deliveries"
+        : "Orders",
     rowIcon: "invoices",
     badge: (r) => {
       const n = tagged(r, "new");
@@ -415,6 +505,79 @@ TOOLS.push(
   },
 );
 
+/** What the business is owed and the money it has (phase 2 additions):
+ * its invoices, and the money log. */
+TOOLS.push(
+  {
+    key: "invoices",
+    title: "Invoices",
+    icon: "invoices",
+    perm: "invoice.read",
+    url: "/v1/invoices?limit=200",
+    page: "/invoices",
+    rows: (data) =>
+      (
+        (data as { invoices?: CustomerInvoice[] } | undefined)?.invoices ?? []
+      ).map((x) => ({
+        id: x.id,
+        name: x.number,
+        sub: invoiceSub(x),
+        pill: invoicePill(x),
+        href: `/invoices/${encodeURIComponent(x.id)}`,
+        tags: invoiceTags(x),
+        words: (x.lines ?? []).map((l) => l.description).join(" "),
+        data: x,
+      })),
+    line: (r) => `${tagged(r, "owed")} owed`,
+    rowIcon: "invoices",
+    badge: (r) => {
+      const n = tagged(r, "overdue");
+      return n > 0 ? { text: `${n} overdue`, tone: "warn" } : undefined;
+    },
+    chips: [
+      { label: "Owed", tag: "owed" },
+      { label: "Overdue", tag: "overdue" },
+      { label: "Drafts", tag: "draft" },
+    ],
+    more: "Open invoices",
+  },
+  {
+    key: "money",
+    title: "Money",
+    icon: "money",
+    perm: "invoice.read",
+    url: "/v1/money/entries",
+    page: "/money",
+    rows: (data) =>
+      ((data as { entries?: MoneyEntry[] } | undefined)?.entries ?? []).map(
+        (e) => ({
+          id: e.id,
+          name: entryName(e),
+          sub: entrySub(e),
+          pill: entryPill(e),
+          href: "/money",
+          tags: entryTags(e),
+          category: e.category,
+          words: [e.vendor, e.reference, e.towards].filter(Boolean).join(" "),
+          data: e,
+        }),
+      ),
+    line: (r) =>
+      tagged(r, "match") > 0 ? `${tagged(r, "match")} to match` : "In and out",
+    rowIcon: "money",
+    badge: (r) => {
+      const n = tagged(r, "match");
+      return n > 0 ? { text: `${n} to match`, tone: "warn" } : undefined;
+    },
+    chips: [
+      { label: "In", tag: "in" },
+      { label: "Out", tag: "out" },
+      { label: "To match", tag: "match" },
+    ],
+    more: "Open money",
+  },
+);
+
 /** Staff who work from chat see their role's tools only (chat-tools.md §7):
  * a cashier sells, keeps the stock and works the orders; a shift manager
  * also hands the shift over. Anyone with another role sees every tool
@@ -425,19 +588,28 @@ export const ROLE_TOOLS: Record<string, ToolKey[]> = {
 };
 
 /** The tools a person's roles shape them to, or undefined for all. */
-export function roleTools(roles: string[] | undefined): Set<ToolKey> | undefined {
-  if (!roles || roles.length === 0 || roles.some((r) => !(r in ROLE_TOOLS))) return undefined;
+export function roleTools(
+  roles: string[] | undefined,
+): Set<ToolKey> | undefined {
+  if (!roles || roles.length === 0 || roles.some((r) => !(r in ROLE_TOOLS)))
+    return undefined;
   return new Set(roles.flatMap((r) => ROLE_TOOLS[r] ?? []));
 }
 
 /** The tools a person may open, matching what follows "/" (a word's start),
  * shaped to their role when they are staff. */
-export function toolsFor(can: (perm: string) => boolean, query = "", roles?: string[]): Tool[] {
+export function toolsFor(
+  can: (perm: string) => boolean,
+  query = "",
+  roles?: string[],
+  delivers = false,
+): Tool[] {
   const q = query.trim().toLowerCase();
   const only = roleTools(roles);
   return TOOLS.filter(
     (t) =>
       can(t.perm) &&
+      (!t.deliversOnly || delivers) &&
       (only ? only.has(t.key) : !t.staffOnly) &&
       (q === "" ||
         t.title

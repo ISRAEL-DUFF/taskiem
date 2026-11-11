@@ -35,12 +35,25 @@ export interface Briefing {
   day: string;
   key: string;
   put_off: boolean;
+  /** The part of the day it is in Lagos, for the greeting. */
+  part?: "morning" | "afternoon" | "evening";
+  /** When its numbers were read, "14:05" Lagos time. */
+  now?: string;
   sales?: { yesterday_kobo: number; change_pct: number | null; weekday: string; week: DaySales[] };
   owed_kobo?: number;
   low?: number;
   deliveries?: number;
   bookings?: number;
 }
+
+/** Asks the briefing card to come back (the tools menu's Briefing, or
+ * "briefing" typed in the Taskiem chat). */
+export const SHOW_BRIEFING = "taskiem:show-briefing";
+export const showBriefing = () => window.dispatchEvent(new Event(SHOW_BRIEFING));
+
+/** Typed words that ask for the briefing rather than tell Taskiem. */
+export const asksBriefing = (words: string) =>
+  /^(show (me )?)?(the |my |today'?s )?(morning )?briefing[.!?]?$/i.test(words.trim());
 
 /** The shift so far (GET /v1/chat-handover). */
 export interface Handover {

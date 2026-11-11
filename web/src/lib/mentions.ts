@@ -6,7 +6,17 @@ import type { ExploreCard } from "./explore";
 export interface Suggestion {
   /** A linked business, an item of a price list, a service, Taskiem, or
    * a category of items (picking it opens them, filtered). */
-  kind: "business" | "item" | "service" | "taskiem" | "category";
+  kind:
+    | "business"
+    | "item"
+    | "service"
+    | "taskiem"
+    | "category"
+    | "invoice"
+    | "bill"
+    | "order"
+    | "purchase"
+    | "customer";
   /** The link (a business) or the seller's item id. */
   id: string;
   name: string;
@@ -25,7 +35,7 @@ export interface Suggestion {
 
 /** A mention as a message stores it. */
 export interface Mention {
-  kind: "business" | "item" | "service";
+  kind: "business" | "item" | "service" | "invoice" | "bill" | "order" | "purchase";
   name: string;
   link?: string;
   item_id?: string;
@@ -34,22 +44,83 @@ export interface Mention {
   /** One of the sender's own services, and how long it takes. */
   service_id?: string;
   minutes?: number;
+  /** An invoice or an order between the two businesses: our id for it
+   * (on our copy only), and its status when it was named. */
+  ref?: string;
+  status?: string;
 }
 
+/** What "/" picks to tag (phase 2 additions): "/invoice" (invoices and
+ * bills), "/bill", "/order" (orders and purchases), "/purchase",
+ * "/product", "/customer", then a space or "/" and the words to find. */
+export type RefKind = "invoice" | "bill" | "order" | "purchase" | "product" | "customer";
+
+export const REF_KINDS: RefKind[] = ["invoice", "bill", "order", "purchase", "product", "customer"];
+
+/** The picker's heading for each. */
+export const REF_LABEL: Record<RefKind, string> = {
+  invoice: "Invoices and bills",
+  bill: "Bills",
+  order: "Orders",
+  purchase: "Your orders to suppliers",
+  product: "Products",
+  customer: "Customers",
+};
+
 export interface MentionQuery {
-  mark: "@" | "#";
+  mark: "@" | "#" | "/";
   query: string;
   /** Where the mark is in the text. */
   start: number;
+  /** "/": what is being picked. */
+  kind?: RefKind;
+}
+
+const REF_STATUS: Record<string, string> = {
+  sent: "sent",
+  open: "to pay",
+  part_paid: "part-paid",
+  paid: "paid",
+  overdue: "overdue",
+  void: "cancelled",
+  disputed: "questioned",
+  paying: "being paid",
+  received: "new",
+  changed: "changed",
+  accepted: "accepted",
+  dispatched: "on the way",
+  delivered: "delivered",
+  declined: "declined",
+  cancelled: "cancelled",
+  confirmed: "confirmed",
+  part_received: "part received",
+};
+
+/** An invoice's or an order's status, as a reference shows it. */
+export const refStatusWords = (s: string) =>
+  REF_STATUS[s] ?? s.replaceAll("_", " ");
+
+/** "/invoice ada" or "/invoices/ada": the kind and the words, or null. */
+function refQuery(after: string): { kind: RefKind; query: string } | null {
+  const m = /^(invoice|bill|order|purchase|product|customer)s?[/ ](.*)$/i.exec(after);
+  if (!m) return null;
+  return { kind: (m[1] ?? "").toLowerCase() as RefKind, query: m[2] ?? "" };
 }
 
 /** The mention being typed before the caret: "@" or "#" at the start or
  * after a space, then up to 40 characters on the line; null when none. */
 export function mentionQuery(text: string, caret: number): MentionQuery | null {
   const before = text.slice(0, caret);
-  for (let i = before.length - 1; i >= 0 && before.length - i <= 41; i--) {
+  for (let i = before.length - 1; i >= 0 && before.length - i <= 51; i--) {
     const ch = before.charAt(i);
     if (ch === "\n") return null;
+    if (ch === "/" && (i === 0 || /\s|\(/.test(before.charAt(i - 1)))) {
+      const r = refQuery(before.slice(i + 1));
+      if (r) return { mark: "/", query: r.query, start: i, kind: r.kind };
+      continue;
+    }
+    // "@" and "#" look back 40 characters; "/invoice " a little further.
+    if (before.length - i > 41) continue;
     if (
       (ch === "@" || ch === "#") &&
       (i === 0 || /\s|\(/.test(before.charAt(i - 1)))
@@ -131,7 +202,8 @@ export function insertMention(
   caret: number,
   name: string,
 ): { text: string; caret: number } {
-  const head = text.slice(0, q.start) + q.mark + name + " ";
+  // A thing picked with "/" is written as "#" writes an item: "#INV-0104".
+  const head = text.slice(0, q.start) + (q.mark === "/" ? "#" : q.mark) + name + " ";
   return { text: head + text.slice(caret), caret: head.length };
 }
 

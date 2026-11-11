@@ -1,3 +1,6 @@
+import type { ToolKey } from "../lib/tools";
+import { docMentions, refSources, type ChatRef } from "../lib/refs";
+import { RefCard } from "./ChatRefCard";
 import {
   useCallback,
   useEffect,
@@ -38,7 +41,7 @@ import { ContactInfo } from "./ContactInfo";
 import { useConfirm } from "./ConfirmSheet";
 import { DealActions, DealHistory } from "./ChatDeal";
 import { useChatTools } from "../lib/useChatTools";
-import { ORDER_STEPS, cardKicker, cardStatus, isDiary } from "../lib/cardframe";
+import { cardKicker, cardStatus, isDiary, stepsFor } from "../lib/cardframe";
 import { DiaryLine } from "../kit";
 import {
   chime,
@@ -144,6 +147,96 @@ function CardActions({
       if (card.was_kobo !== undefined)
         return <DealActions card={card} side="buyer" onDone={onDone} />;
       break;
+  }
+  // A delivery of ours to make (docs/spec/chat-riders.md): each step from
+  // the card, as the rider's WhatsApp button would take it.
+  if (card.doc === "delivery" && can("storefront.manage|order.handle")) {
+    const step = (s: string, done: string) => (
+      <button
+        type="button"
+        className="small primary"
+        disabled={act.busy}
+        onClick={() => go(`/v1/trade-orders/${id}/${s}`, done)}
+      >
+        {done}
+        {who}
+      </button>
+    );
+    switch (card.event) {
+      case "offered":
+        buttons = (
+          <>
+            {step("accept", "Accept")}
+            <button
+              type="button"
+              className="small"
+              disabled={act.busy}
+              onClick={() =>
+                go(`/v1/trade-orders/${id}/cant`, `Passed on ${card.reference}`)
+              }
+            >
+              Can&apos;t{who}
+            </button>
+          </>
+        );
+        break;
+      case "accepted":
+        buttons = step("picked_up", "Picked up");
+        break;
+      case "picked_up":
+        buttons = step("arrived", "Arrived");
+        break;
+      case "arrived":
+        buttons = step("delivered", "Delivered");
+        break;
+    }
+  }
+  // Our rider's delivery, done: our word pays the fee (phase 4), by bank
+  // through the payout, or handed over in cash.
+  if (
+    card.doc === "dispatch" &&
+    card.event === "delivered" &&
+    can("storefront.manage")
+  ) {
+    const ref = encodeURIComponent(card.reference);
+    buttons = (
+      <>
+        <button
+          type="button"
+          className="small primary"
+          disabled={act.busy}
+          onClick={() =>
+            void act.run(
+              async () => (
+                await post(`/v1/storefront/orders/${ref}/confirm`, {}),
+                onDone()
+              ),
+              `Confirmed ${card.reference}`,
+            )
+          }
+        >
+          Confirm, pay the fee{who}
+        </button>
+        <button
+          type="button"
+          className="small"
+          disabled={act.busy}
+          onClick={() =>
+            void act.run(
+              async () => (
+                await post(`/v1/storefront/orders/${ref}/confirm`, {
+                  how: "cash",
+                }),
+                onDone()
+              ),
+              `${card.reference} paid in cash`,
+            )
+          }
+        >
+          Paid in cash{who}
+        </button>
+      </>
+    );
   }
   switch (`${card.doc}:${card.event}`) {
     case "order:ordered":
@@ -541,6 +634,7 @@ function Bubble({
   cheer = false,
   live,
   onOpenDoc,
+  refs,
 }: {
   m: LinkMessage;
   other: string;
@@ -575,6 +669,12 @@ function Bubble({
   live?: Live;
   /** Chat tools: a card of our order or bill opens it in a sheet. */
   onOpenDoc?: (card: DocCard, from: DOMRect) => void;
+  /** An invoice, bill or order the message names shows as a card, read
+   * as this side has it (the conversation's link). */
+  refs?: {
+    link: string;
+    openTool?: (k: ToolKey, from?: DOMRect, start?: { rowId?: string }) => void;
+  };
 }) {
   const card = m.kind === "card" ? m.card : undefined;
   const fold = useFold(m.body ?? "");
@@ -817,15 +917,18 @@ function Bubble({
             </button>
           ) : (
             <Link to={cardHref(card)} className="button small">
-              {card.doc === "order" || card.doc === "purchase"
-                ? "View order"
-                : "View invoice"}
+              {card.doc === "delivery" || card.doc === "dispatch"
+                ? "View delivery"
+                : card.doc === "order" || card.doc === "purchase"
+                  ? "View order"
+                  : "View invoice"}
               <span className="sr-only"> {card.reference}</span>
             </Link>
           )}
-          {latest && !m.mine && (
-            <CardActions card={card} onDone={onDone} onOpenDoc={onOpenDoc} />
-          )}
+          {latest &&
+            (!m.mine || card.doc === "delivery" || card.doc === "dispatch") && (
+              <CardActions card={card} onDone={onDone} onOpenDoc={onOpenDoc} />
+            )}
         </CardFrame>
       ) : (
         <>
@@ -854,6 +957,14 @@ function Bubble({
               )}
             </span>
           )}
+          {refs &&
+            docMentions(m.mentions).map((x) => (
+              <RefCard
+                key={`${x.kind}:${x.name}`}
+                url={`/v1/link-chats/${encodeURIComponent(refs.link)}/card?kind=${x.kind}&name=${encodeURIComponent(x.name)}`}
+                openTool={refs.openTool}
+              />
+            ))}
           {m.preview && <PreviewCard p={m.preview} />}
         </>
       )}
@@ -876,6 +987,7 @@ function CardFrame({
   children: ReactNode;
 }) {
   const st = cardStatus(now ?? card);
+  const steps = stepsFor(card);
   return (
     <article className="tk-chatcard" aria-label={cardKicker(card)}>
       <span className="tk-chatcard-top">
@@ -892,14 +1004,14 @@ function CardFrame({
           <span
             className="tk-progress-bar"
             role="img"
-            aria-label={`${ORDER_STEPS[st.step]}: step ${st.step + 1} of ${ORDER_STEPS.length}`}
+            aria-label={`${steps[st.step]}: step ${st.step + 1} of ${steps.length}`}
           >
-            {ORDER_STEPS.map((w, i) => (
+            {steps.map((w, i) => (
               <span key={w} className={i <= (st.step ?? -1) ? "done" : ""} />
             ))}
           </span>
           <span className="tk-progress-words" aria-hidden="true">
-            {ORDER_STEPS.map((w, i) => (
+            {steps.map((w, i) => (
               <span key={w} className={i === st.step ? "now" : ""}>
                 {w}
               </span>
@@ -1072,6 +1184,17 @@ export function ConversationPane({
     [conv.link],
   );
   const items = { data: priced.data?.items };
+  // What "/invoice" and "/order" offer: what is between us and them only.
+  const shared = useLoad(
+    () =>
+      get<{ refs: ChatRef[] }>(
+        `/v1/link-chats/${encodeURIComponent(conv.link)}/refs`,
+      ).then(
+        (r) => refSources(r.refs ?? []),
+        () => refSources([]),
+      ),
+    [conv.link],
+  );
   // Live cards read our own stock, and the picker offers our own services
   // (chat tools; each only to those who may see it).
   const ownStock = useLoad(
@@ -1132,6 +1255,16 @@ export function ConversationPane({
     c.openTool(card.doc === "purchase" ? "purchases" : "bills", from, {
       rowId: card.id,
     });
+  const priceItems = (items.data ?? [])
+    .filter((it) => it.available)
+    .map((it) => ({
+      kind: "item" as const,
+      id: it.item_id,
+      name: it.name,
+      sub: priceWords(it),
+      category: it.category,
+      words: it.description,
+    }));
   const c = useComposer<LinkMessage>({
     draftKey: conv.link,
     rules: BUSINESS_FILES,
@@ -1162,16 +1295,10 @@ export function ConversationPane({
           .filter(Boolean)
           .join(" · "),
       })),
-      "#": (items.data ?? [])
-        .filter((it) => it.available)
-        .map((it) => ({
-          kind: "item" as const,
-          id: it.item_id,
-          name: it.name,
-          sub: priceWords(it),
-          category: it.category,
-          words: it.description,
-        })),
+      "#": priceItems,
+      // "/product" is "#"'s items; a customer is never named to another
+      // business.
+      refs: { ...shared.data, product: priceItems },
       // A category opens where it can be seen: their list, to order from
       // (supplies), or our own products (table.read); otherwise none is
       // offered, as a tap would open nothing of theirs.
@@ -1778,6 +1905,7 @@ export function ConversationPane({
               cheer={cheer === m.id}
               live={chatTools ? liveNow : undefined}
               onOpenDoc={chatTools ? openDoc : undefined}
+              refs={{ link: conv.link, openTool: chatTools ? c.openTool : undefined }}
             />
           )
         }

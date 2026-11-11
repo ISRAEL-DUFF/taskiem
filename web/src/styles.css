@@ -1753,6 +1753,7 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
 .mention-list button:hover, .mention-list button:focus-visible { background: var(--panel-2); }
 .mention-list .name { font-weight: 600; overflow-wrap: anywhere; }
 .bubble .mention { font-weight: 600; color: var(--tint-text); }
+.bubble button.mention-open { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--tint-text); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 
 /* The chat fills the window, as WhatsApp Web does: the menu is a rail, the
    list and the open conversation each scroll inside, the composer stays at

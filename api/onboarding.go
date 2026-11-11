@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/mail"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -18,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/areas"
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/schools"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 )
@@ -233,7 +235,7 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 	if req.Kinds != nil {
 		var err error
 		if start, err = areas.FromKinds(*req.Kinds); err != nil {
-			refuse("invalid", http.StatusBadRequest, "kinds are shop, service or school (any number, or none for just workflows)")
+			refuse("invalid", http.StatusBadRequest, "kinds are shop, service, delivery or school (any number, or none for just workflows)")
 			return
 		}
 	}
@@ -268,6 +270,11 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 			}
 			if start.On(areas.Schools) {
 				if _, err := schools.SetEnabled(r.Context(), tx, tenant, true, "signup"); err != nil {
+					return err
+				}
+			}
+			if slices.Contains(*req.Kinds, "delivery") {
+				if err := startDeliveryBusinessTx(r.Context(), tx, tenant, "system:signup"); err != nil {
 					return err
 				}
 			}
@@ -489,6 +496,17 @@ func (s *Server) needVerified(r *http.Request, sendsEmail bool) error {
 		return fmt.Errorf("%w: %s", errForbidden, chatUnverifiedMsg)
 	}
 	return fmt.Errorf("%w: %s", errForbidden, unverifiedMsg)
+}
+
+// startDeliveryBusinessTx sets up a business that delivers for others
+// (docs/spec/chat-riders.md, phase 2): its chat tools on from the start
+// (its work is in the conversations), and its profile saying it delivers,
+// so Explore's Delivery section lists it once it chooses to be found.
+func startDeliveryBusinessTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, by string) error {
+	if _, err := tx.Exec(ctx, `UPDATE tenants SET chat_tools = true WHERE id = $1`, tenant); err != nil {
+		return err
+	}
+	return links.SetDeliversTx(ctx, tx, tenant, by)
 }
 
 // checklistItem is one step of getting started; the web app words it.

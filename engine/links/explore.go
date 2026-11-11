@@ -19,6 +19,9 @@ const (
 	SectionSearch = "search"
 	SectionNear   = "near"
 	SectionNew    = "new"
+	// SectionDelivery lists the businesses that deliver for others (riders,
+	// docs/spec/chat-riders.md), those covering our area first.
+	SectionDelivery = "delivery"
 )
 
 // ExploreCard is a business as Explore shows it: its profile (or storefront
@@ -38,21 +41,29 @@ type ExploreCard struct {
 	State    string   `json:"state"`
 	// Ver changes when its logo or photos do: it keys the pictures' cache.
 	Ver string `json:"v"`
+	// Delivers says it delivers for other businesses: with what, and where.
+	Delivers      bool     `json:"delivers,omitempty"`
+	Vehicle       string   `json:"vehicle,omitempty"`
+	DeliveryAreas []string `json:"delivery_areas,omitempty"`
+	// Available is a delivery business's state as businesses may know it
+	// (free, busy or off); "" when no business uses it as a rider yet.
+	Available string `json:"available,omitempty"`
 }
 
 // ExploreTx lists businesses for a section: what a search for q finds
 // (SectionSearch, at most 20), the findable businesses in our own area
-// (SectionNear) or the newest (SectionNew); the last two page by offset and
-// leave out the businesses already linked with.
+// (SectionNear), the newest (SectionNew) or those that deliver for others
+// (SectionDelivery); the last three page by offset and leave out the
+// businesses already linked with.
 func ExploreTx(ctx context.Context, tx pgx.Tx, section, q string, limit, offset int) ([]ExploreCard, error) {
-	rows, err := tx.Query(ctx, `SELECT business, name, COALESCE(slug, ''), COALESCE(area, ''), COALESCE(tagline, ''), COALESCE(about, ''), has_logo, photos, state, ver
-		FROM taskiem_link_explore($1, $2, $3, $4)`, section, q, limit, offset)
+	rows, err := tx.Query(ctx, `SELECT business, name, COALESCE(slug, ''), COALESCE(area, ''), COALESCE(tagline, ''), COALESCE(about, ''), has_logo, photos, state, ver,
+		delivers, COALESCE(vehicle, ''), delivery_areas FROM taskiem_link_explore($1, $2, $3, $4)`, section, q, limit, offset)
 	if err != nil {
 		return nil, pgErr(err)
 	}
 	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ExploreCard, error) {
 		var c ExploreCard
-		return c, r.Scan(&c.Business, &c.Name, &c.Slug, &c.Area, &c.Tagline, &c.About, &c.Logo, &c.Photos, &c.State, &c.Ver)
+		return c, r.Scan(&c.Business, &c.Name, &c.Slug, &c.Area, &c.Tagline, &c.About, &c.Logo, &c.Photos, &c.State, &c.Ver, &c.Delivers, &c.Vehicle, &c.DeliveryAreas)
 	})
 	if out == nil {
 		out = []ExploreCard{}
@@ -60,7 +71,42 @@ func ExploreTx(ctx context.Context, tx pgx.Tx, section, q string, limit, offset 
 	if err == nil && len(out) > 0 {
 		err = exploreCaptionsTx(ctx, tx, out)
 	}
+	if err == nil {
+		err = exploreAvailabilityTx(ctx, tx, out)
+	}
 	return out, pgErr(err)
+}
+
+// exploreAvailabilityTx fills in, for the cards of businesses that
+// deliver, whether each is free, busy or off, in one query.
+func exploreAvailabilityTx(ctx context.Context, tx pgx.Tx, cards []ExploreCard) error {
+	var ids []uuid.UUID
+	for _, c := range cards {
+		if c.Delivers {
+			ids = append(ids, c.Business)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	rows, err := tx.Query(ctx, `SELECT b.id, taskiem_link_availability(b.id) FROM unnest($1::uuid[]) AS b(id)`, ids)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var b uuid.UUID
+		var state *string
+		if err := rows.Scan(&b, &state); err != nil {
+			return err
+		}
+		for i := range cards {
+			if cards[i].Business == b && state != nil {
+				cards[i].Available = *state
+			}
+		}
+	}
+	return rows.Err()
 }
 
 // PhotoURLsTx is the nth photo shown for a business, the sizes it was stored
@@ -98,7 +144,7 @@ func ExploreLogoURLsTx(ctx context.Context, tx pgx.Tx, business uuid.UUID) (map[
 
 // ValidSection reports whether s is a section Explore lists.
 func ValidSection(s string) bool {
-	return s == SectionSearch || s == SectionNear || s == SectionNew
+	return s == SectionSearch || s == SectionNear || s == SectionNew || s == SectionDelivery
 }
 
 // exploreCaptionsTx fills in each card's photo captions, in one query.

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 )
 
@@ -249,6 +250,22 @@ func (o *Orders) Paid(ctx context.Context, tenant uuid.UUID, c Counted) error {
 		if err := o.AfterPaid(ctx, tenant, c.Order); err != nil {
 			o.log().Warn("storefront: after a payment", "reference", c.Order.Reference, "err", err)
 		}
+	}
+	if c.Became && c.Order.Kind == "chat" {
+		// An order confirmed from a customer's message (phase 2): paid by
+		// transfer, its stock goes now, and the customer is told in their
+		// thread.
+		if _, err := o.LowerStock(ctx, tenant, c.Order.Reference); err != nil {
+			o.log().Warn("storefront: lowering a paid chat order's stock", "reference", c.Order.Reference, "err", err)
+		}
+		// Paid at the door, dispatch tells them (D4).
+		if o.ChatNotify != nil && c.Order.Payment != "on_delivery" {
+			text := lang.Default().Text(o.CustomerLanguage(ctx, tenant), "customer.chat_paid", "reference", c.Order.Reference)
+			if err := o.ChatNotify(ctx, tenant, c.Order, text); err != nil {
+				o.log().Warn("storefront: telling a customer their order is paid", "reference", c.Order.Reference, "err", err)
+			}
+		}
+		return nil
 	}
 	if !c.Became && !c.Step || !c.wake {
 		return nil

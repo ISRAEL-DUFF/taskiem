@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/riders"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -109,16 +111,61 @@ func (s *Server) addRider(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	var x riders.Rider
+	var told uuid.UUID
 	err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		x, err = s.Riders.AddTx(r.Context(), tx, p.TenantID, in, p.Actor())
+		if x, err = s.Riders.AddTx(r.Context(), tx, p.TenantID, in, p.Actor()); err != nil {
+			return err
+		}
+		x, told, err = s.linkRiderTx(r.Context(), tx, p.TenantID, x, links.Actor{Type: p.ActorType(), ID: p.Actor()})
 		return err
 	})
 	if err != nil {
 		s.riderFail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"rider": x})
+	s.tellLinkAsked(r.Context(), told, p.TenantID)
+	writeJSON(w, http.StatusCreated, map[string]any{"rider": x, "link_requested": told != uuid.Nil})
+}
+
+// linkRiderTx links a business with a rider just added whose phone is a
+// business on Taskiem (docs/spec/chat-riders.md, phase 2): one already
+// linked with is named on the rider at once; otherwise the rider's
+// business is asked to link, as a supplier, from the phone (a blind
+// request: nothing is told of who is behind the number until they answer).
+// The business asked, when a request went out (for tellLinkAsked once the
+// transaction is committed), else uuid.Nil. A business past the day's
+// requests, or one that cannot be asked, leaves the rider as added.
+func (s *Server) linkRiderTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x riders.Rider, by links.Actor) (riders.Rider, uuid.UUID, error) {
+	if x.LinkID != nil || x.Phone == "" {
+		return x, uuid.Nil, nil
+	}
+	is, err := riders.PhoneIsBusinessTx(ctx, tx, x.Phone)
+	if err != nil || !is {
+		return x, uuid.Nil, err
+	}
+	if _, err := s.Riders.ClaimLinkedTx(ctx, tx, tenant); err != nil {
+		return x, uuid.Nil, err
+	}
+	if x, err = s.Riders.GetTx(ctx, tx, tenant, x.ID); err != nil || x.LinkID != nil {
+		return x, uuid.Nil, err
+	}
+	// Under a savepoint: a refusal raised in the database must not end
+	// the transaction that added the rider.
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		return x, uuid.Nil, err
+	}
+	told, err := links.RequestBlindTx(ctx, sp, tenant, links.Blind{Phone: x.Phone}, links.RoleSupplier, by, s.linkKey(tenant))
+	switch {
+	case errors.Is(err, links.ErrTooMany), errors.Is(err, links.ErrState), errors.Is(err, links.ErrInvalid):
+		s.Logger.Warn("riders: asking the rider's business to link", "tenant", tenant, "err", err)
+		return x, uuid.Nil, sp.Rollback(ctx)
+	case err != nil:
+		_ = sp.Rollback(ctx)
+		return x, uuid.Nil, err
+	}
+	return x, told, sp.Commit(ctx)
 }
 
 // riderAction runs one change to a rider named in the path.

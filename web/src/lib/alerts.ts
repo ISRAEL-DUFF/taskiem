@@ -9,9 +9,11 @@ export type AlertKind =
   | "overdue"
   | "new_order"
   | "rider"
+  | "confirm"
   | "unmatched"
   | "approval"
-  | "deal";
+  | "deal"
+  | "order_draft";
 
 export interface ChatAlert {
   key: string;
@@ -20,7 +22,8 @@ export interface ChatAlert {
   title: string;
   line: string;
   amount_kobo?: number;
-  /** The stock item, invoice, order, payment entry or run. */
+  /** The stock item, invoice, order, payment entry or run; for an
+   * order read from a customer's message, their thread. */
   id?: string;
   reference?: string;
   reorder?: {
@@ -46,9 +49,11 @@ export const ALERT_LOOK: Record<
   overdue: { icon: "invoices", tone: "warn" },
   new_order: { icon: "orders", tone: "lime" },
   rider: { icon: "store", tone: "plain" },
+  confirm: { icon: "money", tone: "lime" },
   unmatched: { icon: "money", tone: "plain" },
   approval: { icon: "approvals", tone: "plain" },
   deal: { icon: "money", tone: "warn" },
+  order_draft: { icon: "chat", tone: "lime" },
 };
 
 /** "Reorder 20 from Bayo Rice Mills". */

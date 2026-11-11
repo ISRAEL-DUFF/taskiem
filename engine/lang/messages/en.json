@@ -2859,6 +2859,36 @@
       "reviewed": true,
       "context": "The owner's add rider was missing the name or phone; keep the command in English"
     },
+    "wa.riders.added_linked": {
+      "text": "{name} is now your rider, and their business is linked with yours: their deliveries reach them in Taskiem.",
+      "reviewed": true,
+      "context": "The owner added a rider whose business is already linked with theirs"
+    },
+    "wa.riders.added_asked": {
+      "text": "{name} is now your rider. Their business is on Taskiem, so I asked it to link with yours: once it says yes, their deliveries reach them in Taskiem.",
+      "reviewed": true,
+      "context": "The owner added a rider whose business is on Taskiem: it was asked to link"
+    },
+    "wa.riders.confirmed": {
+      "text": "Confirmed {reference}: paying {name} {amount}. I will tell you when it lands.",
+      "reviewed": true,
+      "context": "The owner confirmed a delivery; the rider's fee is being paid to their bank"
+    },
+    "wa.riders.confirmed_cash": {
+      "text": "Confirmed {reference}: {name} was paid {amount} in cash. It is in your money log.",
+      "reviewed": true,
+      "context": "The owner confirmed a delivery and handed the fee over in cash"
+    },
+    "wa.riders.confirmed_netted": {
+      "text": "Confirmed {reference}: {name}'s fee of {amount} came out of the cash they held. Nothing more to pay.",
+      "reviewed": true,
+      "context": "The owner confirmed a delivery; the fee was taken from the cash the rider owed"
+    },
+    "wa.riders.confirm_refused": {
+      "text": "I could not confirm that delivery: {reason}",
+      "reviewed": true,
+      "context": "Confirming a delivery was refused; reason is in English"
+    },
     "wa.riders.added": {
       "text": "{name} is now your rider. I sent them a link by SMS to get your deliveries on WhatsApp.",
       "reviewed": true,
@@ -5185,7 +5215,7 @@
       "context": "Sign-up question 2"
     },
     "signup.ask_sells": {
-      "text": "What do you sell or do? Reply with a number:\n1. Food\n2. Provisions\n3. Fashion\n4. Phones and gadgets\n5. School\n6. Salon\n7. Services\n8. Something else",
+      "text": "What do you sell or do? Reply with a number:\n1. Food\n2. Provisions\n3. Fashion\n4. Phones and gadgets\n5. School\n6. Salon\n7. Services\n8. Deliveries (I am a rider)\n9. Something else",
       "reviewed": true,
       "context": "Sign-up question 3, a numbered list"
     },
@@ -7408,6 +7438,66 @@
       "text": "{reference} came back {days} days late, so a late fee of {late_fee} is added. Left to pay: {balance}.",
       "reviewed": true,
       "context": "SMS to a customer: a hire returned late, with the fee and what is left (fronts F5)"
+    },
+    "customer.chat_order": {
+      "text": "Your order {reference}:",
+      "reviewed": true,
+      "context": "Heading of the order a business confirmed from a customer's WhatsApp message, before its lines"
+    },
+    "customer.chat_delivery": {
+      "text": "Delivery",
+      "reviewed": true,
+      "context": "The delivery fee's line in that order"
+    },
+    "customer.chat_total": {
+      "text": "Total",
+      "reviewed": true,
+      "context": "The total's line in that order"
+    },
+    "customer.chat_pay_link": {
+      "text": "Pay by bank transfer here: {link}",
+      "reviewed": true,
+      "context": "How the customer pays for an order confirmed from their WhatsApp message: the order's page gives an account number"
+    },
+    "customer.chat_pay_door": {
+      "text": "You pay when it arrives.",
+      "reviewed": true,
+      "context": "That order is paid at the door"
+    },
+    "customer.chat_paid": {
+      "text": "Paid, thank you: {reference}. We are getting it ready.",
+      "reviewed": true,
+      "context": "The customer's payment for that order was matched"
+    },
+    "customer.order_ask": {
+      "text": "To get your order right:",
+      "reviewed": true,
+      "context": "Before the questions a business asks a customer about the order they sent on WhatsApp"
+    },
+    "customer.order_which": {
+      "text": "{said}: {choices}?",
+      "reviewed": true,
+      "context": "A question when the customer's words fit several items; choices are joined with the word for or"
+    },
+    "customer.order_size": {
+      "text": "Which {product}? {choices}",
+      "reviewed": true,
+      "context": "A question when the customer did not say which size or colour"
+    },
+    "customer.order_how_many": {
+      "text": "How many {item}?",
+      "reviewed": true,
+      "context": "A question when the customer did not say how many"
+    },
+    "customer.order_or": {
+      "text": "or",
+      "reviewed": true,
+      "context": "Joins the last two choices in a question: plate or cooler"
+    },
+    "customer.chat_expired": {
+      "text": "Your order {reference} was not paid in time, so it is cancelled. Write to us to order again.",
+      "reviewed": true,
+      "context": "An order confirmed from a customer's WhatsApp message lapsed unpaid"
     }
   }
 }

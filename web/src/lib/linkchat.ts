@@ -7,7 +7,7 @@ import { cmpTime } from "./stamp";
 import type { DealCard } from "./deals";
 import type { Mention } from "./mentions";
 
-export type DocKind = "order" | "purchase" | "invoice" | "bill";
+export type DocKind = "order" | "purchase" | "invoice" | "bill" | "delivery" | "dispatch";
 
 /** A document event in the conversation, naming our own document. */
 export interface DocCard {
@@ -172,9 +172,30 @@ const VERB: Record<string, string> = {
   reminder: "sent a reminder about invoice",
 };
 
+/** A delivery's events, from either side (docs/spec/chat-riders.md). */
+const DELIVERY_VERB: Record<string, string> = {
+  offered: "offered delivery",
+  accepted: "took delivery",
+  cant: "passed on delivery",
+  picked_up: "picked up",
+  arrived: "arrived with",
+  delivered: "delivered",
+  passed: "let the offer run out on delivery",
+  withdrawn: "withdrew the offer of delivery",
+  released: "took back delivery",
+};
+
+export function isDelivery(card: Pick<DocCard, "doc">): boolean {
+  return card.doc === "delivery" || card.doc === "dispatch";
+}
+
 /** A card in words: "You sent order P-7QX4KD", "Dangote Stores sent invoice INV-0042". */
 export function cardLine(card: DocCard, mine: boolean, other: string): string {
   const who = mine ? "You" : other;
+  if (isDelivery(card)) {
+    const verb = DELIVERY_VERB[card.event] ?? card.event.replaceAll("_", " ");
+    return `${who} ${verb} ${card.reference}`;
+  }
   const verb =
     VERB[card.event] ??
     `${card.event.replaceAll("_", " ")} ${card.doc === "invoice" || card.doc === "bill" ? "invoice" : "order"}`;
@@ -186,7 +207,10 @@ export function cardHref(card: DocCard): string {
   const id = encodeURIComponent(card.id ?? card.reference);
   switch (card.doc) {
     case "order":
+    case "delivery":
       return `/trade-orders/${id}`;
+    case "dispatch":
+      return `/storefront/orders/${encodeURIComponent(card.reference)}`;
     case "purchase":
       return `/purchases/${id}`;
     case "invoice":

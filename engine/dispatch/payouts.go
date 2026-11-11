@@ -331,6 +331,11 @@ func (d *Dispatch) FinishBatch(ctx context.Context, tenant, batch uuid.UUID, res
 				if err := d.settlePayoutTx(ctx, tx, tenant, o.id, o.rider, o.owed); err != nil {
 					return err
 				}
+				// A payout of one delivery (a confirm, phase 4): the fee's
+				// paid card on both sides.
+				if err := d.payoutPaidTx(ctx, tx, tenant, o.id); err != nil {
+					return err
+				}
 				if r.AccountName != "" {
 					if bank, ok, err := d.bankOf(ctx, tx, tenant, o.rider); err != nil {
 						return err
@@ -351,6 +356,10 @@ func (d *Dispatch) FinishBatch(ctx context.Context, tenant, batch uuid.UUID, res
 					return err
 				}
 				if _, err := tx.Exec(ctx, `UPDATE deliveries SET payout_id = NULL WHERE payout_id = $1`, o.id); err != nil {
+					return err
+				}
+				// A confirm's payout (phase 4): both sides told it did not go out.
+				if err := d.payoutNotPaidTx(ctx, tx, tenant, o.id); err != nil {
 					return err
 				}
 				failed++
@@ -394,6 +403,9 @@ func (d *Dispatch) MarkNotPaidTx(ctx context.Context, tx pgx.Tx, tenant, payout 
 		return err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE deliveries SET payout_id = NULL WHERE tenant_id = $1 AND payout_id = $2`, tenant, payout); err != nil {
+		return err
+	}
+	if err := d.payoutNotPaidTx(ctx, tx, tenant, payout); err != nil {
 		return err
 	}
 	return audit(ctx, tx, tenant, "dispatch.payout_marked_not_paid", payout.String(), map[string]any{"by": actor})

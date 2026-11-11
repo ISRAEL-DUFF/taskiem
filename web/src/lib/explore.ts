@@ -18,6 +18,12 @@ export interface ExploreCard {
   state: LinkState | "none";
   /** Changes when its logo or photos do (keys the pictures' cache). */
   v?: string;
+  /** It delivers for other businesses (a rider): with what, and where. */
+  delivers?: boolean;
+  vehicle?: string;
+  delivery_areas?: string[];
+  /** A delivery business's state, when a business uses it as a rider. */
+  available?: "free" | "busy" | "off";
 }
 
 export interface ExploreResult {
@@ -26,6 +32,9 @@ export interface ExploreResult {
   near_more: boolean;
   fresh: ExploreCard[];
   more: boolean;
+  /** Businesses that deliver for others, those covering our area first. */
+  delivery: ExploreCard[];
+  delivery_more: boolean;
   /** Our own area, as near you reads it. */
   area?: string;
   blind?: BlindOffer;
@@ -63,9 +72,30 @@ export function cardOffer(state: ExploreCard["state"]): CardAction {
   }
 }
 
-/** "Cement and sand · Ikeja": the line under a name. */
-export function cardLine(c: Pick<ExploreCard, "tagline" | "area">): string {
-  return [c.tagline, c.area].filter(Boolean).join(" · ");
+/** "Cement and sand · Ikeja": the line under a name. A business that
+ * delivers says so, with what and where, when it has no line of its own:
+ * "Delivers by bike · Lekki, Ajah". */
+export function cardLine(
+  c: Pick<
+    ExploreCard,
+    "tagline" | "area" | "delivers" | "vehicle" | "delivery_areas" | "available"
+  >,
+): string {
+  const line = [c.tagline, c.area].filter(Boolean).join(" · ");
+  if (!c.delivers) return line;
+  const how = c.vehicle ? `Delivers by ${c.vehicle}` : "Delivers";
+  const where = (c.delivery_areas ?? []).slice(0, 3).join(", ");
+  const now =
+    c.available === "free"
+      ? "Free now"
+      : c.available === "busy"
+        ? "Busy"
+        : c.available === "off"
+          ? "Off today"
+          : "";
+  return [c.tagline ? line : how, c.tagline ? how : where || c.area, now]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /** The pending request we sent a business, when there is one (the one Withdraw takes back). */

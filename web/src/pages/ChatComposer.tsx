@@ -24,8 +24,9 @@ import { MicButton, RecordingBar, useVoiceNote } from "./VoiceNote";
 import { PendingFile } from "./PendingFile";
 import { AttachMenu } from "./AttachMenu";
 import { CameraSheet } from "./CameraSheet";
-import { ToolSheet, ToolsPanel } from "./ChatTools";
+import { extrasFor, ToolSheet, ToolsPanel, type ExtraTile } from "./ChatTools";
 import { OrderSheet, type OrderStart } from "./ChatBuyer";
+import { AvailabilitySheet } from "./ChatAvailability";
 import { HandoverSheet, SellSheet } from "./ChatStaff";
 import { toolsFor, type ToolKey } from "../lib/tools";
 import type { Prefill, Request } from "../lib/intents";
@@ -131,6 +132,8 @@ export type ComposerOptions<R> = {
   /** A business's conversation: its orders and bills only, and, when they
    * share prices with us, ordering from them. */
   scope?: { link: string; name: string; supplies: boolean };
+  /** Tiles of the tools menu that are not tools (Briefing): a tap runs it. */
+  extras?: ExtraTile[];
 };
 
 export function useComposer<R>(o: ComposerOptions<R>) {
@@ -172,10 +175,15 @@ export function useComposer<R>(o: ComposerOptions<R>) {
     start?: ToolStart;
   }>();
   const { can, me } = useAuth();
-  const slash = o.tools ? /^\/(\S*)$/.exec(text) : null;
+  // "/invoice/" and the like pick a thing to tag, not a tool.
+  const slash =
+    o.tools && mentions.q?.mark !== "/" ? /^\/(\S*)$/.exec(text) : null;
   const toolsShown = !!o.tools && (toolsOpen || !!slash);
   // How many tools what follows "/" names: none, and Enter sends it.
-  const toolMatches = toolsShown ? toolsFor(can, slash?.[1] ?? "", me?.roles).length : 0;
+  const toolMatches = toolsShown
+    ? toolsFor(can, slash?.[1] ?? "", me?.roles, me?.delivers).length +
+      extrasFor(o.extras, slash?.[1] ?? "").length
+    : 0;
   const closeTools = () => {
     setToolsOpen(false);
     if (slash) setText("");
@@ -486,34 +494,42 @@ export function ComposerView<R>({
           onSent={() => c.o.onDiary?.(undefined)}
         />
       )}
-      {c.tool && !["order", "sell", "handover"].includes(c.tool.key) && (
-        <ToolSheet
-          tool={c.tool.key}
+      {c.tool?.key === "availability" && (
+        <AvailabilitySheet
           from={c.tool.from}
-          start={c.tool.start}
-          scope={c.o.scope?.link}
-          onReorder={
-            c.o.scope?.supplies
-              ? (p) => c.openTool("order", undefined, { order: { last: p } })
-              : undefined
-          }
-          onNewOrder={
-            c.o.scope?.supplies ? () => c.openTool("order") : undefined
-          }
           onClose={() => c.setTool(undefined)}
-          onSaved={() => {
-            // The server tells the change as a diary line in the person's
-            // Taskiem conversation (chat_changes.go): shown there at once;
-            // from a business's conversation, said where it went.
-            c.o.onDiary?.(undefined);
-            if (c.o.diaryWhere && c.o.diaryWhere !== "taskiem")
-              toast("Saved. The change is in your Taskiem chat.", "success", {
-                href: "/chat?with=taskiem",
-                linkText: "Open",
-              });
-          }}
+          onChanged={() => c.o.onDiary?.(undefined)}
         />
       )}
+      {c.tool &&
+        !["order", "sell", "handover", "availability"].includes(c.tool.key) && (
+          <ToolSheet
+            tool={c.tool.key}
+            from={c.tool.from}
+            start={c.tool.start}
+            scope={c.o.scope?.link}
+            onReorder={
+              c.o.scope?.supplies
+                ? (p) => c.openTool("order", undefined, { order: { last: p } })
+                : undefined
+            }
+            onNewOrder={
+              c.o.scope?.supplies ? () => c.openTool("order") : undefined
+            }
+            onClose={() => c.setTool(undefined)}
+            onSaved={() => {
+              // The server tells the change as a diary line in the person's
+              // Taskiem conversation (chat_changes.go): shown there at once;
+              // from a business's conversation, said where it went.
+              c.o.onDiary?.(undefined);
+              if (c.o.diaryWhere && c.o.diaryWhere !== "taskiem")
+                toast("Saved. The change is in your Taskiem chat.", "success", {
+                  href: "/chat?with=taskiem",
+                  linkText: "Open",
+                });
+            }}
+          />
+        )}
       {voice.secs !== undefined || voice.holding ? (
         <RecordingBar voice={voice} />
       ) : (
@@ -536,6 +552,7 @@ export function ComposerView<R>({
               leaving={toolsP.leaving}
               scope={c.o.scope?.link}
               supplier={c.o.scope?.supplies ? c.o.scope.name : undefined}
+              extras={c.o.extras}
             />
           )}
           {c.o.tools && (

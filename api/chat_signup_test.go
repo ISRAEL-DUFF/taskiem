@@ -107,7 +107,7 @@ func TestChatSignupOnWhatsApp(t *testing.T) {
 	if got := w.say(t, ada, "Ada Obi"); !strings.Contains(got, "What do you sell") {
 		t.Fatalf("name: %q", got)
 	}
-	if got := w.say(t, ada, "9"); !strings.Contains(got, "What do you sell") {
+	if got := w.say(t, ada, "10"); !strings.Contains(got, "What do you sell") {
 		t.Fatalf("no such choice: %q", got)
 	}
 	if got := w.say(t, ada, "2"); !strings.Contains(got, "How do customers pay you?") {

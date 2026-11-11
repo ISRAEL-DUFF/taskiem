@@ -135,8 +135,9 @@ test("on a computer the panel sits beside the thread; rows show who, when and th
   const bubble = pane
     .getByTestId("chat-message")
     .filter({ hasText: "Send twenty bags" });
-  await expect(bubble).toBeInViewport();
+  // The flash lasts 1.8 s: looked for first, while the scroll settles.
   await expect(bubble).toHaveClass(/flash/);
+  await expect(bubble).toBeInViewport();
   await expect(panel).toBeVisible(); // beside the thread, it stays
 
   await panel.getByTestId("chat-search").fill("zebra");
@@ -193,8 +194,9 @@ test("the calendar goes to a day: the first message of it or after it, and says 
   const first = pane
     .getByTestId("chat-message")
     .filter({ hasText: "The first message" });
-  await expect(first).toBeInViewport();
+  // The flash lasts 1.8 s: looked for first, while the scroll settles.
   await expect(first).toHaveClass(/flash/);
+  await expect(first).toBeInViewport();
   await expect(panel.getByTestId("chat-date-open")).toBeFocused();
 
   // A day after all of it: nothing, and it says so.

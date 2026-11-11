@@ -2288,6 +2288,30 @@
       "text": "Talk am like this: *add rider Musa 0803 123 4567 Lekki Ajah* (the area no compulsory).",
       "reviewed": false
     },
+    "wa.riders.added_linked": {
+      "text": "{name} don be your rider, and dem business don link with your own: your delivery dey reach dem for Taskiem.",
+      "reviewed": false
+    },
+    "wa.riders.added_asked": {
+      "text": "{name} don be your rider. Dem business dey Taskiem, so I don ask am make e link with your own: once e gree, your delivery go dey reach dem for Taskiem.",
+      "reviewed": false
+    },
+    "wa.riders.confirmed": {
+      "text": "I don confirm {reference}: we dey pay {name} {amount}. I go tell you when e land.",
+      "reviewed": false
+    },
+    "wa.riders.confirmed_cash": {
+      "text": "I don confirm {reference}: {name} don collect {amount} cash. E dey your money log.",
+      "reviewed": false
+    },
+    "wa.riders.confirmed_netted": {
+      "text": "I don confirm {reference}: {name} fee of {amount} comot from the cash wey dem hold. Nothing remain to pay.",
+      "reviewed": false
+    },
+    "wa.riders.confirm_refused": {
+      "text": "I no fit confirm that delivery: {reason}",
+      "reviewed": false
+    },
     "wa.riders.added": {
       "text": "{name} don be your rider. I don send dem link by SMS make dem dey get your delivery for WhatsApp.",
       "reviewed": false
@@ -4149,7 +4173,7 @@
       "reviewed": false
     },
     "signup.ask_sells": {
-      "text": "Wetin you dey sell or do? Reply with number:\n1. Food\n2. Provisions\n3. Fashion\n4. Phone and gadget\n5. School\n6. Salon\n7. Services\n8. Another thing",
+      "text": "Wetin you dey sell or do? Reply with number:\n1. Food\n2. Provisions\n3. Fashion\n4. Phone and gadget\n5. School\n6. Salon\n7. Services\n8. Delivery (I be rider)\n9. Another thing",
       "reviewed": false
     },
     "signup.ask_pays": {
@@ -5925,6 +5949,54 @@
     },
     "customer.hire_late": {
       "text": "{reference} come back {days} days late, so we add late fee of {late_fee}. Wetin remain to pay: {balance}.",
+      "reviewed": false
+    },
+    "customer.chat_order": {
+      "text": "Your order {reference}:",
+      "reviewed": false
+    },
+    "customer.chat_delivery": {
+      "text": "Delivery",
+      "reviewed": false
+    },
+    "customer.chat_total": {
+      "text": "Total",
+      "reviewed": false
+    },
+    "customer.chat_pay_link": {
+      "text": "Pay by bank transfer for here: {link}",
+      "reviewed": false
+    },
+    "customer.chat_pay_door": {
+      "text": "You go pay when e reach you.",
+      "reviewed": false
+    },
+    "customer.chat_paid": {
+      "text": "We don receive your payment, thank you: {reference}. We dey prepare am.",
+      "reviewed": false
+    },
+    "customer.order_ask": {
+      "text": "Make we get your order correct:",
+      "reviewed": false
+    },
+    "customer.order_which": {
+      "text": "{said}: {choices}?",
+      "reviewed": false
+    },
+    "customer.order_size": {
+      "text": "Which {product}? {choices}",
+      "reviewed": false
+    },
+    "customer.order_how_many": {
+      "text": "How many {item}?",
+      "reviewed": false
+    },
+    "customer.order_or": {
+      "text": "or",
+      "reviewed": false
+    },
+    "customer.chat_expired": {
+      "text": "You no pay for your order {reference} on time, so we don cancel am. Write us make you order again.",
       "reviewed": false
     }
   }

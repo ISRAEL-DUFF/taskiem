@@ -15,6 +15,9 @@ import { Link } from "react-router-dom";
 import { get } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
+import { InvoiceAdd, InvoiceView, MoneyAdd, MoneyEntryView } from "./ChatMoney";
+import type { CustomerInvoice } from "../lib/invoices";
+import type { MoneyEntry } from "../lib/chatmoney";
 import { tileLetters, toneOf } from "../lib/tone";
 import { KitEmpty, KitLoading, Pill, SavedTick, Sheet } from "../kit";
 import type { Service } from "../lib/bookings";
@@ -127,6 +130,23 @@ function moveTiles(e: KeyboardEvent<HTMLElement>) {
   tiles[Math.min(tiles.length - 1, Math.max(0, at + step))]?.focus();
 }
 
+/** A tile of the tools menu that is not a tool: a tap runs it. */
+export interface ExtraTile {
+  key: string;
+  title: string;
+  icon: string;
+  line: string;
+  onPick: () => void;
+}
+
+/** The extra tiles what follows "/" names. */
+export const extrasFor = (extras: ExtraTile[] | undefined, query: string) => {
+  const q = query.trim().toLowerCase();
+  return (extras ?? []).filter(
+    (x) => !q || x.title.toLowerCase().startsWith(q),
+  );
+};
+
 /** The panel of tiles over the composer. */
 export function ToolsPanel({
   query,
@@ -135,6 +155,7 @@ export function ToolsPanel({
   leaving = false,
   scope,
   supplier,
+  extras,
 }: {
   /** What follows "/" in the box, when it was typed. */
   query: string;
@@ -145,9 +166,11 @@ export function ToolsPanel({
   scope?: string;
   /** In a supplier's conversation (they share prices): ordering comes first. */
   supplier?: string;
+  extras?: ExtraTile[];
 }) {
+  const more = extrasFor(extras, query);
   const { can, me } = useAuth();
-  const listed = toolsFor(can, query, me?.roles);
+  const listed = toolsFor(can, query, me?.roles, me?.delivers);
   const { rows: loaded } = useToolRows(listed);
   const rows: typeof loaded = Object.fromEntries(
     Object.entries(loaded).map(([k, r]) => [
@@ -230,7 +253,7 @@ export function ToolsPanel({
         <h2>Tools</h2>
         <span>Opens over the chat</span>
       </div>
-      {tools.length === 0 ? (
+      {tools.length + more.length === 0 ? (
         <p className="tk-tools-none">
           No tool called “{query}”. Enter sends it as a message.
         </p>
@@ -239,6 +262,8 @@ export function ToolsPanel({
           {tools.map((t) => {
             const r = rows[t.key];
             const badge = Array.isArray(r) ? t.badge?.(r) : undefined;
+            const title =
+              Array.isArray(r) && t.titleFor ? t.titleFor(r) : t.title;
             const line =
               r === undefined
                 ? " "
@@ -258,7 +283,7 @@ export function ToolsPanel({
                   <Icon name={t.icon} />
                 </span>
                 <span>
-                  <span className="tk-tile-name">{t.title}</span>
+                  <span className="tk-tile-name">{title}</span>
                   {/* A count rolls into place once it is known. */}
                   <span className="tk-tile-line tk-roll" key={line}>
                     {line}
@@ -273,6 +298,25 @@ export function ToolsPanel({
               </button>
             );
           })}
+          {more.map((x) => (
+            <button
+              key={x.key}
+              type="button"
+              className="tk-tile"
+              onClick={() => {
+                onClose();
+                x.onPick();
+              }}
+            >
+              <span className="tk-tile-icon">
+                <Icon name={x.icon} />
+              </span>
+              <span>
+                <span className="tk-tile-name">{x.title}</span>
+                <span className="tk-tile-line">{x.line}</span>
+              </span>
+            </button>
+          ))}
         </div>
       )}
       {recent.length > 0 && !query && (
@@ -295,8 +339,6 @@ export function ToolsPanel({
   );
 }
 
-
-
 /** What a tool's row opens: its form, or a look at it. */
 /** Whether the person may change what a tool shows (else they see it). */
 export function mayEdit(tool: ToolKey, can: (p: string) => boolean): boolean {
@@ -317,6 +359,8 @@ export function mayEdit(tool: ToolKey, can: (p: string) => boolean): boolean {
       // Drafting needs table.edit; sending and the supplier, storefront.manage.
       return can("table.edit") && can("storefront.manage");
     case "bills":
+    case "invoices":
+    case "money":
       return can("invoice.manage");
     default:
       return can("storefront.manage");
@@ -347,6 +391,10 @@ function Detail({
   if (row === "add")
     return tool === "services" ? (
       <ServiceForm onSaved={onSaved} prefill={prefill} />
+    ) : tool === "invoices" ? (
+      <InvoiceAdd onSaved={onSaved} onCancel={onCancel} />
+    ) : tool === "money" ? (
+      <MoneyAdd onSaved={onSaved} onCancel={onCancel} />
     ) : (
       <ProductAdd onSaved={onSaved} />
     );
@@ -417,6 +465,22 @@ function Detail({
       return (
         <BillView bill={row.data as Bill} onSaved={onSaved} canEdit={canEdit} />
       );
+    case "invoices":
+      return (
+        <InvoiceView
+          invoice={row.data as CustomerInvoice}
+          onSaved={onSaved}
+          canEdit={canEdit}
+        />
+      );
+    case "money":
+      return (
+        <MoneyEntryView
+          entry={row.data as MoneyEntry}
+          onSaved={onSaved}
+          canEdit={canEdit}
+        />
+      );
     case "order":
       return null;
   }
@@ -433,6 +497,8 @@ function plainItem(r: ToolRow): boolean {
 const ADDS: Partial<Record<ToolKey, string>> = {
   products: "Add product",
   services: "Add service",
+  invoices: "New invoice",
+  money: "Add cash or expense",
 };
 
 /** A tool's sheet: its list (search, chips, the full page), and each row's
@@ -464,7 +530,9 @@ export function ToolSheet({
   onSaved?: (line: string) => Promise<void> | void;
 }) {
   const { can, me } = useAuth();
-  const tool = toolsFor(can, "", me?.roles).find((t) => t.key === key);
+  const tool = toolsFor(can, "", me?.roles, me?.delivers).find(
+    (t) => t.key === key,
+  );
   const [search, setSearch] = useState("");
   const [chip, setChip] = useState<string | undefined>(start?.chip);
   const [open, setOpen] = useState<ToolRow | "add" | undefined>(
@@ -498,9 +566,10 @@ export function ToolSheet({
   // In a business's conversation, the orders and bills with that business.
   const list = Array.isArray(rows) ? inScope(rows, scope) : undefined;
   const shown = list ? filterRows(list, chip, search) : [];
+  const title = list && tool.titleFor ? tool.titleFor(list) : tool.title;
   // The rows' categories, as chips after the tool's own.
   const cats = list ? categoryChips(list, chip) : [];
-  const name = tool.title.toLowerCase();
+  const name = title.toLowerCase();
   const done = (line: string | null) => {
     if (line) void onSaved?.(line);
     setSaved(true);
@@ -525,13 +594,13 @@ export function ToolSheet({
         grouping
           ? "Make one product"
           : open === "add"
-            ? (add ?? tool.title)
+            ? (add ?? title)
             : open
               ? open.name
-              : tool.title
+              : title
       }
       count={open || grouping ? undefined : list?.length}
-      crumb={open && open !== "add" ? tool.title : undefined}
+      crumb={open && open !== "add" ? title : undefined}
       from={from}
       onClose={onClose}
       onBack={
@@ -637,8 +706,7 @@ export function ToolSheet({
               {picking ? (
                 <>
                   <span role="status">
-                    Choose the items that are one product in sizes and
-                    colours.
+                    Choose the items that are one product in sizes and colours.
                   </span>
                   <button
                     type="button"
@@ -717,30 +785,32 @@ export function ToolSheet({
                           </span>
                         </label>
                       ) : (
-                      <button
-                        type="button"
-                        className="tk-row"
-                        onClick={() => setOpen(r)}
-                      >
-                        <span
-                          className="tk-row-tile"
-                          aria-hidden="true"
-                          data-tone={tool.rowIcon ? undefined : toneOf(r.name)}
+                        <button
+                          type="button"
+                          className="tk-row"
+                          onClick={() => setOpen(r)}
                         >
-                          {tool.rowIcon ? (
-                            <Icon name={tool.rowIcon} />
-                          ) : (
-                            tileLetters(r.name)
+                          <span
+                            className="tk-row-tile"
+                            aria-hidden="true"
+                            data-tone={
+                              tool.rowIcon ? undefined : toneOf(r.name)
+                            }
+                          >
+                            {tool.rowIcon ? (
+                              <Icon name={tool.rowIcon} />
+                            ) : (
+                              tileLetters(r.name)
+                            )}
+                          </span>
+                          <span className="tk-row-words">
+                            <span className="tk-row-name">{r.name}</span>
+                            <span className="tk-row-sub">{r.sub}</span>
+                          </span>
+                          {r.pill && (
+                            <Pill tone={r.pill.tone}>{r.pill.text}</Pill>
                           )}
-                        </span>
-                        <span className="tk-row-words">
-                          <span className="tk-row-name">{r.name}</span>
-                          <span className="tk-row-sub">{r.sub}</span>
-                        </span>
-                        {r.pill && (
-                          <Pill tone={r.pill.tone}>{r.pill.text}</Pill>
-                        )}
-                      </button>
+                        </button>
                       )}
                     </li>
                   ))}

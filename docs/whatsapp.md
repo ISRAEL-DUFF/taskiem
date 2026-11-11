@@ -331,6 +331,16 @@ Someone who writes to an organisation's own number and isn't on its team, a ride
 - **How long:** a year, then the daily purge deletes the message.
 - **API:** `/v1/customer-chats` (with `/unread` and `/search`).
 
+### Orders from customers' messages
+
+What a customer writes is read for an order ([chat-five-more-flows](spec/chat-five-more-flows.md), phase 2; `api/order_drafts.go`, `engine/orders/read`):
+- **When:** after the webhook has answered, when Orders is on, a model is set up, the plan has AI and budget is left, and the words name something sold. A voice note is transcribed first where voice notes are on (the recording held in memory only).
+- **What it makes:** a draft order (`order_drafts`, sealed under the customer), one per thread at a time, on a card in their thread. Nothing is sent to the customer by the reader.
+- **Confirmed by a person:** a storefront order of the kind `chat`. The order, its total and how to pay (the order's page, by bank transfer, when the business's rail gives account numbers for orders; at the door; or arranged by staff) go to the customer from the business's number, as a reply does (words within 24 hours, the customer reply template after). Its questions go the same way, in the business's language for customers.
+- **Not read:** a customer who sent STOP. The model sees their words with numbers and emails masked ([privacy](privacy.md#customers-orders-read-by-the-model)).
+- **Updates:** a chat order's notices to its customer (paid, on its way, arrived, delivered) go in their thread through `storefront.Orders.ChatNotify`, not by SMS.
+- **STOP** deletes the thread's drafts too; confirmed orders stay.
+
 ## Alerts to WhatsApp
 
 An alert channel of kind **WhatsApp** names members by email (Alerts > Channels). Each alert goes to those of them who have linked a number: as text when they wrote in the last 24 hours, otherwise as the template for the rule's kind. A delivery fails, with the reason, when none of them has a number. Otherwise the alert is handed to the [outbox](#delivery-and-retries), one message per member: the delivery is done once queued, and a member whose message fails is retried on their own, so the others never get it twice.
