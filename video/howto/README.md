@@ -22,6 +22,7 @@ timings.
 | 11 | Invoices and matching payments: Invoices in the chat's tools, New invoice (sent by SMS with a link to see it and pay, or kept as a draft), Money's To match, Match to an invoice | `11-invoices-and-payments.mjs` (a fresh world: it matches the seeded ₦37,500 transfer from OKONKWO C; needs none of 1 to 10) |
 | 12 | Approvals: the Needs your OK card (who asks, what, how much, to which account), Approve it? with the first-payment warning, a recorded comment, the line it leaves | `12-approvals.mjs` (a fresh world: it approves the seed's request from Tunde to pay Bayo Rice Mills; needs none of 1 to 11) |
 | 13 | Your own WhatsApp number: Settings, WhatsApp number, the guide, the ids and keys from Meta, Connect, the addresses and templates; a customer writes to the number and Ada replies from it | `13-own-whatsapp-number.mjs` (a fresh world: Ada's number not yet connected; needs none of 1 to 12) |
+| 14 | Deals: a lower price for 50 or more and the lowest price; Rivers Foods orders 50 and makes an offer; Tunde counters; Rivers counters under the lowest price; Tunde accepts, it waits for Ada's OK; she agrees in her Taskiem chat | `14-deals.mjs` (a fresh world; needs none of 1 to 13) |
 
 ## Making one
 
