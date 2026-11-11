@@ -263,6 +263,50 @@ const SCREENS: { name: string; path: string; fixture?: string; ready: (p: Page) 
       await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     },
   },
+  {
+    // A message's menu (held on a phone, right-clicked here): the reactions
+    // above it, what can be done with it below.
+    name: "chat-menu",
+    path: "/chat?with=3af349e2-b776-4306-bdb8-10df59687c55",
+    fixture: "chat-tunde",
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-message").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("chat-message").first().click({ button: "right", position: { x: 40, y: 20 } });
+      await expect(p.getByTestId("chat-more")).toBeVisible();
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // Reply chosen from the menu: what is being answered, over the box.
+    name: "chat-reply",
+    path: "/chat?with=3af349e2-b776-4306-bdb8-10df59687c55",
+    fixture: "chat-tunde",
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-message").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("chat-message").first().click({ button: "right", position: { x: 40, y: 20 } });
+      await p.getByTestId("chat-more").getByRole("button", { name: "Reply" }).click();
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // Delete for me chosen: the confirmation, asked first.
+    name: "chat-delete",
+    path: "/chat?with=3af349e2-b776-4306-bdb8-10df59687c55",
+    fixture: "chat-tunde",
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-message").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("chat-message").first().click({ button: "right", position: { x: 40, y: 20 } });
+      await p.getByTestId("chat-more").getByRole("button", { name: "Delete for me" }).click();
+      await expect(p.getByRole("dialog")).toBeVisible();
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
 ];
 const FIXTURES = resolve(here, "../../mobile/test/parity/fixtures");
 

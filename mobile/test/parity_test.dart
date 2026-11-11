@@ -249,6 +249,23 @@ final screens = <String, Screen>{
     },
     drive: _loaded,
   ),
+  'chat-menu': (build: () => _conversation('chat-tunde', "Mama Tunde's Market"), drive: (t) => _hold(t)),
+  'chat-reply': (
+    build: () => _conversation('chat-tunde', "Mama Tunde's Market"),
+    drive: (t) async {
+      await _hold(t);
+      await t.tap(find.bySemanticsLabel('Reply'));
+      await t.pumpAndSettle();
+    },
+  ),
+  'chat-delete': (
+    build: () => _conversation('chat-tunde', "Mama Tunde's Market"),
+    drive: (t) async {
+      await _hold(t);
+      await t.tap(find.bySemanticsLabel('Delete for me'));
+      await t.pumpAndSettle();
+    },
+  ),
   'sign-up': (
     build: () => SignUpScreen(auth: fakeAuth()),
     drive: (t) async {
@@ -367,5 +384,12 @@ Future<void> _loaded(WidgetTester t) async {
     await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 60)));
     await t.pump();
   }
+  await t.pumpAndSettle();
+}
+
+/// Holds the conversation's first message, as the web half right-clicks it.
+Future<void> _hold(WidgetTester t) async {
+  await _loaded(t);
+  await t.longPress(find.textContaining('Good morning ma', findRichText: true));
   await t.pumpAndSettle();
 }

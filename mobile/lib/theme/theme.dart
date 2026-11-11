@@ -42,6 +42,9 @@ const tkFallback = <String>[
   'InterGreekExt',
   'InterCyrillic',
   'InterCyrillicExt',
+  // Emoji: the phone's own (this name is the tests', where Chromium's Noto
+  // Color Emoji is loaded to draw what the web's pictures show).
+  'NotoColorEmoji',
 ];
 
 /// Text as the web sets it: Inter at a size, a weight, a line height as a

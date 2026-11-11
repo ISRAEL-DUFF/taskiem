@@ -211,6 +211,35 @@ class TaskiemApi {
     final j = await _t.send('POST', '/v1/customer-chats/${Uri.encodeComponent(id)}/messages', body: body.toJson());
     return CustomerMessage.fromJson(j as Map<String, dynamic>);
   }
+
+  /// React to a message (`PUT /v1/link-chats/{link}/messages/{id}/reaction`)
+  Future<ReactLinkMessageResponse> reactLinkMessage({required ReactLinkMessageRequest body, required String link, required String id}) async {
+    final j = await _t.send('PUT', '/v1/link-chats/${Uri.encodeComponent(link)}/messages/${Uri.encodeComponent(id)}/reaction', body: body.toJson());
+    return ReactLinkMessageResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Take a reaction back (`DELETE /v1/link-chats/{link}/messages/{id}/reaction`)
+  Future<UnreactLinkMessageResponse> unreactLinkMessage({required String link, required String id}) async {
+    final j = await _t.send('DELETE', '/v1/link-chats/${Uri.encodeComponent(link)}/messages/${Uri.encodeComponent(id)}/reaction');
+    return UnreactLinkMessageResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Star a message (`PUT /v1/link-chats/{link}/messages/{id}/star`)
+  Future<StarLinkMessageResponse> starLinkMessage({required String link, required String id}) async {
+    final j = await _t.send('PUT', '/v1/link-chats/${Uri.encodeComponent(link)}/messages/${Uri.encodeComponent(id)}/star');
+    return StarLinkMessageResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Unstar a message (`DELETE /v1/link-chats/{link}/messages/{id}/star`)
+  Future<UnstarLinkMessageResponse> unstarLinkMessage({required String link, required String id}) async {
+    final j = await _t.send('DELETE', '/v1/link-chats/${Uri.encodeComponent(link)}/messages/${Uri.encodeComponent(id)}/star');
+    return UnstarLinkMessageResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Delete a message for us (`POST /v1/link-chats/{link}/messages/{id}/hide`)
+  Future<void> hideLinkMessage({required String link, required String id}) async {
+    await _t.send('POST', '/v1/link-chats/${Uri.encodeComponent(link)}/messages/${Uri.encodeComponent(id)}/hide');
+  }
 }
 
 class AppConfig {
@@ -2055,5 +2084,76 @@ class ReplyCustomerRequest {
   Map<String, dynamic> toJson() => {
         'client_id': ?clientId,
         'text': text,
+      };
+}
+
+class ReactLinkMessageRequest {
+  const ReactLinkMessageRequest({required this.emoji});
+
+  /// Exactly one emoji
+  final String emoji;
+
+  factory ReactLinkMessageRequest.fromJson(Map<String, dynamic> j) => ReactLinkMessageRequest(
+        emoji: j['emoji'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'emoji': emoji,
+      };
+}
+
+class ReactLinkMessageResponse {
+  const ReactLinkMessageResponse({required this.reactions});
+
+  final List<LinkReaction> reactions;
+
+  factory ReactLinkMessageResponse.fromJson(Map<String, dynamic> j) => ReactLinkMessageResponse(
+        reactions: (j['reactions'] as List).map((e) => LinkReaction.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'reactions': reactions.map((e) => e.toJson()).toList(),
+      };
+}
+
+class UnreactLinkMessageResponse {
+  const UnreactLinkMessageResponse({required this.reactions});
+
+  final List<LinkReaction> reactions;
+
+  factory UnreactLinkMessageResponse.fromJson(Map<String, dynamic> j) => UnreactLinkMessageResponse(
+        reactions: (j['reactions'] as List).map((e) => LinkReaction.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'reactions': reactions.map((e) => e.toJson()).toList(),
+      };
+}
+
+class StarLinkMessageResponse {
+  const StarLinkMessageResponse({required this.starred});
+
+  final bool starred;
+
+  factory StarLinkMessageResponse.fromJson(Map<String, dynamic> j) => StarLinkMessageResponse(
+        starred: j['starred'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'starred': starred,
+      };
+}
+
+class UnstarLinkMessageResponse {
+  const UnstarLinkMessageResponse({required this.starred});
+
+  final bool starred;
+
+  factory UnstarLinkMessageResponse.fromJson(Map<String, dynamic> j) => UnstarLinkMessageResponse(
+        starred: j['starred'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'starred': starred,
       };
 }

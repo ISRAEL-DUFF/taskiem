@@ -22,7 +22,12 @@ Future<void> loadFonts() async {
     'InterCyrillic': 'Inter-cyrillic.ttf',
     'InterCyrillicExt': 'Inter-cyrillic-ext.ttf',
   };
-  assert(files.keys.skip(1).toList().toString() == tkFallback.toString());
+  assert([...files.keys.skip(1), 'NotoColorEmoji'].toString() == tkFallback.toString());
+  // The emoji as Chromium draws them here, when the machine has the font.
+  final emoji = File('/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf');
+  if (emoji.existsSync()) {
+    await (FontLoader('NotoColorEmoji')..addFont(Future.value(ByteData.sublistView(emoji.readAsBytesSync())))).load();
+  }
   for (final e in files.entries) {
     final loader = FontLoader(e.key)
       ..addFont(Future.value(ByteData.sublistView(File('assets/fonts/${e.value}').readAsBytesSync())));

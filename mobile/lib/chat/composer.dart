@@ -109,9 +109,15 @@ class Composer extends StatefulWidget {
     this.label = 'Message',
     this.rules = businessFiles,
     this.busy = false,
+    this.replying,
+    this.onCancelReply,
   });
 
   final TextEditingController text;
+
+  /// The message being answered, in a line (ChatComposer's replyLine).
+  final String? replying;
+  final VoidCallback? onCancelReply;
 
   /// Sends the words, with the file waiting for its caption if there is one.
   final void Function(String text, PickedFile? file) onSend;
@@ -282,6 +288,7 @@ class ComposerState extends State<Composer> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (_error != null) Container(color: t.panel, padding: const EdgeInsets.symmetric(horizontal: 12), child: TkErrorBox(_error!)),
+        if (widget.replying != null && !recording) _Replying(line: widget.replying!, onCancel: widget.onCancelReply),
         if (file != null && !recording) _Pending(file: file, onRemove: () => setState(() => _file = null)),
         Container(
           color: t.tkSoft,
@@ -689,6 +696,49 @@ class _AttachMenu extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// `.composer-reply`: "Replying to …" with its line, and Cancel.
+class _Replying extends StatelessWidget {
+  const _Replying({required this.line, this.onCancel});
+  final String line;
+  final VoidCallback? onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.only(left: 8),
+              decoration: BoxDecoration(border: Border(left: BorderSide(color: t.accent, width: 3))),
+              child: Text('Replying to $line', style: tkText(size: 13, color: t.muted)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Semantics(
+            button: true,
+            label: 'Cancel the reply',
+            excludeSemantics: true,
+            child: TkPress(
+              onTap: onCancel,
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 40),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: t.panel, border: Border.all(color: t.borderStrong), borderRadius: BorderRadius.circular(8)),
+                // `button.small` in a 13 px row: 0.85 em is 11.05 px.
+                child: Text('Cancel', style: tkText(size: 11.05, weight: 500, lineHeight: 1.2, color: t.text)),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

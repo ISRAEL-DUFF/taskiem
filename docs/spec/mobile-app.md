@@ -614,13 +614,31 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   Found: in the chat every initials avatar is pine with lime letters,
   whatever its name's tone, because chat.css's `.chat-avatar` comes after
   kit.css's tones; the app draws what the web draws.
+- **A message's menu** (`lib/chat/menu.dart`, `lib/kit/modal.dart`), as
+  the web's BubbleShell on a phone: a message held opens the reactions in a
+  pill over it and what can be done in a card under it, each on the
+  bubble's side and kept on the screen (a tap elsewhere, Back or a scroll
+  closes it). A reaction is shown at once and sent (one each, the same
+  again takes it back, also from its chip under the bubble); Reply puts
+  the message over the box ("Replying to…", Cancel) and sends `reply_to`,
+  the answer quoting it, as a swipe to the right also does; Copy says
+  Copied; Forward picks other linked businesses; Star marks it by its time;
+  Message info says when it was sent, delivered and read and who reacted;
+  Delete for me asks first, in the web's confirmation (`showTkConfirm`, the
+  web's Modal from the bottom), then says so in the web's toast. To a
+  screen reader a bubble is one node with its own labels kept and a long
+  press for the menu. Parity: the menu open, replying, and the
+  confirmation, light and dark, two sizes. Found on the way: a reaction
+  chip hangs 12 px under its bubble, outside what Flutter takes taps in,
+  so the bubble keeps the room under it; and Flutter draws no rounded
+  border of two colours (the toast's), so the toast is drawn clipped.
 - **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
   the milestones), Decline (it asks first: with the app's confirmation
-  sheet), a deal's offers and counters, replies, reactions, the message menu, stars, search, the contact sheet,
-  forwarding, older pages as the reader scrolls up, a business's long
+  sheet), a deal's offers and counters, the "+" for any emoji, search, the contact sheet,
+  older pages as the reader scrolls up, a business's long
   message folded (Taskiem's are), the chat tools, the "@" and "#" tags, and the list's search, chips and answers to requests
   (drawn, not yet working).
 

@@ -4,6 +4,8 @@
 // holds them to the web's answers. The tables of an event's words are the
 // web's own (words.g.dart, generated).
 
+import 'dart:convert';
+
 import '../api/api.g.dart';
 import 'words.g.dart';
 
@@ -315,4 +317,42 @@ String? changeWords(num? pct, String than) {
 List<double> barHeights(List<int> kobo) {
   final top = kobo.fold<int>(0, (a, b) => a > b ? a : b);
   return [for (final k in kobo) top == 0 ? 0.04 : (k / top < 0.04 ? 0.04 : k / top)];
+}
+
+// --- reactions (web/src/lib/linkchat.ts) ---
+
+/// linkchat.ts toggleReaction: our reaction (one at most) taken off where
+/// it was, and given on [emoji] when [mine].
+List<LinkReaction> toggleReaction(List<LinkReaction>? list, String emoji, bool mine, {String me = 'You'}) {
+  final out = <LinkReaction>[];
+  for (final r in list ?? const <LinkReaction>[]) {
+    if (r.mine != true) {
+      out.add(r);
+    } else if (r.count > 1) {
+      out.add(LinkReaction(emoji: r.emoji, count: r.count - 1, mine: false, by: r.by?.where((n) => n != me).toList()));
+    }
+  }
+  if (!mine) return out;
+  final at = out.indexWhere((r) => r.emoji == emoji);
+  if (at >= 0) {
+    final r = out[at];
+    out[at] = LinkReaction(emoji: r.emoji, count: r.count + 1, mine: true, by: [...?r.by, me]);
+  } else {
+    out.add(LinkReaction(emoji: emoji, count: 1, mine: true, by: [me]));
+  }
+  return out;
+}
+
+/// linkchat.ts reactionWords: "👍 2: Ada, You".
+String reactionWords(LinkReaction r) {
+  final who = (r.by ?? const []).join(', ');
+  return '${r.emoji} ${r.count}${who.isEmpty ? '' : ': $who'}';
+}
+
+/// A message with some of its fields changed (the generated type has no copy).
+LinkMessage changedMessage(LinkMessage m, {List<LinkReaction>? reactions, bool? starred}) {
+  final j = m.toJson();
+  if (reactions != null) j['reactions'] = reactions.map((r) => r.toJson()).toList();
+  if (starred != null) j['starred'] = starred;
+  return LinkMessage.fromJson(jsonDecode(jsonEncode(j)) as Map<String, dynamic>);
 }

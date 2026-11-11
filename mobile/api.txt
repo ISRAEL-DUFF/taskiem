@@ -46,3 +46,10 @@ listCustomerMessages
 readCustomerChat
 putCustomerChat
 replyCustomer
+
+# The message menu (M3)
+reactLinkMessage
+unreactLinkMessage
+starLinkMessage
+unstarLinkMessage
+hideLinkMessage

@@ -46,6 +46,9 @@ jobs:
         run: go run ./tools/licencecheck -pub mobile/pubspec.lock
       - working-directory: mobile
         run: flutter analyze
+      # The parity test draws emoji as Chromium does here: Noto Color Emoji.
+      - name: Emoji font
+        run: sudo apt-get install -y --no-install-recommends fonts-noto-color-emoji
       - name: Tests, with the app half of the parity test
         working-directory: mobile
         run: flutter test
