@@ -187,9 +187,14 @@ func (s *Server) passkeyLogin(w http.ResponseWriter, r *http.Request) {
 		Credential credentialJSON `json:"credential"`
 		TenantID   uuid.UUID      `json:"tenant_id,omitempty"`
 		Bearer     bool           `json:"bearer,omitempty"` // the token in the answer, no cookie (S35)
+		Device     *deviceReq     `json:"device,omitempty"` // the phone app's (devices.go)
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	r, ok := askDevice(w, r, req.Device, req.Bearer)
+	if !ok {
 		return
 	}
 	user, err := s.verifyPasskey(r.Context(), req.Credential, "login", nil, "")
@@ -801,8 +806,7 @@ func (s *Server) createSession(r *http.Request, user, want uuid.UUID, method str
 	}
 	tok := newToken()
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		if _, err := tx.Exec(ctx, `INSERT INTO sessions (token_hash, user_id, tenant_id, expires_at, ip, auth_method) VALUES ($1, $2, $3, now() + $4::interval, $5, $6)`,
-			hashToken(tok), user, tenant, sessionTTL.String(), clientIP(r), method); err != nil {
+		if err := insertSession(ctx, tx, r, tok, user, tenant, method); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'auth.login', $3, jsonb_build_object('ip', $4::text, 'method', $5::text))`,

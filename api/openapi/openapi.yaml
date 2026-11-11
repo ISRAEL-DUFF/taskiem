@@ -14696,6 +14696,8 @@ paths:
                   format: uuid
                 bearer:
                   type: boolean
+                device:
+                  $ref: '#/components/schemas/DeviceRequest'
       responses:
         '200':
           description: Signed in
@@ -14752,6 +14754,8 @@ paths:
                   format: uuid
                 bearer:
                   type: boolean
+                device:
+                  $ref: '#/components/schemas/DeviceRequest'
       responses:
         '200':
           description: Signed in
@@ -18729,6 +18733,57 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/devices:
+    get:
+      operationId: listDevices
+      tags:
+      - Authentication
+      summary: Your phones
+      description: The person's phones signed in to the app (device sessions), in every business they belong to, the most
+        recently used first.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The phones
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [devices]
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Phone'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/devices/{id}:
+    delete:
+      operationId: removeDevice
+      tags:
+      - Authentication
+      summary: Sign a phone out
+      description: Ends that phone's session in every business. Audited as `auth.device_removed`.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
   /v1/me/passkeys:
@@ -29059,6 +29114,46 @@ components:
           items:
             $ref: '#/components/schemas/Transcript'
       additionalProperties: false
+    DeviceRequest:
+      type: object
+      description: 'The phone the app is on (docs/spec/mobile-app.md §5.2). The session stays signed in on that phone
+        30 days without use, renewed by use up to 180 days from signing in, and ends the phone''s earlier session. Only
+        with `"bearer": true`.'
+      required: [id, name, platform]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The app's install, a random UUID it keeps.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+          description: What the person will see under Your phones.
+        platform:
+          type: string
+          enum: [android, ios]
+    Phone:
+      type: object
+      required: [id, name, platform, signed_in_at, last_used_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        platform:
+          type: string
+          enum: [android, ios]
+        signed_in_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+        this:
+          type: boolean
+          description: The phone asking.
     LoginRequest:
       type: object
       required:
@@ -29077,6 +29172,8 @@ components:
           type: boolean
           description: 'Return the session token in the body instead of setting the cookie: for API clients and
             scripts. Browsers leave it out.'
+        device:
+          $ref: '#/components/schemas/DeviceRequest'
     Session:
       type: object
       properties:
@@ -31250,6 +31347,8 @@ components:
           type: boolean
           description: 'Return the session token in the body instead of setting the cookie: for API clients and
             scripts. Browsers leave it out.'
+        device:
+          $ref: '#/components/schemas/DeviceRequest'
         accept_terms:
           type: boolean
           description: The person agrees to the terms and privacy notice (`terms` on GET /v1/signup). Required
@@ -31663,6 +31762,8 @@ components:
         bearer:
           type: boolean
           description: Return the session token in the body instead of setting the cookie.
+        device:
+          $ref: '#/components/schemas/DeviceRequest'
       additionalProperties: false
     Invitation:
       type: object

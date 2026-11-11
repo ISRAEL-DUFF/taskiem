@@ -399,6 +399,8 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/me/invitations", s.myInvitations)
 			r.Post("/me/invitations/{tenant}/accept", s.acceptInvitation)
 			r.Post("/me/invitations/{tenant}/decline", s.declineInvitation)
+			r.Get("/me/devices", s.listDevices) // Your phones (devices.go)
+			r.Delete("/me/devices/{id}", s.removeDevice)
 			r.Get("/me/passkeys", s.listPasskeys)
 			r.Post("/me/passkeys/options", s.passkeyRegisterOptions)
 			r.Post("/me/passkeys", s.passkeyRegister)

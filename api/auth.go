@@ -86,8 +86,11 @@ type Principal struct {
 	// AuthMethod is how the session signed in: password, passkey, sso or
 	// chat (a code or link sent to a bound chat, chat_signin.go).
 	AuthMethod string
-	// SignedInAt is when the session signed in (sessions only).
+	// SignedInAt is when the session signed in (sessions only); renewing a
+	// phone's session does not change it.
 	SignedInAt time.Time
+	// Device marks a phone app's session, which stays signed in (devices.go).
+	Device bool
 	// EnrolOnly marks a password session of an administrator held to
 	// passkeys: it may only enrol one.
 	EnrolOnly bool
@@ -369,12 +372,18 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 		return &p, nil
 	}
 	p := Principal{viaCookie: viaCookie, Permissions: map[string]bool{}}
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id, tenant_id, auth_method, signed_in_at FROM taskiem_auth_session($1)`, hashToken(tok)).Scan(&p.UserID, &p.TenantID, &p.AuthMethod, &p.SignedInAt); err != nil {
+	var lastUsed *time.Time
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id, tenant_id, auth_method, signed_in_at, device, last_used_at FROM taskiem_auth_session($1)`, hashToken(tok)).
+		Scan(&p.UserID, &p.TenantID, &p.AuthMethod, &p.SignedInAt, &p.Device, &lastUsed); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Perhaps someone with no membership answering invitations.
 			return s.resolveInvitee(r, tok, viaCookie)
 		}
 		return nil, err
+	}
+	if p.Device {
+		// A phone's session is renewed by use (devices.go).
+		s.touchDevice(ctx, tok, lastUsed)
 	}
 	if err := s.loadRoles(ctx, &p); err != nil {
 		return nil, err
@@ -466,6 +475,9 @@ type loginReq struct {
 	// clients; without it the session is a cookie the page cannot read
 	// (S35).
 	Bearer bool `json:"bearer,omitempty"`
+	// Device names the phone the app is on: a session that stays signed in
+	// (devices.go).
+	Device *deviceReq `json:"device,omitempty"`
 }
 
 // jsonOnly refuses a body that is not JSON. A cross-site page can POST a
@@ -491,6 +503,10 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	var req loginReq
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	r, asked := askDevice(w, r, req.Device, req.Bearer)
+	if !asked {
 		return
 	}
 	// Per account too, so guesses spread over many addresses still meet a

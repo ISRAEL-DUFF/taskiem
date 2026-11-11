@@ -292,6 +292,19 @@ means signing in again every morning, which no one will do twice.
   a phone number can be given to someone else. A device session unused for
   30 days ends; signing in again with a chat code proves the number again.
 
+**As built** (M2): migration 00418 gives sessions a device (`device_id`,
+`device_name`, `device_platform`) and `last_used_at`. `POST /v1/auth/login`,
+`/v1/auth/passkey`, `/v1/auth/chat/verify`, `/v1/auth/chat/link` and
+`/v1/signup` take `device` beside `bearer: true` (`api/devices.go`); such a
+session lasts 30 days, `taskiem_auth_session_touch` renews it while it is
+used (at most once an hour, never past 180 days from signing in, never
+moving when it signed in, which step-up reads), and signing in again on the
+same phone ends its earlier session. `GET /v1/me/devices` lists Your phones,
+`DELETE /v1/me/devices/{id}` signs one out (audited `auth.device_removed`).
+Signing out everywhere, a password changed and a role ending end them, as
+they end every session. The 30-day dormancy of an unused phone is the
+session's own expiry. Tested in `api/devices_test.go`.
+
 ### 5.3 S3: chat notifications to the app
 
 [Chat push](chat-push.md) sends Web Push to browsers. The app needs Firebase
