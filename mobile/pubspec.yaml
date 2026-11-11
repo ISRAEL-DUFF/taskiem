@@ -1,0 +1,47 @@
+name: taskiem
+description: "Taskiem's chat as a phone app (docs/spec/mobile-app.md)."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # The brand's own SVG files (assets/brand), never redrawn. MIT.
+  flutter_svg: 2.3.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: false
+  assets:
+    - assets/brand/
+  # The web's Inter, unpacked from its own files (tool/fonts.py): one family
+  # per alphabet, the rest as fallbacks, as the browser picks by unicode-range.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-latin.ttf
+    - family: InterLatinExt
+      fonts:
+        - asset: assets/fonts/Inter-latin-ext.ttf
+    - family: InterVietnamese
+      fonts:
+        - asset: assets/fonts/Inter-vietnamese.ttf
+    - family: InterGreek
+      fonts:
+        - asset: assets/fonts/Inter-greek.ttf
+    - family: InterGreekExt
+      fonts:
+        - asset: assets/fonts/Inter-greek-ext.ttf
+    - family: InterCyrillic
+      fonts:
+        - asset: assets/fonts/Inter-cyrillic.ttf
+    - family: InterCyrillicExt
+      fonts:
+        - asset: assets/fonts/Inter-cyrillic-ext.ttf
