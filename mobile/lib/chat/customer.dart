@@ -128,12 +128,35 @@ class CustomerData extends ChangeNotifier {
     }
   }
 
+  /// There are older messages than those shown (CustomerChat.tsx).
+  bool hasOlder = false;
+  bool _loadingOlder = false;
+
+  /// The page before the oldest shown.
+  Future<void> older() async {
+    final oldest = messages?.where((m) => !m.local).firstOrNull;
+    if (oldest == null || _loadingOlder) return;
+    _loadingOlder = true;
+    try {
+      final out = await api.listCustomerMessages(id: id, before: oldest.m.id);
+      if (_disposed) return;
+      messages = mergeCustomer(messages ?? const [], [for (final m in out.messages) CustomerLine(m)]);
+      hasOlder = out.more;
+      _changed();
+    } on Object catch (e) {
+      _fail(e);
+    } finally {
+      _loadingOlder = false;
+    }
+  }
+
   /// The latest page; the customer's messages read as they are shown.
   Future<void> _pull({required bool first}) async {
     try {
       final out = await api.listCustomerMessages(id: id);
       if (_disposed) return;
       final page = [for (final m in out.messages) CustomerLine(m)];
+      if (first) hasOlder = out.more;
       messages = first ? page : latestPage(messages ?? const [], page, out.more);
       _changed();
       if (out.messages.any((m) => !m.mine && m.readAt == null)) {
@@ -286,6 +309,8 @@ class _CustomerScreenState extends State<CustomerScreen> {
                       items: d.messages,
                       of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
                       now: d.chats.now(),
+                      hasOlder: d.hasOlder,
+                      onOlder: d.older,
                       errors: [?d.error],
                       empty: Text(
                         c?.stopped == true

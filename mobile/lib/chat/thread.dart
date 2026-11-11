@@ -231,7 +231,14 @@ class ThreadView<T> extends StatefulWidget {
     this.errors = const [],
     this.tail,
     this.placeAtMessagesEnd = false,
+    this.hasOlder = false,
+    this.onOlder,
   });
+
+  /// There are older messages than these: asked for as the reader nears
+  /// the top ([onOlder]), the reader's place kept as they land above.
+  final bool hasOlder;
+  final Future<void> Function()? onOlder;
 
   /// Null while loading; oldest first.
   final List<T>? items;
@@ -269,6 +276,7 @@ class ThreadViewState<T> extends State<ThreadView<T>> {
   bool _away = false;
   int _newCount = 0;
   ({String label, double top})? _stuck;
+  bool _loadingOlder = false;
 
   @override
   void initState() {
@@ -291,7 +299,36 @@ class ThreadViewState<T> extends State<ThreadView<T>> {
 
   bool get _atBottom => !scroll.hasClients || scroll.position.maxScrollExtent - scroll.position.pixels <= _nearBottom;
 
+  /// useThread.ts: a mark at the top of the thread, watched 200 px beyond
+  /// the top; in sight, the older page is asked for.
+  void _maybeOlder() {
+    final items = widget.items;
+    if (!widget.hasOlder || widget.onOlder == null || _loadingOlder || items == null || items.isEmpty || !scroll.hasClients) return;
+    // The mark sits under the stream's 8 px padding.
+    if (scroll.position.pixels > 8 + 200) return;
+    _older();
+  }
+
+  Future<void> _older() async {
+    _loadingOlder = true;
+    final was = scroll.position.maxScrollExtent;
+    try {
+      await widget.onOlder!();
+    } finally {
+      _loadingOlder = false;
+    }
+    if (!mounted) return;
+    // The page drawn above: the reader stays where they were.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !scroll.hasClients) return;
+      final grew = scroll.position.maxScrollExtent - was;
+      if (grew > 0) scroll.jumpTo((scroll.position.pixels + grew).clamp(0.0, scroll.position.maxScrollExtent));
+      _maybeOlder();
+    });
+  }
+
   void _onScroll() {
+    _maybeOlder();
     final away = !_atBottom;
     final stuck = _sticky();
     if (away != _away || stuck != _stuck || (!away && _newCount > 0)) {
@@ -431,6 +468,9 @@ class ThreadViewState<T> extends State<ThreadView<T>> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (final e in widget.errors) TkErrorBox(e),
+                    // `.chat-top { height: 1px }` while there are older ones,
+                    // in the stream's 2 px gaps.
+                    if (widget.hasOlder && children.isNotEmpty) const SizedBox(height: 3),
                     KeyedSubtree(
                       key: _endKey,
                       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: gapped(children, 2)),

@@ -221,6 +221,27 @@ class ConversationData extends ChangeNotifier {
     if (out.messages.length >= _page) await pull();
   }
 
+  bool _loadingOlder = false;
+
+  /// The page before the oldest shown (Conversation.tsx loadOlder).
+  Future<void> older() async {
+    final first = messages?.firstOrNull;
+    if (first == null || _loadingOlder) return;
+    _loadingOlder = true;
+    try {
+      final out = await api.linkMessages(link: conv.link, before: first.createdAt.toUtc().toIso8601String(), limit: '$_page');
+      if (_disposed) return;
+      if (out.messages.length < _page) hasOlder = false;
+      _merge(out.messages);
+      _changed();
+    } on Object catch (e) {
+      error = _say(e);
+      _changed();
+    } finally {
+      _loadingOlder = false;
+    }
+  }
+
   void _merge(List<LinkMessage> add) {
     final byId = {for (final m in messages ?? const <LinkMessage>[]) m.id: m};
     for (final m in add) {
@@ -735,6 +756,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
       of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
       now: now,
       unread: d.unread,
+      hasOlder: d.hasOlder,
+      onOlder: d.older,
       empty: Text('No messages yet. Say hello to ${d.conv.name}.', style: tkHint(t)),
       errors: [?d.error, ?_acts.error, ?d.actionError],
       render: (m, prev) {

@@ -40,6 +40,9 @@ const _channels = {'whatsapp': 'WhatsApp', 'telegram': 'Telegram', 'slack': 'Sla
 
 /// A message of Taskiem's conversation; one of the person's on its way is
 /// [local] (shown at once with a clock).
+/// TaskiemChat.tsx PAGE: the server's page of history.
+const _page = 50;
+
 class TaskiemLine {
   TaskiemLine(this.m, {this.local = false});
   final TaskiemChatMessagesItem m;
@@ -139,10 +142,37 @@ class TaskiemData extends ChangeNotifier {
     _changed();
   }
 
+  /// There are older messages than the first page's (TaskiemChat.tsx).
+  bool hasOlder = false;
+  bool _loadingOlder = false;
+
+  /// The page before the oldest shown.
+  Future<void> older() async {
+    final first = messages?.where((m) => !m.local).firstOrNull;
+    if (first == null || _loadingOlder) return;
+    _loadingOlder = true;
+    try {
+      final out = await api.taskiemHistory(before: first.m.createdAt.toUtc().toIso8601String());
+      if (_disposed) return;
+      if (out.messages.length < _page) hasOlder = false;
+      if (out.messages.isNotEmpty) messages = mergeTaskiem(messages ?? const [], out.messages);
+      _changed();
+    } on ApiError catch (e) {
+      error = e.message;
+      _changed();
+    } on Offline {
+      error = 'You’re offline. The conversation shows when you’re back online.';
+      _changed();
+    } finally {
+      _loadingOlder = false;
+    }
+  }
+
   Future<void> open() async {
     unawaited(loadCards());
     try {
       final out = await api.taskiemHistory();
+      hasOlder = out.messages.length >= _page;
       final list = mergeTaskiem(const [], out.messages);
       unread = unreadAfter(list, chats.taskiemSeen);
       messages = list;
@@ -404,6 +434,8 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
         of: (id: (x) => x.id == nilId ? '${x.id}-${x.m.createdAt}' : x.id, at: (x) => x.m.createdAt, mine: (x) => x.m.inbound),
         now: d.chats.now(),
         unread: d.unread,
+        hasOlder: d.hasOlder,
+        onOlder: d.older,
         placeAtMessagesEnd: true,
         tail: d.briefing == null && d.alerts.isEmpty
             ? null

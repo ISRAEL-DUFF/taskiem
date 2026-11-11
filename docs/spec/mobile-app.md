@@ -649,12 +649,21 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   web's words ("ORD-7 accepted", "Received, and your stock is up"). A step
   the server took is done even when asking for what is newer then fails
   (it is asked again on the next turn). Held by `cards_test.dart`.
+- **Older messages** (`lib/chat/thread.dart`): in every conversation (a
+  business's, a customer's, Taskiem's), as the web's useThread: while there
+  are older messages than those shown (a full page of 50, or the server's
+  `more` for a customer), the page before the oldest is asked for as the
+  reader comes within 200 px of the top, drawn above with the reader left
+  where they were, and the next asked for if they are still near the top;
+  a short page ends it. The web's 1 px mark at the top while there are
+  older ones is kept, so the thread sits where the web's does. Held by
+  `older_test.dart`.
 - **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
   the milestones), a deal's offers and counters, search, the contact sheet,
-  older pages as the reader scrolls up, a business's long
+  a business's long
   message folded (Taskiem's are), the chat tools, the "@" and "#" tags, and the list's search, chips and answers to requests
   (drawn, not yet working).
 
