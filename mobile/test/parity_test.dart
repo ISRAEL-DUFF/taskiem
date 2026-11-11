@@ -27,6 +27,7 @@ import 'package:taskiem/app/auth.dart';
 import 'package:taskiem/app/session.dart';
 import 'package:taskiem/kit/kit.dart';
 import 'package:taskiem/main.dart';
+import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/screens/sign_in.dart';
 import 'package:taskiem/screens/sign_up.dart';
 import 'package:taskiem/theme/theme.dart';
@@ -91,6 +92,20 @@ final screens = <String, Screen>{
       await t.enterText(find.byType(TextField).at(0), 'ada@parity.test');
       await t.enterText(find.byType(TextField).at(1), 'not the password');
       await _tap(t, 'Sign in');
+    },
+  ),
+  'chats': (
+    build: () {
+      final f = Fixture('chats');
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+    },
+    drive: (t) async {
+      // The logos: fetched and decoded for real, outside the test's clock.
+      for (var i = 0; i < 5; i++) {
+        await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 60)));
+        await t.pump();
+      }
+      await t.pumpAndSettle();
     },
   ),
   'sign-up': (

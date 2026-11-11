@@ -19,8 +19,13 @@ const UPDATE = process.env.PARITY_UPDATE === "1";
 /** What the server says when a code is asked for, whatever the number. */
 const CODE_SENT = "If this number is on a Taskiem account, we have sent a code to it on WhatsApp or Telegram.";
 
-/** The screens the app copies: its name in the app's test, and where the web shows it. */
-const SCREENS: { name: string; path: string; ready: (p: Page) => Promise<void> }[] = [
+/** The screens the app copies: its name in the app's test, where the web
+ * shows it, and, for a signed-in screen, the fixed answers it is shown with
+ * (mobile/test/parity/fixtures/<fixture>, recorded by mobile/tool/capture.mjs
+ * from the demo world): every API answer comes from there and the clock is
+ * stopped at the moment they were recorded, so the picture never changes
+ * with the data or the time. */
+const SCREENS: { name: string; path: string; fixture?: string; ready: (p: Page) => Promise<void> }[] = [
   {
     name: "sign-in",
     path: "/login",
@@ -81,7 +86,53 @@ const SCREENS: { name: string; path: string; ready: (p: Page) => Promise<void> }
       await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     },
   },
+  {
+    // The chats: the demo world's, signed in as Ada.
+    name: "chats",
+    path: "/chat",
+    fixture: "chats",
+    ready: async (p) => {
+      await expect(p.getByRole("heading", { name: "Chats" }).first()).toBeVisible();
+      await expect(p.getByText("Bayo Rice Mills").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+    },
+  },
 ];
+const FIXTURES = resolve(here, "../../mobile/test/parity/fixtures");
+
+/** The web app around the chat that the phone app does not have: the
+ * notifications' and passkeys' asks, and the tab bar to Home, Money, Orders
+ * and the menu. Hidden in the picture; the chat itself is compared. */
+const NOT_THE_CHAT = ".notify-ask, nav.tabbar { display: none !important; } .chat-mode { --tabbar-h: 0px !important; }";
+
+/** Answers every API request from a fixture's recorded answers. */
+async function fixed(page: Page, name: string) {
+  const dir = resolve(FIXTURES, name);
+  const { at, answers } = JSON.parse(readFileSync(resolve(dir, "answers.json"), "utf8")) as {
+    at: string;
+    answers: Record<string, { file: string; status: number; type: string }>;
+  };
+  await page.clock.setFixedTime(new Date(at));
+  await page.route("**/v1/**", (route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === "/v1/chat/stream") {
+      return route.fulfill({ status: 200, contentType: "text/event-stream", body: "retry: 600000\n\nevent: ready\ndata: {}\n\n" });
+    }
+    const a = answers[u.pathname + u.search.replace(/after=[^&]*/, "after=*")];
+    if (!a || route.request().method() !== "GET") {
+      return route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "not in the fixture" }) });
+    }
+    return route.fulfill({ status: a.status, contentType: a.type, body: readFileSync(resolve(dir, a.file)) });
+  });
+  await page.addInitScript((css) => {
+    addEventListener("DOMContentLoaded", () => {
+      const st = document.createElement("style");
+      st.textContent = css;
+      document.head.append(st);
+    });
+  }, NOT_THE_CHAT);
+}
+
 const SIZES = [
   { width: 390, height: 844 },
   { width: 360, height: 640 },
@@ -132,12 +183,13 @@ for (const s of SCREENS)
     for (const size of SIZES) {
       const file = `${s.name}-${theme}-${size.width}x${size.height}.png`;
       test(`parity: ${file}`, async ({ browser }) => {
-        const ctx = await browser.newContext({ viewport: size, deviceScaleFactor: 1, reducedMotion: "reduce" });
+        const ctx = await browser.newContext({ viewport: size, deviceScaleFactor: 1, reducedMotion: "reduce", timezoneId: "UTC" });
         const page = await ctx.newPage();
         // Dark is the person's choice on the web (theme.ts).
         await page.addInitScript((t) => {
           if (t === "dark") localStorage.setItem("taskiem-theme", "dark");
         }, theme);
+        if (s.fixture) await fixed(page, s.fixture);
         await page.goto(s.path);
         await s.ready(page);
         const shot = await page.screenshot({ animations: "disabled", caret: "hide" });

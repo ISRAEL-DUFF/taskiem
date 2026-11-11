@@ -52,3 +52,18 @@ half passes. Both go in the same pull request.
 
 A new screen: add it to `SCREENS` in the web half and to `screens` in the
 app half under the same name.
+
+**Signed-in screens are shown with fixed answers.** Times and data change, so
+a chat screen is shown in both halves with the same recorded API answers
+(`test/parity/fixtures/<name>/`) and the clock stopped at the moment they were
+recorded, in UTC. The web half answers the page's requests from them; the app
+half's stand-in server does the same (`Fixture` in `test/support.dart`). The
+web app's own parts around the chat (the tab bar to Home, Money and Orders;
+its banners) are hidden in the web picture: the app does not have them. To
+record a fixture, start the demo world and run the recorder:
+
+```sh
+bash web/e2e/demo/serve-demo.sh &
+node web/e2e/demo/seed.ts
+node mobile/tool/capture.mjs chats /chat      # the chats, as Ada
+```

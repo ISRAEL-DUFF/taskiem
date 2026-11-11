@@ -94,6 +94,48 @@ class TaskiemApi {
     final j = await _t.send('POST', '/v1/me/switch', body: body.toJson());
     return Session.fromJson(j as Map<String, dynamic>);
   }
+
+  /// Conversations with linked businesses (`GET /v1/link-chats`)
+  Future<ListLinkChatsResponse> listLinkChats() async {
+    final j = await _t.send('GET', '/v1/link-chats');
+    return ListLinkChatsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Customers' conversations (`GET /v1/customer-chats`)
+  Future<ListCustomerChatsResponse> listCustomerChats({String? archived}) async {
+    final j = await _t.send('GET', '/v1/customer-chats', query: {'archived': ?archived});
+    return ListCustomerChatsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Customers waiting for an answer (`GET /v1/customer-chats/unread`)
+  Future<CustomerChatsUnreadResponse> customerChatsUnread() async {
+    final j = await _t.send('GET', '/v1/customer-chats/unread');
+    return CustomerChatsUnreadResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The business's links and link requests (`GET /v1/links`)
+  Future<ListLinksResponse> listLinks() async {
+    final j = await _t.send('GET', '/v1/links');
+    return ListLinksResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The alerts you can act on, as chat cards (`GET /v1/chat-alerts`)
+  Future<GetChatAlertsResponse> getChatAlerts() async {
+    final j = await _t.send('GET', '/v1/chat-alerts');
+    return GetChatAlertsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Whether the business has chat tools on (`GET /v1/settings/chat-tools`)
+  Future<ChatToolsSetting> getChatTools() async {
+    final j = await _t.send('GET', '/v1/settings/chat-tools');
+    return ChatToolsSetting.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Whether other businesses find this one (`GET /v1/link-settings`)
+  Future<LinkSettings> getLinkSettings() async {
+    final j = await _t.send('GET', '/v1/link-settings');
+    return LinkSettings.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -727,5 +769,801 @@ class SwitchBusinessRequest {
 
   Map<String, dynamic> toJson() => {
         'tenant_id': tenantId,
+      };
+}
+
+class ListLinkChatsResponse {
+  const ListLinkChatsResponse({required this.conversations});
+
+  final List<LinkConversation> conversations;
+
+  factory ListLinkChatsResponse.fromJson(Map<String, dynamic> j) => ListLinkChatsResponse(
+        conversations: (j['conversations'] as List).map((e) => LinkConversation.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'conversations': conversations.map((e) => e.toJson()).toList(),
+      };
+}
+
+class LinkConversation {
+  const LinkConversation({required this.archived, required this.business, this.last, required this.link, required this.logo, required this.muted, required this.name, required this.pinned, required this.state, required this.typing, required this.unread});
+
+  final bool archived;
+  final String business;
+  final LinkMessage? last;
+  final String link;
+  /// The business has a logo, at GET /v1/links/{business}/logo
+  final bool logo;
+  final bool muted;
+  final String name;
+  final bool pinned;
+  final String state;
+  /// Someone on the other side is typing now
+  final bool typing;
+  final int unread;
+
+  factory LinkConversation.fromJson(Map<String, dynamic> j) => LinkConversation(
+        archived: j['archived'] as bool,
+        business: j['business'] as String,
+        last: j['last'] == null ? null : LinkMessage.fromJson(j['last'] as Map<String, dynamic>),
+        link: j['link'] as String,
+        logo: j['logo'] as bool,
+        muted: j['muted'] as bool,
+        name: j['name'] as String,
+        pinned: j['pinned'] as bool,
+        state: j['state'] as String,
+        typing: j['typing'] as bool,
+        unread: (j['unread'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'archived': archived,
+        'business': business,
+        'last': ?last?.toJson(),
+        'link': link,
+        'logo': logo,
+        'muted': muted,
+        'name': name,
+        'pinned': pinned,
+        'state': state,
+        'typing': typing,
+        'unread': unread,
+      };
+}
+
+class LinkMessage {
+  const LinkMessage({this.attachment, this.body, this.card, required this.createdAt, this.forwarded, required this.id, required this.kind, required this.link, this.mentions, required this.mine, this.preview, this.reactions, this.readAt, this.reply, this.senderName, this.starred});
+
+  /// A photo, a PDF or a voice note; GET /v1/link-chats/{link}/files/{id}
+  /// streams it
+  final LinkMessageAttachment? attachment;
+  final String? body;
+  final LinkDocCard? card;
+  final DateTime createdAt;
+  /// Forwarded from another conversation
+  final bool? forwarded;
+  /// The message, the same in both businesses
+  final String id;
+  /// A diary line is a change we made with a chat tool, on our side only
+  final String kind;
+  final String link;
+  final List<LinkMention>? mentions;
+  /// We sent it (a card, we acted)
+  final bool mine;
+  /// The first link's preview, fetched by the sender's side when it was sent
+  final LinkMessagePreview? preview;
+  final List<LinkReaction>? reactions;
+  /// On theirs, when we read it; on ours, when they did
+  final DateTime? readAt;
+  final LinkMessageReply? reply;
+  /// The first name of the member who wrote it
+  final String? senderName;
+  /// You starred it
+  final bool? starred;
+
+  factory LinkMessage.fromJson(Map<String, dynamic> j) => LinkMessage(
+        attachment: j['attachment'] == null ? null : LinkMessageAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
+        body: j['body'] == null ? null : j['body'] as String,
+        card: j['card'] == null ? null : LinkDocCard.fromJson(j['card'] as Map<String, dynamic>),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        forwarded: j['forwarded'] == null ? null : j['forwarded'] as bool,
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        link: j['link'] as String,
+        mentions: j['mentions'] == null ? null : (j['mentions'] as List).map((e) => LinkMention.fromJson(e as Map<String, dynamic>)).toList(),
+        mine: j['mine'] as bool,
+        preview: j['preview'] == null ? null : LinkMessagePreview.fromJson(j['preview'] as Map<String, dynamic>),
+        reactions: j['reactions'] == null ? null : (j['reactions'] as List).map((e) => LinkReaction.fromJson(e as Map<String, dynamic>)).toList(),
+        readAt: j['read_at'] == null ? null : DateTime.parse(j['read_at'] as String),
+        reply: j['reply'] == null ? null : LinkMessageReply.fromJson(j['reply'] as Map<String, dynamic>),
+        senderName: j['sender_name'] == null ? null : j['sender_name'] as String,
+        starred: j['starred'] == null ? null : j['starred'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'attachment': ?attachment?.toJson(),
+        'body': ?body,
+        'card': ?card?.toJson(),
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'forwarded': ?forwarded,
+        'id': id,
+        'kind': kind,
+        'link': link,
+        'mentions': ?mentions?.map((e) => e.toJson()).toList(),
+        'mine': mine,
+        'preview': ?preview?.toJson(),
+        'reactions': ?reactions?.map((e) => e.toJson()).toList(),
+        'read_at': ?readAt?.toUtc().toIso8601String(),
+        'reply': ?reply?.toJson(),
+        'sender_name': ?senderName,
+        'starred': ?starred,
+      };
+}
+
+/// A photo, a PDF or a voice note; GET /v1/link-chats/{link}/files/{id} streams
+/// it
+class LinkMessageAttachment {
+  const LinkMessageAttachment({required this.kind, this.name, required this.size, required this.type});
+
+  final String kind;
+  final String? name;
+  final int size;
+  final String type;
+
+  factory LinkMessageAttachment.fromJson(Map<String, dynamic> j) => LinkMessageAttachment(
+        kind: j['kind'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+        size: (j['size'] as num).toInt(),
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind,
+        'name': ?name,
+        'size': size,
+        'type': type,
+      };
+}
+
+class LinkDocCard {
+  const LinkDocCard({this.amountKobo, this.deal, required this.doc, required this.event, this.id, this.note, required this.reference, this.wasKobo});
+
+  final int? amountKobo;
+  /// A deal as it stood when the card was posted (chat tools phase 7)
+  final LinkDocCardDeal? deal;
+  /// Our own document it names (delivery, a rider's order for a delivery;
+  /// dispatch, the business's delivery)
+  final String doc;
+  /// What happened to it (ordered, accept, delivered, bill, queried, resolved,
+  /// …)
+  final String event;
+  /// Our document's id or number, to open it
+  final String? id;
+  final String? note;
+  final String reference;
+  /// A deal's prices are against this (the seller's own), when more than
+  /// amount_kobo
+  final int? wasKobo;
+
+  factory LinkDocCard.fromJson(Map<String, dynamic> j) => LinkDocCard(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        deal: j['deal'] == null ? null : LinkDocCardDeal.fromJson(j['deal'] as Map<String, dynamic>),
+        doc: j['doc'] as String,
+        event: j['event'] as String,
+        id: j['id'] == null ? null : j['id'] as String,
+        note: j['note'] == null ? null : j['note'] as String,
+        reference: j['reference'] as String,
+        wasKobo: j['was_kobo'] == null ? null : (j['was_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'deal': ?deal?.toJson(),
+        'doc': doc,
+        'event': event,
+        'id': ?id,
+        'note': ?note,
+        'reference': reference,
+        'was_kobo': ?wasKobo,
+      };
+}
+
+/// A deal as it stood when the card was posted (chat tools phase 7)
+class LinkDocCardDeal {
+  const LinkDocCardDeal({required this.steps, this.until});
+
+  /// Offer first, then counters, newest last; a person is named only on our own
+  /// side's steps
+  final List<LinkDocCardDealStepsItem> steps;
+  /// When the offer lapses unless answered
+  final DateTime? until;
+
+  factory LinkDocCardDeal.fromJson(Map<String, dynamic> j) => LinkDocCardDeal(
+        steps: (j['steps'] as List).map((e) => LinkDocCardDealStepsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        until: j['until'] == null ? null : DateTime.parse(j['until'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'steps': steps.map((e) => e.toJson()).toList(),
+        'until': ?until?.toUtc().toIso8601String(),
+      };
+}
+
+class LinkDocCardDealStepsItem {
+  const LinkDocCardDealStepsItem({required this.at, required this.by, required this.totalKobo, this.who});
+
+  final DateTime at;
+  final String by;
+  final int totalKobo;
+  final String? who;
+
+  factory LinkDocCardDealStepsItem.fromJson(Map<String, dynamic> j) => LinkDocCardDealStepsItem(
+        at: DateTime.parse(j['at'] as String),
+        by: j['by'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+        who: j['who'] == null ? null : j['who'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toUtc().toIso8601String(),
+        'by': by,
+        'total_kobo': totalKobo,
+        'who': ?who,
+      };
+}
+
+/// A structured reference the composer put in a message
+class LinkMention {
+  const LinkMention({this.itemId, required this.kind, this.link, this.minutes, required this.name, this.priceKobo, this.ref, this.serviceId, this.status, this.unit});
+
+  final String? itemId;
+  final String kind;
+  /// A business, on our copy only
+  final String? link;
+  /// How long the service takes; an invoice's or an order's total is price_kobo
+  final int? minutes;
+  final String name;
+  final int? priceKobo;
+  /// An invoice's or an order's id, on our copy only
+  final String? ref;
+  /// One of the sender's own services
+  final String? serviceId;
+  /// An invoice's or an order's status when it was named
+  final String? status;
+  final String? unit;
+
+  factory LinkMention.fromJson(Map<String, dynamic> j) => LinkMention(
+        itemId: j['item_id'] == null ? null : j['item_id'] as String,
+        kind: j['kind'] as String,
+        link: j['link'] == null ? null : j['link'] as String,
+        minutes: j['minutes'] == null ? null : (j['minutes'] as num).toInt(),
+        name: j['name'] as String,
+        priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
+        ref: j['ref'] == null ? null : j['ref'] as String,
+        serviceId: j['service_id'] == null ? null : j['service_id'] as String,
+        status: j['status'] == null ? null : j['status'] as String,
+        unit: j['unit'] == null ? null : j['unit'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'item_id': ?itemId,
+        'kind': kind,
+        'link': ?link,
+        'minutes': ?minutes,
+        'name': name,
+        'price_kobo': ?priceKobo,
+        'ref': ?ref,
+        'service_id': ?serviceId,
+        'status': ?status,
+        'unit': ?unit,
+      };
+}
+
+/// The first link's preview, fetched by the sender's side when it was sent
+class LinkMessagePreview {
+  const LinkMessagePreview({this.description, required this.host, required this.title, required this.url});
+
+  final String? description;
+  final String host;
+  final String title;
+  final String url;
+
+  factory LinkMessagePreview.fromJson(Map<String, dynamic> j) => LinkMessagePreview(
+        description: j['description'] == null ? null : j['description'] as String,
+        host: j['host'] as String,
+        title: j['title'] as String,
+        url: j['url'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'description': ?description,
+        'host': host,
+        'title': title,
+        'url': url,
+      };
+}
+
+class LinkReaction {
+  const LinkReaction({this.by, required this.count, required this.emoji, this.mine});
+
+  /// Their first names
+  final List<String>? by;
+  /// How many people gave it, on both sides
+  final int count;
+  /// One emoji
+  final String emoji;
+  /// You gave it
+  final bool? mine;
+
+  factory LinkReaction.fromJson(Map<String, dynamic> j) => LinkReaction(
+        by: j['by'] == null ? null : (j['by'] as List).map((e) => e as String).toList(),
+        count: (j['count'] as num).toInt(),
+        emoji: j['emoji'] as String,
+        mine: j['mine'] == null ? null : j['mine'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'by': ?by?.map((e) => e).toList(),
+        'count': count,
+        'emoji': emoji,
+        'mine': ?mine,
+      };
+}
+
+class LinkMessageReply {
+  const LinkMessageReply({this.attachment, this.body, this.card, required this.kind, required this.mine, required this.pairId});
+
+  final LinkMessageReplyAttachment? attachment;
+  final String? body;
+  final LinkDocCard? card;
+  final String kind;
+  final bool mine;
+  final String pairId;
+
+  factory LinkMessageReply.fromJson(Map<String, dynamic> j) => LinkMessageReply(
+        attachment: j['attachment'] == null ? null : LinkMessageReplyAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
+        body: j['body'] == null ? null : j['body'] as String,
+        card: j['card'] == null ? null : LinkDocCard.fromJson(j['card'] as Map<String, dynamic>),
+        kind: j['kind'] as String,
+        mine: j['mine'] as bool,
+        pairId: j['pair_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'attachment': ?attachment?.toJson(),
+        'body': ?body,
+        'card': ?card?.toJson(),
+        'kind': kind,
+        'mine': mine,
+        'pair_id': pairId,
+      };
+}
+
+class LinkMessageReplyAttachment {
+  const LinkMessageReplyAttachment({required this.kind, this.name, required this.size, required this.type});
+
+  final String kind;
+  final String? name;
+  final int size;
+  final String type;
+
+  factory LinkMessageReplyAttachment.fromJson(Map<String, dynamic> j) => LinkMessageReplyAttachment(
+        kind: j['kind'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+        size: (j['size'] as num).toInt(),
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind,
+        'name': ?name,
+        'size': size,
+        'type': type,
+      };
+}
+
+class ListCustomerChatsResponse {
+  const ListCustomerChatsResponse({required this.chats});
+
+  final List<CustomerChat> chats;
+
+  factory ListCustomerChatsResponse.fromJson(Map<String, dynamic> j) => ListCustomerChatsResponse(
+        chats: (j['chats'] as List).map((e) => CustomerChat.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chats': chats.map((e) => e.toJson()).toList(),
+      };
+}
+
+class CustomerChat {
+  const CustomerChat({required this.archived, required this.id, required this.last, required this.lastAt, required this.lastMine, required this.name, this.openInvoices, this.owesKobo, required this.phone, required this.stopped, required this.unread, required this.windowOpen, this.windowUntil});
+
+  final bool archived;
+  final String id;
+  final String last;
+  final DateTime lastAt;
+  final bool lastMine;
+  /// The customer's name in the business's book, or their number.
+  final String name;
+  final int? openInvoices;
+  /// One thread only, what the customer owes on open invoices.
+  final int? owesKobo;
+  /// Empty when the customer's details were erased.
+  final String phone;
+  /// The customer sent STOP; nothing is sent until START.
+  final bool stopped;
+  final int unread;
+  /// A reply goes as words (within 24 hours of the customer's last message, and
+  /// not stopped).
+  final bool windowOpen;
+  final Object? windowUntil;
+
+  factory CustomerChat.fromJson(Map<String, dynamic> j) => CustomerChat(
+        archived: j['archived'] as bool,
+        id: j['id'] as String,
+        last: j['last'] as String,
+        lastAt: DateTime.parse(j['last_at'] as String),
+        lastMine: j['last_mine'] as bool,
+        name: j['name'] as String,
+        openInvoices: j['open_invoices'] == null ? null : (j['open_invoices'] as num).toInt(),
+        owesKobo: j['owes_kobo'] == null ? null : (j['owes_kobo'] as num).toInt(),
+        phone: j['phone'] as String,
+        stopped: j['stopped'] as bool,
+        unread: (j['unread'] as num).toInt(),
+        windowOpen: j['window_open'] as bool,
+        windowUntil: j['window_until'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'archived': archived,
+        'id': id,
+        'last': last,
+        'last_at': lastAt.toUtc().toIso8601String(),
+        'last_mine': lastMine,
+        'name': name,
+        'open_invoices': ?openInvoices,
+        'owes_kobo': ?owesKobo,
+        'phone': phone,
+        'stopped': stopped,
+        'unread': unread,
+        'window_open': windowOpen,
+        'window_until': ?windowUntil,
+      };
+}
+
+class CustomerChatsUnreadResponse {
+  const CustomerChatsUnreadResponse({required this.chats, required this.messages});
+
+  final int chats;
+  final int messages;
+
+  factory CustomerChatsUnreadResponse.fromJson(Map<String, dynamic> j) => CustomerChatsUnreadResponse(
+        chats: (j['chats'] as num).toInt(),
+        messages: (j['messages'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chats': chats,
+        'messages': messages,
+      };
+}
+
+class ListLinksResponse {
+  const ListLinksResponse({required this.links, required this.sent});
+
+  final List<BusinessLink> links;
+  final List<BlindLinkRequest> sent;
+
+  factory ListLinksResponse.fromJson(Map<String, dynamic> j) => ListLinksResponse(
+        links: (j['links'] as List).map((e) => BusinessLink.fromJson(e as Map<String, dynamic>)).toList(),
+        sent: (j['sent'] as List).map((e) => BlindLinkRequest.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'links': links.map((e) => e.toJson()).toList(),
+        'sent': sent.map((e) => e.toJson()).toList(),
+      };
+}
+
+class BusinessLink {
+  const BusinessLink({this.answeredAt, required this.askedByUs, required this.business, required this.expiresAt, required this.id, required this.name, required this.requestedAt, required this.role, this.slug, required this.state});
+
+  final DateTime? answeredAt;
+  final bool askedByUs;
+  /// The other business
+  final String business;
+  final DateTime expiresAt;
+  final String id;
+  final String name;
+  final DateTime requestedAt;
+  /// How we trade with them
+  final String role;
+  /// The other business's storefront address, when it has one
+  final String? slug;
+  /// As we see it: requested (we asked, waiting as far as we know),
+  /// not_accepted (we asked after a search, 30 days and no acceptance),
+  /// asked_us (ours to answer), blocked (by us)
+  final String state;
+
+  factory BusinessLink.fromJson(Map<String, dynamic> j) => BusinessLink(
+        answeredAt: j['answered_at'] == null ? null : DateTime.parse(j['answered_at'] as String),
+        askedByUs: j['asked_by_us'] as bool,
+        business: j['business'] as String,
+        expiresAt: DateTime.parse(j['expires_at'] as String),
+        id: j['id'] as String,
+        name: j['name'] as String,
+        requestedAt: DateTime.parse(j['requested_at'] as String),
+        role: j['role'] as String,
+        slug: j['slug'] == null ? null : j['slug'] as String,
+        state: j['state'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'answered_at': ?answeredAt?.toUtc().toIso8601String(),
+        'asked_by_us': askedByUs,
+        'business': business,
+        'expires_at': expiresAt.toUtc().toIso8601String(),
+        'id': id,
+        'name': name,
+        'requested_at': requestedAt.toUtc().toIso8601String(),
+        'role': role,
+        'slug': ?slug,
+        'state': state,
+      };
+}
+
+class BlindLinkRequest {
+  const BlindLinkRequest({required this.createdAt, required this.expiresAt, required this.id, required this.kind, required this.role, required this.shown, required this.state});
+
+  final DateTime createdAt;
+  final DateTime expiresAt;
+  final String id;
+  final String kind;
+  final String role;
+  /// The address, a phone number masked
+  final String shown;
+  final String state;
+
+  factory BlindLinkRequest.fromJson(Map<String, dynamic> j) => BlindLinkRequest(
+        createdAt: DateTime.parse(j['created_at'] as String),
+        expiresAt: DateTime.parse(j['expires_at'] as String),
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        role: j['role'] as String,
+        shown: j['shown'] as String,
+        state: j['state'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'expires_at': expiresAt.toUtc().toIso8601String(),
+        'id': id,
+        'kind': kind,
+        'role': role,
+        'shown': shown,
+        'state': state,
+      };
+}
+
+class GetChatAlertsResponse {
+  const GetChatAlertsResponse({required this.alerts});
+
+  final List<ChatAlert> alerts;
+
+  factory GetChatAlertsResponse.fromJson(Map<String, dynamic> j) => GetChatAlertsResponse(
+        alerts: (j['alerts'] as List).map((e) => ChatAlert.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'alerts': alerts.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// An alert as a chat card, with what its next step needs.
+class ChatAlert {
+  const ChatAlert({this.amountKobo, this.approval, required this.at, this.id, required this.key, required this.kind, required this.line, this.reference, this.reorder, required this.title, this.who});
+
+  final int? amountKobo;
+  final Approval? approval;
+  final DateTime at;
+  /// The stock item, invoice, order, payment entry or run it is about
+  final String? id;
+  /// The alert's key, for Later (its kind and what it is about)
+  final String key;
+  final String kind;
+  final String line;
+  final String? reference;
+  final ChatAlertReorder? reorder;
+  final String title;
+  /// Who asked for the approval ("Tunde (cashier)")
+  final String? who;
+
+  factory ChatAlert.fromJson(Map<String, dynamic> j) => ChatAlert(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        approval: j['approval'] == null ? null : Approval.fromJson(j['approval'] as Map<String, dynamic>),
+        at: DateTime.parse(j['at'] as String),
+        id: j['id'] == null ? null : j['id'] as String,
+        key: j['key'] as String,
+        kind: j['kind'] as String,
+        line: j['line'] as String,
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        reorder: j['reorder'] == null ? null : ChatAlertReorder.fromJson(j['reorder'] as Map<String, dynamic>),
+        title: j['title'] as String,
+        who: j['who'] == null ? null : j['who'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'approval': ?approval?.toJson(),
+        'at': at.toUtc().toIso8601String(),
+        'id': ?id,
+        'key': key,
+        'kind': kind,
+        'line': line,
+        'reference': ?reference,
+        'reorder': ?reorder?.toJson(),
+        'title': title,
+        'who': ?who,
+      };
+}
+
+/// An approval waiting for the caller.
+class Approval {
+  const Approval({required this.approvals, required this.environment, this.firstPayment, required this.level, required this.levels, this.onBehalfOf, this.policy, required this.requestedAt, required this.required, this.role, required this.runId, required this.soleApprover, required this.stepId, required this.stepName, this.stepUp, this.subject, this.timeoutAt, required this.workflow});
+
+  /// Approvals the current level has.
+  final int approvals;
+  final String environment;
+  /// The subject names a bank account (`account_number`, `nuban` or `account`,
+  /// with `bank_code` when known) that this business has never paid in prod.
+  /// Absent otherwise, and outside prod
+  final bool? firstPayment;
+  /// The current level, from 1.
+  final int level;
+  final int levels;
+  /// The email of whoever delegated the role, when the caller decides by
+  /// delegation.
+  final Object? onBehalfOf;
+  final Object? policy;
+  final DateTime requestedAt;
+  /// Approvals the current level needs.
+  final int required;
+  /// Who may approve (an owner counts for every role); null is any approver.
+  final Object? role;
+  final String runId;
+  /// Nobody else can decide it, so the caller may approve it even if they made
+  /// the run or workflow; the vote is recorded as self-approved. False when a
+  /// policy sets `allow_sole_approver` to false.
+  final bool soleApprover;
+  final String stepId;
+  /// The step's name in the workflow, or its id when it has none.
+  final String stepName;
+  /// The weakest second factor a decision takes.
+  final Object? stepUp;
+  /// What is being approved, as the workflow describes it (personal data opened
+  /// for the caller).
+  final Object? subject;
+  final Object? timeoutAt;
+  final String workflow;
+
+  factory Approval.fromJson(Map<String, dynamic> j) => Approval(
+        approvals: (j['approvals'] as num).toInt(),
+        environment: j['environment'] as String,
+        firstPayment: j['first_payment'] == null ? null : j['first_payment'] as bool,
+        level: (j['level'] as num).toInt(),
+        levels: (j['levels'] as num).toInt(),
+        onBehalfOf: j['on_behalf_of'],
+        policy: j['policy'],
+        requestedAt: DateTime.parse(j['requested_at'] as String),
+        required: (j['required'] as num).toInt(),
+        role: j['role'],
+        runId: j['run_id'] as String,
+        soleApprover: j['sole_approver'] as bool,
+        stepId: j['step_id'] as String,
+        stepName: j['step_name'] as String,
+        stepUp: j['step_up'],
+        subject: j['subject'],
+        timeoutAt: j['timeout_at'],
+        workflow: j['workflow'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'approvals': approvals,
+        'environment': environment,
+        'first_payment': ?firstPayment,
+        'level': level,
+        'levels': levels,
+        'on_behalf_of': ?onBehalfOf,
+        'policy': ?policy,
+        'requested_at': requestedAt.toUtc().toIso8601String(),
+        'required': required,
+        'role': ?role,
+        'run_id': runId,
+        'sole_approver': soleApprover,
+        'step_id': stepId,
+        'step_name': stepName,
+        'step_up': ?stepUp,
+        'subject': ?subject,
+        'timeout_at': ?timeoutAt,
+        'workflow': workflow,
+      };
+}
+
+class ChatAlertReorder {
+  const ChatAlertReorder({required this.link, required this.priceKobo, required this.quantity, required this.sellerItemId, this.sizes, required this.supplier});
+
+  final String link;
+  final int priceKobo;
+  final int quantity;
+  final String sellerItemId;
+  /// A product sold in sizes and colours (seller_item_id is the supplier's
+  /// product) - how many of each of the supplier's sizes, by their item; at
+  /// least the supplier's minimum together
+  final Map<String, dynamic>? sizes;
+  final String supplier;
+
+  factory ChatAlertReorder.fromJson(Map<String, dynamic> j) => ChatAlertReorder(
+        link: j['link'] as String,
+        priceKobo: (j['price_kobo'] as num).toInt(),
+        quantity: (j['quantity'] as num).toInt(),
+        sellerItemId: j['seller_item_id'] as String,
+        sizes: j['sizes'] == null ? null : j['sizes'] as Map<String, dynamic>,
+        supplier: j['supplier'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'link': link,
+        'price_kobo': priceKobo,
+        'quantity': quantity,
+        'seller_item_id': sellerItemId,
+        'sizes': ?sizes,
+        'supplier': supplier,
+      };
+}
+
+class ChatToolsSetting {
+  const ChatToolsSetting({required this.chatTools});
+
+  final bool chatTools;
+
+  factory ChatToolsSetting.fromJson(Map<String, dynamic> j) => ChatToolsSetting(
+        chatTools: j['chat_tools'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat_tools': chatTools,
+      };
+}
+
+class LinkSettings {
+  const LinkSettings({this.askedAt, this.code, this.findable, required this.findableNow, this.url});
+
+  final DateTime? askedAt;
+  /// The link code the business prints; made the first time the settings are
+  /// read
+  final String? code;
+  /// Our choice; null is the default
+  final Object? findable;
+  /// What applies (the default is on with a published storefront)
+  final bool findableNow;
+  /// Where the code opens a link request, for a signed-in business
+  final String? url;
+
+  factory LinkSettings.fromJson(Map<String, dynamic> j) => LinkSettings(
+        askedAt: j['asked_at'] == null ? null : DateTime.parse(j['asked_at'] as String),
+        code: j['code'] == null ? null : j['code'] as String,
+        findable: j['findable'],
+        findableNow: j['findable_now'] as bool,
+        url: j['url'] == null ? null : j['url'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'asked_at': ?askedAt?.toUtc().toIso8601String(),
+        'code': ?code,
+        'findable': ?findable,
+        'findable_now': findableNow,
+        'url': ?url,
       };
 }

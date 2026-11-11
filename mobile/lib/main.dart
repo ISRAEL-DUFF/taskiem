@@ -11,6 +11,7 @@ import 'app/config.dart';
 import 'app/lock.dart';
 import 'app/prefs.dart';
 import 'app/session.dart';
+import 'chat/chats.dart';
 import 'screens/signed_in.dart';
 import 'screens/sign_in.dart';
 import 'screens/sign_up.dart';
@@ -88,8 +89,8 @@ class _Root extends StatelessWidget {
         AuthState.signedOut => _SignedOut(auth: auth),
         AuthState.outdated => const _Outdated(),
         AuthState.signedIn => unlocker == null
-            ? SignedInScreen(auth: auth, prefs: prefs)
-            : AppLock(active: true, unlocker: unlocker!, startLocked: auth.restored, child: SignedInScreen(auth: auth, prefs: prefs)),
+            ? _Home(auth: auth, prefs: prefs)
+            : AppLock(active: true, unlocker: unlocker!, startLocked: auth.restored, child: _Home(auth: auth, prefs: prefs)),
       },
     );
   }
@@ -185,6 +186,30 @@ class _Outdated extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Signed in: the chats; the menu opens the app's settings.
+class _Home extends StatefulWidget {
+  const _Home({required this.auth, this.prefs});
+  final Auth auth;
+  final Prefs? prefs;
+
+  @override
+  State<_Home> createState() => _HomeState();
+}
+
+class _HomeState extends State<_Home> {
+  late final ChatsData _chats = ChatsData(widget.auth);
+
+  @override
+  Widget build(BuildContext context) {
+    return ChatsScreen(
+      data: _chats,
+      onMenu: () => Navigator.of(context).push(PageRouteBuilder<void>(
+        pageBuilder: (_, _, _) => SignedInScreen(auth: widget.auth, prefs: widget.prefs),
+      )),
     );
   }
 }

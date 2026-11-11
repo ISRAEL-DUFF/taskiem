@@ -86,3 +86,9 @@ Color cssMix(Color a, Color b, double p) {
   double ch(double x, double y) => (x * a.a * p + y * b.a * (1 - p)) / alpha;
   return Color.from(alpha: alpha, red: ch(a.r, b.r), green: ch(a.g, b.g), blue: ch(a.b, b.b));
 }
+
+/// A shadow as CSS draws one on a transparent thing: only outside it.
+/// Flutter's BoxShadow also fills underneath, which shows through a box
+/// with no colour of its own (a chip, a link-like button).
+List<BoxShadow> outsideOnly(List<BoxShadow> shadows) =>
+    [for (final s in shadows) BoxShadow(color: s.color, offset: s.offset, blurRadius: s.blurRadius, spreadRadius: s.spreadRadius, blurStyle: BlurStyle.outer)];

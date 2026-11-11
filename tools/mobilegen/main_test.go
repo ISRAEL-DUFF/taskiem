@@ -37,6 +37,38 @@ func TestAPIClientIsCurrent(t *testing.T) {
 	}
 }
 
+// The app's chat words are the web's.
+func TestWordsAreCurrent(t *testing.T) {
+	root := filepath.Join("..", "..")
+	want, err := GenerateWords(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(root, WordsOut))
+	if err != nil || string(got) != want {
+		t.Fatalf("%s is stale: run `go run ./tools/mobilegen` from the repository root", WordsOut)
+	}
+	if !strings.Contains(want, "'bill': 'sent invoice'") {
+		t.Fatal("card verbs not read")
+	}
+}
+
+// The app's icons are the web's paths.
+func TestIconsAreCurrent(t *testing.T) {
+	root := filepath.Join("..", "..")
+	want, err := GenerateIcons(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(root, IconsOut))
+	if err != nil || string(got) != want {
+		t.Fatalf("%s is stale: run `go run ./tools/mobilegen` from the repository root", IconsOut)
+	}
+	if !strings.Contains(want, "'tick-double': '") || !strings.Contains(want, "'search': '") {
+		t.Fatal("icons not read")
+	}
+}
+
 // The brand's files in the app are the web's, byte for byte.
 func TestBrandIsCurrent(t *testing.T) {
 	root := filepath.Join("..", "..")

@@ -53,6 +53,28 @@ func main() {
 		fmt.Fprintln(os.Stderr, "mobilegen:", err)
 		os.Exit(1)
 	}
+	words, err := GenerateWords(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "mobilegen:", err)
+		os.Exit(1)
+	}
+	if err := os.MkdirAll(filepath.Join(root, filepath.Dir(WordsOut)), 0o755); err != nil { //nolint:gosec // a source directory
+		fmt.Fprintln(os.Stderr, "mobilegen:", err)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(filepath.Join(root, WordsOut), []byte(words), 0o644); err != nil { //nolint:gosec // a source file
+		fmt.Fprintln(os.Stderr, "mobilegen:", err)
+		os.Exit(1)
+	}
+	icons, err := GenerateIcons(root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "mobilegen:", err)
+		os.Exit(1)
+	}
+	if err := os.WriteFile(filepath.Join(root, IconsOut), []byte(icons), 0o644); err != nil { //nolint:gosec // a source file
+		fmt.Fprintln(os.Stderr, "mobilegen:", err)
+		os.Exit(1)
+	}
 	for _, f := range Brand {
 		b, err := os.ReadFile(filepath.Join(root, BrandFrom, f))
 		if err == nil {

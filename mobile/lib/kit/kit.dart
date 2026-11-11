@@ -281,7 +281,7 @@ class TkLinkButton extends StatelessWidget {
         child: Container(
           constraints: const BoxConstraints(minHeight: 40),
           alignment: Alignment.center,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(Tk.radiusSm), boxShadow: t.shadow),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(Tk.radiusSm), boxShadow: outsideOnly(t.shadow)),
           child: Text(label, style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: t.accent, decoration: TextDecoration.underline)),
         ),
       ),
@@ -402,6 +402,65 @@ class TkChoiceRow extends StatelessWidget {
               Expanded(child: label),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The web's `.badge`: a pill 22 px tall, its tone's dot, the words in the
+/// tone mixed with the text, on the tone's faint tint.
+class TkBadge extends StatelessWidget {
+  const TkBadge(this.label, {super.key, required this.tone});
+  final String label;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Container(
+      height: 22,
+      padding: const EdgeInsets.symmetric(horizontal: 9),
+      decoration: BoxDecoration(color: cssMix(tone, t.panel, 0.11), borderRadius: BorderRadius.circular(999)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 6, height: 6, decoration: BoxDecoration(color: tone, shape: BoxShape.circle)),
+          const SizedBox(width: 6),
+          Text(label, style: tkText(size: 12, weight: 500, color: cssMix(tone, t.text, 0.82))),
+        ],
+      ),
+    );
+  }
+}
+
+/// The web's `button.small` in a list's row: a pill 36 px tall, 11.9 px words;
+/// pine (lime on dark) when [primary], the danger colour's words when [danger].
+class TkSmallButton extends StatelessWidget {
+  const TkSmallButton({super.key, required this.label, this.onPressed, this.primary = false, this.danger = false});
+  final String label;
+  final VoidCallback? onPressed;
+  final bool primary;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Semantics(
+      button: true,
+      child: TkPress(
+        onTap: onPressed ?? () {},
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 36),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: primary ? t.primary : t.panel,
+            border: Border.all(color: primary ? t.primary : t.borderStrong),
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: primary ? const [BoxShadow(offset: Offset(0, 1), blurRadius: 0.87, color: Color(0x1F0E0F0C))] : t.shadow,
+          ),
+          child: Text(label, style: tkText(size: 11.9, weight: 500, lineHeight: 1.2, color: primary ? t.primaryText : (danger ? t.danger : t.text))),
         ),
       ),
     );

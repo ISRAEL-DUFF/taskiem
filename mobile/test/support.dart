@@ -1,6 +1,13 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:taskiem/api/api.g.dart';
+import 'package:taskiem/api/transport.dart';
+import 'package:taskiem/app/auth.dart';
+import 'package:taskiem/app/session.dart';
 import 'package:taskiem/theme/theme.dart';
 
 /// Loads the app's own fonts, so a test draws the web's Inter, not the test
@@ -20,5 +27,43 @@ Future<void> loadFonts() async {
     final loader = FontLoader(e.key)
       ..addFont(Future.value(ByteData.sublistView(File('assets/fonts/${e.value}').readAsBytesSync())));
     await loader.load();
+  }
+}
+
+/// A parity fixture (`test/parity/fixtures/NAME`, recorded from the demo
+/// world by tool/capture.mjs): its answers by path, and when they were taken.
+class Fixture {
+  Fixture(this.name) {
+    final j = jsonDecode(File('$dir/answers.json').readAsStringSync()) as Map<String, dynamic>;
+    at = DateTime.parse(j['at'] as String);
+    answers = (j['answers'] as Map<String, dynamic>).cast<String, Map<String, dynamic>>();
+  }
+
+  final String name;
+  late final DateTime at;
+  late final Map<String, Map<String, dynamic>> answers;
+
+  String get dir => 'test/parity/fixtures/$name';
+
+  /// The recorded answer for a request, as the web half finds it.
+  Map<String, dynamic>? answerFor(Uri u) => answers[u.path + (u.query.isEmpty ? '' : '?${u.query}').replaceAll(RegExp(r'after=[^&]*'), 'after=*')];
+
+  /// A stand-in server answering from the fixture; anything else is 404.
+  http.Client client() => MockClient((req) async {
+        final a = req.method == 'GET' ? answerFor(req.url) : null;
+        if (a == null) return http.Response(jsonEncode({'error': 'not in the fixture'}), 404);
+        return http.Response.bytes(File('$dir/${a['file']}').readAsBytesSync(), a['status'] as int, headers: {'content-type': a['type'] as String});
+      });
+
+  /// Signed in as the fixture's person, who-am-I read from it.
+  Auth auth() {
+    final a = Auth(
+      transport: Transport(base: 'http://localhost', token: 'fixture', client: client()),
+      store: SessionStore(MemoryKeyStore(), describe: () async => (name: 'Test phone', platform: 'android')),
+    );
+    final me = answers['/v1/me'];
+    if (me != null) a.me = Me.fromJson(jsonDecode(File('$dir/${me['file']}').readAsStringSync()) as Map<String, dynamic>);
+    a.state = AuthState.signedIn;
+    return a;
   }
 }

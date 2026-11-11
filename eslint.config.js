@@ -15,6 +15,11 @@ export default tseslint.config(
       globals: { window: "readonly", document: "readonly", crypto: "readonly", TextEncoder: "readonly", setTimeout: "readonly", URLSearchParams: "readonly" },
     },
   },
+  // The phone app's fixture recorder (mobile/tool/capture.mjs) runs on Node.
+  {
+    files: ["mobile/tool/*.mjs"],
+    languageOptions: { globals: { process: "readonly", console: "readonly", URL: "readonly" } },
+  },
   // The explainer's renderer (video/README.md) runs on Node; the scenes'
   // timeline runs in Chromium.
   {

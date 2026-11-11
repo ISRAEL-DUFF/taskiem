@@ -18,3 +18,12 @@ listDevices
 removeDevice
 listBusinesses
 switchBusiness
+
+# The chats list (M3)
+listLinkChats
+listCustomerChats
+customerChatsUnread
+listLinks
+getChatAlerts
+getChatTools
+getLinkSettings

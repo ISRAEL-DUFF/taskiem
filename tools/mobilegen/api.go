@@ -147,7 +147,7 @@ func (g *apiGen) method(o operation) (string, error) {
 			args = append(args, "required String "+camelJSON(n))
 		case "query":
 			args = append(args, "String? "+camelJSON(n))
-			query = append(query, fmt.Sprintf("if (%s != null) '%s': %s", camelJSON(n), n, camelJSON(n)))
+			query = append(query, fmt.Sprintf("'%s': ?%s", n, camelJSON(n)))
 		}
 	}
 	body := ""
