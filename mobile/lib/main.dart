@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import 'api/transport.dart';
 import 'app/auth.dart';
 import 'app/config.dart';
+import 'app/lock.dart';
 import 'app/session.dart';
 import 'screens/signed_in.dart';
 import 'screens/sign_in.dart';
@@ -24,11 +25,11 @@ void main() {
   ));
   final auth = Auth(transport: Transport(base: taskiemUrl), store: SessionStore(const SecureKeyStore()));
   auth.start();
-  runApp(TaskiemApp(auth: auth));
+  runApp(TaskiemApp(auth: auth, unlocker: PhoneUnlocker()));
 }
 
 class TaskiemApp extends StatelessWidget {
-  const TaskiemApp({super.key, this.mode = TkMode.light, this.home, this.auth});
+  const TaskiemApp({super.key, this.mode = TkMode.light, this.home, this.auth, this.unlocker});
 
   final TkMode mode;
 
@@ -37,6 +38,9 @@ class TaskiemApp extends StatelessWidget {
 
   /// Signing in, which decides the screen when no [home] is given.
   final Auth? auth;
+
+  /// The phone's own unlock, for the app lock.
+  final Unlocker? unlocker;
 
   @override
   Widget build(BuildContext context) {
@@ -55,15 +59,16 @@ class TaskiemApp extends StatelessWidget {
           ),
         ),
       ),
-      home: home ?? (auth == null ? const SignInScreen() : _Root(auth: auth!)),
+      home: home ?? (auth == null ? const SignInScreen() : _Root(auth: auth!, unlocker: unlocker)),
     );
   }
 }
 
 /// Sign in, or the app: whichever the session says.
 class _Root extends StatelessWidget {
-  const _Root({required this.auth});
+  const _Root({required this.auth, this.unlocker});
   final Auth auth;
+  final Unlocker? unlocker;
 
   @override
   Widget build(BuildContext context) {
@@ -73,7 +78,9 @@ class _Root extends StatelessWidget {
         // Opening: the pine the sign-in page starts with, for a moment.
         AuthState.checking => ColoredBox(color: TkTheme.tokens(context).brand),
         AuthState.signedOut => _SignedOut(auth: auth),
-        AuthState.signedIn => SignedInScreen(auth: auth),
+        AuthState.signedIn => unlocker == null
+            ? SignedInScreen(auth: auth)
+            : AppLock(active: true, unlocker: unlocker!, startLocked: auth.restored, child: SignedInScreen(auth: auth)),
       },
     );
   }

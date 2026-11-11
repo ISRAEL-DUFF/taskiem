@@ -17,6 +17,8 @@ dependencies:
   flutter_secure_storage: 11.2.0
   # The phone's name for Your phones (lib/app/session.dart). BSD-3-Clause.
   device_info_plus: 13.3.0
+  # The app lock: the phone's own fingerprint, face or PIN (lib/app/lock.dart). BSD-3-Clause.
+  local_auth: 3.0.2
 
 dev_dependencies:
   flutter_test:

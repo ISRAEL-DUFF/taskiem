@@ -24,6 +24,10 @@ class Auth extends ChangeNotifier {
   /// Who is signed in, once they are.
   Me? me;
 
+  /// Signed in by a session kept from before (opening the app), not just
+  /// now: the app lock asks for the phone's lock only then.
+  bool restored = false;
+
   /// Opening the app: a kept token is checked; one the server no longer
   /// knows (ended, expired) is forgotten and the person signs in again.
   /// Offline, a kept token is trusted until the server can be asked.
@@ -31,6 +35,7 @@ class Auth extends ChangeNotifier {
     final t = await store.token();
     if (t == null) return _set(AuthState.signedOut);
     transport.token = t;
+    restored = true;
     try {
       me = await api.me();
       _set(AuthState.signedIn);
@@ -82,6 +87,7 @@ class Auth extends ChangeNotifier {
     if (token == null) throw ApiError(500, {'error': 'Signed in, but no session came back. Try again.'});
     transport.token = token;
     await store.keep(token);
+    restored = false;
     me = await api.me();
     _set(AuthState.signedIn);
   }

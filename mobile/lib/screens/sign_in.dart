@@ -163,7 +163,14 @@ class _EmailSignInState extends State<_EmailSignIn> with _Acting {
           padding: const EdgeInsets.only(bottom: 12),
           child: Text('or', textAlign: TextAlign.center, style: tkHint(t)),
         ),
-        TkButton(label: 'Sign in with a passkey', minHeight: 44, onPressed: widget.onPasskey),
+        TkButton(
+          label: 'Sign in with a passkey',
+          minHeight: 44,
+          // Passkeys in the app need its link to Taskiem's address and its
+          // signing key (docs/spec/mobile-app.md §5.6, M4); until then, said.
+          onPressed: widget.onPasskey ??
+              () => setState(() => error = 'Signing in with a passkey comes to the app soon. For now, sign in with your email or with WhatsApp or Telegram.'),
+        ),
         const SizedBox(height: 8),
         TkButton(label: 'Sign in with WhatsApp or Telegram', minHeight: 44, onPressed: widget.onChat),
         if (passkeyRequired)

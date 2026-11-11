@@ -56,6 +56,7 @@ void main() {
     expect(device['id'], matches(RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')));
     expect(keys.values['token'], 'tok-1');
     expect(a.state, AuthState.signedIn);
+    expect(a.restored, isFalse);
     expect(a.me!.tenantName, 'Ada Foods');
     expect(server.calls.last.auth, 'Bearer tok-1');
   });
@@ -93,6 +94,7 @@ void main() {
     final a = auth();
     await a.start();
     expect(a.state, AuthState.signedIn);
+    expect(a.restored, isTrue);
     expect(server.calls.single.auth, 'Bearer kept');
 
     server.answers['GET /v1/me'] = () => json({'error': 'unauthenticated'}, 401);
