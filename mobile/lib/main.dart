@@ -14,6 +14,7 @@ import 'app/session.dart';
 import 'api/api.g.dart';
 import 'chat/chats.dart';
 import 'chat/conversation.dart';
+import 'chat/customer.dart';
 import 'chat/live.dart';
 import 'chat/taskiem.dart';
 import 'screens/signed_in.dart';
@@ -251,6 +252,11 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
         reverseTransitionDuration: Duration.zero,
         pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats),
       )),
+      onOpenCustomer: (c) => Navigator.of(context).push(PageRouteBuilder<void>(
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, _, _) => _OpenCustomer(chats: _chats, id: c.id),
+      )),
       onOpen: (c) => Navigator.of(context).push(PageRouteBuilder<void>(
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
@@ -303,4 +309,27 @@ class _OpenTaskiemState extends State<_OpenTaskiem> {
 
   @override
   Widget build(BuildContext context) => TaskiemScreen(data: _data);
+}
+
+/// A customer's conversation, open: its data lives while it is open.
+class _OpenCustomer extends StatefulWidget {
+  const _OpenCustomer({required this.chats, required this.id});
+  final ChatsData chats;
+  final String id;
+
+  @override
+  State<_OpenCustomer> createState() => _OpenCustomerState();
+}
+
+class _OpenCustomerState extends State<_OpenCustomer> {
+  late final CustomerData _data = CustomerData(widget.chats, widget.id);
+
+  @override
+  void dispose() {
+    _data.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => CustomerScreen(data: _data);
 }

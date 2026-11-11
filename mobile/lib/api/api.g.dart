@@ -183,6 +183,34 @@ class TaskiemApi {
     final j = await _t.send('GET', '/v1/chat-refs');
     return ChatRefsResponse.fromJson(j as Map<String, dynamic>);
   }
+
+  /// A customer's conversation (`GET /v1/customer-chats/{id}`)
+  Future<CustomerChat> getCustomerChat({required String id}) async {
+    final j = await _t.send('GET', '/v1/customer-chats/${Uri.encodeComponent(id)}');
+    return CustomerChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A customer's conversation's messages (`GET /v1/customer-chats/{id}/messages`)
+  Future<ListCustomerMessagesResponse> listCustomerMessages({required String id, String? before}) async {
+    final j = await _t.send('GET', '/v1/customer-chats/${Uri.encodeComponent(id)}/messages', query: {'before': ?before});
+    return ListCustomerMessagesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Mark a customer's messages read (`POST /v1/customer-chats/{id}/read`)
+  Future<void> readCustomerChat({required String id}) async {
+    await _t.send('POST', '/v1/customer-chats/${Uri.encodeComponent(id)}/read');
+  }
+
+  /// Archive a customer's conversation, or bring it back (`PUT /v1/customer-chats/{id}`)
+  Future<void> putCustomerChat({required PutCustomerChatRequest body, required String id}) async {
+    await _t.send('PUT', '/v1/customer-chats/${Uri.encodeComponent(id)}', body: body.toJson());
+  }
+
+  /// Reply to a customer (`POST /v1/customer-chats/{id}/messages`)
+  Future<CustomerMessage> replyCustomer({required ReplyCustomerRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/customer-chats/${Uri.encodeComponent(id)}/messages', body: body.toJson());
+    return CustomerMessage.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -1935,5 +1963,97 @@ class ChatRef {
         'status': ?status,
         'total_kobo': ?totalKobo,
         'when': when.toUtc().toIso8601String(),
+      };
+}
+
+class ListCustomerMessagesResponse {
+  const ListCustomerMessagesResponse({required this.messages, required this.more});
+
+  final List<CustomerMessage> messages;
+  final bool more;
+
+  factory ListCustomerMessagesResponse.fromJson(Map<String, dynamic> j) => ListCustomerMessagesResponse(
+        messages: (j['messages'] as List).map((e) => CustomerMessage.fromJson(e as Map<String, dynamic>)).toList(),
+        more: j['more'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((e) => e.toJson()).toList(),
+        'more': more,
+      };
+}
+
+class CustomerMessage {
+  const CustomerMessage({required this.body, required this.createdAt, this.delivery, this.failure, required this.id, required this.kind, required this.mine, this.readAt, this.senderName, this.sentAs});
+
+  final String body;
+  final DateTime createdAt;
+  /// A reply's way to the customer, as WhatsApp reports it.
+  final String? delivery;
+  /// Why WhatsApp could not deliver it (failed).
+  final String? failure;
+  final String id;
+  final String kind;
+  /// From the business.
+  final bool mine;
+  final Object? readAt;
+  final String? senderName;
+  final String? sentAs;
+
+  factory CustomerMessage.fromJson(Map<String, dynamic> j) => CustomerMessage(
+        body: j['body'] as String,
+        createdAt: DateTime.parse(j['created_at'] as String),
+        delivery: j['delivery'] == null ? null : j['delivery'] as String,
+        failure: j['failure'] == null ? null : j['failure'] as String,
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        mine: j['mine'] as bool,
+        readAt: j['read_at'],
+        senderName: j['sender_name'] == null ? null : j['sender_name'] as String,
+        sentAs: j['sent_as'] == null ? null : j['sent_as'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'body': body,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'delivery': ?delivery,
+        'failure': ?failure,
+        'id': id,
+        'kind': kind,
+        'mine': mine,
+        'read_at': ?readAt,
+        'sender_name': ?senderName,
+        'sent_as': ?sentAs,
+      };
+}
+
+class PutCustomerChatRequest {
+  const PutCustomerChatRequest({required this.archived});
+
+  final bool archived;
+
+  factory PutCustomerChatRequest.fromJson(Map<String, dynamic> j) => PutCustomerChatRequest(
+        archived: j['archived'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'archived': archived,
+      };
+}
+
+class ReplyCustomerRequest {
+  const ReplyCustomerRequest({this.clientId, required this.text});
+
+  final String? clientId;
+  final String text;
+
+  factory ReplyCustomerRequest.fromJson(Map<String, dynamic> j) => ReplyCustomerRequest(
+        clientId: j['client_id'] == null ? null : j['client_id'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'client_id': ?clientId,
+        'text': text,
       };
 }

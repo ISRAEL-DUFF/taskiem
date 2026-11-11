@@ -242,6 +242,27 @@ const SCREENS: { name: string; path: string; fixture?: string; ready: (p: Page) 
       await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     },
   },
+  {
+    // The chats of a shop whose customers wrote to its WhatsApp number.
+    name: "chats-customers",
+    path: "/chat",
+    fixture: "customers",
+    ready: async (p) => {
+      await expect(p.getByTestId("customer-chats")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+    },
+  },
+  {
+    // A customer's conversation: their messages and the shop's reply.
+    name: "customer-chidi",
+    path: "/chat?with=c-01a1caf1-bffd-7bf6-b932-a1e10d4b7bab",
+    fixture: "customer-chidi",
+    ready: async (p) => {
+      await expect(p.getByTestId("customer-message").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
 ];
 const FIXTURES = resolve(here, "../../mobile/test/parity/fixtures");
 
@@ -263,8 +284,10 @@ async function fixed(page: Page, name: string) {
     if (u.pathname === "/v1/chat/stream") {
       return route.fulfill({ status: 200, contentType: "text/event-stream", body: "retry: 600000\n\nevent: ready\ndata: {}\n\n" });
     }
+    // What the page sends (a read mark) is taken, as the server takes it.
+    if (route.request().method() !== "GET") return route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
     const a = answers[u.pathname + u.search.replace(/after=[^&]*/, "after=*")];
-    if (!a || route.request().method() !== "GET") {
+    if (!a) {
       return route.fulfill({ status: 404, contentType: "application/json", body: JSON.stringify({ error: "not in the fixture" }) });
     }
     return route.fulfill({ status: a.status, contentType: a.type, body: readFileSync(resolve(dir, a.file)) });

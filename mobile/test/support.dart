@@ -53,7 +53,10 @@ class Fixture {
   http.Client client({Future<http.Response?> Function(http.Request req)? also}) => MockClient((req) async {
         final own = await also?.call(req);
         if (own != null) return own;
-        final a = req.method == 'GET' ? answerFor(req.url) : null;
+        // What the screen sends (a read mark) is taken, as the web half
+        // takes it.
+        if (req.method != 'GET') return http.Response('{}', 200, headers: {'content-type': 'application/json'});
+        final a = answerFor(req.url);
         if (a == null) return http.Response(jsonEncode({'error': 'not in the fixture'}), 404);
         return http.Response.bytes(File('$dir/${a['file']}').readAsBytesSync(), a['status'] as int, headers: {'content-type': a['type'] as String});
       });

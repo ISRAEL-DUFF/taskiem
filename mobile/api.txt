@@ -39,3 +39,10 @@ taskiemHistory
 taskiemSay
 getChatBriefing
 chatRefs
+
+# Customers' conversations (M3)
+getCustomerChat
+listCustomerMessages
+readCustomerChat
+putCustomerChat
+replyCustomer

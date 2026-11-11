@@ -15,6 +15,7 @@ import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
+import 'customer.dart';
 import 'live.dart';
 import 'words.dart';
 
@@ -112,6 +113,21 @@ class ChatsData extends ChangeNotifier {
   bool _area(String key) => auth.me?.areas?[key] != false;
   bool get linksOn => _area('links');
 
+  /// Customers who wrote to the business's own WhatsApp number: for those
+  /// who handle orders, with Orders on (Links.tsx customersOn).
+  bool get customersOn => auth.can('storefront.manage|order.handle') && _area('orders');
+  List<CustomerChat> customers = const [];
+  List<CustomerChat> archivedCustomerChats = const [];
+
+  /// Requests to link we sent to businesses not yet on Taskiem.
+  int sent = 0;
+
+  /// Whether other businesses may find this one, and whether it was asked.
+  LinkSettings? linkSettings;
+
+  /// Links.tsx: nothing linked, asked, waiting or sent.
+  bool get noLinks => links.where((l) => const ['asked_us', 'active', 'requested', 'not_accepted'].contains(l.state)).isEmpty && sent == 0;
+
   /// The person may answer requests to link (link.manage, as the web's `can`).
   bool get manage => auth.can('link.manage') && linksOn;
 
@@ -122,14 +138,24 @@ class ChatsData extends ChangeNotifier {
         conversations = linksOn ? (await api.listLinkChats()).conversations : const [];
       }),
       _try(() async {
-        links = linksOn ? (await api.listLinks()).links : const [];
+        final r = linksOn ? await api.listLinks() : null;
+        links = r?.links ?? const [];
+        sent = r?.sent.length ?? 0;
       }),
       _try(() async {
         chatTools = (await api.getChatTools()).chatTools;
         waiting = chatTools ? (await api.getChatAlerts()).alerts.length : 0;
       }),
       _try(() async {
-        archivedCustomers = (await api.listCustomerChats(archived: '1')).chats.length;
+        final archived = customersOn ? (await api.listCustomerChats(archived: '1')).chats : const <CustomerChat>[];
+        archivedCustomers = archived.length;
+        archivedCustomerChats = archived;
+      }),
+      _try(() async {
+        customers = customersOn ? (await api.listCustomerChats()).chats : const [];
+      }),
+      _try(() async {
+        linkSettings = manage ? await api.getLinkSettings() : null;
       }),
     ]);
     loaded = true;
@@ -166,7 +192,7 @@ class ChatsData extends ChangeNotifier {
 enum ChatFilter { all, unread, starred, archived }
 
 class ChatsScreen extends StatefulWidget {
-  const ChatsScreen({super.key, required this.data, this.onMenu, this.onFind, this.onOpen, this.onOpenTaskiem});
+  const ChatsScreen({super.key, required this.data, this.onMenu, this.onFind, this.onOpen, this.onOpenTaskiem, this.onOpenCustomer});
 
   final ChatsData data;
   final VoidCallback? onMenu;
@@ -177,6 +203,9 @@ class ChatsScreen extends StatefulWidget {
 
   /// Taskiem's conversation, opened.
   final VoidCallback? onOpenTaskiem;
+
+  /// A customer's conversation, opened.
+  final ValueChanged<CustomerChat>? onOpenCustomer;
 
   @override
   State<ChatsScreen> createState() => _ChatsScreenState();
@@ -213,7 +242,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   children: [
                     _Head(name: d.auth.me?.tenantName, onMenu: widget.onMenu),
                     const _Search(),
-                    if (d.loaded && (d.conversations.isNotEmpty || d.archivedCustomers > 0))
+                    if (d.loaded && (d.conversations.isNotEmpty || d.customers.isNotEmpty || d.archivedCustomers > 0))
                       _Chips(filter: _filter, unread: d.unreadCount, archived: d.archivedCount, onPick: (f) => setState(() => _filter = f)),
                     if (d.error != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: TkErrorBox(d.error!)),
                     if (!archived && _filter != ChatFilter.starred)
@@ -234,12 +263,16 @@ class _ChatsScreenState extends State<ChatsScreen> {
                               : _previewText(context, 'Your own conversation with Taskiem, as on your phone'),
                         ),
                       ),
-                    if (d.asked.isNotEmpty)
+                    if (d.customersOn && _filter != ChatFilter.starred)
+                      _Customers(chats: archived ? d.archivedCustomerChats : d.customers, archived: archived, now: d.now(), onOpen: widget.onOpenCustomer),
+                    if (d.linksOn && d.loaded && d.noLinks && _filter != ChatFilter.starred)
+                      const _NoLinks()
+                    else if (d.asked.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: _Asked(links: d.asked, manage: d.manage, now: d.now()),
                       ),
-                    if (_filter != ChatFilter.starred && d.conversations.isNotEmpty)
+                    if (_filter != ChatFilter.starred && d.conversations.isNotEmpty && !d.noLinks)
                       Padding(
                         padding: EdgeInsets.only(left: 16, right: 16, top: d.asked.isEmpty ? 0 : 6),
                         child: Column(
@@ -270,6 +303,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           ],
                         ),
                       ),
+                    if (d.manage && d.linkSettings != null && d.linkSettings!.askedAt == null && _filter != ChatFilter.starred) _Findable(data: d),
                   ],
                 ),
                 if (d.linksOn)
@@ -557,7 +591,10 @@ class ChatAvatar extends StatelessWidget {
         child: Image.memory(l, width: size, height: size, fit: BoxFit.cover, gaplessPlayback: true),
       );
     }
-    final (bg, ink) = toneColours(t, toneOf(name));
+    // The web's ChatAvatar sets a tone by the name (`data-tone`), but
+    // chat.css's `.chat-avatar` comes after kit.css's tones and wins: in
+    // the chat every initials avatar is pine with lime letters.
+    final (bg, ink) = (t.brand, t.brandDark);
     return Container(
       width: size,
       height: size,
@@ -736,4 +773,194 @@ class UnreadCount extends StatelessWidget {
       child: Text('$count', style: tkText(size: 12, weight: 600, color: t.panel)),
     );
   }
+}
+
+/// CustomerChat.tsx CustomerRows: the Customers section, how many wait.
+class _Customers extends StatelessWidget {
+  const _Customers({required this.chats, required this.archived, required this.now, this.onOpen});
+  final List<CustomerChat> chats;
+  final bool archived;
+  final DateTime now;
+  final ValueChanged<CustomerChat>? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    if (chats.isEmpty) return const SizedBox.shrink();
+    final t = TkTheme.tokens(context);
+    final waiting = chats.where((c) => c.unread > 0).length;
+    final head = archived ? 'Archived customers' : 'Customers';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            header: true,
+            child: Text(
+              '$head${waiting > 0 && !archived ? ' · ${waiting == 1 ? '1 waiting' : '$waiting waiting'}' : ''}',
+              style: tkText(size: 15, weight: 600, lineHeight: 1.35, letterSpacing: -0.15, color: t.text),
+            ),
+          ),
+          const SizedBox(height: 6),
+          for (final c in chats)
+            ChatRow(
+              title: customerTitle(c),
+              letter: customerLetter(c),
+              time: listTime(c.lastAt, now),
+              preview: _ChatsScreenState._previewText(context, c.stopped ? 'Sent STOP' : '${c.lastMine ? 'You: ' : ''}${c.last}'),
+              unread: c.unread,
+              onTap: onOpen == null ? null : () => onOpen!(c),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// ui.tsx EmptyState (`.empty-state`): no linked businesses yet.
+class _NoLinks extends StatelessWidget {
+  const _NoLinks();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 56),
+      decoration: BoxDecoration(
+        color: t.panel,
+        border: Border.all(color: t.border),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(color: t.tint, borderRadius: BorderRadius.circular(16)),
+            alignment: Alignment.center,
+            child: TkIcon('chat', size: 26, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'No linked businesses yet. Search for a supplier or a customer that is on Taskiem, and ask to link.',
+            textAlign: TextAlign.center,
+            style: tkText(size: 14, color: t.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Links.tsx FindableQuestion: may other businesses find this one?
+class _Findable extends StatefulWidget {
+  const _Findable({required this.data});
+  final ChatsData data;
+
+  @override
+  State<_Findable> createState() => _FindableState();
+}
+
+class _FindableState extends State<_Findable> {
+  bool _busy = false;
+
+  Future<void> _answer(bool? findable) async {
+    setState(() => _busy = true);
+    try {
+      await widget.data.auth.transport.send('PUT', '/v1/link-settings', body: {'findable': findable});
+      await widget.data.load();
+    } on Object {
+      // Asked again next time.
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final s = widget.data.linkSettings!;
+    Widget button(String label, bool primary, VoidCallback onTap) => Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: TkPress(
+        onTap: _busy ? null : onTap,
+        // As wide as its words, as a button is.
+        child: IntrinsicWidth(
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 36),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: primary ? t.primary : t.panel,
+              border: Border.all(color: primary ? t.primary : t.borderStrong),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(label, style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: primary ? t.primaryText : t.text)),
+          ),
+        ),
+      ),
+    );
+    return Semantics(
+      container: true,
+      child: Container(
+        // `margin: 14px 16px 16px`; after the empty card's 16 px below, the
+        // two collapse into 16 (CSS block margins).
+        margin: EdgeInsets.fromLTRB(16, widget.data.noLinks ? 0 : 14, 16, 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: t.panel,
+          border: Border.all(color: t.border),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Semantics(
+              header: true,
+              child: Text(
+                'Let other businesses on Taskiem find you?',
+                style: tkText(size: 15, weight: 600, lineHeight: 1.35, letterSpacing: -0.15, color: t.text),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text.rich(
+              TextSpan(
+                children: [
+                  const TextSpan(text: 'They would find you by your name, what you sell and your area, from what your storefront already shows, or from your '),
+                  TextSpan(
+                    text: 'business profile',
+                    style: TextStyle(color: dark ? t.brandDark : t.brand, decoration: TextDecoration.underline),
+                  ),
+                  TextSpan(text: '. ${findableLine(s)}'),
+                ],
+              ),
+              style: tkText(size: 13, color: t.muted),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [button('Yes, let them find us', true, () => _answer(true)), button('Not now', false, () => _answer(null))],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// links.ts findableLine: what "Let other businesses find us" says.
+String findableLine(LinkSettings s) {
+  if (s.findable == null) {
+    return s.findableNow
+        ? 'On, because your storefront is published: businesses find you by your name, what you sell and your area.'
+        : 'Off until you publish your storefront or turn it on.';
+  }
+  return s.findable == true
+      ? 'On: businesses find you by your name, what you sell and your area.'
+      : 'Off: only someone who has your phone number or page address can ask.';
 }

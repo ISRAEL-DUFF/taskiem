@@ -32,6 +32,7 @@ import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/attachments.dart';
 import 'package:taskiem/chat/composer.dart';
 import 'package:taskiem/chat/conversation.dart';
+import 'package:taskiem/chat/customer.dart';
 import 'package:taskiem/chat/alerts.dart';
 import 'package:taskiem/chat/taskiem.dart';
 import 'package:taskiem/chat/thread.dart';
@@ -232,6 +233,21 @@ final screens = <String, Screen>{
       await t.tap(find.bySemanticsLabel(RegExp('^Approve: ')));
       await t.pumpAndSettle();
     },
+  ),
+  'chats-customers': (
+    build: () {
+      final f = Fixture('customers');
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+    },
+    drive: _loaded,
+  ),
+  'customer-chidi': (
+    build: () {
+      final f = Fixture('customer-chidi');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return CustomerScreen(data: CustomerData(chats, '01a1caf1-bffd-7bf6-b932-a1e10d4b7bab', follow: false));
+    },
+    drive: _loaded,
   ),
   'sign-up': (
     build: () => SignUpScreen(auth: fakeAuth()),

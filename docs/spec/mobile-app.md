@@ -598,6 +598,22 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   from the person's authenticator (a passkey comes with M4; a decision that
   needs one says to make it on a device with it). The tick, then the card
   goes. Parity: the sheet over Taskiem's conversation, light and dark.
+- **Customers' conversations** (`lib/chat/customer.dart`), as the web's
+  CustomerChat: the list's Customers (how many wait; archived ones under
+  Archived), a conversation (who they are, their number, what they owe;
+  their messages and the business's replies with who sent them and how far
+  each got: a clock, one tick, two, blue once read, or not delivered and
+  why), read on opening, followed every 4 seconds; a reply shown at once
+  and given back to the box if it could not go; a customer who sent STOP
+  told and not replied to; after the 24 hours, how a reply goes and its
+  900 characters. Start an order is drawn (the order it opens is M7's).
+  With it the list's first-day parts: no linked businesses yet, and whether
+  other businesses may find this one (Yes or Not now). Parity: a shop with
+  two customers who wrote, its list and a conversation, recorded from the
+  browser tests' server (which takes a customer's WhatsApp message).
+  Found: in the chat every initials avatar is pine with lime letters,
+  whatever its name's tone, because chat.css's `.chat-avatar` comes after
+  kit.css's tones; the app draws what the web draws.
 - **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
@@ -605,8 +621,7 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   the milestones), Decline (it asks first: with the app's confirmation
   sheet), a deal's offers and counters, replies, reactions, the message menu, stars, search, the contact sheet,
   forwarding, older pages as the reader scrolls up, a business's long
-  message folded (Taskiem's are), the chat tools, the "@" and "#" tags,
-  customers' conversations, and the list's search, chips and answers to requests
+  message folded (Taskiem's are), the chat tools, the "@" and "#" tags, and the list's search, chips and answers to requests
   (drawn, not yet working).
 
 ## 11. What needs people
