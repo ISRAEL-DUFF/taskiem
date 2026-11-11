@@ -19,13 +19,15 @@ The founder asked, on 11 November 2026, for a native app in Flutter, and settled
 6. **Chat notifications through Firebase Cloud Messaging**, as one more transport of chat push, with the same rules.
 7. **Android first.** iPhone is built from the same code throughout and released after Android is in use.
 8. **A plan's checkout opens in the browser** until counsel has read Apple's and Google's rules for a business tool sold in Nigeria.
+9. **Signing up and signing in, both in the app**, signing up as on Taskiem's WhatsApp number, under decision 0058's rules, with `app` as a way in.
+10. **The app looks, moves and sounds exactly like the web chat.** The demo and advert films are made from the web chat, so the web chat is the design. The app's theme is generated from the web's own CSS (colours, type, radii, the motion tokens and curves), its parts are built to match the web's kit (never Material or Cupertino), and a parity test compares every screen and moment of the two on the demo world, in CI, on every change to either.
 
 ## Alternatives considered
 
 | Alternative | Why not |
 |---|---|
 | The web app on the home screen only, with chat push and offline | Built, and kept: it may be enough for many. But sessions of 12 hours, notifications that depend on the browser, and no store listing are what owners will meet every day. Recorded as the case against: the critical path to real users is still the people items of the [chat-first strategy](../strategy/chat-first-nigeria.md), not code |
-| The web app inside a native shell (a WebView with native notifications) | Store presence and native push quickly, with no second chat; but the chat would still feel like a web page on a cheap phone, and app stores reject thin shells. Kept as the way the app opens pages it does not have, in the phone's own browser tab, not inside the app |
+| The web chat inside a native shell (a WebView with native notifications) | It would match the web chat's look by construction, which the films now require, with no second chat to keep the same. Not chosen: the founder asked for Flutter, for an app quick on a cheap Android phone that the stores accept (they reject thin shells). The cost of that choice is the parity test, which must hold the two the same on every change; if it cannot, this alternative is the fallback |
 | React Native, sharing code with the web app | Shares the language, not the screens: the web's chat is built on the DOM. Flutter draws the same on every phone and is quick on cheap Android ones; Xenibase already ships a Dart SDK |
 | The whole web app in the app | Doubles everything for pages rarely opened on a phone. The chat first; other parts move in after it when people and the app's numbers show they are needed |
 | The chat, approvals, Home and Orders in the first release | The first draft of this plan. The founder chose the chat instead, with everything it leads to |

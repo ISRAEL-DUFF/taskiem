@@ -28,6 +28,13 @@ business, because Taskiem's chat is how a business runs:
 The app does not send people to the web. It opens a browser only where the
 chat itself does, for a reason the app cannot remove (§3.5).
 
+**It looks, moves and sounds exactly like the web chat** (§4.1). The demo
+and advert films are made from the web chat, so a person who saw a film and
+opens the app must see the same thing: the same screens, colours, type,
+cards, sheets, motion, timings, sounds and haptics. The web chat is the
+design; the app is checked against it, screen by screen and moment by
+moment, on every change.
+
 - **What it is for.** The chat quick on a cheap Android phone; notifications
   when nothing is open; a camera, voice notes, photos and sharing that feel
   like the phone's own; a place in the Play Store.
@@ -134,18 +141,21 @@ draw, each for a reason that is not the app's to remove:
 | --- | --- |
 | `connect <service>` for a service that signs in (Google and others) | OAuth runs in a browser by the provider's rules: the chat's one-time connect link (`/c/<token>`, [decision 0058](../decisions/0058-chat-as-a-way-in.md)) opens in the phone's browser tab and comes back to the app. A key-based service (Paystack, Termii…) gets a secure form in the app, as Telegram's Mini App is, never a chat message |
 | A saved workflow's **open it** | The workflow canvas, for the few who want to change a draft's steps by hand; everything else about a workflow is done in the chat |
-| `plan` then **Pay** | The chat sends a checkout link today. Apple and Google have rules on paying for digital subscriptions inside an app; until §13 question 5 is settled the app shows the plan and opens the checkout in the browser, as the web chat does |
+| `plan` then **Pay** | The chat sends a checkout link today. Apple and Google have rules on paying for digital subscriptions inside an app; until §13 question 6 is settled the app shows the plan and opens the checkout in the browser, as the web chat does |
 
 **Never in the app:** a copy of the business kept on the phone (§5.5).
 
 ### 3.6 Signing up, and the app's own settings
 
-- **Signing up in the app**, as on Taskiem's WhatsApp number: a stranger
-  proves their phone with a code to their WhatsApp or Telegram, then has the
-  sign-up conversation with Taskiem (what they sell, **Yes** to the terms,
-  the first template), under the rules of [chat as the way in](chat-way-in.md):
-  consent recorded, limits per phone, hour and country, off unless the
-  operator turns it on. §13 question 4.
+- **Signing up and signing in, both in the app** (settled by the founder,
+  11 November 2026). Signing up is as on Taskiem's WhatsApp number: a
+  stranger proves their phone with a code to their WhatsApp or Telegram, then
+  has the sign-up conversation with Taskiem (what they sell, **Yes** to the
+  terms, the first template), under the rules of
+  [chat as the way in](chat-way-in.md): consent recorded, limits per phone,
+  hour and country, off unless the operator turns it on. The server gains
+  `app` as a way in beside `whatsapp`, `telegram` and `slack`
+  (`tenant_onboarding.source`, `taskiem_signups_total`).
 - **Settings**: notifications on this phone and showing what a message says
   (§5.3); the app lock; **Your phones** (§5.2); the chat PIN; your name and
   email; the chats you have linked (WhatsApp, Telegram, Slack; on the web
@@ -169,13 +179,7 @@ draw, each for a reason that is not the app's to remove:
   (decision 0007). Inter, the typeface, is already allowed under its font
   licence for the web; the exception is widened to the app's bundled font,
   which needs the founder's approval as the policy says.
-- **Taskiem's look**: the colours, type sizes and motion timings are
-  generated from `web/src/styles.css` and `web/src/motion.css` into a Dart
-  theme, with a staleness test, so pine and lime never drift between the two.
-  The rules of [Building screens in Taskiem's look](../brand/screens.md) apply
-  to the app as written: phone first at 360 px, rows not tables, lime only on
-  pine, the mark from the brand's own files, light and dark, motion turned
-  down when the phone asks.
+- **Taskiem's look** is the web chat's, exactly: §4.1.
 - **Plain words.** The words an owner never sees (Appendix C of
   [no-technical-steps](no-technical-steps.md)) are checked in the app's
   strings by the same list, run from a Dart test.
@@ -184,6 +188,61 @@ draw, each for a reason that is not the app's to remove:
   the app's download under 15 MB (split per processor), opening to the
   conversations list in under 2 seconds, and no image fetched larger than it
   is shown.
+
+### 4.1 The same as the web chat, in look, motion and sound
+
+The films are recorded from the web chat ([video](../../video/README.md):
+the scenes are drawn from the app as built, and `video/recording` drives the
+real web chat on the demo world). So the web chat is the design, and the app
+mirrors it. This is a requirement of every milestone, not a polish step.
+
+**Where the look comes from.** The web chat's own sources, read by a
+generator in `tools/` (the same command that writes the API client), which
+writes the app's theme; a test fails when the web changed and the theme was
+not written again:
+
+| Web | What the app takes from it |
+| --- | --- |
+| `web/src/styles.css` | Every colour token, light and dark (pine, lime, the tones, the surfaces), spacing, radii, shadows, type sizes and weights |
+| `web/src/motion.css` | Every moment's duration (`--t-press` 90 ms, `--t-quick` 150, `--t-tick` 260, `--t-picker` 280, `--t-sheet` 360, `--t-land` 400, `--t-roll` 450, `--t-arrive` 600, `--t-cheer` 900, `--t-glow` 1400, `--t-stagger` 40 between rows) and the four curves (`--spring`, `--spring-settle`, `--spring-bounce`, `--ease-out`), used as the same cubic Béziers |
+| `web/src/kit.css`, `web/src/chat.css` | The kit's parts and the chat's: bubbles and their one sharp corner, the initials' tiles, the pill, the composer, the tools button, sheets, cards, rows, chips, pills, the saving tick |
+| `web/src/kit.tsx`, `lib/moments.ts` | The haptics (a 12 ms buzz where the web vibrates) and the sounds (the same tones, made the same way), with the same switches |
+| The Inter font file the web bundles | The same font, at the same sizes, so lines break where they break on the web |
+
+**How it is drawn.** Every screen from the app's own parts, built to match
+the web's kit, never Flutter's Material or Cupertino look: no ripple, no
+Material shadows or app bars, the web's press (to 97%), the web's sheet that
+rises on a phone and is pulled down to close, the web's toasts. The phone's
+status and navigation bars take the chat's colours. Behaviour is the web
+chat's too: swipe to reply, long-press, hold to record, search, pin, mute,
+archive, the picker resting on the message bar, motion turned down when the
+phone asks (nothing moves, as on the web).
+
+**How it is checked: the parity test.** For each screen and each moment, the
+web chat and the app are put in the same state on the same demo world, on
+the same screen (390 × 844 and 360 × 640, at the phone's density, light and
+dark), and compared:
+
+- **Screens**: a screenshot of each, compared by a perceptual difference
+  with a small threshold (text drawn by two engines is never identical to the
+  pixel); a difference above it fails the check, with both pictures and the
+  difference kept.
+- **Moments**: each motion (the picker opening, a card growing into its
+  sheet, a diary line landing and its glow, a number rolling, an order
+  arriving, the tick, a good moment) captured at fixed points of its time
+  (0, 25, 50, 75 and 100%) on both, and compared the same way.
+- **The list** of screens and moments is the films' scenes and acts
+  (`video/films/chat/script.md`, `video/recording/tour.mjs`), and grows with
+  every card, sheet and screen the web chat gains.
+- The check runs in CI on every pull request that touches `web/src` or
+  `mobile/`, beside axe; a pull request that changes how the web chat looks
+  shows the app's difference too, so the two change together.
+
+**Where the two cannot be the same**, and are left to the phone, each named
+so it is not mistaken for a difference to fix: the keyboard and its emoji,
+the phone's own share sheet, camera and photo picker, notifications on the
+lock screen, the system's text-selection handles, and the browser tab of
+§3.5.
 
 ## 5. What the server needs
 
@@ -263,7 +322,7 @@ in memory while the app is open and fetched again when it opens. What is
 kept: the token (secure storage), the person's settings, a draft being typed
 (as the web keeps one), and a message not yet sent until it is sent or
 deleted. A cache of conversations for speed and bad signal is a later
-decision of its own (§13, question 6): what is kept, for how long, encrypted
+decision of its own (§13, question 7): what is kept, for how long, encrypted
 how, and wiped when.
 
 ### 5.6 S6: links that open the app
@@ -307,9 +366,9 @@ WebAuthn origins gain the Android app's signing-key origin.
 
 ## 8. Tests
 
+- **The parity test** (§4.1): every screen and moment against the web chat.
 - **Unit and widget tests** for every screen, in light and dark, at 360 px
-  and with large text; **golden images** of the chat's bubbles and cards,
-  compared with the web's designs.
+  and with large text.
 - **Against the real server**: the app's integration tests run against the
   same server `web/e2e/serve.sh` starts, on an Android emulator in CI. The
   chat's scenarios (two businesses talk, a message that did not go, a
@@ -346,9 +405,9 @@ for one engineer who knows Flutter.
 | | Milestone | Size | Done when |
 | --- | --- | --- | --- |
 | M0 | **People and decisions** (§11, §13) | — | The name is cleared, both store accounts and the Firebase project exist, decision 0066 is accepted |
-| M1 | **Foundation**: `mobile/`, the generated client and theme, CI building an Android app, the licence gate for Dart, S1 | M | A build from `main` installs on a phone and shows the sign-in screen in Taskiem's look |
-| M2 | **Signed in, and staying signed in**: chat code, password, passkey; S2; the app lock; the business switcher; the app's settings and signing up (§3.6) | M | An owner signs in with a WhatsApp code on a real phone and is still signed in a week later |
-| M3 | **The chat** (§3.1, §3.2): chats, a conversation, sending, files, voice notes, the stream; customers' conversations; `@Taskiem` with every command, reply buttons, voice notes, approvals with the chat PIN, and connecting (§3.5) | L | Two businesses chat from two phones; an owner sets up their shop, adds products and publishes a workflow by talking to `@Taskiem` in the app; every web chat e2e scenario on the shared list passes |
+| M1 | **Foundation**: `mobile/`, the generated client and theme, the app's kit of parts matching the web's, the parity test in CI, the licence gate for Dart, S1 | M | A build from `main` installs on a phone, and its sign-in screen passes the parity test against the web's |
+| M2 | **Signing up and signing in**: sign-up as on WhatsApp; chat code, password, passkey; S2; the app lock; the business switcher; the app's settings (§3.6) | M | A stranger signs up from the app and is still signed in a week later, on a real phone |
+| M3 | **The chat** (§3.1, §3.2): chats, a conversation, sending, files, voice notes, the stream; customers' conversations; `@Taskiem` with every command, reply buttons, voice notes, approvals with the chat PIN, and connecting (§3.5) | L | Two businesses chat from two phones; an owner sets up their shop, adds products and publishes a workflow by talking to `@Taskiem` in the app; every web chat e2e scenario on the shared list passes; every screen and moment of the chat film's acts passes the parity test |
 | M4 | **Notifications and links** (S3, S6): the switch, **Your phones**, the icon's count, links that open the app | M | A message to a closed app shows on a real Android phone's lock screen in under 5 seconds and opens that conversation |
 | M5 | **Linked businesses** (§3.3): Explore, cards, linking, your profile, the tools' picker and sheets | M | Two businesses find each other and link from the app alone |
 | M6 | **Selling** (§3.3): products and stock, Sell, Handover, services and bookings, price lists and deals | L | A shop keeps its products, stock and prices from the app alone for a week |
@@ -382,7 +441,9 @@ other takes M7 and M8, since they divide by screen.
 | --- | --- |
 | The two chats drift apart | §9: the server owns behaviour, a feature is done in both, one scenario list |
 | The app slows the chat's pace on the web | The app follows the web by up to one milestone; the web is not held back for it |
-| Store review rejects the app (payments wording, the account deletion rule, reviewers who cannot sign in) | A test business and account for reviewers; account deletion from the app, as both stores require; a plan's checkout in the browser until §13 question 5 is settled |
+| The app drifts from the web chat's look, and from the films | The parity test (§4.1) on every pull request touching either; the theme generated from the web's own CSS |
+| Two engines never draw text the same | A threshold set on the first screens and kept; Inter bundled in both; differences that are the phone's own are listed (§4.1) |
+| Store review rejects the app (payments wording, the account deletion rule, reviewers who cannot sign in) | A test business and account for reviewers; account deletion from the app, as both stores require; a plan's checkout in the browser until §13 question 6 is settled |
 | Phones without Google's services | Told plainly; WhatsApp and Telegram still reach them |
 | The name changes after launch | A1 before M9; the app ID chosen to survive a new display name |
 | A lost or shared phone | The app lock, device sessions listed and ended from the web, nothing of the business kept on the phone |
@@ -399,16 +460,18 @@ other takes M7 and M8, since they divide by screen.
 2. **Android first**, iPhone released after (recommended), or both at once.
 3. **The app is the web chat, all of it** (settled by the founder, 11
    November 2026): §3, opening a browser only as in §3.5.
-4. **Signing up in the app** (§3.6), as on Taskiem's WhatsApp number
-   (recommended), or signing in only, with sign-up left to the chat apps and
-   the web.
-5. **Paying for a plan from the app.** The web chat's **Pay** opens a
+4. **Signing up and signing in in the app** (settled by the founder, 11
+   November 2026): §3.6.
+5. **The look is the web chat's**, in every screen, motion, sound and haptic
+   (settled by the founder, 11 November 2026): §4.1, checked by the parity
+   test.
+6. **Paying for a plan from the app.** The web chat's **Pay** opens a
    checkout; Apple's and Google's rules on digital subscriptions bought in an
    app need counsel's reading for a business tool sold in Nigeria. Until then,
    the checkout opens in the browser (§3.5).
-6. **A cache of conversations on the phone** (§5.5): not in the first release
+7. **A cache of conversations on the phone** (§5.5): not in the first release
    (recommended), or a decision of its own before M3.
-7. **Device sessions** (§5.2): 30 days unused, 180 at most (recommended), or
+8. **Device sessions** (§5.2): 30 days unused, 180 at most (recommended), or
    other numbers.
-8. **Notifications through Firebase** (§5.3), including for iPhones, rather
+9. **Notifications through Firebase** (§5.3), including for iPhones, rather
    than Apple's service directly (recommended: one transport, one key).
