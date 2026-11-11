@@ -95,6 +95,9 @@ class Transport {
   /// A picture or a file's bytes (a logo, a photo), signed in as the rest.
   Future<List<int>> bytes(String path) async {
     final uri = Uri.parse('$base$path');
+    if (uri.scheme != 'https' && !_local(uri.host)) {
+      throw ArgumentError('Taskiem is only reached over https');
+    }
     final req = http.Request('GET', uri);
     final t = token;
     if (t != null) req.headers['Authorization'] = 'Bearer $t';
@@ -110,6 +113,42 @@ class Transport {
     }
     if (res.statusCode != 200) throw ApiError(res.statusCode, {'error': 'not found'});
     return res.bodyBytes;
+  }
+
+  /// A long answer read as it comes (the chat's server-sent events): the
+  /// response once its head is here, its body a stream. The head must come
+  /// within the timeout; the body has none (the caller watches for a
+  /// stall). A 401 ends the session as any request's does.
+  Future<http.StreamedResponse> stream(String path, {Map<String, String>? headers}) async {
+    final uri = Uri.parse('$base$path');
+    if (uri.scheme != 'https' && !_local(uri.host)) {
+      throw ArgumentError('Taskiem is only reached over https');
+    }
+    final req = http.Request('GET', uri)
+      ..headers['Accept'] = 'text/event-stream'
+      ..headers.addAll(headers ?? const {});
+    final t = token;
+    if (t != null) req.headers['Authorization'] = 'Bearer $t';
+    http.StreamedResponse res;
+    try {
+      res = await _client.send(req).timeout(timeout);
+    } on http.ClientException {
+      throw const Offline();
+    } on IOException {
+      throw const Offline();
+    } on TimeoutException {
+      throw const Offline();
+    }
+    if (res.statusCode == 200) return res;
+    final text = await utf8.decodeStream(res.stream).catchError((Object _) => '');
+    Object? json;
+    try {
+      json = text.isEmpty ? null : jsonDecode(text);
+    } on FormatException {
+      json = null;
+    }
+    if (res.statusCode == 401 && t != null && token == t) onSessionEnded?.call();
+    throw ApiError(res.statusCode, json is Map<String, dynamic> ? json : {'error': 'The server answered ${res.statusCode}.'});
   }
 
   // Plain http only to a server on this machine or the emulator's host,

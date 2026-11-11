@@ -14,14 +14,51 @@ import '../app/auth.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
+import 'live.dart';
 import 'words.dart';
 
 /// What the list shows, loaded as the web's page loads it.
 class ChatsData extends ChangeNotifier {
-  ChatsData(this.auth, {DateTime Function()? now}) : now = now ?? DateTime.now;
+  ChatsData(this.auth, {DateTime Function()? now, this.live}) : now = now ?? DateTime.now {
+    _liveSub = live?.events.listen((e) {
+      // A message, one gone, a conversation's settings: the list again,
+      // once for a burst (ChatLive.tsx reloadSoon).
+      if (e is LiveMessage || e is LiveGone || e is LiveConversation) {
+        _soon?.cancel();
+        _soon = Timer(const Duration(milliseconds: 400), load);
+      }
+    });
+    live?.addListener(notifyListeners);
+  }
 
   final Auth auth;
   final DateTime Function() now;
+
+  /// The chat as it happens, when followed.
+  final ChatLive? live;
+  StreamSubscription<LiveEvent>? _liveSub;
+  Timer? _soon;
+  Timer? _every;
+
+  /// Whether a conversation's other side is typing: from the stream while
+  /// it is connected, else as the list was last told.
+  bool typingIn(LinkConversation c) => live?.connected == true ? live!.typing.contains(c.link) : c.typing;
+
+  /// Asks for the list again every 30 seconds while shown (Links.tsx
+  /// useLiveRefresh), besides what the stream tells.
+  void follow(bool on) {
+    _every?.cancel();
+    _every = on ? Timer.periodic(const Duration(seconds: 30), (_) => load()) : null;
+  }
+
+  @override
+  void dispose() {
+    _liveSub?.cancel();
+    _soon?.cancel();
+    _every?.cancel();
+    live?.removeListener(notifyListeners);
+    super.dispose();
+  }
 
   List<LinkConversation> conversations = const [];
   List<BusinessLink> links = const [];
@@ -173,14 +210,14 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                 ticks: c.last != null && c.last!.mine && c.last!.kind != 'card' ? (read: c.last!.readAt != null) : null,
                                 preview: _previewText(
                                   context,
-                                  c.typing
+                                  d.typingIn(c)
                                       ? 'typing…'
                                       : c.last != null
                                       ? listPreview(c.last!, c.name)
                                       : c.state == 'active'
                                       ? 'Linked'
                                       : 'The link has ended',
-                                  typing: c.typing,
+                                  typing: d.typingIn(c),
                                 ),
                                 unread: c.unread,
                                 pinned: c.pinned,

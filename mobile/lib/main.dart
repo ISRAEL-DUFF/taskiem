@@ -14,6 +14,7 @@ import 'app/session.dart';
 import 'api/api.g.dart';
 import 'chat/chats.dart';
 import 'chat/conversation.dart';
+import 'chat/live.dart';
 import 'screens/signed_in.dart';
 import 'screens/sign_in.dart';
 import 'screens/sign_up.dart';
@@ -202,8 +203,38 @@ class _Home extends StatefulWidget {
   State<_Home> createState() => _HomeState();
 }
 
-class _HomeState extends State<_Home> {
-  late final ChatsData _chats = ChatsData(widget.auth);
+class _HomeState extends State<_Home> with WidgetsBindingObserver {
+  // The chat as it happens, followed while the app is in front.
+  late final ChatLive _live = ChatLive(widget.auth.transport);
+  late final ChatsData _chats = ChatsData(widget.auth, live: _live);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _live.start();
+    _chats.follow(true);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _live.start();
+      _chats.follow(true);
+      _chats.load();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      _live.stop();
+      _chats.follow(false);
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _chats.dispose();
+    _live.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

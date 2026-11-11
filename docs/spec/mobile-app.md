@@ -527,12 +527,24 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   Parity: Bayo Rice Mills' conversation (an order and an invoice), light and
   dark, two sizes. Chrome breaks a line after a hyphen before a digit and
   Flutter does not: card titles are given the break (`breakAfterHyphens`).
+- **The live stream** (`lib/chat/live.dart`): `GET /v1/chat/stream`
+  followed while the app is in front (stopped behind another app), as the
+  web's ChatLive: messages new and changed, ones gone, a conversation's
+  settings, who is typing; a stream quiet for 30 seconds or dropped is
+  opened again (after 30 seconds) with Last-Event-ID, so nothing is missed
+  or told twice. While it is connected the conversation asks for what is
+  newer every 15 seconds and the newest page every 30 (3 and 9 without
+  it, which also bring our ticks turning blue), and reads a burst of
+  incoming messages once; the list is asked again on a change and every
+  30 seconds. A phone's bearer token is taken by the stream (checked
+  against the demo world). The sound and the phone's notification for a
+  message are M4's.
 - **Not yet in M3**: the documents the cards open (View order, View
-  invoice, Pay: next), Decline (it asks first: with the app's confirmation
+  invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
+  the milestones), Decline (it asks first: with the app's confirmation
   sheet), a deal's offers and counters, photos, files and voice notes,
   replies, reactions, the message menu, stars, search, the contact sheet,
-  forwarding, the live stream (`/v1/chat/stream`; the app polls), older pages
-  as the reader scrolls up, the chat tools, `@Taskiem`, customers'
+  forwarding, older pages as the reader scrolls up, the chat tools, `@Taskiem`, customers'
   conversations, and the list's search, chips and answers to requests
   (drawn, not yet working).
 

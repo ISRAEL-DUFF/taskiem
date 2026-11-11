@@ -18,6 +18,7 @@ import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'cards.dart';
 import 'chats.dart';
+import 'live.dart';
 import 'words.dart';
 
 /// Conversation.tsx PAGE: a page of messages.
@@ -67,7 +68,16 @@ class ConversationData extends ChangeNotifier {
   bool hasOlder = false;
   String? error;
   Timer? _timer;
+  Timer? _ticks;
+  Timer? _readSoon;
+  StreamSubscription<LiveEvent>? _liveSub;
   bool _disposed = false;
+
+  ChatLive? get _live => chats.live;
+  bool get _connected => _live?.connected == true;
+
+  /// Typing: from the stream while connected, else as the messages said.
+  bool get typingNow => _connected ? _live!.typing.contains(conv.link) : typing;
 
   /// The link's role, as the head says it (links.ts headLine).
   String? get headLine {
@@ -110,7 +120,58 @@ class ConversationData extends ChangeNotifier {
       error = 'You’re offline. The conversation shows when you’re back online.';
       _changed();
     }
-    if (follow) _timer ??= Timer.periodic(_every, (_) => pull().catchError((Object _) {}));
+    if (!follow) return;
+    _liveSub ??= _live?.events.listen(_onLive);
+    _live?.addListener(_reschedule);
+    _reschedule();
+  }
+
+  bool _wasConnected = false;
+
+  /// Conversation.tsx: what is newer every 3 seconds, the newest page again
+  /// every 9 (our ticks, their reactions); while the stream is connected
+  /// only every 15 and 30, to reconcile.
+  void _reschedule() {
+    if (_timer != null && _wasConnected == _connected) {
+      _changed();
+      return;
+    }
+    _wasConnected = _connected;
+    _timer?.cancel();
+    _ticks?.cancel();
+    _timer = Timer.periodic(_connected ? _every * 5 : _every, (_) => pull().catchError((Object _) {}));
+    _ticks = Timer.periodic(_connected ? _every * 10 : _every * 3, (_) => refresh().catchError((Object _) {}));
+    _changed();
+  }
+
+  void _onLive(LiveEvent e) {
+    if (e is LiveMessage && e.message.link == conv.link) {
+      final m = e.message;
+      _merge([m]);
+      // Ours, sent from here, told by the stream before the send's answer
+      // came: the outbox's copy gives way to it.
+      if (m.mine) {
+        final i = outbox.indexWhere((o) => !o.failed && o.body == (m.body ?? '').trim());
+        if (i >= 0) outbox.removeAt(i);
+      }
+      _changed();
+      if (!m.mine && m.readAt == null) {
+        // Read once for a burst of them.
+        _readSoon?.cancel();
+        _readSoon = Timer(const Duration(milliseconds: 400), () => _markRead([m]));
+      }
+    } else if (e is LiveGone && e.link == conv.link) {
+      messages = messages?.where((x) => x.id != e.id).toList();
+      _changed();
+    }
+  }
+
+  /// The newest page again: read marks and reactions change in place.
+  Future<void> refresh() async {
+    final out = await api.linkMessages(link: conv.link);
+    if (_disposed) return;
+    _merge(out.messages);
+    _changed();
   }
 
   /// What is newer than the newest we have; read while seen.
@@ -198,6 +259,10 @@ class ConversationData extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _timer?.cancel();
+    _ticks?.cancel();
+    _readSoon?.cancel();
+    _liveSub?.cancel();
+    _live?.removeListener(_reschedule);
     super.dispose();
   }
 }
@@ -526,7 +591,7 @@ class _ConversationHead extends StatelessWidget {
             child: ListenableBuilder(
               listenable: data,
               builder: (context, _) {
-                final sub = data.typing ? 'typing…' : data.headLine;
+                final sub = data.typingNow ? 'typing…' : data.headLine;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -545,7 +610,7 @@ class _ConversationHead extends StatelessWidget {
                         sub,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: data.typing
+                        style: data.typingNow
                             ? tkText(size: 13, weight: 600, lineHeight: 1.25, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand)
                             : tkText(size: 13, lineHeight: 1.25, color: t.muted),
                       ),
