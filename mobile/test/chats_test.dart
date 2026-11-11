@@ -32,19 +32,28 @@ Future<void> _settle(WidgetTester t) async {
 void main() {
   setUpAll(loadFonts);
 
-  Future<List<String>> list(WidgetTester t, {void Function(LinkConversation, String)? onOpenAt}) async {
+  Future<List<String>> list(
+    WidgetTester t, {
+    void Function(LinkConversation, String)? onOpenAt,
+    String fixture = 'chats-starred',
+    Future<http.Response?> Function(http.Request req)? also,
+    List<Object?>? bodies,
+  }) async {
     t.view.physicalSize = const Size(390, 844);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
-    final f = Fixture('chats-starred');
+    final f = Fixture(fixture);
     final asked = <String>[];
     final data = ChatsData(
       f.auth(also: (req) async {
+        final own = await also?.call(req);
+        if (own != null) return own;
         if (req.method != 'GET') {
           asked.add('${req.method} ${req.url.path}');
+          bodies?.add(req.body.isEmpty ? null : jsonDecode(req.body));
           return _answer(<String, Object>{});
         }
-        if (req.url.path == '/v1/link-chats/starred') asked.add('GET ${req.url.path}');
+        if (req.url.path == '/v1/link-chats/starred' || req.url.path.endsWith('/search')) asked.add('GET ${req.url.path}?${req.url.query}');
         return null;
       }),
       now: () => f.at,
@@ -86,11 +95,76 @@ void main() {
     final asked = await list(t, onOpenAt: (c, m) => opened = (c, m));
     await t.tap(find.bySemanticsLabel(RegExp('^Starred')));
     await _settle(t);
-    expect(asked, ['GET /v1/link-chats/starred']);
+    expect(asked, ['GET /v1/link-chats/starred?']);
     expect(find.text('Starred messages'), findsOneWidget);
     await t.tap(find.textContaining('Good morning ma'));
     expect(opened?.$1.name, "Mama Tunde's Market");
     expect(opened?.$2, _first);
+  });
+
+  testWidgets('search: a letter narrows the list; two look further', (t) async {
+    final asked = await list(t, fixture: 'chats-search');
+    await t.enterText(find.byType(EditableText), 'm');
+    await t.pump();
+    expect(find.text("Mama Tunde's Market"), findsOneWidget);
+    expect(find.text('Eko Events Co.'), findsNothing, reason: 'no word of it begins with m');
+    expect(find.text('Taskiem'), findsNothing);
+    expect(asked, isEmpty, reason: 'one letter asks nothing');
+    await t.enterText(find.byType(EditableText), 'rice');
+    await t.pump(const Duration(milliseconds: 100));
+    await t.enterText(find.byType(EditableText), 'rice');
+    await t.pump(const Duration(milliseconds: 200));
+    await _settle(t);
+    expect(asked.toSet(), {'GET /v1/links/search?q=rice', 'GET /v1/link-chats/search?q=rice', 'GET /v1/customer-chats/search?q=rice'});
+    expect(find.text('Businesses on Taskiem'), findsOneWidget);
+    expect(find.text('Lagos Grains Depot'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^Unread')), findsNothing, reason: 'no chips while searching');
+  });
+
+  testWidgets('Request link: how we trade, then sent and said', (t) async {
+    final bodies = <Object?>[];
+    final asked = await list(t, fixture: 'chats-search', bodies: bodies);
+    await t.enterText(find.byType(EditableText), 'rice');
+    await t.pump(const Duration(milliseconds: 200));
+    await _settle(t);
+    await t.tap(find.bySemanticsLabel('Request link with Lagos Grains Depot'));
+    await t.pumpAndSettle();
+    expect(find.text('Ask Lagos Grains Depot to link'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('They buy from us'));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Send request'));
+    await t.pumpAndSettle();
+    await _settle(t);
+    expect(asked.where((a) => a.startsWith('POST')), ['POST /v1/links']);
+    expect(bodies.single, {'business': '01a1ca85-0000-7000-8000-00000000a11a', 'role': 'customer'});
+    expect(find.text('Asked Lagos Grains Depot to link'), findsOneWidget);
+    expect(find.text('Businesses on Taskiem'), findsNothing, reason: 'the box emptied');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a phone number: never searched, only a request sent to it', (t) async {
+    final bodies = <Object?>[];
+    final asked = await list(
+      t,
+      fixture: 'chats-search',
+      bodies: bodies,
+      also: (req) async => req.url.path == '/v1/links/search'
+          ? _answer({'results': <Object>[], 'blind': {'kind': 'phone', 'shown': '+234 803 555 0101'}})
+          : null,
+    );
+    await t.enterText(find.byType(EditableText), '08035550101');
+    await t.pump(const Duration(milliseconds: 200));
+    await _settle(t);
+    expect(find.text('Send a link request to +234 803 555 0101'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Send request'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Send request').last);
+    await t.pumpAndSettle();
+    await _settle(t);
+    expect(asked.where((a) => a.startsWith('POST')), ['POST /v1/links']);
+    expect(bodies.single, {'phone': '08035550101', 'role': 'supplier'});
+    expect(find.text('Request sent'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
   });
 
   testWidgets('opened at a message: in the middle, then back to the newest', (t) async {

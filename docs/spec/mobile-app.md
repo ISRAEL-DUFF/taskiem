@@ -677,12 +677,25 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   then; sending from there goes back to the newest). Parity: the Starred
   view (the chats' recording with two starred messages added), light and
   dark, two sizes; held by `chats_test.dart`.
+- **The list's search** (`lib/chat/chats.dart`), as Links.tsx: from the
+  first letter the list narrows (a chat whose name or last message has a
+  word beginning with it; customers by name; Taskiem by its name); from
+  two, 150 ms after the typing stops, the chips go and the results show:
+  the linked businesses found, the messages found (each opening its
+  conversation at itself), the customers and their messages found, and
+  the businesses on Taskiem that chose to be found, each with Request
+  link (the web's sheet: how we trade with them, then Send request) or
+  Cancel request for one waiting; a phone number or a page address is
+  never searched, only offered a request sent to it. Parity: "rice"
+  searched (the chats' recording with its answers added), light and dark,
+  two sizes; held by `chats_test.dart`. Finding a business (the Find a
+  business button) opens the web's Explore screen, not yet built.
 - **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
   the milestones), a deal's offers and counters, search, the contact sheet,
-  the chat tools, the "@" and "#" tags, and the list's search (drawn, not yet working).
+  the chat tools, the "@" and "#" tags, and Find a business (the web's Explore).
 
 ## 11. What needs people
 

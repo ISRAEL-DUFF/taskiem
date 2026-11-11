@@ -5,6 +5,7 @@
 
 import 'dart:async';
 
+import 'package:flutter/material.dart' show InputDecoration, Material, MaterialType, TextField;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -262,6 +263,77 @@ class _ChatsScreenState extends State<ChatsScreen> {
   ChatFilter _filter = ChatFilter.all;
   bool _answering = false;
 
+  // The search (Links.tsx): from the first letter the list narrows to what
+  // matches; from two, other businesses, messages and customers are
+  // looked for too.
+  final _q = TextEditingController();
+  Timer? _searchSoon;
+  SearchLinksResponse? _found;
+  List<LinkMessage> _foundMessages = const [];
+  SearchCustomerChatsResponse? _foundCustomers;
+  Object? _searchError;
+  String get _query => _q.text.trim();
+
+  @override
+  void dispose() {
+    _searchSoon?.cancel();
+    _q.dispose();
+    super.dispose();
+  }
+
+  void _typed() {
+    setState(() {});
+    _searchSoon?.cancel();
+    final q = _query;
+    if (q.length < 2) {
+      _found = null;
+      _foundMessages = const [];
+      _foundCustomers = null;
+      return;
+    }
+    _searchSoon = Timer(const Duration(milliseconds: 150), () => _search(q));
+  }
+
+  Future<void> _search(String q) async {
+    final d = widget.data;
+    _found = null;
+    if (d.linksOn) {
+      d.api.searchLinks(q: q).then((r) {
+        if (mounted && _query == q) setState(() => (_found = r, _searchError = null));
+      }, onError: (Object e) {
+        if (mounted && _query == q) setState(() => _searchError = e);
+      });
+      d.api.searchLinkChats(q: q).then((r) {
+        if (mounted && _query == q) setState(() => _foundMessages = r.messages);
+      }, onError: (_) {});
+    }
+    if (d.customersOn) {
+      d.api.searchCustomerChats(q: q).then((r) {
+        if (mounted && _query == q) setState(() => _foundCustomers = r);
+      }, onError: (_) {});
+    }
+  }
+
+  /// RequestSheet: how we trade with them, then Send request.
+  Future<void> _ask({required String title, required String hint, required Map<String, dynamic> to, required String done}) async {
+    final sent = await showTkModal<bool>(
+      context,
+      title: title,
+      builder: (context) => _RequestForm(data: widget.data, hint: hint, to: to),
+    );
+    if (sent != true || !mounted) return;
+    showTkToast(context, done);
+    _q.clear();
+    await widget.data.load();
+  }
+
+  Future<void> _cancel(BusinessLink pending) async {
+    final why = await widget.data.answer(pending, 'cancel');
+    if (!mounted) return;
+    showTkToast(context, why ?? 'Request withdrawn', error: why != null);
+    if (_query.length >= 2) _search(_query);
+  }
+
   Future<void> _answer(BusinessLink l, String a, String done) async {
     if (_answering) return;
     _answering = true;
@@ -274,6 +346,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   @override
   void initState() {
     super.initState();
+    _q.addListener(_typed);
     if (!widget.data.loaded) widget.data.load();
   }
 
@@ -291,15 +364,21 @@ class _ChatsScreenState extends State<ChatsScreen> {
           builder: (context, _) {
             final d = widget.data;
             final archived = _filter == ChatFilter.archived;
-            final listed = d.conversations.where((c) => c.archived == archived && (_filter != ChatFilter.unread || c.unread > 0)).toList();
+            final query = _query;
+            final searching = d.linksOn && query.length >= 2;
+            final narrowed = d.linksOn && query.length == 1 ? matchChats(d.conversations, query) : d.conversations;
+            final listed = narrowed.where((c) => c.archived == archived && (_filter != ChatFilter.unread || c.unread > 0)).toList();
+            final customers = (archived ? d.archivedCustomerChats : d.customers)
+                .where((c) => (_filter != ChatFilter.unread || c.unread > 0) && (query.isEmpty || c.name.toLowerCase().contains(query.toLowerCase())))
+                .toList();
             return Stack(
               children: [
                 ListView(
                   padding: EdgeInsets.only(top: top, bottom: 88 + MediaQuery.paddingOf(context).bottom),
                   children: [
                     _Head(name: d.auth.me?.tenantName, onMenu: widget.onMenu),
-                    const _Search(),
-                    if (d.loaded && (d.conversations.isNotEmpty || d.customers.isNotEmpty || d.archivedCustomers > 0))
+                    if (d.linksOn || d.customers.isNotEmpty || d.archivedCustomers > 0) _Search(controller: _q),
+                    if (!searching && d.loaded && (d.conversations.isNotEmpty || d.customers.isNotEmpty || d.archivedCustomers > 0))
                       _Chips(
                         filter: _filter,
                         unread: d.unreadCount,
@@ -310,7 +389,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         },
                       ),
                     if (d.error != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: TkErrorBox(d.error!)),
-                    if (!archived && _filter != ChatFilter.starred)
+                    if (_searchError != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: TkErrorBox(_searchError is ApiError ? (_searchError as ApiError).message : 'You’re offline. Try again when you’re back online.')),
+                    if (!searching && !archived && _filter != ChatFilter.starred && (query.isEmpty || 'taskiem'.startsWith(query.toLowerCase())))
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: ChatRow(
@@ -329,24 +409,69 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         ),
                       ),
                     if (d.customersOn && _filter != ChatFilter.starred)
-                      _Customers(chats: archived ? d.archivedCustomerChats : d.customers, archived: archived, now: d.now(), onOpen: widget.onOpenCustomer),
-                    if (d.linksOn && d.loaded && d.noLinks && _filter != ChatFilter.starred)
+                      query.length >= 2
+                          ? _CustomersFound(found: _foundCustomers, data: d, onOpen: widget.onOpenCustomer)
+                          : _Customers(chats: customers, archived: archived, now: d.now(), onOpen: widget.onOpenCustomer),
+                    if (searching)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: _Results(
+                          data: d,
+                          query: query,
+                          found: _found,
+                          messages: _foundMessages,
+                          // Under the search box (its 16 px margin collapsing
+                          // into the heading's 32), or under customers found.
+                          first: (_foundCustomers?.chats.isEmpty ?? true) && (_foundCustomers?.messages.isEmpty ?? true),
+                          onOpen: widget.onOpen,
+                          onOpenAt: widget.onOpenAt,
+                          onAsk: (c) => _ask(
+                            title: 'Ask ${c.name} to link',
+                            hint: 'Linked, your invoices and orders reach each other by themselves. Nothing is shared until they accept.',
+                            to: {'business': c.business},
+                            done: 'Asked ${c.name} to link',
+                          ),
+                          onBlind: (b) => _ask(
+                            title: 'Ask ${b.shown} to link',
+                            hint: '${blindRowLine(b.kind)} You hear only if it accepts.',
+                            to: b.kind == 'phone' ? {'phone': query} : {'address': b.shown},
+                            done: 'Request sent',
+                          ),
+                          onCancel: _cancel,
+                        ),
+                      )
+                    else if (d.linksOn && d.loaded && d.noLinks && _filter != ChatFilter.starred)
                       const _NoLinks()
                     else if (d.asked.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: _Asked(links: d.asked, manage: d.manage, now: d.now(), onAnswer: _answer),
                       ),
-                    if (_filter == ChatFilter.starred && !d.noLinks)
+                    if (!searching && _filter == ChatFilter.starred && !d.noLinks)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: _Starred(data: d, onOpenAt: widget.onOpenAt, afterCard: d.asked.isNotEmpty),
                       ),
-                    if (_filter != ChatFilter.starred && d.conversations.isNotEmpty && !d.noLinks)
+                    if (!searching && _filter != ChatFilter.starred && d.conversations.isNotEmpty && !d.noLinks)
                       Padding(
                         padding: EdgeInsets.only(left: 16, right: 16, top: d.asked.isEmpty ? 0 : 6),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
+                            if (listed.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Text(
+                                  query.length == 1
+                                      ? 'No chat matches “$query”.'
+                                      : archived
+                                      ? 'No archived chats.'
+                                      : _filter == ChatFilter.unread
+                                      ? 'Nothing unread.'
+                                      : 'No chats.',
+                                  style: tkHint(t),
+                                ),
+                              ),
                             for (final c in listed)
                               ChatRow(
                                 title: c.name,
@@ -373,12 +498,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           ],
                         ),
                       ),
-                    if (d.linksOn && !d.noLinks && (d.waitingLinks.isNotEmpty || d.sent.isNotEmpty))
+                    if (!searching && d.linksOn && !d.noLinks && (d.waitingLinks.isNotEmpty || d.sent.isNotEmpty))
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: _Waiting(links: d.waitingLinks, sent: d.sent, now: d.now()),
                       ),
-                    if (d.manage && d.linkSettings != null && d.linkSettings!.askedAt == null && _filter != ChatFilter.starred) _Findable(data: d),
+                    if (!searching && d.manage && d.linkSettings != null && d.linkSettings!.askedAt == null && _filter != ChatFilter.starred) _Findable(data: d),
                   ],
                 ),
                 if (d.linksOn)
@@ -451,30 +576,43 @@ class _Head extends StatelessWidget {
 
 /// `.filters .search`: the round search box.
 class _Search extends StatelessWidget {
-  const _Search();
+  const _Search({required this.controller});
+  final TextEditingController controller;
 
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Container(
-        height: 42,
-        decoration: BoxDecoration(color: t.field, borderRadius: BorderRadius.circular(999)),
-        padding: const EdgeInsets.only(left: 11),
-        child: Row(
-          children: [
-            TkIcon('search', size: 16, color: t.muted),
-            const SizedBox(width: 7),
-            Expanded(
-              child: Text(
-                'Search chats, messages, businesses',
-                maxLines: 1,
-                overflow: TextOverflow.clip,
-                style: tkText(size: 15, weight: 500, color: cssMix(t.muted, const Color(0x00000000), 0.72)),
+      child: Semantics(
+        container: true,
+        label: 'Find a business',
+        child: Container(
+          height: 42,
+          decoration: BoxDecoration(color: t.field, borderRadius: BorderRadius.circular(999)),
+          padding: const EdgeInsets.only(left: 11, right: 11),
+          child: Row(
+            children: [
+              TkIcon('search', size: 16, color: t.muted),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: TextField(
+                    controller: controller,
+                    textInputAction: TextInputAction.search,
+                    cursorColor: t.text,
+                    showCursor: !TkField.debugHideCaret,
+                    style: tkText(size: 15, weight: 500, color: t.text),
+                    decoration: InputDecoration.collapsed(
+                      hintText: 'Search chats, messages, businesses',
+                      hintStyle: tkText(size: 15, weight: 500, color: cssMix(t.muted, const Color(0x00000000), 0.72)),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -698,26 +836,29 @@ class ChatAvatar extends StatelessWidget {
 /// Links.tsx: the businesses asking to link, each with its answers.
 /// One row of a section of links (ui.tsx Row): a tinted letter or icon,
 /// the name and its state's badge, a line under them, and its buttons.
-typedef _LinkRow = ({String? letter, String? icon, Tone tone, String title, String badge, Tone badgeTone, String sub, Widget? actions});
+typedef _LinkRow = ({String? letter, String? icon, Tone? tone, String title, String? badge, Tone? badgeTone, String sub, Widget? actions});
 
 /// Links.tsx's sections of links (Asks to link, Waiting for an answer): a
 /// heading, then the rows in a card.
 class _LinkSection extends StatelessWidget {
-  const _LinkSection({required this.title, required this.rows});
-  final String title;
+  const _LinkSection({this.title, required this.rows, this.top = 32});
+  final String? title;
   final List<_LinkRow> rows;
+
+  /// The heading's room above (CSS's 32, less a margin it collapses into).
+  final double top;
 
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    Color ink(Tone tone) => switch (tone) {
+    Color ink(Tone? tone) => switch (tone) {
       Tone.warn => t.warn,
       Tone.info => t.info,
       Tone.ok => t.ok,
-      Tone.muted => t.muted,
+      _ => t.muted,
     };
-    // `.list-icon.warn` / `.list-icon.info`.
-    (Color, Color) tinted(Tone tone) => switch (tone) {
+    // `.list-icon`, `.list-icon.warn`, `.list-icon.info`.
+    (Color, Color) tinted(Tone? tone) => switch (tone) {
       Tone.warn => (t.tintWarn, t.tintWarnText),
       Tone.info => (cssMix(t.info, t.panel, 0.12), cssMix(t.info, t.text, 0.85)),
       _ => (t.tint, t.tintText),
@@ -725,13 +866,7 @@ class _LinkSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 32, bottom: 12),
-          child: Semantics(
-            header: true,
-            child: Text(title, style: tkText(size: 15, weight: 600, lineHeight: 1.35, letterSpacing: -0.15, color: t.text)),
-          ),
-        ),
+        if (title != null) _Heading(title!, top: top),
         Container(
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
@@ -765,7 +900,8 @@ class _LinkSection extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             SizedBox(
-                              height: 25,
+                              // `.item-top`: as tall as the badge, else the name's line.
+                              height: r.badge != null ? 25 : 23.25,
                               child: Row(
                                 children: [
                                   Expanded(
@@ -776,12 +912,11 @@ class _LinkSection extends StatelessWidget {
                                       style: tkText(size: 15, weight: 600, color: t.text),
                                     ),
                                   ),
-                                  const SizedBox(width: 12),
-                                  TkBadge(r.badge, tone: ink(r.badgeTone)),
+                                  if (r.badge != null) ...[const SizedBox(width: 12), TkBadge(r.badge!, tone: ink(r.badgeTone))],
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 3),
+                            SizedBox(height: r.badge != null ? 3 : 2),
                             Text(r.sub, style: tkHint(t)),
                             if (r.actions != null) ...[const SizedBox(height: 3), r.actions!],
                           ],
@@ -891,13 +1026,7 @@ class _Starred extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: EdgeInsets.only(top: afterCard ? 16 : 32, bottom: 12),
-            child: Semantics(
-              header: true,
-              child: Text('Starred messages', style: tkText(size: 15, weight: 600, lineHeight: 1.35, letterSpacing: -0.15, color: t.text)),
-            ),
-          ),
+          _Heading('Starred messages', top: afterCard ? 16 : 32),
           if (list == null)
             const SizedBox(height: 120)
           else if (list.isEmpty)
@@ -922,6 +1051,369 @@ class _Starred extends StatelessWidget {
               ),
         ],
       ),
+    );
+  }
+}
+
+/// The list's `h2`: 15 px semibold, 32 px above (less a margin it
+/// collapses into), 12 below.
+class _Heading extends StatelessWidget {
+  const _Heading(this.text, {this.top = 32});
+  final String text;
+  final double top;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Padding(
+      padding: EdgeInsets.only(top: top, bottom: 12),
+      child: Semantics(
+        header: true,
+        child: Text(text, style: tkText(size: 15, weight: 600, lineHeight: 1.35, letterSpacing: -0.15, color: t.text)),
+      ),
+    );
+  }
+}
+
+/// Links.tsx's search results: the linked businesses found (by name, or a
+/// word of their last message), the messages found, and the businesses on
+/// Taskiem to ask, or the request a phone number or a page address sends.
+class _Results extends StatelessWidget {
+  const _Results({
+    required this.data,
+    required this.query,
+    required this.found,
+    required this.messages,
+    required this.first,
+    required this.onAsk,
+    required this.onBlind,
+    required this.onCancel,
+    this.onOpen,
+    this.onOpenAt,
+  });
+  final ChatsData data;
+  final String query;
+  final SearchLinksResponse? found;
+  final List<LinkMessage> messages;
+  final bool first;
+  final ValueChanged<LinkCard> onAsk;
+  final ValueChanged<SearchLinksResponseBlind> onBlind;
+  final ValueChanged<BusinessLink> onCancel;
+  final ValueChanged<LinkConversation>? onOpen;
+  final void Function(LinkConversation c, String message)? onOpenAt;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final d = data;
+    final hits = matchChats(d.conversations, query);
+    final chats = [
+      for (final l in d.links)
+        if (matchLinked([l], query).isNotEmpty || hits.any((c) => c.business == l.business))
+          if (d.conversations.where((c) => c.business == l.business).firstOrNull case final c?) (l, c),
+    ];
+    final blind = found?.blind;
+    final others = (found?.results ?? const <LinkCard>[]).where((c) => !d.conversations.any((l) => l.business == c.business)).toList();
+    var top = first ? 16.0 : 32.0;
+    double next() {
+      final v = top;
+      top = 32;
+      return v;
+    }
+
+    Widget preview(String s) => Text(s, maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false, style: tkText(size: 14.5, color: t.muted));
+    return Semantics(
+      container: true,
+      label: 'Search results',
+      explicitChildNodes: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (chats.isNotEmpty) ...[
+            _Heading('Chats', top: next()),
+            for (final (l, c) in chats)
+              ChatRow(
+                title: c.name,
+                letter: c.name,
+                logo: c.logo ? d.logo(c.business) : null,
+                preview: preview(roleLine(l.role)),
+                unread: c.unread,
+                onTap: onOpen == null ? null : () => onOpen!(c),
+              ),
+          ],
+          if (messages.isNotEmpty) ...[
+            _Heading('Messages', top: next()),
+            for (final m in messages)
+              ChatRow(
+                title: d.nameOf(m.link),
+                letter: d.nameOf(m.link),
+                time: listTime(m.createdAt, d.now()),
+                preview: preview(previewLine(m, d.nameOf(m.link))),
+                onTap: () {
+                  final c = d.conversations.where((c) => c.link == m.link).firstOrNull;
+                  if (c != null) onOpenAt?.call(c, m.id);
+                },
+              ),
+          ],
+          if (blind != null)
+            _LinkSection(
+              title: 'Businesses on Taskiem',
+              top: next(),
+              rows: [
+                (
+                  letter: null,
+                  icon: 'chat',
+                  tone: null,
+                  title: 'Send a link request to ${blind.shown}',
+                  badge: null,
+                  badgeTone: null,
+                  sub: blindRowLine(blind.kind),
+                  actions: d.manage
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Row(children: [TkSmallButton(label: 'Send request', onPressed: () => onBlind(blind))]),
+                        )
+                      : null,
+                ),
+              ],
+            )
+          else if (found == null) ...[
+            _Heading('Businesses on Taskiem', top: next()),
+            Semantics(label: 'Searching businesses…', child: const SizedBox(height: 96)),
+          ] else if (others.isEmpty) ...[
+            _Heading('Businesses on Taskiem', top: next()),
+            _Empty(icon: 'search', words: 'No business found for “$query”. Only businesses that chose to be found are listed.'),
+          ] else
+            _LinkSection(
+              title: 'Businesses on Taskiem',
+              top: next(),
+              rows: [
+                for (final c in others)
+                  () {
+                    final state = stateWords(c.state);
+                    final action = cardAction(c);
+                    final pending = requestTo(d.links, c.business);
+                    final Widget? actions = action == 'request'
+                        ? (d.manage
+                              ? Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Row(
+                                    children: [TkSmallButton(label: 'Request link', semantics: 'Request link with ${c.name}', onPressed: () => onAsk(c))],
+                                  ),
+                                )
+                              : Text('An owner or admin can link with this business.', style: tkHint(t)))
+                        : c.state == 'requested' && d.manage && pending != null
+                        ? Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Row(
+                              children: [TkSmallButton(label: 'Cancel request', semantics: 'Cancel request to ${c.name}', onPressed: () => onCancel(pending))],
+                            ),
+                          )
+                        : action == 'answer'
+                        ? Text('They asked you: answer under Asks to link.', style: tkHint(t))
+                        : null;
+                    return (
+                      letter: c.name,
+                      icon: null,
+                      tone: null,
+                      title: c.name,
+                      badge: state?.label,
+                      badgeTone: state?.tone,
+                      sub: foundSub(c),
+                      actions: actions,
+                    );
+                  }(),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// ui.tsx EmptyState in a card: an icon on its tint, then the words.
+class _Empty extends StatelessWidget {
+  const _Empty({required this.icon, required this.words});
+  final String icon;
+  final String words;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 56),
+      decoration: BoxDecoration(color: t.panel, border: Border.all(color: t.border), borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(color: t.tint, borderRadius: BorderRadius.circular(16)),
+            alignment: Alignment.center,
+            child: TkIcon(icon, size: 26, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand),
+          ),
+          const SizedBox(height: 14),
+          Text(words, textAlign: TextAlign.center, style: tkText(size: 14, color: t.muted)),
+        ],
+      ),
+    );
+  }
+}
+
+/// CustomerChat.tsx CustomerSearch: the customers found by name or number,
+/// and the messages that hold the words.
+class _CustomersFound extends StatelessWidget {
+  const _CustomersFound({required this.found, required this.data, this.onOpen});
+  final SearchCustomerChatsResponse? found;
+  final ChatsData data;
+  final ValueChanged<CustomerChat>? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final f = found;
+    if (f == null || (f.chats.isEmpty && f.messages.isEmpty)) return const SizedBox.shrink();
+    final now = data.now();
+    Widget preview(String s) => Text(s, maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false, style: tkText(size: 14.5, color: t.muted));
+    CustomerChat? chatOf(String id) => [...data.customers, ...data.archivedCustomerChats, ...f.chats].where((c) => c.id == id).firstOrNull;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Semantics(
+        container: true,
+        label: 'Customers found',
+        explicitChildNodes: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (f.chats.isNotEmpty) ...[
+              const _Heading('Customers', top: 16),
+              for (final c in f.chats)
+                ChatRow(
+                  title: customerTitle(c),
+                  letter: customerLetter(c),
+                  time: listTime(c.lastAt, now),
+                  preview: preview(c.last),
+                  unread: c.unread,
+                  onTap: onOpen == null ? null : () => onOpen!(c),
+                ),
+            ],
+            if (f.messages.isNotEmpty) ...[
+              _Heading('In customers’ messages', top: f.chats.isEmpty ? 16 : 32),
+              for (final m in f.messages)
+                ChatRow(
+                  title: RegExp(r'^\+\d').hasMatch(m.name) ? phoneWords(m.name) : m.name,
+                  letter: m.name,
+                  time: listTime(m.createdAt, now),
+                  preview: preview('${m.mine ? 'You: ' : ''}${m.body}'),
+                  onTap: () {
+                    final c = chatOf(m.chatId);
+                    if (c != null) onOpen?.call(c);
+                  },
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Links.tsx RequestSheet's form: what the request means, how we trade
+/// with them, Send request or Not now; closes with true once sent.
+class _RequestForm extends StatefulWidget {
+  const _RequestForm({required this.data, required this.hint, required this.to});
+  final ChatsData data;
+  final String hint;
+  final Map<String, dynamic> to;
+
+  @override
+  State<_RequestForm> createState() => _RequestFormState();
+}
+
+class _RequestFormState extends State<_RequestForm> {
+  String _role = 'supplier';
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _send() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.data.auth.transport.send('POST', '/v1/links', body: {...widget.to, 'role': _role});
+      if (mounted) Navigator.of(context).pop(true);
+    } on ApiError catch (e) {
+      setState(() => _error = e.message);
+    } on Offline {
+      setState(() => _error = 'You’re offline. Try again when you’re back online.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(widget.hint, style: tkHint(t)),
+        const SizedBox(height: 12),
+        Semantics(
+          container: true,
+          label: 'How do you trade with them?',
+          explicitChildNodes: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('How do you trade with them?', style: tkText(size: 13, weight: 600, color: t.text)),
+              const SizedBox(height: 6),
+              for (final (role, label) in roleChoices)
+                Semantics(
+                  inMutuallyExclusiveGroup: true,
+                  checked: _role == role,
+                  label: label,
+                  excludeSemantics: true,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _role = role),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: _role == role ? t.primary : t.borderStrong, width: _role == role ? 5 : 1),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(label, style: tkText(size: 14, color: t.text)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (_error != null) ...[const SizedBox(height: 8), TkErrorBox(_error!)],
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            TkPlainButton(label: 'Send request', primary: true, onTap: _busy ? null : _send),
+            TkPlainButton(label: 'Not now', onTap: () => Navigator.of(context).pop(false)),
+          ],
+        ),
+      ],
     );
   }
 }

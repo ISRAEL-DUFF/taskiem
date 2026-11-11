@@ -113,6 +113,24 @@ const SCREENS: { name: string; path: string; fixture?: string; ready: (p: Page) 
     },
   },
   {
+    // The list's search, two letters on: the chats found, the messages,
+    // and businesses on Taskiem to ask (the chats' recording, with answers
+    // for "rice" added).
+    name: "chats-search",
+    path: "/chat",
+    fixture: "chats-search",
+    ready: async (p) => {
+      await expect(p.getByText("Bayo Rice Mills").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("link-search").fill("rice");
+      await expect(p.getByTestId("link-found")).toBeVisible();
+      await expect(p.getByTestId("chat-found-message")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
     // A conversation with a linked business: Mama Tunde's Market's, as Ada.
     name: "chat-tunde",
     path: "/chat?with=3af349e2-b776-4306-bdb8-10df59687c55",

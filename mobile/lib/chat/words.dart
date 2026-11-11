@@ -106,6 +106,53 @@ String listPreview(LinkMessage m, String other) {
 
 // --- links (web/src/lib/links.ts) ---
 
+/// linkchat.ts matchChats: each word typed begins a word of the chat's name
+/// or of its last message ("d" finds Dangote and not Ada).
+List<LinkConversation> matchChats(List<LinkConversation> convs, String q) {
+  final words = q.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  if (words.isEmpty) return const [];
+  final split = RegExp(r"[^\p{L}\p{N}']+", unicode: true);
+  return convs.where((c) {
+    final hay = '${c.name} ${c.last != null ? previewLine(c.last!, c.name) : ''}'.toLowerCase().split(split).where((w) => w.isNotEmpty).toList();
+    return words.every((w) => hay.any((h) => h.startsWith(w)));
+  }).toList();
+}
+
+/// links.ts matchLinked: the linked businesses whose name holds every word.
+List<BusinessLink> matchLinked(List<BusinessLink> links, String q) {
+  final words = q.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  if (words.isEmpty) return const [];
+  return links.where((l) => l.state == 'active' && words.every((w) => l.name.toLowerCase().contains(w))).toList();
+}
+
+/// links.ts cardSub (here foundSub): a business found, in one line: its area, then the
+/// items that matched with the prices its page shows.
+String foundSub(LinkCard c) {
+  final items = [for (final it in c.items) it.priceKobo is num ? '${it.name} ${naira((it.priceKobo as num).toInt())}' : it.name];
+  final line = [?c.area, ...items].where((s) => s.isNotEmpty).join(' · ');
+  return line.isNotEmpty ? line : ((c.tagline ?? '').isNotEmpty ? c.tagline! : 'On Taskiem');
+}
+
+/// links.ts cardAction: whether we may ask a business found to link, or it
+/// is ours to answer, or there is nothing to do.
+String? cardAction(LinkCard c) => switch (c.state) {
+  'none' || 'ended' => 'request',
+  'asked_us' => 'answer',
+  _ => null,
+};
+
+/// links.ts requestTo: the request we sent a business found, still waiting.
+BusinessLink? requestTo(List<BusinessLink> links, String business) =>
+    links.where((l) => l.business == business && l.state == 'requested' && l.askedByUs).firstOrNull;
+
+/// links.ts blindRowLine.
+String blindRowLine(String kind) => kind == 'phone'
+    ? 'If a business on Taskiem uses this number, it gets your request.'
+    : 'If a business on Taskiem has this page address, it gets your request.';
+
+/// links.ts ROLE_CHOICES.
+const roleChoices = [('supplier', 'They supply us'), ('customer', 'They buy from us'), ('both', 'Both')];
+
 /// links.ts roleLine.
 String roleLine(String role) => switch (role) {
       'supplier' => 'They supply you',

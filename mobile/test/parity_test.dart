@@ -127,6 +127,21 @@ final screens = <String, Screen>{
       await _loaded(t);
     },
   ),
+  'chats-search': (
+    build: () {
+      final f = Fixture('chats-search');
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.enterText(find.byType(EditableText), 'rice');
+      // The search waits 150 ms for the typing to stop.
+      await t.pump(const Duration(milliseconds: 200));
+      await _loaded(t);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await t.pumpAndSettle();
+    },
+  ),
   'chat-tunde': (
     build: () {
       final f = Fixture('chat-tunde');
