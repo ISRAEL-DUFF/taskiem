@@ -211,7 +211,7 @@ test("typed words open the form filled in, and saving stays a tap", async ({ bro
   await expect(pane.getByTestId("request-chip")).toHaveCount(0);
 });
 
-test("a tagged product is a live card; our own services can be tagged", async ({ browser }) => {
+test("a tagged product is a live card; our own services are not offered in a business's chat", async ({ browser }) => {
   const { owner, link } = await linked(browser, { width: 390, height: 844 });
   await shop(owner);
   await owner.route(`**/v1/link-chats/${link}/items`, (r) =>
@@ -259,13 +259,12 @@ test("a tagged product is a live card; our own services can be tagged", async ({
   await order.getByRole("button", { name: "Close" }).click();
   await expect(order).toHaveCount(0);
 
-  // Our own service, from the picker's Services.
+  // Our own services are not offered here (business-chat-tools.md §4):
+  // what we offer them goes by Share my prices and Make an offer.
   const box = pane.getByLabel("Message");
   await box.fill("We can also do @mill");
   const picker = owner.getByRole("region", { name: "Tag something" });
-  await expect(picker.getByRole("group", { name: "Services" })).toContainText("₦2,500 · 30 min");
-  await box.press("Enter");
-  await expect(box).toHaveValue("We can also do @Rice milling ");
+  await expect(picker.getByRole("group", { name: "Services" })).toHaveCount(0);
 });
 
 test("the sound for new orders and payments can be switched off", async ({ browser }) => {
