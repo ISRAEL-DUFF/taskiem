@@ -4,6 +4,7 @@
 // data, at a frozen moment, so a picture never changes with the clock.
 //
 //   node mobile/tool/capture.mjs <name> <path> [email]
+//   EXPLORE=1 node mobile/tool/capture.mjs explore /chat
 //
 // Needs the demo world running (serve-demo.sh, seed.ts) and Playwright.
 import fs from "node:fs";
@@ -47,6 +48,14 @@ p.on("response", async (r) => {
 const at = new Date().toISOString();
 await p.goto(base + page);
 await p.waitForTimeout(4000);
+// After it loads, what a person then does there (EXPLORE=1: Find a
+// business opened, then "rice" searched), its answers kept too.
+if (process.env.EXPLORE) {
+  await p.getByTestId("new-chat").click();
+  await p.waitForTimeout(4000);
+  await p.getByTestId("explore-search").fill("rice");
+  await p.waitForTimeout(3000);
+}
 fs.writeFileSync(path.join(out, "answers.json"), JSON.stringify({ at, answers }, null, 1));
 console.log(Object.keys(answers).length, "answers at", at);
 await b.close();

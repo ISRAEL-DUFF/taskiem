@@ -138,6 +138,40 @@ const SCREENS: {
     },
   },
   {
+    // Find a business (Explore), over the chats: near you, delivery, new on
+    // Taskiem, each card with its photos. (Recorded from the demo world.)
+    name: "explore",
+    path: "/chat",
+    fixture: "explore",
+    touch: true,
+    ready: async (p) => {
+      await expect(p.getByTestId("new-chat")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("new-chat").click();
+      await expect(p.getByTestId("explore-card").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.waitForTimeout(500);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // Explore searched: "rice".
+    name: "explore-search",
+    path: "/chat",
+    fixture: "explore",
+    touch: true,
+    ready: async (p) => {
+      await expect(p.getByTestId("new-chat")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("new-chat").click();
+      await p.getByTestId("explore-search").fill("rice");
+      await expect(p.getByLabel("Businesses found")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.waitForTimeout(500);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
     // A conversation with a linked business: Mama Tunde's Market's, as Ada.
     name: "chat-tunde",
     path: "/chat?with=3af349e2-b776-4306-bdb8-10df59687c55",

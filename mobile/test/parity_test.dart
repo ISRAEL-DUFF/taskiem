@@ -143,6 +143,36 @@ final screens = <String, Screen>{
       await t.pumpAndSettle();
     },
   ),
+  'explore': (
+    build: () {
+      final f = Fixture('explore');
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Find a business to link with'));
+      await _loaded(t);
+      await _loaded(t);
+    },
+  ),
+  'explore-search': (
+    build: () {
+      final f = Fixture('explore');
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Find a business to link with'));
+      await _loaded(t);
+      await t.enterText(find.byType(EditableText), 'rice');
+      // Searched 250 ms after the typing stops.
+      await t.pump(const Duration(milliseconds: 300));
+      await _loaded(t);
+      await _loaded(t);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await t.pumpAndSettle();
+    },
+  ),
   'chat-tunde': (
     build: () {
       final f = Fixture('chat-tunde');

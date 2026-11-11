@@ -18,6 +18,7 @@ import '../kit/modal.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'customer.dart';
+import 'explore.dart';
 import 'live.dart';
 import 'words.dart';
 
@@ -510,7 +511,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   Positioned(
                     right: 16,
                     bottom: 16 + MediaQuery.paddingOf(context).bottom,
-                    child: _FindButton(onTap: widget.onFind),
+                    child: _FindButton(
+                      // Find a business: Explore, over the chats.
+                      onTap: widget.onFind ?? () => showExplore(context, chats: d, onOpen: (c) => widget.onOpen?.call(c)),
+                    ),
                   ),
               ],
             );
@@ -1472,6 +1476,7 @@ class _FindButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Find a business to link with',
+      excludeSemantics: true,
       child: TkPress(
         onTap: onTap ?? () {},
         child: Container(

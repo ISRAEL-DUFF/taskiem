@@ -64,3 +64,6 @@ searchCustomerChats
 linkChatItems
 getStorefrontServices
 getStock
+
+# Find a business (M3)
+explore

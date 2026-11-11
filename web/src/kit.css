@@ -538,6 +538,9 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
 .tk-x-search label:focus-within { box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-dark) 70%, transparent); }
 .tk-x-search svg { flex: none; width: 18px; height: 18px; color: var(--muted); }
 .tk-x .tk-x-search input[type="search"], .tk-x .tk-x-search input[type="search"]:focus:not(:disabled):not([aria-invalid]), .tk-x .tk-x-search input[type="search"]:hover:not(:disabled):not([aria-invalid]) { flex: 1; min-width: 0; min-height: 48px; padding: 0; border: 0; background: transparent; box-shadow: none; font-size: 16px; outline: none; }
+/* The bare input inside the search pill: no box of its own (the site's
+   input rule is more specific, and its field colour showed as a box). */
+.tk-x .tk-x-search input[type="search"] { background: transparent !important; border: 0 !important; box-shadow: none !important; }
 .tk-x-mine { display: none; }
 .tk-x-body.explore-body { max-width: 1200px; padding: 4px max(16px, env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
 .tk-x-sec { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 8px 2px 12px; }

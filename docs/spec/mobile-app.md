@@ -766,12 +766,28 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   web's own deal tests and by `deal_test.dart`. Parity: Bayo's counter on
   our order, and countering it (Bayo's recording with the counter added),
   as a touch phone, light and dark, two sizes.
+- **Find a business** (`lib/chat/explore.dart`), as the web's Explore:
+  the chats' Find a business opens it over them (rising in): Back, the
+  title, the search (a name, what they sell, or an area, searched 250 ms
+  after the typing stops); with nothing typed, Near you (with our area),
+  Delivery and New on Taskiem, each with Show more; each business a card
+  (its logo and name, its line, its photos swiping with their words on
+  them and dots under them, its words) with what can be done: Connect
+  (asked at once, supplier and customer both; Requested then, Withdraw
+  under it), Message (a linked one: its conversation in Explore's place),
+  or Accept and Not now (it asked us). A phone number is offered a
+  request sent to it; nothing found says so. "Your business in Explore"
+  is a computer's (the web hides it on a phone too). Parity: Explore and
+  "rice" searched, recorded from the demo world (`EXPLORE=1` in
+  `tool/capture.mjs` opens it and searches as it records), as a touch
+  phone, light and dark, two sizes; held by `explore_test.dart`. Found: on
+  the web the search pill showed a grey box inside it (the site's input
+  rule is more specific than Explore's bare one); fixed.
 - **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
-  the milestones), the chat tools, and Find a business (the web's
-  Explore).
+  the milestones), and the chat tools: M5 to M8.
 
 ## 11. What needs people
 

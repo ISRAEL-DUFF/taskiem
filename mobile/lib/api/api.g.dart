@@ -282,6 +282,12 @@ class TaskiemApi {
     final j = await _t.send('GET', '/v1/stock');
     return GetStockResponse.fromJson(j as Map<String, dynamic>);
   }
+
+  /// Businesses to browse (`GET /v1/explore`)
+  Future<ExploreResult> explore({String? q, String? section, String? offset}) async {
+    final j = await _t.send('GET', '/v1/explore', query: {'q': ?q, 'section': ?section, 'offset': ?offset});
+    return ExploreResult.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -2851,5 +2857,126 @@ class StockMovement {
         'set_to': ?setTo,
         'short': ?short,
         'status': status,
+      };
+}
+
+class ExploreResult {
+  const ExploreResult({this.area, this.blind, required this.delivery, required this.deliveryMore, required this.fresh, required this.more, required this.near, required this.nearMore, required this.results});
+
+  /// Our own area, as near you reads it (the first page only)
+  final String? area;
+  final ExploreResultBlind? blind;
+  /// Businesses that deliver for others, those covering our area first
+  final List<ExploreCard> delivery;
+  final bool deliveryMore;
+  final List<ExploreCard> fresh;
+  final bool more;
+  final List<ExploreCard> near;
+  final bool nearMore;
+  final List<ExploreCard> results;
+
+  factory ExploreResult.fromJson(Map<String, dynamic> j) => ExploreResult(
+        area: j['area'] == null ? null : j['area'] as String,
+        blind: j['blind'] == null ? null : ExploreResultBlind.fromJson(j['blind'] as Map<String, dynamic>),
+        delivery: (j['delivery'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        deliveryMore: j['delivery_more'] as bool,
+        fresh: (j['fresh'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        more: j['more'] as bool,
+        near: (j['near'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        nearMore: j['near_more'] as bool,
+        results: (j['results'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': ?area,
+        'blind': ?blind?.toJson(),
+        'delivery': delivery.map((e) => e.toJson()).toList(),
+        'delivery_more': deliveryMore,
+        'fresh': fresh.map((e) => e.toJson()).toList(),
+        'more': more,
+        'near': near.map((e) => e.toJson()).toList(),
+        'near_more': nearMore,
+        'results': results.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ExploreResultBlind {
+  const ExploreResultBlind({required this.kind, required this.shown});
+
+  final String kind;
+  final String shown;
+
+  factory ExploreResultBlind.fromJson(Map<String, dynamic> j) => ExploreResultBlind(
+        kind: j['kind'] as String,
+        shown: j['shown'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind,
+        'shown': shown,
+      };
+}
+
+class ExploreCard {
+  const ExploreCard({this.about, this.area, this.available, required this.business, required this.captions, this.delivers, this.deliveryAreas, required this.logo, required this.name, required this.photos, this.slug, required this.state, this.tagline, required this.v, this.vehicle});
+
+  final String? about;
+  final String? area;
+  /// A delivery business's state, when a business uses it as a rider
+  final String? available;
+  final String business;
+  /// Its photos' captions, in order ("" for a photo with none)
+  final List<String> captions;
+  /// It delivers for other businesses (a rider)
+  final bool? delivers;
+  final List<String>? deliveryAreas;
+  /// Whether it has a logo, at GET /v1/explore/{business}/logo
+  final bool logo;
+  final String name;
+  /// How many photos it shows, at GET /v1/explore/{business}/photos/{photo}
+  final int photos;
+  final String? slug;
+  /// Our link with it, as in a search (none when there is none)
+  final String state;
+  final String? tagline;
+  /// Changes when its logo or photos do; send it as v on the picture requests
+  /// so a changed picture is not served from the browser's cache
+  final String v;
+  final String? vehicle;
+
+  factory ExploreCard.fromJson(Map<String, dynamic> j) => ExploreCard(
+        about: j['about'] == null ? null : j['about'] as String,
+        area: j['area'] == null ? null : j['area'] as String,
+        available: j['available'] == null ? null : j['available'] as String,
+        business: j['business'] as String,
+        captions: (j['captions'] as List).map((e) => e as String).toList(),
+        delivers: j['delivers'] == null ? null : j['delivers'] as bool,
+        deliveryAreas: j['delivery_areas'] == null ? null : (j['delivery_areas'] as List).map((e) => e as String).toList(),
+        logo: j['logo'] as bool,
+        name: j['name'] as String,
+        photos: (j['photos'] as num).toInt(),
+        slug: j['slug'] == null ? null : j['slug'] as String,
+        state: j['state'] as String,
+        tagline: j['tagline'] == null ? null : j['tagline'] as String,
+        v: j['v'] as String,
+        vehicle: j['vehicle'] == null ? null : j['vehicle'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'about': ?about,
+        'area': ?area,
+        'available': ?available,
+        'business': business,
+        'captions': captions.map((e) => e).toList(),
+        'delivers': ?delivers,
+        'delivery_areas': ?deliveryAreas?.map((e) => e).toList(),
+        'logo': logo,
+        'name': name,
+        'photos': photos,
+        'slug': ?slug,
+        'state': state,
+        'tagline': ?tagline,
+        'v': v,
+        'vehicle': ?vehicle,
       };
 }
