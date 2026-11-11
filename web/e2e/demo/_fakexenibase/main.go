@@ -21,6 +21,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/binary"
+	"encoding/json"
 	"encoding/pem"
 	"flag"
 	"fmt"
@@ -108,7 +110,18 @@ func (s *files) serve(w http.ResponseWriter, r *http.Request) bool {
 		s.mu.Unlock()
 		_, _ = fmt.Fprintf(w, `{"path":%q,"size":%d,"mime_type":%q}`, path, len(body), r.Header.Get("Content-Type"))
 	case r.Method == http.MethodPost && strings.HasSuffix(rest, "/sign"):
-		_, _ = io.WriteString(w, `{"signed_url":"","url":""}`)
+		// A link to the object as this fake serves it (relative, so read
+		// from the project's own address), good for the time asked.
+		bucket := strings.TrimSuffix(strings.TrimPrefix(rest, "/buckets/"), "/sign")
+		var in struct {
+			Path      string `json:"path"`
+			ExpiresIn int    `json:"expires_in"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"signed_url": "/storage/v1/public/" + bucket + "/" + in.Path,
+			"expires_at": time.Now().Add(time.Duration(in.ExpiresIn) * time.Second).UTC(),
+		})
 	case r.Method == http.MethodDelete && strings.HasSuffix(rest, "/objects"):
 		_, _ = io.WriteString(w, `{}`)
 	default:
@@ -123,6 +136,7 @@ func main() {
 	proxyAddr := flag.String("proxy", "127.0.0.1:18094", "where the CONNECT proxy listens")
 	token := flag.String("token", "xb_demo_platform_token", "the platform token Taskiem sends")
 	caOut := flag.String("ca", "", "where to write the PEM certificate Taskiem must trust (SSL_CERT_FILE)")
+	clamdAddr := flag.String("clamd", "127.0.0.1:18095", "where the stand-in malware scanner listens")
 	flag.Parse()
 
 	f := xenibasetest.New(tb{})
@@ -169,13 +183,56 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("TASKIEM_XENIBASE_URL=%s TASKIEM_XENIBASE_TOKEN=%s TASKIEM_XENIBASE_ORG=%s TASKIEM_EGRESS_PROXY=http://%s\n", public, *token, f.OrgID, *proxyAddr)
+	cl, err := net.Listen("tcp", *clamdAddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	go cleanScanner(cl)
+	fmt.Printf("TASKIEM_XENIBASE_URL=%s TASKIEM_XENIBASE_TOKEN=%s TASKIEM_XENIBASE_ORG=%s TASKIEM_EGRESS_PROXY=http://%s TASKIEM_CLAMD_ADDR=%s\n", public, *token, f.OrgID, *proxyAddr, *clamdAddr)
 	for {
 		c, err := pl.Accept()
 		if err != nil {
 			log.Fatal(err)
 		}
 		go tunnel(c, ports)
+	}
+}
+
+// cleanScanner stands in for clamd in the demo world only: it reads each
+// file sent (zINSTREAM: chunks, each with its length, until a zero one) and
+// answers that it is clean, so the demo's chats can carry photos, PDFs and
+// voice notes. A real deployment runs ClamAV (TASKIEM_CLAMD_ADDR).
+func cleanScanner(ln net.Listener) {
+	for {
+		c, err := ln.Accept()
+		if err != nil {
+			log.Fatal(err)
+		}
+		go func() {
+			defer func() { _ = c.Close() }()
+			r := bufio.NewReader(c)
+			cmd, err := r.ReadString(0)
+			if err != nil {
+				return
+			}
+			if strings.Contains(cmd, "PING") {
+				_, _ = c.Write([]byte("PONG\x00"))
+				return
+			}
+			for {
+				var n uint32
+				if binary.Read(r, binary.BigEndian, &n) != nil {
+					return
+				}
+				if n == 0 {
+					break
+				}
+				if _, err := io.CopyN(io.Discard, r, int64(n)); err != nil {
+					return
+				}
+			}
+			_, _ = c.Write([]byte("stream: OK\x00"))
+		}()
 	}
 }
 

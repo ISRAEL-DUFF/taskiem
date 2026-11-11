@@ -29,6 +29,8 @@ import 'package:taskiem/kit/kit.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/chat/chats.dart';
+import 'package:taskiem/chat/attachments.dart';
+import 'package:taskiem/chat/composer.dart';
 import 'package:taskiem/chat/conversation.dart';
 import 'package:taskiem/screens/sign_in.dart';
 import 'package:taskiem/screens/sign_up.dart';
@@ -140,6 +142,35 @@ final screens = <String, Screen>{
       await t.pumpAndSettle();
     },
   ),
+  'chat-files': (build: () => _conversation('chat-files', "Mama Tunde's Market"), drive: _loaded),
+  'chat-files-end': (
+    build: () => _conversation('chat-files', "Mama Tunde's Market"),
+    drive: (t) async {
+      await _loaded(t);
+      // As the web half scrolls the thread to its end.
+      final s = t.widget<SingleChildScrollView>(find.byType(SingleChildScrollView)).controller!;
+      s.jumpTo(s.position.maxScrollExtent);
+      await t.pumpAndSettle();
+    },
+  ),
+  'chat-attach': (
+    build: () => _conversation('chat-files', "Mama Tunde's Market"),
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Attach'));
+      await t.pumpAndSettle();
+    },
+  ),
+  'chat-caption': (
+    build: () => _conversation('chat-files', "Mama Tunde's Market"),
+    drive: (t) async {
+      await _loaded(t);
+      // The fixture's own photo, as the web half chooses it.
+      final bytes = File('test/parity/fixtures/chat-files/025.img').readAsBytesSync();
+      t.state<ComposerState>(find.byType(Composer)).choose(PickedFile(bytes: bytes, name: 'tomatoes.jpg', type: 'image/jpeg'));
+      await _loaded(t);
+    },
+  ),
   'sign-up': (
     build: () => SignUpScreen(auth: fakeAuth()),
     drive: (t) async {
@@ -241,4 +272,22 @@ double differs(Uint8List a, Uint8List b, int w, int h) {
     }
   }
   return n / (w * h);
+}
+
+/// A conversation of a fixture, shown as the app shows it.
+Widget _conversation(String fixture, String name) {
+  final f = Fixture(fixture);
+  final chats = ChatsData(f.auth(), now: () => f.at)..load();
+  final conv = ListLinkChatsResponse.fromJson(f.json('/v1/link-chats')).conversations.firstWhere((c) => c.name == name);
+  return ConversationScreen(data: ConversationData(chats, conv, follow: false));
+}
+
+/// Waits for what is fetched and decoded for real (logos, photos), outside
+/// the test's clock.
+Future<void> _loaded(WidgetTester t) async {
+  for (var i = 0; i < 8; i++) {
+    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 60)));
+    await t.pump();
+  }
+  await t.pumpAndSettle();
 }

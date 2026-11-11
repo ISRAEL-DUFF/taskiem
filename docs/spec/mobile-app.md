@@ -539,11 +539,32 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   30 seconds. A phone's bearer token is taken by the stream (checked
   against the demo world). The sound and the phone's notification for a
   message are M4's.
+- **Photos, PDFs and voice notes** (`lib/chat/attachments.dart`,
+  `lib/chat/composer.dart`): shown as the web shows them (a photo in its
+  bubble up to 320 px tall, a PDF as its name and size, a voice note in
+  the browser's own player, which the app draws as Chromium does and plays
+  with `just_audio`), each this business's own copy; sent as the web sends
+  them: the clip's menu (Photo, Document, Camera) and the camera beside it
+  (the phone's gallery, files and camera: `image_picker`, `file_selector`;
+  a photo as a JPEG, so an iPhone's HEIC goes), the file waiting above the
+  box for its caption, then shown at once with a clock and retried with the
+  same client id; a voice note held and released (sent at once), slid left
+  (thrown away) or tapped (until Done, then with a caption), recorded as
+  AAC in MP4 (`record`). The phone's permissions: the microphone (Android),
+  the camera, photos and microphone with their reasons (iPhone). Parity: a
+  conversation with a photo, a voice note and a PDF, at its unread and at
+  its end, the clip's menu open, and a photo waiting for its caption.
+  Found on the way: the web's voice note player was collapsed to its menu
+  button (a percentage width in a bubble sized by its content), fixed; the
+  demo world's stand-in storage signed no links, so no demo file could be
+  read, fixed; and the app's release build lacked the INTERNET permission
+  (only debug and profile builds had it), fixed. A voice note recorded on
+  the web is WebM or Ogg Opus, which an iPhone does not play: it needs the
+  server to keep an MP4 copy (not yet).
 - **Not yet in M3**: the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
   the milestones), Decline (it asks first: with the app's confirmation
-  sheet), a deal's offers and counters, photos, files and voice notes,
-  replies, reactions, the message menu, stars, search, the contact sheet,
+  sheet), a deal's offers and counters, replies, reactions, the message menu, stars, search, the contact sheet,
   forwarding, older pages as the reader scrolls up, the chat tools, `@Taskiem`, customers'
   conversations, and the list's search, chips and answers to requests
   (drawn, not yet working).

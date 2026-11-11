@@ -49,7 +49,9 @@ export TASKIEM_LOGIN_BURST=1000 TASKIEM_ALLOW_SIGNUP=true TASKIEM_SIGNUP_PER_ADD
 # (web/e2e/demo/_fakexenibase, the Go tests' fake plus file storage), kept
 # in memory by a process of its own that outlives this one. Taskiem reaches
 # it through the CONNECT proxy that process runs (TASKIEM_EGRESS_PROXY),
-# since it refuses loopback addresses for tenant traffic. --keep with a
+# since it refuses loopback addresses for tenant traffic. The same process
+# stands in for the malware scanner (TASKIEM_CLAMD_ADDR), passing every
+# file, so the demo's chats can carry photos, PDFs and voice notes. --keep with a
 # fake that was restarted keeps the database but not the stock and photos.
 fake=bin/demo-fakexenibase
 fakeenv="$root/bin/demo-fakexenibase.env"

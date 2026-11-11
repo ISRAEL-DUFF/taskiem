@@ -13,12 +13,24 @@ dependencies:
   flutter_svg: 2.3.0
   # HTTPS to Taskiem (lib/api/transport.dart). BSD-3-Clause.
   http: 1.6.0
+  # A file's type in a multipart form (lib/api/transport.dart). BSD-3-Clause.
+  http_parser: 4.1.2
   # The session token in the phone's Keychain or Keystore (lib/app/session.dart). BSD-3-Clause.
   flutter_secure_storage: 11.2.0
   # The phone's name for Your phones (lib/app/session.dart). BSD-3-Clause.
   device_info_plus: 13.3.0
   # The app lock: the phone's own fingerprint, face or PIN (lib/app/lock.dart). BSD-3-Clause.
   local_auth: 3.0.2
+  # Photos from the camera or the gallery, to send in a chat (lib/chat/attach.dart). BSD-3-Clause.
+  image_picker: 1.2.4
+  # A PDF from the phone's files, to send in a chat (lib/chat/attach.dart). BSD-3-Clause.
+  file_selector: 1.1.0
+  # Recording a voice note (lib/chat/voice.dart). BSD-3-Clause.
+  record: 7.1.2
+  # Playing a voice note (lib/chat/voice.dart). MIT.
+  just_audio: 0.10.6
+  # Where a voice note is recorded before it is sent (lib/chat/voice.dart). BSD-3-Clause.
+  path_provider: 2.1.6
 
 dev_dependencies:
   flutter_test:

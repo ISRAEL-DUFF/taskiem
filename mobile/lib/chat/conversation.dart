@@ -6,7 +6,6 @@
 
 import 'dart:async';
 
-import 'package:flutter/material.dart' show Material, MaterialType, TextField, InputDecoration;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -16,8 +15,10 @@ import '../app/session.dart' show uuid4;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
+import 'attachments.dart';
 import 'cards.dart';
 import 'chats.dart';
+import 'composer.dart';
 import 'live.dart';
 import 'words.dart';
 
@@ -32,10 +33,13 @@ const _every = Duration(seconds: 3);
 /// not sent, with Retry and Delete. Its client id makes a retry the same
 /// message to the server, never a second one.
 class Outgoing {
-  Outgoing(this.clientId, this.body, this.at);
+  Outgoing(this.clientId, this.body, this.at, {this.file});
   final String clientId;
   final String body;
   final DateTime at;
+
+  /// A photo, PDF or voice note going with it (the body its caption).
+  final PickedFile? file;
   bool failed = false;
   String? error;
 }
@@ -97,7 +101,15 @@ class ConversationData extends ChangeNotifier {
     for (final m in messages ?? const <LinkMessage>[]) ThreadMessage(m),
     for (final o in outbox)
       ThreadMessage(
-        LinkMessage(id: 'local-${o.clientId}', link: conv.link, mine: true, kind: 'text', body: o.body, createdAt: o.at),
+        LinkMessage(
+          id: 'local-${o.clientId}',
+          link: conv.link,
+          mine: true,
+          kind: 'text',
+          body: o.body.isEmpty ? null : o.body,
+          attachment: o.file?.attachment,
+          createdAt: o.at,
+        ),
         out: o,
       ),
   ];
@@ -151,7 +163,7 @@ class ConversationData extends ChangeNotifier {
       // Ours, sent from here, told by the stream before the send's answer
       // came: the outbox's copy gives way to it.
       if (m.mine) {
-        final i = outbox.indexWhere((o) => !o.failed && o.body == (m.body ?? '').trim());
+        final i = outbox.indexWhere((o) => !o.failed && o.file == null && m.attachment == null && o.body == (m.body ?? '').trim());
         if (i >= 0) outbox.removeAt(i);
       }
       _changed();
@@ -210,10 +222,11 @@ class ConversationData extends ChangeNotifier {
   }
 
   /// Sent at once: it shows with a clock, then the server's copy takes its place.
-  Future<void> send(String text) async {
+  /// Sent at once with a clock; a file with its caption.
+  Future<void> send(String text, {PickedFile? file}) async {
     final body = text.trim();
-    if (body.isEmpty) return;
-    final o = Outgoing(uuid4(), body, chats.now());
+    if (body.isEmpty && file == null) return;
+    final o = Outgoing(uuid4(), body, chats.now(), file: file);
     outbox.add(o);
     _changed();
     await _send(o);
@@ -233,12 +246,28 @@ class ConversationData extends ChangeNotifier {
 
   Future<void> _send(Outgoing o) async {
     try {
-      final r = await api.sendLinkMessage(
-        link: conv.link,
-        body: SendLinkMessageRequest(text: o.body, clientId: o.clientId),
-      );
+      final f = o.file;
+      final LinkMessage sent;
+      if (f != null) {
+        // POST /v1/link-chats/{link}/files: the file, its caption, the client id.
+        final j = await chats.auth.transport.upload(
+          '/v1/link-chats/${Uri.encodeComponent(conv.link)}/files',
+          bytes: f.bytes,
+          filename: f.name,
+          type: f.type,
+          fields: {'client_id': o.clientId, if (o.body.isNotEmpty) 'text': o.body},
+        );
+        sent = LinkMessage.fromJson((j as Map<String, dynamic>)['message'] as Map<String, dynamic>);
+      } else {
+        sent = (await api.sendLinkMessage(
+          link: conv.link,
+          body: SendLinkMessageRequest(text: o.body, clientId: o.clientId),
+        )).message;
+      }
       outbox.remove(o);
-      _merge([r.message]);
+      _merge([sent]);
+      // Our own copy of what we sent: shown without fetching it back.
+      if (f != null) chats.files.keep(sent.id, f.bytes);
       unawaited(chats.load());
     } on ApiError catch (e) {
       o.failed = true;
@@ -269,13 +298,17 @@ class ConversationData extends ChangeNotifier {
 
 /// The conversation's screen.
 class ConversationScreen extends StatefulWidget {
-  const ConversationScreen({super.key, required this.data, this.onBack, this.onOpenDoc});
+  const ConversationScreen({super.key, required this.data, this.onBack, this.onOpenDoc, this.pickers = const Pickers(), this.recorder});
 
   final ConversationData data;
   final VoidCallback? onBack;
 
   /// A card's document opened (View order, View invoice, Pay).
   final void Function(LinkDocCard card)? onOpenDoc;
+
+  /// Where photos and PDFs come from, and the microphone (stand-ins in tests).
+  final Pickers pickers;
+  final Recorder? recorder;
 
   @override
   State<ConversationScreen> createState() => _ConversationScreenState();
@@ -292,6 +325,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
   final _scroll = ScrollController();
   final _text = TextEditingController();
   final _viewport = GlobalKey();
+
+  /// The box to write in (a test hands it a file, as a picker would).
+  final composerKey = GlobalKey<ComposerState>();
   final _unreadKey = GlobalKey();
   final _chipKeys = <String, GlobalKey>{};
   final _groupKeys = <String, GlobalKey>{};
@@ -400,13 +436,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
     setState(() => _newCount = 0);
   }
 
-  void _send() {
-    final words = _text.text;
-    if (words.trim().isEmpty) return;
-    _text.clear();
-    widget.data.send(words);
-  }
-
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
@@ -467,7 +496,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   ),
                 ),
               ),
-              _Composer(text: _text, onSend: _send, bottom: pad.bottom),
+              Composer(
+                key: composerKey,
+                text: _text,
+                onSend: (words, file) => d.send(words, file: file),
+                bottom: pad.bottom,
+                pickers: widget.pickers,
+                recorder: widget.recorder,
+              ),
             ],
           ),
         ),
@@ -762,6 +798,7 @@ class _Stream extends StatelessWidget {
               current: card == null ? null : current['${card.doc}:${card.reference}'],
               acts: acts,
               changed: changed,
+              files: data.chats.files,
               onRetry: m.out == null ? null : () => data.retry(m.out!),
               onDiscard: m.out == null ? null : () => data.discard(m.out!),
             ),
@@ -790,6 +827,12 @@ class _Stream extends StatelessWidget {
 List<Widget> _gapped(List<Widget> list, double gap) => [
   for (var i = 0; i < list.length; i++) ...[if (i > 0) SizedBox(height: gap), list[i]],
 ];
+
+/// How much taller a line of a bubble's text is in the app than in Chrome,
+/// half of it for each of two lines.
+const _lineDrift = 0.31;
+
+Widget _maybeIntrinsic(bool on, Widget child) => on ? IntrinsicWidth(child: child) : child;
 
 /// lib/thread.ts startsRun: the first of a run has the bubble's tail.
 bool _startsRun(LinkMessage prev, LinkMessage m) {
@@ -911,6 +954,7 @@ class _Bubble extends StatelessWidget {
     required this.now,
     required this.acts,
     required this.changed,
+    required this.files,
     this.latest = false,
     this.current,
     this.onRetry,
@@ -922,6 +966,7 @@ class _Bubble extends StatelessWidget {
   final DateTime now;
   final CardActs acts;
   final VoidCallback changed;
+  final ChatFiles files;
 
   /// The newest card of its document: its actions show.
   final bool latest;
@@ -984,8 +1029,10 @@ class _Bubble extends StatelessWidget {
           // `.stamp-gap`: room kept at the end of the text for the time.
           if (inline)
             WidgetSpan(
-              alignment: PlaceholderAlignment.baseline,
-              baseline: TextBaseline.alphabetic,
+              // 1 px tall: at the line's bottom it leaves the line as it is
+              // (on the baseline, Flutter cannot size it in a bubble sized
+              // to its content).
+              alignment: PlaceholderAlignment.bottom,
               child: SizedBox(width: mine ? 74 : 52, height: 1),
             ),
         ],
@@ -1006,63 +1053,77 @@ class _Bubble extends StatelessWidget {
           alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
           child: ConstrainedBox(
             constraints: card != null ? BoxConstraints.tightFor(width: max) : BoxConstraints(maxWidth: max),
-            child: Semantics(
-              label: mine ? null : (first && msg.senderName != null ? '${msg.senderName}: ' : null),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: mine ? t.chatOut : t.chatIn,
-                  borderRadius: radius,
-                  boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 1)],
-                ),
-                child: Stack(
-                  children: [
-                    if (card != null)
-                      // `.bubble.card-bubble { padding: 6px }`: the frame, then the time.
-                      Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            CardFrame(
-                              card: card,
-                              current: current,
-                              mine: mine,
-                              now: now,
-                              title: cardLine(card, mine, other),
-                              actions: [viewButton(card, acts), if (latest && (!mine || isDelivery(card))) ...cardActions(card, acts, changed)],
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(top: 1),
-                              child: Align(alignment: Alignment.centerRight, child: stamp),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (msg.forwarded == true)
-                              Text(
-                                'Forwarded',
-                                style: tkText(size: 12, color: t.muted).copyWith(fontStyle: FontStyle.italic),
+            // CSS sizes a bubble to what it holds (shrink to fit): as wide as
+            // its widest line or photo, up to the most it may be.
+            child: _maybeIntrinsic(
+              card == null,
+              Semantics(
+                label: mine ? null : (first && msg.senderName != null ? '${msg.senderName}: ' : null),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: mine ? t.chatOut : t.chatIn,
+                    borderRadius: radius,
+                    boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 1)],
+                  ),
+                  child: Stack(
+                    children: [
+                      if (card != null)
+                        // `.bubble.card-bubble { padding: 6px }`: the frame, then the time.
+                        Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CardFrame(
+                                card: card,
+                                current: current,
+                                mine: mine,
+                                now: now,
+                                title: cardLine(card, mine, other),
+                                actions: [viewButton(card, acts), if (latest && (!mine || isDelivery(card))) ...cardActions(card, acts, changed)],
                               ),
-                            text,
-                            if (!inline)
                               Padding(
                                 padding: const EdgeInsets.only(top: 1),
                                 child: Align(alignment: Alignment.centerRight, child: stamp),
                               ),
-                          ],
+                            ],
+                          ),
+                        )
+                      else
+                        Padding(
+                          // `padding: 8px 12px 6px`, with two corrections: on the
+                          // right 11.5, as Chrome fits a line its measure says
+                          // is a hundredth of a pixel wider; above and below
+                          // 0.31 less, as Flutter's lines are a whole 23 px and
+                          // Chrome's 22.69 (exact for two lines; a thread
+                          // otherwise drifts a pixel every three lines).
+                          padding: const EdgeInsets.fromLTRB(12, 8 - _lineDrift, 11.5, 6 - _lineDrift),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (msg.forwarded == true)
+                                Text(
+                                  'Forwarded',
+                                  style: tkText(size: 12, color: t.muted).copyWith(fontStyle: FontStyle.italic),
+                                ),
+                              if (msg.attachment != null) AttachmentView(m: msg, files: files, other: other, room: max - 24, local: out?.file),
+                              if (body.isNotEmpty) text,
+                              if (!inline)
+                                Padding(
+                                  // `.stamp { margin-top: 1px }`, which collapses
+                                  // into an attachment's larger bottom margin.
+                                  padding: EdgeInsets.only(top: msg.attachment != null && body.isEmpty ? 0 : 1),
+                                  child: Align(alignment: Alignment.centerRight, child: stamp),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
-                    // `.stamp.inline { position: absolute; right: 9px; bottom: 5px }`
-                    if (inline) Positioned(right: 9, bottom: 5, child: stamp),
-                  ],
+                      // `.stamp.inline { position: absolute; right: 9px; bottom: 5px }`
+                      if (inline) Positioned(right: 9, bottom: 5, child: stamp),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1112,116 +1173,6 @@ class _Bubble extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// ChatComposer.tsx ComposerView: the tools, the round box with attach and
-/// the camera, and the mic (Send once there are words).
-class _Composer extends StatelessWidget {
-  const _Composer({required this.text, required this.onSend, required this.bottom});
-  final TextEditingController text;
-  final VoidCallback onSend;
-  final double bottom;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    final dark = TkTheme.of(context).mode == TkMode.dark;
-    const lift = [BoxShadow(color: Color(0x140E1A14), offset: Offset(0, 1), blurRadius: 2)];
-    final words = text.text.trim().isNotEmpty;
-    Widget small(String icon, String label) => Semantics(
-      button: true,
-      label: label,
-      child: TkPress(
-        onTap: () {},
-        child: SizedBox(
-          width: 40,
-          height: 40,
-          child: Center(child: TkIcon(icon, size: 18, color: t.muted)),
-        ),
-      ),
-    );
-    return Container(
-      color: t.tkSoft,
-      // `.chat-pane .composer { padding: 8px 10px 12px; gap: 8px }`
-      padding: EdgeInsets.fromLTRB(10, 8, 10, 12 + bottom),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Semantics(
-            button: true,
-            label: 'Chat tools',
-            child: TkPress(
-              onTap: () {},
-              child: Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(color: t.panel, shape: BoxShape.circle, boxShadow: lift),
-                alignment: Alignment.center,
-                child: TkIcon('grid', size: 22, stroke: 2, color: dark ? t.text : t.brand),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 46),
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              decoration: BoxDecoration(color: t.panel, borderRadius: BorderRadius.circular(24), boxShadow: lift),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                      child: Material(
-                        type: MaterialType.transparency,
-                        child: Semantics(
-                          label: 'Message',
-                          textField: true,
-                          child: TextField(
-                            controller: text,
-                            minLines: 1,
-                            maxLines: 6,
-                            maxLength: 4000,
-                            buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
-                            textCapitalization: TextCapitalization.sentences,
-                            keyboardType: TextInputType.multiline,
-                            cursorColor: t.text,
-                            showCursor: !TkField.debugHideCaret,
-                            style: tkText(size: 15.5, lineHeight: 1.4, color: t.text),
-                            decoration: InputDecoration.collapsed(
-                              hintText: 'Message',
-                              hintStyle: tkText(size: 15.5, lineHeight: 1.4, color: t.muted),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  small('attach', 'Attach'),
-                  small('camera', 'Take a photo'),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Semantics(
-            button: true,
-            label: words ? 'Send' : 'Record a voice note',
-            child: TkPress(
-              onTap: words ? onSend : () {},
-              child: Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(color: dark ? t.brandDark : t.brand, shape: BoxShape.circle),
-                alignment: Alignment.center,
-                child: TkIcon(words ? 'arrow-up' : 'mic', size: 22, stroke: 2.4, color: dark ? t.brandDarkText : t.brandDark),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

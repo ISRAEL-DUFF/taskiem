@@ -119,6 +119,66 @@ const SCREENS: { name: string; path: string; fixture?: string; ready: (p: Page) 
       await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     },
   },
+  {
+    // A photo with its caption, a voice note and a PDF: Mama Tunde's again.
+    name: "chat-files",
+    path: "/chat?with=828e255f-dc0f-4dd3-bb19-0ba2764778d3",
+    fixture: "chat-files",
+    ready: async (p) => {
+      await expect(p.locator(".chat-photo img")).toBeVisible();
+      await p.locator(".chat-photo img").evaluate((i: HTMLImageElement) => i.decode());
+      await p.waitForLoadState("networkidle");
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // The same conversation scrolled to its end: the voice note and our PDF.
+    name: "chat-files-end",
+    path: "/chat?with=828e255f-dc0f-4dd3-bb19-0ba2764778d3",
+    fixture: "chat-files",
+    ready: async (p) => {
+      await expect(p.locator(".chat-photo img")).toBeVisible();
+      await p.locator(".chat-photo img").evaluate((i: HTMLImageElement) => i.decode());
+      await p.getByTestId("chat-stream").evaluate((s) => (s.scrollTop = s.scrollHeight));
+      await p.waitForLoadState("networkidle");
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // The clip's menu, open: Photo, Document, Camera.
+    name: "chat-attach",
+    path: "/chat?with=828e255f-dc0f-4dd3-bb19-0ba2764778d3",
+    fixture: "chat-files",
+    ready: async (p) => {
+      await expect(p.locator(".chat-photo img")).toBeVisible();
+      await p.locator(".chat-photo img").evaluate((i: HTMLImageElement) => i.decode());
+      await p.getByTestId("attach").click();
+      await expect(p.getByTestId("attach-menu")).toBeVisible();
+      // A phone has no pointer left hovering over what was tapped.
+      await p.mouse.move(0, 0);
+      await p.waitForLoadState("networkidle");
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // A photo chosen, waiting for its caption (the fixture's own photo).
+    name: "chat-caption",
+    path: "/chat?with=828e255f-dc0f-4dd3-bb19-0ba2764778d3",
+    fixture: "chat-files",
+    ready: async (p) => {
+      await expect(p.locator(".chat-photo img")).toBeVisible();
+      await p.locator(".chat-photo img").evaluate((i: HTMLImageElement) => i.decode());
+      await p.locator('input[type="file"]').first().setInputFiles({
+        name: "tomatoes.jpg",
+        mimeType: "image/jpeg",
+        buffer: readFileSync(resolve(FIXTURES, "chat-files", "025.img")),
+      });
+      await expect(p.locator(".pending-photo")).toBeVisible();
+      await p.locator(".pending-photo").evaluate((i: HTMLImageElement) => i.decode());
+      await p.waitForLoadState("networkidle");
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
 ];
 const FIXTURES = resolve(here, "../../mobile/test/parity/fixtures");
 

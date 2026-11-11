@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- The app lock opens with the phone's own fingerprint, face or PIN. -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
+    <!-- A voice note to a business (lib/chat/composer.dart). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Reaching Taskiem at all: only the debug and profile builds had it,
+         so a release build could not sign in. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="Taskiem"
         android:name="${applicationName}"

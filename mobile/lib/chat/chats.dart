@@ -14,6 +14,7 @@ import '../app/auth.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
+import 'attachments.dart';
 import 'live.dart';
 import 'words.dart';
 
@@ -68,6 +69,9 @@ class ChatsData extends ChangeNotifier {
   bool loaded = false;
   String? error;
   final Map<String, Uint8List?> logos = {};
+
+  /// The conversations' photos, voice notes and PDFs, fetched as shown.
+  late final ChatFiles files = ChatFiles(auth.transport);
 
   TaskiemApi get api => auth.api;
 

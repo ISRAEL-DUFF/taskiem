@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'dart:io' show IOException;
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 /// An answer that is not a success: its status and the server's body, which
 /// always has a human-readable `error` and sometimes a machine-readable
@@ -35,8 +36,7 @@ class Offline implements Exception {
 }
 
 class Transport {
-  Transport({required this.base, this.token, http.Client? client, this.timeout = const Duration(seconds: 30)})
-      : _client = client ?? http.Client();
+  Transport({required this.base, this.token, http.Client? client, this.timeout = const Duration(seconds: 30)}) : _client = client ?? http.Client();
 
   /// How long an answer may take before the network counts as gone: on a
   /// weak connection a request must not hang with its button spinning.
@@ -86,6 +86,42 @@ class Transport {
       } on FormatException {
         json = null;
       }
+    }
+    if (res.statusCode >= 200 && res.statusCode < 300) return json;
+    if (res.statusCode == 401 && t != null && token == t) onSessionEnded?.call();
+    throw ApiError(res.statusCode, json is Map<String, dynamic> ? json : {'error': 'The server answered ${res.statusCode}.'});
+  }
+
+  /// Sends a file as a multipart form (`file`, and the [fields] beside it)
+  /// and answers the JSON, as [send] does.
+  Future<Object?> upload(String path, {required List<int> bytes, required String filename, required String type, Map<String, String> fields = const {}}) async {
+    final uri = Uri.parse('$base$path');
+    if (uri.scheme != 'https' && !_local(uri.host)) {
+      throw ArgumentError('Taskiem is only reached over https');
+    }
+    final req = http.MultipartRequest('POST', uri)
+      ..headers['Accept'] = 'application/json'
+      ..fields.addAll(fields)
+      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename, contentType: MediaType.parse(type)));
+    final t = token;
+    if (t != null) req.headers['Authorization'] = 'Bearer $t';
+    http.Response res;
+    try {
+      // A file takes longer than a message: twice the time.
+      res = await (() async => http.Response.fromStream(await _client.send(req)))().timeout(timeout * 2);
+    } on http.ClientException {
+      throw const Offline();
+    } on IOException {
+      throw const Offline();
+    } on TimeoutException {
+      throw const Offline();
+    }
+    final text = utf8.decode(res.bodyBytes);
+    Object? json;
+    try {
+      json = text.isEmpty ? null : jsonDecode(text);
+    } on FormatException {
+      json = null;
     }
     if (res.statusCode >= 200 && res.statusCode < 300) return json;
     if (res.statusCode == 401 && t != null && token == t) onSessionEnded?.call();
