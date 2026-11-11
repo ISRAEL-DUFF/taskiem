@@ -67,3 +67,7 @@ getStock
 
 # Find a business (M3)
 explore
+
+# "Give this to…" on a card: the people, and the task (M3)
+listStaffTasks
+giveStaffTask

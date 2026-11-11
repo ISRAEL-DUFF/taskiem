@@ -14,6 +14,8 @@ import 'package:http/http.dart' as http;
 import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/chat/alerts.dart';
 import 'package:taskiem/chat/chats.dart';
+import 'package:taskiem/chat/give_task.dart';
+import 'package:taskiem/chat/thread.dart';
 import 'package:taskiem/chat/taskiem.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
@@ -186,6 +188,110 @@ void main() {
     expect(posts['/v1/chat-alerts/later']!.last, {'key': 'briefing:2026-11-11', 'hours': 24});
     expect(find.byType(BriefingCard), findsOneWidget);
     expect(find.text('Got it'), findsNothing, reason: 'put away');
+  });
+
+  testWidgets('an answer comes in view with the cards still below it', (t) async {
+    await open(t, answer: [_msg('a1', 'All *good* today.', at: '2026-11-11T13:22:01Z')]);
+    await t.enterText(find.byType(EditableText), 'status');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Send'));
+    await settle(t);
+    final thread = t.state<ThreadViewState<Object?>>(find.byWidgetPredicate((w) => w is ThreadView));
+    final view = t.getRect(find.byWidgetPredicate((w) => w is ThreadView));
+    final answer = t.getRect(find.textContaining('All good today.', findRichText: true));
+    expect(answer.bottom, lessThanOrEqualTo(view.bottom), reason: 'the answer is in sight');
+    expect(answer.top, greaterThanOrEqualTo(view.top));
+    expect(thread.scroll.offset, lessThan(thread.scroll.position.maxScrollExtent - 80), reason: 'Taskiem\'s cards are left below it');
+  });
+
+  testWidgets('"Give this to…" a low stock item: who, then the task given with what it is about', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-taskiem');
+    final given = <Map<String, dynamic>>[];
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (req.method == 'GET' && req.url.path == '/v1/staff/tasks') {
+          return http.Response(
+            jsonEncode({
+              'give': true,
+              'tasks': [],
+              'repeats': [],
+              'people': [
+                {'id': 'u-bola', 'name': 'Bola Ade', 'roles': ['cashier']},
+                {'id': 'u-ada', 'name': 'Ada Obi', 'roles': ['owner']},
+              ],
+            }),
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        if (req.method == 'POST' && req.url.path == '/v1/staff/tasks') {
+          given.add(jsonDecode(req.body) as Map<String, dynamic>);
+          return http.Response('{}', 200, headers: {'content-type': 'application/json'});
+        }
+        return null;
+      }),
+      now: () => f.at,
+    )..load();
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: TaskiemScreen(data: TaskiemData(chats, follow: false))));
+    await settle(t);
+    final give = find.bySemanticsLabel('Give this to…: Palm oil 25L is running low');
+    await t.ensureVisible(give);
+    await t.pumpAndSettle();
+    await t.tap(give);
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(find.text('Give this to someone'), findsOneWidget);
+    expect(find.text('Restock Palm oil 25L'), findsOneWidget, reason: 'what it is about, already said');
+    await t.tap(find.text('Give the task'));
+    await t.pumpAndSettle();
+    expect(find.text('Choose who it is for.'), findsOneWidget);
+    expect(given, isEmpty);
+    await t.tap(find.text('Choose…'));
+    await t.pumpAndSettle();
+    expect(find.text('Bola Ade'), findsOneWidget);
+    expect(find.text('Any owner'), findsNothing, reason: 'not the owner\'s role');
+    await t.tap(find.text('Any cashier'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('A photo when it is done'));
+    await t.pump();
+    await t.tap(find.text('Give the task'));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(given.single['what'], 'Restock Palm oil 25L');
+    expect(given.single['to_role'], 'cashier');
+    expect(given.single['photo'], true);
+    expect(given.single['link'], {'kind': 'stock', 'id': isNotEmpty, 'name': 'Palm oil 25L'});
+    expect(find.text('Give this to someone'), findsNothing);
+    expect(find.text('Task given. They hear in their chat.'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+    await t.pumpAndSettle();
+  });
+
+  test('a task\'s words and what is sent, as tasks.ts says them', () {
+    expect(linkedWhat((kind: 'order', id: 'o1', name: 'ORD-7')), 'Pack order ORD-7');
+    expect(linkedWhat((kind: 'stock', id: 's1', name: null)), 'Restock this item');
+    expect(roleWords('shift_manager'), 'Shift manager');
+    expect(roleWords('store_keeper'), 'Store keeper');
+    final f = TaskForm('2026-11-11')
+      ..what = ' Count the float '
+      ..who = 'user:u1';
+    expect(taskProblem(f), isNull);
+    expect(taskRequest(f, null).toJson(), {'what': 'Count the float', 'photo': false, 'to_user': 'u1'});
+    f.when = 'by';
+    expect(taskProblem(f), 'Choose the time it is due.');
+    f.time = '09:30';
+    expect(taskRequest(f, null).toJson()['due_at'], '2026-11-11T08:30:00.000Z');
+    f
+      ..when = 'week'
+      ..day = 'fri';
+    expect(taskRequest(f, null).toJson()['repeat'], {'at': '09:30', 'day': 'fri', 'every': 'week'});
+    expect(staffTile(3, 0), '3 in');
+    expect(staffTile(3, 1), '3 in · 1 late');
+    expect(tasksTile(0, 0), 'None due');
+    expect(tasksTile(2, 1), '2 due today · 1 late');
   });
 
   test('the cards\' words, as alerts.ts, approvals.ts and staff.ts say them', () {

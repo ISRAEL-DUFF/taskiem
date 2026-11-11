@@ -288,6 +288,18 @@ class TaskiemApi {
     final j = await _t.send('GET', '/v1/explore', query: {'q': ?q, 'section': ?section, 'offset': ?offset});
     return ExploreResult.fromJson(j as Map<String, dynamic>);
   }
+
+  /// Tasks for staff (`GET /v1/staff/tasks`)
+  Future<ListStaffTasksResponse> listStaffTasks({String? all}) async {
+    final j = await _t.send('GET', '/v1/staff/tasks', query: {'all': ?all});
+    return ListStaffTasksResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Give a task (`POST /v1/staff/tasks`)
+  Future<GiveStaffTaskResponse> giveStaffTask({required StaffTaskIn body}) async {
+    final j = await _t.send('POST', '/v1/staff/tasks', body: body.toJson());
+    return GiveStaffTaskResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -3095,5 +3107,265 @@ class ExploreCard {
         'tagline': ?tagline,
         'v': v,
         'vehicle': ?vehicle,
+      };
+}
+
+class ListStaffTasksResponse {
+  const ListStaffTasksResponse({required this.give, required this.people, required this.repeats, required this.tasks});
+
+  final bool give;
+  /// Who a task can be given to, with their roles (for those who give tasks;
+  /// empty otherwise)
+  final List<ListStaffTasksResponsePeopleItem> people;
+  final List<StaffTaskRepeat> repeats;
+  final List<StaffTask> tasks;
+
+  factory ListStaffTasksResponse.fromJson(Map<String, dynamic> j) => ListStaffTasksResponse(
+        give: j['give'] as bool,
+        people: (j['people'] as List).map((e) => ListStaffTasksResponsePeopleItem.fromJson(e as Map<String, dynamic>)).toList(),
+        repeats: (j['repeats'] as List).map((e) => StaffTaskRepeat.fromJson(e as Map<String, dynamic>)).toList(),
+        tasks: (j['tasks'] as List).map((e) => StaffTask.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'give': give,
+        'people': people.map((e) => e.toJson()).toList(),
+        'repeats': repeats.map((e) => e.toJson()).toList(),
+        'tasks': tasks.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ListStaffTasksResponsePeopleItem {
+  const ListStaffTasksResponsePeopleItem({required this.id, required this.name, required this.roles});
+
+  final String id;
+  final String name;
+  final List<String> roles;
+
+  factory ListStaffTasksResponsePeopleItem.fromJson(Map<String, dynamic> j) => ListStaffTasksResponsePeopleItem(
+        id: j['id'] as String,
+        name: j['name'] as String,
+        roles: (j['roles'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'roles': roles.map((e) => e).toList(),
+      };
+}
+
+class StaffTaskRepeat {
+  const StaffTaskRepeat({required this.at, this.day, required this.every, required this.id, this.person, required this.photo, this.toRole, this.toUser, required this.what});
+
+  final String at;
+  final String? day;
+  final String every;
+  final String id;
+  final String? person;
+  final bool photo;
+  final String? toRole;
+  final String? toUser;
+  final String what;
+
+  factory StaffTaskRepeat.fromJson(Map<String, dynamic> j) => StaffTaskRepeat(
+        at: j['at'] as String,
+        day: j['day'] == null ? null : j['day'] as String,
+        every: j['every'] as String,
+        id: j['id'] as String,
+        person: j['person'] == null ? null : j['person'] as String,
+        photo: j['photo'] as bool,
+        toRole: j['to_role'] == null ? null : j['to_role'] as String,
+        toUser: j['to_user'] == null ? null : j['to_user'] as String,
+        what: j['what'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at,
+        'day': ?day,
+        'every': every,
+        'id': id,
+        'person': ?person,
+        'photo': photo,
+        'to_role': ?toRole,
+        'to_user': ?toUser,
+        'what': what,
+      };
+}
+
+class StaffTask {
+  const StaffTask({this.cantWhy, required this.createdAt, this.doneAt, this.dueAt, required this.givenBy, required this.giver, required this.id, required this.late, this.link, this.person, required this.photo, this.photoUrl, this.repeatId, required this.state, this.takenBy, this.toRole, this.toUser, required this.what});
+
+  final String? cantWhy;
+  final DateTime createdAt;
+  final DateTime? doneAt;
+  final DateTime? dueAt;
+  final String givenBy;
+  final String giver;
+  final String id;
+  final bool late;
+  final StaffTaskLink? link;
+  /// The name of the person who has it, once someone does
+  final String? person;
+  /// A photo is needed when it is done
+  final bool photo;
+  /// The photo it was done with, a link good for ten minutes
+  final String? photoUrl;
+  final String? repeatId;
+  final String state;
+  final String? takenBy;
+  final String? toRole;
+  final String? toUser;
+  final String what;
+
+  factory StaffTask.fromJson(Map<String, dynamic> j) => StaffTask(
+        cantWhy: j['cant_why'] == null ? null : j['cant_why'] as String,
+        createdAt: DateTime.parse(j['created_at'] as String),
+        doneAt: j['done_at'] == null ? null : DateTime.parse(j['done_at'] as String),
+        dueAt: j['due_at'] == null ? null : DateTime.parse(j['due_at'] as String),
+        givenBy: j['given_by'] as String,
+        giver: j['giver'] as String,
+        id: j['id'] as String,
+        late: j['late'] as bool,
+        link: j['link'] == null ? null : StaffTaskLink.fromJson(j['link'] as Map<String, dynamic>),
+        person: j['person'] == null ? null : j['person'] as String,
+        photo: j['photo'] as bool,
+        photoUrl: j['photo_url'] == null ? null : j['photo_url'] as String,
+        repeatId: j['repeat_id'] == null ? null : j['repeat_id'] as String,
+        state: j['state'] as String,
+        takenBy: j['taken_by'] == null ? null : j['taken_by'] as String,
+        toRole: j['to_role'] == null ? null : j['to_role'] as String,
+        toUser: j['to_user'] == null ? null : j['to_user'] as String,
+        what: j['what'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'cant_why': ?cantWhy,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'done_at': ?doneAt?.toUtc().toIso8601String(),
+        'due_at': ?dueAt?.toUtc().toIso8601String(),
+        'given_by': givenBy,
+        'giver': giver,
+        'id': id,
+        'late': late,
+        'link': ?link?.toJson(),
+        'person': ?person,
+        'photo': photo,
+        'photo_url': ?photoUrl,
+        'repeat_id': ?repeatId,
+        'state': state,
+        'taken_by': ?takenBy,
+        'to_role': ?toRole,
+        'to_user': ?toUser,
+        'what': what,
+      };
+}
+
+class StaffTaskLink {
+  const StaffTaskLink({required this.id, required this.kind, this.name});
+
+  final String id;
+  final String kind;
+  final String? name;
+
+  factory StaffTaskLink.fromJson(Map<String, dynamic> j) => StaffTaskLink(
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': kind,
+        'name': ?name,
+      };
+}
+
+class StaffTaskIn {
+  const StaffTaskIn({this.dueAt, this.link, this.photo, this.repeat, this.toRole, this.toUser, required this.what});
+
+  final DateTime? dueAt;
+  final StaffTaskInLink? link;
+  final bool? photo;
+  final StaffTaskInRepeat? repeat;
+  final String? toRole;
+  final String? toUser;
+  final String what;
+
+  factory StaffTaskIn.fromJson(Map<String, dynamic> j) => StaffTaskIn(
+        dueAt: j['due_at'] == null ? null : DateTime.parse(j['due_at'] as String),
+        link: j['link'] == null ? null : StaffTaskInLink.fromJson(j['link'] as Map<String, dynamic>),
+        photo: j['photo'] == null ? null : j['photo'] as bool,
+        repeat: j['repeat'] == null ? null : StaffTaskInRepeat.fromJson(j['repeat'] as Map<String, dynamic>),
+        toRole: j['to_role'] == null ? null : j['to_role'] as String,
+        toUser: j['to_user'] == null ? null : j['to_user'] as String,
+        what: j['what'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'due_at': ?dueAt?.toUtc().toIso8601String(),
+        'link': ?link?.toJson(),
+        'photo': ?photo,
+        'repeat': ?repeat?.toJson(),
+        'to_role': ?toRole,
+        'to_user': ?toUser,
+        'what': what,
+      };
+}
+
+class StaffTaskInLink {
+  const StaffTaskInLink({required this.id, required this.kind, this.name});
+
+  final String id;
+  final String kind;
+  final String? name;
+
+  factory StaffTaskInLink.fromJson(Map<String, dynamic> j) => StaffTaskInLink(
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': kind,
+        'name': ?name,
+      };
+}
+
+class StaffTaskInRepeat {
+  const StaffTaskInRepeat({required this.at, this.day, required this.every});
+
+  final String at;
+  final String? day;
+  final String every;
+
+  factory StaffTaskInRepeat.fromJson(Map<String, dynamic> j) => StaffTaskInRepeat(
+        at: j['at'] as String,
+        day: j['day'] == null ? null : j['day'] as String,
+        every: j['every'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at,
+        'day': ?day,
+        'every': every,
+      };
+}
+
+class GiveStaffTaskResponse {
+  const GiveStaffTaskResponse({this.repeatId, this.task});
+
+  final Object? repeatId;
+  final Object? task;
+
+  factory GiveStaffTaskResponse.fromJson(Map<String, dynamic> j) => GiveStaffTaskResponse(
+        repeatId: j['repeat_id'],
+        task: j['task'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'repeat_id': ?repeatId,
+        'task': ?task,
       };
 }

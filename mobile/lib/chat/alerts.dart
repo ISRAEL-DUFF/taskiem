@@ -15,6 +15,7 @@ import '../kit/sheet.dart';
 import 'approve.dart';
 import '../theme/theme.dart';
 import 'cards.dart' show CardPill;
+import 'give_task.dart';
 import 'words.dart';
 
 // --- words (web/src/lib/alerts.ts, lib/approvals.ts, lib/staff.ts) ---
@@ -179,6 +180,8 @@ class _BriefingCardState extends State<BriefingCard> {
       if (b.owedKobo != null) tile('Owed to you', naira(b.owedKobo!)),
       if (b.low != null) tile('Low stock', b.low == 1 ? '1 item' : '${b.low} items'),
       if (b.deliveries != null) tile('Deliveries', '${b.deliveries} today'),
+      if (b.staff case final n?) tile('Staff', staffTile(n.in_.length, n.late.length)),
+      if (b.tasks case final n?) tile('Tasks', tasksTile(n.today, n.late)),
       if (b.bookings != null && b.bookings! > 0) tile('Bookings', '${b.bookings} today'),
     ];
     final parts = <Widget>[
@@ -454,6 +457,70 @@ class _Pill extends StatelessWidget {
   }
 }
 
+/// team.ts staffTile: who is in, and who is late.
+String staffTile(int inNow, int late) => ['$inNow in', if (late > 0) '$late late'].join(' · ');
+
+/// tasks.ts tasksTile: tasks due today, and late.
+String tasksTile(int today, int late) {
+  final w = [if (today > 0) '$today due today', if (late > 0) '$late late'].join(' · ');
+  return w.isEmpty ? 'None due' : w;
+}
+
+/// `.tk-alert-acts { display: flex; flex-wrap: wrap; gap: 10px }`: the
+/// next step (`.tk-alert-go { flex: 1; min-width: min(100%, 180px) }`)
+/// then the soft pills, each as wide as its words; a line that is full
+/// wraps, and the step grows into the room left on its line.
+class _Acts extends StatelessWidget {
+  const _Acts({required this.pills});
+  final List<({Widget pill, String words, bool grow})> pills;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, box) {
+        final room = box.maxWidth;
+        double base(({Widget pill, String words, bool grow}) p) {
+          final w = (TextPainter(
+                text: TextSpan(text: p.words, style: tkText(size: 15, weight: 700, lineHeight: 1.2)),
+                textDirection: TextDirection.ltr,
+              )..layout()).width +
+              (p.grow ? 32 : 44);
+          return (p.grow ? (w < 180 ? 180.0 : w) : w).clamp(0.0, room);
+        }
+
+        final lines = <List<(int, double)>>[[]];
+        var used = 0.0;
+        for (var i = 0; i < pills.length; i++) {
+          final w = base(pills[i]);
+          final gap = lines.last.isEmpty ? 0.0 : 10.0;
+          if (lines.last.isNotEmpty && used + gap + w > room) {
+            lines.add([]);
+            used = 0;
+          }
+          used += (lines.last.isEmpty ? 0.0 : 10.0) + w;
+          lines.last.add((i, w));
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final (n, line) in lines.indexed) ...[
+              if (n > 0) const SizedBox(height: 10),
+              Row(
+                children: [
+                  for (final (k, (i, w)) in line.indexed) ...[
+                    if (k > 0) const SizedBox(width: 10),
+                    if (pills[i].grow) Expanded(child: pills[i].pill) else SizedBox(width: w, child: pills[i].pill),
+                  ],
+                ],
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
 /// ChatAlerts.tsx AlertCard: what it is, and its next step with Later.
 class _AlertCard extends StatefulWidget {
   const _AlertCard({required this.a, required this.auth, required this.onDone, this.onOpen});
@@ -540,6 +607,11 @@ class _AlertCardState extends State<_AlertCard> {
       _ => (t.tkSoft, t.text),
     };
     final step = _step();
+    // ChatAlerts.tsx: "Give this to…" a low stock item, for those who give tasks.
+    final can = widget.auth.can;
+    final give = a.kind == 'low_stock' && (a.id ?? '').isNotEmpty && can('member.manage|invoice.manage')
+        ? () => giveThis(context, widget.auth, (kind: 'stock', id: a.id!, name: a.title.replaceFirst(RegExp(r' is running low$'), '')))
+        : null;
     return Semantics(
       container: true,
       label: a.title,
@@ -572,17 +644,19 @@ class _AlertCardState extends State<_AlertCard> {
               ],
             ),
             const SizedBox(height: 14),
-            Row(
-              children: [
-                if (step != null) ...[
-                  Expanded(child: _Pill(label: step.words, named: a.title, onTap: _busy ? null : step.go)),
-                  const SizedBox(width: 10),
-                ],
-                _Pill(
-                  label: 'Later',
-                  named: a.title,
-                  kind: 'soft',
-                  onTap: _busy ? null : () => _run(() => _post('/v1/chat-alerts/later', {'key': a.key})),
+            _Acts(
+              pills: [
+                if (step != null) (pill: _Pill(label: step.words, named: a.title, onTap: _busy ? null : step.go), words: step.words, grow: true),
+                if (give != null) (pill: _Pill(label: 'Give this to…', named: a.title, kind: 'soft', onTap: _busy ? null : give), words: 'Give this to…', grow: false),
+                (
+                  pill: _Pill(
+                    label: 'Later',
+                    named: a.title,
+                    kind: 'soft',
+                    onTap: _busy ? null : () => _run(() => _post('/v1/chat-alerts/later', {'key': a.key})),
+                  ),
+                  words: 'Later',
+                  grow: false,
                 ),
               ],
             ),

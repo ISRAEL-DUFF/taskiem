@@ -663,11 +663,18 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final tools = d.chats.chatTools;
     final roles = {for (final l in d.chats.links) l.id: l.role};
     return (
+      // What "#" (and "@"'s products) tag: theirs, with chat tools
+      // (business-chat-tools.md §4); without, the list between us.
       items: [
-        for (final it in d.priceList)
-          if (it.available) TagSuggestion(kind: 'item', id: it.itemId, name: it.name, sub: priceWords(it), category: it.category, words: it.description),
+        if (!tools || d.priceWhose == 'theirs')
+          for (final it in d.priceList)
+            if (it.available) TagSuggestion(kind: 'item', id: it.itemId, name: it.name, sub: priceWords(it), category: it.category, words: it.description),
       ],
+      // Our own services are not offered in a business's conversation with
+      // chat tools: what we offer them goes by Share my prices and Make an
+      // offer (§4).
       services: [
+        if (!tools)
         for (final x in d.services)
           TagSuggestion(
             kind: 'service',

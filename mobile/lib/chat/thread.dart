@@ -327,13 +327,13 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   DateTime? _newest;
   bool _away = false;
 
-  /// At the bottom, as the reader last left it: kept there as what is below
-  /// grows (useThread's: Taskiem's cards arriving, a photo loading).
-  bool _stick = true;
-
   /// Kept at the bottom as what is below grows: opened at the end, or
   /// scrolled there by the reader (not opened at the unread or a message).
   bool _keep = false;
+
+  /// At the very end of the thread (not merely with the newest message in
+  /// view), as the reader last left it.
+  bool _atEnd = false;
   int _newCount = 0;
   ({String label, double top})? _stuck;
   bool _loadingOlder = false;
@@ -373,6 +373,38 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
 
   bool get _atBottom => !scroll.hasClients || scroll.position.maxScrollExtent - scroll.position.pixels <= _nearBottom;
 
+  /// useThread.ts newestEnd: how far down the content the newest message ends.
+  double? _newestEnd() {
+    final box = _endKey.currentContext?.findRenderObject();
+    final view = _viewport.currentContext?.findRenderObject();
+    if (box is! RenderBox || view is! RenderBox || !box.hasSize || !scroll.hasClients) return null;
+    return box.localToGlobal(Offset(0, box.size.height), ancestor: view).dy + scroll.offset;
+  }
+
+  /// thread.ts atNewest: at the thread's end, or the newest message ending
+  /// within the view with only what follows it (Taskiem's cards) below.
+  bool get _atNewest {
+    if (_atBottom) return true;
+    final end = _newestEnd();
+    if (end == null) return false;
+    final p = scroll.position;
+    return end <= p.pixels + p.viewportDimension + _nearBottom && end > p.pixels;
+  }
+
+  /// useThread.ts toNewest with thread.ts newestTop: the newest message at
+  /// the view's end, a little room under it, when cards follow it; else the
+  /// end of the thread.
+  void _toNewest() {
+    final p = scroll.position;
+    final end = _newestEnd();
+    final height = p.maxScrollExtent + p.viewportDimension;
+    if (end == null || height - end <= _nearBottom) {
+      scroll.jumpTo(p.maxScrollExtent);
+    } else {
+      scroll.jumpTo((end + 16 - p.viewportDimension).clamp(0.0, p.maxScrollExtent));
+    }
+  }
+
   /// useThread.ts: a mark at the top of the thread, watched 200 px beyond
   /// the top; in sight, the older page is asked for.
   void _maybeOlder() {
@@ -403,9 +435,9 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
 
   /// Kept at the bottom after this frame, if the reader is there.
   void _hold() {
-    if (!_placed || !_stick || !_keep) return;
+    if (!_placed || !_atEnd || !_keep) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !scroll.hasClients || !_stick || !_keep) return;
+      if (!mounted || !scroll.hasClients || !_atEnd || !_keep) return;
       final end = scroll.position.maxScrollExtent;
       if (scroll.offset != end) scroll.jumpTo(end);
     });
@@ -413,10 +445,19 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
 
   void _onScroll() {
     _maybeOlder();
-    final near = _atBottom;
-    // Moved by the reader: kept at the bottom only from there.
-    if (_placed && (_stick != near || !near)) _keep = near;
-    _stick = near;
+    final near = _atNewest;
+    // Held at the very end only from there: arriving at it, not with the
+    // newest message merely in view (toNewest leaves Taskiem's cards below
+    // it, and that place stands).
+    final end = _atBottom;
+    if (_placed) {
+      if (!end) {
+        _keep = false;
+      } else if (!_atEnd) {
+        _keep = true;
+      }
+    }
+    _atEnd = end;
     final away = !near;
     final stuck = _sticky();
     if (away != _away || stuck != _stuck || (!away && _newCount > 0)) {
@@ -437,7 +478,7 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
     if (items == null) return;
     final of = widget.of;
     final newest = items.isEmpty ? null : of.at(items.last);
-    final stick = _atBottom;
+    final stick = _atNewest;
     final prev = _newest;
     _newest = newest;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -469,7 +510,9 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
       final arrived = items.where((m) => of.at(m).isAfter(prev)).toList();
       if (arrived.isEmpty) return;
       if (stick || arrived.any(of.mine)) {
-        scroll.jumpTo(scroll.position.maxScrollExtent);
+        // The newest message in view, not what follows it (Taskiem's
+        // cards): an answer is never left out of sight.
+        _toNewest();
         setState(() => _newCount = 0);
       } else {
         setState(() => _newCount += arrived.where((m) => !of.mine(m)).length);

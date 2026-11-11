@@ -527,6 +527,9 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   under the newest. The thread opens with the first unread 40 px under the
   top, the day's chip stays at the top while its day is under it, and the
   round button takes the reader to the newest, with how many came meanwhile.
+  A new message is followed to the newest message, not past it: with
+  Taskiem's cards after it, the answer ends at the bottom of the view and
+  the cards stay below (useThread's toNewest).
   Parity: Bayo Rice Mills' conversation (an order and an invoice), light and
   dark, two sizes. Chrome breaks a line after a hyphen before a digit and
   Flutter does not: card titles are given the break (`breakAfterHyphens`).
@@ -580,11 +583,17 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   unchanged.
 - **Taskiem's cards** (`lib/chat/alerts.dart`): after its conversation, as
   the web's: the day's briefing on pine (the greeting, yesterday's sales
-  with the week's bars, what is owed, low and out today, Got it putting it
+  with the week's bars, what is owed, low and out today, who is in and
+  late, the tasks due, Got it putting it
   away for the day), then a card for each thing that needs the person
   (overdue, a payment to match, a new order, low stock, a rider, a deal, a
   delivery to confirm, a customer's draft order), each with its next step
-  and Later, and approvals (who asks for what, the amount, to whom and the
+  and Later (a row that wraps, as the web's: the step grows to fill its
+  line, Later onto the next when there is no room), low stock with "Give
+  this to…" for those who give tasks (the web's GiveTask form in a modal
+  from the bottom: what is to be done, already said; who, a person or
+  anyone in a role; when, with its day or weekday and time; a photo when
+  done; `lib/chat/give_task.dart`), and approvals (who asks for what, the amount, to whom and the
   account, a first payment or a step-up said, Decline and Approve). Later,
   Got it, Send reminder, Agree and Confirm work from the card. Parity: the
   conversation, its cards and its approval, light and dark, two sizes.
@@ -734,8 +743,9 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
 - **Tags: "@" and "#"** (`lib/chat/tags.dart`, `tag_picker.dart`,
   `live_card.dart`), as the web's Mentions and ChatLiveCard: in a
   business's conversation "@" opens, with chat tools, the designs' picker
-  over the thread (the price list's products, our services, the other
-  linked businesses with how we trade, Taskiem last; the first drawn ready
+  over the thread (the products on the price list when it is theirs, the
+  other linked businesses with how we trade, Taskiem last; without chat
+  tools, the price list's products and our services; the first drawn ready
   to take; "Matches for …" as words are typed), and "#" the plain list of
   the price list's items with their prices above the box. A pick puts
   the name in the words; the things and businesses still named when it is
