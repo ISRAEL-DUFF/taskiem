@@ -44,6 +44,9 @@ class Auth extends ChangeNotifier {
   /// Who is signed in, once they are.
   Me? me;
 
+  /// auth.tsx can: any of the permissions, "a|b".
+  bool can(String perm) => perm.split('|').any((p) => me?.permissions.contains(p) ?? false);
+
   /// Signed in by a session kept from before (opening the app), not just
   /// now: the app lock asks for the phone's lock only then.
   bool restored = false;

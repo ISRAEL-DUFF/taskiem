@@ -514,12 +514,27 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   place, or it shows not sent with Retry and Delete (the same client id, so
   a retry is never a second message). Parity: Mama Tunde's Market's
   conversation, light and dark, two sizes.
-- **Not yet in M3**: cards and their actions, photos, files and voice notes,
+- **Cards** (`lib/chat/cards.dart`): a document's card as the web's
+  (cardframe.ts ported: the kind and reference, the state's pill, what
+  happened, the amount, an order's or a delivery's progress), its View
+  button and its own steps on the document's newest card (accept, the
+  delivery's steps, accept a change, all came, confirm a rider's delivery,
+  Pay an invoice), every card of a document showing where it is now; our own
+  changes as diary lines, those made within 5 minutes of each other folded
+  under the newest. The thread opens with the first unread 40 px under the
+  top, the day's chip stays at the top while its day is under it, and the
+  round button takes the reader to the newest, with how many came meanwhile.
+  Parity: Bayo Rice Mills' conversation (an order and an invoice), light and
+  dark, two sizes. Chrome breaks a line after a hyphen before a digit and
+  Flutter does not: card titles are given the break (`breakAfterHyphens`).
+- **Not yet in M3**: the documents the cards open (View order, View
+  invoice, Pay: next), Decline (it asks first: with the app's confirmation
+  sheet), a deal's offers and counters, photos, files and voice notes,
   replies, reactions, the message menu, stars, search, the contact sheet,
   forwarding, the live stream (`/v1/chat/stream`; the app polls), older pages
-  as the reader scrolls up, the day chip staying at the top while scrolling,
-  the chat tools, `@Taskiem`, customers' conversations, and the list's
-  search, chips and answers to requests (drawn, not yet working).
+  as the reader scrolls up, the chat tools, `@Taskiem`, customers'
+  conversations, and the list's search, chips and answers to requests
+  (drawn, not yet working).
 
 ## 11. What needs people
 

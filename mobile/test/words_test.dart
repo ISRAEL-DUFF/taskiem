@@ -65,4 +65,42 @@ void main() {
     expect(toneOf('Zuri Atelier'), 'blue');
     expect(toneOf("Mama Tunde's Market"), 'peach');
   });
+
+  test('money, as storefront.ts formatPrice', () {
+    expect(naira(82000000), '₦820,000');
+    expect(naira(125050), '₦1,250.50');
+    expect(naira(5), '₦0.05');
+    expect(naira(-150000), '-₦1,500');
+  });
+
+  test('cards: pill, progress, kicker and second line, as cardframe.ts', () {
+    final now = DateTime.utc(2026, 11, 11, 12);
+    LinkDocCard c(String doc, String event, {int? amount, int? was, String? note, DateTime? until}) => LinkDocCard.fromJson({
+          'doc': doc,
+          'event': event,
+          'reference': 'P-9XTV54',
+          'amount_kobo': ?amount,
+          'was_kobo': ?was,
+          'note': ?note,
+          if (until != null) 'deal': {'steps': <Object>[], 'until': until.toIso8601String()},
+        });
+    expect(cardStatus(c('purchase', 'accept'), now), (word: 'Accepted', tone: CardTone.lime, step: 1));
+    expect(cardStatus(c('order', 'ordered'), now), (word: 'New', tone: CardTone.lime, step: 0));
+    expect(cardStatus(c('bill', 'bill'), now), (word: 'To pay', tone: CardTone.lime, step: null));
+    expect(cardStatus(c('delivery', 'arrived'), now).word, 'At the door');
+    expect(cardStatus(c('order', 'offered', until: now.subtract(const Duration(minutes: 1))), now).word, 'Lapsed');
+    expect(cardStatus(c('order', 'offered', until: now.add(const Duration(minutes: 1))), now).word, 'Offer');
+    expect(cardStatus(c('purchase', 'change', was: 100), now), (word: 'Counter', tone: CardTone.warn, step: 0));
+    expect(cardStatus(c('invoice', 'some_thing'), now), (word: 'some thing', tone: CardTone.plain, step: null));
+    expect(cardKicker(c('purchase', 'accept')), 'Order · P-9XTV54');
+    expect(cardKicker(c('bill', 'bill')), 'Invoice · P-9XTV54');
+    expect(cardKicker(c('dispatch', 'delivered')), 'Delivery · P-9XTV54');
+    expect(stepsFor(c('delivery', 'offered')).length, 5);
+    expect(cardSub(c('order', 'change', amount: 7000000, was: 8000000, note: 'less rice')), '₦70,000 · was ₦80,000 · “less rice”');
+    expect(isDiary(c('order', 'accept'), true), isTrue);
+    expect(isDiary(c('order', 'ordered'), true), isFalse);
+    expect(isDiary(c('order', 'accept'), false), isFalse);
+    expect(breakAfterHyphens('accepted order P-9XTV54'), 'accepted order P-\u200B9XTV54');
+    expect(breakAfterHyphens('a - b'), 'a - b');
+  });
 }

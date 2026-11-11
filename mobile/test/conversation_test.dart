@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/conversation.dart';
 import 'package:taskiem/main.dart';
@@ -131,5 +132,35 @@ void main() {
     expect(find.bySemanticsLabel(RegExp('^Not sent')), findsNothing);
     expect(ids.length, 2);
     expect(ids[0], ids[1], reason: 'a retry is the same message to the server');
+  });
+
+  testWidgets('cards: opened at the unread, the round button goes to the newest, Pay opens the invoice', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-bayo');
+    final chats = ChatsData(f.auth(), now: () => f.at)..load();
+    final conv = ListLinkChatsResponse.fromJson(f.json('/v1/link-chats')).conversations.firstWhere((c) => c.name == 'Bayo Rice Mills');
+    final opened = <LinkDocCard>[];
+    await t.pumpWidget(TaskiemApp(
+      mode: TkMode.light,
+      home: ConversationScreen(data: ConversationData(chats, conv, follow: false), onOpenDoc: opened.add),
+    ));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(find.text('5 unread messages'), findsOneWidget);
+    final jump = find.bySemanticsLabel('Scroll to the newest messages');
+    expect(jump, findsOneWidget, reason: 'opened at the unread, not at the bottom');
+    expect(find.text('Today'), findsNWidgets(2), reason: 'the day stays at the top, over its own place');
+    await t.tap(jump);
+    await t.pumpAndSettle();
+    expect(jump, findsNothing);
+    final pay = find.bySemanticsLabel('Pay INV-0001');
+    expect(pay, findsOneWidget);
+    expect(find.text('Pay ₦450,000'), findsOneWidget);
+    await t.tap(pay);
+    expect(opened.single.reference, 'INV-0001');
+    await t.tap(find.bySemanticsLabel('View invoice INV-0001'));
+    expect(opened.length, 2);
   });
 }

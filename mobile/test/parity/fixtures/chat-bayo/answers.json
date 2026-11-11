@@ -1,0 +1,105 @@
+{
+ "at": "2026-11-11T12:43:15.433Z",
+ "answers": {
+  "/v1/me": {
+   "file": "000.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/billing/status": {
+   "file": "001.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats": {
+   "file": "002.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/settings/chat-tools": {
+   "file": "003.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats/unread": {
+   "file": "004.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/taskiem-chat?after=*": {
+   "file": "005.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats?archived=1": {
+   "file": "006.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-settings": {
+   "file": "007.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/form-requests": {
+   "file": "008.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/links": {
+   "file": "009.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats": {
+   "file": "025.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/notifications/count": {
+   "file": "011.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/onboarding": {
+   "file": "012.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/links/01a1ca85-c0ea-702e-bc21-b92acbab6b6a/logo": {
+   "file": "015.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/stock": {
+   "file": "016.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats/ef99249d-9322-40ca-91c2-e24fdd450c15/items": {
+   "file": "017.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/storefront/services": {
+   "file": "018.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats/ef99249d-9322-40ca-91c2-e24fdd450c15/refs": {
+   "file": "019.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/chat-alerts": {
+   "file": "021.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats/ef99249d-9322-40ca-91c2-e24fdd450c15/messages": {
+   "file": "022.json",
+   "status": 200,
+   "type": "application/json"
+  }
+ }
+}

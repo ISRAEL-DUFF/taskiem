@@ -108,6 +108,17 @@ const SCREENS: { name: string; path: string; fixture?: string; ready: (p: Page) 
       await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     },
   },
+  {
+    // A conversation with cards: Bayo Rice Mills', an order and an invoice.
+    name: "chat-bayo",
+    path: "/chat?with=ef99249d-9322-40ca-91c2-e24fdd450c15",
+    fixture: "chat-bayo",
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-card").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
 ];
 const FIXTURES = resolve(here, "../../mobile/test/parity/fixtures");
 

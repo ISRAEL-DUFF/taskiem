@@ -38,7 +38,7 @@ class ChatsData extends ChangeNotifier {
   bool get linksOn => _area('links');
 
   /// The person may answer requests to link (link.manage, as the web's `can`).
-  bool get manage => (auth.me?.permissions ?? const []).contains('link.manage') && linksOn;
+  bool get manage => auth.can('link.manage') && linksOn;
 
   Future<void> load() async {
     error = null;
@@ -136,12 +136,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     _Head(name: d.auth.me?.tenantName, onMenu: widget.onMenu),
                     const _Search(),
                     if (d.loaded && (d.conversations.isNotEmpty || d.archivedCustomers > 0))
-                      _Chips(
-                        filter: _filter,
-                        unread: d.unreadCount,
-                        archived: d.archivedCount,
-                        onPick: (f) => setState(() => _filter = f),
-                      ),
+                      _Chips(filter: _filter, unread: d.unreadCount, archived: d.archivedCount, onPick: (f) => setState(() => _filter = f)),
                     if (d.error != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: TkErrorBox(d.error!)),
                     if (!archived && _filter != ChatFilter.starred)
                       Padding(
@@ -150,8 +145,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           accent: true,
                           title: 'Taskiem',
                           preview: d.waiting > 0
-                              ? Text(d.waiting == 1 ? '1 thing needs you' : '${d.waiting} things need you',
-                                  maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14.5, weight: 700, color: t.tintText))
+                              ? Text(
+                                  d.waiting == 1 ? '1 thing needs you' : '${d.waiting} things need you',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: tkText(size: 14.5, weight: 700, color: t.tintText),
+                                )
                               : _previewText(context, 'Your own conversation with Taskiem, as on your phone'),
                         ),
                       ),
@@ -177,10 +176,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                   c.typing
                                       ? 'typing…'
                                       : c.last != null
-                                          ? listPreview(c.last!, c.name)
-                                          : c.state == 'active'
-                                              ? 'Linked'
-                                              : 'The link has ended',
+                                      ? listPreview(c.last!, c.name)
+                                      : c.state == 'active'
+                                      ? 'Linked'
+                                      : 'The link has ended',
                                   typing: c.typing,
                                 ),
                                 unread: c.unread,
@@ -209,7 +208,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   static Widget _previewText(BuildContext context, String s, {bool typing = false}) {
     final t = TkTheme.tokens(context);
-    return Text(s, maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false, style: tkText(size: 14.5, color: typing ? t.ok : t.muted));
+    return Text(
+      s,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+      style: tkText(size: 14.5, color: typing ? t.ok : t.muted),
+    );
   }
 }
 
@@ -232,10 +237,7 @@ class _Head extends StatelessWidget {
               child: Text('Chats', style: tkText(size: 26, weight: 800, lineHeight: 1.35, letterSpacing: -0.52, color: t.text)),
             ),
           ),
-          if (name != null) ...[
-            const SizedBox(width: 6),
-            Text(name!, style: tkText(size: 13, color: t.muted)),
-          ],
+          if (name != null) ...[const SizedBox(width: 6), Text(name!, style: tkText(size: 13, color: t.muted))],
           const SizedBox(width: 6),
           Semantics(
             button: true,
@@ -243,7 +245,13 @@ class _Head extends StatelessWidget {
             child: TkPress(
               onTap: onMenu ?? () {},
               // The web's `more`, turned upright, its dots bolder (`.chat-menu-wrap svg`).
-              child: SizedBox(width: 40, height: 40, child: Center(child: RotatedBox(quarterTurns: 1, child: TkIcon('more', size: 18, stroke: 3, color: t.text)))),
+              child: SizedBox(
+                width: 40,
+                height: 40,
+                child: Center(
+                  child: RotatedBox(quarterTurns: 1, child: TkIcon('more', size: 18, stroke: 3, color: t.text)),
+                ),
+              ),
             ),
           ),
         ],
@@ -270,8 +278,12 @@ class _Search extends StatelessWidget {
             TkIcon('search', size: 16, color: t.muted),
             const SizedBox(width: 7),
             Expanded(
-              child: Text('Search chats, messages, businesses',
-                  maxLines: 1, overflow: TextOverflow.clip, style: tkText(size: 15, weight: 500, color: cssMix(t.muted, const Color(0x00000000), 0.72))),
+              child: Text(
+                'Search chats, messages, businesses',
+                maxLines: 1,
+                overflow: TextOverflow.clip,
+                style: tkText(size: 15, weight: 500, color: cssMix(t.muted, const Color(0x00000000), 0.72)),
+              ),
             ),
           ],
         ),
@@ -301,36 +313,40 @@ class _Chips extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: SizedBox(
-      height: 50,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: chips.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final (f, label) = chips[i];
-          final on = filter == f;
-          return Semantics(
-            button: true,
-            selected: on,
-            child: TkPress(
-              onTap: () => onPick(f),
-              child: Container(
-                height: 34,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  border: Border.all(color: t.borderStrong),
-                  borderRadius: BorderRadius.circular(999),
-                  boxShadow: outsideOnly(t.shadow),
+        height: 50,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: chips.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 8),
+          itemBuilder: (context, i) {
+            final (f, label) = chips[i];
+            final on = filter == f;
+            return Semantics(
+              button: true,
+              selected: on,
+              child: TkPress(
+                onTap: () => onPick(f),
+                child: Container(
+                  height: 34,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: t.borderStrong),
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: outsideOnly(t.shadow),
+                  ),
+                  child: Text(
+                    label,
+                    style: tkText(size: 14, weight: on ? 600 : 500, lineHeight: 1.2, color: on ? t.tintText : t.text),
+                  ),
                 ),
-                child: Text(label, style: tkText(size: 14, weight: on ? 600 : 500, lineHeight: 1.2, color: on ? t.tintText : t.text)),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
-    ));
+    );
   }
 }
 
@@ -382,11 +398,20 @@ class ChatRow extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false, style: tkText(size: 16, weight: 600, color: t.text)),
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          softWrap: false,
+                          style: tkText(size: 16, weight: 600, color: t.text),
+                        ),
                       ),
                       if (time != null) ...[
                         const SizedBox(width: 8),
-                        Text(time!, style: tkText(size: 12, weight: unread > 0 ? 600 : 400, color: unread > 0 ? t.ok : t.muted)),
+                        Text(
+                          time!,
+                          style: tkText(size: 12, weight: unread > 0 ? 600 : 400, color: unread > 0 ? t.ok : t.muted),
+                        ),
                       ],
                     ],
                   ),
@@ -402,16 +427,7 @@ class ChatRow extends StatelessWidget {
                       if (muted) ...[const SizedBox(width: 6), TkIcon('mute', size: 15, color: t.muted)],
                       if (unread > 0) ...[
                         const SizedBox(width: 8),
-                        Semantics(
-                          label: '$unread unread ${unread == 1 ? 'message' : 'messages'}',
-                          child: Container(
-                            constraints: const BoxConstraints(minWidth: 20),
-                            padding: const EdgeInsets.symmetric(horizontal: 7),
-                            decoration: BoxDecoration(color: t.ok, borderRadius: BorderRadius.circular(999)),
-                            alignment: Alignment.center,
-                            child: Text('$unread', style: tkText(size: 12, weight: 600, color: t.panel)),
-                          ),
-                        ),
+                        Semantics(label: '$unread unread ${unread == 1 ? 'message' : 'messages'}', child: UnreadCount(unread)),
                       ],
                     ],
                   ),
@@ -457,7 +473,9 @@ class ChatAvatar extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final l = logo;
     if (l != null) {
-      return ClipOval(child: Image.memory(l, width: size, height: size, fit: BoxFit.cover, gaplessPlayback: true));
+      return ClipOval(
+        child: Image.memory(l, width: size, height: size, fit: BoxFit.cover, gaplessPlayback: true),
+      );
     }
     final (bg, ink) = toneColours(t, toneOf(name));
     return Container(
@@ -465,22 +483,25 @@ class ChatAvatar extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
       alignment: Alignment.center,
-      child: Text(initialsOf(name), style: tkText(size: letterSize ?? size * 20 / 52, weight: 800, letterSpacing: 0.2, color: ink)),
+      child: Text(
+        initialsOf(name),
+        style: tkText(size: letterSize ?? size * 20 / 52, weight: 800, letterSpacing: 0.2, color: ink),
+      ),
     );
   }
 }
 
 /// kit.css `[data-tone]`: a tone's ground and ink.
 (Color, Color) toneColours(TkTokens t, String tone) => switch (tone) {
-      'pine' => (t.tonePineBg, t.tonePineInk),
-      'lime' => (t.toneLimeBg, t.toneLimeInk),
-      'peach' => (t.tonePeachBg, t.tonePeachInk),
-      'yellow' => (t.toneYellowBg, t.toneYellowInk),
-      'green' => (t.toneGreenBg, t.toneGreenInk),
-      'lavender' => (t.toneLavenderBg, t.toneLavenderInk),
-      'blue' => (t.toneBlueBg, t.toneBlueInk),
-      _ => (t.toneSandBg, t.toneSandInk),
-    };
+  'pine' => (t.tonePineBg, t.tonePineInk),
+  'lime' => (t.toneLimeBg, t.toneLimeInk),
+  'peach' => (t.tonePeachBg, t.tonePeachInk),
+  'yellow' => (t.toneYellowBg, t.toneYellowInk),
+  'green' => (t.toneGreenBg, t.toneGreenInk),
+  'lavender' => (t.toneLavenderBg, t.toneLavenderInk),
+  'blue' => (t.toneBlueBg, t.toneBlueInk),
+  _ => (t.toneSandBg, t.toneSandInk),
+};
 
 /// Links.tsx: the businesses asking to link, each with its answers.
 class _Asked extends StatelessWidget {
@@ -498,11 +519,18 @@ class _Asked extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 32, bottom: 12),
-          child: Semantics(header: true, child: Text('Asks to link', style: tkText(size: 15, weight: 600, lineHeight: 1.35, letterSpacing: -0.15, color: t.text))),
+          child: Semantics(
+            header: true,
+            child: Text('Asks to link', style: tkText(size: 15, weight: 600, lineHeight: 1.35, letterSpacing: -0.15, color: t.text)),
+          ),
         ),
         Container(
           margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(color: t.panel, border: Border.all(color: t.border), borderRadius: BorderRadius.circular(20)),
+          decoration: BoxDecoration(
+            color: t.panel,
+            border: Border.all(color: t.border),
+            borderRadius: BorderRadius.circular(20),
+          ),
           child: Column(
             children: [
               for (final l in links)
@@ -516,8 +544,10 @@ class _Asked extends StatelessWidget {
                         height: 40,
                         decoration: BoxDecoration(color: t.tintWarn, borderRadius: BorderRadius.circular(12)),
                         alignment: Alignment.center,
-                        child: Text(l.name.isEmpty ? '' : String.fromCharCode(l.name.runes.first).toUpperCase(),
-                            style: tkText(size: 16, weight: 700, color: t.tintWarnText)),
+                        child: Text(
+                          l.name.isEmpty ? '' : String.fromCharCode(l.name.runes.first).toUpperCase(),
+                          style: tkText(size: 16, weight: 700, color: t.tintWarnText),
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -528,7 +558,14 @@ class _Asked extends StatelessWidget {
                               height: 25,
                               child: Row(
                                 children: [
-                                  Expanded(child: Text(l.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 15, weight: 600, color: t.text))),
+                                  Expanded(
+                                    child: Text(
+                                      l.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: tkText(size: 15, weight: 600, color: t.text),
+                                    ),
+                                  ),
                                   const SizedBox(width: 12),
                                   TkBadge(badge.label, tone: t.warn),
                                 ],
@@ -599,6 +636,24 @@ class _FindButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// `.unread-count`: how many, on the ok colour.
+class UnreadCount extends StatelessWidget {
+  const UnreadCount(this.count, {super.key});
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Container(
+      constraints: const BoxConstraints(minWidth: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 7),
+      decoration: BoxDecoration(color: t.ok, borderRadius: BorderRadius.circular(999)),
+      alignment: Alignment.center,
+      child: Text('$count', style: tkText(size: 12, weight: 600, color: t.panel)),
     );
   }
 }

@@ -125,6 +125,21 @@ final screens = <String, Screen>{
       await t.pumpAndSettle();
     },
   ),
+  'chat-bayo': (
+    build: () {
+      final f = Fixture('chat-bayo');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      final conv = ListLinkChatsResponse.fromJson(f.json('/v1/link-chats')).conversations.firstWhere((c) => c.name == 'Bayo Rice Mills');
+      return ConversationScreen(data: ConversationData(chats, conv, follow: false));
+    },
+    drive: (t) async {
+      for (var i = 0; i < 5; i++) {
+        await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 60)));
+        await t.pump();
+      }
+      await t.pumpAndSettle();
+    },
+  ),
   'sign-up': (
     build: () => SignUpScreen(auth: fakeAuth()),
     drive: (t) async {

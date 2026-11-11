@@ -148,3 +148,107 @@ String toneOf(String name) {
   }
   return tones[h % tones.length];
 }
+
+// --- money (web/src/lib/storefront.ts formatPrice, invoices.ts naira) ---
+
+/// "₦820,000", "₦1,250.50".
+String naira(int kobo) {
+  final neg = kobo < 0;
+  final abs = kobo.abs();
+  final whole = (abs ~/ 100).toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
+  final frac = abs % 100;
+  return '${neg ? '-' : ''}₦$whole${frac != 0 ? '.${frac.toString().padLeft(2, '0')}' : ''}';
+}
+
+// --- cards (web/src/lib/cardframe.ts, linkchat.ts) ---
+
+enum CardTone { lime, warn, danger, plain }
+
+typedef CardStatus = ({String word, CardTone tone, int? step});
+
+const orderSteps = ['Placed', 'Accepted', 'On the way', 'Delivered'];
+const deliverySteps = ['Offered', 'Accepted', 'Picked up', 'Arrived', 'Delivered'];
+
+List<String> stepsFor(LinkDocCard c) => isDelivery(c) ? deliverySteps : orderSteps;
+
+const Map<String, CardStatus> _delivery = {
+  'offered': (word: 'Offered', tone: CardTone.warn, step: 0),
+  'accepted': (word: 'Accepted', tone: CardTone.lime, step: 1),
+  'picked_up': (word: 'Picked up', tone: CardTone.lime, step: 2),
+  'arrived': (word: 'At the door', tone: CardTone.lime, step: 3),
+  'delivered': (word: 'Delivered', tone: CardTone.lime, step: 4),
+  'confirmed': (word: 'Confirmed', tone: CardTone.lime, step: 4),
+  'paid': (word: 'Fee paid', tone: CardTone.lime, step: 4),
+  'not_paid': (word: 'Fee not paid', tone: CardTone.warn, step: 4),
+  'cant': (word: 'Passed', tone: CardTone.danger, step: null),
+  'passed': (word: 'Ran out', tone: CardTone.plain, step: null),
+  'withdrawn': (word: 'Withdrawn', tone: CardTone.plain, step: null),
+  'released': (word: 'Taken back', tone: CardTone.warn, step: null),
+};
+
+const Map<String, CardStatus> _order = {
+  'ordered': (word: 'New', tone: CardTone.lime, step: 0),
+  'offered': (word: 'Offer', tone: CardTone.warn, step: 0),
+  'countered': (word: 'Counter', tone: CardTone.warn, step: 0),
+  'proposed': (word: 'Draft', tone: CardTone.plain, step: 0),
+  'confirmed': (word: 'Placed', tone: CardTone.plain, step: 0),
+  'auto_changed': (word: 'Changed', tone: CardTone.warn, step: 0),
+  'change': (word: 'Change asked', tone: CardTone.warn, step: 0),
+  'accept': (word: 'Accepted', tone: CardTone.lime, step: 1),
+  'auto_accepted': (word: 'Accepted', tone: CardTone.lime, step: 1),
+  'change_accepted': (word: 'Accepted', tone: CardTone.lime, step: 1),
+  'keep': (word: 'Kept', tone: CardTone.lime, step: 1),
+  'ready': (word: 'Ready', tone: CardTone.lime, step: 1),
+  'dispatched': (word: 'On the way', tone: CardTone.lime, step: 2),
+  'delivered': (word: 'Delivered', tone: CardTone.lime, step: 3),
+  'received': (word: 'Received', tone: CardTone.lime, step: 3),
+  'agree': (word: 'Count agreed', tone: CardTone.lime, step: 3),
+  'short': (word: 'Not all came', tone: CardTone.warn, step: 3),
+  'decline': (word: 'Declined', tone: CardTone.danger, step: null),
+  'cancel': (word: 'Cancelled', tone: CardTone.danger, step: null),
+  'cancel_agreed': (word: 'Cancelled', tone: CardTone.danger, step: null),
+  'cancelled_by_buyer': (word: 'Cancelled', tone: CardTone.danger, step: null),
+  'cancel_asked': (word: 'Cancel asked', tone: CardTone.warn, step: null),
+};
+
+const Map<String, CardStatus> _invoice = {
+  'bill': (word: 'To pay', tone: CardTone.lime, step: null),
+  'declared': (word: 'Paid, they say', tone: CardTone.plain, step: null),
+  'queried': (word: 'Queried', tone: CardTone.warn, step: null),
+  'resolved': (word: 'Settled', tone: CardTone.lime, step: null),
+  'reminder': (word: 'Reminder', tone: CardTone.warn, step: null),
+};
+
+/// cardframe.ts cardStatus: the pill and the progress.
+CardStatus cardStatus(LinkDocCard c, DateTime now) {
+  CardStatus plain() => (word: c.event.replaceAll('_', ' '), tone: CardTone.plain, step: null);
+  if (isDelivery(c)) return _delivery[c.event] ?? plain();
+  final order = c.doc == 'order' || c.doc == 'purchase';
+  final until = c.deal?.until;
+  if (order && until != null && const ['offered', 'countered', 'change'].contains(c.event) && !until.isAfter(now)) {
+    return (word: 'Lapsed', tone: CardTone.plain, step: null);
+  }
+  if (order && c.event == 'change' && c.wasKobo != null) return (word: 'Counter', tone: CardTone.warn, step: 0);
+  return (order ? _order : _invoice)[c.event] ?? plain();
+}
+
+/// cardframe.ts cardKicker: "Order · P-7QX4KD".
+String cardKicker(LinkDocCard c) {
+  final word = isDelivery(c) ? 'Delivery' : (c.doc == 'order' || c.doc == 'purchase' ? 'Order' : 'Invoice');
+  return '$word · ${c.reference}';
+}
+
+/// cardframe.ts isDiary: a change we made ourselves that needs nothing more.
+bool isDiary(LinkDocCard c, bool mine) => mine && !const ['ordered', 'offered', 'bill', 'proposed'].contains(c.event);
+
+/// linkchat.ts cardSub: the amount, and a word.
+String cardSub(LinkDocCard c) => [
+      if (c.amountKobo != null) naira(c.amountKobo!),
+      if (c.wasKobo != null && c.wasKobo! > (c.amountKobo ?? 0)) 'was ${naira(c.wasKobo!)}',
+      if ((c.note ?? '').isNotEmpty) '“${c.note}”',
+    ].join(' · ');
+
+/// Chrome breaks a line after a hyphen even before a digit ("P-" then
+/// "9XTV54"); Flutter's breaker does not (UAX 14's LB25). A zero-width
+/// space after each hyphen between word characters lets it break there too.
+String breakAfterHyphens(String s) => s.replaceAllMapped(RegExp(r'(?<=\w)-(?=\w)'), (_) => '-\u200B');
