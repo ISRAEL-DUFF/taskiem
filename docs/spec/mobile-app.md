@@ -16,7 +16,7 @@ business, because Taskiem's chat is how a business runs:
 - **`@Taskiem`** is the same conversation as Taskiem on WhatsApp. In it a
   person sets up the shop and its fronts, adds products, stock, services and
   hours, builds a workflow with AI and publishes it, connects Paystack or
-  Google, invites staff, sees their plan, sends invoices, records expenses
+  Google, invites staff, sends invoices, records expenses
   and cash, keeps tables, approves payments, switches business and language,
   and talks by voice note.
 - **The conversations with linked businesses and customers** carry the trade:
@@ -95,7 +95,7 @@ each new one the server learns works in the app the same day. Today they are
 | Money | `invoice Ada 25,000 for …`, `spent 12k on diesel`, `cash in …`, `cash out …`, debts kept as invoices (*Ada owes 5,000*, `who owes me?`, `send Ada her balance`), payments to match |
 | Records | `tables`, `add to <table>`, `find <table> …`, questions answered from the rows |
 | Automation | `build …` or the goal in words ("every Friday text my customers who owe me"): the AI's draft as plain steps, the details asked one by one, saved on **yes**, tables made, settings asked, **Publish it now?**; `run <workflow>` with its inputs; `publish <workflow>` |
-| Set-up | `connect <service>`; `invite …` (staff, with their role); `plan`, `pay`; `email`; `switch <business>`; `language …`; the chat PIN |
+| Set-up | `connect <service>`; `invite …` (staff, with their role); `email`; `switch <business>`; `language …`; the chat PIN |
 | Voice | A voice note, read as if typed |
 
 ### 3.3 The tools, and the screens they lead to
@@ -142,7 +142,7 @@ draw, each for a reason that is not the app's to remove:
 | --- | --- |
 | `connect <service>` for a service that signs in (Google and others) | OAuth runs in a browser by the provider's rules: the chat's one-time connect link (`/c/<token>`, [decision 0058](../decisions/0058-chat-as-a-way-in.md)) opens in the phone's browser tab and comes back to the app. A key-based service (Paystack, Termii…) gets a secure form in the app, as Telegram's Mini App is, never a chat message |
 | A saved workflow's **open it** | The workflow canvas, for the few who want to change a draft's steps by hand; everything else about a workflow is done in the chat |
-| (none for paying) | A plan is paid from the business's Taskiem wallet (§5.7): `plan` and **Pay** in the chat charge it there after a **yes**, so nothing about a plan opens a browser |
+| (nothing about billing) | Billing is off, on the web too (settled by the founder, 11 November 2026): the app has no plan, payment or checkout, and the chat's `plan` and `pay` are not offered while billing is off |
 
 **Never in the app:** a copy of the business kept on the phone (§5.5).
 
@@ -351,19 +351,6 @@ serves `/.well-known/assetlinks.json` and
 let the platform passkey APIs use the web's passkeys in the app; the server's
 WebAuthn origins gain the Android app's signing-key origin.
 
-### 5.7 S7: a plan paid from the business's Taskiem wallet
-
-Settled by the founder: paying for a plan is internal to Taskiem, charged to
-the business's funded Taskiem wallet ([decision 0052](../decisions/0052-taskiem-as-a-collection-rail.md)),
-not by a card checkout. Not built: billing today charges a saved card through
-Paystack ([billing](../billing.md)). It moves money, so it gets a plan and a
-decision of its own before M8, covering: the renewal charged to the wallet,
-the **yes** (and step-up where the policy asks) for a first charge or a change
-of plan, what happens when the wallet is short (the chat says how to fund it,
-by a transfer to the business's account number, and dunning as today), the
-receipt and the audit, and the card kept for the web where a business wants
-it. In the app it is the chat's `plan` and **Pay**, with no checkout.
-
 ## 6. The chat in the app
 
 - **Live**: while the app is open it holds `GET /v1/chat/stream` open, with
@@ -440,7 +427,7 @@ for one engineer who knows Flutter.
 | M5 | **Linked businesses** (§3.3): Explore, cards, linking, your profile, the tools' picker and sheets | M | Two businesses find each other and link from the app alone |
 | M6 | **Selling** (§3.3): products and stock, Sell, Handover, services and bookings, price lists and deals | L | A shop keeps its products, stock and prices from the app alone for a week |
 | M7 | **Orders and deliveries** (§3.3): orders from linked businesses and from customers' messages, deliveries and availability, their cards | L | An order goes from a buyer's message to delivered and received with both sides in the app |
-| M8 | **Money** (§3.3, S7): invoices (new, send, payments, PDF), bills and Pay from Taskiem, purchases and suppliers, money and matching, approvals with step-up, tables | L | An order is invoiced, sent, paid and matched, and a bill paid with a passkey, from the app alone |
+| M8 | **Money** (§3.3): invoices (new, send, payments, PDF), bills and Pay from Taskiem, purchases and suppliers, money and matching, approvals with step-up, tables | L | An order is invoiced, sent, paid and matched, and a bill paid with a passkey, from the app alone |
 | M9 | **Release, Android and iPhone**: closed testing with the design partners (Play's testing track and TestFlight), then the Play Store and the App Store | M | Ten businesses, on both kinds of phone, run their day from the app for two weeks without opening the web, with no lost message and no crash a person reports |
 | — | **What the web chat gains** (§3.4): tasks, receipts, quotes, restocking, paying people and payroll, riders | — | Each in the app within one milestone of the web |
 
@@ -472,7 +459,6 @@ other takes M7 and M8, since they divide by screen.
 | The app drifts from the web chat's look, and from the films | The parity test (§4.1) on every pull request touching either; the theme generated from the web's own CSS |
 | Two engines never draw text the same | A threshold set on the first screens and kept; Inter bundled in both; differences that are the phone's own are listed (§4.1) |
 | Store review rejects the app (payments wording, the account deletion rule, reviewers who cannot sign in) | A test business and account for reviewers; account deletion from the app, as both stores require |
-| A reviewer reads a plan paid from the wallet in the app as a digital purchase that should go through the store | The plan is charged to a wallet the business funds by bank transfer, for a business tool; counsel reads Apple's and Google's rules on this before M9, and the words in the app say what it is plainly |
 | Phones without Google's services | Told plainly; WhatsApp and Telegram still reach them |
 | The name changes after launch | A1 before M9; the app ID chosen to survive a new display name |
 | A lost or shared phone | The app lock, device sessions listed and ended from the web, nothing of the business kept on the phone |
@@ -492,8 +478,9 @@ All settled with the founder on 11 November 2026.
 4. **Signing up and signing in in the app**: §3.6.
 5. **The look is the web chat's**, in every screen, motion, sound and haptic:
    §4.1, checked by the parity test.
-6. **A plan is paid from the business's Taskiem wallet**, internal to
-   Taskiem, never a store purchase or a checkout: S7, §5.7.
+6. **No billing in the app.** Billing is off, on the web too; when it is
+   turned on, how a plan is paid (the founder's direction: from the
+   business's Taskiem wallet, internal to Taskiem) gets a plan of its own.
 7. **Nothing of the business kept on the phone** in the first release (§5.5);
    a cache is a decision of its own, later.
 8. **Device sessions**: 30 days unused, 180 at most (§5.2).
