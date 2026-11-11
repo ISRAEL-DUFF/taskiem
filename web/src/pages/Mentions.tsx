@@ -38,10 +38,17 @@ export function useMentions(
   text: string,
   setText: (v: string) => void,
   box: RefObject<HTMLTextAreaElement | null>,
-  sources: { "@": Suggestion[]; "#": Suggestion[]; services?: Suggestion[] },
+  sources: {
+    "@": Suggestion[];
+    "#": Suggestion[];
+    services?: Suggestion[];
+    /** The categories "@" offers, when not the items' own. */
+    categories?: { name: string; count: number }[];
+  },
   /** Chat tools (chat-tools.md §3): "@" tags things and businesses, in
-   * groups, with the Taskiem row when it may be called. */
-  grouped?: { taskiem: boolean },
+   * groups, with the Taskiem row when it may be called; a category picked
+   * opens its items (onCategory). */
+  grouped?: { taskiem: boolean; onCategory?: (name: string) => void },
 ) {
   const [q, setQ] = useState<MentionQuery | null>(null);
   const [picked, setPicked] = useState<Suggestion[]>([]);
@@ -83,6 +90,7 @@ export function useMentions(
             services: sources.services,
             businesses: sources["@"],
             unlinked,
+            categories: sources.categories,
           },
           grouped.taskiem,
         )
@@ -92,9 +100,10 @@ export function useMentions(
   const shown = groups.flatMap((g) => g.items);
   // What Enter takes: the first match. The Taskiem row, always offered,
   // only when "Taskiem" is what is being typed ("@4500" stays as typed).
+  // A category is not a tag: Enter tags an item, a tap opens the category.
   const enterPick = shown.find(
     (s) =>
-      s.kind !== "taskiem" ||
+      (s.kind !== "taskiem" && s.kind !== "category") ||
       (q && q.query.length > 0 && "taskiem".startsWith(q.query.toLowerCase())),
   );
   const update = (value: string, caret: number | null) =>
@@ -109,6 +118,14 @@ export function useMentions(
       return;
     }
     const caret = el?.selectionStart ?? text.length;
+    if (s.kind === "category") {
+      // Its items, filtered: the words typed for it go.
+      const end = Math.max(caret, q.start + 1 + q.query.length);
+      setText(text.slice(0, q.start) + text.slice(end));
+      setQ(null);
+      grouped?.onCategory?.(s.name);
+      return;
+    }
     const next = insertMention(
       text,
       q,
@@ -279,6 +296,12 @@ function PickIcon({ s }: { s: Suggestion }) {
         <TaskiemMark />
       </span>
     );
+  if (s.kind === "category")
+    return (
+      <span className="pick-icon soft" aria-hidden="true">
+        <Icon name="grid" />
+      </span>
+    );
   return (
     <span
       className={`pick-icon ${s.kind === "service" ? "blue" : "soft"}`}
@@ -352,6 +375,9 @@ function Picker({
                   {s.sub && <span className="pick-sub">{s.sub}</span>}
                 </span>
                 {s.explore && <span className="sr-only">: see their card</span>}
+                {s.kind === "category" && (
+                  <span className="sr-only">: show them</span>
+                )}
                 {s.badge && <span className="pick-badge">{s.badge}</span>}
                 {first && (
                   <span className="pick-enter" aria-hidden="true">

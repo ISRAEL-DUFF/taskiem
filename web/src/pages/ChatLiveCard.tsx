@@ -5,6 +5,7 @@ import type { Mention } from "../lib/mentions";
 import type { PriceItem } from "../lib/pricelists";
 import { quantity, type StockItem } from "../lib/stock";
 import { formatPrice } from "../lib/storefront";
+import { hasSizes, label, sizesLine } from "../lib/variants";
 
 // A live card (docs/spec/chat-tools.md §3, phase 2): a product or a service
 // tagged in a message, shown as a card with what is true now: the price on
@@ -60,7 +61,12 @@ export function LiveCard({ m, live }: { m: Mention; live: Live }) {
   const changed =
     now && m.price_kobo !== undefined && now.price_kobo !== m.price_kobo;
   const unit = now?.unit ?? m.unit;
-  const mine = live.stock.find((it) => same(it.name, m.name));
+  const mine = live.stock.find((it) => !it.variant_of && same(it.name, m.name));
+  // A product sold in sizes and colours: those on sale, and our own
+  // stock of it their stock together.
+  const onSale = (now?.sizes ?? []).filter((z) => z.available);
+  const ours =
+    mine && hasSizes(mine) ? sizesLine(live.stock, mine.id).stock : mine?.stock;
   return (
     <article className="tk-live" aria-label={`Product: ${m.name}`}>
       <span className="tk-live-top">
@@ -84,16 +90,22 @@ export function LiveCard({ m, live }: { m: Mention; live: Live }) {
               : ""}
             {now && !now.available ? " · not available now" : ""}
           </span>
+          {onSale.length > 0 && (
+            <span className="tk-live-sub">
+              Sizes on sale:{" "}
+              {onSale.map((z) => label(z.variant, now?.choices)).join("; ")}
+            </span>
+          )}
         </span>
       </span>
-      {(mine?.stock != null || live.whose === "theirs") && (
+      {(ours != null || live.whose === "theirs") && (
         <span className="tk-live-foot">
-          {mine && mine.stock !== null ? (
-            <Pill tone={mine.low || mine.stock <= 0 ? "warn" : "plain"}>
+          {mine && ours != null ? (
+            <Pill tone={mine.low || ours <= 0 ? "warn" : "plain"}>
               Your stock:{" "}
-              {mine.stock <= 0
+              {ours <= 0
                 ? "none"
-                : `${quantity(mine.stock, mine.unit)}${mine.low ? " left" : ""}`}
+                : `${quantity(ours, mine.unit)}${mine.low ? " left" : ""}`}
             </Pill>
           ) : (
             <span />

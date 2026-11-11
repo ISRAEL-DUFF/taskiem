@@ -92,8 +92,41 @@ func pageTexts(card storefront.Card, items []storefront.Item) []moderation.Text 
 	return out
 }
 
+// itemTexts are an item's words to check: its name, description and
+// section, and, on a product sold in sizes and colours, its choices'
+// names and values, under the product. A size's name on the page is the
+// product's and its values ("Air Max 90 – 42, Black"), so these are every
+// word it shows.
 func itemTexts(it storefront.Item) []moderation.Text {
-	return []moderation.Text{{Field: "item " + it.ID, Text: it.Name}, {Field: "item " + it.ID, Text: it.Description}, {Field: "item " + it.ID, Text: it.Category}}
+	field := "item " + it.ID
+	out := []moderation.Text{{Field: field, Text: it.Name}, {Field: field, Text: it.Description}, {Field: field, Text: it.Category}}
+	for _, c := range it.Choices {
+		out = append(out, moderation.Text{Field: field, Text: c.Name})
+		for _, v := range c.Values {
+			out = append(out, moderation.Text{Field: field, Text: v})
+		}
+	}
+	return out
+}
+
+// itemPrices are the price checks of an item: its own price (a service
+// may have none), and each of its sizes' own prices, under the product.
+func itemPrices(m *moderation.Checker, it storefront.Item) []moderation.Finding {
+	var out []moderation.Finding
+	if it.DurationMinutes == 0 || it.PriceKobo != nil {
+		f := m.Price("item "+it.ID, it.PriceKobo)
+		f.Text = it.Name + " " + f.Text
+		out = append(out, f)
+	}
+	for _, z := range it.Sizes {
+		if z.PriceKobo == nil {
+			continue
+		}
+		f := m.Price("item "+it.ID, z.PriceKobo)
+		f.Text = z.Name(it) + " " + f.Text
+		out = append(out, f)
+	}
+	return out
 }
 
 // checkPage runs the checks over a page's words and its items' prices.
@@ -104,9 +137,7 @@ func (s *Server) checkPage(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, car
 		return res, err
 	}
 	for _, it := range items {
-		if it.DurationMinutes == 0 || it.PriceKobo != nil {
-			f := m.Price("item "+it.ID, it.PriceKobo)
-			f.Text = it.Name + " " + f.Text
+		for _, f := range itemPrices(m, it) {
 			res.Add(f)
 		}
 	}
@@ -382,9 +413,7 @@ func (s *Server) moderateItems(ctx context.Context, tenant uuid.UUID, items []st
 		for _, f := range byItem["item "+it.ID] {
 			res.Add(f)
 		}
-		if it.DurationMinutes == 0 || it.PriceKobo != nil {
-			f := m.Price("item "+it.ID, it.PriceKobo)
-			f.Text = it.Name + " " + f.Text
+		for _, f := range itemPrices(m, it) {
 			res.Add(f)
 		}
 		switch res.Verdict {

@@ -11,4 +11,5 @@ export const FILM = [
   { title: "Light by day, *dark by night.*", acts: ["act6"] },
   { title: "Find businesses, *and link.*", acts: ["act7"] },
   { title: "Haggle *in the chat.*", acts: ["act8a", "act8b", "act8c", "act8d", "act8e", "act8f"] },
+  { title: "Sizes and colours, *one product.*", acts: ["act9a", "act9b"] },
 ];

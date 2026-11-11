@@ -150,9 +150,19 @@ export function AlertCards({
           link={sheet.a.reorder.link}
           business={sheet.a.reorder.supplier}
           from={sheet.from}
-          start={{
-            qty: { [sheet.a.reorder.seller_item_id]: sheet.a.reorder.quantity },
-          }}
+          start={
+            sheet.a.reorder.sizes
+              ? // The low sizes, in the product's grid.
+                {
+                  qty: sheet.a.reorder.sizes,
+                  itemId: sheet.a.reorder.seller_item_id,
+                }
+              : {
+                  qty: {
+                    [sheet.a.reorder.seller_item_id]: sheet.a.reorder.quantity,
+                  },
+                }
+          }
           onClose={close}
           onPlaced={() => done(sheet.a)}
         />

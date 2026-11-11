@@ -179,3 +179,56 @@ func TestAcceptRecordsMovements(t *testing.T) {
 		t.Fatalf("short: stock %d, note %q", st.n["1"], o.Note)
 	}
 }
+
+// A size's new count goes into its product on the catalogue's copy only:
+// a front's list from another table that carries a size of the same row
+// id keeps its own. The product's count is the sizes' together, unknown
+// when one keeps no count.
+func TestCopySizeCountCatalogueOnly(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	n := func(v int64) *int64 { return &v }
+	product := func(m *int64) storefront.Item {
+		return storefront.Item{ID: "1", Name: "Tee", Available: true, Stock: n(5), Variants: 2,
+			Sizes: []storefront.Size{{ID: "2", Variant: map[string]string{"Size": "S"}, Stock: n(3)}, {ID: "3", Variant: map[string]string{"Size": "M"}, Stock: m}}}
+	}
+	w.in(func(tx pgx.Tx) error {
+		if err := storefront.SyncCatalogue(ctx, tx, w.env.Tenant, []storefront.Item{product(n(2))}); err != nil {
+			return err
+		}
+		if err := storefront.SyncList(ctx, tx, w.env.Tenant, "other", []storefront.Item{product(n(2))}); err != nil {
+			return err
+		}
+		return storefront.CopySizeCount(ctx, tx, w.env.Tenant, "2", 1)
+	})
+	if got := w.copiedStock("1"); got != 3 {
+		t.Errorf("the catalogue's product: %d, want 3", got)
+	}
+	w.in(func(tx pgx.Tx) error {
+		items, err := storefront.ListItems(ctx, tx, w.env.Tenant, "other")
+		if err != nil {
+			return err
+		}
+		if len(items) != 1 || *items[0].Stock != 5 || *items[0].Sizes[0].Stock != 3 {
+			t.Errorf("the other table's list was changed: %+v", items)
+		}
+		return nil
+	})
+	// One size keeps no count: the product's count is unknown.
+	w.in(func(tx pgx.Tx) error {
+		if err := storefront.SyncCatalogue(ctx, tx, w.env.Tenant, []storefront.Item{product(nil)}); err != nil {
+			return err
+		}
+		if err := storefront.CopySizeCount(ctx, tx, w.env.Tenant, "2", 0); err != nil {
+			return err
+		}
+		items, err := storefront.Catalogue(ctx, tx, w.env.Tenant)
+		if err != nil {
+			return err
+		}
+		if len(items) != 1 || items[0].Stock != nil || items[0].SoldOut() {
+			t.Errorf("a product with an uncounted size: %+v", items)
+		}
+		return nil
+	})
+}

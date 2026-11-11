@@ -16,6 +16,9 @@ applyTheme(savedTheme());
 applyBrand(savedBrand());
 // The service worker: chat notifications, and "You're offline" (lib/worker.ts).
 registerWorker();
+// iOS Safari shows a tapped button's :active (the pressed look in
+// styles.css) only when the page listens for touches.
+document.addEventListener("touchstart", () => undefined, { passive: true });
 
 // The operator console (/ops) is its own app with its own session; it
 // never mounts the tenant console's providers (docs/operator-console.md).

@@ -424,6 +424,14 @@
       "text": "Ba za ka ƙara samun labarai daga {business} a nan ba. Aika START don sake samun su.",
       "reviewed": false
     },
+    "customer.resumed": {
+      "text": "Za ka iya sake rubuta wa {business} a nan, kuma za su iya ba ka amsa.",
+      "reviewed": false
+    },
+    "customer.stopped": {
+      "text": "Ba za ka ƙara samun saƙonni daga {business} a nan ba, kuma an goge abin da ka rubuta musu. Aika START don sake rubuta musu.",
+      "reviewed": false
+    },
     "reach.stopped_none": {
       "text": "Ba ka samun labarai daga kowa a nan.",
       "reviewed": false
@@ -1366,6 +1374,54 @@
     },
     "wa.build.table_lacks": {
       "text": "Teburinka {table} bai da ginshiƙin {columns} tukuna, wanda yake amfani da shi. Ƙara shi a manhajar{link}, ko waɗannan matakan za su gaza.",
+      "reviewed": false
+    },
+    "wa.stock.category": {
+      "text": "*{category}* ({count}):\n{list}",
+      "reviewed": false
+    },
+    "wa.stock.category_more": {
+      "text": "Aika *more* don sauran.",
+      "reviewed": false
+    },
+    "wa.stock.which_size": {
+      "text": "{name} yana da girma da launi {count}. Faɗi wanne, da girmansa da launinsa bayan sunan, kamar *{example}*.",
+      "reviewed": false
+    },
+    "wa.order.which_size": {
+      "text": "{name} daga {business} yana zuwa da girma da launi: {sizes}. Faɗi wanne, kamar *{example}*, ko ka zaɓi da yawa a lokaci ɗaya a hirarka da su a Taskiem.",
+      "reviewed": false
+    },
+    "wa.size.which": {
+      "text": "Wane {choice} na {name}? Amsa da lambarsa, ko ka faɗe shi:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.again": {
+      "text": "Amsa da lambar {choice}, ko ka faɗe shi:\n{list}",
+      "reviewed": false
+    },
+    "wa.size.none": {
+      "text": "{name} ba shi da wanda ake sayarwa a {said}. Yana zuwa a {sizes}.",
+      "reviewed": false
+    },
+    "wa.size.say": {
+      "text": "Wanne {choice} na {name}? Faɗi shi: {list}",
+      "reviewed": false
+    },
+    "wa.size.say_again": {
+      "text": "Faɗi {choice} ɗin: {list}",
+      "reviewed": false
+    },
+    "wa.order.no_size": {
+      "text": "{name} daga {business} ba ya zuwa a {said}. Yana zuwa a {sizes}.",
+      "reviewed": false
+    },
+    "wa.stock.sizes": {
+      "text": "{name}: girma da launi {count}, {total} gaba ɗaya.\n{lines}",
+      "reviewed": false
+    },
+    "wa.stock.low_tag": {
+      "text": "(ya yi kaɗan)",
       "reviewed": false
     },
     "wa.tablemake.denied": {

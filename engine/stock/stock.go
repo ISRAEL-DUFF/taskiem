@@ -36,6 +36,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/moneylog"
+	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 // Reasons a movement is made for.
@@ -46,6 +47,10 @@ const (
 	Adjustment = "adjustment"
 	Count      = "count"
 	Outside    = "outside"
+	// Moved is stock that went from one item to another of the business's
+	// own (a product's count shared out among its sizes and colours): out
+	// of one, into the other, neither received, sold nor lost.
+	Moved = "moved"
 )
 
 var (
@@ -132,9 +137,9 @@ const MaxDelta = 1_000_000
 
 func (m Move) check() error {
 	switch m.Reason {
-	case Order, Sale, Received, Adjustment, Count:
+	case Order, Sale, Received, Adjustment, Count, Moved:
 	default:
-		return fmt.Errorf("%w: a movement is for an order, a sale, goods received, an adjustment or a count", ErrInvalid)
+		return fmt.Errorf("%w: a movement is for an order, a sale, goods received, an adjustment, a count or stock moved", ErrInvalid)
 	}
 	if (m.Delta == nil) == (m.SetTo == nil) {
 		return fmt.Errorf("%w: a movement is a change or a count", ErrInvalid)
@@ -352,7 +357,10 @@ func copyCount(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, item string, n 
 	// list from another table may share a row's id.
 	_, err := tx.Exec(ctx, `UPDATE storefront_catalogue c SET item = jsonb_set(item, '{stock}', to_jsonb(GREATEST($3::bigint, 0)))
 		WHERE c.tenant_id = $1 AND c.row_id = $2 AND c.item ? 'stock' AND c.table_name = COALESCE((SELECT d.name FROM storefronts s JOIN data_tables d ON d.id = s.catalogue_table WHERE s.id = c.storefront_id), '')`, tenant, item, n)
-	return err
+	if err != nil {
+		return err
+	}
+	return storefront.CopySizeCount(ctx, tx, tenant, item, n)
 }
 
 func (s *Stock) failed(ctx context.Context, tenant, id uuid.UUID, cause error) {

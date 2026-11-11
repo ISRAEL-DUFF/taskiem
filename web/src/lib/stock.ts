@@ -4,7 +4,7 @@
 
 import { whenLabel } from "./bookings";
 import { feeInput, feeKobo } from "./orders";
-import { formatPrice } from "./storefront";
+import { formatPrice, type Image } from "./storefront";
 
 export interface StockItem {
   id: string;
@@ -19,6 +19,22 @@ export interface StockItem {
   reorder_level?: number;
   target_level?: number;
   supplier?: string;
+  /** The kind of thing it is ("Sneakers"), when the catalogue has a
+   * category column. */
+  category?: string;
+  /** Its words on the storefront, when the catalogue maps them. */
+  description?: string;
+  /** Sizes and colours: the product this is one of, and its values. */
+  variant_of?: string;
+  variant?: Record<string, string>;
+  /** A product's choices, when it has sizes and colours (it then keeps no
+   * stock of its own: theirs is its). */
+  choices?: { name: string; values: string[] }[];
+  /** A product's sizes and colours with a price of their own (by their
+   * values, lower case: "colour=black|size=42"); the rest follow its. */
+  own_price?: string[];
+  /** A size's own photo (its colour's), read from the table. */
+  photo?: Image;
   low?: boolean;
   /** How many to order, when low. */
   suggest?: number;
@@ -32,7 +48,8 @@ export type MovementReason =
   | "received"
   | "adjustment"
   | "count"
-  | "outside";
+  | "outside"
+  | "moved";
 
 export interface Movement {
   id: string;
@@ -114,6 +131,7 @@ export const REASON: Record<MovementReason, string> = {
   adjustment: "Adjusted",
   count: "Counted",
   outside: "Changed in the table",
+  moved: "Moved",
 };
 
 /** A movement's title: "Indomie: received 50". */

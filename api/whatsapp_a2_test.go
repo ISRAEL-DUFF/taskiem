@@ -572,7 +572,12 @@ func TestWhatsAppPublicMenu(t *testing.T) {
 	say := func(pnid, from, text string) []whatsapptest.Sent {
 		return w.sendTo(t, "/channels/whatsapp", pnid, waSecret, from, whatsapptest.Text(text))
 	}
-	got := say(pnA, stranger, "hello")
+	// "hello" is the customer's conversation with the business
+	// (customer_chat.go); the menu answers its word.
+	if got := say(pnA, stranger, "hello"); len(got) != 0 {
+		t.Fatalf("hello answered: %+v", got)
+	}
+	got := say(pnA, stranger, "menu")
 	if len(got) != 1 || got[0].From != pnA || !strings.Contains(got[0].Text, "1. Pay a supplier") || strings.Contains(got[0].Text, "loan") {
 		t.Fatalf("menu: %+v", got)
 	}
@@ -602,21 +607,26 @@ func TestWhatsAppPublicMenu(t *testing.T) {
 		t.Error("the public start is not audited with the number masked")
 	}
 	// Only the public workflows: "2" is not on the menu.
+	say(pnA, stranger, "menu")
 	if got := say(pnA, stranger, "2"); len(got) != 1 || !strings.Contains(got[0].Text, "Reply with a number") {
 		t.Errorf("not on the menu: %+v", got)
 	}
 	_ = hidden
 
-	// Beta offers no menu: the stranger is told how to link.
-	if got := say(pnB, stranger, "hello"); len(got) != 1 || !strings.Contains(got[0].Text, "not linked") || got[0].From != pnB {
+	// Beta offers no menu: what the stranger writes is their
+	// conversation with Beta, unanswered until Beta's people answer.
+	if got := say(pnB, stranger, "hello"); len(got) != 0 {
 		t.Errorf("beta: %+v", got)
 	}
-	// Alpha's form token is not Beta's.
-	got = say(pnA, stranger, "1")
+	// Alpha's form token is not Beta's. (Another customer: the menu
+	// answers one number a few times, then one message in ten seconds.)
+	const other = "+2348099990004"
+	say(pnA, other, "menu")
+	got = say(pnA, other, "1")
 	if len(got) != 1 || got[0].Flow == "" {
 		t.Fatalf("second form: %+v", got)
 	}
-	if got := w.sendTo(t, "/channels/whatsapp", pnB, waSecret, stranger, whatsapptest.FlowCompleted(got[0].FlowToken)); len(got) != 0 && !strings.Contains(got[0].Text, "not linked") {
+	if got := w.sendTo(t, "/channels/whatsapp", pnB, waSecret, other, whatsapptest.FlowCompleted(got[0].FlowToken)); len(got) != 0 && !strings.Contains(got[0].Text, "not linked") {
 		t.Errorf("alpha's form completed on beta's number: %+v", got)
 	}
 	// The shared number offers no menu.
