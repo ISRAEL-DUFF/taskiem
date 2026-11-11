@@ -23,6 +23,7 @@ timings.
 | 12 | Approvals: the Needs your OK card (who asks, what, how much, to which account), Approve it? with the first-payment warning, a recorded comment, the line it leaves | `12-approvals.mjs` (a fresh world: it approves the seed's request from Tunde to pay Bayo Rice Mills; needs none of 1 to 11) |
 | 13 | Your own WhatsApp number: Settings, WhatsApp number, the guide, the ids and keys from Meta, Connect, the addresses and templates; a customer writes to the number and Ada replies from it | `13-own-whatsapp-number.mjs` (a fresh world: Ada's number not yet connected; needs none of 1 to 12) |
 | 14 | Deals: a lower price for 50 or more and the lowest price; Rivers Foods orders 50 and makes an offer; Tunde counters; Rivers counters under the lowest price; Tunde accepts, it waits for Ada's OK; she agrees in her Taskiem chat | `14-deals.mjs` (a fresh world; needs none of 1 to 13) |
+| 15 | Explore and connecting: Find a business, search by what they sell, a card with photos, Connect and Requested; the other side accepts; a business that asked you: Accept, Decline or Block | `15-explore-and-connect.mjs` (a fresh world: Kola's Bakery has asked Ada, Mallam Musa Suya Spot is not linked; needs none of 1 to 14) |
 
 ## Making one
 
