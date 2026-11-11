@@ -40,12 +40,11 @@ async function approve() {
   await card.scrollIntoViewIfNeeded();
   await act(page, "howto12-approve", "Ada · Ada's Kitchen, the owner", async () => {
     await say("Tunde asked to pay Bayo Rice Mills. The Taskiem chat shows Ada a card: Needs your OK.", 3800);
-    await say("Who asks, for what, and how much, with Decline and Approve.", 3200);
+    await say("Who asks, for what, how much and to which account, with Decline and Approve.", 3200);
     await card.getByRole("button", { name: /^Approve/ }).click();
     const sheet = page.getByTestId("approve-sheet");
     await sheet.waitFor();
-    await sleep(1600);
-    await say("Approve asks once more, with the amount, who is paid and the account.", 3600);
+    await say("Approve asks once more. It is the first payment to this account, so Taskiem says to check the number and name first.", 5200);
     const note = sheet.getByLabel("A comment (optional, recorded)");
     await note.scrollIntoViewIfNeeded();
     await say("A comment if she wants one. Her decision and what she was shown are recorded.", 400);

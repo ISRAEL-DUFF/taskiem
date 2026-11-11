@@ -20,6 +20,7 @@ timings.
 | 9 | Selling at the counter and the shift handover: Sell in the chat's tools (pick, how it was paid, record), Handover (the shift's sales, cash counted, short or over, a note) | `09-selling-and-handover.mjs` (a fresh world; needs none of 1 to 8) |
 | 10 | Products and stock: Products in the chat's tools, Add product (name, category, price, sold by, in stock), Stock with low first, the Low stock chip, goods came in with a note | `10-products-and-stock.mjs` (a fresh world; needs none of 1 to 9) |
 | 11 | Invoices and matching payments: Invoices in the chat's tools, New invoice (sent by SMS with a link to see it and pay, or kept as a draft), Money's To match, Match to an invoice | `11-invoices-and-payments.mjs` (a fresh world: it matches the seeded ₦37,500 transfer from OKONKWO C; needs none of 1 to 10) |
+| 12 | Approvals: the Needs your OK card (who asks, what, how much, to which account), Approve it? with the first-payment warning, a recorded comment, the line it leaves | `12-approvals.mjs` (a fresh world: it approves the seed's request from Tunde to pay Bayo Rice Mills; needs none of 1 to 11) |
 
 ## Making one
 
