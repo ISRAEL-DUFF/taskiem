@@ -1905,7 +1905,7 @@ class TaskiemSayRequest {
 }
 
 class GetChatBriefingResponse {
-  const GetChatBriefingResponse({this.bookings, required this.day, this.deliveries, required this.key, this.low, required this.now, this.owedKobo, required this.part, required this.putOff, required this.ready, this.sales});
+  const GetChatBriefingResponse({this.bookings, required this.day, this.deliveries, required this.key, this.low, required this.now, this.owedKobo, required this.part, required this.putOff, required this.ready, this.sales, this.staff, this.tasks});
 
   final int? bookings;
   final String day;
@@ -1920,6 +1920,12 @@ class GetChatBriefingResponse {
   final bool putOff;
   final bool ready;
   final GetChatBriefingResponseSales? sales;
+  /// Who is clocked in and who is late, when anyone is either (for those who
+  /// run the people).
+  final GetChatBriefingResponseStaff? staff;
+  /// Open tasks due today, and late, when there are any (for those who run the
+  /// people).
+  final GetChatBriefingResponseTasks? tasks;
 
   factory GetChatBriefingResponse.fromJson(Map<String, dynamic> j) => GetChatBriefingResponse(
         bookings: j['bookings'] == null ? null : (j['bookings'] as num).toInt(),
@@ -1933,6 +1939,8 @@ class GetChatBriefingResponse {
         putOff: j['put_off'] as bool,
         ready: j['ready'] as bool,
         sales: j['sales'] == null ? null : GetChatBriefingResponseSales.fromJson(j['sales'] as Map<String, dynamic>),
+        staff: j['staff'] == null ? null : GetChatBriefingResponseStaff.fromJson(j['staff'] as Map<String, dynamic>),
+        tasks: j['tasks'] == null ? null : GetChatBriefingResponseTasks.fromJson(j['tasks'] as Map<String, dynamic>),
       );
 
   Map<String, dynamic> toJson() => {
@@ -1947,6 +1955,8 @@ class GetChatBriefingResponse {
         'put_off': putOff,
         'ready': ready,
         'sales': ?sales?.toJson(),
+        'staff': ?staff?.toJson(),
+        'tasks': ?tasks?.toJson(),
       };
 }
 
@@ -1990,6 +2000,98 @@ class DaySales {
         'day': day,
         'kobo': kobo,
         'label': label,
+      };
+}
+
+/// Who is clocked in and who is late, when anyone is either (for those who run
+/// the people).
+class GetChatBriefingResponseStaff {
+  const GetChatBriefingResponseStaff({required this.in_, required this.late});
+
+  final List<StaffShift> in_;
+  final List<StaffLate> late;
+
+  factory GetChatBriefingResponseStaff.fromJson(Map<String, dynamic> j) => GetChatBriefingResponseStaff(
+        in_: (j['in'] as List).map((e) => StaffShift.fromJson(e as Map<String, dynamic>)).toList(),
+        late: (j['late'] as List).map((e) => StaffLate.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'in': in_.map((e) => e.toJson()).toList(),
+        'late': late.map((e) => e.toJson()).toList(),
+      };
+}
+
+class StaffShift {
+  const StaffShift({required this.id, required this.inAt, this.inWhere, this.name, this.outAt, this.outHow, required this.userId});
+
+  final String id;
+  final DateTime inAt;
+  /// A maps link of where they were when they clocked in, when they shared it
+  final String? inWhere;
+  final String? name;
+  final DateTime? outAt;
+  final String? outHow;
+  final String userId;
+
+  factory StaffShift.fromJson(Map<String, dynamic> j) => StaffShift(
+        id: j['id'] as String,
+        inAt: DateTime.parse(j['in_at'] as String),
+        inWhere: j['in_where'] == null ? null : j['in_where'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+        outAt: j['out_at'] == null ? null : DateTime.parse(j['out_at'] as String),
+        outHow: j['out_how'] == null ? null : j['out_how'] as String,
+        userId: j['user_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'in_at': inAt.toUtc().toIso8601String(),
+        'in_where': ?inWhere,
+        'name': ?name,
+        'out_at': ?outAt?.toUtc().toIso8601String(),
+        'out_how': ?outHow,
+        'user_id': userId,
+      };
+}
+
+class StaffLate {
+  const StaffLate({required this.due, required this.name, required this.userId});
+
+  /// When their shift should have started, "08:00"
+  final String due;
+  final String name;
+  final String userId;
+
+  factory StaffLate.fromJson(Map<String, dynamic> j) => StaffLate(
+        due: j['due'] as String,
+        name: j['name'] as String,
+        userId: j['user_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'due': due,
+        'name': name,
+        'user_id': userId,
+      };
+}
+
+/// Open tasks due today, and late, when there are any (for those who run the
+/// people).
+class GetChatBriefingResponseTasks {
+  const GetChatBriefingResponseTasks({required this.late, required this.today});
+
+  final int late;
+  final int today;
+
+  factory GetChatBriefingResponseTasks.fromJson(Map<String, dynamic> j) => GetChatBriefingResponseTasks(
+        late: (j['late'] as num).toInt(),
+        today: (j['today'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'late': late,
+        'today': today,
       };
 }
 
@@ -2382,7 +2484,7 @@ class LinkChatItemsResponse {
 }
 
 class PriceItem {
-  const PriceItem({required this.available, this.breaks, this.category, this.choices, this.description, required this.itemId, required this.minQuantity, required this.name, this.overridden, required this.priceKobo, this.sizes, this.unit, this.variant, this.variantOf});
+  const PriceItem({required this.available, this.breaks, this.category, this.choices, this.description, required this.itemId, this.left, required this.minQuantity, required this.name, this.overridden, this.photo, required this.priceKobo, this.sizes, this.unit, this.variant, this.variantOf});
 
   final bool available;
   /// Lower prices from a quantity up (from 10 bags ₦39,500), quantity going
@@ -2397,10 +2499,16 @@ class PriceItem {
   final String? description;
   /// The seller's own item
   final String itemId;
+  /// On a storefront offered to a linked business, how many are left where the
+  /// storefront counts them
+  final int? left;
   final int minQuantity;
   final String name;
   /// This link's own price, not the list's
   final bool? overridden;
+  /// On a storefront offered to a linked business, its photo's addresses by
+  /// width; the picture comes through GET /v1/link-chats/{link}/photo
+  final Map<String, dynamic>? photo;
   final int priceKobo;
   /// Its sizes and colours on sale, each ordered on its own row (an order line
   /// names the size's item_id), at the product's price unless it has its own;
@@ -2418,9 +2526,11 @@ class PriceItem {
         choices: j['choices'] == null ? null : (j['choices'] as List).map((e) => VariantChoice.fromJson(e as Map<String, dynamic>)).toList(),
         description: j['description'] == null ? null : j['description'] as String,
         itemId: j['item_id'] as String,
+        left: j['left'] == null ? null : (j['left'] as num).toInt(),
         minQuantity: (j['min_quantity'] as num).toInt(),
         name: j['name'] as String,
         overridden: j['overridden'] == null ? null : j['overridden'] as bool,
+        photo: j['photo'] == null ? null : j['photo'] as Map<String, dynamic>,
         priceKobo: (j['price_kobo'] as num).toInt(),
         sizes: j['sizes'] == null ? null : (j['sizes'] as List).map((e) => PriceItemSizesItem.fromJson(e as Map<String, dynamic>)).toList(),
         unit: j['unit'] == null ? null : j['unit'] as String,
@@ -2435,9 +2545,11 @@ class PriceItem {
         'choices': ?choices?.map((e) => e.toJson()).toList(),
         'description': ?description,
         'item_id': itemId,
+        'left': ?left,
         'min_quantity': minQuantity,
         'name': name,
         'overridden': ?overridden,
+        'photo': ?photo,
         'price_kobo': priceKobo,
         'sizes': ?sizes?.map((e) => e.toJson()).toList(),
         'unit': ?unit,
@@ -2481,10 +2593,13 @@ class VariantChoice {
 }
 
 class PriceItemSizesItem {
-  const PriceItemSizesItem({required this.available, required this.itemId, required this.name, this.priceKobo, required this.variant});
+  const PriceItemSizesItem({required this.available, required this.itemId, this.left, required this.name, this.priceKobo, required this.variant});
 
   final bool available;
   final String itemId;
+  /// How many of this size are left, on a storefront offered to a linked
+  /// business, where the storefront counts them
+  final int? left;
   /// Written out in full - Air Max 90 – 42, Black
   final String name;
   /// Its own price on the list; absent, the product's
@@ -2494,6 +2609,7 @@ class PriceItemSizesItem {
   factory PriceItemSizesItem.fromJson(Map<String, dynamic> j) => PriceItemSizesItem(
         available: j['available'] as bool,
         itemId: j['item_id'] as String,
+        left: j['left'] == null ? null : (j['left'] as num).toInt(),
         name: j['name'] as String,
         priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
         variant: j['variant'] as Map<String, dynamic>,
@@ -2502,6 +2618,7 @@ class PriceItemSizesItem {
   Map<String, dynamic> toJson() => {
         'available': available,
         'item_id': itemId,
+        'left': ?left,
         'name': name,
         'price_kobo': ?priceKobo,
         'variant': variant,

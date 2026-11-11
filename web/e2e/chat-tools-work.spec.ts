@@ -82,12 +82,13 @@ for (const [size, viewport] of [
 ] as const) {
   test(`from chat on ${size}: a price, stock in, an order and a service`, async ({ browser }) => {
     test.setTimeout(180_000);
+    // Her own shop's tools are in her Taskiem chat; a business's chat
+    // offers only its tools (docs/spec/business-chat-tools.md).
     const { owner, seller, link } = await linked(browser, viewport);
     const sent = await shop(owner);
-    await owner.goto(`/chat?with=${link}`);
-    const pane = owner.getByTestId("chat-pane");
+    await owner.goto("/chat?with=taskiem");
+    const pane = owner.getByTestId("taskiem-pane");
     const sheet = owner.getByTestId("tool-sheet");
-    const saved = owner.locator(".toast", { hasText: "The change is in your Taskiem chat" });
     const tool = async (name: string) => {
       await pane.getByRole("button", { name: "Open tools" }).click();
       await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: new RegExp(`^${name}`) }).click();
@@ -110,7 +111,6 @@ for (const [size, viewport] of [
     await sheet.getByRole("button", { name: "Save" }).click();
     await expect(owner.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
     await expect(sheet).toHaveCount(0, { timeout: 5000 });
-    await expect(saved).toBeVisible();
     // The price and whether it shows; no count was touched, so none is sent.
     expect(sent.find((x) => x.method === "PATCH")?.body).toEqual({ price_kobo: 7_800_000, available: false });
     expect(sent.filter((x) => x.path === "/v1/stock/movements")).toEqual([]);
@@ -211,7 +211,7 @@ test("typed words open the form filled in, and saving stays a tap", async ({ bro
   await expect(pane.getByTestId("request-chip")).toHaveCount(0);
 });
 
-test("a tagged product is a live card; our own services can be tagged", async ({ browser }) => {
+test("a tagged product is a live card; our own services are not offered in a business's chat", async ({ browser }) => {
   const { owner, link } = await linked(browser, { width: 390, height: 844 });
   await shop(owner);
   await owner.route(`**/v1/link-chats/${link}/items`, (r) =>
@@ -259,13 +259,12 @@ test("a tagged product is a live card; our own services can be tagged", async ({
   await order.getByRole("button", { name: "Close" }).click();
   await expect(order).toHaveCount(0);
 
-  // Our own service, from the picker's Services.
+  // Our own services are not offered here (business-chat-tools.md §4):
+  // what we offer them goes by Share my prices and Make an offer.
   const box = pane.getByLabel("Message");
   await box.fill("We can also do @mill");
   const picker = owner.getByRole("region", { name: "Tag something" });
-  await expect(picker.getByRole("group", { name: "Services" })).toContainText("₦2,500 · 30 min");
-  await box.press("Enter");
-  await expect(box).toHaveValue("We can also do @Rice milling ");
+  await expect(picker.getByRole("group", { name: "Services" })).toHaveCount(0);
 });
 
 test("the sound for new orders and payments can be switched off", async ({ browser }) => {
@@ -324,8 +323,8 @@ test("a product's trade price list price and who it is shared with, saved from c
     puts.push({ path: new URL(r.request().url()).pathname, body: r.request().postDataJSON() });
     await r.fulfill(json({ lists: [] }));
   });
-  await owner.goto(`/chat?with=${link}`);
-  const pane = owner.getByTestId("chat-pane");
+  await owner.goto("/chat?with=taskiem");
+  const pane = owner.getByTestId("taskiem-pane");
   const sheet = owner.getByTestId("tool-sheet");
   await pane.getByRole("button", { name: "Open tools" }).click();
   await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Products/ }).click();
@@ -353,15 +352,15 @@ test("a product's trade price list price and who it is shared with, saved from c
 
 test("in dark, every product tile keeps its own initials' colour (the lime tile was blank)", async ({ browser }) => {
   test.setTimeout(120_000);
-  const { owner, link } = await linked(browser, { width: 390, height: 844 });
+  const { owner } = await linked(browser, { width: 390, height: 844 });
   // One name for each of the eight tile colours (lib/tone).
   const names = ["Beans and plantain", "Afang soup and fufu", "Asun", "Banga soup and starch", "Chapman", "Puff puff", "Small chops", "Gala"];
   await owner.route("**/v1/stock", (r) =>
     r.fulfill(json({ keeps_stock: true, catalogue: "products", items: names.map((name, i) => ({ id: `t${i}`, name, available: true, stock: 9, unit: "plate", price_kobo: 300_000 })) })),
   );
   await owner.addInitScript(() => localStorage.setItem("taskiem-theme", "dark"));
-  await owner.goto(`/chat?with=${link}`);
-  await owner.getByTestId("chat-pane").getByRole("button", { name: "Open tools" }).click();
+  await owner.goto("/chat?with=taskiem");
+  await owner.getByTestId("taskiem-pane").getByRole("button", { name: "Open tools" }).click();
   await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Products/ }).click();
   const tiles = owner.getByTestId("tool-sheet").locator(".tk-row-tile[data-tone]");
   await expect(tiles).toHaveCount(8);

@@ -114,6 +114,10 @@ func TestCashierShift(t *testing.T) {
 	if sales["total_kobo"] != float64(23400000) || sales["by_how"].(map[string]any)["cash"] != float64(15600000) || h["orders_open"] != float64(1) {
 		t.Fatalf("the shift so far: %v", h)
 	}
+	// Clocked in, the handover clocks them out (staff_clock.go).
+	if got := w.say(t, samOn, "in"); !strings.Contains(got, "Clocked in at") {
+		t.Fatalf("sam in: %q", got)
+	}
 	before = len(w.graph.Sent(ownerOn))
 	samBefore := len(w.graph.Sent(samOn))
 	out := manager.must(200, "POST", "/v1/chat-handover", map[string]any{"cash_counted_kobo": 15000000, "note": "Till drawer sticks"})
@@ -121,6 +125,10 @@ func TestCashierShift(t *testing.T) {
 	if !strings.Contains(words, "Sold ₦234,000 in 2 sales") || !strings.Contains(words, "Cash counted: ₦150,000, ₦6,000 short of the ₦156,000 sold") ||
 		!strings.Contains(words, "Note: Till drawer sticks") {
 		t.Fatalf("the handover: %q", words)
+	}
+	var how string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT COALESCE(out_how, '') FROM staff_clock WHERE user_id = (SELECT user_id FROM whatsapp_bindings WHERE number = $1)`, samOn).Scan(&how); err != nil || how != "handover" {
+		t.Fatalf("the handover clocked out: %q %v", how, err)
 	}
 	w.srv.WaitBackground()
 	if told := w.lastTo(t, ownerOn, before); len(told) == 0 || !strings.Contains(told[0].Text, "sam handed the shift over") {
@@ -130,6 +138,31 @@ func TestCashierShift(t *testing.T) {
 		t.Fatalf("the one handing over was told of their own handover: %+v", told)
 	}
 	manager.must(400, "POST", "/v1/chat-handover", map[string]any{"cash_counted_kobo": -1})
+
+	// Each person's figures (staff_figures.go): the cashier's sales and the
+	// order they worked; the manager's shift and handover, ₦6,000 short.
+	meID := func(c *client) string {
+		return c.must(200, "GET", "/v1/me", nil)["user"].(map[string]any)["id"].(string)
+	}
+	cashID, samID := meID(cashier), meID(manager)
+	f := cashier.must(200, "GET", "/v1/staff/"+cashID+"/figures?period=week", nil)
+	if sales := f["sales"].(map[string]any); sales["count"] != float64(2) || sales["total_kobo"] != float64(23400000) || sales["by_how"].(map[string]any)["pos"] != float64(7800000) || f["orders"] != float64(1) {
+		t.Fatalf("the cashier's figures: %v", f)
+	}
+	cashier.must(403, "GET", "/v1/staff/"+samID+"/figures", nil)
+	cashier.must(400, "GET", "/v1/staff/"+cashID+"/figures?period=year", nil)
+	f = manager.must(200, "GET", "/v1/staff/"+samID+"/figures?period=day", nil)
+	if hs := f["handovers"].([]any); len(hs) != 1 || hs[0].(map[string]any)["diff_kobo"] != float64(-600000) || f["shifts"] != float64(1) {
+		t.Fatalf("the manager's figures: %v", f)
+	}
+	manager.must(200, "GET", "/v1/staff/"+cashID+"/figures?period=month", nil)
+	if r := w.say(t, cashOn, "my week"); !strings.Contains(r, "Your week (from") || !strings.Contains(r, "Sales: ₦234,000 in 2 sales (cash ₦156,000, POS ₦78,000).") ||
+		!strings.Contains(r, "Orders worked: 1.") {
+		t.Fatalf("my week: %q", r)
+	}
+	if r := w.say(t, samOn, "my day"); !strings.Contains(r, "Handovers: 1, ₦6,000 short.") || !strings.Contains(r, "over 1 shift") {
+		t.Fatalf("my day: %q", r)
+	}
 
 	// The owner's briefing: from 8am Lagos, not for a cashier.
 	lagos, _ := time.LoadLocation("Africa/Lagos")

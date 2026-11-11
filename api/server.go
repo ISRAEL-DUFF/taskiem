@@ -534,6 +534,7 @@ func (s *Server) Handler() http.Handler {
 			s.linkOrderRoutes(r)    // their orders (link_orders.go)
 			s.tradeDealRoutes(r)    // their price deliberation (trade_deals.go)
 			s.linkChatRoutes(r)     // their conversations (link_chat.go)
+			s.linkBookingRoutes(r)  // booking their services from it (link_bookings.go)
 			s.customerChatRoutes(r) // customers' conversations (customer_chat.go)
 			s.orderDraftRoutes(r)   // orders read from them (order_drafts.go)
 			s.taskiemChatRoutes(r)  // the Taskiem conversation on the web (chat_history.go)
@@ -723,6 +724,29 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermMemberManage)).Get("/invitations", s.listInvitations)
 			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/invitations/{user}", s.cancelInvitation)
 			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/members/{user}/roles/{role}", s.revokeRole)
+			// Staff by phone (staff.go).
+			r.With(s.need(PermMemberManage)).Get("/staff", s.listStaff)
+			r.With(s.need(PermMemberManage), s.tenantWide).Post("/staff/invites", s.inviteStaff)
+			r.With(s.need(PermMemberManage), s.tenantWide).Post("/staff/invites/{id}/send", s.resendStaffInvite)
+			r.With(s.need(PermMemberManage), s.tenantWide).Delete("/staff/invites/{id}", s.cancelStaffInvite)
+			r.With(s.need(PermMemberManage), s.tenantWide).Post("/staff/{user}/remove", s.removeStaff)
+			r.With(s.need(PermMemberManage)).Get("/staff/clock", s.staffClockDay)
+			// Tasks for staff (staff_tasks.go): anyone sees and does their
+			// own; those who run the business give them and see everyone's.
+			r.Get("/staff/tasks", s.listTasks)
+			r.With(s.need(PermTaskGive), s.tenantWide).Post("/staff/tasks", s.giveTask)
+			r.With(s.tenantWide).Post("/staff/tasks/{id}/take", s.takeTask)
+			r.With(s.tenantWide).Post("/staff/tasks/{id}/done", s.doneTask)
+			r.With(s.tenantWide).Post("/staff/tasks/{id}/cant", s.cantTask)
+			r.With(s.need(PermTaskGive), s.tenantWide).Post("/staff/tasks/{id}/remind", s.remindTask)
+			r.With(s.need(PermTaskGive), s.tenantWide).Post("/staff/tasks/{id}/give", s.passTask)
+			r.With(s.need(PermTaskGive), s.tenantWide).Delete("/staff/tasks/{id}", s.cancelTask)
+			r.With(s.need(PermTaskGive), s.tenantWide).Delete("/staff/task-repeats/{id}", s.stopRepeat)
+			// One person's figures (staff_figures.go): anyone's for those
+			// who run the business, one's own for anyone.
+			r.Get("/staff/{user}/figures", s.getStaffFigures)
+			r.With(s.need(PermMemberManage)).Get("/staff/{user}", s.getStaff)
+			r.With(s.need(PermMemberManage), s.tenantWide).Put("/staff/{user}/profile", s.putStaffProfile)
 			r.Get("/permissions", s.listPermissions)
 			r.Get("/limits", s.getLimits) // read-only: operators set limits from the CLI
 			r.With(s.need(PermMemberManage)).Get("/roles", s.listRoles)

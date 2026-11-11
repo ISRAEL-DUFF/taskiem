@@ -8456,7 +8456,7 @@ paths:
       tags:
       - Links
       summary: What "#" names in a conversation
-      description: 'The price list the other business shares with you (whose: theirs), else the one you share with them (ours), each item with its unit and price.'
+      description: 'What the other business offers you (whose: theirs): the price list it shares with you, or else its storefront at the storefront''s prices; else the list you share with them (ours). Each item with its unit and price.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -8485,6 +8485,219 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/PriceItem'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/photo:
+    get:
+      operationId: linkChatPhoto
+      tags:
+      - Links
+      summary: The photo of one of the other business's items
+      description: The picture of an item on the other business's storefront, as your copy of it names it, fetched from their storage. Only an item of theirs you can see.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: item
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: w
+        in: query
+        schema:
+          type: string
+          enum: ['320', '800', '2000']
+      responses:
+        '200':
+          description: The picture
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/services:
+    get:
+      operationId: linkServices
+      tags:
+      - Links
+      summary: The other business's services you can book
+      description: 'Their services as their storefront shows them (each marked to show on it, whether the storefront is published or not), with a length; and whether they take bookings online now (open; closed says so when not). phone is the number a booking gives them: your storefront''s, where it has one. Only for an active link; nothing is changed in either business by looking.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Their services
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [services, open, phone]
+                properties:
+                  services:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkService'
+                  open:
+                    type: boolean
+                  closed:
+                    type: string
+                  phone:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/services/{id}/times:
+    get:
+      operationId: linkServiceTimes
+      tags:
+      - Links
+      summary: Free times for one of their services
+      description: 'The days with a free time for the service, in their booking hours and how far ahead they take bookings, and the free times of one day (day, or the first with any). Only whether a time is free, never who booked.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: day
+        in: query
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: The days and times
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [service, days, times]
+                properties:
+                  service:
+                    $ref: '#/components/schemas/LinkService'
+                  days:
+                    type: array
+                    items:
+                      type: string
+                      format: date
+                  day:
+                    type: string
+                    format: date
+                  times:
+                    type: array
+                    items:
+                      type: string
+                      format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/link-chats/{link}/bookings:
+    post:
+      operationId: bookLinkService
+      tags:
+      - Links
+      summary: Book one of their services
+      description: 'Books the service at a free time through their storefront''s booking, your business the customer (its name, and phone or your storefront''s phone); they see it in their bookings like any other, and a message in the conversation says so to both sides. Paid at the appointment, or as you agree. Needs an Idempotency-Key: the same key answers the first booking (200). A time taken since answers 409 slot_taken; a time not offered 422 pick_time; no phone 422 phone_needed; not taking bookings 409 bookings_closed.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: chat.trade
+      x-taskiem-all-environments: true
+      parameters:
+      - name: link
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key answers the same booking'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [service_id, start]
+              properties:
+                service_id:
+                  type: string
+                start:
+                  type: string
+                  format: date-time
+                note:
+                  type: string
+                  maxLength: 500
+                phone:
+                  type: string
+      responses:
+        '201':
+          description: Booked
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [booking]
+                properties:
+                  booking:
+                    $ref: '#/components/schemas/LinkBooking'
+        '200':
+          description: The same booking, from an earlier request with this Idempotency-Key
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [booking]
+                properties:
+                  booking:
+                    $ref: '#/components/schemas/LinkBooking'
         default:
           $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/refs:
@@ -19916,6 +20129,799 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/staff:
+    get:
+      operationId: listStaff
+      tags:
+      - Account
+      summary: The people of the business, and invitations by phone waiting
+      description: Each person with their roles, their chat number (masked without pii.reveal) and whether their chat is linked; email only when they have a real one. Invitations by phone not yet answered or expired.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      responses:
+        '200':
+          description: The staff
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [people, invites]
+                properties:
+                  people:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [user_id, name, roles, chat]
+                      properties:
+                        user_id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        email:
+                          type: string
+                        phone:
+                          type: string
+                        roles:
+                          type: array
+                          items:
+                            type: string
+                        chat:
+                          type: boolean
+                        you:
+                          type: boolean
+                  invites:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, phone, roles, inviter, expires_at, created_at]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        phone:
+                          type: string
+                        roles:
+                          type: array
+                          items:
+                            type: string
+                        inviter:
+                          type: string
+                        sent_at:
+                          type: string
+                          format: date-time
+                        expires_at:
+                          type: string
+                          format: date-time
+                        created_at:
+                          type: string
+                          format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/invites:
+    post:
+      operationId: inviteStaff
+      tags:
+      - Account
+      summary: Add someone by phone
+      description: Their WhatsApp gets the taskiem_invite template; Join makes their account (no email needed), links their chat and grants the roles. One still waiting for the same number is renewed, not doubled. sent is false when it could not go out (send it again later).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name, phone, roles]
+              properties:
+                name:
+                  type: string
+                  maxLength: 80
+                phone:
+                  type: string
+                roles:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Invited
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [id, sent]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  sent:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/invites/{id}/send:
+    post:
+      operationId: resendStaffInvite
+      tags:
+      - Account
+      summary: Send an invitation by phone again
+      description: Seven more days; not within five minutes of the last send (409).
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Sent again
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [id, sent]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  sent:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/invites/{id}:
+    delete:
+      operationId: cancelStaffInvite
+      tags:
+      - Account
+      summary: Cancel an invitation by phone
+      description: Join no longer works.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Cancelled
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/clock:
+    get:
+      operationId: staffClockDay
+      tags:
+      - Account
+      summary: A day's shifts, who is in now and who is late
+      description: 'The shifts clocked in on a day (Lagos; today when none), with when each ended and how (chat, web, handover, or closed by Taskiem: auto), and the place shared when one was; who is clocked in now; who should have started 15 minutes or more ago (within three hours) by their usual hours and has not clocked in.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      parameters:
+      - name: day
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: The day
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [day, shifts, in, late]
+                properties:
+                  day:
+                    type: string
+                    format: date
+                  shifts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StaffShift'
+                  in:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StaffShift'
+                  late:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StaffLate'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/tasks:
+    get:
+      operationId: listStaffTasks
+      tags:
+      - Account
+      summary: Tasks for staff
+      description: 'The person''s open tasks (their own, and those for a role they hold that no one has taken) and those closed in the last week; with all=true, for those who give tasks (member.manage or invoice.manage), everyone''s and the repeats. give says whether this person gives tasks, and people (for them) who tasks can go to.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: all
+        in: query
+        required: false
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: The tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [tasks, repeats, give, people]
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StaffTask'
+                  repeats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StaffTaskRepeat'
+                  give:
+                    type: boolean
+                  people:
+                    type: array
+                    description: Who a task can be given to, with their roles (for those who give tasks; empty otherwise)
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, name, roles]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        roles:
+                          type: array
+                          items:
+                            type: string
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: giveStaffTask
+      tags:
+      - Account
+      summary: Give a task
+      description: 'To one person (to_user) or to anyone in a role (to_role; the first to take it has it), maybe due at a time, maybe needing a photo when done, maybe about an order, invoice, bill, purchase or stock item. With repeat, a task repeating every day or every week on one day at a time: todays is made now when its time has not passed, and each later one on its day. The person (or everyone in the role) is told in their chat; on WhatsApp outside the 24 hours, the taskiem_staff_task template.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'member.manage|invoice.manage'
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffTaskIn'
+      responses:
+        '201':
+          description: Given
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [task, repeat_id]
+                properties:
+                  task:
+                    oneOf:
+                    - $ref: '#/components/schemas/StaffTask'
+                    - type: 'null'
+                  repeat_id:
+                    type: [string, 'null']
+                    format: uuid
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/tasks/{id}:
+    delete:
+      operationId: cancelStaffTask
+      tags:
+      - Account
+      summary: Call a task off
+      description: 'An open task, or one sent back.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'member.manage|invoice.manage'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffTask'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/tasks/{id}/take:
+    post:
+      operationId: takeStaffTask
+      tags:
+      - Account
+      summary: Take a task given to a role
+      description: 'The first in the role to take it has it.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffTask'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/tasks/{id}/done:
+    post:
+      operationId: doneStaffTask
+      tags:
+      - Account
+      summary: Done
+      description: 'Closes the persons task (taking a roles task first). A task that needs a photo takes it as a multipart form (photo), kept privately in the businesss own storage. Whoever gave it is told.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                photo:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: The task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffTask'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/tasks/{id}/cant:
+    post:
+      operationId: cantStaffTask
+      tags:
+      - Account
+      summary: Cant do it
+      description: 'Sends the task back to whoever gave it, with why.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                why:
+                  type: string
+                  maxLength: 300
+      responses:
+        '200':
+          description: The task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffTask'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/tasks/{id}/remind:
+    post:
+      operationId: remindStaffTask
+      tags:
+      - Account
+      summary: Remind the person
+      description: 'They are told again; once in ten minutes.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'member.manage|invoice.manage'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffTask'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/tasks/{id}/give:
+    post:
+      operationId: passStaffTask
+      tags:
+      - Account
+      summary: Give a task to someone else
+      description: 'To another person or role; a task sent back is open again.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'member.manage|invoice.manage'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                to_user:
+                  type: string
+                  format: uuid
+                to_role:
+                  type: string
+      responses:
+        '200':
+          description: The task
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StaffTask'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/task-repeats/{id}:
+    delete:
+      operationId: stopStaffTaskRepeat
+      tags:
+      - Account
+      summary: Stop a repeating task
+      description: 'No more tasks are made from it; those made stay.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'member.manage|invoice.manage'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Stopped
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/{user}/figures:
+    get:
+      operationId: getStaffFigures
+      tags:
+      - Account
+      summary: One person's figures for a day, a week or a month
+      description: 'From the first of the period (today; this week from Monday; this month, Lagos) to today: the minutes clocked in (an open shift up to now) over how many shifts, the days they clocked in 15 minutes or more late and the days they were due by their usual hours and never clocked in, the sales they recorded by how paid, their handovers with the cash counted against the cash sold (diff below 0 short), how many orders they worked, and their tasks (done, done late, sent back, open now, late now). Anyone''s for those who run the business (member.manage or invoice.manage); one''s own for anyone.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: period
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [day, week, month]
+      responses:
+        '200':
+          description: The figures
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [period, from, to, minutes, shifts, late_days, missed_days, sales, handovers, orders, tasks]
+                properties:
+                  period:
+                    type: string
+                    enum: [day, week, month]
+                  from:
+                    type: string
+                    format: date
+                  to:
+                    type: string
+                    format: date
+                  minutes:
+                    type: integer
+                  shifts:
+                    type: integer
+                  late_days:
+                    type: array
+                    items:
+                      type: string
+                      format: date
+                  missed_days:
+                    type: array
+                    items:
+                      type: string
+                      format: date
+                  sales:
+                    type: object
+                    additionalProperties: false
+                    required: [count, total_kobo, by_how]
+                    properties:
+                      count:
+                        type: integer
+                      total_kobo:
+                        type: integer
+                      by_how:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                  handovers:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [at]
+                      properties:
+                        at:
+                          type: string
+                          format: date-time
+                        counted_kobo:
+                          type: integer
+                        cash_kobo:
+                          type: integer
+                        diff_kobo:
+                          type: integer
+                  orders:
+                    type: integer
+                  tasks:
+                    type: object
+                    additionalProperties: false
+                    required: [done, done_late, cant, open, late]
+                    properties:
+                      done:
+                        type: integer
+                      done_late:
+                        type: integer
+                      cant:
+                        type: integer
+                      open:
+                        type: integer
+                      late:
+                        type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/{user}:
+    get:
+      operationId: getStaff
+      tags:
+      - Account
+      summary: A person of the business and their profile
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The person
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [user_id, name, roles, chat, profile]
+                properties:
+                  user_id:
+                    type: string
+                    format: uuid
+                  name:
+                    type: string
+                  email:
+                    type: string
+                  phone:
+                    type: string
+                  roles:
+                    type: array
+                    items:
+                      type: string
+                  chat:
+                    type: boolean
+                  you:
+                    type: boolean
+                  profile:
+                    $ref: '#/components/schemas/StaffProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/{user}/profile:
+    put:
+      operationId: putStaffProfile
+      tags:
+      - Account
+      summary: Change a person's profile
+      description: The whole profile. Pay is for the record only (Taskiem pays no one here); the audit log keeps that it changed, not the amount.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffProfile'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [profile]
+                properties:
+                  profile:
+                    $ref: '#/components/schemas/StaffProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/staff/{user}/remove:
+    post:
+      operationId: removeStaff
+      tags:
+      - Account
+      summary: Remove someone from the business
+      description: Every role they hold goes, so neither their chat nor the web reaches the business; their history stays. Not oneself, an owner only by an owner, never the last owner.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: member.manage
+      x-taskiem-all-environments: true
+      parameters:
+      - name: user
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
   /v1/members:
     get:
       operationId: listMembers
@@ -23602,6 +24608,30 @@ paths:
                     type: string
                   put_off:
                     type: boolean
+                  staff:
+                    type: object
+                    description: Who is clocked in and who is late, when anyone is either (for those who run the people).
+                    additionalProperties: false
+                    required: [in, late]
+                    properties:
+                      in:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/StaffShift'
+                      late:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/StaffLate'
+                  tasks:
+                    type: object
+                    description: Open tasks due today, and late, when there are any (for those who run the people).
+                    additionalProperties: false
+                    required: [today, late]
+                    properties:
+                      today:
+                        type: integer
+                      late:
+                        type: integer
                   part:
                     type: string
                     enum: [morning, afternoon, evening]
@@ -33745,6 +34775,46 @@ components:
               type: string
               format: date-time
               description: When the offer lapses unless answered
+    LinkService:
+      type: object
+      additionalProperties: false
+      description: One of a linked business's services, as its storefront shows it
+      required: [id, name, minutes]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        minutes:
+          type: integer
+          description: How long it takes
+        price_kobo:
+          type: integer
+          description: Its storefront price; none when paid on the day
+        description:
+          type: string
+        category:
+          type: string
+    LinkBooking:
+      type: object
+      additionalProperties: false
+      description: A booking made with a linked business from the conversation
+      required: [reference, service_id, service_name, starts_at, ends_at]
+      properties:
+        reference:
+          type: string
+        service_id:
+          type: string
+        service_name:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        price_kobo:
+          type: integer
     PriceItem:
       type: object
       additionalProperties: false
@@ -33815,6 +34885,10 @@ components:
                 description: Its own price on the list; absent, the product's
               available:
                 type: boolean
+              left:
+                type: integer
+                minimum: 0
+                description: How many of this size are left, on a storefront offered to a linked business, where the storefront counts them
         variant_of:
           type: string
           description: On a size as an order line prices it, its product's item
@@ -33822,6 +34896,15 @@ components:
           type: object
           additionalProperties:
             type: string
+        photo:
+          type: object
+          description: On a storefront offered to a linked business, its photo's addresses by width; the picture comes through GET /v1/link-chats/{link}/photo
+          additionalProperties:
+            type: string
+        left:
+          type: integer
+          minimum: 0
+          description: On a storefront offered to a linked business, how many are left where the storefront counts them
     PriceList:
       type: object
       additionalProperties: false
@@ -33951,6 +35034,217 @@ components:
         minutes:
           type: integer
           description: How long the service takes; an invoice's or an order's total is price_kobo
+    StaffTask:
+      type: object
+      additionalProperties: false
+      required: [id, what, given_by, giver, photo, state, created_at, late]
+      properties:
+        id:
+          type: string
+          format: uuid
+        what:
+          type: string
+        given_by:
+          type: string
+          format: uuid
+        giver:
+          type: string
+        to_user:
+          type: string
+          format: uuid
+        to_role:
+          type: string
+        taken_by:
+          type: string
+          format: uuid
+        person:
+          type: string
+          description: The name of the person who has it, once someone does
+        due_at:
+          type: string
+          format: date-time
+        photo:
+          type: boolean
+          description: A photo is needed when it is done
+        state:
+          type: string
+          enum: [open, done, cant, cancelled]
+        done_at:
+          type: string
+          format: date-time
+        photo_url:
+          type: string
+          description: The photo it was done with, a link good for ten minutes
+        cant_why:
+          type: string
+        link:
+          type: object
+          additionalProperties: false
+          required: [kind, id]
+          properties:
+            kind:
+              type: string
+              enum: [order, invoice, bill, purchase, stock]
+            id:
+              type: string
+            name:
+              type: string
+        repeat_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        late:
+          type: boolean
+    StaffTaskRepeat:
+      type: object
+      additionalProperties: false
+      required: [id, what, photo, every, at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        what:
+          type: string
+        to_user:
+          type: string
+          format: uuid
+        to_role:
+          type: string
+        person:
+          type: string
+        photo:
+          type: boolean
+        every:
+          type: string
+          enum: [day, week]
+        day:
+          type: string
+          enum: [mon, tue, wed, thu, fri, sat, sun]
+        at:
+          type: string
+          pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+    StaffTaskIn:
+      type: object
+      additionalProperties: false
+      required: [what]
+      properties:
+        what:
+          type: string
+          maxLength: 200
+        to_user:
+          type: string
+          format: uuid
+        to_role:
+          type: string
+        due_at:
+          type: string
+          format: date-time
+        photo:
+          type: boolean
+        link:
+          type: object
+          additionalProperties: false
+          required: [kind, id]
+          properties:
+            kind:
+              type: string
+              enum: [order, invoice, bill, purchase, stock]
+            id:
+              type: string
+              maxLength: 100
+            name:
+              type: string
+              maxLength: 120
+        repeat:
+          type: object
+          additionalProperties: false
+          required: [every, at]
+          properties:
+            every:
+              type: string
+              enum: [day, week]
+            day:
+              type: string
+              enum: [mon, tue, wed, thu, fri, sat, sun]
+            at:
+              type: string
+              pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+    StaffShift:
+      type: object
+      additionalProperties: false
+      required: [id, user_id, in_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        in_at:
+          type: string
+          format: date-time
+        out_at:
+          type: string
+          format: date-time
+        out_how:
+          type: string
+          enum: [chat, web, handover, auto]
+        in_where:
+          type: string
+          description: A maps link of where they were when they clocked in, when they shared it
+    StaffLate:
+      type: object
+      additionalProperties: false
+      required: [user_id, name, due]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        due:
+          type: string
+          description: When their shift should have started, "08:00"
+    StaffProfile:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          maxLength: 60
+        started_on:
+          type: string
+          format: date
+        note:
+          type: string
+          maxLength: 500
+        pay_kobo:
+          type: integer
+          minimum: 0
+        pay_per:
+          type: string
+          enum: [hour, day, week, month]
+        rota:
+          type: array
+          description: Their usual hours, one set a day, Monday first; an end before its start runs past midnight.
+          items:
+            type: object
+            additionalProperties: false
+            required: [day, start, end]
+            properties:
+              day:
+                type: string
+                enum: [mon, tue, wed, thu, fri, sat, sun]
+              start:
+                type: string
+                pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+              end:
+                type: string
+                pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'
     ChatRef:
       type: object
       additionalProperties: false

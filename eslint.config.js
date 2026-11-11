@@ -20,10 +20,11 @@ export default tseslint.config(
     files: ["mobile/tool/*.mjs"],
     languageOptions: { globals: { process: "readonly", console: "readonly", URL: "readonly" } },
   },
-  // The explainer's renderer (video/README.md) runs on Node; the scenes'
+  // The explainer's renderer, the recordings and the how-to videos
+  // (video/README.md) run on Node; the scenes'
   // timeline runs in Chromium.
   {
-    files: ["video/*.mjs", "video/recording/*.mjs"],
+    files: ["video/*.mjs", "video/recording/*.mjs", "video/howto/*.mjs"],
     languageOptions: { globals: { process: "readonly", console: "readonly", window: "readonly", document: "readonly" } },
   },
   {

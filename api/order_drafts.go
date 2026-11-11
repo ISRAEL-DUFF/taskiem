@@ -1036,10 +1036,17 @@ func (s *Server) confirmOrderDraft(w http.ResponseWriter, r *http.Request) {
 		case pay == storefront.ChatPayOnDelivery && d.body.Fulfilment != "delivery":
 			pay = ""
 		}
+		// Not chosen: the first of the card's choices, the one it shows as
+		// chosen (web/src/lib/customerorders.ts payChoices): the page when
+		// the shop has one, else at the door for a delivery, else arranged.
 		if pay == "" {
-			pay = storefront.ChatPayLater
-			if opts.PayPage {
+			switch {
+			case opts.PayPage:
 				pay = storefront.ChatPayTransfer
+			case d.body.Fulfilment == "delivery":
+				pay = storefront.ChatPayOnDelivery
+			default:
+				pay = storefront.ChatPayLater
 			}
 		}
 		lines := make([]storefront.Line, len(d.body.Lines))

@@ -355,8 +355,13 @@ func TestOrdersFromCustomersMessages(t *testing.T) {
 	if e := cashier.must(409, "POST", "/v1/order-drafts/"+id2+"/confirm", map[string]any{"version": d2["version"]}); !strings.Contains(e["error"].(string), "cannot take this payment by transfer") {
 		t.Fatalf("transfer refused: %v", e)
 	}
-	d2 = cashier.must(200, "PUT", "/v1/order-drafts/"+id2, map[string]any{"version": d2["version"], "op": "details", "pay": "on_delivery"})
+	// Not chosen: what the card shows as chosen, the first of its choices.
+	// With no page, a delivery is paid at the door, and they are told so.
+	d2 = cashier.must(200, "PUT", "/v1/order-drafts/"+id2, map[string]any{"version": d2["version"], "op": "details", "pay": ""})
 	c2 := cashier.must(200, "POST", "/v1/order-drafts/"+id2+"/confirm", map[string]any{"version": d2["version"]})
+	if c2["order"].(map[string]any)["pay"] != "on_delivery" {
+		t.Fatalf("not chosen, a delivery is paid at the door: %s", toJSON(c2))
+	}
 	ref2 := c2["order"].(map[string]any)["reference"].(string)
 	if c2["order"].(map[string]any)["order_status"] != "accepted" {
 		t.Fatalf("at the door: %s", toJSON(c2))

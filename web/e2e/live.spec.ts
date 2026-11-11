@@ -2,6 +2,11 @@ import { expect, test } from "@playwright/test";
 import { addStep, doneWithStep, newWorkflow } from "./builder";
 
 test("the run canvas lights up as the run goes", async ({ page }) => {
+  // Signs in, builds and publishes a workflow, starts a run and cancels it:
+  // some 25 steps, which on a loaded runner took each 1 to 5 s to settle and
+  // outlasted 60 s (CI timed out on it five times, at a different step
+  // each time). It gets 120 s, as the other long tests have.
+  test.setTimeout(120_000);
   await page.goto("/login");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");

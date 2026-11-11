@@ -255,11 +255,16 @@ export function InvoiceView({
 export function InvoiceAdd({
   onSaved,
   onCancel,
+  to,
 }: {
   onSaved: (line: string | null) => void;
   onCancel?: () => void;
+  /** A linked business, from its conversation (Invoice them): its name,
+   * and its key, so the invoice reaches it on Taskiem as a bill; no phone
+   * is asked. */
+  to?: { name: string; key: string };
 }) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState(to?.name ?? "");
   const [phone, setPhone] = useState("");
   const [what, setWhat] = useState("");
   const [amount, setAmount] = useState("");
@@ -268,13 +273,19 @@ export function InvoiceAdd({
   const key = useRef(newKey());
   const kobo = toKobo(amount);
   const ready =
-    name.trim() !== "" && phone.trim() !== "" && what.trim() !== "" && !!kobo && kobo > 0;
+    name.trim() !== "" &&
+    (!!to || phone.trim() !== "") &&
+    what.trim() !== "" &&
+    !!kobo &&
+    kobo > 0;
   const save = async (send: boolean) => {
     setBusy(true);
     setError(undefined);
     try {
       const x = await postOnce<CustomerInvoice>("/v1/invoices", key.current, {
-        customer: { name: name.trim(), phone: phone.trim() },
+        customer: to
+          ? { name: to.name, key: to.key }
+          : { name: name.trim(), phone: phone.trim() },
         description: what.trim(),
         amount_kobo: kobo,
       });
@@ -289,22 +300,33 @@ export function InvoiceAdd({
   return (
     <>
       <div className="tk-sheet-list tk-form-body">
-        <KitField label="Customer's name">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoComplete="off"
-            placeholder="Bisi Okafor"
-          />
-        </KitField>
-        <KitField label="Their phone number" hint="The invoice is sent here.">
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="0803 000 0000"
-          />
-        </KitField>
+        {to ? (
+          <p className="tk-form-now">
+            To {to.name}: it reaches them on Taskiem, with their bills.
+          </p>
+        ) : (
+          <>
+            <KitField label="Customer's name">
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="off"
+                placeholder="Bisi Okafor"
+              />
+            </KitField>
+            <KitField
+              label="Their phone number"
+              hint="The invoice is sent here."
+            >
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="0803 000 0000"
+              />
+            </KitField>
+          </>
+        )}
         <KitField label="What it is for">
           <input
             value={what}

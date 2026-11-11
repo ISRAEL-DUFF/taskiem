@@ -34,6 +34,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -137,6 +138,7 @@ func main() {
 	token := flag.String("token", "xb_demo_platform_token", "the platform token Taskiem sends")
 	caOut := flag.String("ca", "", "where to write the PEM certificate Taskiem must trust (SSL_CERT_FILE)")
 	clamdAddr := flag.String("clamd", "127.0.0.1:18095", "where the stand-in malware scanner listens")
+	pass := flag.String("pass", "", "loopback addresses (host:port, comma-separated) the proxy also tunnels to as they are: the how-to videos' stand-ins for WhatsApp and the model")
 	flag.Parse()
 
 	f := xenibasetest.New(tb{})
@@ -159,6 +161,11 @@ func main() {
 	// no path (media.FetchPublic insists): here a port of its own on the
 	// same IP for each project, which serves the fake's /edge/{ref}.
 	ports := &projectPorts{ip: *ip, next: *port + 10, byRef: map[string]int{}, allowed: map[int]bool{*port: true}}
+	for _, hp := range strings.Split(*pass, ",") {
+		if hp = strings.TrimSpace(hp); hp != "" {
+			ports.pass = append(ports.pass, hp)
+		}
+	}
 	edge := regexp.MustCompile(regexp.QuoteMeta(public) + `/edge/(k[0-9a-f]{7})`)
 	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if store.serve(w, r) {
@@ -254,6 +261,8 @@ type projectPorts struct {
 	next    int
 	byRef   map[string]int
 	allowed map[int]bool
+	// pass are loopback addresses tunnelled to as they are (-pass).
+	pass []string
 }
 
 func (p *projectPorts) serve(ref string, inner http.Handler, store *files, cfg *tls.Config) int {
@@ -279,6 +288,9 @@ func (p *projectPorts) serve(ref string, inner http.Handler, store *files, cfg *
 }
 
 func (p *projectPorts) ok(host string) (string, bool) {
+	if slices.Contains(p.pass, host) {
+		return host, true
+	}
 	h, ps, err := net.SplitHostPort(host)
 	if err != nil || h != p.ip {
 		return "", false

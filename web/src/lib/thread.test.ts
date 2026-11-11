@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { atBottom, firstUnread, followNew, startsRun } from "./thread";
+import {
+  atBottom,
+  atNewest,
+  firstUnread,
+  followNew,
+  newestTop,
+  startsRun,
+} from "./thread";
 import type { LinkMessage } from "./linkchat";
 
 const msg = (
@@ -14,6 +21,33 @@ const msg = (
   body: id,
   created_at: at,
   ...o,
+});
+
+describe("newestTop", () => {
+  it("puts the newest message at the view's end when cards follow it", () => {
+    // Messages end at 900; 700 px of alert cards follow; a 500 px view.
+    expect(
+      newestTop({ scrollHeight: 1600, clientHeight: 500, newestEnd: 900 }),
+    ).toBe(416);
+  });
+  it("is the thread's end when nothing of note follows", () => {
+    expect(
+      newestTop({ scrollHeight: 1600, clientHeight: 500, newestEnd: 1560 }),
+    ).toBeUndefined();
+  });
+});
+
+describe("atNewest", () => {
+  it("counts the newest message in view, with cards below, as at the end", () => {
+    const m = { scrollHeight: 1600, clientHeight: 500, newestEnd: 900 };
+    expect(atNewest({ ...m, scrollTop: 416 })).toBe(true);
+    // Scrolled up past it: away.
+    expect(atNewest({ ...m, scrollTop: 100 })).toBe(false);
+    // Down among the cards, the newest message gone above: still away.
+    expect(atNewest({ ...m, scrollTop: 950 })).toBe(false);
+    // At the very end: at the end.
+    expect(atNewest({ ...m, scrollTop: 1100 })).toBe(true);
+  });
 });
 
 describe("atBottom", () => {

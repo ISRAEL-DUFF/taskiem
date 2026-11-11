@@ -295,7 +295,7 @@ means signing in again every morning, which no one will do twice.
   a phone number can be given to someone else. A device session unused for
   30 days ends; signing in again with a chat code proves the number again.
 
-**As built** (M2): migration 00418 gives sessions a device (`device_id`,
+**As built** (M2): migration 00424 gives sessions a device (`device_id`,
 `device_name`, `device_platform`) and `last_used_at`. `POST /v1/auth/login`,
 `/v1/auth/passkey`, `/v1/auth/chat/verify`, `/v1/auth/chat/link` and
 `/v1/signup` take `device` beside `bearer: true` (`api/devices.go`); such a
@@ -461,7 +461,7 @@ other takes M7 and M8, since they divide by screen.
   (`web/e2e/parity.spec.ts`, `mobile/test/parity_test.dart`);
   `GET /v1/app/config`; the licence gate reads `pubspec.lock`;
   `.github/workflows/mobile.yml`.
-- **M2**: device sessions (§5.2, migration 00418); the generated API client
+- **M2**: device sessions (§5.2, migration 00424); the generated API client
   (`mobile/api.txt` → `lib/api/api.g.dart`); signing in with a password or a
   WhatsApp or Telegram code, signing up as the web does, staying signed in
   (the token in the phone's secure storage, checked on opening), signing

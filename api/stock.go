@@ -1103,7 +1103,7 @@ func requiredKey(r *http.Request) (string, error) {
 func (s *Server) stockFail(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, errStockOff):
-		writeJSON(w, http.StatusConflict, map[string]any{"error": "no catalogue keeps stock yet: press Keep my stock", "code": "stock_off"})
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "Your stock is not kept on Taskiem yet. Turn it on with Keep my stock: Storefront, then Stock.", "code": "stock_off"})
 	case errors.Is(err, errNoItem):
 		writeErr(w, http.StatusNotFound, "no such item")
 	case errors.Is(err, errNoVariantColumns):

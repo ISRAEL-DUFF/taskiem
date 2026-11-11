@@ -18,7 +18,7 @@ import (
 )
 
 // Device sessions: staying signed in on a phone (docs/spec/mobile-app.md
-// §5.2, S2, migration 00418). The phone app signs in with `bearer: true` and
+// §5.2, S2, migration 00424). The phone app signs in with `bearer: true` and
 // a `device` naming the phone; its session lasts 30 days without use,
 // renewed by use (taskiem_auth_session_touch, at most once an hour) up to
 // 180 days from signing in. Signing in again on the same phone ends its

@@ -180,7 +180,9 @@ chat_invites.id
 chat_invites.invited_by
 chat_invites.inviter
 chat_invites.joined_user
+chat_invites.name
 chat_invites.roles
+chat_invites.sent_at
 chat_invites.state
 chat_invites.tenant_id
 chat_invites.token_hash
@@ -1059,6 +1061,14 @@ sso_requests.return_to
 sso_requests.state
 sso_requests.tenant_id
 sso_requests.verifier
+staff_clock.out_at
+staff_clock.tenant_id
+staff_profiles.rota
+staff_profiles.tenant_id
+staff_task_repeats.stopped_at
+staff_task_repeats.tenant_id
+staff_tasks.state
+staff_tasks.tenant_id
 stock_movements.change
 stock_movements.claimed_at
 stock_movements.count_after

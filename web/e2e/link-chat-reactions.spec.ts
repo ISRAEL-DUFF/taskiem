@@ -235,6 +235,10 @@ test("a star stays on when a copy read before it was saved arrives after", async
 test("a star is yours alone: marked in the thread, listed under Starred, opened at the message", async ({
   browser,
 }) => {
+  // Two businesses, pages loaded again and axe in both themes: on a loaded
+  // runner this outlasts 60 s (CI timed out on it), as the other heavy chat
+  // tests did.
+  test.setTimeout(120_000);
   const { seller, buyer, link } = await linked(browser);
   for (const t of ["Rice is back in stock", "The price is 45000", "On its way"])
     await seller.request.post(`/v1/link-chats/${link}/messages`, {
@@ -298,6 +302,10 @@ test("a star is yours alone: marked in the thread, listed under Starred, opened 
 test("Info shows when a message was sent and read, and who reacted", async ({
   browser,
 }) => {
+  // Two businesses, pages loaded again and axe in both themes: on a loaded
+  // runner this outlasts 60 s (CI timed out on it), as the other heavy chat
+  // tests did.
+  test.setTimeout(120_000);
   const { seller, buyer, link } = await linked(browser);
   await buyer.goto(`/chat?with=${link}`);
   await buyer

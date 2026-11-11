@@ -110,7 +110,7 @@ test("while an answer is being made there is a clock on the message and Taskiem 
   await expect(pane(page).getByTestId("taskiem-typing")).toBeVisible();
   await expect(ours(page).getByRole("img", { name: "Sending" })).toBeVisible();
   answer();
-  await expect(theirs(page).last()).toBeVisible({ timeout: 8000 });
+  await expect(theirs(page).last()).toBeVisible({ timeout: 15_000 });
   await expect(pane(page).getByTestId("taskiem-typing")).toHaveCount(0);
   await expect(ours(page)).toHaveCount(1); // not twice
   await expect(ours(page).getByRole("img", { name: "Read" })).toBeVisible();

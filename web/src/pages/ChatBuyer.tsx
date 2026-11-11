@@ -14,7 +14,9 @@ import {
 } from "../lib/bills";
 import {
   bagOf,
+  notNowLine,
   orderLine,
+  STOREFRONT_PRICES,
   purchaseState,
   quoteText,
   reorderQty,
@@ -31,11 +33,11 @@ import { answersDelivery } from "../lib/purchases";
 import { buyerSteps, sameName } from "../lib/tradeorders";
 import type { ItemLink, PriceItem, SupplierPrices } from "../lib/pricelists";
 import type { Purchase } from "../lib/purchases";
-import type { StockItem, StockView } from "../lib/stock";
+import type { StockView } from "../lib/stock";
 import type { Supplier } from "../lib/purchases";
 import { formatPrice } from "../lib/storefront";
 import { nairaKobo } from "../lib/toolforms";
-import { ErrorBox, useLoad } from "../ui";
+import { ErrorBox, useAction, useLoad } from "../ui";
 import { initialsOf } from "./ChatAvatar";
 import { useConfirm } from "./ConfirmSheet";
 
@@ -53,6 +55,8 @@ export interface OrderStart {
   last?: Purchase;
   /** A category picked in "@": the list opens showing it. */
   category?: string;
+  /** Make an offer, from its tile: the review asks our price. */
+  offer?: boolean;
 }
 
 /** An order from a supplier's price list: pick, review, place (or ask them
@@ -111,6 +115,7 @@ export function OrderSheet({
   business,
   start,
   from,
+  browse = false,
   onClose,
   onPlaced,
 }: {
@@ -118,6 +123,9 @@ export function OrderSheet({
   business: string;
   start?: OrderStart;
   from?: DOMRect | null;
+  /** Someone who may not order looks around their shop: no bag, no
+   * steppers (docs/spec/business-chat-tools.md §3). */
+  browse?: boolean;
   onClose: () => void;
   onPlaced?: (words: string) => void;
 }) {
@@ -164,14 +172,17 @@ export function OrderSheet({
   const theirs = suppliers.data?.find((x) => x.link_id === link);
   const [who, setWho] = useState<string>();
   const [phone, setPhone] = useState("");
-  const own = useLoad(
+  // Our own stock: an order is kept in it, so it must be on (Keep my stock).
+  const stock = useLoad(
     () =>
-      get<StockView>("/v1/stock").then(
-        (r) => r.items,
-        () => [] as StockItem[],
+      get<StockView>("/v1/stock").catch(
+        (): StockView => ({ keeps_stock: true, catalogue: null, items: [] }),
       ),
     [],
   );
+  const own = { data: stock.data?.items };
+  const stockOff = stock.data?.keeps_stock === false;
+  const startStock = useAction();
   const list = prices.data?.suppliers[0];
   const [qty, setQty] = useState<Record<string, number>>(
     () => start?.qty ?? {},
@@ -193,7 +204,7 @@ export function OrderSheet({
   );
   const [note, setNote] = useState("");
   // Make an offer (phase 7): our own price for the whole order.
-  const [offering, setOffering] = useState(false);
+  const [offering, setOffering] = useState(!!start?.offer);
   const [offerText, setOfferText] = useState("");
   const [mine, setMine] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -365,18 +376,28 @@ export function OrderSheet({
     new Date(list.updated_at).toDateString() === new Date().toDateString()
       ? "updated today"
       : "as they share them";
+  // No list shared: their storefront, at its prices.
+  const storefront = list?.name === STOREFRONT_PRICES;
   // Everything placing reads is here; what still stops it, said.
   const loaded = !!suppliers.data && !!own.data && !!links.data;
   const needPhone =
     !!suppliers.data && !theirs && supplierFor === "new" && phone.trim() === "";
   const stops = !loaded
     ? undefined
-    : needPhone
-      ? `Add ${business}'s phone number to place the order.`
-      : undefined;
+    : stockOff
+      ? "Start keeping your stock on Taskiem to place the order."
+      : needPhone
+        ? `Add ${business}'s phone number to place the order.`
+        : undefined;
   return (
     <Sheet
-      title={step === "review" ? "Review your order" : `Order from ${business}`}
+      title={
+        step === "review"
+          ? "Review your order"
+          : browse
+            ? `${business}'s shop`
+            : `Order from ${business}`
+      }
       from={from}
       onClose={onClose}
       onBack={step === "review" ? () => setStep("pick") : undefined}
@@ -392,9 +413,15 @@ export function OrderSheet({
           />
         ) : undefined
       }
-      sub={step === "pick" ? `Your prices · ${updated}` : undefined}
+      sub={
+        step === "pick"
+          ? storefront
+            ? `Their storefront prices · ${updated}`
+            : `Your prices · ${updated}`
+          : undefined
+      }
       footer={
-        step === "pick" ? (
+        browse ? undefined : step === "pick" ? (
           <div className="tk-bag" data-testid="order-bag">
             <span>
               <span className="tk-bag-count">
@@ -443,7 +470,9 @@ export function OrderSheet({
               <button
                 type="button"
                 className="tk-cta"
-                disabled={busy || !loaded || needPhone || !!offerProblem}
+                disabled={
+                  busy || !loaded || stockOff || needPhone || !!offerProblem
+                }
                 onClick={() => void place()}
               >
                 {busy ? "Sending…" : offering ? "Send offer" : "Place order"}
@@ -454,7 +483,35 @@ export function OrderSheet({
       }
     >
       {done && <SavedTick words={done} />}
-      {step === "pick" && last.data && bag.lines.length === 0 && list && (
+      {stockOff && list && (
+        <section
+          className="tk-order-stock"
+          aria-labelledby="order-stock-off"
+          data-testid="order-stock-off"
+        >
+          <h3 id="order-stock-off">First, keep your stock on Taskiem</h3>
+          <p>
+            What you order from {business} is added to your stock when it
+            comes, and they become one of your suppliers. Taskiem keeps your
+            stock in your products table.
+          </p>
+          <button
+            type="button"
+            className="tk-btn"
+            disabled={startStock.busy}
+            onClick={() =>
+              void startStock.run(
+                async () => (await post("/v1/stock/setup"), stock.reload()),
+                "Your stock is kept on Taskiem now",
+              )
+            }
+          >
+            {startStock.busy ? "Starting…" : "Start keeping my stock"}
+          </button>
+          <ErrorBox error={startStock.error} />
+        </section>
+      )}
+      {!browse && step === "pick" && last.data && bag.lines.length === 0 && list && (
         <div className="tk-order-who">
           <button
             type="button"
@@ -483,18 +540,22 @@ export function OrderSheet({
       ) : !list ? (
         <KitEmpty
           icon="tag"
-          title={`${business} shares no price list with you`}
+          title={`Nothing on ${business}'s storefront yet`}
         >
-          Ask them in the chat to share one.
+          Ask them in the chat what they sell, or to share a price list.
         </KitEmpty>
       ) : step === "pick" ? (
         <>
           <label className="tk-search">
             <Icon name="search" />
-            <span className="sr-only">Search their price list</span>
+            <span className="sr-only">
+              {storefront ? "Search their shop" : "Search their price list"}
+            </span>
             <input
               type="search"
-              placeholder="Search their price list"
+              placeholder={
+                storefront ? "Search their shop" : "Search their price list"
+              }
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -546,7 +607,20 @@ export function OrderSheet({
                           aria-hidden="true"
                           data-tone="sand"
                         >
-                          <Icon name="package" />
+                          {it.photo ? (
+                            <img
+                              src={`/v1/link-chats/${encodeURIComponent(link)}/photo?item=${encodeURIComponent(it.item_id)}&w=320`}
+                              alt=""
+                              loading="lazy"
+                              onError={(e) => {
+                                // Their picture cannot be read: no broken
+                                // image, the tile's colour alone.
+                                e.currentTarget.hidden = true;
+                              }}
+                            />
+                          ) : (
+                            <Icon name="package" />
+                          )}
                         </span>
                         <span className="tk-row-words">
                           <span className="tk-row-name">{it.name}</span>
@@ -554,15 +628,20 @@ export function OrderSheet({
                             {it.available &&
                             !(soldInSizes(it) && !it.sizes?.length)
                               ? orderLine(it)
-                              : "Not available now"}
+                              : notNowLine(it)}
                           </span>
+                          {browse && it.description && (
+                            <span className="tk-row-sub">
+                              {it.description}
+                            </span>
+                          )}
                           {it.available && !!it.breaks?.length && (
                             <span className="tk-row-sub tk-breaks">
                               {breakWords(it)}
                             </span>
                           )}
                         </span>
-                        {soldInSizes(it) ? (
+                        {browse ? null : soldInSizes(it) ? (
                           <button
                             type="button"
                             className="tk-btn soft"

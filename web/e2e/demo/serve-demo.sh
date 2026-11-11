@@ -57,7 +57,9 @@ fake=bin/demo-fakexenibase
 fakeenv="$root/bin/demo-fakexenibase.env"
 if ! { exec 3<>/dev/tcp/127.0.0.1/18094; } 2>/dev/null || [ ! -s "$fakeenv" ]; then
   go build -o "$fake" ./web/e2e/demo/_fakexenibase
-  setsid nohup "$fake" -ca "$root/bin/demo-fakexenibase.pem" >"$fakeenv" 2>"$root/bin/demo-fakexenibase.log" </dev/null &
+  # DEMO_PASS: loopback addresses the proxy also lets through (the how-to
+  # videos' stand-ins for WhatsApp and the model, video/howto/world.sh).
+  setsid nohup "$fake" -ca "$root/bin/demo-fakexenibase.pem" -pass "${DEMO_PASS:-}" >"$fakeenv" 2>"$root/bin/demo-fakexenibase.log" </dev/null &
   for _ in $(seq 50); do [ -s "$fakeenv" ] && break; sleep 0.2; done
 else
   exec 3>&-

@@ -1,6 +1,6 @@
 # Chat: five more flows
 
-Status: **plan**, for review (8 November 2026; phase 0 added 9 November, from the founder's checks on a phone). Phases 0, 1 and 2 are built (see As built under each). Written with the founder; the live
+Status: **plan**, for review (8 November 2026; phase 0 added 9 November, from the founder's checks on a phone). Phases 0 to 3 are built (see As built under each). Written with the founder; the live
 doc is [the shared plan](https://claude.ai/artifact/FycMX9CLMjjE6oMBiGCumm), and this file is its copy beside the code.
 
 ## Summary
@@ -328,14 +328,84 @@ Seven phases, each a PR that ships on its own. Phase 0 puts the chat's tools, mo
    - Done when: a customer's WhatsApp message to the business's number appears as a thread in the web chat, and a staff reply reaches their WhatsApp.
 2. **Orders from customers' messages** (built; above). The reader for text; the draft order card with questions; confirm; the total and how to pay sent back; paid matched; on to stock, dispatch and "On the way". Then voice notes for customers (the transcription that exists) and photos of written lists (after phase 4's image reading).
    - Done when: "2 jollof and 1 chapman, deliver to Yaba by 1" becomes a confirmed, paid, dispatched order without retyping.
-3. **Tasks for staff.** Tasks from words, cards and Tools; WhatsApp delivery and DONE; photo proof; nudges and late lines; the briefing line; repeats.
-   - Done when: "@Tunde count the float every day at 7am" makes a repeating task Tunde closes from WhatsApp, and a late one reaches the owner.
+3. **Staff and their tasks.** Folded in on 9 November 2026: staff management as it stood (members by email on the web, roles, chat sign-in) had no way to add someone by phone, no profile, no shifts or attendance and no page for one person's figures, and tasks need all of it. See "Phase 3 plan" below.
+   - Done when: the owner adds Tunde by his phone number from chat, Tunde joins from WhatsApp, clocks in, gets "count the float every day at 7am" as a repeating task he closes from WhatsApp, a late one reaches the owner, and Tunde's page shows his hours, sales, handovers and tasks.
 4. **Expenses from receipts.** Images in the AI layer; the receipt reader; propose, record, photo kept; staff limits; duplicates; "how much did we spend".
    - Done when: a photo of a fuel receipt becomes a categorised expense in one tap.
 5. **Restocking that drafts itself.** One order per supplier for all low items; unlinked suppliers by WhatsApp, Telegram or SMS; the ready card; a set day; send on its own up to a limit; "usually lasts".
    - Done when: on Monday morning each supplier with low items has one ready order, sent with one tap each.
 6. **Quote to cash.** Quotes built from lines in the chat; sent to customers and linked businesses; accept makes the deposit invoice; the balance follows; a web page to price one.
    - Done when: a caterer quotes ₦840,000 from a customer's message, gets the deposit, and the balance invoice goes out after the event.
+
+Next spec: [the payments flow](chat-payments-flow.md), starting with paying a bill by transfer in the chat.
+
+## Phase 3 plan: staff and their tasks
+
+Phase 3 builds what tasks stand on first: staff who can be added by phone and reached on WhatsApp, a profile for each, their shifts and when they clocked in, and one page per person. Tasks (flow 2, above) come on top.
+
+**1. Adding staff by phone, from the web or from chat**
+
+- **The web:** Settings, **Staff** (beside Members): Add staff with a name, a phone number and a role (cashier, shift manager, or any role the business has); email is optional.
+- **Chat:** "add Tunde 0803 123 4567 as cashier" (WhatsApp, Telegram or the Taskiem chat), for those who manage members. Taskiem shows a card to confirm; nothing is added from words alone.
+- **Joining:** Tunde gets a WhatsApp message from Taskiem (a template, since he has never written): "Ada added you to Ada Kitchen as a cashier. Reply JOIN to start." JOIN from that number, and only that number, makes his account: a person with no email (`staff+…@phone.taskiem.invalid`, as a business that signs up in chat), his WhatsApp bound, his role granted. A number already on an account joins that account. An invitation lasts seven days; it can be sent again or cancelled.
+- **Signing in on the web** needs no email: the chat sign-in that exists (a code or a link to his chat).
+- **Removing** someone is one step ("Remove from the business"): every role goes, their chat stops working for the business, their open tasks go back to whoever gave them. Their history stays.
+
+**2. A profile for each person**
+
+- Their name, phone, role(s), job title ("Head chef"), the day they started, a note, and their pay (an amount and per hour, day, week or month), for the record only: Taskiem pays no one here.
+- The pay is seen only by those who manage members; the phone is masked to anyone without `pii.reveal`, as customers' are.
+
+**3. Shifts and clocking in**
+
+- **The rota:** each person's usual days and hours ("Mon to Sat, 8:00 to 16:00"), set on their profile.
+- **Clocking in and out:** "in" and "out" on WhatsApp or Telegram, or a button in the Taskiem chat. A shift manager's handover clocks them out. Clocking in can carry the location WhatsApp shares, kept with the record and shown on a map link to managers; it is never asked for.
+- **Late and missing:** 15 minutes after a shift should start with no "in", the owner (or the shift managers) get a line: "Tunde has not clocked in (due 8:00)". A shift left open 4 hours after it should end is closed at its end time, marked "closed by Taskiem".
+- **Who is in:** the Staff page and a line in the briefing: "In now: Tunde, Bisi. Not in yet: Musa (due 8:00)".
+
+**4. One page per person**
+
+- For a day, a week or a month: hours worked (and late days), sales they recorded and how they were paid, handovers with the cash counted against the cash sold (short or over), orders they worked, and their tasks (done, late, open).
+- Owners and managers see everyone's; a person sees their own in chat ("my week").
+
+**5. Tasks** (flow 2, above), with these settled:
+
+- A task is given to a person or to a role ("any cashier"); for a role, the first to take it has it.
+- Tasks go to the person in chat; on WhatsApp outside the 24 hours, the staff task template.
+- DONE closes it (a photo when one was asked for); CAN'T with a word sends it back.
+- 30 minutes before it is due, a nudge; when late, a line to whoever gave it with Remind and Give to someone else.
+- Repeating tasks make one task each time they fall due.
+- The briefing gains "Tasks: 3 due today, 1 late".
+- The Tasks tile in the chat's tools lists them; "Give this to…" on an order, a low-stock card, a bill or a delivery makes one linked to it (a delivery opens dispatch instead).
+
+**Order of work:** staff by phone and removal; profiles; shifts and clocking in; tasks; the person's page last, since it reads all the rest. One pull request, built and reviewed in those steps.
+
+**Open questions:**
+
+- **Pay:** a record only for now. Paying staff from Taskiem (as riders are paid) would be a later phase.
+- **Overtime and breaks** are not counted, only time between in and out.
+
+### As built: phase 3, staff and their tasks
+
+Built 9 November 2026, in the plan's five steps. `TestStaffByPhone`, `TestStaffProfile`, `TestStaffClock` and `TestStaffTasks` (`api/staff_test.go`) and `TestCashierShift` (`api/chat_staff_test.go`) check the server with fake WhatsApp and a test clock; `web/e2e/staff.spec.ts` and `web/e2e/tasks.spec.ts` check the Staff, person and Tasks pages at 390 and 360 px in both themes with axe.
+
+- **1. Staff by phone.** Built on the chat invitations that already existed (`api/chat_invites.go`), not beside them. Migration 00417 gives an invitation a name and when it was sent, and lets it be cancelled. Staff (Settings, beside Members; for those who manage members) lists the people, who is still to tap Join, Send again (not within five minutes) and Cancel. In chat, "add Tunde 0803 123 4567 as cashier" is confirmed before the invitation goes. Join names the account and tells those who manage members. Remove takes every role; the business keeps at least one owner, and only an owner removes an owner.
+- **2. Profiles.** Migration 00418: job title, the day they started, a note, pay (an amount per hour, day, week or month) and the usual hours, one shift a weekday. The pay is seen and set only by those who manage members; the audit log records that pay was set, never the amount.
+- **3. Clocking in.** Migration 00419. "in" and "out" (and "clock in", "I'm out", …) on WhatsApp or Telegram, or the Clock in and Clock out tiles in the Taskiem chat's tools (for staff; owners and admins say "in" and "out"). A location shared within 30 minutes of "in" goes with that clock-in, as a maps link; it is never asked for, and sharing a location never clocks anyone in. A shift manager's handover clocks them out. A minute job: someone 15 minutes past their usual start (and under three hours) is told once to those who run the business ("Bisi has not clocked in. Due at 08:00."); a shift left open is closed at its usual end once four hours have passed, or after 16 hours with no usual hours, marked closed by Taskiem. "who is in", the Staff page's Today and the briefing's Staff tile show who is in and who is not in yet.
+- **4. Tasks.** Migration 00420, and the WhatsApp template `taskiem_staff_task` (Done and Can't as quick replies). Those who manage members or invoices (owner, admin, shift manager) give tasks:
+  - from the Tasks page or the Tasks tile in the chat's tools: what, who (a person, or anyone in a role), any time / by a time / every day / every week on a day, and a photo when done;
+  - from a card: **Give this to…** on a tagged invoice, bill, order or order to a supplier, and on a low stock card, starts the task with the thing it is about ("Pack order P-7K8YED", "Restock Rice");
+  - in chat: "@Bisi clean the freezer by 5pm, with a photo", "@cashier count the float by 7am", "@Tunde count the float every day at 7am" (or "every Monday at 9am" first): Taskiem asks "Make it a task for Bisi: clean the freezer, by 17:00, with a photo?" and makes it on Yes. A time already past today ("by 7am" said at 9am) is tomorrow's. Two people with the same first name are asked about ("Which one: Bisi Ade or Bisi Okon?"); "@" with a linked business's longer name is a message to the business, not a task.
+  - The person hears in their chat with Done and Can't (a role's task goes to everyone in the role with I'll do it; the first to take it has it). Until Meta approves `taskiem_staff_task` on a number, a task outside the 24 hours goes as the business message template instead (DONE and CAN'T work as words). A button on a task from another of the person's businesses answers in that business. **DONE** closes it; with several open it lists them for DONE 2. A task that needs a photo asks for it, and the next photo within 30 minutes closes it, kept privately in the business's own storage (on the web, Done, with a photo). **CAN'T** and why sends it back to the giver.
+  - The minute job nudges 30 minutes before it is due (a role's task, everyone in the role, until someone takes it), tells the giver once when it is late, with Remind ("Count the cash float is 5 minutes late (Bisi)"), and makes each repeat's task at the start of its day. A task given already due soon or late is not nudged or told late as well. A repeat set after today's time starts on its next day.
+  - A task about an order closes when the order is ready or completed, and is called off when the order is declined, cancelled or expires; one about an invoice closes when it is paid and is called off when it is void. Other linked tasks are closed with DONE.
+  - Givers see everyone's (Remind, Give to someone else, Call off; the person who had it is told) and the repeats (Stop); the briefing's Tasks tile counts those still due today and those late, each once. Removing someone gives their open tasks back to whoever gave them and stops their repeats; tasks and repeats they gave become those of whoever removed them, and they hear nothing more.
+  - A photo is checked to be one, and the task checked, before it is kept.
+- **5. One page per person.** `GET /v1/staff/{user}/figures?period=day|week|month`: the hours clocked over how many shifts, the days late and the days missed by their usual hours (from the day they joined or started), the sales they recorded by how paid, their handovers with the cash counted against the cash sold (a handover now records the cash sold with it), the orders they worked (from what they did to orders), and their tasks. On the person's page under Today, This week and This month; anyone's for those who run the business, and one's own in chat with "my day", "my week" or "my month".
+- **Where it differs from the plan:**
+  - Staff live in their own Staff page (and Tasks in their own), linked from the menu, rather than inside Settings.
+  - "Give this to…" on an order makes a task about the order; sending a rider stays with dispatch on the order's page, as before.
+  - Staff signing in on the web with no email uses the chat sign-in that already existed; nothing new was needed.
 
 ## Tests and checks
 

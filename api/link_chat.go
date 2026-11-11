@@ -52,6 +52,7 @@ func (s *Server) linkChatRoutes(r chi.Router) {
 	r.With(write, s.tenantWide).Post("/link-chats/{link}/files", s.sendLinkFile)
 	r.Get("/link-chats/{link}/files/{id}", s.linkFile)
 	r.Get("/link-chats/{link}/items", s.linkChatItems)
+	r.Get("/link-chats/{link}/photo", s.linkChatPhoto)
 	r.Get("/link-chats/{link}/refs", s.linkChatRefs)
 	r.Get("/link-chats/{link}/card", s.linkChatCard)
 	r.Post("/link-chats/{link}/read", s.readLinkChat)

@@ -304,3 +304,47 @@ test("the Taskiem row says how many things need you", async ({ browser }) => {
   await page.goto("/chat");
   await expect(page.getByTestId("taskiem-waiting")).toHaveText("7 things need you");
 });
+
+test("Give this to… on a low stock card makes a task about the item", async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+  await owner(page);
+  await answer(page);
+  const given: unknown[] = [];
+  await page.route("**/v1/staff/tasks", (r) =>
+    r.request().method() === "POST"
+      ? (given.push(r.request().postDataJSON()), r.fulfill(json({ task: null, repeat_id: null }, 201)))
+      : r.fulfill(json({ tasks: [], repeats: [], give: true, people: [{ id: "u2", name: "Tunde Bakare", roles: ["cashier"] }] })),
+  );
+  await page.goto("/chat?with=taskiem");
+  const garri = page.getByTestId("chat-alerts").getByRole("article", { name: "Garri, Ijebu is running low" });
+  await garri.getByRole("button", { name: /^Give this to/ }).click();
+  const form = page.getByRole("dialog", { name: "Give this to someone" });
+  await expect(form.getByLabel("What is to be done")).toHaveValue("Restock Garri, Ijebu");
+  await form.getByLabel("Who it is for").selectOption({ label: "Tunde Bakare" });
+  await form.getByRole("button", { name: "Give the task" }).click();
+  await expect(form).toHaveCount(0);
+  expect(given).toEqual([{ what: "Restock Garri, Ijebu", photo: false, to_user: "u2", link: { kind: "stock", id: "s3", name: "Garri, Ijebu" } }]);
+});
+
+test("a question asked over the cards gets its answer in view, not left above them", async ({ browser }) => {
+  test.setTimeout(120_000);
+  const page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+  await owner(page);
+  await answer(page);
+  await page.goto("/chat?with=taskiem");
+  await expect(page.getByTestId("chat-alerts").getByTestId("chat-alert")).toHaveCount(6);
+  const box = page.getByLabel("Message to Taskiem");
+  await box.fill("who is in");
+  await box.press("Enter");
+  const said = page.getByTestId("taskiem-message").filter({ hasText: /clocked in|In now/ }).last();
+  await expect(said).toBeVisible();
+  // The answer is on screen, with the cards below it, and the thread does not
+  // offer to jump to the newest: it is there.
+  await expect(said).toBeInViewport();
+  await expect(page.getByTestId("chat-alerts")).toBeVisible();
+  // Another question: followed again.
+  await box.fill("who is in");
+  await box.press("Enter");
+  await expect(page.getByTestId("taskiem-message").filter({ hasText: /clocked in|In now/ })).toHaveCount(2);
+  await expect(page.getByTestId("taskiem-message").filter({ hasText: /clocked in|In now/ }).last()).toBeInViewport();
+});
