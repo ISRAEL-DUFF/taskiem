@@ -379,6 +379,7 @@ export const TOOLS: Tool[] = [
           },
           href: `/trade-orders/${encodeURIComponent(o.id)}`,
           tags: o.status === "received" ? ["new"] : [],
+          link: o.link || undefined,
           data: o,
         }),
       ),
@@ -598,6 +599,17 @@ export function roleTools(
 
 /** The tools a person may open, matching what follows "/" (a word's start),
  * shaped to their role when they are staff. */
+/** The tools a business's conversation shows (docs/spec/business-chat-
+ * tools.md §3): what is between us and them, and ours only where it is
+ * about them. The rest of our own tools are in the Taskiem conversation. */
+export const BUSINESS_TOOLS: ToolKey[] = [
+  "purchases",
+  "orders",
+  "bills",
+  "invoices",
+  "prices",
+];
+
 export function toolsFor(
   can: (perm: string) => boolean,
   query = "",

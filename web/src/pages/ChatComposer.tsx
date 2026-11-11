@@ -552,6 +552,7 @@ export function ComposerView<R>({
               leaving={toolsP.leaving}
               scope={c.o.scope?.link}
               supplier={c.o.scope?.supplies ? c.o.scope.name : undefined}
+              business={c.o.scope?.name}
               extras={c.o.extras}
             />
           )}
