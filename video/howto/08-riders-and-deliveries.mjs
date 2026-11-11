@@ -39,11 +39,14 @@ async function prepare() {
   d = await must(await rq.put(BASE + `/v1/order-drafts/${d.id}`, { headers: H, data: { version: d.version, op: "details", delivery_kobo: 150000, pay: "on_delivery" } }), "details");
   d = d.draft ?? d;
   await must(await rq.post(BASE + `/v1/order-drafts/${d.id}/confirm`, { headers: H, data: { version: d.version } }), "confirm");
-  // Kunle taps in: the message the Riders page's link opens WhatsApp with.
+  // Kunle taps in: the link the Riders page gives (to send him by SMS)
+  // opens WhatsApp with a message to Taskiem's number. The public pages
+  // answer for the form host's name, on their own port in the demo.
   const tap = (await must(await rq.get(BASE + "/v1/riders", { headers: H }), "riders")).tap_in_url;
   const at = new URL(tap);
-  const go = await rq.get(BASE + at.pathname + "/whatsapp", { maxRedirects: 0 });
+  const go = await rq.get(`http://127.0.0.1:18095${at.pathname}/whatsapp`, { headers: { Host: at.host }, maxRedirects: 0 });
   const text = new URL(go.headers()["location"]).searchParams.get("text");
+  if (!text) throw new Error(`tap in: ${go.status()} ${await go.text()}`);
   await says(rq, BASE, { ...KUNLE, text });
   await page.waitForTimeout(1500);
   await page.context().close();

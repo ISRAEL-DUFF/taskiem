@@ -16,6 +16,9 @@ sleep 1
 setsid nohup node video/howto/fakes.mjs >video/out/howto/fakes.out 2>&1 </dev/null &
 eval "$(node video/howto/whatsapp.mjs env)"
 export DEMO_PASS=127.0.0.1:12626,127.0.0.1:12930
+# The public pages (a rider's tap-in link, forms), on their own port,
+# answered for the form host's name (video 8 asks with that Host).
+export TASKIEM_PUBLIC_ENABLED=true TASKIEM_PUBLIC_LISTEN=127.0.0.1:18095 TASKIEM_PUBLIC_FORM_HOST=forms.demo.test
 setsid nohup bash web/e2e/demo/serve-demo.sh >video/out/howto/server.log 2>&1 </dev/null &
 for _ in $(seq 150); do
   curl -sf localhost:18090/readyz >/dev/null && break
