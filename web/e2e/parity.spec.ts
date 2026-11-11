@@ -206,6 +206,41 @@ const SCREENS: {
     },
   },
   {
+    // A deal: Bayo's counter on our order, its history and when it lapses,
+    // Accept, Counter, Cancel. (Bayo's recording with the counter added.)
+    name: "chat-deal",
+    path: "/chat?with=ef99249d-9322-40ca-91c2-e24fdd450c15",
+    fixture: "chat-deal",
+    touch: true,
+    ready: async (p) => {
+      await expect(p.getByTestId("deal-actions")).toBeAttached();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("chat-stream").evaluate((e) => (e.scrollTop = e.scrollHeight));
+      await p.waitForTimeout(200);
+
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // Countering it: our price and a word with it.
+    name: "chat-deal-counter",
+    path: "/chat?with=ef99249d-9322-40ca-91c2-e24fdd450c15",
+    fixture: "chat-deal",
+    touch: true,
+    ready: async (p) => {
+      await expect(p.getByTestId("deal-actions")).toBeAttached();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("chat-stream").evaluate((e) => (e.scrollTop = e.scrollHeight));
+      await p.waitForTimeout(200);
+      await p.getByTestId("deal-actions").getByRole("button", { name: /^Counter/ }).click();
+      await p.getByTestId("deal-actions").locator("input").first().fill("755k");
+      await p.getByTestId("deal-actions").locator("input").nth(1).fill("Meet me halfway");
+      await p.getByTestId("chat-stream").evaluate((e) => (e.scrollTop = e.scrollHeight));
+      await p.waitForTimeout(200);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
     // A photo with its caption, a voice note and a PDF: Mama Tunde's again.
     name: "chat-files",
     path: "/chat?with=828e255f-dc0f-4dd3-bb19-0ba2764778d3",

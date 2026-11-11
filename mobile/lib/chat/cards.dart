@@ -12,11 +12,12 @@ import '../app/auth.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
+import 'deal.dart';
 import 'words.dart';
 
 /// `.tk-chatcard`: the frame, inside its bubble.
 class CardFrame extends StatelessWidget {
-  const CardFrame({super.key, required this.card, required this.title, required this.mine, required this.now, this.current, required this.actions});
+  const CardFrame({super.key, required this.card, required this.title, required this.mine, required this.now, this.current, required this.actions, this.deal});
 
   final LinkDocCard card;
 
@@ -26,6 +27,9 @@ class CardFrame extends StatelessWidget {
   final bool mine;
   final DateTime now;
   final List<Widget> actions;
+
+  /// A deal's answers (ChatDeal.tsx DealActions), under the buttons.
+  final Widget? deal;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +57,7 @@ class CardFrame extends StatelessWidget {
       ),
       Text(breakAfterHyphens(title), style: tkText(size: 15, weight: 600, color: t.text)),
       if (sub.isNotEmpty) Text(sub, style: tkText(size: 14, color: mine ? t.chatOutMeta : t.muted)),
+      if (card.deal != null) DealHistory(card: card, now: now),
       if (step != null)
         Semantics(
           label: '${steps[step]}: step ${step + 1} of ${steps.length}',
@@ -91,6 +96,8 @@ class CardFrame extends StatelessWidget {
           ),
         ),
       if (actions.isNotEmpty) Row(children: _spaced(actions)),
+      // `.tk-deal-form { margin-top: 6px }`, on a line of its own.
+      if (deal != null) Padding(padding: const EdgeInsets.only(top: 6), child: deal),
     ];
     return Semantics(
       container: true,

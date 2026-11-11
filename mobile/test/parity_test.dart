@@ -32,6 +32,7 @@ import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/attachments.dart';
 import 'package:taskiem/chat/composer.dart';
 import 'package:taskiem/chat/conversation.dart';
+import 'package:taskiem/chat/deal.dart';
 import 'package:taskiem/chat/customer.dart';
 import 'package:taskiem/chat/alerts.dart';
 import 'package:taskiem/chat/taskiem.dart';
@@ -338,6 +339,20 @@ final screens = <String, Screen>{
   ),
   'chat-tag': (build: () => _conversation('chat-tag', 'Bayo Rice Mills'), drive: (t) => _typeTag(t, '@')),
   'chat-tag-hash': (build: () => _conversation('chat-tag', 'Bayo Rice Mills'), drive: (t) => _typeTag(t, '#')),
+  'chat-deal': (build: () => _conversation('chat-deal', 'Bayo Rice Mills'), drive: (t) => _toEnd(t)),
+  'chat-deal-counter': (
+    build: () => _conversation('chat-deal', 'Bayo Rice Mills'),
+    drive: (t) async {
+      await _toEnd(t);
+      await t.tap(find.bySemanticsLabel('Counter P-9XTV54'));
+      await t.pump();
+      final boxes = find.descendant(of: find.byType(DealActions), matching: find.byType(EditableText));
+      await t.enterText(boxes.first, '755k');
+      await t.enterText(boxes.last, 'Meet me halfway');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await _toEnd(t);
+    },
+  ),
   'chat-pick': (
     build: () => _conversation('chat-tunde', "Mama Tunde's Market"),
     drive: (t) async {
@@ -480,6 +495,14 @@ Future<void> _typeTag(WidgetTester t, String mark) async {
   await t.enterText(find.byType(EditableText), mark);
   await t.pump();
   FocusManager.instance.primaryFocus?.unfocus();
+  await _loaded(t);
+}
+
+/// The thread at its end, what is fetched for real loaded.
+Future<void> _toEnd(WidgetTester t) async {
+  await _loaded(t);
+  final thread = t.state<ThreadViewState<ThreadMessage>>(find.byType(ThreadView<ThreadMessage>));
+  thread.scroll.jumpTo(thread.scroll.position.maxScrollExtent);
   await _loaded(t);
 }
 

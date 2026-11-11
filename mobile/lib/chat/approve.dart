@@ -161,9 +161,20 @@ class _ApproveSheetState extends State<ApproveSheet> {
 /// `.tk-field textarea` / `input`: the soft filled box, 17 px semibold, and
 /// Chromium's resize grip in a text area's corner, as the web is seen.
 class TkTextBox extends StatefulWidget {
-  const TkTextBox({super.key, required this.controller, this.lines = 1, this.digits});
+  const TkTextBox({super.key, required this.controller, this.lines = 1, this.digits, this.height = 54, this.size = 17, this.hint, this.money = false});
   final TextEditingController controller;
   final int lines;
+
+  /// `min-height` and the words' size: 54 and 17, or 44 and 16 in a
+  /// card's form (`.tk-deal-form .tk-field input`).
+  final double height;
+  final double size;
+
+  /// The words shown while it is empty (`placeholder`).
+  final String? hint;
+
+  /// A price typed (`inputmode="decimal"`).
+  final bool money;
 
   /// Only digits, at most this many (a code).
   final int? digits;
@@ -192,7 +203,7 @@ class _TkTextBoxState extends State<TkTextBox> {
     final t = TkTheme.tokens(context);
     final area = widget.lines > 1;
     return Container(
-      constraints: const BoxConstraints(minHeight: 54),
+      constraints: BoxConstraints(minHeight: widget.height),
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: area ? 14 : 0),
       alignment: Alignment.centerLeft,
       decoration: BoxDecoration(
@@ -211,15 +222,22 @@ class _TkTextBoxState extends State<TkTextBox> {
               focusNode: _focus,
               minLines: widget.lines,
               maxLines: area ? null : 1,
-              keyboardType: widget.digits != null ? TextInputType.number : (area ? TextInputType.multiline : TextInputType.text),
+              keyboardType: widget.digits != null
+                  ? TextInputType.number
+                  : widget.money
+                  ? const TextInputType.numberWithOptions(decimal: true)
+                  : (area ? TextInputType.multiline : TextInputType.text),
               autofillHints: widget.digits != null ? const [AutofillHints.oneTimeCode] : null,
               inputFormatters: widget.digits == null
                   ? const <TextInputFormatter>[]
                   : [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(widget.digits)],
               cursorColor: t.text,
               showCursor: !TkField.debugHideCaret,
-              style: tkText(size: 17, weight: 600, lineHeight: 1.5, color: t.text),
-              decoration: const InputDecoration.collapsed(hintText: null),
+              style: tkText(size: widget.size, weight: 600, lineHeight: 1.5, color: t.text),
+              decoration: InputDecoration.collapsed(
+                hintText: widget.hint,
+                hintStyle: tkText(size: widget.size, weight: 600, lineHeight: 1.5, color: t.muted.withValues(alpha: t.muted.a * 0.72)),
+              ),
             ),
           ),
           if (area) Positioned(right: -14, bottom: -12, child: CustomPaint(size: const Size(9, 9), painter: _Grip(t.muted))),

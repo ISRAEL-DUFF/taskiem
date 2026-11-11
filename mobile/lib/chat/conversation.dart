@@ -26,6 +26,7 @@ import 'thread.dart';
 import 'live.dart';
 import 'menu.dart';
 import 'contact.dart';
+import 'deal.dart';
 import 'live_card.dart';
 import 'tag_picker.dart';
 import 'tags.dart';
@@ -1419,6 +1420,10 @@ class _Bubble extends StatelessWidget {
                                   now: now,
                                   title: cardLine(card, mine, other),
                                   actions: [viewButton(card, acts), if (latest && (!mine || isDelivery(card))) ...cardActions(card, acts, changed)],
+                                  // A deal to answer (theirs, the newest of its order).
+                                  deal: latest && !mine && dealSide(card) != null
+                                      ? DealActions(key: ValueKey('deal-${msg.id}'), card: card, side: dealSide(card)!, acts: acts, now: now)
+                                      : null,
                                 ),
                                 Padding(
                                   padding: const EdgeInsets.only(top: 1),

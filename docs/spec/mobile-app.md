@@ -751,12 +751,27 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   Explore, categories, and "/invoice" and the like (with the tools);
   Order on the card says ordering is not in the app yet (the Order sheet
   is a tool's).
+- **A deal's offers and counters** (`lib/chat/deal.dart`), as the web's
+  ChatDeal on the newest card of an order: the back and forth so far
+  (the last four steps, ours in pine, the newest bold) and when the offer
+  lapses. The seller, on the buyer's offer or counter: Accept (for those
+  who set prices, keeping the price for this buyer this order or 7, 14
+  or 30 days; under the lowest price it waits for the owner and says so),
+  Counter with a total and a word, Decline (asked first). The buyer, on
+  the seller's counter: Accept it, Counter back, Cancel the order (asked
+  first). A counter is read as people type naira ("755k", "₦760,000") and
+  refused until it sits between the two (more than their offer, under
+  their price), the share off said under it. A lapsed offer has nothing
+  to answer. The buttons wrap as the web's flex row does. Held to the
+  web's own deal tests and by `deal_test.dart`. Parity: Bayo's counter on
+  our order, and countering it (Bayo's recording with the counter added),
+  as a touch phone, light and dark, two sizes.
 - **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
   invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
-  the milestones), a deal's offers and counters,
-  the chat tools, and Find a business (the web's Explore).
+  the milestones), the chat tools, and Find a business (the web's
+  Explore).
 
 ## 11. What needs people
 
