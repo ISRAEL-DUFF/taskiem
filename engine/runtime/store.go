@@ -77,7 +77,7 @@ type Store struct {
 	WakeInterval time.Duration
 	WakeInTx     bool
 
-	wake waker
+	wake     waker
 	defs     lru.Cache[string, *wd.Definition] // "workflow_id/version"; versions are immutable; bounded (S34)
 	folds    decideCache
 	taints   taintCache
