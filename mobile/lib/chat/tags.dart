@@ -4,19 +4,27 @@
 // the price list with their prices; a pick puts the name in the words and a
 // structured reference beside them, sent with the message; a message's
 // words are drawn with its tags marked.
+// "/invoice", "/order" and the like tag a document (a card under the
+// words); with chat tools "@" also finds businesses not linked (Explore).
 //
-// Not yet: businesses not linked, found by Explore (their card is the
-// Explore screen's); categories (they open the Order and Products tools);
-// "/invoice" and the like (with the tools).
+// Not yet: categories (picking one opens the Products tool, M5).
 
 import '../api/api.g.dart';
 import 'words.dart';
 
 /// mentions.ts Suggestion: a thing or a business to tag.
 class TagSuggestion {
-  const TagSuggestion({required this.kind, required this.id, required this.name, this.sub, this.category, this.words, this.mention});
+  const TagSuggestion({required this.kind, required this.id, required this.name, this.sub, this.category, this.words, this.mention, this.badge, this.explore});
 
-  /// "business", "item", "service" or "taskiem".
+  /// A short word on the right ("Invoice").
+  final String? badge;
+
+  /// A business we are not linked with, found in Explore: picking it shows
+  /// its card (with Connect) rather than tagging it.
+  final ExploreCard? explore;
+
+  /// "business", "item", "service", "taskiem", or what "/" tags:
+  /// "invoice", "bill", "order", "purchase", "customer".
   final String kind;
 
   /// The link (a business), the seller's item id, or our service's.
@@ -37,18 +45,37 @@ class TagSuggestion {
 /// mentions.ts TASKIEM: always offered last with chat tools.
 const taskiemTag = TagSuggestion(kind: 'taskiem', id: 'taskiem', name: 'Taskiem', sub: 'Ask Taskiem to do it for you');
 
-/// mentions.ts MentionQuery: the mark, what follows it, and where it is.
-typedef TagQuery = ({String mark, String query, int start});
+/// mentions.ts MentionQuery: the mark, what follows it, and where it is;
+/// for "/", what is being picked.
+typedef TagQuery = ({String mark, String query, int start, String? kind});
+
+/// mentions.ts REF_LABEL: the picker's heading for what "/" picks.
+const refLabel = {
+  'invoice': 'Invoices and bills',
+  'bill': 'Bills',
+  'order': 'Orders',
+  'purchase': 'Your orders to suppliers',
+  'product': 'Products',
+  'customer': 'Customers',
+};
 
 /// mentions.ts mentionQuery: "@" or "#" at the start or after a space or
-/// "(", then up to 40 characters on the line, before the caret.
+/// "(", then up to 40 characters on the line, before the caret; or
+/// "/invoice ada" ("/invoices/ada"), looked for a little further back.
 TagQuery? tagQuery(String text, int caret) {
   final before = text.substring(0, caret.clamp(0, text.length));
-  for (var i = before.length - 1; i >= 0 && before.length - i <= 41; i--) {
+  for (var i = before.length - 1; i >= 0 && before.length - i <= 51; i--) {
     final ch = before[i];
     if (ch == '\n') return null;
-    if ((ch == '@' || ch == '#') && (i == 0 || RegExp(r'[\s(]').hasMatch(before[i - 1]))) {
-      return (mark: ch, query: before.substring(i + 1), start: i);
+    final after = i == 0 || RegExp(r'[\s(]').hasMatch(before[i - 1]);
+    if (ch == '/' && after) {
+      final m = RegExp(r'^(invoice|bill|order|purchase|product|customer)s?[/ ](.*)$', caseSensitive: false).firstMatch(before.substring(i + 1));
+      if (m != null) return (mark: '/', query: m[2] ?? '', start: i, kind: m[1]!.toLowerCase());
+      continue;
+    }
+    if (before.length - i > 41) continue;
+    if ((ch == '@' || ch == '#') && after) {
+      return (mark: ch, query: before.substring(i + 1), start: i, kind: null);
     }
   }
   return null;
@@ -81,16 +108,26 @@ typedef TagGroup = ({String label, List<TagSuggestion> items});
 
 /// mentions.ts groupSuggestions: things first, then businesses, then
 /// Taskiem; a few of each.
-List<TagGroup> groupTags(String query, {required List<TagSuggestion> items, required List<TagSuggestion> services, required List<TagSuggestion> businesses, required bool taskiem}) {
+List<TagGroup> groupTags(
+  String query, {
+  required List<TagSuggestion> items,
+  required List<TagSuggestion> services,
+  required List<TagSuggestion> businesses,
+  required bool taskiem,
+  List<TagSuggestion> unlinked = const [],
+}) {
   final out = <TagGroup>[];
-  void add(String label, List<TagSuggestion> list, int n) {
+  void add(String label, List<TagSuggestion> list, int n, [List<TagSuggestion> more = const []]) {
     final got = suggest(list, query).take(n).toList();
-    if (got.isNotEmpty) out.add((label: label, items: got));
+    final names = {for (final s in got) s.name.toLowerCase()};
+    final all = [...got, ...more.where((s) => !names.contains(s.name.toLowerCase())).take(3)];
+    if (all.isNotEmpty) out.add((label: label, items: all));
   }
 
   add('Products', items, 4);
   add('Services', services, 3);
-  add('Businesses', businesses, 4);
+  // Found in Explore for these words: not linked, after the linked.
+  add('Businesses', businesses, 4, unlinked);
   if (taskiem) out.add((label: '', items: const [taskiemTag]));
   return out;
 }
@@ -98,7 +135,8 @@ List<TagGroup> groupTags(String query, {required List<TagSuggestion> items, requ
 /// mentions.ts insertMention: the query replaced by the picked name and a
 /// space; the text and where the caret goes.
 ({String text, int caret}) insertTag(String text, TagQuery q, int caret, String name) {
-  final head = '${text.substring(0, q.start)}${q.mark}$name ';
+  // A thing picked with "/" is written as "#" writes an item: "#INV-0104".
+  final head = '${text.substring(0, q.start)}${q.mark == '/' ? '#' : q.mark}$name ';
   return (text: head + text.substring(caret.clamp(0, text.length)), caret: head.length);
 }
 
@@ -118,12 +156,52 @@ List<TagSuggestion> stillNamed(String text, List<TagSuggestion> picked) {
 /// What a message sends of its tags (useMentions refs).
 List<SendLinkMessageRequestMentionsItem> tagRefs(String text, List<TagSuggestion> picked) => [
   for (final p in stillNamed(text, picked))
-    switch (p.kind) {
-      'business' => SendLinkMessageRequestMentionsItem(kind: p.kind, link: p.id),
-      'service' => SendLinkMessageRequestMentionsItem(kind: p.kind, serviceId: p.id),
-      _ => SendLinkMessageRequestMentionsItem(kind: p.kind, itemId: p.id),
-    },
+    // A customer is named in words only: never sent to another business.
+    if (p.kind != 'customer')
+      switch (p.kind) {
+        'business' => SendLinkMessageRequestMentionsItem(kind: p.kind, link: p.id),
+        'service' => SendLinkMessageRequestMentionsItem(kind: p.kind, serviceId: p.id),
+        'invoice' || 'bill' || 'order' || 'purchase' => SendLinkMessageRequestMentionsItem(kind: p.kind, ref: p.id),
+        _ => SendLinkMessageRequestMentionsItem(kind: p.kind, itemId: p.id),
+      },
 ];
+
+/// mentions.ts unlinkedSuggestion: a business found in Explore, as the
+/// picker lists it ("Not linked · Yaba", or where asking stands); linked
+/// ones and those we blocked are not offered.
+TagSuggestion? unlinkedTag(ExploreCard c) {
+  final where = (c.area ?? '').isNotEmpty ? ' · ${c.area}' : '';
+  final sub = switch (c.state) {
+    'none' || 'ended' || 'not_accepted' => 'Not linked$where',
+    'requested' => 'Not linked · you asked to link',
+    'asked_us' => 'Not linked · asked you to link',
+    _ => null,
+  };
+  return sub == null ? null : TagSuggestion(kind: 'business', id: c.business, name: c.name, sub: sub, explore: c);
+}
+
+/// refs.ts refSuggestion: a row of the "/" picker ("Ada's Kitchen · 3 Nov ·
+/// ₦45,000 · overdue").
+TagSuggestion refTag(ChatRef r, DateTime now, {required String Function(DateTime, DateTime) date, required String Function(String) status}) {
+  final sub = r.kind == 'customer'
+      ? [?r.party, 'last wrote ${date(r.when, now)}']
+      : [?r.party, date(r.when, now), if (r.totalKobo != null) naira(r.totalKobo!), if ((r.status ?? '').isNotEmpty) status(r.status!)];
+  const kindWords = {'invoice': 'Invoice', 'bill': 'Bill', 'order': 'Order', 'purchase': 'Your order'};
+  return TagSuggestion(kind: r.kind, id: r.id, name: r.name, sub: sub.where((x) => x.isNotEmpty).join(' · '), badge: kindWords[r.kind], words: r.party);
+}
+
+/// refs.ts refSources: what each "/" word offers: "/invoice" invoices and
+/// bills, "/order" orders and purchases, the rest their own.
+Map<String, List<TagSuggestion>> refSources(List<TagSuggestion> list) {
+  List<TagSuggestion> of(Set<String> kinds) => list.where((r) => kinds.contains(r.kind)).toList();
+  return {
+    'invoice': of({'invoice', 'bill'}),
+    'bill': of({'bill'}),
+    'order': of({'order', 'purchase'}),
+    'purchase': of({'purchase'}),
+    'customer': of({'customer'}),
+  };
+}
 
 /// mentions.ts mentionParts: a message's words in parts, its tags marked.
 List<({String text, LinkMention? tag})> tagParts(String text, List<LinkMention>? mentions) {
@@ -193,3 +271,18 @@ String linkedLine(String? role) => switch (role) {
   'both' => 'Linked · supplies you and buys from you',
   _ => 'Linked',
 };
+
+/// refs.ts productRefs: the business's own products (not their sizes), as
+/// "#" and "/product" offer them in its Taskiem chat.
+List<TagSuggestion> productRefs(List<StockItem> items) => [
+  for (final it in items)
+    if (it.variantOf == null)
+      TagSuggestion(
+        kind: 'item',
+        id: 'own:${it.id}',
+        name: it.name,
+        sub: it.priceKobo != null ? 'Yours · ${naira(it.priceKobo!)}${(it.unit ?? '').isNotEmpty ? ' a ${it.unit}' : ''}' : 'Yours · no price yet',
+        category: it.category,
+        words: it.description,
+      ),
+];

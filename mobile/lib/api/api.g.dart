@@ -312,6 +312,30 @@ class TaskiemApi {
     final j = await _t.send('POST', '/v1/connect/${Uri.encodeComponent(token)}', body: body.toJson());
     return ConnectWithKeyResponse.fromJson(j as Map<String, dynamic>);
   }
+
+  /// A tagged thing's card, read now (`GET /v1/chat-card`)
+  Future<ChatCard> chatCard({String? kind, String? id}) async {
+    final j = await _t.send('GET', '/v1/chat-card', query: {'kind': ?kind, 'id': ?id});
+    return ChatCard.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The card of an invoice or order a message named (`GET /v1/link-chats/{link}/card`)
+  Future<ChatCard> linkChatCard({required String link, String? kind, String? name}) async {
+    final j = await _t.send('GET', '/v1/link-chats/${Uri.encodeComponent(link)}/card', query: {'kind': ?kind, 'name': ?name});
+    return ChatCard.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// What "/invoice", "/bill", "/order" and "/purchase" name in a conversation (`GET /v1/link-chats/{link}/refs`)
+  Future<LinkChatRefsResponse> linkChatRefs({required String link}) async {
+    final j = await _t.send('GET', '/v1/link-chats/${Uri.encodeComponent(link)}/refs');
+    return LinkChatRefsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your linked suppliers prices (`GET /v1/supplier-prices`)
+  Future<ListSupplierPricesResponse> listSupplierPrices({String? link}) async {
+    final j = await _t.send('GET', '/v1/supplier-prices', query: {'link': ?link});
+    return ListSupplierPricesResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -3545,5 +3569,162 @@ class ConnectionWebhook {
         'trigger': trigger,
         'url': url,
         'where': where,
+      };
+}
+
+class ChatCard {
+  const ChatCard({this.action, this.dueKobo, this.dueOn, required this.id, required this.kind, this.lastOrder, this.lines, this.more, required this.name, this.orders, this.owesKobo, this.paidKobo, this.party, this.status, this.totalKobo, required this.when});
+
+  final String? action;
+  final int? dueKobo;
+  final String? dueOn;
+  final String id;
+  final String kind;
+  final ChatCardLastOrder? lastOrder;
+  final List<ChatCardLinesItem>? lines;
+  /// Lines not shown
+  final int? more;
+  final String name;
+  final int? orders;
+  final int? owesKobo;
+  final int? paidKobo;
+  final String? party;
+  final String? status;
+  final int? totalKobo;
+  final DateTime when;
+
+  factory ChatCard.fromJson(Map<String, dynamic> j) => ChatCard(
+        action: j['action'] == null ? null : j['action'] as String,
+        dueKobo: j['due_kobo'] == null ? null : (j['due_kobo'] as num).toInt(),
+        dueOn: j['due_on'] == null ? null : j['due_on'] as String,
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        lastOrder: j['last_order'] == null ? null : ChatCardLastOrder.fromJson(j['last_order'] as Map<String, dynamic>),
+        lines: j['lines'] == null ? null : (j['lines'] as List).map((e) => ChatCardLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        more: j['more'] == null ? null : (j['more'] as num).toInt(),
+        name: j['name'] as String,
+        orders: j['orders'] == null ? null : (j['orders'] as num).toInt(),
+        owesKobo: j['owes_kobo'] == null ? null : (j['owes_kobo'] as num).toInt(),
+        paidKobo: j['paid_kobo'] == null ? null : (j['paid_kobo'] as num).toInt(),
+        party: j['party'] == null ? null : j['party'] as String,
+        status: j['status'] == null ? null : j['status'] as String,
+        totalKobo: j['total_kobo'] == null ? null : (j['total_kobo'] as num).toInt(),
+        when: DateTime.parse(j['when'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'action': ?action,
+        'due_kobo': ?dueKobo,
+        'due_on': ?dueOn,
+        'id': id,
+        'kind': kind,
+        'last_order': ?lastOrder?.toJson(),
+        'lines': ?lines?.map((e) => e.toJson()).toList(),
+        'more': ?more,
+        'name': name,
+        'orders': ?orders,
+        'owes_kobo': ?owesKobo,
+        'paid_kobo': ?paidKobo,
+        'party': ?party,
+        'status': ?status,
+        'total_kobo': ?totalKobo,
+        'when': when.toUtc().toIso8601String(),
+      };
+}
+
+class ChatCardLastOrder {
+  const ChatCardLastOrder({required this.reference, required this.status, required this.totalKobo, required this.when});
+
+  final String reference;
+  final String status;
+  final int totalKobo;
+  final DateTime when;
+
+  factory ChatCardLastOrder.fromJson(Map<String, dynamic> j) => ChatCardLastOrder(
+        reference: j['reference'] as String,
+        status: j['status'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+        when: DateTime.parse(j['when'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'reference': reference,
+        'status': status,
+        'total_kobo': totalKobo,
+        'when': when.toUtc().toIso8601String(),
+      };
+}
+
+class ChatCardLinesItem {
+  const ChatCardLinesItem({required this.name, required this.quantity, required this.totalKobo});
+
+  final String name;
+  final int quantity;
+  final int totalKobo;
+
+  factory ChatCardLinesItem.fromJson(Map<String, dynamic> j) => ChatCardLinesItem(
+        name: j['name'] as String,
+        quantity: (j['quantity'] as num).toInt(),
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'quantity': quantity,
+        'total_kobo': totalKobo,
+      };
+}
+
+class LinkChatRefsResponse {
+  const LinkChatRefsResponse({required this.refs});
+
+  final List<ChatRef> refs;
+
+  factory LinkChatRefsResponse.fromJson(Map<String, dynamic> j) => LinkChatRefsResponse(
+        refs: (j['refs'] as List).map((e) => ChatRef.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'refs': refs.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ListSupplierPricesResponse {
+  const ListSupplierPricesResponse({required this.suppliers});
+
+  final List<SupplierPrices> suppliers;
+
+  factory ListSupplierPricesResponse.fromJson(Map<String, dynamic> j) => ListSupplierPricesResponse(
+        suppliers: (j['suppliers'] as List).map((e) => SupplierPrices.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'suppliers': suppliers.map((e) => e.toJson()).toList(),
+      };
+}
+
+class SupplierPrices {
+  const SupplierPrices({required this.business, required this.items, required this.link, required this.name, required this.updatedAt});
+
+  final String business;
+  final List<PriceItem> items;
+  final String link;
+  final String name;
+  final DateTime updatedAt;
+
+  factory SupplierPrices.fromJson(Map<String, dynamic> j) => SupplierPrices(
+        business: j['business'] as String,
+        items: (j['items'] as List).map((e) => PriceItem.fromJson(e as Map<String, dynamic>)).toList(),
+        link: j['link'] as String,
+        name: j['name'] as String,
+        updatedAt: DateTime.parse(j['updated_at'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business': business,
+        'items': items.map((e) => e.toJson()).toList(),
+        'link': link,
+        'name': name,
+        'updated_at': updatedAt.toUtc().toIso8601String(),
       };
 }

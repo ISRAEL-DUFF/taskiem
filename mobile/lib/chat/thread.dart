@@ -930,3 +930,48 @@ class _TapsOwnerState extends State<TapsOwner> {
     return w;
   }
 }
+
+/// motion.css `tk-cheer`: a good moment's ring, 3 px of lime-on-pine's
+/// lime (`--brand-dark`), 22 px corners, growing from 0.4 to 1.6 as it
+/// shows (by 40 %) and fades, over 900 ms (`--t-cheer`, `--ease-out`). None
+/// with motion turned down.
+class CheerRing extends StatefulWidget {
+  const CheerRing({super.key});
+
+  @override
+  State<CheerRing> createState() => _CheerRingState();
+}
+
+class _CheerRingState extends State<CheerRing> with SingleTickerProviderStateMixin {
+  late final _go = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..forward();
+
+  @override
+  void dispose() {
+    _go.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return const SizedBox.shrink();
+    final t = TkTheme.tokens(context);
+    // `--ease-out: cubic-bezier(0.16, 1, 0.3, 1)`
+    const ease = Cubic(0.16, 1, 0.3, 1);
+    return AnimatedBuilder(
+      animation: _go,
+      builder: (context, _) {
+        final p = ease.transform(_go.value);
+        final opacity = p < 0.4 ? p / 0.4 : 1 - (p - 0.4) / 0.6;
+        return Opacity(
+          opacity: opacity.clamp(0.0, 1.0),
+          child: Transform.scale(
+            scale: 0.4 + 1.2 * p,
+            child: DecoratedBox(
+              decoration: BoxDecoration(border: Border.all(color: t.brandDark, width: 3), borderRadius: BorderRadius.circular(22)),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

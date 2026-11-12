@@ -13,6 +13,7 @@ import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/prefs.dart';
+import '../app/sound.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
@@ -21,6 +22,7 @@ import 'attachments.dart';
 import 'customer.dart';
 import 'explore.dart';
 import 'live.dart';
+import 'thread.dart' show showHeadMenu;
 import 'words.dart';
 
 /// What the list shows, loaded as the web's page loads it.
@@ -71,6 +73,10 @@ class ChatsData extends ChangeNotifier {
 
   /// Where Taskiem's conversation was last seen is kept here.
   final Prefs? prefs;
+
+  /// Whether new orders and payments make a sound (moments.ts soundOn).
+  bool get soundOn => prefs?.sound ?? true;
+  Set<String>? _seenAlerts;
 
   /// The chat as it happens, when followed.
   final ChatLive? live;
@@ -197,7 +203,13 @@ class ChatsData extends ChangeNotifier {
       }),
       _try(() async {
         chatTools = (await api.getChatTools()).chatTools;
-        waiting = chatTools ? (await api.getChatAlerts()).alerts.length : 0;
+        final alerts = chatTools ? (await api.getChatAlerts()).alerts : const <ChatAlert>[];
+        waiting = alerts.length;
+        // ChatAlerts.tsx loadAlerts: a card new since the last read comes
+        // with the sound the owner can turn off; the first read is quiet.
+        final seen = _seenAlerts;
+        if (seen != null && soundOn && alerts.any((a) => alertNews.contains(a.kind) && !seen.contains(a.key))) unawaited(chime());
+        _seenAlerts = {for (final a in alerts) a.key};
       }),
       _try(() async {
         final archived = customersOn ? (await api.listCustomerChats(archived: '1')).chats : const <CustomerChat>[];
@@ -443,7 +455,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 ListView(
                   padding: EdgeInsets.only(top: top, bottom: 88 + MediaQuery.paddingOf(context).bottom),
                   children: [
-                    _Head(name: d.auth.me?.tenantName, onMenu: widget.onMenu),
+                    _Head(name: d.auth.me?.tenantName, onMenu: (at) => _menu(d, at)),
                     if (d.linksOn || d.customers.isNotEmpty || d.archivedCustomers > 0) _Search(controller: _q),
                     if (!searching && d.loaded && (d.conversations.isNotEmpty || d.customers.isNotEmpty || d.archivedCustomers > 0))
                       _Chips(
@@ -593,6 +605,24 @@ class _ChatsScreenState extends State<ChatsScreen> {
     );
   }
 
+  /// Links.tsx HeadMenu: the app's own settings (where the web has its
+  /// pages), and with chat tools the sound for new orders and payments.
+  void _menu(ChatsData d, Rect at) {
+    final p = d.prefs;
+    showHeadMenu(
+      context,
+      at: at,
+      items: [
+        if (widget.onMenu != null) ('Settings', widget.onMenu!),
+        if (d.chatTools && p != null)
+          (
+            'Sound for new orders and payments: ${p.sound ? 'on' : 'off'}',
+            () => p.setSound(!p.sound),
+          ),
+      ],
+    );
+  }
+
   static Widget _previewText(BuildContext context, String s, {bool typing = false, String? draft}) {
     final t = TkTheme.tokens(context);
     // `.chat-row-sub .draft { color: var(--ok); font-weight: 600 }`
@@ -624,7 +654,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
 class _Head extends StatelessWidget {
   const _Head({this.name, this.onMenu});
   final String? name;
-  final VoidCallback? onMenu;
+  final ValueChanged<Rect>? onMenu;
 
   @override
   Widget build(BuildContext context) {
@@ -642,10 +672,17 @@ class _Head extends StatelessWidget {
           if (name != null) ...[const SizedBox(width: 6), Text(name!, style: tkText(size: 13, color: t.muted))],
           const SizedBox(width: 6),
           Semantics(
+            // Its own button, not merged with the title beside it.
+            container: true,
             button: true,
             label: 'More about the chats',
-            child: TkPress(
-              onTap: onMenu ?? () {},
+            excludeSemantics: true,
+            child: Builder(
+              builder: (context) => TkPress(
+              onTap: () {
+                final box = context.findRenderObject()! as RenderBox;
+                onMenu?.call(box.localToGlobal(Offset.zero) & box.size);
+              },
               // The web's `more`, turned upright, its dots bolder (`.chat-menu-wrap svg`).
               child: SizedBox(
                 width: 40,
@@ -654,6 +691,7 @@ class _Head extends StatelessWidget {
                   child: RotatedBox(quarterTurns: 1, child: TkIcon('more', size: 18, stroke: 3, color: t.text)),
                 ),
               ),
+            ),
             ),
           ),
         ],

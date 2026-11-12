@@ -91,6 +91,39 @@ G16 needs no change: the app's sheet says what the web chat's card says
 ("Needs your passkey or a code"); the chat PIN is typed only in WhatsApp,
 and here such an approval takes the passkey or a code, as on the web.
 
+**Done: G6, G8, G12, G14** (`lib/chat/ref_card.dart`, `tag_box.dart`,
+`lib/app/sound.dart`; `test/refs_test.dart`, `ref_screens_test.dart`,
+`moments_test.dart`).
+- G6: an invoice, bill or order named in a business's message, and what
+  Taskiem's words name with "#", is its card, read now (the amount still
+  to pay, the paid bar, the lines; a customer's orders, what they owe,
+  their last order), with Give this to… and its action (Send it, Send a
+  reminder: one press one send, by an Idempotency-Key; Message them, a
+  customer's conversation). Open and Pay lead to the tools' screens and
+  come with them; a card that cannot be read leaves the words as they are.
+- Found and added with it: "/" tagging ("/invoice ada", "/order",
+  "/customer"…), in both conversations, which the plan had not listed:
+  it is how a document comes to be named, and so carded. The thing picked
+  is written as "#INV-0001" and sent by its id; a customer only in words.
+- G8: the tag handling is one piece now (`TagBox`), shared by both
+  conversations. In Taskiem's: "@" its linked businesses (no Taskiem row),
+  "#" its own products then what suppliers sell, "/" all it may see; its
+  answers mark what they name, a customer opening their conversation.
+- G14: with chat tools "@" asks Explore after two letters (250 ms after
+  typing stops); businesses not linked come after the linked, three at
+  most, "Not linked · Yaba"; picked, the business's Explore card in a
+  sheet (Connect, Withdraw, Accept), the words left as typed. Categories
+  open the Products tool: they come with it (M5).
+- G12: a new order or payment arriving while a conversation is open
+  chimes, as a new alert card does (the first read quiet); a payment, or
+  the first order of the day, gets the ring (`tk-cheer`, 900 ms, none with
+  motion turned down). The chime is the web's two notes, made the same
+  way. The chats' ⋯ is now a menu: Settings, and "Sound for new orders and
+  payments: on/off" with chat tools (kept on the phone). Its web items
+  Linked businesses and Your business in Explore come with their screens.
+  Found: the chats' head was one node to a screen reader (the title, the
+  business and ⋯ together); the button is its own now.
+
 **Done: G1, G2** (`lib/chat/connect.dart`, `test/connect_test.dart`;
 `TestConnectFromTheWebChat`). Found on the way: `connect <service>` in the
 Taskiem conversation of the web, and so of the app, failed with a server

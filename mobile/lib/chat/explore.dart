@@ -915,3 +915,112 @@ class _Empty extends StatelessWidget {
     );
   }
 }
+
+/// Mentions.tsx: a business not linked, picked from "@", shown by its
+/// Explore card (with Connect, Withdraw, or Accept); its conversation by
+/// [onOpen] once linked.
+Future<void> showExploreCard(BuildContext context, ChatsData chats, ExploreCard card, {ValueChanged<LinkConversation>? onOpen}) =>
+    showTkModal<void>(context, title: card.name, builder: (_) => _OneCard(chats: chats, card: card, onOpen: onOpen));
+
+class _OneCard extends StatefulWidget {
+  const _OneCard({required this.chats, required this.card, this.onOpen});
+  final ChatsData chats;
+  final ExploreCard card;
+  final ValueChanged<LinkConversation>? onOpen;
+
+  @override
+  State<_OneCard> createState() => _OneCardState();
+}
+
+class _OneCardState extends State<_OneCard> {
+  late final _pictures = _Pictures(widget.chats.auth.transport);
+  late String _state = widget.card.state;
+  BusinessLink? _asked;
+  bool _busy = false;
+  String? _error;
+
+  ChatsData get d => widget.chats;
+  ExploreCard get c => widget.card;
+
+  @override
+  void dispose() {
+    _pictures.dispose();
+    super.dispose();
+  }
+
+  Future<void> _run(Future<String> Function() f) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final said = await f();
+      if (mounted) showTkToast(context, said);
+    } on ApiError catch (e) {
+      _error = e.message;
+    } on Offline {
+      _error = 'You’re offline. Try again when you’re back online.';
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: d,
+      builder: (context, _) {
+        final pending = _asked ?? d.links.where((l) => l.business == c.business && l.state == 'requested' && l.askedByUs).firstOrNull;
+        final incoming = d.links.where((l) => l.business == c.business && l.state == 'asked_us').firstOrNull;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Card(
+              card: c,
+              offer: cardOffer(_state),
+              manage: d.manage,
+              busy: _busy,
+              pictures: _pictures,
+              canWithdraw: pending != null,
+              onConnect: () => _run(() async {
+                final out = await d.auth.transport.send('POST', '/v1/links', body: {'business': c.business, 'role': 'both'});
+                _asked = out is Map && out['link'] is Map ? BusinessLink.fromJson((out['link'] as Map).cast<String, dynamic>()) : null;
+                _state = 'requested';
+                unawaited(d.load());
+                return 'Asked ${c.name} to link';
+              }),
+              onWithdraw: pending == null
+                  ? null
+                  : () => _run(() async {
+                      await d.auth.transport.send('POST', '/v1/links/${Uri.encodeComponent(pending.id)}/cancel', body: const {});
+                      _asked = null;
+                      _state = 'none';
+                      unawaited(d.load());
+                      return 'Request withdrawn';
+                    }),
+              onMessage: () async {
+                var conv = d.conversations.where((x) => x.business == c.business).firstOrNull;
+                if (conv == null) {
+                  await d.load();
+                  conv = d.conversations.where((x) => x.business == c.business).firstOrNull;
+                }
+                if (!context.mounted) return;
+                Navigator.of(context).pop();
+                if (conv != null) widget.onOpen?.call(conv);
+              },
+              onAnswer: incoming == null
+                  ? null
+                  : (a) => _run(() async {
+                      final why = await d.answer(incoming, a);
+                      if (why != null) throw ApiError(0, {'error': why});
+                      _state = a == 'accept' ? 'active' : 'none';
+                      return a == 'accept' ? 'Linked with ${c.name}' : 'Request declined';
+                    }),
+            ),
+            if (_error != null) TkErrorBox(_error!),
+          ],
+        );
+      },
+    );
+  }
+}

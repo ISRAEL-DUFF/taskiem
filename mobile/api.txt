@@ -75,3 +75,9 @@ giveStaffTask
 # Connecting a service from Taskiem's conversation (M3, docs/spec/mobile-app.md 3.5)
 getConnectLink
 connectWithKey
+
+# Reference cards, and what Taskiem's conversation may name (M3)
+chatCard
+linkChatCard
+linkChatRefs
+listSupplierPrices

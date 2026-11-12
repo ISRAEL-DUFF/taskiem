@@ -29,8 +29,8 @@ void main() {
     final list = [_b('l1', 'Dangote Stores'), _b('l2', 'Cherry Blocks'), _b('l3', "Ada's Kitchen")];
 
     test('finds the tag being typed', () {
-      expect(tagQuery('Buy 4 from @Dan', 15), (mark: '@', query: 'Dan', start: 11));
-      expect(tagQuery('#ri', 3), (mark: '#', query: 'ri', start: 0));
+      expect(tagQuery('Buy 4 from @Dan', 15), (mark: '@', query: 'Dan', start: 11, kind: null));
+      expect(tagQuery('#ri', 3), (mark: '#', query: 'ri', start: 0, kind: null));
       expect(tagQuery('ada@example.com', 15), isNull);
       expect(tagQuery('@Dangote\nok', 11), isNull);
       expect(tagQuery('no mark here', 12), isNull);
@@ -43,7 +43,7 @@ void main() {
     });
 
     test('puts the pick in the words', () {
-      const q = (mark: '@', query: 'Dan', start: 11);
+      const q = (mark: '@', query: 'Dan', start: 11, kind: null);
       expect(insertTag('Buy 4 from @Dan please', q, 15, 'Dangote Stores'), (text: 'Buy 4 from @Dangote Stores  please', caret: 27));
     });
 

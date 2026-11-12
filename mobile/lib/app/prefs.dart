@@ -22,6 +22,10 @@ class Prefs extends ChangeNotifier {
   /// so it holds when the app is opened again.
   DateTime? taskiemSeen;
 
+  /// moments.ts soundOn: whether new orders and payments make a sound
+  /// here (on until turned off).
+  bool sound = true;
+
   /// Done once what is kept has been read.
   Future<void> get ready => _ready.future;
   final _ready = Completer<void>();
@@ -31,11 +35,22 @@ class Prefs extends ChangeNotifier {
       final t = await keys.read('theme');
       theme = ThemeChoice.values.firstWhere((c) => c.name == t, orElse: () => ThemeChoice.light);
       taskiemSeen = DateTime.tryParse(await keys.read('taskiem-seen') ?? '');
+      sound = await keys.read('chat-sound') != 'off';
     } on Object {
       // The phone's storage not read: the defaults.
     }
     if (!_ready.isCompleted) _ready.complete();
     notifyListeners();
+  }
+
+  Future<void> setSound(bool on) async {
+    sound = on;
+    notifyListeners();
+    try {
+      await keys.write('chat-sound', on ? null : 'off');
+    } on Object {
+      // Kept only while the app runs.
+    }
   }
 
   /// Seen up to [at] (never goes back).

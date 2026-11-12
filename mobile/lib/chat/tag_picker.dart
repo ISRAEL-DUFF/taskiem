@@ -106,15 +106,24 @@ class _Pick extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
     // `.pick-icon`: 42 px, 12 px corners (round for a business, Taskiem).
+    // `.pick-icon.soft`: the lime tint, pine (lime in dark).
+    final softInk = dark ? t.brandDark : t.brand;
     final Widget icon = switch (s.kind) {
+      // Not linked (found in Explore): soft, not lime.
+      'business' when s.explore != null => _icon(t.tkLimeSoft, round: true, child: Text(initialsOf(s.name), style: tkText(size: 14, weight: 800, lineHeight: 1, color: softInk))),
       'business' => _icon(t.brandDark, round: true, child: Text(initialsOf(s.name), style: tkText(size: 14, weight: 800, lineHeight: 1, color: t.brandDarkText))),
+      'customer' => _icon(t.tkLimeSoft, round: true, child: Text(initialsOf(s.name), style: tkText(size: 14, weight: 800, lineHeight: 1, color: softInk))),
+      'invoice' => _icon(t.tkLimeSoft, child: TkIcon('invoices', size: 20, color: softInk)),
+      'order' => _icon(t.tkLimeSoft, child: TkIcon('orders', size: 20, color: softInk)),
+      'bill' => _icon(t.tkBlueBg, child: TkIcon('money', size: 20, color: t.tkBlueInk)),
+      'purchase' => _icon(t.tkBlueBg, child: TkIcon('orders', size: 20, color: t.tkBlueInk)),
       'taskiem' => _icon(t.brand, round: true, child: TkIcon('sparkle', size: 20, color: t.brandDark)),
       'service' => _icon(t.tkBlueBg, child: TkIcon('clock', size: 20, color: t.tkBlueInk)),
       _ => _icon(t.tkLimeSoft, child: TkIcon('box', size: 20, color: dark ? t.brandDark : t.brand)),
     };
     return Semantics(
       button: true,
-      label: [s.name, ?s.sub].join(', '),
+      label: [s.name, ?s.sub, ?s.badge].join(', ') + (s.explore != null ? ': see their card' : ''),
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -137,6 +146,15 @@ class _Pick extends StatelessWidget {
                   ],
                 ),
               ),
+              // `.pick-badge`
+              if (s.badge != null) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(color: t.tkWarnBg, borderRadius: BorderRadius.circular(999)),
+                  child: Text(s.badge!, style: tkText(size: 12, weight: 700, lineHeight: 1.2, color: t.tkWarnInk)),
+                ),
+              ],
             ],
           ),
         ),
@@ -165,7 +183,7 @@ class TagList extends StatelessWidget {
     final t = TkTheme.tokens(context);
     return Semantics(
       container: true,
-      label: mark == '@' ? 'Businesses to mention' : 'Items to mention',
+      label: mark == '@' ? 'Businesses to mention' : (mark == '/' ? 'Things to tag' : 'Items to mention'),
       explicitChildNodes: true,
       child: Container(
         // `margin: 0 10px; padding: 4px; border: 1px solid; border-radius: 16px; max-height: 240px`
@@ -181,7 +199,7 @@ class TagList extends StatelessWidget {
               for (final s in items)
                 Semantics(
                   button: true,
-                  label: '$mark${s.name}${s.sub != null ? ', ${s.sub}' : ''}',
+                  label: '${mark == '/' ? '#' : mark}${s.name}${s.sub != null ? ', ${s.sub}' : ''}',
                   excludeSemantics: true,
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
@@ -192,7 +210,7 @@ class TagList extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('$mark${s.name}', style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: t.text)),
+                          Text('${mark == '/' ? '#' : mark}${s.name}', style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: t.text)),
                           if (s.sub != null) ...[
                             const SizedBox(height: 2),
                             Text(s.sub!, style: tkText(size: 13, lineHeight: 1.2, color: t.muted)),

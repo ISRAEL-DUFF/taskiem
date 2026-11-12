@@ -766,10 +766,12 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
   Order when we buy from them). The tag logic is held to the web's own
   tests (`tags_test.dart`). Parity: "@", "#", and a tagged message with its
   card (Bayo's recording with the message added), seen as a touch phone,
-  light and dark, two sizes. Not yet: businesses not linked found by
-  Explore, categories, and "/invoice" and the like (with the tools);
-  Order on the card says ordering is not in the app yet (the Order sheet
-  is a tool's).
+  light and dark, two sizes. Since (12 November): businesses not linked
+  found by Explore, "/invoice" and the like with their cards, and the same
+  tags in Taskiem's conversation ([Finishing M3](mobile-app-m3-fixes.md)
+  G6, G8, G14). Not yet: categories (they open the Products tool); Order
+  on the card says ordering is not in the app yet (the Order sheet is a
+  tool's).
 - **A deal's offers and counters** (`lib/chat/deal.dart`), as the web's
   ChatDeal on the newest card of an order: the back and forth so far
   (the last four steps, ours in pine, the newest bold) and when the offer

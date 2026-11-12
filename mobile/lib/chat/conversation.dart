@@ -11,6 +11,8 @@ import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
 import '../app/links.dart';
+import '../app/auth.dart';
+import '../app/sound.dart';
 import '../api/transport.dart';
 import '../app/session.dart' show uuid4;
 import '../kit/icon.dart';
@@ -24,10 +26,12 @@ import 'composer.dart';
 import 'thread.dart';
 import 'live.dart';
 import 'menu.dart';
+import 'ref_card.dart';
 import 'contact.dart';
 import 'deal.dart';
 import 'live_card.dart';
-import 'tag_picker.dart';
+import 'explore.dart' show showExploreCard;
+import 'tag_box.dart';
 import 'tags.dart';
 import 'search.dart';
 import 'words.dart';
@@ -164,10 +168,20 @@ class ConversationData extends ChangeNotifier {
   List<StorefrontItem> services = const [];
   List<StockItem> stock = const [];
 
+  /// What "/invoice" and "/order" offer: what is between us and them only.
+  List<ChatRef> refs = const [];
+
   Future<void> _tagSources() async {
     if (!chats.loaded) await chats.load();
     final can = chats.auth.can;
     await Future.wait([
+      () async {
+        try {
+          refs = (await api.linkChatRefs(link: conv.link)).refs;
+        } on Object {
+          // None offered.
+        }
+      }(),
       () async {
         try {
           final r = await api.linkChatItems(link: conv.link);
@@ -243,6 +257,7 @@ class ConversationData extends ChangeNotifier {
     unread = null;
     error = null;
     messages = out.messages;
+    _moments();
     openedAt = at >= 0 ? id : null;
     epoch++;
     _changed();
@@ -335,6 +350,7 @@ class ConversationData extends ChangeNotifier {
       final unseen = out.messages.where((m) => !m.mine && m.readAt == null).toList();
       unread = unseen.isEmpty ? null : (id: unseen.first.id, count: unseen.length);
       messages = out.messages;
+      _moments();
       _changed();
       await _markRead(out.messages);
     } on ApiError catch (e) {
@@ -441,6 +457,51 @@ class ConversationData extends ChangeNotifier {
       byId[m.id] = m;
     }
     messages = byId.values.toList()..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    _moments();
+  }
+
+  /// The message the burst is round (a good moment, for 900 ms).
+  String? cheer;
+  Timer? _cheerOff;
+  DateTime? _openedNewest;
+  final _told = <String>{};
+
+  /// Conversation.tsx: news that arrives while the conversation is open,
+  /// with chat tools: a sound (unless switched off) for an order or a
+  /// payment, and a burst for a good moment. What was there already, or
+  /// loads from further back, just shows.
+  void _moments() {
+    final all = messages;
+    if (all == null || all.isEmpty) return;
+    final opened = _openedNewest ??= all.last.createdAt;
+    if (!chats.chatTools) return;
+    bool fresh(LinkMessage m) => m.createdAt.isAfter(opened);
+    final now = chats.now().toLocal();
+    bool today(DateTime d) {
+      final l = d.toLocal();
+      return l.year == now.year && l.month == now.month && l.day == now.day;
+    }
+
+    bool order(LinkMessage m) => m.card?.event == 'ordered' || m.card?.event == 'auto_accepted';
+    var firstOrder = !all.any((m) => !m.mine && order(m) && today(m.createdAt) && !fresh(m));
+    var sounded = false;
+    for (final m in all) {
+      final card = m.card;
+      if (card == null || !fresh(m) || !_told.add(m.id)) continue;
+      if (isNews(card.event, m.mine) && chats.soundOn && !sounded) {
+        sounded = true;
+        unawaited(chime());
+      }
+      if (isGoodMoment(card.event, m.mine, firstOrder)) {
+        cheer = m.id;
+        _cheerOff?.cancel();
+        _cheerOff = Timer(const Duration(milliseconds: 900), () {
+          cheer = null;
+          _changed();
+        });
+      }
+      if (order(m)) firstOrder = false;
+    }
   }
 
   Future<void> _markRead(List<LinkMessage> list) async {
@@ -589,6 +650,7 @@ class ConversationData extends ChangeNotifier {
     _disposed = true;
     _timer?.cancel();
     _ticks?.cancel();
+    _cheerOff?.cancel();
     _readSoon?.cancel();
     _liveSub?.cancel();
     _live?.removeListener(_reschedule);
@@ -644,20 +706,23 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   @override
   void dispose() {
+    _tags.dispose();
     _text.dispose();
     super.dispose();
   }
 
-  // Tags (Mentions.tsx useMentions): what is being typed after "@" or "#",
-  // and what was picked (sent with the words while they still name it).
-  TagQuery? _tag;
-  final _picked = <TagSuggestion>[];
-  final _pickerShown = OverlayPortalController();
-  final _boxTop = LayerLink();
-
-  /// The words changed by a pick, not by typing: the picker stays shut
-  /// until the next keystroke (the web reads the tag on input only).
-  bool _tagging = false;
+  // Tags (Mentions.tsx useMentions), shared with Taskiem's conversation.
+  late final _tags = TagBox(
+    text: _text,
+    sources: _tagSources,
+    grouped: () => widget.data.chats.chatTools,
+    taskiem: true,
+    onChange: () {
+      if (mounted) setState(() {});
+    },
+    explore: (q) async => (await widget.data.chats.api.explore(q: q)).results,
+    onExplore: (c) => showExploreCard(context, widget.data.chats, c, onOpen: (o) => widget.onOpenLink?.call(o.link)),
+  );
 
   String _words = '';
 
@@ -670,34 +735,30 @@ class _ConversationScreenState extends State<ConversationScreen> {
       final d = widget.data;
       d.chats.setDraft(d.conv.link, d.chats.chatTools && RegExp(r'^/\S*$').hasMatch(_words) ? '' : _words);
     }
-    if (_tagging) return;
-    final v = _text.value;
-    final caret = v.selection.baseOffset < 0 ? v.text.length : v.selection.baseOffset;
-    final q = tagQuery(v.text, caret);
-    if (q == _tag) return;
-    setState(() => _tag = q);
-    if (_grouped) {
-      _pickerShown.show();
-    } else {
-      _pickerShown.hide();
-    }
+    _tags.typed();
   }
 
   /// What "@" and "#" offer here: the price list's items on sale, our own
   /// services, and the other linked businesses (with the tools, not this
   /// one: it gets the message already).
-  ({List<TagSuggestion> items, List<TagSuggestion> services, List<TagSuggestion> businesses}) _tagSources() {
+  TagSources _tagSources() {
     final d = widget.data;
     final tools = d.chats.chatTools;
     final roles = {for (final l in d.chats.links) l.id: l.role};
+    // What "#" (and "@"'s products) tag: theirs, with chat tools
+    // (business-chat-tools.md §4); without, the list between us.
+    final items = [
+      if (!tools || d.priceWhose == 'theirs')
+        for (final it in d.priceList)
+          if (it.available) TagSuggestion(kind: 'item', id: it.itemId, name: it.name, sub: priceWords(it), category: it.category, words: it.description),
+    ];
+    final now = d.chats.now();
     return (
-      // What "#" (and "@"'s products) tag: theirs, with chat tools
-      // (business-chat-tools.md §4); without, the list between us.
-      items: [
-        if (!tools || d.priceWhose == 'theirs')
-          for (final it in d.priceList)
-            if (it.available) TagSuggestion(kind: 'item', id: it.itemId, name: it.name, sub: priceWords(it), category: it.category, words: it.description),
-      ],
+      refs: {
+        ...refSources([for (final r in d.refs) refTag(r, now, date: shortDate, status: refStatusWords)]),
+        'product': items,
+      },
+      items: items,
       // Our own services are not offered in a business's conversation with
       // chat tools: what we offer them goes by Share my prices and Make an
       // offer (§4).
@@ -717,20 +778,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
             TagSuggestion(kind: 'business', id: o.link, name: o.name, sub: tools ? linkedLine(roles[o.link]) : null),
       ],
     );
-  }
-
-  void _pickTag(TagSuggestion s) {
-    final q = _tag;
-    if (q == null) return;
-    final v = _text.value;
-    final caret = v.selection.baseOffset < 0 ? v.text.length : v.selection.baseOffset;
-    final next = insertTag(v.text, q, caret < q.start + 1 + q.query.length ? q.start + 1 + q.query.length : caret, s.name);
-    if (s.kind != 'taskiem') _picked.add(s);
-    _tagging = true;
-    _text.value = TextEditingValue(text: next.text, selection: TextSelection.collapsed(offset: next.caret));
-    _tagging = false;
-    setState(() => _tag = null);
-    _pickerShown.hide();
   }
 
   /// The message whose menu is open, and the one being answered.
@@ -1009,27 +1056,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
               Expanded(
                 child: ListenableBuilder(listenable: d, builder: (context, _) => _thread(context, d)),
               ),
-              if (_tag != null && !_grouped) ListenableBuilder(listenable: d, builder: (context, _) => _plainList()),
+              ListenableBuilder(listenable: d, builder: (context, _) => _tags.plain()),
               // The tools' picker floats over the thread from the box, 8 px
               // above it, its shadow over the box too (`.composer > .tk-picker`).
-              OverlayPortal(
-                controller: _pickerShown,
-                overlayChildBuilder: (context) => Positioned(
-                  left: 0,
-                  top: 0,
-                  child: CompositedTransformFollower(
-                    link: _boxTop,
-                    targetAnchor: Alignment.topLeft,
-                    followerAnchor: Alignment.bottomLeft,
-                    offset: const Offset(10, -8),
-                    child: SizedBox(
-                      width: MediaQuery.sizeOf(context).width - 20,
-                      child: ListenableBuilder(listenable: d, builder: (context, _) => _grouped ? _picker() : const SizedBox.shrink()),
-                    ),
-                  ),
-                ),
-                child: CompositedTransformTarget(link: _boxTop, child: const SizedBox(width: double.infinity)),
-              ),
+              ListenableBuilder(listenable: d, builder: (context, _) => _tags.anchor(context)),
               Composer(
                 key: composerKey,
                 text: _text,
@@ -1037,8 +1067,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 onCancelReply: () => setState(() => _reply = null),
                 onSend: (words, file) {
                   final r = _reply;
-                  final tags = tagRefs(words, _picked);
-                  _picked.clear();
+                  final tags = _tags.take(words);
                   setState(() => _reply = null);
                   d.send(words, file: file, reply: r, tags: tags);
                 },
@@ -1051,28 +1080,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
         ),
       ),
     );
-  }
-
-  /// With the tools, "@" opens the grouped picker; "#" the plain list.
-  bool get _grouped => _tag != null && _tag!.mark == '@' && widget.data.chats.chatTools;
-
-  Widget _picker() {
-    final q = _tag!;
-    final src = _tagSources();
-    final groups = groupTags(q.query, items: src.items, services: src.services, businesses: src.businesses, taskiem: true);
-    final shown = [for (final g in groups) ...g.items];
-    // What Enter takes: the first, the Taskiem row only when "Taskiem" is
-    // what is being typed.
-    final first = shown.where((s) => s.kind != 'taskiem' || (q.query.isNotEmpty && 'taskiem'.startsWith(q.query.toLowerCase()))).firstOrNull;
-    return TagPicker(query: q.query, groups: groups, first: first, onPick: _pickTag);
-  }
-
-  Widget _plainList() {
-    final q = _tag!;
-    final src = _tagSources();
-    final shown = suggest(q.mark == '@' ? src.businesses : src.items, q.query);
-    if (shown.isEmpty) return const SizedBox.shrink();
-    return TagList(mark: q.mark, items: shown, onPick: _pickTag);
   }
 
   /// The thread: bubbles, cards, and our own changes as diary lines.
@@ -1156,6 +1163,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
             taps: _taps[m.id] ?? 0,
             live: d.chats.chatTools ? (items: d.priceList, whose: d.priceWhose, stock: d.stock) : null,
             onOpenLink: widget.onOpenLink,
+            cheer: d.cheer == m.id,
+            refs: (auth: d.chats.auth, link: d.conv.link),
             onMore: () => setState(() => _taps[m.id] = (_taps[m.id] ?? 0) + 1),
           ),
         );
@@ -1257,7 +1266,15 @@ class _Bubble extends StatelessWidget {
     this.onMore,
     this.live,
     this.onOpenLink,
+    this.cheer = false,
+    this.refs,
   });
+
+  /// Where the cards of what it names are read.
+  final ({Auth auth, String link})? refs;
+
+  /// A good moment, just arrived: the burst round it.
+  final bool cheer;
 
   /// With chat tools: what a tagged thing's card reads (the price list,
   /// whose it is, our stock).
@@ -1493,6 +1510,16 @@ class _Bubble extends StatelessWidget {
                                 if (live != null && liveTag(msg.mentions) != null)
                                   LiveCard(m: liveTag(msg.mentions)!, items: live!.items, whose: live!.whose, stock: live!.stock),
                                 if (body.isNotEmpty) text,
+                                // Conversation.tsx: the invoices, bills and orders it
+                                // names, each as its card, read now.
+                                if (refs != null)
+                                  for (final x in docMentions(msg.mentions))
+                                    RefCard(
+                                      key: ValueKey('${x.kind}:${x.name}'),
+                                      auth: refs!.auth,
+                                      now: now,
+                                      load: () => refs!.auth.api.linkChatCard(link: refs!.link, kind: x.kind, name: x.name),
+                                    ),
                                 if (msg.preview != null) _PreviewCard(p: msg.preview!),
                                 if (!inline)
                                   Padding(
@@ -1524,6 +1551,8 @@ class _Bubble extends StatelessWidget {
                               child: TkIcon('down', size: 16, color: meta),
                             ),
                           ),
+                        // `.tk-cheer`: a good moment's ring, 6 px out.
+                        if (cheer) const Positioned(left: -6, top: -6, right: -6, bottom: -6, child: IgnorePointer(child: CheerRing())),
                       ],
                     ),
                   ),

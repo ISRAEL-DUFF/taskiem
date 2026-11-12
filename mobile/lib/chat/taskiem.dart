@@ -17,6 +17,7 @@ import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
 import '../api/transport.dart';
+import '../app/auth.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
@@ -28,7 +29,11 @@ import 'chats.dart';
 import 'composer.dart';
 import 'connect.dart';
 import 'live.dart';
+import 'explore.dart' show showExploreCard;
 import 'menu.dart';
+import 'ref_card.dart';
+import 'tag_box.dart';
+import 'tags.dart';
 import 'thread.dart';
 import 'words.dart';
 
@@ -142,6 +147,53 @@ class TaskiemData extends ChangeNotifier {
   /// What needs the person, as cards after the conversation.
   List<ChatAlert> alerts = const [];
 
+  /// TaskiemChat.tsx: what "/invoice" and the like may tag (all the person
+  /// may see), the business's own stock (its products on "#"), and what
+  /// suppliers sell ("#" after them).
+  List<ChatRef> refs = const [];
+  List<StockItem> ownStock = const [];
+  List<SupplierPrices> suppliers = const [];
+
+  Future<void> loadTags() async {
+    if (!chats.loaded) await chats.load();
+    final tools = chats.chatTools;
+    await Future.wait([
+      () async {
+        try {
+          suppliers = (await api.listSupplierPrices()).suppliers;
+        } on Object {
+          // None offered.
+        }
+      }(),
+      if (tools && chats.auth.can('table.read'))
+        () async {
+          try {
+            ownStock = (await api.getStock()).items;
+          } on Object {
+            // None offered.
+          }
+        }(),
+      if (tools)
+        () async {
+          try {
+            refs = (await api.chatRefs()).refs;
+          } on Object {
+            // None offered.
+          }
+        }(),
+    ]);
+    _changed();
+  }
+
+  /// refs.ts productRefs: the business's own products (not their sizes).
+  List<TagSuggestion> get ownProducts => productRefs(ownStock);
+
+  /// refs.ts knownRefs: the things its words may name with "#".
+  List<KnownRef> get known => [
+    for (final r in refs) (kind: r.kind, id: r.id, name: r.name),
+    for (final p in ownProducts) (kind: 'product', id: p.id.replaceFirst('own:', ''), name: p.name),
+  ];
+
   /// TaskiemChat.tsx briefs: the briefing card is for those who sell or bill.
   bool get briefs => chats.chatTools && chats.auth.can('storefront.manage|invoice.manage');
 
@@ -205,6 +257,7 @@ class TaskiemData extends ChangeNotifier {
 
   Future<void> open() async {
     unawaited(loadCards());
+    unawaited(loadTags());
     try {
       final out = await api.taskiemHistory();
       hasOlder = out.messages.length >= _page;
@@ -343,7 +396,7 @@ class TaskiemData extends ChangeNotifier {
 
 /// Taskiem's conversation.
 class TaskiemScreen extends StatefulWidget {
-  const TaskiemScreen({super.key, required this.data, this.onBack, this.pickers = const Pickers(), this.recorder, this.onOpenCustomer});
+  const TaskiemScreen({super.key, required this.data, this.onBack, this.pickers = const Pickers(), this.recorder, this.onOpenCustomer, this.onOpenLink});
 
   final TaskiemData data;
   final VoidCallback? onBack;
@@ -351,6 +404,10 @@ class TaskiemScreen extends StatefulWidget {
   /// A customer's conversation, in this one's place (an alert's "Open the
   /// order": the customer's thread, with the order on its card).
   final ValueChanged<String>? onOpenCustomer;
+
+  /// A business's conversation, in this one's place (one linked from its
+  /// Explore card).
+  final ValueChanged<LinkConversation>? onOpenLink;
   final Pickers pickers;
   final Recorder? recorder;
 
@@ -362,12 +419,53 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
   final _text = TextEditingController();
   StreamSubscription<String>? _back;
 
+  // TaskiemChat.tsx: with chat tools "@" tags things and businesses in
+  // groups and finds businesses not yet linked; Taskiem is who is being
+  // talked to, so it is not offered. "#" the business's own products, then
+  // what suppliers sell; "/invoice" and the like what the person may see.
+  late final _tags = TagBox(
+    text: _text,
+    sources: _tagSources,
+    grouped: () => widget.data.chats.chatTools,
+    taskiem: false,
+    onChange: () {
+      if (mounted) setState(() {});
+    },
+    explore: (q) async => (await widget.data.chats.api.explore(q: q)).results,
+    onExplore: (c) => showExploreCard(context, widget.data.chats, c, onOpen: widget.onOpenLink),
+  );
+
+  TagSources _tagSources() {
+    final d = widget.data;
+    final own = d.ownProducts;
+    final now = d.chats.now();
+    return (
+      items: [
+        ...own,
+        for (final p in d.suppliers)
+          for (final it in p.items)
+            if (it.available)
+              TagSuggestion(kind: 'item', id: '${p.link}:${it.itemId}', name: it.name, sub: '${p.business} · ${priceWords(it)}', category: it.category, words: it.description),
+      ],
+      services: const [],
+      businesses: [
+        for (final x in d.chats.conversations)
+          if (x.state == 'active') TagSuggestion(kind: 'business', id: x.link, name: x.name),
+      ],
+      refs: {
+        ...refSources([for (final r in d.refs) refTag(r, now, date: shortDate, status: refStatusWords)]),
+        'product': own,
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     // The words left unsent here, back in the box, and kept as they change.
     _text.text = widget.data.chats.draft('taskiem');
     _text.addListener(() => widget.data.chats.setDraft('taskiem', _text.text));
+    _text.addListener(_tags.typed);
     if (widget.data.messages == null) widget.data.open();
     widget.data.chats.viewingTaskiem = true;
     _back = widget.data.givenBack.listen((words) {
@@ -379,6 +477,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
   void dispose() {
     widget.data.chats.viewingTaskiem = false;
     _back?.cancel();
+    _tags.dispose();
     _text.dispose();
     super.dispose();
   }
@@ -420,6 +519,8 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                   ),
                 ),
                 Expanded(child: _thread(context, d)),
+                _tags.plain(),
+                _tags.anchor(context),
                 Composer(
                   text: _text,
                   // TaskiemChat.tsx: with chat tools "Ask Taskiem, or @ to
@@ -432,6 +533,8 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                   pickers: widget.pickers,
                   recorder: widget.recorder,
                   onSend: (words, file) {
+                    // Tags name things for Taskiem in the words alone.
+                    _tags.take(words);
                     if (file != null) {
                       d.sendFile(file, words);
                     } else if (d.briefs && asksBriefing(words)) {
@@ -468,6 +571,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
 
   Widget _thread(BuildContext context, TaskiemData d) {
     final t = TkTheme.tokens(context);
+    final known = d.known;
     final list = d.messages;
     // For each of Taskiem's answers with buttons, the one pressed (the
     // person's next message, when it is the button's title); which of the
@@ -568,6 +672,10 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
               pressable: x.id == pressable && !d.busy,
               onPress: (b) => d.say(reply: b.id, text: b.title),
               onLink: (u) => openTaskiemLink(context, d.chats.auth, u, onDone: d.pull),
+              known: known,
+              auth: d.chats.auth,
+              now: d.chats.now(),
+              onCustomer: widget.onOpenCustomer,
             ),
           );
         },
@@ -580,7 +688,27 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
 /// first of its run, its words (*bold* marked, a long answer folded), the
 /// channel it came by, the time, the person's ticks, and reply buttons.
 class _TaskiemBubble extends StatefulWidget {
-  const _TaskiemBubble({required this.x, required this.first, required this.read, required this.choice, required this.pressable, required this.onPress, this.onLink});
+  const _TaskiemBubble({
+    required this.x,
+    required this.first,
+    required this.read,
+    required this.choice,
+    required this.pressable,
+    required this.onPress,
+    this.onLink,
+    this.known = const [],
+    this.auth,
+    this.now,
+    this.onCustomer,
+  });
+
+  /// What its words may name with "#" (refs.ts knownRefs).
+  final List<KnownRef> known;
+  final Auth? auth;
+  final DateTime? now;
+
+  /// A customer named: their conversation.
+  final ValueChanged<String>? onCustomer;
 
   /// A connect link or a workflow's canvas in its words, pressed.
   final ValueChanged<Uri>? onLink;
@@ -643,7 +771,7 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
     );
     // A connect link or a workflow's canvas (§3.5) is pressed to open it;
     // other addresses stay words, as on the web.
-    List<InlineSpan> part(String text, TextStyle? style, TapGestureRecognizer Function(String, VoidCallback) tap) {
+    List<InlineSpan> linked(String text, TextStyle? style, TapGestureRecognizer Function(String, VoidCallback) tap) {
       final links = widget.onLink == null ? const <({int start, int end, Uri uri})>[] : linksIn(text).where((l) => opensFromTaskiem(l.uri)).toList();
       if (links.isEmpty) return [TextSpan(text: text, style: style)];
       final out = <InlineSpan>[];
@@ -660,6 +788,23 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
         at = l.end;
       }
       if (at < text.length) out.add(TextSpan(text: text.substring(at), style: style));
+      return out;
+    }
+
+    // TaskiemText: a thing it knows, named with "#", marked; a customer
+    // opens their conversation; the rest open in the tools (M5 to M8).
+    List<InlineSpan> part(String text, TextStyle? style, TapGestureRecognizer Function(String, VoidCallback) tap) {
+      final out = <InlineSpan>[];
+      for (final r in refParts(text, widget.known)) {
+        final ref = r.ref;
+        if (ref == null) {
+          out.addAll(linked(r.text, style, tap));
+          continue;
+        }
+        final mention = (style ?? const TextStyle()).copyWith(color: t.tintText, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]);
+        final open = ref.kind == 'customer' ? widget.onCustomer : null;
+        out.add(TextSpan(text: r.text, style: mention, recognizer: open == null ? null : tap('ref:${ref.kind}:${ref.id}', () => open(ref.id))));
+      }
       return out;
     }
 
@@ -712,6 +857,15 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
           )
         else
           words,
+        // The documents it names, each as its card, read now.
+        for (final r in cardRefs(m.text, widget.known))
+          RefCard(
+            key: ValueKey('${r.kind}:${r.id}'),
+            auth: widget.auth!,
+            now: widget.now ?? DateTime.now(),
+            load: () => widget.auth!.api.chatCard(kind: r.kind, id: r.id),
+            onMessage: widget.onCustomer,
+          ),
         if (buttons.isNotEmpty) _ReplyButtons(buttons: buttons, choice: widget.choice, pressable: widget.pressable, onPress: widget.onPress),
       ],
       ),

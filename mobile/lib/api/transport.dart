@@ -55,8 +55,10 @@ class Transport {
   final http.Client _client;
 
   /// Sends one request and answers its JSON (null for 204).
-  Future<Object?> send(String method, String path, {Object? body, Map<String, String>? query}) async {
+  Future<Object?> send(String method, String path, {Object? body, Map<String, String>? query, Map<String, String>? headers}) async {
     final req = http.Request(method, _uri(path, query))..headers['Accept'] = 'application/json';
+    // An Idempotency-Key, where one press must be one action however often it is sent.
+    if (headers != null) req.headers.addAll(headers);
     if (body != null) {
       req.headers['Content-Type'] = 'application/json';
       req.body = jsonEncode(body);

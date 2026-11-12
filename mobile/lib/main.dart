@@ -384,6 +384,11 @@ class _OpenTaskiemState extends State<_OpenTaskiem> {
       reverseTransitionDuration: Duration.zero,
       pageBuilder: (_, _, _) => _OpenCustomer(chats: widget.chats, id: id),
     )),
+    onOpenLink: (c) => Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
+      pageBuilder: (_, _, _) => _Open(chats: widget.chats, conv: c),
+    )),
   );
 }
 
