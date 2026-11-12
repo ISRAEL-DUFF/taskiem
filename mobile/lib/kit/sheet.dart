@@ -103,6 +103,55 @@ class TkSheet extends StatelessWidget {
     final dim = frame?.dim ?? 1;
     final pad = MediaQuery.paddingOf(context);
     void close() => Navigator.of(context).maybePop();
+    final big = MediaQuery.textScalerOf(context).scale(10) > 15;
+    final Widget head = Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
+                            child: Row(
+                              children: [
+                                if (onBack != null) ...[
+                                  _Round(icon: 'back', label: 'Back', onTap: onBack!),
+                                  // `.tk-back { margin-right: 4px }` with the head's 12 px gap.
+                                  SizedBox(width: crumb == null ? 16 : 12),
+                                ],
+                                if (lead != null) ...[
+                                  SizedBox(width: 48, height: 48, child: ExcludeSemantics(child: lead!)),
+                                  const SizedBox(width: 12),
+                                ],
+                                Expanded(
+                                  child: Semantics(
+                                    header: true,
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        if (crumb != null) Text(crumb!, style: tkText(size: 13, weight: 600, color: t.muted)),
+                                        Text.rich(
+                                          TextSpan(
+                                            text: title,
+                                            children: [
+                                              // `.tk-sheet-count { font-size: 14px; font-weight: 400; color: var(--muted) }`, 8 px after.
+                                              if (count != null) ...[
+                                                const WidgetSpan(child: SizedBox(width: 8)),
+                                                TextSpan(text: '$count', style: tkText(size: 14, weight: 400, letterSpacing: 0, color: t.muted)),
+                                              ],
+                                            ],
+                                          ),
+                                          style: lead != null
+                                              ? tkText(size: 22, weight: 800, lineHeight: 1.2, letterSpacing: -0.44, color: t.text)
+                                              : tkText(size: 26, weight: 800, lineHeight: 1.35, letterSpacing: -0.52, color: t.text),
+                                        ),
+                                        if (sub != null) ...[
+                                          const SizedBox(height: 2),
+                                          Text(sub!, style: tkText(size: 13, color: t.muted)),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                _Round(icon: 'close', label: 'Close', onTap: close),
+                              ],
+                            ),
+                          );
     return Stack(
       children: [
         // `.tk-veil { background: var(--tk-veil); backdrop-filter: blur(2px) }`
@@ -162,56 +211,19 @@ class TkSheet extends StatelessWidget {
                               ),
                             ),
                           ),
-                          // `.tk-sheet-head`
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
-                            child: Row(
-                              children: [
-                                if (onBack != null) ...[
-                                  _Round(icon: 'back', label: 'Back', onTap: onBack!),
-                                  // `.tk-back { margin-right: 4px }` with the head's 12 px gap.
-                                  SizedBox(width: crumb == null ? 16 : 12),
-                                ],
-                                if (lead != null) ...[
-                                  SizedBox(width: 48, height: 48, child: ExcludeSemantics(child: lead!)),
-                                  const SizedBox(width: 12),
-                                ],
-                                Expanded(
-                                  child: Semantics(
-                                    header: true,
+                          if (!big) head,
+                          // With large text the head scrolls away with the body, which
+                          // keeps room for itself (its own list scrolls in it).
+                          Expanded(
+                            child: big
+                                ? SingleChildScrollView(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        if (crumb != null) Text(crumb!, style: tkText(size: 13, weight: 600, color: t.muted)),
-                                        Text.rich(
-                                          TextSpan(
-                                            text: title,
-                                            children: [
-                                              // `.tk-sheet-count { font-size: 14px; font-weight: 400; color: var(--muted) }`, 8 px after.
-                                              if (count != null) ...[
-                                                const WidgetSpan(child: SizedBox(width: 8)),
-                                                TextSpan(text: '$count', style: tkText(size: 14, weight: 400, letterSpacing: 0, color: t.muted)),
-                                              ],
-                                            ],
-                                          ),
-                                          style: lead != null
-                                              ? tkText(size: 22, weight: 800, lineHeight: 1.2, letterSpacing: -0.44, color: t.text)
-                                              : tkText(size: 26, weight: 800, lineHeight: 1.35, letterSpacing: -0.52, color: t.text),
-                                        ),
-                                        if (sub != null) ...[
-                                          const SizedBox(height: 2),
-                                          Text(sub!, style: tkText(size: 13, color: t.muted)),
-                                        ],
-                                      ],
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [head, SizedBox(height: box.maxHeight * 0.62, child: body)],
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                _Round(icon: 'close', label: 'Close', onTap: close),
-                              ],
-                            ),
+                                  )
+                                : body,
                           ),
-                          Expanded(child: body),
                           if (footer != null) TkSheetFoot(bare: bareFooter, child: footer!),
                         ],
                       ),

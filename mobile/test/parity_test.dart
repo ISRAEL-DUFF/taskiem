@@ -606,7 +606,13 @@ Future<void> _shop(WidgetTester t, {bool review = false}) async {
   await _loaded(t);
   await t.tap(find.bySemanticsLabel(RegExp('^Their shop')));
   await _loaded(t);
-  await t.tap(find.bySemanticsLabel(RegExp('^One more ')).first);
+  // At large text the head can fill the sheet: the first row scrolled to.
+  final more = find.bySemanticsLabel(RegExp('^One more '));
+  for (var i = 0; i < 20 && more.evaluate().isEmpty; i++) {
+    await t.drag(find.byType(Scrollable).last, const Offset(0, -80));
+    await t.pumpAndSettle();
+  }
+  await t.tap(more.first);
   await _loaded(t);
   if (review) {
     await t.tap(find.bySemanticsLabel('Review order'));

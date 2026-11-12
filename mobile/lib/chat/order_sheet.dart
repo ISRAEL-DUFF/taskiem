@@ -445,8 +445,11 @@ class _OrderSheetState extends State<OrderSheet> {
       final cats = priceChips(items, _chip);
       final shown = orderShown(items, _chip, _search.text);
       final sections = orderSections(shown);
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      // One scroll for all of it, the search and chips too: with large
+      // text the head and the bag leave a list of its own no room.
+      Widget side(Widget w) => Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: w);
+      return ListView(
+        padding: const EdgeInsets.only(bottom: 96),
         children: [
           ?stockSection,
           if (!widget.browse && _last != null && bag.lines.isEmpty)
@@ -462,29 +465,22 @@ class _OrderSheetState extends State<OrderSheet> {
             ),
           TkSearchBox(controller: _search, hint: storefront ? 'Search their shop' : 'Search their price list'),
           if (cats.isNotEmpty) TkChipRow(chips: cats, on: _chip, onPick: (tag) => setState(() => _chip = tag)),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 96),
-              children: [
-                if (shown.isEmpty) const TkEmpty(icon: 'search', title: 'Nothing matches', line: 'Try another word, or show all.'),
-                for (final sec in sections) ...[
-                  if (sec.label.isNotEmpty)
-                    Padding(
-                      // `.tk-order-cat`: 14 px above, in from the list's sides.
-                      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-                      child: Semantics(
-                        container: true,
-                        header: true,
-                        label: sec.label,
-                        excludeSemantics: true,
-                        child: Text(sec.label.toUpperCase(), style: tkText(size: 13, weight: 700, letterSpacing: 0.78, color: t.muted)),
-                      ),
-                    ),
-                  for (final it in sec.items) _row(t, dark, it),
-                ],
-              ],
-            ),
-          ),
+          if (shown.isEmpty) side(const TkEmpty(icon: 'search', title: 'Nothing matches', line: 'Try another word, or show all.')),
+          for (final sec in sections) ...[
+            if (sec.label.isNotEmpty)
+              Padding(
+                // `.tk-order-cat`: 14 px above, in from the list's sides.
+                padding: const EdgeInsets.fromLTRB(32, 14, 32, 0),
+                child: Semantics(
+                  container: true,
+                  header: true,
+                  label: sec.label,
+                  excludeSemantics: true,
+                  child: Text(sec.label.toUpperCase(), style: tkText(size: 13, weight: 700, letterSpacing: 0.78, color: t.muted)),
+                ),
+              ),
+            for (final it in sec.items) side(_row(t, dark, it)),
+          ],
         ],
       );
     }
@@ -700,58 +696,61 @@ class _BagBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    // With large text the words and the button share no line: the button
+    // goes under them, the whole width.
+    final stack = MediaQuery.textScalerOf(context).scale(10) > 15;
+    final words = Semantics(
+      container: true,
+      liveRegion: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Opacity(opacity: 0.8, child: Text(count, style: tkText(size: 13, color: t.tkOnPine))),
+          Text(total, style: tkText(size: 20, weight: 800, letterSpacing: -0.2, color: t.tkOnPine)),
+        ],
+      ),
+    );
+    final go = TapArea(
+      child: Semantics(
+        button: true,
+        enabled: onGo != null,
+        label: 'Review order',
+        excludeSemantics: true,
+        child: TkPress(
+          onTap: onGo,
+          child: Opacity(
+            opacity: onGo == null ? 0.55 : 1,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 52),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              decoration: BoxDecoration(color: t.brandDark, borderRadius: BorderRadius.circular(999)),
+              child: Row(
+                mainAxisSize: stack ? MainAxisSize.max : MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(child: Text('Review order', style: tkText(size: 15, weight: 800, color: t.brand))),
+                  const SizedBox(width: 6),
+                  TkIcon('arrow-right', size: 18, color: t.brand),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 10, 10, 10),
+      padding: stack ? const EdgeInsets.all(10) : const EdgeInsets.fromLTRB(20, 10, 10, 10),
       decoration: BoxDecoration(
         color: t.brand,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [BoxShadow(color: t.brand.withValues(alpha: 0.6), offset: const Offset(0, 20), blurRadius: 40, spreadRadius: -14)],
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Semantics(
-              container: true,
-              liveRegion: true,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Opacity(opacity: 0.8, child: Text(count, style: tkText(size: 13, color: t.tkOnPine))),
-                  Text(total, style: tkText(size: 20, weight: 800, letterSpacing: -0.2, color: t.tkOnPine)),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          TapArea(
-            child: Semantics(
-              button: true,
-              enabled: onGo != null,
-              label: 'Review order',
-              excludeSemantics: true,
-              child: TkPress(
-                onTap: onGo,
-                child: Opacity(
-                  opacity: onGo == null ? 0.55 : 1,
-                  child: Container(
-                    constraints: const BoxConstraints(minHeight: 52),
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    decoration: BoxDecoration(color: t.brandDark, borderRadius: BorderRadius.circular(999)),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('Review order', style: tkText(size: 15, weight: 800, color: t.brand)),
-                        const SizedBox(width: 6),
-                        TkIcon('arrow-right', size: 18, color: t.brand),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      child: stack
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [Padding(padding: const EdgeInsets.fromLTRB(10, 0, 10, 8), child: words), go],
+            )
+          : Row(children: [Expanded(child: words), const SizedBox(width: 12), go]),
     );
   }
 }
