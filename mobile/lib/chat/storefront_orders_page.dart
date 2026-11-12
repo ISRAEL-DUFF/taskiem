@@ -40,6 +40,12 @@ CardTone _pillTone(Tone t) => switch (t) {
   _ => CardTone.plain,
 };
 
+/// StorefrontOrders.tsx DecideWhere: accepting and declining are in the
+/// approval request, not here (the web's Approvals page is, in the app,
+/// the approval cards in the conversation with Taskiem).
+const decideWhere =
+    'You accept or decline each one in the approval request Taskiem sends you in WhatsApp or Telegram, or in your conversation with Taskiem.';
+
 /// orders.ts ORDER_FILTERS: the list's filter.
 const orderFilters = [
   ('open', 'Open'),
@@ -247,6 +253,9 @@ bool _dispatchOff(Object e) => e is ApiError && e.status == 409;
 
 void _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
 
+/// Opens Orders: every order, booking, question and call-back.
+void openStorefrontOrders(BuildContext context, Auth auth) => _push(context, StorefrontOrdersPage(auth: auth));
+
 /// Opens one order from a customer on its own screen.
 void openStorefrontOrder(BuildContext context, Auth auth, String reference) => _push(context, StorefrontOrderPage(auth: auth, reference: reference));
 
@@ -289,20 +298,32 @@ class _Kv extends StatelessWidget {
         for (final (k, v) in rows)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: MergeSemantics(
-              child: Column(
+            child: () {
+              final row = Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(k, style: tkText(size: 13, weight: 600, color: t.muted)),
                   const SizedBox(height: 2),
                   v,
                 ],
-              ),
-            ),
+              );
+              // A row of words is read as one; a row with links keeps each
+              // link its own, to be pressed (merged, one would be lost).
+              return v is _Links ? Semantics(container: true, child: row) : MergeSemantics(child: row);
+            }(),
           ),
       ],
     );
   }
+}
+
+/// A row's links, each pressed on its own (see [_Kv]).
+class _Links extends StatelessWidget {
+  const _Links(this.links);
+  final List<Widget> links;
+
+  @override
+  Widget build(BuildContext context) => Wrap(spacing: 12, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: links);
 }
 
 Widget _text(TkTokens t, String s, {bool hint = false}) => Text(s, style: hint ? tkHint(t) : tkText(size: 15, color: t.text));
@@ -370,7 +391,7 @@ class _StorefrontOrdersPageState extends State<StorefrontOrdersPage> with Pollin
       if (mounted && asked == _asked) setState(() => (_orders = _maps(r['orders']), _none = false, _error = null));
     } on ApiError catch (e) {
       if (!mounted || asked != _asked) return;
-      setState(() => e.status == 404 ? (_orders = const [], _none = true) : _error = e.message);
+      setState(() => e.status == 404 ? (_orders = const [], _none = true, _error = null) : _error = e.message);
     } on Object catch (e) {
       if (mounted && asked == _asked) setState(() => _error = errorWords(e));
     }
@@ -398,13 +419,14 @@ class _StorefrontOrdersPageState extends State<StorefrontOrdersPage> with Pollin
       description: 'Orders, bookings, questions and call-back requests from your storefront, newest first. The list refreshes itself.',
       onRefresh: _load,
       children: [
-        Text('You accept or decline each one in the approval request Taskiem sends you in WhatsApp or Telegram.', style: tkHint(t)),
+        Text(decideWhere, style: tkHint(t)),
         if (_trade)
           Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               Text('Orders from businesses you are linked with are among these. ', style: tkHint(t)),
               TkLink(label: 'Orders from linked businesses', onTap: () => openTradeOrders(context, _auth)),
+              Text(' has what is theirs alone.', style: tkHint(t)),
             ],
           ),
         Wrap(
@@ -475,8 +497,16 @@ class _StorefrontOrdersPageState extends State<StorefrontOrdersPage> with Pollin
                       '${orderTotal(o)} · ${extra.join(' · ')}',
                     ].join('\n'),
                     pill: TkPill(st.label, tone: _pillTone(st.tone)),
+                    // StorefrontOrders.tsx WAITING: amber; a refund due, red.
+                    tone: o['status'] == 'refund_due'
+                        ? CardTone.danger
+                        : (const {'received', 'awaiting_payment', 'price_changed'}.contains(o['status']) ? CardTone.warn : null),
                     onTap: () async {
-                      await Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => StorefrontOrderPage(auth: _auth, reference: _str(o['reference']), now: widget.now)));
+                      await Navigator.of(context).push(
+                        PageRouteBuilder<void>(
+                          pageBuilder: (_, _, _) => StorefrontOrderPage(auth: _auth, reference: _str(o['reference']), now: widget.now, backLabel: 'Back to Orders'),
+                        ),
+                      );
                       await _load();
                     },
                   );
@@ -494,10 +524,14 @@ void openTradeOrders(BuildContext context, Auth auth) => _push(context, TradeOrd
 /// StorefrontOrder: one order, its customer's details for those who may
 /// see them.
 class StorefrontOrderPage extends StatefulWidget {
-  const StorefrontOrderPage({super.key, required this.auth, required this.reference, this.now});
+  const StorefrontOrderPage({super.key, required this.auth, required this.reference, this.now, this.backLabel = 'Back'});
   final Auth auth;
   final String reference;
   final DateTime Function()? now;
+
+  /// Where Back goes, said: the list's "Back to Orders", or just Back from
+  /// a card or a chat.
+  final String backLabel;
 
   @override
   State<StorefrontOrderPage> createState() => _StorefrontOrderPageState();
@@ -522,12 +556,19 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
     startPolling(const Duration(seconds: 30), _load);
   }
 
+  int _asked = 0;
+
+  /// The order's delivery reads again with it.
+  int _loads = 0;
+
   Future<void> _load() async {
+    // Only the newest read is shown: a slow poll does not undo an action's.
+    final asked = ++_asked;
     try {
       final r = (await _auth.transport.send('GET', '/v1/storefront/orders/$_ref') as Map).cast<String, dynamic>();
-      if (mounted) setState(() => (_view = r, _error = null));
+      if (mounted && asked == _asked) setState(() => (_view = r, _error = null, _loads++));
     } on Object catch (e) {
-      if (mounted) setState(() => _error = errorWords(e));
+      if (mounted && asked == _asked) setState(() => _error = errorWords(e));
     }
   }
 
@@ -549,7 +590,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
     final o = _view == null ? null : _map(_view!['order']);
     return TkPageScreen(
       title: '${o == null ? 'Order' : (kindLabel[o['kind']] ?? 'Order')} ${widget.reference}',
-      backLabel: 'Back to Orders',
+      backLabel: widget.backLabel,
       onRefresh: _load,
       children: [
         if (_error != null) TkErrorBox(_error!),
@@ -585,6 +626,8 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
           children: [
             _Notice(refundLine(refundKobo, paidBy), tone: Tone.danger),
             if (_str(o['note']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: _text(t, _str(o['note']), hint: true)),
+            // Refunds are the owner's (storefront.manage, api/server.go).
+            if (_auth.can('storefront.manage')) ...[
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
@@ -628,6 +671,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
                 ),
               ],
             ),
+            ],
           ],
         ),
       if (_actError != null) TkErrorBox(_actError!),
@@ -674,8 +718,10 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
             if (_str(o['note']).isNotEmpty) ('Note', _text(t, _str(o['note']))),
             if (_str(o['decided_at']).isNotEmpty)
               ('Decided', _text(t, '${whenLabel(_str(o['decided_at']))}${_str(o['decided_by']).isNotEmpty ? ' by ${o['decided_by']}' : ''}')),
+            // The run's own page is the web's: here, whether it started.
+            ('Workflow', _text(t, _str(o['run_id']).isNotEmpty ? 'Started' : 'Not started yet', hint: _str(o['run_id']).isEmpty)),
           ]),
-          Text('You accept or decline each one in the approval request Taskiem sends you in WhatsApp or Telegram.', style: tkHint(t)),
+          Text(decideWhere, style: tkHint(t)),
           if (booking && canChange(o)) ...[
             if (_changed.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 10), child: _Notice(_changed)),
             const SizedBox(height: 10),
@@ -685,7 +731,9 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
                 TkSmallButton(
                   label: 'Move',
                   semantics: 'Move ${o['service_name'] ?? 'booking'} ${o['reference']}',
-                  onPressed: () async {
+                  onPressed: _busy
+                      ? null
+                      : () async {
                     final said = await moveBooking(context, _auth, o);
                     if (said == null || !mounted) return;
                     setState(() => _changed = said);
@@ -703,7 +751,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
                           await _run(() async {
                             final said = await cancelBooking(_auth, o);
                             if (mounted) setState(() => _changed = said);
-                          }, '');
+                          }, 'Booking cancelled');
                         },
                 ),
               ],
@@ -728,7 +776,14 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
           ],
         ),
       if ((kind == 'order' || kind == 'trade') && o['fulfilment'] == 'delivery')
-        OrderDelivery(key: ValueKey('delivery ${widget.reference}'), auth: _auth, reference: widget.reference, onChanged: _load),
+        OrderDelivery(
+          key: ValueKey('delivery ${widget.reference}'),
+          auth: _auth,
+          reference: widget.reference,
+          onChanged: _load,
+          reads: _loads,
+          manage: _auth.can('storefront.manage'),
+        ),
       _money(t),
       TkPageCard(
         title: 'Customer',
@@ -839,19 +894,27 @@ class _CustomerDetails extends StatelessWidget {
           'Phone',
           isMasked(phone)
               ? _text(t, phone)
-              : Wrap(
-                  spacing: 12,
-                  children: [
-                    TkLink(label: 'Call $phone', onTap: () => callPhone(phone)),
-                    if (wa != null) TkLink(label: 'WhatsApp', onTap: () => openOutside(Uri.parse(wa))),
-                  ],
-                ),
+              : _Links([
+                  TkLink(label: 'Call $phone', onTap: () => openOrSay(context, () => callPhone(phone), 'That number could not be called.')),
+                  if (wa != null) TkLink(label: 'WhatsApp', onTap: () => openOrSay(context, () => openOutside(Uri.parse(wa)), 'WhatsApp could not be opened.')),
+                ]),
         ),
-      if (_str(c['email']).isNotEmpty) ('Email', _text(t, _str(c['email']))),
+      if (_str(c['email']).isNotEmpty)
+        (
+          'Email',
+          isMasked(_str(c['email']))
+              ? _text(t, _str(c['email']))
+              : _Links([TkLink(label: _str(c['email']), onTap: () => openOrSay(context, () => mailTo(_str(c['email'])), 'Your mail app could not be opened.'))]),
+        ),
       if (_str(c['address']).isNotEmpty) ('Address', _text(t, _str(c['address']))),
       if (_str(c['landmark']).isNotEmpty) ('Landmark', _text(t, _str(c['landmark']))),
       if (pin.isNotEmpty)
-        ('Location', pin.startsWith('https://') ? Align(alignment: Alignment.centerLeft, child: TkLink(label: 'Open the map', onTap: () => openOutside(Uri.parse(pin)))) : _text(t, pin)),
+        (
+          'Location',
+          pin.startsWith('https://')
+              ? _Links([TkLink(label: 'Open the map', onTap: () => openOrSay(context, () => openOutside(Uri.parse(pin)), 'The map could not be opened.'))])
+              : _text(t, pin),
+        ),
       if (_str(c['message']).isNotEmpty) ('Message', _text(t, _str(c['message']))),
       if (_str(c['best_time']).isNotEmpty) ('Best time', _text(t, _str(c['best_time']))),
     ];
@@ -864,10 +927,17 @@ class _CustomerDetails extends StatelessWidget {
 /// it got, with Offer, Choose the rider, Confirm the fee and Take it back.
 /// Nothing with riders off.
 class OrderDelivery extends StatefulWidget {
-  const OrderDelivery({super.key, required this.auth, required this.reference, required this.onChanged});
+  const OrderDelivery({super.key, required this.auth, required this.reference, required this.onChanged, this.reads = 0, this.manage = true});
   final Auth auth;
   final String reference;
   final Future<void> Function() onChanged;
+
+  /// Changes each time the order's page reads the order again: the
+  /// delivery is read again with it (the web's useLiveRefresh).
+  final int reads;
+
+  /// May confirm the rider's fee (storefront.manage).
+  final bool manage;
 
   @override
   State<OrderDelivery> createState() => _OrderDeliveryState();
@@ -884,18 +954,27 @@ class _OrderDeliveryState extends State<OrderDelivery> {
   String get _ref => Uri.encodeComponent(widget.reference);
   Transport get _t => widget.auth.transport;
 
+  int _asked = 0;
+
   @override
   void initState() {
     super.initState();
     _load();
   }
 
+  @override
+  void didUpdateWidget(OrderDelivery old) {
+    super.didUpdateWidget(old);
+    if (old.reads != widget.reads) _load();
+  }
+
   Future<void> _load() async {
+    final asked = ++_asked;
     try {
       final r = (await _t.send('GET', '/v1/storefront/orders/$_ref/deliveries') as Map).cast<String, dynamic>();
-      if (mounted) setState(() => (_v = r, _error = null));
+      if (mounted && asked == _asked) setState(() => (_v = r, _error = null));
     } on Object catch (e) {
-      if (mounted) setState(() => _dispatchOff(e) ? _off = true : _error = errorWords(e));
+      if (mounted && asked == _asked) setState(() => _dispatchOff(e) ? _off = true : _error = errorWords(e));
     }
   }
 
@@ -944,14 +1023,16 @@ class _OrderDeliveryState extends State<OrderDelivery> {
           _Kv([
             (
               'Rider',
-              Wrap(
-                spacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  _text(t, _str(cur['rider'])),
-                  if (_str(cur['rider_phone']).isNotEmpty) TkLink(label: 'Call ${cur['rider_phone']}', onTap: () => callPhone(_str(cur['rider_phone']))),
-                ],
-              ),
+              // A cashier gets the rider's phone masked: words, not a call.
+              _str(cur['rider_phone']).isEmpty || isMasked(_str(cur['rider_phone']))
+                  ? _text(t, [_str(cur['rider']), _str(cur['rider_phone'])].where((x) => x.isNotEmpty).join(' · '))
+                  : _Links([
+                      _text(t, _str(cur['rider'])),
+                      TkLink(
+                        label: 'Call ${cur['rider_phone']}',
+                        onTap: () => openOrSay(context, () => callPhone(_str(cur['rider_phone'])), 'That number could not be called.'),
+                      ),
+                    ]),
             ),
             (
               'Status',
@@ -983,16 +1064,24 @@ class _OrderDeliveryState extends State<OrderDelivery> {
               child: Wrap(
                 spacing: 12,
                 children: [
-                  if (_str(cur['proof_url']).isNotEmpty) TkLink(label: 'See the photo from the door', onTap: () => openInBrowser(Uri.parse(_str(cur['proof_url'])))),
+                  if (_str(cur['proof_url']).isNotEmpty)
+                    TkLink(
+                      label: 'See the photo from the door',
+                      onTap: () => openOrSay(context, () => openInBrowser(Uri.parse(_str(cur['proof_url']))), 'The photo could not be opened.'),
+                    ),
                   if (_str(cur['location']).isNotEmpty)
                     TkLink(
                       label: 'Where the rider was',
-                      onTap: () => openOutside(
-                        Uri.parse(
-                          _str(cur['location']).startsWith('https://')
-                              ? _str(cur['location'])
-                              : 'https://maps.google.com/?q=${Uri.encodeQueryComponent(_str(cur['location']))}',
+                      onTap: () => openOrSay(
+                        context,
+                        () => openOutside(
+                          Uri.parse(
+                            _str(cur['location']).startsWith('https://')
+                                ? _str(cur['location'])
+                                : 'https://maps.google.com/?q=${Uri.encodeQueryComponent(_str(cur['location']))}',
+                          ),
                         ),
+                        'The map could not be opened.',
                       ),
                     ),
                 ],
@@ -1010,7 +1099,7 @@ class _OrderDeliveryState extends State<OrderDelivery> {
                 TkSmallButton(label: cur != null ? 'Offer to the next free rider' : 'Offer to a free rider', primary: true, onPressed: _busy ? null : () => _offer()),
                 TkSmallButton(label: 'Choose the rider', onPressed: _busy ? null : _choose),
               ],
-              if (cur != null && cur['status'] == 'delivered' && _str(cur['fee_paid']).isEmpty) ...[
+              if (widget.manage && cur != null && cur['status'] == 'delivered' && _str(cur['fee_paid']).isEmpty) ...[
                 TkSmallButton(
                   label: 'Confirm, pay the fee',
                   primary: true,
@@ -1211,8 +1300,10 @@ class _DeliveriesPageState extends State<DeliveriesPage> with Polling {
 
   /// A workflow the business made itself is replaced only once the owner
   /// says so.
+  String? _turnOnError;
+
   Future<void> _turnOn() async {
-    setState(() => _busy = true);
+    setState(() => (_busy = true, _turnOnError = null));
     try {
       try {
         await _auth.transport.send('POST', '/v1/dispatch/workflow', body: const {});
@@ -1234,7 +1325,9 @@ class _DeliveriesPageState extends State<DeliveriesPage> with Polling {
         setState(() => _on = true);
       }
     } on Object catch (e) {
-      if (mounted) setState(() => _error = errorWords(e));
+      // In the card, kept until pressed again (not the page's, which the
+      // next read clears).
+      if (mounted) setState(() => _turnOnError = errorWords(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1250,11 +1343,11 @@ class _DeliveriesPageState extends State<DeliveriesPage> with Polling {
       title: 'Deliveries',
       description: 'Your riders’ deliveries: who has each order, how far it got, and how it was paid at the door.',
       onRefresh: _load,
-      action: _off
+      // How orders are offered is the owner's (storefront.manage).
+      action: _off || !_auth.can('storefront.manage')
           ? null
           : TkSmallButton(
-              label: 'Settings',
-              semantics: 'How orders are offered',
+              label: 'How orders are offered',
               onPressed: () async {
                 final saved = await showTkModal<bool>(context, title: 'How orders are offered', builder: (_) => _DispatchSettings(auth: _auth));
                 if (saved == true && mounted) showTkToast(this.context, 'Saved');
@@ -1263,7 +1356,8 @@ class _DeliveriesPageState extends State<DeliveriesPage> with Polling {
       children: [
         if (_off) const TkEmpty(icon: 'members', title: 'Deliveries need text messages, which are not set up on this Taskiem yet.'),
         if (!_off && _error != null) TkErrorBox(_error!),
-        if (!_off && _on == false)
+        // Turning on needs the owner who may also publish workflows.
+        if (!_off && _on == false && _auth.can('storefront.manage') && _auth.can('workflow.edit') && _auth.can('workflow.publish'))
           TkPageCard(
             title: 'Offer orders to your riders by themselves',
             children: [
@@ -1271,6 +1365,7 @@ class _DeliveriesPageState extends State<DeliveriesPage> with Polling {
                 'Each order for delivery you confirm then goes to your riders in turn, and the rider’s Delivered completes it. Your order form stays as it is; without this, you offer each order from its page.',
                 style: tkHint(t),
               ),
+              if (_turnOnError != null) Padding(padding: const EdgeInsets.only(top: 10), child: TkErrorBox(_turnOnError!)),
               const SizedBox(height: 10),
               Align(
                 alignment: Alignment.centerLeft,
@@ -1284,7 +1379,15 @@ class _DeliveriesPageState extends State<DeliveriesPage> with Polling {
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.end,
             children: [
-              TkSmallButton(label: 'Under way now', primary: _open, onPressed: () => _show(open: !_open)),
+              // The web's ?open=true, or none: either way no day.
+              TkSmallButton(
+                label: 'Under way now',
+                primary: _open,
+                onPressed: () {
+                  _dayBox.clear();
+                  _show(open: !_open, day: '');
+                },
+              ),
               SizedBox(
                 width: 150,
                 child: TkKitField(label: 'Day', child: TkTextBox(controller: _dayBox, hint: today, height: 44, size: 16)),

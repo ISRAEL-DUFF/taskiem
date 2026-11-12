@@ -215,9 +215,13 @@ class TkPill extends StatelessWidget {
 /// kit.css `.tk-row`: a 52 px tile (letters in their name's tone, or an
 /// icon on the lime tint), the name and its line, a pill at the end.
 class TkRow extends StatelessWidget {
-  const TkRow({super.key, required this.name, required this.sub, this.letters, this.icon, this.pill, this.onTap, this.trailing});
+  const TkRow({super.key, required this.name, required this.sub, this.letters, this.icon, this.pill, this.onTap, this.trailing, this.tone});
   final String name;
   final String sub;
+
+  /// The icon tile's tone: amber for what waits on someone, red for a
+  /// refund due (the web's `.list-icon.warn`, `.danger`); else lime.
+  final CardTone? tone;
 
   /// The tile's letters, in [name]'s tone; or [icon] on the lime tint.
   final String? letters;
@@ -230,7 +234,11 @@ class TkRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
-    final (bg, ink) = icon != null ? (t.tkLimeSoft, dark ? t.brandDark : t.brand) : tkTone(t, toneOf(name));
+    final (bg, ink) = switch (tone) {
+      CardTone.warn => (t.tintWarn, t.tintWarnText),
+      CardTone.danger => (t.tkDangerBg, t.tkDangerInk),
+      _ => icon != null ? (t.tkLimeSoft, dark ? t.brandDark : t.brand) : tkTone(t, toneOf(name)),
+    };
     // One node: its name, line and pill read together, as the row they are.
     return MergeSemantics(
       child: Semantics(

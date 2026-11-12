@@ -54,6 +54,11 @@ int _minutes(String hhmm) => int.parse(hhmm.substring(0, 2)) * 60 + int.parse(hh
   'expired' => (label: 'Expired', tone: Tone.muted),
   'cancelled' => (label: 'Cancelled', tone: Tone.muted),
   'refunded' => (label: 'Refunded', tone: Tone.muted),
+  'dispatched' => (label: 'With a rider', tone: Tone.info),
+  'on_the_way' => (label: 'On the way', tone: Tone.info),
+  'arrived' => (label: 'At the door', tone: Tone.info),
+  'proposed' => (label: 'Waiting for the business to confirm', tone: Tone.info),
+  'changed' => (label: 'Waiting for the business to accept your change', tone: Tone.info),
   _ => (label: s.replaceAll('_', ' '), tone: Tone.muted),
 };
 
@@ -400,7 +405,6 @@ class _BookingsPageState extends State<BookingsPage> {
     setState(() => _notice = said);
     await _loadBookings();
   }
-
 
   @override
   Widget build(BuildContext context) {

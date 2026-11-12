@@ -35,3 +35,13 @@ Future<bool> Function(String phone) callPhone = (phone) async {
     return false;
   }
 };
+
+/// Writes to [email] from the phone's mail app (`mailto:`); false when
+/// nothing could. A test stands in for it.
+Future<bool> Function(String email) mailTo = (email) async {
+  try {
+    return await launchUrl(Uri(scheme: 'mailto', path: email));
+  } on Object {
+    return false;
+  }
+};

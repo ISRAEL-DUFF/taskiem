@@ -17,7 +17,7 @@ import '../kit/sheet.dart' show TkKitField, TkLines;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show whenLabel;
-import 'storefront_orders_page.dart' show openStorefrontOrder;
+import 'storefront_orders_page.dart' show openStorefrontOrder, openStorefrontOrders;
 import 'tags.dart' show quantity;
 import 'words.dart' show CardTone, naira;
 
@@ -198,6 +198,11 @@ class _TradeOrdersPageState extends State<TradeOrdersPage> {
       onRefresh: _load,
       action: widget.auth.can('storefront.manage') ? TkSmallButton(label: 'Draft', semantics: 'Draft an order for them', primary: true, onPressed: _draft) : null,
       children: [
+        // The web's crumb back to Orders, where every order is.
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TkLink(label: 'All your orders', onTap: () => openStorefrontOrders(context, widget.auth)),
+        ),
         if (_error != null) TkErrorBox(_error!),
         if (orders == null && _error == null) Text('Loading the orders…', style: tkHint(t)),
         if (orders != null && orders.isEmpty)
