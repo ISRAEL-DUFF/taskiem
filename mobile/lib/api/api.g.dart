@@ -300,6 +300,18 @@ class TaskiemApi {
     final j = await _t.send('POST', '/v1/staff/tasks', body: body.toJson());
     return GiveStaffTaskResponse.fromJson(j as Map<String, dynamic>);
   }
+
+  /// What a connect link connects (`GET /v1/connect/{token}`)
+  Future<GetConnectLinkResponse> getConnectLink({required String token}) async {
+    final j = await _t.send('GET', '/v1/connect/${Uri.encodeComponent(token)}');
+    return GetConnectLinkResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Connect a key-based service through a connect link (`POST /v1/connect/{token}`)
+  Future<ConnectWithKeyResponse> connectWithKey({required ConnectWithKeyRequest body, required String token}) async {
+    final j = await _t.send('POST', '/v1/connect/${Uri.encodeComponent(token)}', body: body.toJson());
+    return ConnectWithKeyResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -3367,5 +3379,171 @@ class GiveStaffTaskResponse {
   Map<String, dynamic> toJson() => {
         'repeat_id': ?repeatId,
         'task': ?task,
+      };
+}
+
+class GetConnectLinkResponse {
+  const GetConnectLinkResponse({this.back, required this.business, required this.channel, required this.connector, required this.expiresAt, this.miniApp});
+
+  /// A link back to the chat.
+  final String? back;
+  final String business;
+  final String channel;
+  final Connector connector;
+  final DateTime expiresAt;
+  /// On Telegram the key form needs the Mini App's initData.
+  final bool? miniApp;
+
+  factory GetConnectLinkResponse.fromJson(Map<String, dynamic> j) => GetConnectLinkResponse(
+        back: j['back'] == null ? null : j['back'] as String,
+        business: j['business'] as String,
+        channel: j['channel'] as String,
+        connector: Connector.fromJson(j['connector'] as Map<String, dynamic>),
+        expiresAt: DateTime.parse(j['expires_at'] as String),
+        miniApp: j['mini_app'] == null ? null : j['mini_app'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'back': ?back,
+        'business': business,
+        'channel': channel,
+        'connector': connector.toJson(),
+        'expires_at': expiresAt.toUtc().toIso8601String(),
+        'mini_app': ?miniApp,
+      };
+}
+
+class Connector {
+  const Connector({required this.actions, required this.auth, this.capabilities, this.category, this.description, required this.id, this.kind, required this.name, this.oauthLinkable, this.oauthModes, required this.ref, this.triggers, required this.version});
+
+  final Map<String, dynamic> actions;
+  /// How the connector authenticates (its manifest's `auth`, with `oauth2` when
+  /// it connects by OAuth).
+  final Map<String, dynamic> auth;
+  /// A rail's capabilities (schemas/capabilities-v1.json, connector/v1 rule
+  /// 16), sorted; absent for other connectors.
+  final List<String>? capabilities;
+  final String? category;
+  final String? description;
+  final String id;
+  /// rail: moves money, and Taskiem builds products on it; product: runs a
+  /// whole process itself; tool: anything else (decision 0044).
+  final String? kind;
+  final String name;
+  /// For a connector that declares `auth.oauth2`, whether it can be connected
+  /// by OAuth on this platform. Always false for a tenant's own (`x_`) or a
+  /// catalogue (`p_`) connector, which Taskiem's OAuth apps are never lent to.
+  final bool? oauthLinkable;
+  /// For a connector whose modes are hosts, the modes it can be connected in by
+  /// OAuth on this platform.
+  final List<String>? oauthModes;
+  /// `id@major`, as steps name it.
+  final String ref;
+  final Object? triggers;
+  final String version;
+
+  factory Connector.fromJson(Map<String, dynamic> j) => Connector(
+        actions: j['actions'] as Map<String, dynamic>,
+        auth: j['auth'] as Map<String, dynamic>,
+        capabilities: j['capabilities'] == null ? null : (j['capabilities'] as List).map((e) => e as String).toList(),
+        category: j['category'] == null ? null : j['category'] as String,
+        description: j['description'] == null ? null : j['description'] as String,
+        id: j['id'] as String,
+        kind: j['kind'] == null ? null : j['kind'] as String,
+        name: j['name'] as String,
+        oauthLinkable: j['oauth_linkable'] == null ? null : j['oauth_linkable'] as bool,
+        oauthModes: j['oauth_modes'] == null ? null : (j['oauth_modes'] as List).map((e) => e as String).toList(),
+        ref: j['ref'] as String,
+        triggers: j['triggers'],
+        version: j['version'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'actions': actions,
+        'auth': auth,
+        'capabilities': ?capabilities?.map((e) => e).toList(),
+        'category': ?category,
+        'description': ?description,
+        'id': id,
+        'kind': ?kind,
+        'name': name,
+        'oauth_linkable': ?oauthLinkable,
+        'oauth_modes': ?oauthModes?.map((e) => e).toList(),
+        'ref': ref,
+        'triggers': ?triggers,
+        'version': version,
+      };
+}
+
+class ConnectWithKeyRequest {
+  const ConnectWithKeyRequest({required this.credentials, this.initData, this.mode});
+
+  final Map<String, dynamic> credentials;
+  final String? initData;
+  final String? mode;
+
+  factory ConnectWithKeyRequest.fromJson(Map<String, dynamic> j) => ConnectWithKeyRequest(
+        credentials: j['credentials'] as Map<String, dynamic>,
+        initData: j['init_data'] == null ? null : j['init_data'] as String,
+        mode: j['mode'] == null ? null : j['mode'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'credentials': credentials,
+        'init_data': ?initData,
+        'mode': ?mode,
+      };
+}
+
+class ConnectWithKeyResponse {
+  const ConnectWithKeyResponse({this.back, required this.business, required this.connected, required this.name, this.webhooks});
+
+  final String? back;
+  final String business;
+  final String connected;
+  final String name;
+  /// As in POST /v1/connections; shown only in this answer.
+  final List<ConnectionWebhook>? webhooks;
+
+  factory ConnectWithKeyResponse.fromJson(Map<String, dynamic> j) => ConnectWithKeyResponse(
+        back: j['back'] == null ? null : j['back'] as String,
+        business: j['business'] as String,
+        connected: j['connected'] as String,
+        name: j['name'] as String,
+        webhooks: j['webhooks'] == null ? null : (j['webhooks'] as List).map((e) => ConnectionWebhook.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'back': ?back,
+        'business': business,
+        'connected': connected,
+        'name': name,
+        'webhooks': ?webhooks?.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ConnectionWebhook {
+  const ConnectionWebhook({required this.title, required this.trigger, required this.url, required this.where});
+
+  final String title;
+  final String trigger;
+  /// The absolute address, under the server's hooks URL, with the connection's
+  /// token in it. A secret.
+  final String url;
+  /// Where in the provider's dashboard it is pasted.
+  final String where;
+
+  factory ConnectionWebhook.fromJson(Map<String, dynamic> j) => ConnectionWebhook(
+        title: j['title'] as String,
+        trigger: j['trigger'] as String,
+        url: j['url'] as String,
+        where: j['where'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'title': title,
+        'trigger': trigger,
+        'url': url,
+        'where': where,
       };
 }

@@ -91,6 +91,26 @@ G16 needs no change: the app's sheet says what the web chat's card says
 ("Needs your passkey or a code"); the chat PIN is typed only in WhatsApp,
 and here such an approval takes the passkey or a code, as on the web.
 
+**Done: G1, G2** (`lib/chat/connect.dart`, `test/connect_test.dart`;
+`TestConnectFromTheWebChat`). Found on the way: `connect <service>` in the
+Taskiem conversation of the web, and so of the app, failed with a server
+error, the connect link's table taking only WhatsApp, Telegram and Slack
+(migration 00425 adds `web`; the conversation is then told when the
+connection is made, as on the others). In Taskiem's words, a connect link
+and a draft's canvas are pressed to open them; other addresses stay words,
+as on the web. A service that signs in opens the link in the phone's
+browser tab (Custom Tabs, declared in the Android manifest so it is never
+a web view, which providers refuse; Safari's on an iPhone), where the web's
+connect page runs its consent; a service with keys gets the web page's
+form in a sheet here (the kinds of key, each value checked as it is
+pasted, More options, Checking…), then what was made and its webhook
+addresses to copy, shown once. The history keeps no one-time link (its
+words are cut, chat_history.go historyText), so the app keeps the words
+as they came live (`keptWithoutLinks`). The canvas opens signed in when
+the phone's browser is signed in to Taskiem; otherwise the web asks first.
+The web's own Taskiem conversation still shows the link as words, not a
+link: a web change, not the app's.
+
 **Done: G4, G5, G11** (`test/gaps_test.dart`, `test/files_test.dart`).
 Unsent words are kept for each conversation (its link, `taskiem`,
 `customer:<id>`) while signed in, as the web keeps them while its tab is

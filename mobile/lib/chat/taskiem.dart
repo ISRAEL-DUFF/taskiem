@@ -10,6 +10,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -25,6 +26,7 @@ import 'attachments.dart';
 import 'cards.dart';
 import 'chats.dart';
 import 'composer.dart';
+import 'connect.dart';
 import 'live.dart';
 import 'menu.dart';
 import 'thread.dart';
@@ -72,22 +74,34 @@ List<TaskiemLine> mergeTaskiem(List<TaskiemLine> a, List<TaskiemChatMessagesItem
     final key = x.id == nilId ? 'local-${n++}-${x.m.createdAt.toIso8601String()}' : x.id;
     final had = seen[key];
     final keep = (had?.m.buttons?.any((y) => y.id != null) ?? false) && !(x.m.buttons?.any((y) => y.id != null) ?? false);
-    seen[key] = keep
+    // The history keeps no one-time link (a connect link, a draft's
+    // address are cut or left out): the words as they came live keep it.
+    final words = had != null && !had.local && keptWithoutLinks(had.m.text, x.m.text);
+    seen[key] = keep || words
         ? TaskiemLine(
             TaskiemChatMessagesItem(
               id: x.m.id,
               channel: x.m.channel,
               inbound: x.m.inbound,
               kind: x.m.kind,
-              text: x.m.text,
+              text: words ? had.m.text : x.m.text,
               createdAt: x.m.createdAt,
-              buttons: had!.m.buttons,
+              buttons: keep ? had!.m.buttons : x.m.buttons,
             ),
             local: x.local,
           )
         : x;
   }
   return seen.values.toList()..sort((p, q) => p.m.createdAt.compareTo(q.m.createdAt));
+}
+
+/// Whether [kept] is [live] as the history keeps it: its links cut
+/// (chat_history.go historyText) or a link button's line left out, and
+/// [live] had a link to lose.
+bool keptWithoutLinks(String live, String kept) {
+  if (live == kept || !live.contains(RegExp(r'https?://'))) return false;
+  String bare(String s) => s.replaceAll(RegExp(r'https?://[^\s<>"]+'), '').replaceAll(RegExp(r'\n[^\n]*: *$'), '').trim();
+  return bare(live) == bare(kept);
 }
 
 /// taskiemSeen.ts unreadAfter: where what Taskiem said since the person
@@ -553,6 +567,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
               choice: pressed[x.id],
               pressable: x.id == pressable && !d.busy,
               onPress: (b) => d.say(reply: b.id, text: b.title),
+              onLink: (u) => openTaskiemLink(context, d.chats.auth, u, onDone: d.pull),
             ),
           );
         },
@@ -565,7 +580,10 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
 /// first of its run, its words (*bold* marked, a long answer folded), the
 /// channel it came by, the time, the person's ticks, and reply buttons.
 class _TaskiemBubble extends StatefulWidget {
-  const _TaskiemBubble({required this.x, required this.first, required this.read, required this.choice, required this.pressable, required this.onPress});
+  const _TaskiemBubble({required this.x, required this.first, required this.read, required this.choice, required this.pressable, required this.onPress, this.onLink});
+
+  /// A connect link or a workflow's canvas in its words, pressed.
+  final ValueChanged<Uri>? onLink;
   final TaskiemLine x;
   final bool first;
   final bool read;
@@ -623,14 +641,34 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
         ],
       ],
     );
-    final words = Text.rich(
+    // A connect link or a workflow's canvas (§3.5) is pressed to open it;
+    // other addresses stay words, as on the web.
+    List<InlineSpan> part(String text, TextStyle? style, TapGestureRecognizer Function(String, VoidCallback) tap) {
+      final links = widget.onLink == null ? const <({int start, int end, Uri uri})>[] : linksIn(text).where((l) => opensFromTaskiem(l.uri)).toList();
+      if (links.isEmpty) return [TextSpan(text: text, style: style)];
+      final out = <InlineSpan>[];
+      var at = 0;
+      for (final l in links) {
+        if (l.start > at) out.add(TextSpan(text: text.substring(at, l.start), style: style));
+        out.add(
+          TextSpan(
+            text: text.substring(l.start, l.end),
+            style: (style ?? const TextStyle()).copyWith(color: t.accent, decoration: TextDecoration.underline, decorationColor: t.accent),
+            recognizer: tap(l.uri.toString(), () => widget.onLink!(l.uri)),
+          ),
+        );
+        at = l.end;
+      }
+      if (at < text.length) out.add(TextSpan(text: text.substring(at), style: style));
+      return out;
+    }
+
+    final words = TapsOwner(
+      builder: (context, tap) => Text.rich(
       TextSpan(
         children: [
           for (final p in boldParts(fold.shown))
-            TextSpan(
-              text: p.text,
-              style: p.bold ? const TextStyle(fontWeight: FontWeight.w700, fontVariations: [FontVariation('wght', 700)]) : null,
-            ),
+            ...part(p.text, p.bold ? const TextStyle(fontWeight: FontWeight.w700, fontVariations: [FontVariation('wght', 700)]) : null, tap),
           if (fold.folded) ...[
             const TextSpan(text: '… '),
             TextSpan(
@@ -645,6 +683,7 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
         ],
       ),
       style: tkText(size: 16, lineHeight: 23 / 16, color: t.text),
+      ),
     );
     // TaskiemChat.tsx: a message's menu holds Copy (not one still going).
     final copyable = !widget.x.local && m.text.isNotEmpty;

@@ -5,6 +5,7 @@
 // under it; where the unread begin; the round button over the corner; the
 // view placed on opening and following what comes only at the bottom).
 
+import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/rendering.dart' show RenderDecoratedBox;
 import 'package:flutter/widgets.dart';
 
@@ -885,5 +886,47 @@ class _BubbleHoldState extends State<BubbleHold> {
       onLongPress: () => widget.onHold!(_rect()),
       child: gestures,
     );
+  }
+}
+
+/// Owns the tap recognisers of a text's links: made once, kept while the
+/// text is, and let go with it (a span's recogniser is the caller's to
+/// dispose; made afresh on every build, each was left behind).
+class TapsOwner extends StatefulWidget {
+  const TapsOwner({super.key, required this.builder});
+  final Widget Function(BuildContext context, TapGestureRecognizer Function(String key, VoidCallback onTap) tap) builder;
+
+  @override
+  State<TapsOwner> createState() => _TapsOwnerState();
+}
+
+class _TapsOwnerState extends State<TapsOwner> {
+  final _all = <String, TapGestureRecognizer>{};
+
+  @override
+  void dispose() {
+    for (final r in _all.values) {
+      r.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final used = <String>{};
+    final w = widget.builder(context, (key, onTap) {
+      used.add(key);
+      return (_all[key] ??= TapGestureRecognizer())..onTap = onTap;
+    });
+    // Those no longer in the text: let go once the old text is replaced.
+    final gone = [for (final k in _all.keys) if (!used.contains(k)) k].map((k) => _all.remove(k)!).toList();
+    if (gone.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        for (final r in gone) {
+          r.dispose();
+        }
+      });
+    }
+    return w;
   }
 }

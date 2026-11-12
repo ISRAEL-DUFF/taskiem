@@ -142,6 +142,12 @@ draw, each for a reason that is not the app's to remove:
 | --- | --- |
 | `connect <service>` for a service that signs in (Google and others) | OAuth runs in a browser by the provider's rules: the chat's one-time connect link (`/c/<token>`, [decision 0058](../decisions/0058-chat-as-a-way-in.md)) opens in the phone's browser tab and comes back to the app. A key-based service (Paystack, Termii…) gets a secure form in the app, as Telegram's Mini App is, never a chat message |
 | A saved workflow's **open it** | The workflow canvas, for the few who want to change a draft's steps by hand; everything else about a workflow is done in the chat |
+
+As built (12 November 2026): in Taskiem's conversation a connect link and a
+draft's address are pressed to open them (`lib/chat/connect.dart`): a
+service that signs in, and the canvas, in the browser tab; a service with
+keys, in a form in the app. Asking from the web's or the app's
+conversation needed the server to allow it (migration 00425).
 | (nothing about billing) | Billing is off, on the web too (settled by the founder, 11 November 2026): the app has no plan, payment or checkout, and the chat's `plan` and `pay` are not offered while billing is off |
 
 **Never in the app:** a copy of the business kept on the phone (§5.5).

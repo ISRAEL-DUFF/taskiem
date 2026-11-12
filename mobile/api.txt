@@ -71,3 +71,7 @@ explore
 # "Give this to…" on a card: the people, and the task (M3)
 listStaffTasks
 giveStaffTask
+
+# Connecting a service from Taskiem's conversation (M3, docs/spec/mobile-app.md 3.5)
+getConnectLink
+connectWithKey

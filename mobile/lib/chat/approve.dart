@@ -161,7 +161,7 @@ class _ApproveSheetState extends State<ApproveSheet> {
 /// `.tk-field textarea` / `input`: the soft filled box, 17 px semibold, and
 /// Chromium's resize grip in a text area's corner, as the web is seen.
 class TkTextBox extends StatefulWidget {
-  const TkTextBox({super.key, required this.controller, this.lines = 1, this.digits, this.height = 54, this.size = 17, this.hint, this.money = false});
+  const TkTextBox({super.key, required this.controller, this.lines = 1, this.digits, this.height = 54, this.size = 17, this.hint, this.money = false, this.secret = false, this.plain = false});
   final TextEditingController controller;
   final int lines;
 
@@ -175,6 +175,13 @@ class TkTextBox extends StatefulWidget {
 
   /// A price typed (`inputmode="decimal"`).
   final bool money;
+
+  /// A key (`type="password"`): hidden as typed.
+  final bool secret;
+
+  /// Pasted as it is (`autocomplete="off" spellcheck="false"`): no
+  /// suggestions, no corrections.
+  final bool plain;
 
   /// Only digits, at most this many (a code).
   final int? digits;
@@ -222,6 +229,9 @@ class _TkTextBoxState extends State<TkTextBox> {
               focusNode: _focus,
               minLines: widget.lines,
               maxLines: area ? null : 1,
+              obscureText: widget.secret && !area,
+              autocorrect: !(widget.secret || widget.plain),
+              enableSuggestions: !(widget.secret || widget.plain),
               keyboardType: widget.digits != null
                   ? TextInputType.number
                   : widget.money
