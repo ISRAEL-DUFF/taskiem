@@ -421,7 +421,10 @@ WebAuthn origins gain the Android app's signing-key origin.
   same server `web/e2e/serve.sh` starts, on an Android emulator in CI. The
   chat's scenarios (two businesses talk, a message that did not go, a
   reaction both see) are the web's e2e scenarios, kept as one list both
-  suites follow.
+  suites follow: [chat-scenarios.md](chat-scenarios.md). As built (12
+  November 2026): the app's own code against that server
+  (`mobile/test/server/`, `.github/workflows/mobile-server.yml`), not yet
+  on an emulator.
 - **The client** is checked against the API description (§4) on every build.
 - **Accessibility**: TalkBack and VoiceOver labels on everything that can be
   pressed, checked by Flutter's semantics tests; every touch target at least

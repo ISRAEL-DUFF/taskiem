@@ -2,6 +2,6 @@ tags:
   # The parity test (test/parity_test.dart): compared with pictures the web
   # half takes on Linux.
   parity:
-  # The client against a real Taskiem (test/live_test.dart): needs
-  # TASKIEM_LIVE_URL, else skipped.
-  live:
+  # The app's own code against the real server (test/server/): needs
+  # TASKIEM_E2E_URL, the server web/e2e/serve.sh starts, else skipped.
+  server:

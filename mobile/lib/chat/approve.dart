@@ -21,6 +21,19 @@ import 'cards.dart' show CardPill;
 import 'words.dart';
 
 /// The approve sheet; it closes with true once decided.
+/// The decision, as the sheet sends it (POST /v1/approvals/{run}/{step}):
+/// approved or rejected, with its comment and the code a rule asks for.
+Future<void> decideApproval(Auth auth, Approval ap, String decision, {String comment = '', String code = ''}) =>
+    auth.transport.send(
+      'POST',
+      '/v1/approvals/${ap.runId}/${Uri.encodeComponent(ap.stepId)}',
+      body: {
+        'decision': decision,
+        if (comment.trim().isNotEmpty) 'comment': comment.trim(),
+        if (code.isNotEmpty) 'totp': code,
+      },
+    );
+
 class ApproveSheet extends StatefulWidget {
   const ApproveSheet({super.key, required this.a, required this.decision, required this.auth});
   final ChatAlert a;
@@ -63,15 +76,7 @@ class _ApproveSheetState extends State<ApproveSheet> {
       _error = null;
     });
     try {
-      await widget.auth.transport.send(
-        'POST',
-        '/v1/approvals/${ap.runId}/${Uri.encodeComponent(ap.stepId)}',
-        body: {
-          'decision': widget.decision,
-          if (_comment.text.trim().isNotEmpty) 'comment': _comment.text.trim(),
-          if (_code.text.isNotEmpty) 'totp': _code.text,
-        },
-      );
+      await decideApproval(widget.auth, ap, widget.decision, comment: _comment.text, code: _code.text);
       setState(() => _saved = true);
       // The tick draws, then the sheet goes and the card with it.
       await Future<void>.delayed(const Duration(milliseconds: 1200));
