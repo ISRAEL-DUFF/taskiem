@@ -61,3 +61,6 @@ order's invoice (M8, with money); the alerts' Reorder and Match it (M8);
 the briefing's Owed, Staff and Tasks tiles; reading a count from a CSV
 (the web's; on a phone the shelf is counted by hand); the riders' own
 page (`/storefront/riders`, adding riders) and paying riders (M8).
+
+The audit after M7 and its fixes: [mobile-app-m7-fixes.md](mobile-app-m7-fixes.md),
+every finding fixed with its test.

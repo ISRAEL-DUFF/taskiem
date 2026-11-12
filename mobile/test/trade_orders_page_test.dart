@@ -70,7 +70,7 @@ void main() {
     WidgetTester t,
     Map<String, dynamic> order, {
     bool list = false,
-    Size size = const Size(390, 1600),
+    Size size = const Size(390, 2600),
     bool none = false,
     bool noBuyers = false,
     List<String>? perms,
@@ -101,6 +101,18 @@ void main() {
               ],
             }),
             '/v1/links/L1/trade' => ok({'terms_days': 30, 'credit_limit_kobo': null}),
+            '/v1/link-chats/thread' => ok({
+              'messages': [
+                {
+                  'id': 'm1',
+                  'link': 'L1',
+                  'kind': 'card',
+                  'mine': false,
+                  'created_at': '2026-11-12T09:00:00Z',
+                  'card': {'doc': 'order', 'event': 'ordered', 'reference': 'PO-12', 'id': 'T1', 'amount_kobo': 1500000},
+                },
+              ],
+            }),
             '/v1/links' => ok({
               'links': [
                 if (!noBuyers) {'id': 'L1', 'name': 'Rivers Foods', 'state': 'active', 'role': 'customer'},
@@ -134,6 +146,7 @@ void main() {
     expect(find.text('₦15,000'), findsWidgets);
     expect(find.text('Accept it, change it, or decline it.'), findsOneWidget);
     expect(find.text('Their note: “By Friday”'), findsOneWidget);
+    expect(find.text('Messages about it'), findsOneWidget, reason: 'the order’s thread, under its steps');
     expect(find.text('2 bags at ₦5,000'), findsOneWidget);
     expect(find.text('5 at ₦1,000 · they proposed ₦900'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Yes, that is it for Rice 50kg'));
@@ -206,13 +219,13 @@ void main() {
 
   testWidgets('their terms: days to pay checked, saved; invoice raised when accepted; accepted by themselves', (t) async {
     final sent = await open(t, _order('accepted'));
-    final days = find.byType(EditableText).at(0);
+    final days = find.descendant(of: find.bySemanticsLabel(RegExp('^Days to pay')), matching: find.byType(EditableText));
     expect(find.text('30'), findsOneWidget);
     await t.enterText(days, '400');
     await t.pump();
     expect(find.text('From 0 to 365 days.'), findsOneWidget);
     await t.enterText(days, '14');
-    await t.enterText(find.byType(EditableText).at(1), '500,000');
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp(r'^Credit limit')), matching: find.byType(EditableText)), '500,000');
     await t.pump();
     await t.tap(find.bySemanticsLabel('Save terms'));
     await settle(t);
@@ -255,7 +268,7 @@ void main() {
 
   testWidgets('their terms typed and not saved stay through another change', (t) async {
     final sent = await open(t, _order('accepted'));
-    await t.enterText(find.byType(EditableText).at(0), '14');
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Days to pay')), matching: find.byType(EditableText)), '14');
     await t.pump();
     await t.tap(find.bySemanticsLabel('Accept their orders by themselves when every item has a price').last);
     await settle(t);

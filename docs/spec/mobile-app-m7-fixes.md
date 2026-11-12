@@ -177,5 +177,5 @@ Test: the thread's bubbles and the latest card shown; a reply sent with
 | 3 | 3.1 to 3.16; the list opened from Orders from linked businesses ("All your orders"); `TkRow` gained a tone |
 | 4 | 4.1 to 4.7; `KeyboardRoom.up` says when the keyboard is up; a refused Start an order keeps its words (found by the tests) |
 | 5, 6 | 5.1 to 5.4, 6.1 to 6.4; Availability's tile read at once after a change (it waited until five seconds old: found by the tests); text boxes can be disabled |
-| 8 | Every test listed, and one for each fix; the full suite: 742 passed |
-| 7 | |
+| 8 | Every test listed, and one for each fix |
+| 7 | Messages about it on the order screen (`lib/chat/doc_thread.dart`): the thread's cards and words, read again every 10 seconds while seen, a reply to its latest card for `chat.trade` (sent once, with a client id); the same section for purchases and bills comes with their screens (M8). The full suite: 745 passed |

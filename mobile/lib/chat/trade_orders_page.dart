@@ -17,6 +17,7 @@ import '../kit/sheet.dart' show TkKitField, TkLines;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show whenLabel;
+import 'doc_thread.dart' show DocThread;
 import 'storefront_orders_page.dart' show openStorefrontOrder, openStorefrontOrders;
 import 'tags.dart' show quantity;
 import 'words.dart' show CardTone, naira;
@@ -242,10 +243,13 @@ void openTradeOrder(BuildContext context, Auth auth, String id, {TradeLinks link
 /// TradeOrderPage: one order from a linked business: its total first, what
 /// it needs from us, its lines, and the steps its status allows.
 class TradeOrderPage extends StatefulWidget {
-  const TradeOrderPage({super.key, required this.auth, required this.id, this.links = const TradeLinks()});
+  const TradeOrderPage({super.key, required this.auth, required this.id, this.links = const TradeLinks(), this.follow = true});
   final Auth auth;
   final String id;
   final TradeLinks links;
+
+  /// The thread about it is read again while seen (off in a test).
+  final bool follow;
 
   @override
   State<TradeOrderPage> createState() => _TradeOrderPageState();
@@ -375,6 +379,8 @@ class _TradeOrderPageState extends State<TradeOrderPage> {
           ],
         ),
       if (manage && _any(sellerSteps(o))) _actions(t, o),
+      // TradeOrders.tsx DocThread: the order's thread, under its steps.
+      DocThread(key: ValueKey('thread ${o['reference']}'), auth: _auth, doc: 'order', reference: _str(o['reference']), follow: widget.follow),
       if (_auth.can('link.manage')) _TradeSettings(auth: _auth, order: o, onDone: _load, onStatement: links.statement, onSoon: _soon),
     ];
   }
