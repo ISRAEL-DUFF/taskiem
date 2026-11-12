@@ -6,12 +6,14 @@
 
 import 'package:flutter/widgets.dart';
 
+import '../app/auth.dart';
 import '../kit/list.dart';
 import '../kit/modal.dart' show showComingSoon;
 import '../kit/sheet.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'sizes_forms.dart' show GroupForm;
+import 'stock_page.dart' show StockPage;
 import 'tools.dart';
 import 'tools_panel.dart';
 
@@ -19,6 +21,17 @@ import 'tools_panel.dart';
 /// them in their own sheets, not a list): they say they are coming
 /// (Availability with deliveries, M7).
 const soonTools = {'availability'};
+
+/// A tool's "Open …": the page it leads to (tools.ts `page`), where the
+/// app has it as a screen; the rest say they are coming.
+void openToolPage(BuildContext context, Tool tool, Auth auth) {
+  final Widget? page = switch (tool.key) {
+    'products' || 'stock' || 'sell' || 'handover' => StockPage(auth: auth),
+    _ => null,
+  };
+  if (page == null) return showComingSoon(context);
+  Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+}
 
 /// ChatTools.tsx mayEdit: whether the person may change what a tool shows.
 bool mayEdit(String key, bool Function(String) can) => switch (key) {
@@ -65,7 +78,18 @@ class ToolHost {
   /// Back to the list (a form's Cancel).
   final VoidCallback back;
 
-  /// ChatTools.tsx mayEdit: whether the person may change it.
+  /// A tool's "Open …": the page it leads to (tools.ts `page`), where the
+/// app has it as a screen; the rest say they are coming.
+void openToolPage(BuildContext context, Tool tool, Auth auth) {
+  final Widget? page = switch (tool.key) {
+    'products' || 'stock' || 'sell' || 'handover' => StockPage(auth: auth),
+    _ => null,
+  };
+  if (page == null) return showComingSoon(context);
+  Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+}
+
+/// ChatTools.tsx mayEdit: whether the person may change it.
   final bool canEdit;
 }
 
@@ -204,7 +228,7 @@ class _ToolSheetState extends State<ToolSheet> {
               TkCta(
                 label: canAdd ? add : tool.more,
                 icon: canAdd ? 'plus' : null,
-                onTap: adds ? () => setState(() => _adding = true) : () => showComingSoon(context),
+                onTap: adds ? () => setState(() => _adding = true) : () => openToolPage(context, tool, c.chats.auth),
               ),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -294,7 +318,7 @@ class _ToolSheetState extends State<ToolSheet> {
       itemBuilder: (context, i) {
         if (i == shown.length) {
           // The rest, for what the sheet does not do, after the list.
-          return TkSheetMore(label: tool.more, onTap: () => showComingSoon(context));
+          return TkSheetMore(label: tool.more, onTap: () => openToolPage(context, tool, c.chats.auth));
         }
         final r = shown[i];
         if (_picking) return _pickRow(context, r);
