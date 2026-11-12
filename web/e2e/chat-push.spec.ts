@@ -331,6 +331,11 @@ test("the worker shows what is pushed: one notification a conversation, only a p
       });
       return Promise.resolve();
     };
+    // The icon's count is the next test's; here it is only kept from the
+    // browser, which ends a worker that sets it with no window of the app open.
+    const badge = () => Promise.resolve();
+    Object.defineProperty(self.navigator, "setAppBadge", { value: badge, configurable: true });
+    Object.defineProperty(self.navigator, "clearAppBadge", { value: badge, configurable: true });
   });
   const shown = (): Promise<Shown[]> =>
     worker.evaluate(() => (self as unknown as { __shown: Shown[] }).__shown);
