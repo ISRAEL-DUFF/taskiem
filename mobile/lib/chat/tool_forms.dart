@@ -2,6 +2,7 @@
 // Detail): each tool's form, where the app has it; null leaves the row
 // saying its screens are coming.
 
+
 import 'package:flutter/widgets.dart';
 
 import '../app/auth.dart';
@@ -35,25 +36,26 @@ ToolDetail toolDetail(
   }
   if (data == null) return null;
   return switch (tool.key) {
-    'products' => ProductForm(auth: auth, item: data, onSaved: host.done, canEdit: host.canEdit, onCancel: host.back, link: link, pickers: pickers),
+    'products' => ProductForm(
+      auth: auth,
+      item: data,
+      onSaved: host.done,
+      canEdit: host.canEdit,
+      onCancel: host.back,
+      link: link,
+      pickers: pickers,
+    ),
     'stock' => StockInForm(auth: auth, item: data, onSaved: host.done, canEdit: host.canEdit),
     'services' => ServiceForm(auth: auth, service: data, onSaved: host.done, canEdit: host.canEdit),
     'prices' => PriceListForm(auth: auth, list: data, onSaved: host.done, canEdit: host.canEdit),
-    'purchases' => PurchaseView(auth: auth, purchase: data, onSaved: host.done, onReorder: (data['link_id'] as String? ?? '').isEmpty ? null : onReorder),
-    'invoices' => InvoiceView(
+    'purchases' => PurchaseView(
       auth: auth,
-      invoice: data,
+      purchase: data,
       onSaved: host.done,
-      canEdit: host.canEdit,
-      onOpen: openers?.invoice ?? (context, id) => openInvoice(context, auth, id),
+      onReorder: (data['link_id'] as String? ?? '').isEmpty ? null : onReorder,
     ),
-    'bills' => BillView(
-      auth: auth,
-      bill: data,
-      onSaved: host.done,
-      canEdit: host.canEdit,
-      onOpen: openers?.bill ?? (context, id) => openBill(context, auth, id),
-    ),
+    'invoices' => InvoiceView(auth: auth, invoice: data, onSaved: host.done, canEdit: host.canEdit, onOpen: openers?.invoice ?? (context, id) => openInvoice(context, auth, id)),
+    'bills' => BillView(auth: auth, bill: data, onSaved: host.done, canEdit: host.canEdit, onOpen: openers?.bill ?? (context, id) => openBill(context, auth, id)),
     'money' => MoneyEntryView(auth: auth, entry: data, onSaved: host.done, canEdit: host.canEdit),
     'tables' => TableTool(auth: auth, table: data, onSaved: host.done, canEdit: host.canEdit),
     'orders' => OrderView(auth: auth, order: data, onSaved: host.done, canEdit: host.canEdit, pickers: pickers),

@@ -45,24 +45,11 @@ final _list = {
       'min_quantity': 1,
       'available': true,
       'choices': [
-        {
-          'name': 'Size',
-          'values': ['S', 'L'],
-        },
+        {'name': 'Size', 'values': ['S', 'L']},
       ],
       'sizes': [
-        {
-          'item_id': 'sackS',
-          'name': 'Jute sack – S',
-          'variant': {'Size': 'S'},
-          'available': true,
-        },
-        {
-          'item_id': 'sackL',
-          'name': 'Jute sack – L',
-          'variant': {'Size': 'L'},
-          'available': true,
-        },
+        {'item_id': 'sackS', 'name': 'Jute sack – S', 'variant': {'Size': 'S'}, 'available': true},
+        {'item_id': 'sackL', 'name': 'Jute sack – L', 'variant': {'Size': 'L'}, 'available': true},
       ],
     },
   ],
@@ -102,25 +89,11 @@ void main() {
         'min_quantity': 3,
         'available': true,
         'choices': [
-          {
-            'name': 'Size',
-            'values': ['42', '43'],
-          },
+          {'name': 'Size', 'values': ['42', '43']},
         ],
         'sizes': [
-          {
-            'item_id': 's42',
-            'name': 'Sneaker – 42',
-            'variant': {'Size': '42'},
-            'available': true,
-          },
-          {
-            'item_id': 's43',
-            'name': 'Sneaker – 43',
-            'variant': {'Size': '43'},
-            'price_kobo': 1200,
-            'available': true,
-          },
+          {'item_id': 's42', 'name': 'Sneaker – 42', 'variant': {'Size': '42'}, 'available': true},
+          {'item_id': 's43', 'name': 'Sneaker – 43', 'variant': {'Size': '43'}, 'price_kobo': 1200, 'available': true},
         ],
       });
       expect(soldInSizes(shoe), isTrue);
@@ -160,43 +133,30 @@ void main() {
     var failing = failSend;
     http.Response ok(Object body) => http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
     final chats = ChatsData(
-      f.auth(
-        also: (req) async {
-          final p = req.url.path;
-          if (req.method == 'GET') {
-            return switch (p) {
-              '/v1/supplier-prices' => ok({
-                'suppliers': [_list],
-              }),
-              '/v1/item-links/L1' => ok({'item_links': <Object>[]}),
-              '/v1/stock/suppliers' => ok({'suppliers': <Object>[]}),
-              '/v1/stock/purchases' => ok({'purchases': purchases}),
-              '/v1/stock' => ok({'keeps_stock': true, 'items': <Object>[]}),
-              _ => null,
-            };
-          }
-          final key = req.headers['Idempotency-Key'] ?? req.headers['idempotency-key'];
-          sent.add('${req.method} $p${key != null ? ' (once)' : ''}');
-          if (p == '/v1/stock/suppliers')
-            return ok({
-              'supplier': {'id': 'S1'},
-            });
-          if (p == '/v1/stock/items')
-            return ok({
-              'item': {'id': 'I1'},
-            });
-          if (p == '/v1/supplier-prices/L1/order')
-            return ok({
-              'purchase': {'id': 'P1', 'reference': 'PO-1'},
-            });
-          if (p == '/v1/stock/purchases/P1/send') await Future<void>.delayed(sendTakes);
-          if (p == '/v1/stock/purchases/P1/send' && failing) {
-            failing = false;
-            return http.Response(jsonEncode({'error': 'Something went wrong'}), 500, headers: {'content-type': 'application/json'});
-          }
-          return ok({});
-        },
-      ),
+      f.auth(also: (req) async {
+        final p = req.url.path;
+        if (req.method == 'GET') {
+          return switch (p) {
+            '/v1/supplier-prices' => ok({'suppliers': [_list]}),
+            '/v1/item-links/L1' => ok({'item_links': <Object>[]}),
+            '/v1/stock/suppliers' => ok({'suppliers': <Object>[]}),
+            '/v1/stock/purchases' => ok({'purchases': purchases}),
+            '/v1/stock' => ok({'keeps_stock': true, 'items': <Object>[]}),
+            _ => null,
+          };
+        }
+        final key = req.headers['Idempotency-Key'] ?? req.headers['idempotency-key'];
+        sent.add('${req.method} $p${key != null ? ' (once)' : ''}');
+        if (p == '/v1/stock/suppliers') return ok({'supplier': {'id': 'S1'}});
+        if (p == '/v1/stock/items') return ok({'item': {'id': 'I1'}});
+        if (p == '/v1/supplier-prices/L1/order') return ok({'purchase': {'id': 'P1', 'reference': 'PO-1'}});
+        if (p == '/v1/stock/purchases/P1/send') await Future<void>.delayed(sendTakes);
+        if (p == '/v1/stock/purchases/P1/send' && failing) {
+          failing = false;
+          return http.Response(jsonEncode({'error': 'Something went wrong'}), 500, headers: {'content-type': 'application/json'});
+        }
+        return ok({});
+      }),
       now: () => f.at,
     )..load();
     await t.pumpWidget(
@@ -332,12 +292,7 @@ void main() {
 
   testWidgets('closed while the order is sending: it is still said it was sent', (t) async {
     final said = <String>[];
-    await open(
-      t,
-      start: const OrderStart(itemId: 'beans'),
-      onSent: said.add,
-      sendTakes: const Duration(milliseconds: 300),
-    );
+    await open(t, start: const OrderStart(itemId: 'beans'), onSent: said.add, sendTakes: const Duration(milliseconds: 300));
     await t.tap(find.bySemanticsLabel('Review order'));
     await settle(t);
     await t.enterText(find.bySemanticsLabel(RegExp('phone number')), '08031234567');

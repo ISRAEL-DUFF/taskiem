@@ -1088,11 +1088,11 @@ class _SuppliersPageState extends State<SuppliersPage> {
                             cancel: 'Keep them',
                             danger: true,
                           );
-                          if (yes)
-                            await _run(
-                              () => _auth.transport.send('POST', '/v1/stock/suppliers/${Uri.encodeComponent(_str(s['id']))}/retire', body: const {}),
-                              '$name retired',
-                            );
+                          if (!yes) return;
+                          await _run(
+                            () => _auth.transport.send('POST', '/v1/stock/suppliers/${Uri.encodeComponent(_str(s['id']))}/retire', body: const {}),
+                            '$name retired',
+                          );
                         },
                 ),
               ],

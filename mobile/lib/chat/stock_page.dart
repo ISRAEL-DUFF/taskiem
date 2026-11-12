@@ -640,13 +640,7 @@ class _ItemFormState extends State<_ItemForm> {
           placeholder: '9500',
           money: true,
         ),
-        pageField(
-          'Reorder at',
-          _reorder,
-          hint: 'When the count is this or less, the item is low and you are told each morning.',
-          placeholder: '10',
-          number: true,
-        ),
+        pageField('Reorder at', _reorder, hint: 'When the count is this or less, the item is low and you are told each morning.', placeholder: '10', number: true),
         pageField('Order up to', _target, hint: 'What to order a low item back up to.', placeholder: '50', number: true),
         pageField('Supplier', _supplier, placeholder: 'Dangote Depot', max: 120),
       ],
@@ -1106,11 +1100,7 @@ class _CountsCardState extends State<_CountsCard> {
   }
 
   Future<void> _count() async {
-    final saved = await showTkModal<bool>(
-      context,
-      title: 'Count the shelf',
-      builder: (_) => _CountForm(auth: widget.auth, items: widget.items),
-    );
+    final saved = await showTkModal<bool>(context, title: 'Count the shelf', builder: (_) => _CountForm(auth: widget.auth, items: widget.items));
     if (saved == true && mounted) {
       showTkToast(context, 'Count recorded');
       await _load();
@@ -1148,11 +1138,8 @@ class _CountsCardState extends State<_CountsCard> {
                   letter: '#',
                   icon: null,
                   tone: null,
-                  title:
-                      '${c['reference']} · ${_maps(c['lines']).length == 1 ? '1 item' : '${_maps(c['lines']).length} items'}${c['full'] == true ? ', every item' : ''}',
-                  badge: (_int(c['lost_kobo']) ?? 0) > 0
-                      ? '${naira(_int(c['lost_kobo'])!)} missing'
-                      : (_int(c['changed']) == 1 ? '1 change' : '${_int(c['changed']) ?? 0} changes'),
+                  title: '${c['reference']} · ${_maps(c['lines']).length == 1 ? '1 item' : '${_maps(c['lines']).length} items'}${c['full'] == true ? ', every item' : ''}',
+                  badge: (_int(c['lost_kobo']) ?? 0) > 0 ? '${naira(_int(c['lost_kobo'])!)} missing' : (_int(c['changed']) == 1 ? '1 change' : '${_int(c['changed']) ?? 0} changes'),
                   badgeTone: (_int(c['lost_kobo']) ?? 0) > 0 ? Tone.warn : Tone.muted,
                   sub: '${whenLabel(c['counted_at'] as String? ?? '')}${(c['reason'] as String? ?? '').isNotEmpty ? ' · ${c['reason']}' : ''}',
                   actions: null,
@@ -1227,10 +1214,7 @@ class _CountFormState extends State<_CountForm> {
 
   /// stock.ts countProblem.
   String? get _problem {
-    final filled = [
-      for (final c in _boxes.values)
-        if (c.text.trim().isNotEmpty) c.text,
-    ];
+    final filled = [for (final c in _boxes.values) if (c.text.trim().isNotEmpty) c.text];
     if (filled.isEmpty) return 'Enter how many of at least one item.';
     if (filled.any((v) => _whole(v) == null)) return 'How many is a whole number, like 12.';
     return null;
@@ -1275,11 +1259,7 @@ class _CountFormState extends State<_CountForm> {
             hint: countDiff(it, _boxes[it['id']]!.text) ?? 'Taskiem has ${stockLine(it)}.',
             child: TkTextBox(controller: _boxes[it['id']]!, digits: 7),
           ),
-        TkKitField(
-          label: 'Why they differ',
-          hint: 'Spoilt, rats, a miscount.',
-          child: TkTextBox(controller: _reason, max: 200),
-        ),
+        TkKitField(label: 'Why they differ', hint: 'Spoilt, rats, a miscount.', child: TkTextBox(controller: _reason, max: 200)),
       ],
     );
   }

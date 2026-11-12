@@ -53,7 +53,10 @@ Future<String?> showOrderSheet(
   OrderStart? start,
   bool browse = false,
   void Function(String words)? onSent,
-}) => showTkSheet<String>(context, (_) => OrderSheet(chats: chats, link: link, business: business, start: start, browse: browse, onSent: onSent));
+}) => showTkSheet<String>(
+  context,
+  (_) => OrderSheet(chats: chats, link: link, business: business, start: start, browse: browse, onSent: onSent),
+);
 
 class OrderSheet extends StatefulWidget {
   const OrderSheet({super.key, required this.chats, required this.link, required this.business, this.start, this.browse = false, this.onSent});
@@ -161,7 +164,9 @@ class _OrderSheetState extends State<OrderSheet> {
     unawaited(() async {
       try {
         final r = await _t.send('GET', '/v1/stock/purchases') as Map<String, dynamic>;
-        final mine = _maps(r['purchases']).where((p) => p['link_id'] == widget.link && p['status'] != 'cancelled' && p['seller_status'] != 'proposed').toList()
+        final mine = _maps(r['purchases'])
+            .where((p) => p['link_id'] == widget.link && p['status'] != 'cancelled' && p['seller_status'] != 'proposed')
+            .toList()
           ..sort((a, b) => (b['created_at'] as String? ?? '').compareTo(a['created_at'] as String? ?? ''));
         _last = mine.firstOrNull;
       } on Object {
@@ -220,10 +225,7 @@ class _OrderSheetState extends State<OrderSheet> {
   String _ownFor(PriceItem it) =>
       _linkedTo(it.id) ??
       _mine[it.id] ??
-      _own
-          ?.where((x) => x['variant_of'] == null && (x['name'] as String? ?? '').toLowerCase() == it.name.toLowerCase())
-          .map((x) => x['id'] as String)
-          .firstOrNull ??
+      _own?.where((x) => x['variant_of'] == null && (x['name'] as String? ?? '').toLowerCase() == it.name.toLowerCase()).map((x) => x['id'] as String).firstOrNull ??
       'new';
 
   PriceItem _lineProduct(PriceItem it) => it.variantOf == null ? it : (_items.where((x) => x.id == it.variantOf).firstOrNull ?? it);
@@ -279,8 +281,7 @@ class _OrderSheetState extends State<OrderSheet> {
       final what = '$lines|${_note.text.trim()}|$deal';
       var order = _madeOrders[what];
       if (order == null) {
-        final out =
-            await _postOnce('/v1/supplier-prices/$_enc/order', 'order-$what', {'lines': lines, 'note': _note.text.trim(), ...deal}) as Map<String, dynamic>;
+        final out = await _postOnce('/v1/supplier-prices/$_enc/order', 'order-$what', {'lines': lines, 'note': _note.text.trim(), ...deal}) as Map<String, dynamic>;
         order = _madeOrders[what] = (out['purchase'] as Map).cast<String, dynamic>();
       }
       try {
@@ -349,9 +350,7 @@ class _OrderSheetState extends State<OrderSheet> {
         : '';
     final updatedAt = DateTime.tryParse(list?['updated_at'] as String? ?? '')?.toLocal();
     final now = DateTime.now();
-    final updated = updatedAt != null && updatedAt.year == now.year && updatedAt.month == now.month && updatedAt.day == now.day
-        ? 'updated today'
-        : 'as they share them';
+    final updated = updatedAt != null && updatedAt.year == now.year && updatedAt.month == now.month && updatedAt.day == now.day ? 'updated today' : 'as they share them';
     final storefront = list?['name'] == storefrontPrices;
     final loaded = _suppliers != null && _own != null && _links != null;
     final needPhone = _suppliers != null && _theirs == null && _supplierFor == 'new' && _phone.text.trim().isEmpty;
@@ -388,9 +387,7 @@ class _OrderSheetState extends State<OrderSheet> {
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Expanded(
-                      child: Text(_offering ? 'Your offer' : 'Total', style: tkText(size: 15, color: t.text)),
-                    ),
+                    Expanded(child: Text(_offering ? 'Your offer' : 'Total', style: tkText(size: 15, color: t.text))),
                     if (_offering && offerKobo != null && offerKobo > 0 && offerProblem.isEmpty) ...[
                       Text(naira(offerKobo), style: tkText(size: 22, weight: 800, color: t.text)),
                       const SizedBox(width: 6),
@@ -431,10 +428,7 @@ class _OrderSheetState extends State<OrderSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Semantics(
-                  header: true,
-                  child: Text('First, keep your stock on Taskiem', style: tkText(size: 16, weight: 700, color: t.text)),
-                ),
+                Semantics(header: true, child: Text('First, keep your stock on Taskiem', style: tkText(size: 16, weight: 700, color: t.text))),
                 const SizedBox(height: 6),
                 Text(
                   'What you order from $_biz is added to your stock when it comes, and they become one of your suppliers. Taskiem keeps your stock in your products table.',
@@ -514,10 +508,7 @@ class _OrderSheetState extends State<OrderSheet> {
       children: [
         ?stockSection,
         if (_suppliers != null && theirs == null) ...[
-          Text(
-            '$_biz is not one of your suppliers yet. Orders and bills from them are kept with your other suppliers.',
-            style: tkText(size: 14, color: t.muted),
-          ),
+          Text('$_biz is not one of your suppliers yet. Orders and bills from them are kept with your other suppliers.', style: tkText(size: 14, color: t.muted)),
           if (_unlinkedSuppliers.isNotEmpty)
             TkKitField(
               field: false,
@@ -589,7 +580,11 @@ class _OrderSheetState extends State<OrderSheet> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _ChipButton(label: _offering ? 'Pay their price instead' : 'Make an offer', on: _offering, onTap: () => setState(() => _offering = !_offering)),
+            _ChipButton(
+              label: _offering ? 'Pay their price instead' : 'Make an offer',
+              on: _offering,
+              onTap: () => setState(() => _offering = !_offering),
+            ),
             if (_offering) ...[
               const SizedBox(height: 10),
               TkKitField(
@@ -601,17 +596,11 @@ class _OrderSheetState extends State<OrderSheet> {
             ],
             if (_offering && offerKobo != null && offerKobo > 0 && offerProblem.isEmpty) ...[
               const SizedBox(height: 10),
-              Semantics(
-                liveRegion: true,
-                child: Text('${offWords(offerKobo, bag.total)} their price', style: tkText(size: 14, color: t.muted)),
-              ),
+              Semantics(liveRegion: true, child: Text('${offWords(offerKobo, bag.total)} their price', style: tkText(size: 14, color: t.muted))),
             ],
           ],
         ),
-        TkKitField(
-          label: 'A note for them (optional)',
-          child: TkTextBox(controller: _note, hint: 'Deliver before Friday'),
-        ),
+        TkKitField(label: 'A note for them (optional)', child: TkTextBox(controller: _note, hint: 'Deliver before Friday')),
         Text('Delivery and payment as you agree in the chat. The invoice arrives here.', style: tkText(size: 14, color: t.muted)),
         if (_error != null) TkErrorBox(_error!),
       ],
@@ -625,9 +614,7 @@ class _OrderSheetState extends State<OrderSheet> {
     final sizes = soldInSizes(it);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: t.border)),
-      ),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.border))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -739,10 +726,7 @@ class BagBar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Opacity(
-            opacity: 0.8,
-            child: Text(count, style: tkText(size: 13, color: t.tkOnPine)),
-          ),
+          Opacity(opacity: 0.8, child: Text(count, style: tkText(size: 13, color: t.tkOnPine))),
           Text(total, style: tkText(size: 20, weight: 800, letterSpacing: -0.2, color: t.tkOnPine)),
         ],
       ),
@@ -766,9 +750,7 @@ class BagBar extends StatelessWidget {
                 mainAxisSize: stack ? MainAxisSize.max : MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Flexible(
-                    child: Text(go, style: tkText(size: 15, weight: 800, color: t.brand)),
-                  ),
+                  Flexible(child: Text(go, style: tkText(size: 15, weight: 800, color: t.brand))),
                   const SizedBox(width: 6),
                   TkIcon(goIcon, size: 18, color: t.brand),
                 ],
@@ -788,18 +770,9 @@ class BagBar extends StatelessWidget {
       child: stack
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(padding: const EdgeInsets.fromLTRB(10, 0, 10, 8), child: words),
-                button,
-              ],
+              children: [Padding(padding: const EdgeInsets.fromLTRB(10, 0, 10, 8), child: words), button],
             )
-          : Row(
-              children: [
-                Expanded(child: words),
-                const SizedBox(width: 12),
-                button,
-              ],
-            ),
+          : Row(children: [Expanded(child: words), const SizedBox(width: 12), button]),
     );
   }
 }
@@ -818,28 +791,26 @@ class QtyStepper extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
     final (bg, ink) = !on ? (t.tkSoft, t.text) : (dark ? (t.brandDark, t.brandDarkText) : (t.brand, t.tkOnPine));
-    Widget step(String sign, String label, VoidCallback? onTap) => TapArea(
-      child: Semantics(
-        button: true,
-        enabled: onTap != null,
-        label: label,
+    Widget step(String sign, String label, VoidCallback? onTap) => TapArea(child: Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: label,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        excludeSemantics: true,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: SizedBox(
-            width: 44,
-            height: 44,
-            child: Center(
-              // On a row in the bag, − and + stay bright though one cannot go
-              // further (chat.css `.tk-order-row .tk-qty button:disabled`).
-              child: Text(sign, style: tkText(size: 20, weight: 600, color: ink)),
-            ),
+        child: SizedBox(
+          width: 44,
+          height: 44,
+          child: Center(
+            // On a row in the bag, − and + stay bright though one cannot go
+            // further (chat.css `.tk-order-row .tk-qty button:disabled`).
+            child: Text(sign, style: tkText(size: 20, weight: 600, color: ink)),
           ),
         ),
       ),
-    );
+    ));
     return Semantics(
       container: true,
       label: 'How many $name',
@@ -854,11 +825,7 @@ class QtyStepper extends StatelessWidget {
               constraints: const BoxConstraints(minWidth: 28),
               child: Semantics(
                 liveRegion: true,
-                child: Text(
-                  '$n',
-                  textAlign: TextAlign.center,
-                  style: tkText(size: 15, weight: 800, color: ink),
-                ),
+                child: Text('$n', textAlign: TextAlign.center, style: tkText(size: 15, weight: 800, color: ink)),
               ),
             ),
             step('+', 'One more $name', onMore),
@@ -917,13 +884,7 @@ class _SizeCellState extends State<_SizeCell> {
             Text.rich(
               TextSpan(
                 text: name,
-                children: [
-                  if ((z.price ?? 0) > 0)
-                    TextSpan(
-                      text: ' ${naira(z.price!)}',
-                      style: tkText(size: 13, weight: 500, color: t.muted),
-                    ),
-                ],
+                children: [if ((z.price ?? 0) > 0) TextSpan(text: ' ${naira(z.price!)}', style: tkText(size: 13, weight: 500, color: t.muted))],
               ),
               style: tkText(size: 13, weight: 700, color: t.text),
             ),
@@ -1025,10 +986,7 @@ class _Select extends StatelessWidget {
                   onTap: () => Navigator.of(context).pop(id),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Text(
-                      words,
-                      style: tkText(size: 16, weight: id == value ? 700 : 500, color: TkTheme.tokens(context).text),
-                    ),
+                    child: Text(words, style: tkText(size: 16, weight: id == value ? 700 : 500, color: TkTheme.tokens(context).text)),
                   ),
                 ),
               ),
@@ -1052,14 +1010,7 @@ class _Select extends StatelessWidget {
             decoration: BoxDecoration(color: t.field, borderRadius: BorderRadius.circular(14)),
             child: Row(
               children: [
-                Expanded(
-                  child: Text(
-                    now,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: tkText(size: 17, weight: 600, color: t.text),
-                  ),
-                ),
+                Expanded(child: Text(now, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 17, weight: 600, color: t.text))),
                 RotatedBox(quarterTurns: 1, child: TkIcon('chevron', size: 12, color: t.text)),
               ],
             ),

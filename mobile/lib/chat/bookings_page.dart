@@ -125,22 +125,14 @@ Future<bool> askCancelBooking(BuildContext context, Map<String, dynamic> b) => s
 
 /// Cancels [b]; answers what to say.
 Future<String> cancelBooking(Auth auth, Map<String, dynamic> b) async {
-  final r =
-      (await auth.transport.send('POST', '/v1/storefront/bookings/${Uri.encodeComponent(b['reference'] as String)}/cancel', body: const {}) as Map)['booking']
-          as Map;
-  return r['status'] == 'refund_due'
-      ? '${r['reference']} is cancelled. They had paid: refund them in Paystack.'
-      : '${r['reference']} is cancelled; the customer is told.';
+  final r = (await auth.transport.send('POST', '/v1/storefront/bookings/${Uri.encodeComponent(b['reference'] as String)}/cancel', body: const {}) as Map)['booking'] as Map;
+  return r['status'] == 'refund_due' ? '${r['reference']} is cancelled. They had paid: refund them in Paystack.' : '${r['reference']} is cancelled; the customer is told.';
 }
 
 /// StorefrontBookings.tsx MoveDialog: a new day and time; answers what to
 /// say, or null when it was not moved.
 Future<String?> moveBooking(BuildContext context, Auth auth, Map<String, dynamic> b) async {
-  final moved = await showTkModal<Map<String, dynamic>>(
-    context,
-    title: 'Move booking ${b['reference']}',
-    builder: (_) => _MoveForm(auth: auth, booking: b),
-  );
+  final moved = await showTkModal<Map<String, dynamic>>(context, title: 'Move booking ${b['reference']}', builder: (_) => _MoveForm(auth: auth, booking: b));
   if (moved == null) return null;
   return '${moved['reference']} is moved to ${moved['starts_at'] != null ? whenLabel(moved['starts_at'] as String) : 'its new time'}; the customer is told.';
 }

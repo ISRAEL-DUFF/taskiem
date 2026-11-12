@@ -300,10 +300,7 @@ class _ToolSheetState extends State<ToolSheet> {
       );
     }
     if (list == null) {
-      return ListView(
-        padding: pad,
-        children: [TkLoading(label: 'Loading $name…')],
-      );
+      return ListView(padding: pad, children: [TkLoading(label: 'Loading $name…')]);
     }
     final shown = filterRows(list, _chip, _search.text);
     if (shown.isEmpty) {
