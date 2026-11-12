@@ -18,6 +18,7 @@ import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty, TkLoading, TkPill, TkRow;
 import '../kit/modal.dart';
 import '../kit/page.dart';
+import '../kit/polling.dart';
 import '../kit/sheet.dart' show TkKitField, TkSavedTick, TkSheet, showTkSheet;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
@@ -317,7 +318,7 @@ class StorefrontOrdersPage extends StatefulWidget {
   State<StorefrontOrdersPage> createState() => _StorefrontOrdersPageState();
 }
 
-class _StorefrontOrdersPageState extends State<StorefrontOrdersPage> {
+class _StorefrontOrdersPageState extends State<StorefrontOrdersPage> with Polling {
   // Null: not read yet; empty and _none: this Taskiem takes none.
   List<Map<String, dynamic>>? _orders;
   bool _none = false;
@@ -327,7 +328,6 @@ class _StorefrontOrdersPageState extends State<StorefrontOrdersPage> {
   List<Map<String, dynamic>> _fronts = const [];
   Map<String, dynamic>? _sf;
   bool _trade = false;
-  Timer? _every;
   int _asked = 0;
 
   Auth get _auth => widget.auth;
@@ -339,13 +339,7 @@ class _StorefrontOrdersPageState extends State<StorefrontOrdersPage> {
     _load();
     _side();
     // useLiveRefresh: read again while it is open (ages count on too).
-    _every = Timer.periodic(const Duration(seconds: 30), (_) => _load());
-  }
-
-  @override
-  void dispose() {
-    _every?.cancel();
-    super.dispose();
+    startPolling(const Duration(seconds: 30), _load);
   }
 
   Future<void> _side() async {
@@ -509,14 +503,13 @@ class StorefrontOrderPage extends StatefulWidget {
   State<StorefrontOrderPage> createState() => _StorefrontOrderPageState();
 }
 
-class _StorefrontOrderPageState extends State<StorefrontOrderPage> {
+class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling {
   Map<String, dynamic>? _view;
   String? _error;
   Map<String, dynamic>? _revealed;
   String _changed = '';
   bool _busy = false;
   String? _actError;
-  Timer? _every;
 
   Auth get _auth => widget.auth;
   String get _ref => Uri.encodeComponent(widget.reference);
@@ -526,13 +519,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> {
   void initState() {
     super.initState();
     _load();
-    _every = Timer.periodic(const Duration(seconds: 30), (_) => _load());
-  }
-
-  @override
-  void dispose() {
-    _every?.cancel();
-    super.dispose();
+    startPolling(const Duration(seconds: 30), _load);
   }
 
   Future<void> _load() async {
@@ -1172,7 +1159,7 @@ class DeliveriesPage extends StatefulWidget {
   State<DeliveriesPage> createState() => _DeliveriesPageState();
 }
 
-class _DeliveriesPageState extends State<DeliveriesPage> {
+class _DeliveriesPageState extends State<DeliveriesPage> with Polling {
   List<Map<String, dynamic>>? _list;
   String? _error;
   bool _off = false;
@@ -1181,7 +1168,6 @@ class _DeliveriesPageState extends State<DeliveriesPage> {
   final _dayBox = TextEditingController();
   bool? _on;
   bool _busy = false;
-  Timer? _every;
   int _asked = 0;
 
   Auth get _auth => widget.auth;
@@ -1194,12 +1180,11 @@ class _DeliveriesPageState extends State<DeliveriesPage> {
     _auth.transport.send('GET', '/v1/dispatch/workflow').then((r) {
       if (mounted) setState(() => _on = (r as Map)['on'] == true);
     }, onError: (Object _) {});
-    _every = Timer.periodic(const Duration(seconds: 30), (_) => _load());
+    startPolling(const Duration(seconds: 30), _load);
   }
 
   @override
   void dispose() {
-    _every?.cancel();
     _dayBox.dispose();
     super.dispose();
   }

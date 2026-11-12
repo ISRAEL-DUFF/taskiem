@@ -388,7 +388,7 @@ class _CheckPainter extends CustomPainter {
 /// Chrome's margins: 3 px above and right, 5 px left), 8 px, the words;
 /// 16 px below. The whole row is pressed.
 class TkChoiceRow extends StatelessWidget {
-  const TkChoiceRow({super.key, required this.control, required this.label, required this.onTap, this.radio = true});
+  const TkChoiceRow({super.key, required this.control, required this.label, required this.onTap, this.radio = true, this.checked});
   final Widget control;
   final Widget label;
 
@@ -396,13 +396,20 @@ class TkChoiceRow extends StatelessWidget {
   final VoidCallback? onTap;
   final bool radio;
 
+  /// Whether it is the one chosen, said to a screen reader; by default
+  /// what [control] (a [TkRadio] or [TkCheckbox]) shows.
+  final bool? checked;
+
   @override
   Widget build(BuildContext context) {
+    final c = control;
+    final on = checked ?? (c is TkRadio ? c.checked : (c is TkCheckbox ? c.checked : null));
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TapArea(
         child: Semantics(
           inMutuallyExclusiveGroup: radio,
+          checked: on,
           enabled: onTap != null,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,

@@ -16,6 +16,7 @@ import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkPill;
 import '../kit/modal.dart';
+import '../kit/polling.dart';
 import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
@@ -111,12 +112,11 @@ class CustomerOrders extends StatefulWidget {
   State<CustomerOrders> createState() => _CustomerOrdersState();
 }
 
-class _CustomerOrdersState extends State<CustomerOrders> {
+class _CustomerOrdersState extends State<CustomerOrders> with Polling {
   Map<String, dynamic>? _data;
   String? _error;
   bool _busy = false;
   ({String id, String error})? _told;
-  Timer? _every;
   int _asked = 0;
 
   Transport get _t => widget.auth.transport;
@@ -125,13 +125,7 @@ class _CustomerOrdersState extends State<CustomerOrders> {
   void initState() {
     super.initState();
     _load();
-    if (widget.follow) _every = Timer.periodic(const Duration(seconds: 4), (_) => _load());
-  }
-
-  @override
-  void dispose() {
-    _every?.cancel();
-    super.dispose();
+    if (widget.follow) startPolling(const Duration(seconds: 4), _load);
   }
 
   Future<void> _load() async {
