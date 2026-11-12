@@ -14,3 +14,14 @@ Future<bool> Function(Uri url) openInBrowser = (url) async {
     return false;
   }
 };
+
+/// Opens [url] in the app it belongs to (a t.me link in Telegram), or the
+/// phone's browser; false when nothing could. A test stands in for it.
+Future<bool> Function(Uri url) openOutside = (url) async {
+  if (url.scheme != 'https' && url.scheme != 'http') return false;
+  try {
+    return await launchUrl(url, mode: LaunchMode.externalApplication);
+  } on Object {
+    return false;
+  }
+};

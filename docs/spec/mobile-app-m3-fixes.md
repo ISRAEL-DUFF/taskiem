@@ -180,6 +180,27 @@ with one.
 
 ## 5. Gaps: Settings (§3.6)
 
+**Done: S1–S5** (`lib/screens/settings_more.dart`, `test/settings_test.dart`,
+and a test in `test/stack_test.dart`).
+- S1: the app lock's switch, on unless turned off, and turned off only by
+  the phone's own unlock; off, the app does not lock (Prefs).
+- S2: the WhatsApp approval PIN, under the linked number when its flows
+  are on: set, changed, removed; locked until is said.
+- S3: who is signed in (name, email); an account made in a chat adds its
+  email (a link sent to it), its made-up sign-in name not shown.
+- S4: the chats linked, as Account on the web: WhatsApp by a code sent to
+  the number (or sent back in WhatsApp), Telegram by its one-time link
+  (opened in Telegram), Slack by the Confirm sent there; each unlinked
+  after asking, with the web's warning for an account made in that chat.
+- S5: the chat tools switch, for those who manage members (as the web).
+- What changes a way in asks for the authenticator code (or the password
+  when there is no stronger way), as the server takes; one with only a
+  passkey is told to do it where the passkey is (M4 brings passkeys).
+- Found: each settings card was one node to a screen reader; its buttons
+  and fields are their own now. The generator wrote angle brackets into
+  doc comments ("https://t.me/<bot>"), which Dart reads as HTML: such a
+  word is code now.
+
 The spec's Settings list against `screens/signed_in.dart` (which has Your
 businesses, Your phones, Appearance, Sign out):
 

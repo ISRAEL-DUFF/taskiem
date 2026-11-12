@@ -336,6 +336,86 @@ class TaskiemApi {
     final j = await _t.send('GET', '/v1/supplier-prices', query: {'link': ?link});
     return ListSupplierPricesResponse.fromJson(j as Map<String, dynamic>);
   }
+
+  /// Add your email (`POST /v1/me/email`)
+  Future<StatusMessage> addEmail({required AddEmailRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/email', body: body.toJson());
+    return StatusMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Get the caller's WhatsApp link (`GET /v1/me/whatsapp`)
+  Future<WhatsAppBinding> getWhatsApp() async {
+    final j = await _t.send('GET', '/v1/me/whatsapp');
+    return WhatsAppBinding.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Start linking WhatsApp (`POST /v1/me/whatsapp`)
+  Future<WhatsAppCodeSent> startWhatsAppBinding({required WhatsAppBindRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/whatsapp', body: body.toJson());
+    return WhatsAppCodeSent.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Finish linking WhatsApp (`POST /v1/me/whatsapp/verify`)
+  Future<WhatsAppLinked> verifyWhatsAppBinding({required WhatsAppVerifyRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/whatsapp/verify', body: body.toJson());
+    return WhatsAppLinked.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Unlink WhatsApp (`DELETE /v1/me/whatsapp`)
+  Future<void> unbindWhatsApp() async {
+    await _t.send('DELETE', '/v1/me/whatsapp');
+  }
+
+  /// Set the WhatsApp PIN (`PUT /v1/me/whatsapp/pin`)
+  Future<WhatsAppPin> setWhatsAppPin({required WhatsAppPinRequest body}) async {
+    final j = await _t.send('PUT', '/v1/me/whatsapp/pin', body: body.toJson());
+    return WhatsAppPin.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove the WhatsApp PIN (`DELETE /v1/me/whatsapp/pin`)
+  Future<void> removeWhatsAppPin() async {
+    await _t.send('DELETE', '/v1/me/whatsapp/pin');
+  }
+
+  /// Get the caller's Telegram link (`GET /v1/me/telegram`)
+  Future<TelegramLink> getTelegram() async {
+    final j = await _t.send('GET', '/v1/me/telegram');
+    return TelegramLink.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a one-time Telegram link (`POST /v1/me/telegram`)
+  Future<TelegramLinkMade> startTelegramLink({required FactorProof body}) async {
+    final j = await _t.send('POST', '/v1/me/telegram', body: body.toJson());
+    return TelegramLinkMade.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Unlink Telegram (`DELETE /v1/me/telegram`)
+  Future<void> unlinkTelegram() async {
+    await _t.send('DELETE', '/v1/me/telegram');
+  }
+
+  /// Get the caller's Slack link in this business (`GET /v1/me/slack`)
+  Future<SlackLink> getSlack() async {
+    final j = await _t.send('GET', '/v1/me/slack');
+    return SlackLink.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Link the caller's Slack user (`POST /v1/me/slack`)
+  Future<SlackLink> startSlackLink({required FactorProof body}) async {
+    final j = await _t.send('POST', '/v1/me/slack', body: body.toJson());
+    return SlackLink.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Unlink Slack in this business (`DELETE /v1/me/slack`)
+  Future<void> unlinkSlack() async {
+    await _t.send('DELETE', '/v1/me/slack');
+  }
+
+  /// Turn chat tools on or off (`PUT /v1/settings/chat-tools`)
+  Future<ChatToolsSetting> putChatTools({required PutChatToolsRequest body}) async {
+    final j = await _t.send('PUT', '/v1/settings/chat-tools', body: body.toJson());
+    return ChatToolsSetting.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -3726,5 +3806,335 @@ class SupplierPrices {
         'link': link,
         'name': name,
         'updated_at': updatedAt.toUtc().toIso8601String(),
+      };
+}
+
+class AddEmailRequest {
+  const AddEmailRequest({required this.email});
+
+  final String email;
+
+  factory AddEmailRequest.fromJson(Map<String, dynamic> j) => AddEmailRequest(
+        email: j['email'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'email': email,
+      };
+}
+
+class StatusMessage {
+  const StatusMessage({required this.status});
+
+  /// What happened, in plain words.
+  final String status;
+
+  factory StatusMessage.fromJson(Map<String, dynamic> j) => StatusMessage(
+        status: j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'status': status,
+      };
+}
+
+class WhatsAppBinding {
+  const WhatsAppBinding({this.dormant, required this.enabled, required this.flows, this.number, this.pending, required this.pin, this.platformNumber, this.verifiedAt});
+
+  /// The number was silent too long and acts for no one until proven again (a
+  /// new code links it again).
+  final bool? dormant;
+  /// Whether the deployment has WhatsApp.
+  final bool enabled;
+  /// Whether WhatsApp forms are available.
+  final bool flows;
+  /// The person's linked number.
+  final Object? number;
+  /// A number waiting for its code.
+  final WhatsAppBindingPending? pending;
+  final WhatsAppPin pin;
+  /// The shared number to message.
+  final String? platformNumber;
+  final Object? verifiedAt;
+
+  factory WhatsAppBinding.fromJson(Map<String, dynamic> j) => WhatsAppBinding(
+        dormant: j['dormant'] == null ? null : j['dormant'] as bool,
+        enabled: j['enabled'] as bool,
+        flows: j['flows'] as bool,
+        number: j['number'],
+        pending: j['pending'] == null ? null : WhatsAppBindingPending.fromJson(j['pending'] as Map<String, dynamic>),
+        pin: WhatsAppPin.fromJson(j['pin'] as Map<String, dynamic>),
+        platformNumber: j['platform_number'] == null ? null : j['platform_number'] as String,
+        verifiedAt: j['verified_at'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'dormant': ?dormant,
+        'enabled': enabled,
+        'flows': flows,
+        'number': ?number,
+        'pending': ?pending?.toJson(),
+        'pin': pin.toJson(),
+        'platform_number': ?platformNumber,
+        'verified_at': ?verifiedAt,
+      };
+}
+
+/// A number waiting for its code.
+class WhatsAppBindingPending {
+  const WhatsAppBindingPending({required this.expiresAt, required this.number});
+
+  final DateTime expiresAt;
+  final String number;
+
+  factory WhatsAppBindingPending.fromJson(Map<String, dynamic> j) => WhatsAppBindingPending(
+        expiresAt: DateTime.parse(j['expires_at'] as String),
+        number: j['number'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_at': expiresAt.toUtc().toIso8601String(),
+        'number': number,
+      };
+}
+
+class WhatsAppPin {
+  const WhatsAppPin({this.lockedUntil, required this.set, this.setAt});
+
+  /// Wrong PINs lock it until then.
+  final DateTime? lockedUntil;
+  final bool set;
+  final DateTime? setAt;
+
+  factory WhatsAppPin.fromJson(Map<String, dynamic> j) => WhatsAppPin(
+        lockedUntil: j['locked_until'] == null ? null : DateTime.parse(j['locked_until'] as String),
+        set: j['set'] as bool,
+        setAt: j['set_at'] == null ? null : DateTime.parse(j['set_at'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'locked_until': ?lockedUntil?.toUtc().toIso8601String(),
+        'set': set,
+        'set_at': ?setAt?.toUtc().toIso8601String(),
+      };
+}
+
+/// The number, with the proof FactorProof describes.
+class WhatsAppBindRequest {
+  const WhatsAppBindRequest({required this.number, this.passkey, this.password, this.totp});
+
+  /// The WhatsApp number, international or local to the deployment's default
+  /// country.
+  final String number;
+  final PasskeyCredential? passkey;
+  final String? password;
+  final String? totp;
+
+  factory WhatsAppBindRequest.fromJson(Map<String, dynamic> j) => WhatsAppBindRequest(
+        number: j['number'] as String,
+        passkey: j['passkey'] == null ? null : PasskeyCredential.fromJson(j['passkey'] as Map<String, dynamic>),
+        password: j['password'] == null ? null : j['password'] as String,
+        totp: j['totp'] == null ? null : j['totp'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'number': number,
+        'passkey': ?passkey?.toJson(),
+        'password': ?password,
+        'totp': ?totp,
+      };
+}
+
+class WhatsAppCodeSent {
+  const WhatsAppCodeSent({required this.expiresAt, required this.number});
+
+  final DateTime expiresAt;
+  /// The number, normalised.
+  final String number;
+
+  factory WhatsAppCodeSent.fromJson(Map<String, dynamic> j) => WhatsAppCodeSent(
+        expiresAt: DateTime.parse(j['expires_at'] as String),
+        number: j['number'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_at': expiresAt.toUtc().toIso8601String(),
+        'number': number,
+      };
+}
+
+class WhatsAppVerifyRequest {
+  const WhatsAppVerifyRequest({required this.code});
+
+  /// The six digits sent on WhatsApp.
+  final String code;
+
+  factory WhatsAppVerifyRequest.fromJson(Map<String, dynamic> j) => WhatsAppVerifyRequest(
+        code: j['code'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+      };
+}
+
+class WhatsAppLinked {
+  const WhatsAppLinked({required this.number});
+
+  final String number;
+
+  factory WhatsAppLinked.fromJson(Map<String, dynamic> j) => WhatsAppLinked(
+        number: j['number'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'number': number,
+      };
+}
+
+class WhatsAppPinRequest {
+  const WhatsAppPinRequest({this.passkey, this.password, required this.pin, this.totp});
+
+  final PasskeyCredential? passkey;
+  final String? password;
+  /// Six digits; not one digit repeated or a run.
+  final String pin;
+  final String? totp;
+
+  factory WhatsAppPinRequest.fromJson(Map<String, dynamic> j) => WhatsAppPinRequest(
+        passkey: j['passkey'] == null ? null : PasskeyCredential.fromJson(j['passkey'] as Map<String, dynamic>),
+        password: j['password'] == null ? null : j['password'] as String,
+        pin: j['pin'] as String,
+        totp: j['totp'] == null ? null : j['totp'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'passkey': ?passkey?.toJson(),
+        'password': ?password,
+        'pin': pin,
+        'totp': ?totp,
+      };
+}
+
+class TelegramLink {
+  const TelegramLink({this.botUsername, this.dormant, required this.enabled, required this.linked, this.pendingExpiresAt, this.username, this.verifiedAt});
+
+  /// The bot, without @.
+  final String? botUsername;
+  /// The account was silent too long and acts for no one until proven again (a
+  /// new link links it again).
+  final bool? dormant;
+  /// Whether the deployment has a Telegram bot.
+  final bool enabled;
+  final bool linked;
+  /// A link made and not opened yet works until then.
+  final DateTime? pendingExpiresAt;
+  /// The linked account's Telegram username, when it has one.
+  final String? username;
+  final DateTime? verifiedAt;
+
+  factory TelegramLink.fromJson(Map<String, dynamic> j) => TelegramLink(
+        botUsername: j['bot_username'] == null ? null : j['bot_username'] as String,
+        dormant: j['dormant'] == null ? null : j['dormant'] as bool,
+        enabled: j['enabled'] as bool,
+        linked: j['linked'] as bool,
+        pendingExpiresAt: j['pending_expires_at'] == null ? null : DateTime.parse(j['pending_expires_at'] as String),
+        username: j['username'] == null ? null : j['username'] as String,
+        verifiedAt: j['verified_at'] == null ? null : DateTime.parse(j['verified_at'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'bot_username': ?botUsername,
+        'dormant': ?dormant,
+        'enabled': enabled,
+        'linked': linked,
+        'pending_expires_at': ?pendingExpiresAt?.toUtc().toIso8601String(),
+        'username': ?username,
+        'verified_at': ?verifiedAt?.toUtc().toIso8601String(),
+      };
+}
+
+/// Proof, beyond the session, that it is the person: a passkey assertion (for a
+/// challenge from `POST /v1/me/step-up/options` with operation
+/// `account.reauth`) or an authenticator code when they have either, otherwise
+/// their password. A 403 with `reauth` lists what will do.
+class FactorProof {
+  const FactorProof({this.passkey, this.password, this.totp});
+
+  final PasskeyCredential? passkey;
+  final String? password;
+  final String? totp;
+
+  factory FactorProof.fromJson(Map<String, dynamic> j) => FactorProof(
+        passkey: j['passkey'] == null ? null : PasskeyCredential.fromJson(j['passkey'] as Map<String, dynamic>),
+        password: j['password'] == null ? null : j['password'] as String,
+        totp: j['totp'] == null ? null : j['totp'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'passkey': ?passkey?.toJson(),
+        'password': ?password,
+        'totp': ?totp,
+      };
+}
+
+class TelegramLinkMade {
+  const TelegramLinkMade({required this.expiresAt, required this.url});
+
+  final DateTime expiresAt;
+  /// `https://t.me/<bot>?start=<code>;` works once.
+  final String url;
+
+  factory TelegramLinkMade.fromJson(Map<String, dynamic> j) => TelegramLinkMade(
+        expiresAt: DateTime.parse(j['expires_at'] as String),
+        url: j['url'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_at': expiresAt.toUtc().toIso8601String(),
+        'url': url,
+      };
+}
+
+class SlackLink {
+  const SlackLink({required this.enabled, required this.linked, required this.pending, this.verifiedAt, this.workspace});
+
+  /// Taskiem's Slack app is set up here.
+  final bool enabled;
+  final bool linked;
+  /// A Confirm button was sent and not pressed yet.
+  final bool pending;
+  final DateTime? verifiedAt;
+  /// The Slack workspace's id.
+  final String? workspace;
+
+  factory SlackLink.fromJson(Map<String, dynamic> j) => SlackLink(
+        enabled: j['enabled'] as bool,
+        linked: j['linked'] as bool,
+        pending: j['pending'] as bool,
+        verifiedAt: j['verified_at'] == null ? null : DateTime.parse(j['verified_at'] as String),
+        workspace: j['workspace'] == null ? null : j['workspace'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'enabled': enabled,
+        'linked': linked,
+        'pending': pending,
+        'verified_at': ?verifiedAt?.toUtc().toIso8601String(),
+        'workspace': ?workspace,
+      };
+}
+
+class PutChatToolsRequest {
+  const PutChatToolsRequest({required this.chatTools});
+
+  final bool chatTools;
+
+  factory PutChatToolsRequest.fromJson(Map<String, dynamic> j) => PutChatToolsRequest(
+        chatTools: j['chat_tools'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat_tools': chatTools,
       };
 }

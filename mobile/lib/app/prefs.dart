@@ -26,6 +26,9 @@ class Prefs extends ChangeNotifier {
   /// here (on until turned off).
   bool sound = true;
 
+  /// The app lock (docs/spec/mobile-app.md §5.2): on unless turned off.
+  bool lock = true;
+
   /// Done once what is kept has been read.
   Future<void> get ready => _ready.future;
   final _ready = Completer<void>();
@@ -36,11 +39,22 @@ class Prefs extends ChangeNotifier {
       theme = ThemeChoice.values.firstWhere((c) => c.name == t, orElse: () => ThemeChoice.light);
       taskiemSeen = DateTime.tryParse(await keys.read('taskiem-seen') ?? '');
       sound = await keys.read('chat-sound') != 'off';
+      lock = await keys.read('app-lock') != 'off';
     } on Object {
       // The phone's storage not read: the defaults.
     }
     if (!_ready.isCompleted) _ready.complete();
     notifyListeners();
+  }
+
+  Future<void> setLock(bool on) async {
+    lock = on;
+    notifyListeners();
+    try {
+      await keys.write('app-lock', on ? null : 'off');
+    } on Object {
+      // Kept only while the app runs.
+    }
   }
 
   Future<void> setSound(bool on) async {

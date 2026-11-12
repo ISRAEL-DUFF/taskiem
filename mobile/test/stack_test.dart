@@ -8,6 +8,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/app/auth.dart';
+import 'package:taskiem/app/prefs.dart';
+import 'package:taskiem/app/session.dart';
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/conversation.dart';
 import 'package:taskiem/main.dart';
@@ -40,7 +42,7 @@ void main() {
 
   /// The app signed in as the chats fixture's person, Bayo's conversation
   /// open on top of the list; every request after [mark] is in [after].
-  Future<({Auth auth, FakeUnlocker u, List<String> asked, void Function(DateTime) setNow})> openBayo(WidgetTester t) async {
+  Future<({Auth auth, FakeUnlocker u, List<String> asked, void Function(DateTime) setNow})> openBayo(WidgetTester t, {Prefs? prefs}) async {
     t.view.physicalSize = const Size(390, 844);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
@@ -55,7 +57,7 @@ void main() {
       return null;
     });
     final u = FakeUnlocker();
-    await t.pumpWidget(TaskiemApp(auth: auth, unlocker: u, now: () => now));
+    await t.pumpWidget(TaskiemApp(auth: auth, unlocker: u, now: () => now, prefs: prefs));
     await settle(t);
     await t.tap(find.text('Bayo Rice Mills').first);
     await settle(t);
@@ -85,6 +87,20 @@ void main() {
     await settle(t);
     expect(find.text('Taskiem is locked'), findsNothing);
     expect(t.widget<ConversationScreen>(find.byType(ConversationScreen)).data, same(data), reason: 'the same conversation, its place kept');
+  });
+
+  testWidgets('the lock turned off in Settings: away 5 minutes, the conversation is still there', (t) async {
+    final prefs = Prefs(MemoryKeyStore());
+    await prefs.load();
+    await prefs.setLock(false);
+    final o = await openBayo(t, prefs: prefs);
+    away(t);
+    o.setNow(DateTime(2026, 11, 11, 9, 6));
+    back(t);
+    await settle(t);
+    expect(find.text('Taskiem is locked'), findsNothing);
+    expect(find.byType(ConversationScreen), findsOneWidget);
+    expect(o.u.asked, 0);
   });
 
   testWidgets('signing out closes the screens open on top, and nothing more is asked', (t) async {

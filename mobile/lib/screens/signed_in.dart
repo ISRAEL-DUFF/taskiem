@@ -8,14 +8,19 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
+import '../app/lock.dart';
 import '../app/prefs.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
+import 'settings_more.dart';
 
 class SignedInScreen extends StatefulWidget {
-  const SignedInScreen({super.key, required this.auth, this.prefs});
+  const SignedInScreen({super.key, required this.auth, this.prefs, this.unlocker});
   final Auth auth;
   final Prefs? prefs;
+
+  /// The phone's own unlock: turning the app lock off asks for it.
+  final Unlocker? unlocker;
 
   @override
   State<SignedInScreen> createState() => _SignedInScreenState();
@@ -107,7 +112,9 @@ class _SignedInScreenState extends State<SignedInScreen> {
                     style: tkHint(t),
                   ),
                 ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 4),
+              YouCard(auth: widget.auth),
+              const SizedBox(height: 16),
               if (_businesses.length > 1) ...[
                 _Card(
                   title: 'Your businesses',
@@ -155,6 +162,7 @@ class _SignedInScreenState extends State<SignedInScreen> {
                       ),
                 ],
               ),
+              if (prefs != null) LockCard(prefs: prefs, unlocker: widget.unlocker),
               if (prefs != null) ...[
                 const SizedBox(height: 16),
                 ListenableBuilder(
@@ -179,6 +187,12 @@ class _SignedInScreenState extends State<SignedInScreen> {
                   ),
                 ),
               ],
+              // Owners and admins turn chat tools on for everyone.
+              if (widget.auth.can('member.manage')) ChatToolsCard(auth: widget.auth),
+              // The chats you have linked (Account on the web).
+              WhatsAppCard(auth: widget.auth),
+              TelegramCard(auth: widget.auth),
+              SlackCard(auth: widget.auth),
               const SizedBox(height: 16),
               TkButton(
                 label: 'Sign out of this phone',

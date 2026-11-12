@@ -81,3 +81,19 @@ chatCard
 linkChatCard
 linkChatRefs
 listSupplierPrices
+
+# Settings: your email, your linked chats and the approval PIN, chat tools (M3, S2-S5)
+addEmail
+getWhatsApp
+startWhatsAppBinding
+verifyWhatsAppBinding
+unbindWhatsApp
+setWhatsAppPin
+removeWhatsAppPin
+getTelegram
+startTelegramLink
+unlinkTelegram
+getSlack
+startSlackLink
+unlinkSlack
+putChatTools

@@ -75,9 +75,10 @@ class TaskiemApp extends StatelessWidget {
             child: auth == null || unlocker == null || home != null
                 ? child!
                 : ListenableBuilder(
-                    listenable: auth!,
+                    listenable: Listenable.merge([auth!, ?prefs]),
                     builder: (context, _) => AppLock(
-                      active: auth!.state == AuthState.signedIn,
+                      // Signed in, and the lock not turned off here.
+                      active: auth!.state == AuthState.signedIn && (prefs?.lock ?? true),
                       unlocker: unlocker!,
                       startLocked: auth!.restored,
                       now: now,
@@ -87,7 +88,7 @@ class TaskiemApp extends StatelessWidget {
           ),
         ),
       ),
-      home: home ?? (auth == null ? const SignInScreen() : _Root(auth: auth!, prefs: prefs)),
+      home: home ?? (auth == null ? const SignInScreen() : _Root(auth: auth!, prefs: prefs, unlocker: unlocker)),
     );
   }
 }
@@ -97,9 +98,10 @@ class TaskiemApp extends StatelessWidget {
 /// or moved to another business, they are closed, and the chats start
 /// afresh for the new session.
 class _Root extends StatefulWidget {
-  const _Root({required this.auth, this.prefs});
+  const _Root({required this.auth, this.prefs, this.unlocker});
   final Auth auth;
   final Prefs? prefs;
+  final Unlocker? unlocker;
 
   @override
   State<_Root> createState() => _RootState();
@@ -138,7 +140,7 @@ class _RootState extends State<_Root> {
       AuthState.checking => ColoredBox(color: TkTheme.tokens(context).brand),
       AuthState.signedOut => _SignedOut(auth: auth),
       AuthState.outdated => const _Outdated(),
-      AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs),
+      AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker),
     };
   }
 }
@@ -239,9 +241,10 @@ class _Outdated extends StatelessWidget {
 
 /// Signed in: the chats; the menu opens the app's settings.
 class _Home extends StatefulWidget {
-  const _Home({super.key, required this.auth, this.prefs});
+  const _Home({super.key, required this.auth, this.prefs, this.unlocker});
   final Auth auth;
   final Prefs? prefs;
+  final Unlocker? unlocker;
 
   @override
   State<_Home> createState() => _HomeState();
@@ -292,7 +295,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     return ChatsScreen(
       data: _chats,
       onMenu: () => Navigator.of(context).push(PageRouteBuilder<void>(
-        pageBuilder: (_, _, _) => SignedInScreen(auth: widget.auth, prefs: widget.prefs),
+        pageBuilder: (_, _, _) => SignedInScreen(auth: widget.auth, prefs: widget.prefs, unlocker: widget.unlocker),
       )),
       // On a phone the web shows the conversation in the list's place, at
       // once: no transition either way.

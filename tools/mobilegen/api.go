@@ -418,6 +418,11 @@ func docComment(s, indent string) string {
 	var b strings.Builder
 	line := indent + "///"
 	for _, w := range strings.Fields(s) {
+		// A word with angle brackets ("https://t.me/<bot>") is code to Dart's
+		// docs, not HTML.
+		if strings.ContainsAny(w, "<>") && !strings.Contains(w, "`") {
+			w = "`" + w + "`"
+		}
 		if len(line)+1+len(w) > 80 && line != indent+"///" {
 			b.WriteString(line + "\n")
 			line = indent + "///"
