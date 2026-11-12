@@ -16,6 +16,7 @@ import 'sizes_forms.dart' show GroupForm;
 import 'bills_page.dart' show BillsPage;
 import 'bookings_page.dart' show BookingsPage;
 import 'invoices_page.dart' show InvoicesPage;
+import 'money_page.dart' show MoneyPage;
 import 'price_lists_page.dart' show PriceListsPage;
 import 'stock_page.dart' show StockPage;
 import 'tools.dart';
@@ -34,6 +35,7 @@ void openToolPage(BuildContext context, Tool tool, Auth auth) {
     'tables' => TablesPage(auth: auth),
     'invoices' => InvoicesPage(auth: auth),
     'bills' => BillsPage(auth: auth),
+    'money' => MoneyPage(auth: auth),
     _ => null,
   };
   if (page == null) return showComingSoon(context);

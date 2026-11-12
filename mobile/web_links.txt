@@ -33,7 +33,7 @@
 /purchases/ | app lib/chat/purchases_page.dart
 /storefront/suppliers | app lib/chat/purchases_page.dart
 /storefront/suppliers/ | app lib/chat/purchases_page.dart
-/money | M8
+/money | app lib/chat/money_page.dart
 /tables | app lib/chat/table_tool.dart
 /tables/ | app lib/chat/table_tool.dart
 /invoice | not a page

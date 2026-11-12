@@ -40,6 +40,7 @@ import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
 import 'availability_sheet.dart' show showAvailabilitySheet;
 import 'bookings_page.dart' show BookingsPage;
 import 'invoice_match.dart' show showMatchSheet;
+import 'invoices_page.dart' show InvoicesPage;
 import 'order_sheet.dart' show OrderStart, showOrderSheet;
 import 'storefront_orders_page.dart' show DeliveriesPage, openStorefrontOrder, showRiderSheet;
 import 'tool_sheet.dart';
@@ -730,8 +731,10 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                             push(DeliveriesPage(auth: auth));
                           case 'bookings':
                             push(BookingsPage(auth: auth));
+                          case 'owed':
+                            push(InvoicesPage(auth: auth));
                           default:
-                            // Invoices (M8), staff and tasks: coming.
+                            // Staff and tasks: coming.
                             showComingSoon(context);
                         }
                       },
