@@ -1475,7 +1475,8 @@ class _Bubble extends StatelessWidget {
                                   mine: mine,
                                   now: now,
                                   title: cardLine(card, mine, other),
-                                  actions: [viewButton(card, acts), if (latest && (!mine || isDelivery(card))) ...cardActions(card, acts, changed)],
+                                  view: viewButton(card, acts),
+                                  actions: [if (latest && (!mine || isDelivery(card))) ...cardActions(card, acts, changed)],
                                   // A deal to answer (theirs, the newest of its order).
                                   deal: latest && !mine && dealSide(card) != null
                                       ? DealActions(key: ValueKey('deal-${msg.id}'), card: card, side: dealSide(card)!, acts: acts, now: now)

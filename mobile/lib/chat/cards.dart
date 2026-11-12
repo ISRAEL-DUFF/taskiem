@@ -4,6 +4,7 @@
 // state as a pill, what happened, the amount, an order's progress, and its
 // buttons. A change we made ourselves is a diary line instead.
 
+import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
@@ -17,7 +18,7 @@ import 'words.dart';
 
 /// `.tk-chatcard`: the frame, inside its bubble.
 class CardFrame extends StatelessWidget {
-  const CardFrame({super.key, required this.card, required this.title, required this.mine, required this.now, this.current, required this.actions, this.deal});
+  const CardFrame({super.key, required this.card, required this.title, required this.mine, required this.now, this.current, this.view, required this.actions, this.deal});
 
   final LinkDocCard card;
 
@@ -27,6 +28,10 @@ class CardFrame extends StatelessWidget {
   final bool mine;
   final DateTime now;
   final List<Widget> actions;
+
+  /// The card's own button to its document (View order, View invoice): on a
+  /// row of its own under [actions], the whole width (`.tk-chatcard-actions .view`).
+  final Widget? view;
 
   /// A deal's answers (ChatDeal.tsx DealActions), under the buttons.
   final Widget? deal;
@@ -95,9 +100,11 @@ class CardFrame extends StatelessWidget {
             ],
           ),
         ),
-      if (actions.isNotEmpty) Row(children: _spaced(actions)),
+      if (actions.isNotEmpty) CardActionRows(children: actions),
       // `.tk-deal-form { margin-top: 6px }`, on a line of its own.
       if (deal != null) Padding(padding: const EdgeInsets.only(top: 6), child: deal),
+      // Last, the whole width.
+      ?view,
     ];
     return Semantics(
       container: true,
@@ -120,10 +127,122 @@ class CardFrame extends StatelessWidget {
   }
 }
 
-/// `.tk-chatcard-actions`: the buttons share the row, 8 px apart.
-List<Widget> _spaced(List<Widget> buttons) => [
-  for (var i = 0; i < buttons.length; i++) ...[if (i > 0) const SizedBox(width: 8), Expanded(child: buttons[i])],
-];
+/// `.tk-chatcard-actions` (flex-wrap, each button `flex: 1` and its word on
+/// one line): the buttons share a row, 8 px apart, as wide as each other
+/// where they can be; one that does not fit beside the others goes to the
+/// next row, rather than its word being cut or broken.
+class CardActionRows extends MultiChildRenderObjectWidget {
+  const CardActionRows({super.key, required super.children});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderActionRows();
+}
+
+class _ActionRowsData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderActionRows extends RenderBox
+    with ContainerRenderObjectMixin<RenderBox, _ActionRowsData>, RenderBoxContainerDefaultsMixin<RenderBox, _ActionRowsData> {
+  static const gap = 8.0;
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _ActionRowsData) child.parentData = _ActionRowsData();
+  }
+
+  List<RenderBox> get _kids {
+    final out = <RenderBox>[];
+    var c = firstChild;
+    while (c != null) {
+      out.add(c);
+      c = childAfter(c);
+    }
+    return out;
+  }
+
+  /// The children in rows, each with the width it needs.
+  List<List<(RenderBox, double)>> _rows(double width) {
+    final rows = <List<(RenderBox, double)>>[];
+    var row = <(RenderBox, double)>[];
+    var used = 0.0;
+    for (final c in _kids) {
+      final need = c.getMaxIntrinsicWidth(double.infinity).clamp(0.0, width);
+      if (row.isNotEmpty && used + gap + need > width) {
+        rows.add(row);
+        row = [];
+        used = 0;
+      }
+      used += (row.isEmpty ? 0 : gap) + need;
+      row.add((c, need));
+    }
+    if (row.isNotEmpty) rows.add(row);
+    return rows;
+  }
+
+  /// `flex: 1` from nothing: as wide as each other, and none narrower than
+  /// its word.
+  static List<double> _widths(List<(RenderBox, double)> row, double width) {
+    final room = width - gap * (row.length - 1);
+    final even = room / row.length;
+    if (row.every((r) => r.$2 <= even)) return [for (final _ in row) even];
+    final extra = (room - row.fold(0.0, (a, r) => a + r.$2)) / row.length;
+    return [for (final r in row) r.$2 + extra];
+  }
+
+  @override
+  void performLayout() {
+    final width = constraints.maxWidth;
+    var y = 0.0;
+    for (final row in _rows(width)) {
+      final ws = _widths(row, width);
+      var h = 0.0;
+      for (var i = 0; i < row.length; i++) {
+        row[i].$1.layout(BoxConstraints.tightFor(width: ws[i]), parentUsesSize: true);
+        h = h > row[i].$1.size.height ? h : row[i].$1.size.height;
+      }
+      var x = 0.0;
+      for (var i = 0; i < row.length; i++) {
+        final c = row[i].$1;
+        (c.parentData! as _ActionRowsData).offset = Offset(x, y + (h - c.size.height) / 2);
+        x += ws[i] + gap;
+      }
+      y += h + gap;
+    }
+    size = constraints.constrain(Size(width, y > 0 ? y - gap : 0));
+  }
+
+  @override
+  double computeMinIntrinsicWidth(double height) => _kids.fold(0.0, (a, c) => a > c.getMinIntrinsicWidth(height) ? a : c.getMinIntrinsicWidth(height));
+
+  @override
+  double computeMaxIntrinsicWidth(double height) {
+    final k = _kids;
+    return k.fold(0.0, (a, c) => a + c.getMaxIntrinsicWidth(height)) + gap * (k.isEmpty ? 0 : k.length - 1);
+  }
+
+  @override
+  double computeMinIntrinsicHeight(double width) => computeMaxIntrinsicHeight(width);
+
+  @override
+  double computeMaxIntrinsicHeight(double width) {
+    var y = 0.0;
+    for (final row in _rows(width)) {
+      final ws = _widths(row, width);
+      var h = 0.0;
+      for (var i = 0; i < row.length; i++) {
+        final ch = row[i].$1.getMaxIntrinsicHeight(ws[i]);
+        h = h > ch ? h : ch;
+      }
+      y += h + gap;
+    }
+    return y > 0 ? y - gap : 0;
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) => defaultHitTestChildren(result, position: position);
+
+  @override
+  void paint(PaintingContext context, Offset offset) => defaultPaint(context, offset);
+}
 
 /// kit.css `.tk-pill`: a state in a word.
 class CardPill extends StatelessWidget {

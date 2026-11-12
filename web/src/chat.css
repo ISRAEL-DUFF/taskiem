@@ -131,7 +131,12 @@
 .tk-chatcard-actions .row-actions { display: contents; }
 .tk-chatcard-actions .button.small, .tk-chatcard-actions button.small {
   flex: 1; display: inline-flex; justify-content: center; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; font-weight: 700; font-size: 14px;
+  /* A word on one line: buttons that do not fit side by side go to the next row. */
+  white-space: nowrap;
 }
+/* The card's document (View order, View invoice) on a row of its own under
+   what can be done (Accept, Decline), the whole width. */
+.tk-chatcard-actions .button.small.view, .tk-chatcard-actions button.small.view { order: 1; flex-basis: 100%; }
 .tk-chatcard-actions .button.small:not(.primary), .tk-chatcard-actions button.small:not(.primary) { background: var(--panel); border: 1px solid var(--border-strong); color: var(--brand); }
 :root[data-theme="dark"] .tk-chatcard-actions .button.small:not(.primary), :root[data-theme="dark"] .tk-chatcard-actions button.small:not(.primary) { color: var(--text); }
 

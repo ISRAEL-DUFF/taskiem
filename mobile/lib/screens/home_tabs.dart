@@ -126,34 +126,35 @@ class _Tab extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: ConstrainedBox(
-          // `.tabbar a { min-height: 56px; gap: 3px; font-size: 11.5px }`
-          constraints: const BoxConstraints(minHeight: 56),
+        child: Padding(
+          // Room above the icons and under the words, as WhatsApp's bar has.
+          padding: const EdgeInsets.only(top: 10, bottom: 12),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // `.tabbar .tab-icon { width: 56px; height: 30px; border-radius: 15px }`
+                  // The open tab's icon in its pill (`.tabbar .tab-icon`), a
+                  // little larger, as WhatsApp's.
                   AnimatedContainer(
                     duration: still ? Duration.zero : const Duration(milliseconds: 150),
-                    width: 56,
-                    height: 30,
-                    decoration: BoxDecoration(color: pill, borderRadius: BorderRadius.circular(15)),
+                    width: 64,
+                    height: 32,
+                    decoration: BoxDecoration(color: pill, borderRadius: BorderRadius.circular(16)),
                     alignment: Alignment.center,
-                    child: TkIcon(tab.icon, size: 22, color: ink),
+                    child: TkIcon(tab.icon, size: 24, color: ink),
                   ),
                   // `.tab-count { top: -3px; right: 5px }`
-                  if (count != null) Positioned(top: -3, right: 5, child: count!),
+                  if (count != null) Positioned(top: -4, right: 6, child: count!),
                 ],
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 4),
               Text(
                 tab.label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: tkText(size: 11.5, weight: on ? 600 : 500, color: on ? t.text : t.muted),
+                style: tkText(size: 12.5, weight: on ? 700 : 500, color: on ? t.text : t.muted),
               ),
             ],
           ),
