@@ -40,7 +40,9 @@ import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
 import 'availability_sheet.dart' show showAvailabilitySheet;
 import 'bookings_page.dart' show BookingsPage;
 import 'invoice_match.dart' show showMatchSheet;
-import 'invoices_page.dart' show InvoicesPage;
+import 'bills_page.dart' show openBill;
+import 'invoices_page.dart' show InvoicesPage, openInvoice;
+import 'purchases_page.dart' show openPurchase;
 import 'order_sheet.dart' show OrderStart, showOrderSheet;
 import 'storefront_orders_page.dart' show DeliveriesPage, openStorefrontOrder, showRiderSheet;
 import 'tool_sheet.dart';
@@ -985,11 +987,20 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
           fontVariations: const [FontVariation('wght', 600)],
         );
         // TaskiemChat.tsx: an order opens on its own screen, by its reference.
+        // An invoice, a bill or a purchase on its own screen (the web's tool
+        // sheet's row leads there too).
+        final a = widget.auth;
         final open = ref.kind == 'customer'
             ? widget.onCustomer
-            : ref.kind == 'order' && widget.auth != null
-            ? (String _) => openStorefrontOrder(context, widget.auth!, ref.name)
-            : null;
+            : a == null
+            ? null
+            : switch (ref.kind) {
+                'order' => (String _) => openStorefrontOrder(context, a, ref.name),
+                'invoice' => (String id) => openInvoice(context, a, id),
+                'bill' => (String id) => openBill(context, a, id),
+                'purchase' => (String id) => openPurchase(context, a, id),
+                _ => null,
+              };
         // Anything else opens in its tool, which comes with the tools.
         out.add(
           TextSpan(text: r.text, style: mention, recognizer: tap('ref:${ref.kind}:${ref.id}', () => open == null ? showComingSoon(context) : open(ref.id))),

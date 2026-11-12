@@ -2,8 +2,8 @@
 // lib/refs.ts; docs/spec/chat-five-more-flows.md, phase 2 additions): an
 // invoice, a bill, an order, an order to a supplier or a customer, read
 // now, so a payment made since shows as paid. Its one action (send, remind,
-// message) and "Give this to…" work from it; Open and Pay lead to the tools'
-// screens (M5 to M8) and come with them.
+// message) and "Give this to…" work from it; Open and Pay lead to its
+// screen.
 
 import 'dart:math' as math;
 
@@ -16,8 +16,11 @@ import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../theme/theme.dart';
+import 'bills_page.dart' show openBill;
 import 'cards.dart' show CardPill;
 import 'give_task.dart';
+import 'invoices_page.dart' show openInvoice;
+import 'purchases_page.dart' show openPurchase;
 import 'storefront_orders_page.dart' show openStorefrontOrder;
 import 'words.dart';
 
@@ -184,8 +187,8 @@ class _RefCardState extends State<RefCard> {
       return;
     }
     if (c.action == 'pay') {
-      // Paying is the bill's screen: coming with the tools.
-      showComingSoon(context);
+      // Paying is the bill's screen.
+      openBill(context, widget.auth, c.id);
       return;
     }
     setState(() => _busy = true);
@@ -265,13 +268,18 @@ class _RefCardState extends State<RefCard> {
     final giving = c.kind != 'customer' && can('member.manage|invoice.manage');
     final action = c.action;
     final acts = <Widget>[
-      // Open shows it where it is worked on: an order on its own screen
-      // (ChatRefCard.tsx); invoices, bills and purchases with M8.
+      // Open shows it where it is worked on, each on its own screen
+      // (ChatRefCard.tsx).
       if (c.kind != 'customer')
         _Btn(
           label: 'Open',
           named: label,
-          onTap: () => c.kind == 'order' ? openStorefrontOrder(context, widget.auth, c.name) : showComingSoon(context),
+          onTap: () => switch (c.kind) {
+            'order' => openStorefrontOrder(context, widget.auth, c.name),
+            'invoice' => openInvoice(context, widget.auth, c.id),
+            'bill' => openBill(context, widget.auth, c.id),
+            _ => openPurchase(context, widget.auth, c.id),
+          },
         ),
       if (giving)
         _Btn(label: 'Give this to…', named: label, onTap: () => giveThis(context, widget.auth, (kind: c.kind, id: c.id, name: c.name))),

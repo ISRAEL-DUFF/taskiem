@@ -12,6 +12,7 @@ import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/conversation.dart';
 import 'package:taskiem/chat/ref_card.dart';
 import 'package:taskiem/chat/taskiem.dart';
+import 'package:taskiem/chat/invoices_page.dart' show InvoicePage;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
@@ -144,6 +145,14 @@ void main() {
     expect(find.text('Reminder sent for INV-0001'), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
     await t.pumpAndSettle();
+    // M8: Open leads to the invoice's own screen.
+    final open = find.bySemanticsLabel('Open Invoice INV-0001');
+    await t.ensureVisible(open);
+    await t.pumpAndSettle();
+    await t.tap(open);
+    await t.pumpAndSettle();
+    expect(find.byType(InvoicePage), findsOneWidget);
+    expect(find.text('This is coming to the app soon.'), findsNothing);
   });
 
   testWidgets('G6: a card that cannot be read leaves the words as they are', (t) async {

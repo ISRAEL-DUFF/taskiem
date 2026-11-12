@@ -1,8 +1,8 @@
 // A tool's sheet (web/src/pages/ChatTools.tsx ToolSheet): its list, with
 // the search, the chips (the tool's own, then its rows' categories), each
-// row, and the line to the rest. A row's form and the Add buttons come with
-// the tool's milestone (M6 selling, M7 orders, M8 money); until then they
-// say the tool's screens are coming, as the panel's button did.
+// row, and the line to the rest. A row's form and the Add buttons are the
+// tool's own (M6 selling, M7 orders, M8 money); a tool without one says it
+// is coming, as the panel's button did.
 
 import 'package:flutter/widgets.dart';
 
@@ -17,6 +17,7 @@ import 'bills_page.dart' show BillsPage;
 import 'bookings_page.dart' show BookingsPage;
 import 'invoices_page.dart' show InvoicesPage;
 import 'money_page.dart' show MoneyPage;
+import 'purchases_page.dart' show SuppliersPage;
 import 'price_lists_page.dart' show PriceListsPage;
 import 'stock_page.dart' show StockPage;
 import 'tools.dart';
@@ -36,6 +37,7 @@ void openToolPage(BuildContext context, Tool tool, Auth auth) {
     'invoices' => InvoicesPage(auth: auth),
     'bills' => BillsPage(auth: auth),
     'money' => MoneyPage(auth: auth),
+    'purchases' => SuppliersPage(auth: auth),
     _ => null,
   };
   if (page == null) return showComingSoon(context);

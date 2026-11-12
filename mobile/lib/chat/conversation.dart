@@ -26,6 +26,9 @@ import 'availability_sheet.dart' show showAvailabilitySheet;
 import 'book_sheet.dart' show bookLine, linkServices, showBookSheet;
 import 'money_sheets.dart' show InvoiceAdd;
 import 'order_sheet.dart';
+import 'bills_page.dart' show openBill;
+import 'invoices_page.dart' show openInvoice;
+import 'purchases_page.dart' show openPurchase;
 import 'statement_page.dart' show openStatement;
 import 'tool_forms.dart' show toolDetail;
 import '../kit/sheet.dart' show TkCta, TkSheet, showTkSheet;
@@ -700,8 +703,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   late final CardActs _acts = CardActs(
     auth: widget.data.chats.auth,
     onDone: () => widget.data.pull(),
-    // An order we sent them opens among Your orders; the other documents'
-    // screens come with their tools (M7, M8).
+    // A document opens on its screen, or in its tool's sheet.
     onOpen: widget.onOpenDoc ?? _openDoc,
     ask: (title, ok) => showTkConfirm(context, title: title, ok: ok, danger: true),
     said: (words) {
@@ -820,12 +822,22 @@ class _ConversationScreenState extends State<ConversationScreen> {
       openStorefrontOrder(context, widget.data.chats.auth, card.reference);
       return;
     }
-    final tool = card.doc == 'purchase' ? tools.where((x) => x.key == 'purchases').firstOrNull : null;
-    if (tool == null) {
-      showComingSoon(context);
+    // linkchat.ts cardHref: an invoice on its screen; a purchase or a bill
+    // in its tool's sheet (Conversation.tsx openDoc), else on its screen.
+    final auth = widget.data.chats.auth;
+    final key = card.id ?? card.reference;
+    if (card.doc == 'invoice') {
+      openInvoice(context, auth, key);
       return;
     }
-    _openTool(tool, openId: card.id);
+    final tool = tools.where((x) => x.key == (card.doc == 'purchase' ? 'purchases' : 'bills')).firstOrNull;
+    if (tool != null && card.id != null) {
+      _openTool(tool, openId: card.id);
+    } else if (card.doc == 'purchase') {
+      openPurchase(context, auth, key);
+    } else {
+      openBill(context, auth, key);
+    }
   }
 
   /// Conversation.tsx Invoice them: a new invoice to this business; it

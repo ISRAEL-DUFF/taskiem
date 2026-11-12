@@ -377,6 +377,11 @@ List<Widget> cardActions(LinkDocCard card, CardActs acts, VoidCallback changed) 
       if (card.wasKobo == null && can('storefront.manage')) return [step('Accept the change', '/v1/stock/purchases/$id/accept-change', 'Change accepted')];
     case 'purchase:delivered':
       if (can('table.edit')) return [step('All came', '/v1/stock/purchases/$id/all-came', 'Received, and your stock is up')];
+    case 'invoice:queried':
+      // The buyer queried our invoice: settled on its screen.
+      if (can('invoice.manage')) {
+        return [CardButton(label: 'Settle the query', primary: true, semantics: 'Settle the query $ref', onTap: acts.onOpen == null ? null : () => acts.onOpen!(card))];
+      }
     case 'bill:bill':
       if (can('invoice.manage')) {
         return [
