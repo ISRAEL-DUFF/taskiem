@@ -645,8 +645,9 @@ const SIZES = [
 
 /** The share of pixels that differ, a pixel counting only when nothing within
  * one pixel of it in the other picture is close (two engines never draw a
- * letter's edge alike). Worked out by Chromium itself: no image library. */
-export async function differs(page: Page, a: Buffer, b: Buffer): Promise<number> {
+ * letter's edge alike), and the box round them (null when none). Worked out
+ * by Chromium itself: no image library. */
+export async function differs(page: Page, a: Buffer, b: Buffer): Promise<{ share: number; box: string | null }> {
   return page.evaluate(
     async ({ x, y }) => {
       const load = async (b64: string) => {
@@ -660,7 +661,7 @@ export async function differs(page: Page, a: Buffer, b: Buffer): Promise<number>
         return { w: img.width, h: img.height, d: g.getImageData(0, 0, img.width, img.height).data };
       };
       const [p, q] = [await load(x), await load(y)];
-      if (p.w !== q.w || p.h !== q.h) return 1;
+      if (p.w !== q.w || p.h !== q.h) return { share: 1, box: `sizes ${p.w}x${p.h} and ${q.w}x${q.h}` };
       const near = (s: typeof p, t: typeof p, i: number, j: number) => {
         const o = (j * s.w + i) * 4;
         for (let dy = -1; dy <= 1; dy++)
@@ -675,9 +676,14 @@ export async function differs(page: Page, a: Buffer, b: Buffer): Promise<number>
         return false;
       };
       let n = 0;
+      let [x0, y0, x1, y1] = [p.w, p.h, -1, -1];
       for (let j = 0; j < p.h; j++)
-        for (let i = 0; i < p.w; i++) if (!near(p, q, i, j) && !near(q, p, i, j)) n++;
-      return n / (p.w * p.h);
+        for (let i = 0; i < p.w; i++)
+          if (!near(p, q, i, j) && !near(q, p, i, j)) {
+            n++;
+            [x0, y0, x1, y1] = [Math.min(x0, i), Math.min(y0, j), Math.max(x1, i), Math.max(y1, j)];
+          }
+      return { share: n / (p.w * p.h), box: n ? `x ${x0}–${x1}, y ${y0}–${y1}` : null };
     },
     { x: a.toString("base64"), y: b.toString("base64") },
   );
@@ -714,8 +720,18 @@ for (const s of SCREENS)
           mkdirSync(KEPT, { recursive: true });
           writeFileSync(kept, shot);
         } else {
-          const share = await differs(page, shot, readFileSync(kept));
-          expect(share, `${file}: the web looks different from what the app copies; if meant, run with PARITY_UPDATE=1 and make the app the same`).toBeLessThan(0.002);
+          const { share, box } = await differs(page, shot, readFileSync(kept));
+          if (share >= 0.002) {
+            // What a machine that draws it differently needs looked at: the
+            // picture it took (in the test's results), where it differs and
+            // the fonts the page has.
+            await test.info().attach(file, { body: shot, contentType: "image/png" });
+            const fonts = await page.evaluate(() =>
+              [...document.fonts].map((f) => `${f.family} ${f.weight} ${f.status}`).join("; "),
+            );
+            console.log(`${file}: ${(share * 100).toFixed(2)}% differs, ${box}; fonts: ${fonts}`);
+          }
+          expect(share, `${file}: the web looks different from what the app copies (${box}); if meant, run with PARITY_UPDATE=1 and make the app the same`).toBeLessThan(0.002);
         }
         await ctx.close();
       });
