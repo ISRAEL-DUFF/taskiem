@@ -77,7 +77,12 @@ func inTenantTx(ctx context.Context, pool *pgxpool.Pool, tenants []uuid.UUID, fn
 	if _, err := tx.Exec(ctx, "SELECT set_config('app.tenant_scope', $1, true)", Scope(tenants...)); err != nil {
 		return err
 	}
-	if err := fn(tx); err != nil {
+	// The transaction can hold functions to run after its commit, as
+	// InTenantTx's can (AfterCommit): the worker records a step's outcome
+	// and schedules the next task through here, and that task's wake-up is
+	// sent after the commit. A commit whose outcome is unknown runs none.
+	h := &hookTx{Tx: tx}
+	if err := fn(h); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -89,6 +94,9 @@ func inTenantTx(ctx context.Context, pool *pgxpool.Pool, tenants []uuid.UUID, fn
 			return commitError{err}
 		}
 		return err
+	}
+	for _, then := range h.after {
+		runAfterCommit(then)
 	}
 	return nil
 }
