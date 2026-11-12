@@ -166,7 +166,7 @@ void main() {
       f.auth(
         also: (req) async {
           if (req.url.path.endsWith('/items') && req.url.path.startsWith('/v1/link-chats/')) {
-            final j = f.json(req.url.path) as Map<String, dynamic>;
+            final j = f.json(req.url.path);
             return http.Response(jsonEncode({...j, 'whose': whose}), 200, headers: {'content-type': 'application/json'});
           }
           return null;
