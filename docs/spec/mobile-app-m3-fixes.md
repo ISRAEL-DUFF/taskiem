@@ -264,7 +264,20 @@ The questions as they stood:
   from the demo world with Explore asked from "@"); 13 `chat-deal`; 14
   `chat-deal-counter`. Acts 6, 7, 9, 10 and 15 are the tools' (M5–M8).
 - T5, T6: `test/sizes_test.dart` and `test/targets_test.dart`, over every
-  parity screen.
+  parity screen, both run with the rest. T5 found rows of buttons that did
+  not wrap at large text (sign-in, sign-up, a link request's Accept,
+  Decline and Block, the live card's foot) and the attach menu's words.
+  T6 found the web's 40 px round buttons, 34 px chips, 36–44 px buttons
+  and fields whose box answered only on their line of text: each is drawn
+  as before (`lib/kit/tap_area.dart`): `TapArea` gives what is pressed a
+  48 by 48 room round it to a finger and a screen reader, `TapField` makes
+  a field's whole box (and its words above, as a web `label`) put the
+  caret in it, one node with its name. Also: the space round a menu or
+  sheet is "Dismiss" (`Backdrop`), bubbles are "Your message" or "Message
+  from …", a photo is one node with its words, the chats' search is named
+  with what is typed in it. The test skips what a scrolling list has cut
+  off at its edge (Flutter's own check means to, but compares in
+  different coordinates).
 
 | # | What | Work |
 | --- | --- | --- |

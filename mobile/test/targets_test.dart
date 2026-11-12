@@ -6,7 +6,7 @@
 @Tags(['targets'])
 library;
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
@@ -28,8 +28,36 @@ void main() {
       await e.value.drive(t);
       await t.pumpAndSettle();
       await expectLater(t, meetsGuideline(labeledTapTargetGuideline));
-      await expectLater(t, meetsGuideline(androidTapTargetGuideline));
+      await expectLater(t, meetsGuideline(const _TapTargets()));
       handle.dispose();
     });
+  }
+}
+
+/// Android's 48 by 48, skipping what a scrolling list has cut off at its
+/// edge (a long bubble half scrolled away): Flutter's own check means to,
+/// but compares the two in different coordinates.
+class _TapTargets extends MinimumTapTargetGuideline {
+  const _TapTargets() : super(size: const Size(48, 48), link: 'https://support.google.com/accessibility/android/answer/7101858');
+
+  static Rect _onScreen(SemanticsNode n) {
+    var r = n.rect;
+    for (SemanticsNode? p = n; p != null; p = p.parent) {
+      if (p.transform != null) r = MatrixUtils.transformRect(p.transform!, r);
+    }
+    return r;
+  }
+
+  @override
+  bool shouldSkipNode(SemanticsNode node) {
+    if (super.shouldSkipNode(node)) return true;
+    final r = _onScreen(node);
+    for (var p = node.parent; p != null; p = p.parent) {
+      if (!p.flagsCollection.hasImplicitScrolling) continue;
+      final list = _onScreen(p);
+      const e = 0.5;
+      return r.top <= list.top + e || r.bottom >= list.bottom - e || r.left <= list.left + e || r.right >= list.right - e;
+    }
+    return false;
   }
 }

@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';
+import 'tap_area.dart';
 
 /// A press, as the web's `button:active { transform: scale(0.98) }` with its
 /// 80 ms transition: the thing gives a little while held.
@@ -91,12 +92,14 @@ class TkButton extends StatelessWidget {
         style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: fg),
       ),
     );
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      child: Opacity(
-        opacity: enabled ? 1 : 0.45,
-        child: TkPress(onTap: enabled ? (onPressed ?? () {}) : null, child: box),
+    return TapArea(
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        child: Opacity(
+          opacity: enabled ? 1 : 0.45,
+          child: TkPress(onTap: enabled ? (onPressed ?? () {}) : null, child: box),
+        ),
       ),
     );
   }
@@ -161,7 +164,8 @@ class _TkFieldState extends State<TkField> {
     final t = TkTheme.tokens(context);
     final focused = _focus.hasFocus;
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    return Column(
+    // The words and the field are one to a screen reader and a finger.
+    return TapField(child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
@@ -202,7 +206,7 @@ class _TkFieldState extends State<TkField> {
           ),
         ),
       ],
-    );
+    ));
   }
 }
 
@@ -220,14 +224,16 @@ class TkLink extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Semantics(
-      link: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Text(label, style: tkText(size: 13, color: t.accent, decoration: TextDecoration.underline)),
+    return TapArea(
+      child: Semantics(
+        link: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(label, style: tkText(size: 13, color: t.accent, decoration: TextDecoration.underline)),
+          ),
         ),
       ),
     );
@@ -274,7 +280,7 @@ class TkLinkButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Semantics(
+    return TapArea(child: Semantics(
       button: true,
       child: TkPress(
         onTap: onPressed ?? () {},
@@ -285,7 +291,7 @@ class TkLinkButton extends StatelessWidget {
           child: Text(label, style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: t.accent, decoration: TextDecoration.underline)),
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -390,17 +396,19 @@ class TkChoiceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
-      child: Semantics(
-        inMutuallyExclusiveGroup: radio,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: Row(
-            children: [
-              Padding(padding: const EdgeInsets.fromLTRB(5, 3, 3, 0), child: control),
-              const SizedBox(width: 8),
-              Expanded(child: label),
-            ],
+      child: TapArea(
+        child: Semantics(
+          inMutuallyExclusiveGroup: radio,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: Row(
+              children: [
+                Padding(padding: const EdgeInsets.fromLTRB(5, 3, 3, 0), child: control),
+                const SizedBox(width: 8),
+                Expanded(child: label),
+              ],
+            ),
           ),
         ),
       ),
@@ -450,7 +458,7 @@ class TkSmallButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Semantics(
+    return TapArea(child: Semantics(
       button: true,
       label: semantics,
       excludeSemantics: semantics != null,
@@ -469,6 +477,6 @@ class TkSmallButton extends StatelessWidget {
           child: Text(label, style: tkText(size: 11.9, weight: 500, lineHeight: 1.2, color: primary ? t.primaryText : (danger ? t.danger : t.text))),
         ),
       ),
-    );
+    ));
   }
 }

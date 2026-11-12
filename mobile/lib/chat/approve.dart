@@ -15,6 +15,7 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../kit/kit.dart';
 import '../kit/sheet.dart';
+import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'alerts.dart';
 import 'cards.dart' show CardPill;
@@ -214,7 +215,7 @@ class _TkTextBoxState extends State<TkTextBox> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final area = widget.lines > 1;
-    return Container(
+    return TapField(child: Container(
       constraints: BoxConstraints(minHeight: widget.height),
       padding: EdgeInsets.symmetric(horizontal: 16, vertical: area ? 14 : 0),
       alignment: Alignment.centerLeft,
@@ -258,7 +259,7 @@ class _TkTextBoxState extends State<TkTextBox> {
           if (area) Positioned(right: -14, bottom: -12, child: CustomPaint(size: const Size(9, 9), painter: _Grip(t.muted))),
         ],
       ),
-    );
+    ));
   }
 }
 

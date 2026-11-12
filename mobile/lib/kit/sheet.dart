@@ -12,6 +12,7 @@ import 'package:flutter/widgets.dart';
 import '../theme/theme.dart';
 import 'icon.dart';
 import 'kit.dart';
+import 'tap_area.dart';
 
 /// Opens a sheet over the screen; the future ends when it closes, with
 /// what it closed with.
@@ -92,8 +93,9 @@ class TkSheet extends StatelessWidget {
       children: [
         // `.tk-veil { background: var(--tk-veil); backdrop-filter: blur(2px) }`
         Positioned.fill(
-          child: GestureDetector(
-            onTap: close,
+          child: Backdrop(
+            behavior: HitTestBehavior.deferToChild,
+            onClose: close,
             child: Opacity(
               opacity: dim,
               child: BackdropFilter(
@@ -267,9 +269,12 @@ class TkLines extends StatelessWidget {
 
 /// kit.tsx KitField (`.tk-field`): the label, the box, an error, a hint.
 class TkKitField extends StatelessWidget {
-  const TkKitField({super.key, required this.label, required this.child, this.hint, this.error});
+  const TkKitField({super.key, required this.label, required this.child, this.hint, this.error, this.field = true});
   final String label;
   final Widget child;
+
+  /// [child] is a text box, named by [label] (not a row of buttons).
+  final bool field;
   final String? hint;
   final String? error;
 
@@ -279,14 +284,29 @@ class TkKitField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(label, style: tkText(size: 13, weight: 600, color: t.muted)),
-        const SizedBox(height: 6),
-        child,
+        // A field's words and its box are one to a screen reader; a row of
+        // buttons keeps its own.
+        _MergeIf(
+          field,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [Text(label, style: tkText(size: 13, weight: 600, color: t.muted)), const SizedBox(height: 6), child],
+          ),
+        ),
         if (error != null) ...[const SizedBox(height: 6), Text(error!, style: tkText(size: 13, weight: 600, color: t.danger))],
         if (hint != null) ...[const SizedBox(height: 6), Text(hint!, style: tkText(size: 13, color: t.muted))],
       ],
     );
   }
+}
+
+class _MergeIf extends StatelessWidget {
+  const _MergeIf(this.merge, this.child);
+  final bool merge;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => merge ? MergeSemantics(child: child) : child;
 }
 
 /// kit.tsx SavedTick (`.tk-saved`): over the sheet, the lime tick and a word.

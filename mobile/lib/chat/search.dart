@@ -15,6 +15,7 @@ import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'words.dart';
 
@@ -240,7 +241,7 @@ class _ChatSearchScreenState extends State<ChatSearchScreen> {
               if (_dateOpen) ...[
                 // A tap elsewhere closes it.
                 Positioned.fill(
-                  child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(() => _dateOpen = false)),
+                  child: Backdrop(onClose: () => setState(() => _dateOpen = false)),
                 ),
                 Positioned(
                   left: 6,
@@ -299,7 +300,7 @@ class _Box extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Semantics(
+    return TapField(child: Semantics(
       label: 'Search messages in $name',
       textField: true,
       child: Container(
@@ -329,7 +330,7 @@ class _Box extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ));
   }
 }
 

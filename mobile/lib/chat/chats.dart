@@ -17,6 +17,7 @@ import '../app/sound.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
+import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'customer.dart';
@@ -710,8 +711,8 @@ class _Search extends StatelessWidget {
     final t = TkTheme.tokens(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Semantics(
-        container: true,
+      // The field's name, with what is typed in it or its hint.
+      child: TapField(child: Semantics(
         label: 'Find a business',
         child: Container(
           height: 42,
@@ -739,7 +740,7 @@ class _Search extends StatelessWidget {
               ),
             ],
           ),
-        ),
+        )),
       ),
     );
   }
@@ -769,18 +770,21 @@ class _Chips extends StatelessWidget {
         height: 50,
         child: ListView.separated(
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(vertical: 8),
           itemCount: chips.length,
           separatorBuilder: (_, _) => const SizedBox(width: 8),
           itemBuilder: (context, i) {
             final (f, label) = chips[i];
             final on = filter == f;
-            return Semantics(
+            // The 8 px above and below are the chip's to a finger too.
+            return TapArea(
+              child: Semantics(
               button: true,
               selected: on,
               child: TkPress(
                 onTap: () => onPick(f),
-                child: Container(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Container(
                   height: 34,
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   alignment: Alignment.center,
@@ -794,6 +798,8 @@ class _Chips extends StatelessWidget {
                     style: tkText(size: 14, weight: on ? 600 : 500, lineHeight: 1.2, color: on ? t.tintText : t.text),
                   ),
                 ),
+                ),
+              ),
               ),
             );
           },

@@ -1564,7 +1564,7 @@ class _Bubble extends StatelessWidget {
         );
       },
     );
-    final held = BubbleHold(onHold: out == null ? onHold : null, onReply: out == null ? onReply : null, child: bubble);
+    final held = BubbleHold(label: mine ? 'Your message' : 'Message from $other', onHold: out == null ? onHold : null, onReply: out == null ? onReply : null, child: bubble);
     final placed = held;
     if (!failed) return placed;
     return Column(

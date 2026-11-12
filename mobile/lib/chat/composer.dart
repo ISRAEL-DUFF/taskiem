@@ -21,6 +21,7 @@ import 'package:record/record.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart' show showComingSoon;
+import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 
@@ -363,15 +364,17 @@ class ComposerState extends State<Composer> {
   }
 
   Widget _row(TkTokens t, bool dark, PickedFile? file, bool words) {
-    Widget small(String icon, String label, VoidCallback onTap) => Semantics(
-      button: true,
-      label: label,
-      child: TkPress(
-        onTap: onTap,
-        child: SizedBox(
-          width: 40,
-          height: 40,
-          child: Center(child: TkIcon(icon, size: 18, color: t.muted)),
+    Widget small(String icon, String label, VoidCallback onTap) => TapArea(
+      child: Semantics(
+        button: true,
+        label: label,
+        child: TkPress(
+          onTap: onTap,
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Center(child: TkIcon(icon, size: 18, color: t.muted)),
+          ),
         ),
       ),
     );
@@ -379,7 +382,7 @@ class ComposerState extends State<Composer> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        Semantics(
+        TapArea(child: Semantics(
           button: true,
           label: 'Chat tools',
           child: TkPress(
@@ -393,7 +396,7 @@ class ComposerState extends State<Composer> {
               child: TkIcon('grid', size: 22, stroke: 2, color: dark ? t.text : t.brand),
             ),
           ),
-        ),
+        )),
         const SizedBox(width: 8),
         Expanded(
           child: Container(
@@ -403,7 +406,7 @@ class ComposerState extends State<Composer> {
             child: Row(
               children: [
                 Expanded(
-                  child: Padding(
+                  child: TapField(child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
                     child: Material(
                       type: MaterialType.transparency,
@@ -428,7 +431,7 @@ class ComposerState extends State<Composer> {
                         ),
                       ),
                     ),
-                  ),
+                  )),
                 ),
                 OverlayPortal(
                   controller: _menu,
@@ -445,15 +448,15 @@ class ComposerState extends State<Composer> {
         ),
         const SizedBox(width: 8),
         if (sendable)
-          Semantics(
+          TapArea(child: Semantics(
             button: true,
             label: 'Send',
             child: TkPress(onTap: widget.busy ? null : _send, child: _round(t, dark, 'arrow-up')),
-          )
+          ))
         else
           // MicButton: hold to record, release to send; tap to record and
           // send when done.
-          Semantics(
+          TapArea(child: Semantics(
             button: true,
             label: 'Record a voice note',
             hint: 'Hold to record, release to send. Tap to record and send when you are done.',
@@ -464,7 +467,7 @@ class ComposerState extends State<Composer> {
               onPointerCancel: (_) => _holding ? _stop(keep: false) : null,
               child: _round(t, dark, 'mic'),
             ),
-          ),
+          )),
       ],
     );
   }
@@ -728,7 +731,7 @@ class _AttachMenu extends StatelessWidget {
       children: [
         // A tap elsewhere closes it.
         Positioned.fill(
-          child: GestureDetector(behavior: HitTestBehavior.translucent, onTap: onClose),
+          child: Backdrop(behavior: HitTestBehavior.translucent, onClose: onClose),
         ),
         CompositedTransformFollower(
           link: link,

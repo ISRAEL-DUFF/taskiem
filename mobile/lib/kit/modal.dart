@@ -12,6 +12,7 @@ import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';
 import 'kit.dart';
+import 'tap_area.dart';
 
 /// Opens the web's Modal: [builder] gives what it holds under its title;
 /// it closes with what it pops.
@@ -73,8 +74,9 @@ class TkModal extends StatelessWidget {
       children: [
         // `.modal-backdrop { background: rgba(14, 15, 12, 0.32); backdrop-filter: blur(2px) }`
         Positioned.fill(
-          child: GestureDetector(
-            onTap: () => Navigator.of(context).maybePop(),
+          child: Backdrop(
+            behavior: HitTestBehavior.deferToChild,
+            onClose: () => Navigator.of(context).maybePop(),
             child: BackdropFilter(
               filter: ui.ImageFilter.blur(sigmaX: 2, sigmaY: 2),
               child: const ColoredBox(color: Color(0x520E0F0C)),
@@ -161,7 +163,7 @@ class TkPlainButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Semantics(
+    return TapArea(child: Semantics(
       button: true,
       label: label,
       excludeSemantics: true,
@@ -181,7 +183,7 @@ class TkPlainButton extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -235,17 +237,19 @@ void showTkToast(BuildContext context, String text, {bool error = false}) {
                             child: Text(text, style: tkText(size: 14, color: t.text)),
                           ),
                           const SizedBox(width: 10),
-                          Semantics(
-                            button: true,
-                            label: 'Dismiss',
-                            excludeSemantics: true,
-                            child: GestureDetector(
-                              onTap: close,
-                              child: SizedBox(
-                                width: 28,
-                                height: 28,
-                                child: Center(
-                                  child: Text('×', style: tkText(size: 18, lineHeight: 1, color: t.muted)),
+                          TapArea(
+                            child: Semantics(
+                              button: true,
+                              label: 'Dismiss',
+                              excludeSemantics: true,
+                              child: GestureDetector(
+                                onTap: close,
+                                child: SizedBox(
+                                  width: 28,
+                                  height: 28,
+                                  child: Center(
+                                    child: Text('×', style: tkText(size: 18, lineHeight: 1, color: t.muted)),
+                                  ),
                                 ),
                               ),
                             ),

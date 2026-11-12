@@ -289,6 +289,7 @@ class _DealActionsState extends State<DealActions> {
       children: [
         if (!_countering && setsPrices) ...[
           TkKitField(
+            field: false,
             label: 'Keep this price for them',
             child: Semantics(
               button: true,

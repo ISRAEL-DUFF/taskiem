@@ -17,6 +17,7 @@ import '../api/transport.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
+import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'chats.dart';
 import 'thread.dart';
@@ -531,7 +532,7 @@ class _ReplyBox extends StatelessWidget {
               constraints: const BoxConstraints(minHeight: 46),
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
               decoration: BoxDecoration(color: t.panel, borderRadius: BorderRadius.circular(24), boxShadow: lift),
-              child: Padding(
+              child: TapField(child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
                 child: Material(
                   type: MaterialType.transparency,
@@ -553,12 +554,12 @@ class _ReplyBox extends StatelessWidget {
                     ),
                   ),
                 ),
-              ),
+              )),
             ),
           ),
           const SizedBox(width: 8),
           // `.send-button:disabled` keeps its look.
-          Semantics(
+          TapArea(child: Semantics(
             button: true,
             enabled: ready,
             label: 'Send',
@@ -572,7 +573,7 @@ class _ReplyBox extends StatelessWidget {
                 child: TkIcon('arrow-up', size: 22, stroke: 2.4, color: dark ? t.brandDarkText : t.brandDark),
               ),
             ),
-          ),
+          )),
         ],
       ),
     );

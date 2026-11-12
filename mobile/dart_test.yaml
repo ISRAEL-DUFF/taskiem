@@ -7,8 +7,5 @@ tags:
   server:
   # Every screen at 360 px with the text 1.3 and 2 times (test/sizes_test.dart),
   # and what can be pressed, labelled and 48 px (test/targets_test.dart).
-  # The touch targets are skipped until the screens they find are fixed (T6
-  # of docs/spec/mobile-app-m3-fixes.md): run with --run-skipped.
   sizes:
   targets:
-    skip: "being fixed: T6 of docs/spec/mobile-app-m3-fixes.md"

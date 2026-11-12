@@ -11,6 +11,7 @@ import 'package:flutter/widgets.dart';
 
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'chats.dart' show UnreadCount;
 import 'words.dart';
@@ -82,12 +83,14 @@ class ChatHeadBar extends StatelessWidget {
   final VoidCallback? onBack;
 
   /// A 40 px round button of the head.
-  static Widget iconButton(String label, Widget icon, VoidCallback? onTap) => Semantics(
-    button: true,
-    label: label,
-    child: TkPress(
-      onTap: onTap ?? () {},
-      child: SizedBox(width: 40, height: 40, child: Center(child: icon)),
+  static Widget iconButton(String label, Widget icon, VoidCallback? onTap) => TapArea(
+    child: Semantics(
+      button: true,
+      label: label,
+      child: TkPress(
+        onTap: onTap ?? () {},
+        child: SizedBox(width: 40, height: 40, child: Center(child: icon)),
+      ),
     ),
   );
 
@@ -105,10 +108,10 @@ class ChatHeadBar extends StatelessWidget {
           iconButton('Back to the chats', TkIcon('back', size: 20, color: t.text), onBack ?? () => Navigator.of(context).maybePop()),
           const SizedBox(width: 6),
           if (onAvatar != null)
-            Semantics(
+            TapArea(child: Semantics(
               button: true,
               label: 'About $title',
-              child: GestureDetector(onTap: onAvatar, child: avatar),
+              child: GestureDetector(onTap: onAvatar, child: avatar),)
             )
           else
             avatar,
@@ -226,7 +229,7 @@ class ThreadJump extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Semantics(
+    return TapArea(child: Semantics(
       button: true,
       label: detached
           ? 'Jump to the latest messages'
@@ -250,7 +253,7 @@ class ThreadJump extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -770,7 +773,7 @@ Future<void> showHeadMenu(BuildContext context, {required Rect at, required List
         final width = MediaQuery.sizeOf(context).width;
         return Stack(
           children: [
-            Positioned.fill(child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => Navigator.of(context).pop())),
+            Positioned.fill(child: Backdrop(onClose: () => Navigator.of(context).pop())),
             Positioned(
               right: width - at.right,
               top: at.bottom + 4,
@@ -832,8 +835,12 @@ Future<void> showHeadMenu(BuildContext context, {required Rect at, required List
 /// BubbleShell's touch: a finger held opens the menu, a swipe right replies
 /// (60 px, drawn up to 80), as WhatsApp's.
 class BubbleHold extends StatefulWidget {
-  const BubbleHold({super.key, required this.child, this.onHold, this.onReply});
+  const BubbleHold({super.key, required this.child, this.onHold, this.onReply, this.label = 'Message'});
   final Widget child;
+
+  /// What a screen reader calls the bubble before its words ("Your
+  /// message", "Message from Bayo").
+  final String label;
   final ValueChanged<Rect>? onHold;
   final VoidCallback? onReply;
 
@@ -882,6 +889,7 @@ class _BubbleHoldState extends State<BubbleHold> {
     return Semantics(
       container: true,
       explicitChildNodes: true,
+      label: widget.label,
       onLongPressHint: 'Options',
       onLongPress: () => widget.onHold!(_rect()),
       child: gestures,

@@ -18,6 +18,7 @@ import '../api/transport.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
+import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'chats.dart';
 import 'words.dart';
@@ -478,7 +479,7 @@ class _SearchBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Semantics(
+    return TapField(child: Semantics(
       label: 'Search businesses',
       textField: true,
       child: Container(
@@ -512,7 +513,7 @@ class _SearchBox extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ));
   }
 }
 

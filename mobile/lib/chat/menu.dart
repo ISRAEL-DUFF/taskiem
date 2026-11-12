@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'emoji_panel.dart';
 
@@ -146,7 +147,7 @@ class _MenuState extends State<_Menu> {
     return Stack(
       children: [
         Positioned.fill(
-          child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: _close, onVerticalDragStart: (_) => _close()),
+          child: Backdrop(onClose: _close, onVerticalDragStart: (_) => _close()),
         ),
         if (widget.onReact != null && _picking)
           at(

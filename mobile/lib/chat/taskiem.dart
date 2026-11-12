@@ -839,6 +839,7 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
     // TaskiemChat.tsx: a message's menu holds Copy (not one still going).
     final copyable = !widget.x.local && m.text.isNotEmpty;
     return BubbleHold(
+      label: mine ? 'Your message' : 'Message from Taskiem',
       onHold: copyable
           ? (at) => showMessageMenu(
               context,

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart' show InputDecoration, Material, MaterialT
 import 'package:flutter/services.dart' show TextInputAction;
 import 'package:flutter/widgets.dart';
 
+import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'emoji.dart';
 
@@ -189,7 +190,7 @@ class _Search extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Container(
+    return TapField(child: Container(
       height: 36,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       alignment: Alignment.centerLeft,
@@ -207,7 +208,7 @@ class _Search extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 

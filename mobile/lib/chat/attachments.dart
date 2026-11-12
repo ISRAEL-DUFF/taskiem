@@ -293,6 +293,7 @@ class AttachmentView extends StatelessWidget {
             // as the web's image has no size before it loads.
             if (f == null || size == null) return const SizedBox(height: 6);
             final s = photoSize(size, room);
+            void open() => showPhoto(context, f.bytes, m.mine ? 'Your photo' : 'Photo from $other');
             return Padding(
               padding: const EdgeInsets.only(top: 2, bottom: 4),
               child: Semantics(
@@ -300,18 +301,21 @@ class AttachmentView extends StatelessWidget {
                 button: true,
                 label: m.mine ? 'Your photo' : 'Photo from $other',
                 onTapHint: 'Open it',
+                onTap: open,
                 // As wide as the photo is (up to the room), the picture at
                 // its start: a tall photo leaves the bubble as wide as the
                 // web's, which sizes it by the photo's own width.
                 child: GestureDetector(
-                  onTap: () => showPhoto(context, f.bytes, m.mine ? 'Your photo' : 'Photo from $other'),
+                  // Said above, as one node with its words.
+                  excludeFromSemantics: true,
+                  onTap: open,
                   child: SizedBox(
                   width: size.width < room ? size.width : room,
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.memory(f.bytes, width: s.width, height: s.height, fit: BoxFit.fill, gaplessPlayback: true),
+                      child: Image.memory(f.bytes, width: s.width, height: s.height, fit: BoxFit.fill, gaplessPlayback: true, excludeFromSemantics: true),
                     ),
                   ),
                 ),
