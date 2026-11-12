@@ -11,6 +11,7 @@ import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'guidelines.dart';
 import 'support.dart';
 
 void main() {
@@ -58,5 +59,6 @@ void main() {
     expect(find.text('Off today'), findsWidgets);
     expect(changed, 2);
     await t.pump(const Duration(seconds: 2));
+    await expectLargeText(t, TaskiemApp(mode: TkMode.dark, home: AvailabilitySheet(auth: chats.auth)), drive: settle);
   });
 }

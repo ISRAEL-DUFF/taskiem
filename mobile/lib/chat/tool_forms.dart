@@ -5,6 +5,7 @@
 
 import '../app/auth.dart';
 import 'composer.dart' show Pickers;
+import 'order_view.dart';
 import 'product_form.dart';
 import 'purchase_view.dart';
 import 'service_form.dart';
@@ -44,6 +45,7 @@ ToolDetail toolDetail(
       onSaved: host.done,
       onReorder: (data['link_id'] as String? ?? '').isEmpty ? null : onReorder,
     ),
+    'orders' => OrderView(auth: auth, order: data, onSaved: host.done, canEdit: host.canEdit, pickers: pickers),
     _ => null,
   };
 };

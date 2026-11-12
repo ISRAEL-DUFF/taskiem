@@ -83,11 +83,11 @@ class Transport {
 
   /// Sends a file as a multipart form (`file`, and the [fields] beside it)
   /// and answers the JSON, as [send] does.
-  Future<Object?> upload(String path, {required List<int> bytes, required String filename, required String type, Map<String, String> fields = const {}}) async {
+  Future<Object?> upload(String path, {required List<int> bytes, required String filename, required String type, Map<String, String> fields = const {}, String field = 'file'}) async {
     final req = http.MultipartRequest('POST', _uri(path))
       ..headers['Accept'] = 'application/json'
       ..fields.addAll(fields)
-      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename, contentType: MediaType.parse(type)));
+      ..files.add(http.MultipartFile.fromBytes(field, bytes, filename: filename, contentType: MediaType.parse(type)));
     final t = _sign(req);
     // A file takes longer than a message: twice the time.
     final res = await _reach(() async => http.Response.fromStream(await _client.send(req)), timeout * 2);
