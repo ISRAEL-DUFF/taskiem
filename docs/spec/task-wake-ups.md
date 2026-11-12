@@ -208,6 +208,21 @@ Before and after, the two builds interleaved, as [performance](../performance.md
 - dispatch within 50 ms at 5 and at 20 runs a second is no worse than the old build, beyond the noise between rounds;
 - about 37,000 fake transfers or more across the ramps, and none moved money twice.
 
+### 9.1 The review machine, 12 November 2026
+
+The ramp (step 2) and low load (step 3, as the 20 and 40 runs/s stages) were run with one binary and `TASKIEM_WAKE_IN_TX` changed, interleaved twice. The table is in [performance](../performance.md#wake-ups-after-the-commit-decision-0067-migration-00426).
+
+| "Done when" | Result |
+| --- | --- |
+| `Lock:object` waits gone from engine commits | Not sampled in these passes. That engine commits no longer notify is shown by `TestEngineCommitsDoNotNotify` |
+| Above the knee, throughput levels off instead of falling | It levelled off at about 58 runs/s with both settings: this machine ran out of CPU (97% to 98% busy) before commits, so it cannot tell the two apart there |
+| Dispatch at low load no worse | Met: every objective held at 20 and 40 runs/s either way |
+| No money moved twice | Every accepted run ended, about 24,000 across the four passes |
+
+At the knee (60 runs/s) the change helped in both rounds: dispatch within 50 ms rose from 59% to 67% up to 85% to 94%, and run start's 95th percentile about halved.
+
+**Not shown:** the collapse this plan is for. It was recorded on a machine whose disk flush was slow; this one flushes in about 0.3 ms, which puts the notify lock's ceiling near 3,000 commits a second, far above what four CPUs can offer. The `pgbench` script of the engine's own transaction (step 1) was not run either. Both belong to W5.
+
 No figure for runs a second is promised here. The review machine is shared and noisy, and the next limits (§10) are not touched. The number to quote comes from the target hardware (P4-R5).
 
 ## 10. What this does not do

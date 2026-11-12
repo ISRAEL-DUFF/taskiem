@@ -1,6 +1,6 @@
 # 0067 — Task wake-ups leave the transaction; the queue stays in Postgres
 
-Date: 2026-11-12 · Status: **Accepted** (12 November 2026; not built) · Plan: [task wake-ups outside the transaction](../spec/task-wake-ups.md) · Amends [0002](0002-postgres-as-queue.md)
+Date: 2026-11-12 · Status: **Accepted** (built 12 November 2026; the measurement on the target hardware is open) · Plan: [task wake-ups outside the transaction](../spec/task-wake-ups.md) · Amends [0002](0002-postgres-as-queue.md)
 
 ## Context
 
