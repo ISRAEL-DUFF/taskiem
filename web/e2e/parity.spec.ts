@@ -16,6 +16,19 @@ const here = dirname(fileURLToPath(import.meta.url));
 const KEPT = resolve(here, "../../mobile/test/parity/web");
 const UPDATE = process.env.PARITY_UPDATE === "1";
 
+// Text as a phone draws it, on any machine: glyphs at their exact, fractional
+// places and edges in grey, not hinted, not in colour. Without these Chromium
+// on Linux rounds each glyph's advance to a whole pixel and follows the
+// machine's fontconfig (an Ubuntu runner's: sub-pixel colour, hinted), so a
+// title can wrap on one machine and not on another.
+test.use({
+  launchOptions: {
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
+    args: ["--font-render-hinting=none"],
+    env: { ...process.env, FONTCONFIG_FILE: resolve(here, "fonts/fonts.conf") },
+  },
+});
+
 /** What the server says when a code is asked for, whatever the number. */
 const CODE_SENT = "If this number is on a Taskiem account, we have sent a code to it on WhatsApp or Telegram.";
 
