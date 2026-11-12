@@ -20,6 +20,7 @@ import '../kit/modal.dart';
 import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'chats.dart';
+import 'customer_orders.dart' show CustomerOrders;
 import 'thread.dart';
 import 'words.dart';
 
@@ -357,16 +358,9 @@ class _CustomerScreenState extends State<CustomerScreen> {
                       },
                     ),
                   ),
-                  // CustomerOrders.tsx: an order started from the conversation (M7
-                  // builds what it opens).
-                  if (canSend)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: _StartOrder(onTap: () => showComingSoon(context)),
-                      ),
-                    ),
+                  // CustomerOrders.tsx: the order read from their messages, or
+                  // Start an order.
+                  if (c != null) CustomerOrders(auth: d.chats.auth, chatId: d.id, canSend: canSend, follow: d.follow),
                   if (note != null) _Note(text: note.text, stop: note.stop),
                   if (canSend && tooLong)
                     _Note(
@@ -471,39 +465,6 @@ class _Note extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(color: stop ? t.tkDangerBg : t.tkWarnBg, borderRadius: BorderRadius.circular(12)),
         child: Text(text, style: tkText(size: 13, lineHeight: 1.4, color: stop ? t.tkDangerInk : t.tkWarnInk)),
-      ),
-    );
-  }
-}
-
-/// `.small.customer-order-start`: the web's plain small button with a +.
-class _StartOrder extends StatelessWidget {
-  const _StartOrder({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    return Semantics(
-      button: true,
-      label: 'Start an order',
-      onTap: onTap,
-      excludeSemantics: true,
-      child: TkPress(
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 40),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(color: t.panel, border: Border.all(color: t.borderStrong), borderRadius: BorderRadius.circular(8)),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TkIcon('plus', size: 14, color: t.text),
-              const SizedBox(width: 6),
-              Text('Start an order', style: tkText(size: 11.9, weight: 500, lineHeight: 1.2, color: t.text)),
-            ],
-          ),
-        ),
       ),
     );
   }
