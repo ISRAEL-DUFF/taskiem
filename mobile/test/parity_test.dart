@@ -76,7 +76,16 @@ typedef Screen = ({Widget Function() build, Future<void> Function(WidgetTester t
 Future<void> _none(WidgetTester t) async {}
 
 Future<void> _tap(WidgetTester t, String words) async {
-  await t.tap(find.text(words));
+  final f = find.text(words);
+  // Scrolled to only when it is off the screen (large text pushes it down):
+  // where it is in sight the picture stays as the web took it.
+  final c = t.getCenter(f);
+  final size = t.view.physicalSize / t.view.devicePixelRatio;
+  if (c.dy < 0 || c.dy > size.height || c.dx < 0 || c.dx > size.width) {
+    await t.ensureVisible(f);
+    await t.pumpAndSettle();
+  }
+  await t.tap(f);
   await t.pumpAndSettle();
 }
 
