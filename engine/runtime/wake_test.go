@@ -2,13 +2,16 @@ package runtime_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	dto "github.com/prometheus/client_model/go"
 
 	"github.com/israel-duff/taskiem/engine/runtime"
+	"github.com/israel-duff/taskiem/engine/telemetry"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 )
 
@@ -132,4 +135,68 @@ func TestEngineCommitsDoNotNotify(t *testing.T) {
 		t.Errorf("with wake-ups left in the transaction, %d runs sent %d notifications, want one each", runs, got)
 	}
 	e.Drain(t)
+}
+
+// inTx reads how many tasks' wake-ups were left to the trigger inside
+// their transaction, for the connector queue.
+func inTx(t *testing.T) float64 {
+	t.Helper()
+	var m dto.Metric
+	if err := telemetry.WakeupsInTx.WithLabelValues("connector").Write(&m); err != nil {
+		t.Fatal(err)
+	}
+	return m.GetCounter().GetValue()
+}
+
+// The transactions in which a worker records a step and schedules the next
+// do not notify either: three steps in sequence, run by a worker, are
+// announced by the notifier and never by the trigger. (The first build
+// covered only the transaction that starts a run: the worker's go through
+// InTenantTxRetry, whose transactions could not hold an after-commit
+// function.)
+func TestWorkerCommitsDoNotNotify(t *testing.T) {
+	e := rt.New(t)
+	step := func(id, needs string) string {
+		s := strings.Replace(payOne, `"id":"pay",`, `"id":"`+id+`",`+needs, 1)
+		return strings.Replace(s, `':pay'`, `':`+id+`'`, 1)
+	}
+	wf := e.Publish(t, wfDoc(step("a", "")+","+step("b", `"needs":["a"],`)+","+step("c", `"needs":["b"],`), ""))
+	s := process(t, e, false)
+	s.WakeInterval = time.Second
+	w := e.Worker("w-commits")
+	w.Store, w.Drain = s, time.Second
+	wctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() { defer wg.Done(); _ = w.Run(wctx) }()
+	defer func() { cancel(); wg.Wait() }()
+
+	const runs = 10
+	left := inTx(t)
+	heard := notifications(t, e)
+	began := time.Now()
+	var refs []runtime.RunRef
+	for i := 0; i < runs; i++ {
+		ref, _, err := s.StartRun(ctx, runtime.StartRequest{TenantID: e.Tenant, WorkflowID: wf, Version: 1, Environment: "prod",
+			Trigger: map[string]any{"amount": 100 + i}, Env: map[string]any{"api": "https://api.example"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		refs = append(refs, ref)
+	}
+	for _, ref := range refs {
+		rt.WaitFor(t, 20*time.Second, "the run to complete", func() bool { return e.Status(t, ref) == "completed" })
+	}
+	took := time.Since(began)
+	got := heard()
+	// The trigger would have sent one for each of the 30 tasks.
+	if most := int(took/time.Second) + 3; got < 1 || got > most {
+		t.Errorf("%d runs of three steps (%s) sent %d notifications, want between 1 and %d (one a second)", runs, took, got, most)
+	}
+	if n := inTx(t) - left; n != 0 {
+		t.Errorf("%v tasks' wake-ups were left to the trigger inside their transaction, want none", n)
+	}
+	if n := e.Provider.Executions(refs[0].ID.String() + ":c"); n != 1 {
+		t.Errorf("the last step of the first run moved money %d times, want 1", n)
+	}
 }

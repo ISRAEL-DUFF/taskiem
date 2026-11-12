@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -41,6 +42,9 @@ const (
 	// wakeOwnFor is how long a notification from a connection this
 	// process's notifier sent on is taken to be its own.
 	wakeOwnFor = time.Second
+	// wakeConnIdle is how long the notifier keeps its connection with
+	// nothing to send.
+	wakeConnIdle = time.Minute
 )
 
 // waker is a Store's wake-ups: what is owed to each queue, the workers of
@@ -52,6 +56,12 @@ type waker struct {
 	sending bool
 	local   map[string][]chan struct{}
 	sentBy  map[uint32]time.Time // backend PID -> when the notifier last sent on it
+	// conn is the notifier's own connection, taken out of the pool: a send
+	// must not wait behind the work it announces when the pool is busy.
+	// Only the sender uses it; the idle timer closes it when no sender
+	// runs.
+	conn *pgx.Conn
+	idle *time.Timer
 }
 
 // wakeSetting is the value of app.task_wake that tells the task trigger
@@ -129,6 +139,12 @@ func (s *Store) sendWakes() {
 		}
 		if len(ready) == 0 && wait < 0 {
 			w.sending = false
+			if w.idle != nil {
+				w.idle.Stop()
+			}
+			if w.conn != nil {
+				w.idle = time.AfterFunc(wakeConnIdle, s.closeIdleWakeConn)
+			}
 			w.mu.Unlock()
 			return
 		}
@@ -151,6 +167,8 @@ func (s *Store) sendWakes() {
 				for _, q := range ready {
 					w.owed[q] = true
 				}
+			} else {
+				failures = 0 // dropped; whatever comes next gets its tries
 			}
 			w.mu.Unlock()
 			time.Sleep(wakeRetryAfter)
@@ -166,19 +184,28 @@ func (s *Store) sendWakes() {
 	}
 }
 
-// sendWake notifies the queues in one statement, on a connection of the
-// pool. The transaction has written nothing, so its commit waits for no
-// WAL flush.
+// sendWake notifies the queues in one statement, on the notifier's own
+// connection. The transaction has written nothing, so its commit waits for
+// no WAL flush. Called by the one sender only.
 func (s *Store) sendWake(queues []string) error {
+	if s.Pool == nil {
+		return errors.New("runtime: no pool to send a wake-up on")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), wakeSendTimeout)
 	defer cancel()
-	conn, err := s.Pool.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Release()
 	w := &s.wake
 	w.mu.Lock()
+	conn := w.conn
+	w.mu.Unlock()
+	if conn == nil {
+		pc, err := s.Pool.Acquire(ctx)
+		if err != nil {
+			return err
+		}
+		conn = pc.Hijack() // the pool opens another in its place
+	}
+	w.mu.Lock()
+	w.conn = conn
 	if w.sentBy == nil {
 		w.sentBy = map[uint32]time.Time{}
 	}
@@ -188,10 +215,39 @@ func (s *Store) sendWake(queues []string) error {
 			delete(w.sentBy, pid)
 		}
 	}
-	w.sentBy[conn.Conn().PgConn().PID()] = now
+	w.sentBy[conn.PgConn().PID()] = now
 	w.mu.Unlock()
-	_, err = conn.Exec(ctx, `SELECT pg_notify('taskiem_tasks', q) FROM unnest($1::text[]) AS q`, queues)
-	return err
+	if _, err := conn.Exec(ctx, `SELECT pg_notify('taskiem_tasks', q) FROM unnest($1::text[]) AS q`, queues); err != nil {
+		// Broken, or pointing at a server that is no longer the primary:
+		// the next send takes a new one.
+		w.mu.Lock()
+		w.conn = nil
+		w.mu.Unlock()
+		closeWakeConn(conn)
+		return err
+	}
+	return nil
+}
+
+// closeIdleWakeConn closes the notifier's connection when nothing has been
+// sent for wakeConnIdle, so a process that schedules nothing holds none.
+func (s *Store) closeIdleWakeConn() {
+	w := &s.wake
+	w.mu.Lock()
+	if w.sending || w.conn == nil {
+		w.mu.Unlock()
+		return
+	}
+	conn := w.conn
+	w.conn = nil
+	w.mu.Unlock()
+	closeWakeConn(conn)
+}
+
+func closeWakeConn(conn *pgx.Conn) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = conn.Close(ctx)
 }
 
 // localWakes is a channel signalled when this process schedules a task for
@@ -222,9 +278,8 @@ func (s *Store) localWakes(queue string) (<-chan struct{}, func()) {
 // sentHere reports whether a notification from backend pid is one this
 // process's notifier sent. A worker that has localWakes was already woken
 // for it in memory, and waking again would only cost a claim that finds
-// nothing. A connection the notifier used a moment ago may, rarely, carry
-// some other notification of this process (the trigger's, for a task
-// inserted in a savepoint); skipping that one costs a wait for the poll.
+// nothing. The notifier's connection carries nothing but its own sends, so
+// nothing else is skipped by this.
 func (s *Store) sentHere(pid uint32) bool {
 	w := &s.wake
 	w.mu.Lock()
