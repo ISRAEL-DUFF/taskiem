@@ -18,6 +18,7 @@ import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/modal.dart';
 import '../theme/theme.dart';
 import 'alerts.dart';
 import 'attachments.dart';
@@ -25,6 +26,7 @@ import 'cards.dart';
 import 'chats.dart';
 import 'composer.dart';
 import 'live.dart';
+import 'menu.dart';
 import 'thread.dart';
 import 'words.dart';
 
@@ -128,6 +130,25 @@ class TaskiemData extends ChangeNotifier {
 
   /// TaskiemChat.tsx briefs: the briefing card is for those who sell or bill.
   bool get briefs => chats.chatTools && chats.auth.can('storefront.manage|invoice.manage');
+
+  /// How often the briefing was asked back: its card is drawn afresh (a
+  /// card put away with Got it comes back).
+  int briefingShown = 0;
+
+  /// ChatStaff.tsx show: the briefing asked for by name, even put away
+  /// for the day (GET /v1/chat-briefing?show=1). False when it did not come.
+  Future<bool> showBriefing() async {
+    try {
+      final b = await api.getChatBriefing(show: '1');
+      if (_disposed) return true;
+      briefing = b;
+      briefingShown++;
+      _changed();
+      return true;
+    } on Object {
+      return false;
+    }
+  }
 
   /// The briefing and the cards, read again (after one is dealt with).
   Future<void> loadCards() async {
@@ -308,10 +329,14 @@ class TaskiemData extends ChangeNotifier {
 
 /// Taskiem's conversation.
 class TaskiemScreen extends StatefulWidget {
-  const TaskiemScreen({super.key, required this.data, this.onBack, this.pickers = const Pickers(), this.recorder});
+  const TaskiemScreen({super.key, required this.data, this.onBack, this.pickers = const Pickers(), this.recorder, this.onOpenCustomer});
 
   final TaskiemData data;
   final VoidCallback? onBack;
+
+  /// A customer's conversation, in this one's place (an alert's "Open the
+  /// order": the customer's thread, with the order on its card).
+  final ValueChanged<String>? onOpenCustomer;
   final Pickers pickers;
   final Recorder? recorder;
 
@@ -389,7 +414,16 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                   bottom: pad.bottom,
                   pickers: widget.pickers,
                   recorder: widget.recorder,
-                  onSend: (words, file) => file != null ? d.sendFile(file, words) : d.say(text: words),
+                  onSend: (words, file) {
+                    if (file != null) {
+                      d.sendFile(file, words);
+                    } else if (d.briefs && asksBriefing(words)) {
+                      // Asked for by name: the card, not a message.
+                      _showBriefing(d);
+                    } else {
+                      d.say(text: words);
+                    }
+                  },
                 ),
               ],
             ),
@@ -397,6 +431,22 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
         ),
       ),
     );
+  }
+
+  final _threadKey = GlobalKey<ThreadViewState<TaskiemLine>>();
+
+  Future<void> _showBriefing(TaskiemData d) async {
+    final ok = await d.showBriefing();
+    if (!mounted) return;
+    if (!ok) {
+      showTkToast(context, 'The briefing didn\'t load. Try again.', error: true);
+      return;
+    }
+    // Into sight: it is after the messages, at the end.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final s = _threadKey.currentState?.scroll;
+      if (s != null && s.hasClients) s.jumpTo(s.position.maxScrollExtent);
+    });
   }
 
   Widget _thread(BuildContext context, TaskiemData d) {
@@ -432,6 +482,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
         return false;
       },
       child: ThreadView<TaskiemLine>(
+        key: _threadKey,
         items: list,
         of: (id: (x) => x.id == nilId ? '${x.id}-${x.m.createdAt}' : x.id, at: (x) => x.m.createdAt, mine: (x) => x.m.inbound),
         now: d.chats.now(),
@@ -444,7 +495,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (d.briefing != null) ...[
-                    BriefingCard(briefing: d.briefing!, auth: d.chats.auth, onAsk: (w) => d.say(text: w)),
+                    BriefingCard(key: ValueKey(d.briefingShown), briefing: d.briefing!, auth: d.chats.auth, onAsk: (w) => d.say(text: w)),
                     const SizedBox(height: 2),
                   ],
                   AlertCards(
@@ -454,6 +505,9 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                     onChanged: () {
                       d.loadCards();
                       d.pull();
+                    },
+                    onOpen: (what, a) {
+                      if (what == 'customer' && (a.id ?? '').isNotEmpty) widget.onOpenCustomer?.call(a.id!);
                     },
                   ),
                 ],
@@ -589,7 +643,19 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
       ),
       style: tkText(size: 16, lineHeight: 23 / 16, color: t.text),
     );
-    return BubbleFrame(
+    // TaskiemChat.tsx: a message's menu holds Copy (not one still going).
+    final copyable = !widget.x.local && m.text.isNotEmpty;
+    return BubbleHold(
+      onHold: copyable
+          ? (at) => showMessageMenu(
+              context,
+              bubble: at,
+              mine: mine,
+              what: m.text.split('\n').first.length > 60 ? m.text.split('\n').first.substring(0, 60) : m.text.split('\n').first,
+              items: [MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.text)), done: 'Copied')],
+            )
+          : null,
+      child: BubbleFrame(
       mine: mine,
       first: widget.first,
       stamp: stamp,
@@ -606,6 +672,7 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
           words,
         if (buttons.isNotEmpty) _ReplyButtons(buttons: buttons, choice: widget.choice, pressable: widget.pressable, onPress: widget.onPress),
       ],
+      ),
     );
   }
 }

@@ -250,7 +250,7 @@ class _Home extends StatefulWidget {
 class _HomeState extends State<_Home> with WidgetsBindingObserver {
   // The chat as it happens, followed while the app is in front.
   late final ChatLive _live = ChatLive(widget.auth.transport);
-  late final ChatsData _chats = ChatsData(widget.auth, live: _live);
+  late final ChatsData _chats = ChatsData(widget.auth, live: _live, prefs: widget.prefs);
 
   @override
   void initState() {
@@ -377,7 +377,14 @@ class _OpenTaskiemState extends State<_OpenTaskiem> {
   }
 
   @override
-  Widget build(BuildContext context) => TaskiemScreen(data: _data);
+  Widget build(BuildContext context) => TaskiemScreen(
+    data: _data,
+    onOpenCustomer: (id) => Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
+      pageBuilder: (_, _, _) => _OpenCustomer(chats: widget.chats, id: id),
+    )),
+  );
 }
 
 /// A customer's conversation, open: its data lives while it is open.

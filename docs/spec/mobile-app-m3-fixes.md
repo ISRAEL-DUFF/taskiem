@@ -79,6 +79,18 @@ Explore's page with its constructor, not through JSON.
 M3 is "the chat (§3.1, §3.2)… and connecting (§3.5)". The web chat does
 each of these; the app does not.
 
+**Done: G3, G7, G9, G10, G13; G16 settled** (`test/gaps_test.dart`,
+`test/taskiem_test.dart`). Typing is told to the other side at most every
+3 seconds (not for "/" or "@Taskiem" with the tools). "Open the order"
+opens the customer's conversation in Taskiem's place. Taskiem's messages
+have Copy when held (the hold now shared, `BubbleHold` in `thread.dart`;
+a menu of one item keeps it its own button for a screen reader). "briefing"
+typed brings the card back (`?show=1`), even put away, and is not sent.
+Where Taskiem's conversation was last seen is kept on the phone (Prefs).
+G16 needs no change: the app's sheet says what the web chat's card says
+("Needs your passkey or a code"); the chat PIN is typed only in WhatsApp,
+and here such an approval takes the passkey or a code, as on the web.
+
 | # | Gap | The web | The app | Work |
 | --- | --- | --- | --- | --- |
 | G1 | **Connecting a service** (`connect <service>`; §3.5, named in M3) | The one-time link `/c/<token>` in Taskiem's answer (`api/connect_links.go`, `api/chat_history.go:482`) | No way to open a browser at all (no url_launcher / custom tabs); no return to the app; no form for key-based services | Open `/c/` links (and only §3.5's) in the phone's browser tab (Custom Tabs / SFSafariViewController); come back to Taskiem's conversation on return (an app link, with M4's S6, or on resume); a key-based service (Paystack, Termii…) gets a secure form in the app, posting where the web's connect page does, never through a message. Needs: the server's answer to say which kind a connect is. Test: a connect answer opens the browser; a key form saves |

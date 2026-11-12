@@ -12,6 +12,7 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
+import '../app/prefs.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
@@ -24,9 +25,24 @@ import 'words.dart';
 
 /// What the list shows, loaded as the web's page loads it.
 class ChatsData extends ChangeNotifier {
-  ChatsData(this.auth, {DateTime Function()? now, this.live}) : now = now ?? DateTime.now {
-    // taskiemSeen.ts: a first visit begins at now.
+  ChatsData(this.auth, {DateTime Function()? now, this.live, this.prefs}) : now = now ?? DateTime.now {
+    // taskiemSeen.ts: a first visit begins at now; afterwards, where it was
+    // last seen, kept on the phone.
     taskiemSeen = this.now();
+    final p = prefs;
+    if (p != null) {
+      final began = taskiemSeen!;
+      p.ready.then((_) {
+        final kept = p.taskiemSeen;
+        if (kept == null) {
+          p.setTaskiemSeen(began);
+        } else if (taskiemSeen == began && kept.isBefore(began)) {
+          // Not seen since this began: from where it was last seen.
+          taskiemSeen = kept;
+          notifyListeners();
+        }
+      });
+    }
     _liveSub = live?.events.listen((e) {
       // A message, one gone, a conversation's settings: the list again,
       // once for a burst (ChatLive.tsx reloadSoon).
@@ -53,6 +69,9 @@ class ChatsData extends ChangeNotifier {
   final Auth auth;
   final DateTime Function() now;
 
+  /// Where Taskiem's conversation was last seen is kept here.
+  final Prefs? prefs;
+
   /// The chat as it happens, when followed.
   final ChatLive? live;
   StreamSubscription<LiveEvent>? _liveSub;
@@ -70,6 +89,7 @@ class ChatsData extends ChangeNotifier {
   void markTaskiemSeen(DateTime at) {
     if (taskiemSeen != null && !at.isAfter(taskiemSeen!)) return;
     taskiemSeen = at;
+    prefs?.setTaskiemSeen(at);
     if (taskiemUnread != 0) {
       taskiemUnread = 0;
       notifyListeners();

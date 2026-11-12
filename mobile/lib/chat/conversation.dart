@@ -7,7 +7,6 @@
 import 'dart:async';
 
 import 'package:flutter/gestures.dart' show TapGestureRecognizer;
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -196,6 +195,21 @@ class ConversationData extends ChangeNotifier {
         }(),
     ]);
     _changed();
+  }
+
+  DateTime? _typedAt;
+
+  /// Conversation.tsx onType: we are typing, told to the other side (their
+  /// "typing…") at most every 3 seconds. "/" (the tools) and "@Taskiem"
+  /// (asking Taskiem) reach neither them, so they are not told.
+  void typed(String words) {
+    if (words.trim().isEmpty || _disposed) return;
+    if (chats.chatTools && (words.startsWith('/') || RegExp(r'(^|[\s,(])@taskiem\b', caseSensitive: false).hasMatch(words))) return;
+    final now = chats.now();
+    final was = _typedAt;
+    if (was != null && now.difference(was) <= const Duration(seconds: 3)) return;
+    _typedAt = now;
+    api.linkTyping(link: conv.link).catchError((Object _) {});
   }
 
   /// Opens at [focus], or at the newest page; then follows it.
@@ -642,7 +656,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
   /// until the next keystroke (the web reads the tag on input only).
   bool _tagging = false;
 
+  String _words = '';
+
   void _typed() {
+    // The words changed (not the cursor): the other side is told.
+    if (_text.text != _words) {
+      _words = _text.text;
+      widget.data.typed(_words);
+    }
     if (_tagging) return;
     final v = _text.value;
     final caret = v.selection.baseOffset < 0 ? v.text.length : v.selection.baseOffset;
@@ -1548,7 +1569,7 @@ class _Bubble extends StatelessWidget {
         );
       },
     );
-    final held = _Hold(onHold: out == null ? onHold : null, onReply: out == null ? onReply : null, child: bubble);
+    final held = BubbleHold(onHold: out == null ? onHold : null, onReply: out == null ? onReply : null, child: bubble);
     final placed = held;
     if (!failed) return placed;
     return Column(
@@ -1592,66 +1613,6 @@ class _Bubble extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// BubbleShell's touch: a finger held opens the menu, a swipe right replies
-/// (60 px, drawn up to 80), as WhatsApp's.
-class _Hold extends StatefulWidget {
-  const _Hold({required this.child, this.onHold, this.onReply});
-  final Widget child;
-  final ValueChanged<Rect>? onHold;
-  final VoidCallback? onReply;
-
-  @override
-  State<_Hold> createState() => _HoldState();
-}
-
-class _HoldState extends State<_Hold> {
-  double _dx = 0;
-
-  /// The bubble itself, on the screen (not its row).
-  Rect _rect() {
-    RenderBox? box;
-    void find(Element e) {
-      final r = e.renderObject;
-      if (r is RenderDecoratedBox && box == null) {
-        box = r;
-        return;
-      }
-      e.visitChildElements(find);
-    }
-
-    (context as Element).visitChildElements(find);
-    final b = box ?? context.findRenderObject()! as RenderBox;
-    return b.localToGlobal(Offset.zero) & b.size;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final gestures = GestureDetector(
-      // Said to a screen reader by the node below, which keeps the
-      // bubble's own labels (its ticks, a star) apart.
-      excludeFromSemantics: true,
-      onLongPress: widget.onHold == null ? null : () => widget.onHold!(_rect()),
-      onHorizontalDragUpdate: widget.onReply == null ? null : (d) => setState(() => _dx = (_dx + d.delta.dx).clamp(0.0, 80.0)),
-      onHorizontalDragEnd: widget.onReply == null
-          ? null
-          : (_) {
-              if (_dx >= 60) widget.onReply!();
-              setState(() => _dx = 0);
-            },
-      onHorizontalDragCancel: widget.onReply == null ? null : () => setState(() => _dx = 0),
-      child: Transform.translate(offset: Offset(_dx, 0), child: widget.child),
-    );
-    if (widget.onHold == null) return gestures;
-    return Semantics(
-      container: true,
-      explicitChildNodes: true,
-      onLongPressHint: 'Options',
-      onLongPress: () => widget.onHold!(_rect()),
-      child: gestures,
     );
   }
 }

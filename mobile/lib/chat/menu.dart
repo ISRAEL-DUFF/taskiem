@@ -225,6 +225,8 @@ class _MenuState extends State<_Menu> {
             _cardAt,
             Semantics(
               container: true,
+              // Each item its own button, even when there is only one.
+              explicitChildNodes: true,
               label: 'Options for ${widget.what}',
               child: Container(
                 key: _card,

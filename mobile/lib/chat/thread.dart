@@ -5,6 +5,7 @@
 // under it; where the unread begin; the round button over the corner; the
 // view placed on opening and following what comes only at the bottom).
 
+import 'package:flutter/rendering.dart' show RenderDecoratedBox;
 import 'package:flutter/widgets.dart';
 
 import '../kit/icon.dart';
@@ -825,4 +826,64 @@ Future<void> showHeadMenu(BuildContext context, {required Rect at, required List
       },
     ),
   );
+}
+
+/// BubbleShell's touch: a finger held opens the menu, a swipe right replies
+/// (60 px, drawn up to 80), as WhatsApp's.
+class BubbleHold extends StatefulWidget {
+  const BubbleHold({super.key, required this.child, this.onHold, this.onReply});
+  final Widget child;
+  final ValueChanged<Rect>? onHold;
+  final VoidCallback? onReply;
+
+  @override
+  State<BubbleHold> createState() => _BubbleHoldState();
+}
+
+class _BubbleHoldState extends State<BubbleHold> {
+  double _dx = 0;
+
+  /// The bubble itself, on the screen (not its row).
+  Rect _rect() {
+    RenderBox? box;
+    void find(Element e) {
+      final r = e.renderObject;
+      if (r is RenderDecoratedBox && box == null) {
+        box = r;
+        return;
+      }
+      e.visitChildElements(find);
+    }
+
+    (context as Element).visitChildElements(find);
+    final b = box ?? context.findRenderObject()! as RenderBox;
+    return b.localToGlobal(Offset.zero) & b.size;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final gestures = GestureDetector(
+      // Said to a screen reader by the node below, which keeps the
+      // bubble's own labels (its ticks, a star) apart.
+      excludeFromSemantics: true,
+      onLongPress: widget.onHold == null ? null : () => widget.onHold!(_rect()),
+      onHorizontalDragUpdate: widget.onReply == null ? null : (d) => setState(() => _dx = (_dx + d.delta.dx).clamp(0.0, 80.0)),
+      onHorizontalDragEnd: widget.onReply == null
+          ? null
+          : (_) {
+              if (_dx >= 60) widget.onReply!();
+              setState(() => _dx = 0);
+            },
+      onHorizontalDragCancel: widget.onReply == null ? null : () => setState(() => _dx = 0),
+      child: Transform.translate(offset: Offset(_dx, 0), child: widget.child),
+    );
+    if (widget.onHold == null) return gestures;
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      onLongPressHint: 'Options',
+      onLongPress: () => widget.onHold!(_rect()),
+      child: gestures,
+    );
+  }
 }

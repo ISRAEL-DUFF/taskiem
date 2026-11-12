@@ -457,6 +457,11 @@ class _Pill extends StatelessWidget {
   }
 }
 
+/// staff.ts asksBriefing: typed words that ask for the briefing rather
+/// than tell Taskiem.
+bool asksBriefing(String words) =>
+    RegExp(r"^(show (me )?)?(the |my |today'?s )?(morning )?briefing[.!?]?$", caseSensitive: false).hasMatch(words.trim());
+
 /// team.ts staffTile: who is in, and who is late.
 String staffTile(int inNow, int late) => ['$inNow in', if (late > 0) '$late late'].join(' · ');
 

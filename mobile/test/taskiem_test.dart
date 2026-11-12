@@ -8,6 +8,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -292,6 +293,89 @@ void main() {
     expect(staffTile(3, 1), '3 in · 1 late');
     expect(tasksTile(0, 0), 'None due');
     expect(tasksTile(2, 1), '2 due today · 1 late');
+  });
+
+  /// Taskiem's conversation from the fixture, every request kept, [also]
+  /// answering first.
+  Future<List<String>> screen(WidgetTester t, {Future<http.Response?> Function(http.Request req, Fixture f)? also, ValueChanged<String>? onOpenCustomer}) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-taskiem');
+    final asked = <String>[];
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        asked.add('${req.method} ${req.url.path}${req.url.query.isEmpty ? '' : '?${req.url.query}'}');
+        return also?.call(req, f);
+      }),
+      now: () => f.at,
+    )..load();
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: TaskiemScreen(data: TaskiemData(chats, follow: false), onOpenCustomer: onOpenCustomer)));
+    await settle(t);
+    return asked;
+  }
+
+  http.Response json(Object body) => http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
+
+  testWidgets('G7: "Open the order" on a customer\'s draft order opens their conversation', (t) async {
+    final opened = <String>[];
+    await screen(
+      t,
+      onOpenCustomer: opened.add,
+      also: (req, f) async => req.url.path == '/v1/chat-alerts'
+          ? json({
+              'alerts': [
+                {'key': 'order_draft:c1', 'kind': 'order_draft', 'at': '2026-11-11T13:00:00Z', 'title': 'Chidi wants to order', 'line': '2 baskets of tomatoes', 'id': 'c1'},
+              ],
+            })
+          : null,
+    );
+    final open = find.bySemanticsLabel('Open the order: Chidi wants to order');
+    await t.ensureVisible(open);
+    await t.pumpAndSettle();
+    await t.tap(open);
+    await t.pump();
+    expect(opened, ['c1']);
+  });
+
+  testWidgets('G9: a Taskiem message held: Copy puts its words on the clipboard', (t) async {
+    String? copied;
+    t.binding.defaultBinaryMessenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') copied = (call.arguments as Map)['text'] as String;
+      return null;
+    });
+    await screen(t);
+    final said = find.textContaining('how did we do this week?', findRichText: true);
+    await t.ensureVisible(said);
+    await t.pumpAndSettle();
+    await t.longPress(said);
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Copy'));
+    await t.pump();
+    expect(copied, 'how did we do this week?');
+    expect(find.bySemanticsLabel('Copied'), findsOneWidget);
+  });
+
+  testWidgets('G10: "briefing" typed brings the card back, put away or not, and is not sent', (t) async {
+    final asked = await screen(
+      t,
+      also: (req, f) async => req.url.path == '/v1/chat-briefing' && req.url.queryParameters['show'] == '1' ? json(f.json('/v1/chat-briefing')) : null,
+    );
+    final gotIt = find.bySemanticsLabel('Got it: put the briefing away for today');
+    await t.ensureVisible(gotIt);
+    await t.tap(gotIt);
+    await settle(t);
+    expect(find.text('Got it'), findsNothing, reason: 'put away');
+    await t.enterText(find.byType(EditableText), 'Show me the briefing');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Send'));
+    await settle(t);
+    expect(asked, contains('GET /v1/chat-briefing?show=1'));
+    expect(asked.where((a) => a == 'POST /v1/taskiem-chat'), isEmpty, reason: 'asked for by name, not said to Taskiem');
+    expect(find.text('Got it'), findsOneWidget, reason: 'the card back');
+    expect(asksBriefing('morning briefing!'), isTrue);
+    expect(asksBriefing('what is in the briefing'), isFalse);
+    expect(asksBriefing('briefings'), isFalse);
   });
 
   test('the cards\' words, as alerts.ts, approvals.ts and staff.ts say them', () {

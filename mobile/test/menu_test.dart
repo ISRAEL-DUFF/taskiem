@@ -43,6 +43,8 @@ void main() {
         if (req.method == 'GET') return null;
         // Opening reads it: not the menu's doing.
         if (req.url.path.endsWith('/read')) return answer({'read': 2});
+        // Typing told to them: not the menu's doing either.
+        if (req.url.path.endsWith('/typing')) return answer(<String, Object>{});
         final body = req.body.isEmpty ? null : jsonDecode(req.body);
         calls.add((req.method, req.url.path, body));
         final p = req.url.path;
