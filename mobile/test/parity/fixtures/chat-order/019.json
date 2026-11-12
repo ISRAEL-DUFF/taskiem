@@ -1,0 +1,1 @@
+{"refs":[{"kind":"bill","id":"01a1cf73-a224-785a-a8ec-75592db74b4e","name":"INV-0001","party":"Bayo Rice Mills","when":"2026-11-12T11:10:24.288361Z","total_kobo":45000000,"status":"open"},{"kind":"purchase","id":"01a1cf73-7f93-79eb-91e8-1cc0e8d6776c","name":"P-ZTX99X","party":"Bayo Rice Mills","when":"2026-11-12T11:10:15.437954Z","total_kobo":82000000,"status":"confirmed"}]}

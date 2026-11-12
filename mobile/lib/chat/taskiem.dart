@@ -35,6 +35,7 @@ import 'ref_card.dart';
 import 'tag_box.dart';
 import 'tags.dart';
 import 'thread.dart';
+import 'purchase_view.dart' show toolDetail;
 import 'tool_sheet.dart';
 import 'tools.dart';
 import 'tools_panel.dart';
@@ -444,7 +445,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
   void _openTool(Tool tool) {
     _tools.close();
     if (RegExp(r'^/\S*$').hasMatch(_text.text)) _text.clear();
-    showToolSheet(context, tools: _tools, tool: tool);
+    showToolSheet(context, tools: _tools, tool: tool, detail: toolDetail(widget.data.chats.auth));
   }
 
   /// TaskiemChat.tsx extras: the briefing, tasks, and clocking in and out.

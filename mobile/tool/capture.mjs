@@ -6,6 +6,7 @@
 //   node mobile/tool/capture.mjs <name> <path> [email]
 //   EXPLORE=1 node mobile/tool/capture.mjs explore /chat
 //   TOOLS=1 node mobile/tool/capture.mjs chat-tools "/chat?with=taskiem"
+//   ORDER=1 node mobile/tool/capture.mjs chat-order "/chat?with=<Bayo's link>"
 //
 // Needs the demo world running (serve-demo.sh, seed.ts) and Playwright.
 import fs from "node:fs";
@@ -63,6 +64,17 @@ if (process.env.TOOLS) {
   await p.getByRole("button", { name: "Open tools" }).click();
   await p.waitForTimeout(4000);
   await p.getByTestId("tools-panel").getByRole("button", { name: /^Products/ }).click();
+  await p.waitForTimeout(3000);
+}
+// ORDER=1: their shop opened from the tools panel, one item in the bag,
+// and the review.
+if (process.env.ORDER) {
+  await p.getByRole("button", { name: "Open tools" }).click();
+  await p.waitForTimeout(3000);
+  await p.getByTestId("tools-panel").getByRole("button", { name: /^Their shop/ }).click();
+  await p.waitForTimeout(4000);
+  await p.getByRole("button", { name: /^One more / }).first().click();
+  await p.getByRole("button", { name: "Review order" }).click();
   await p.waitForTimeout(3000);
 }
 fs.writeFileSync(path.join(out, "answers.json"), JSON.stringify({ at, answers }, null, 1));

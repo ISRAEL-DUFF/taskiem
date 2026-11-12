@@ -17,7 +17,7 @@ import 'words.dart';
 LinkMention? liveTag(List<LinkMention>? mentions) => mentions?.where((m) => m.kind == 'item' || m.kind == 'service').firstOrNull;
 
 class LiveCard extends StatelessWidget {
-  const LiveCard({super.key, required this.m, required this.items, required this.whose, required this.stock});
+  const LiveCard({super.key, required this.m, required this.items, required this.whose, required this.stock, this.onOrder});
   final LinkMention m;
 
   /// The conversation's price list, and whose it is.
@@ -26,6 +26,9 @@ class LiveCard extends StatelessWidget {
 
   /// Our own stock (when we may see it).
   final List<StockItem> stock;
+
+  /// Order: their shop opened on [m]'s item.
+  final ValueChanged<String>? onOrder;
 
   @override
   Widget build(BuildContext context) {
@@ -126,8 +129,8 @@ class LiveCard extends StatelessWidget {
                   label: 'Order ${m.name}',
                   excludeSemantics: true,
                   child: GestureDetector(
-                    // The Order sheet comes with the tools (M5 to M8).
-                    onTap: () => showComingSoon(context),
+                    // Their shop, opened on this item (in the bag when we may order).
+                    onTap: onOrder == null || m.itemId == null ? () => showComingSoon(context) : () => onOrder!(m.itemId!),
                     child: IntrinsicWidth(
                       child: Container(
                         height: 40,

@@ -123,6 +123,12 @@ class ToolsController extends ChangeNotifier {
     load([t]);
   }
 
+  /// Read again after a change, the list shown as it was meanwhile.
+  void refresh(Tool t) {
+    _asked.remove(t.url);
+    load([t]);
+  }
+
   bool failed(Tool t) => identical(_data[t.url], _failed);
 
   /// A tool's rows, here (in a business's conversation, those with it);

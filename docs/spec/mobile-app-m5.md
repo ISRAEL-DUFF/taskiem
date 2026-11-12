@@ -37,3 +37,15 @@ the web read first, the app built to the parity test where the web has a
 picture of it (new parity screens: the panel, a tool's sheet, Linked
 businesses, the profile, Their shop), widget tests, large text and touch
 targets as for every screen; committed on its own.
+
+## Where it stands
+
+| Part | Done | Parity pictures |
+|---|---|---|
+| K, P, S | The kit's list parts; the tools panel ("/" and a word filter it; Recent); each tool's sheet (search, chips, rows) | `chat-tools`, `chat-tool-sheet` |
+| L | Linked businesses: every link's state and actions, being found, the link code and QR | Not yet: widget tests only |
+| B | Your business in Explore: being found, the card as others see it, logo, words, delivering, photos (add, move, remove, caption) | Not yet: widget tests only |
+| O | Their shop (pick, sizes, the bag, review, Place order, Ask for a quote, Make an offer, Same as last time), Order on a live card, Your orders with each order's steps (confirm their quote, accept a change, all came, not all came, cancel, Reorder), View order on a purchase card | `chat-order`, `chat-order-review` |
+
+The head's Order button is left out: the web hides it at phone width
+(chat.css, `max-width: 860px`), so the app shows what the phone web does.

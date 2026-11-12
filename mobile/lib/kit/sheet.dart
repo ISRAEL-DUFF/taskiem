@@ -64,7 +64,7 @@ class _SheetFrame extends InheritedWidget {
 
 /// kit.tsx Sheet.
 class TkSheet extends StatelessWidget {
-  const TkSheet({super.key, required this.title, required this.body, this.footer, this.onBack, this.overlay, this.semanticsLabel, this.count, this.crumb});
+  const TkSheet({super.key, required this.title, required this.body, this.footer, this.onBack, this.overlay, this.semanticsLabel, this.count, this.crumb, this.lead, this.sub, this.bareFooter = false});
 
   final String title;
 
@@ -86,6 +86,14 @@ class TkSheet extends StatelessWidget {
 
   /// What the title is in ("Products" over a product's name).
   final String? crumb;
+
+  /// chat.css `.tk-sheet-lead`: a 48 px mark before the title (the title
+  /// then 22 px), and `.tk-sheet-sub`, a line under it (the Buyer design).
+  final Widget? lead;
+  final String? sub;
+
+  /// kit.css `.tk-sheet-foot:has(.tk-bag)`: no line above, no top padding.
+  final bool bareFooter;
 
   @override
   Widget build(BuildContext context) {
@@ -161,6 +169,11 @@ class TkSheet extends StatelessWidget {
                               children: [
                                 if (onBack != null) ...[
                                   _Round(icon: 'back', label: 'Back', onTap: onBack!),
+                                  // `.tk-back { margin-right: 4px }` with the head's 12 px gap.
+                                  SizedBox(width: crumb == null ? 16 : 12),
+                                ],
+                                if (lead != null) ...[
+                                  SizedBox(width: 48, height: 48, child: ExcludeSemantics(child: lead!)),
                                   const SizedBox(width: 12),
                                 ],
                                 Expanded(
@@ -181,8 +194,14 @@ class TkSheet extends StatelessWidget {
                                               ],
                                             ],
                                           ),
-                                          style: tkText(size: 26, weight: 800, lineHeight: 1.35, letterSpacing: -0.52, color: t.text),
+                                          style: lead != null
+                                              ? tkText(size: 22, weight: 800, lineHeight: 1.2, letterSpacing: -0.44, color: t.text)
+                                              : tkText(size: 26, weight: 800, lineHeight: 1.35, letterSpacing: -0.52, color: t.text),
                                         ),
+                                        if (sub != null) ...[
+                                          const SizedBox(height: 2),
+                                          Text(sub!, style: tkText(size: 13, color: t.muted)),
+                                        ],
                                       ],
                                     ),
                                   ),
@@ -193,12 +212,7 @@ class TkSheet extends StatelessWidget {
                             ),
                           ),
                           Expanded(child: body),
-                          if (footer != null)
-                            Container(
-                              decoration: BoxDecoration(border: Border(top: BorderSide(color: t.border))),
-                              padding: EdgeInsets.fromLTRB(20, 12, 20, 18 + pad.bottom),
-                              child: footer,
-                            ),
+                          if (footer != null) TkSheetFoot(bare: bareFooter, child: footer!),
                         ],
                       ),
                       ?overlay,
@@ -486,6 +500,26 @@ class TkCta extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// kit.css `.tk-sheet-foot`: the sheet's buttons, over a line, clear of
+/// the phone's bottom edge; for a body that draws its own foot (a row's
+/// detail whose buttons follow its state).
+class TkSheetFoot extends StatelessWidget {
+  const TkSheetFoot({super.key, required this.child, this.bare = false});
+  final Widget child;
+  final bool bare;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final pad = MediaQuery.paddingOf(context);
+    return Container(
+      decoration: bare ? null : BoxDecoration(border: Border(top: BorderSide(color: t.border))),
+      padding: EdgeInsets.fromLTRB(20, bare ? 0 : 12, 20, 18 + pad.bottom),
+      child: child,
     );
   }
 }

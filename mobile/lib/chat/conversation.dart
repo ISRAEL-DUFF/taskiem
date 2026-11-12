@@ -22,6 +22,9 @@ import '../theme/theme.dart';
 import 'attachments.dart';
 import 'cards.dart';
 import 'chats.dart';
+import 'order_sheet.dart';
+import 'purchase_view.dart' show toolDetail;
+import '../kit/sheet.dart' show TkCta;
 import 'composer.dart';
 import 'tool_sheet.dart';
 import 'tools.dart';
@@ -690,8 +693,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
   late final CardActs _acts = CardActs(
     auth: widget.data.chats.auth,
     onDone: () => widget.data.pull(),
-    // A document's own screen comes with the tools (M5 to M8).
-    onOpen: widget.onOpenDoc ?? (_) => showComingSoon(context),
+    // An order we sent them opens among Your orders; the other documents'
+    // screens come with their tools (M7, M8).
+    onOpen: widget.onOpenDoc ?? _openDoc,
     ask: (title, ok) => showTkConfirm(context, title: title, ok: ok, danger: true),
     said: (words) {
       if (mounted) showTkToast(context, words);
@@ -720,10 +724,67 @@ class _ConversationScreenState extends State<ConversationScreen> {
   late final _tools = ToolsController(chats: widget.data.chats, scope: widget.data.conv.link, business: widget.data.conv.name);
 
   /// ChatTools.tsx: a tool opened from the panel; "/" and its word, put away.
-  void _openTool(Tool tool) {
+  void _openTool(Tool tool, {String? openId}) {
     _tools.close();
     if (RegExp(r'^/\S*$').hasMatch(_text.text)) _text.clear();
-    showToolSheet(context, tools: _tools, tool: tool);
+    final d = widget.data;
+    final can = d.chats.auth.can;
+    final supplies = d.priceWhose == 'theirs' && can('table.edit') && can('storefront.manage');
+    showToolSheet(
+      context,
+      tools: _tools,
+      tool: tool,
+      openId: openId,
+      detail: toolDetail(
+        d.chats.auth,
+        // Reorder: the sheet closes; their shop opens with its lines.
+        onReorder: supplies
+            ? (p) {
+                Navigator.of(context).maybePop();
+                _order(OrderStart(last: p));
+              }
+            : null,
+      ),
+      footer: tool.key == 'purchases' && supplies
+          ? Builder(
+              builder: (sheet) => TkCta(
+                label: 'New order',
+                onTap: () {
+                  Navigator.of(sheet).maybePop();
+                  _order();
+                },
+              ),
+            )
+          : null,
+    );
+  }
+
+  /// Conversation.tsx openDoc: a card's document in its tool's sheet.
+  void _openDoc(LinkDocCard card) {
+    final tool = card.doc == 'purchase' ? tools.where((x) => x.key == 'purchases').firstOrNull : null;
+    if (tool == null) {
+      showComingSoon(context);
+      return;
+    }
+    _openTool(tool, openId: card.id);
+  }
+
+  /// ChatComposer.tsx's OrderSheet: their shop, to order from when we may
+  /// (drafting needs table.edit; sending and the supplier,
+  /// storefront.manage), else to look around.
+  Future<void> _order([OrderStart? start]) async {
+    final d = widget.data;
+    final can = d.chats.auth.can;
+    _tools.close();
+    if (RegExp(r'^/\S*$').hasMatch(_text.text)) _text.clear();
+    await showOrderSheet(
+      context,
+      chats: d.chats,
+      link: d.conv.link,
+      business: d.conv.name,
+      start: start,
+      browse: !(can('table.edit') && can('storefront.manage')),
+    );
   }
 
   /// Conversation.tsx businessTiles and the panel's own (Their shop): what
@@ -741,9 +802,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
     }
 
     return (
-      lead: [(key: 'order', title: 'Their shop', icon: 'plus', line: 'From ${d.conv.name}', onPick: soon)],
+      lead: [(key: 'order', title: 'Their shop', icon: 'plus', line: 'From ${d.conv.name}', onPick: () => _order())],
       extras: [
-        if (supplies) (key: 'offer', title: 'Make an offer', icon: 'tag', line: 'Your price for an order', onPick: soon),
+        if (supplies) (key: 'offer', title: 'Make an offer', icon: 'tag', line: 'Your price for an order', onPick: () => _order(const OrderStart(offer: true))),
         if (can('invoice.manage')) (key: 'invoice-them', title: 'Invoice them', icon: 'invoices', line: 'A new invoice to ${d.conv.name}', onPick: soon),
         if (can('invoice.read')) (key: 'statement', title: 'Statement', icon: 'money', line: 'What is owed each way', onPick: soon),
       ],
@@ -1220,6 +1281,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
             onReact: _write ? (e) => d.react(m.m, e) : null,
             taps: _taps[m.id] ?? 0,
             live: d.chats.chatTools ? (items: d.priceList, whose: d.priceWhose, stock: d.stock) : null,
+            onOrder: (id) => _order(OrderStart(itemId: id)),
             onOpenLink: widget.onOpenLink,
             cheer: d.cheer == m.id,
             refs: (auth: d.chats.auth, link: d.conv.link),
@@ -1326,6 +1388,7 @@ class _Bubble extends StatelessWidget {
     this.onOpenLink,
     this.cheer = false,
     this.refs,
+    this.onOrder,
   });
 
   /// Where the cards of what it names are read.
@@ -1337,6 +1400,9 @@ class _Bubble extends StatelessWidget {
   /// With chat tools: what a tagged thing's card reads (the price list,
   /// whose it is, our stock).
   final ({List<PriceItem> items, String whose, List<StockItem> stock})? live;
+
+  /// Order on a live card: their shop, opened on its item.
+  final ValueChanged<String>? onOrder;
 
   /// A tagged business opens its conversation.
   final ValueChanged<String>? onOpenLink;
@@ -1567,7 +1633,7 @@ class _Bubble extends StatelessWidget {
                                 if (msg.reply != null) _Quote(reply: msg.reply!, mine: mine, other: other),
                                 if (msg.attachment != null) AttachmentView(m: msg, files: files, other: other, room: max - 24, local: out?.file),
                                 if (live != null && liveTag(msg.mentions) != null)
-                                  LiveCard(m: liveTag(msg.mentions)!, items: live!.items, whose: live!.whose, stock: live!.stock),
+                                  LiveCard(m: liveTag(msg.mentions)!, items: live!.items, whose: live!.whose, stock: live!.stock, onOrder: onOrder),
                                 if (body.isNotEmpty) text,
                                 // Conversation.tsx: the invoices, bills and orders it
                                 // names, each as its card, read now.

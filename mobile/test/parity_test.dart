@@ -276,6 +276,8 @@ final screens = <String, Screen>{
       await _loaded(t);
     },
   ),
+  'chat-order': (build: () => _conversation('chat-order', 'Bayo Rice Mills'), drive: (t) => _shop(t)),
+  'chat-order-review': (build: () => _conversation('chat-order', 'Bayo Rice Mills'), drive: (t) => _shop(t, review: true)),
   'chat-taskiem-cards': (
     build: () {
       final f = Fixture('chat-taskiem');
@@ -594,4 +596,20 @@ Future<void> _hold(WidgetTester t) async {
   await _loaded(t);
   await t.longPress(find.textContaining('Good morning ma', findRichText: true));
   await t.pumpAndSettle();
+}
+
+/// Their shop from the tools panel, the first item it can add in the bag;
+/// with [review], its review.
+Future<void> _shop(WidgetTester t, {bool review = false}) async {
+  await _loaded(t);
+  await t.tap(find.bySemanticsLabel('Open tools'));
+  await _loaded(t);
+  await t.tap(find.bySemanticsLabel(RegExp('^Their shop')));
+  await _loaded(t);
+  await t.tap(find.bySemanticsLabel(RegExp('^One more ')).first);
+  await _loaded(t);
+  if (review) {
+    await t.tap(find.bySemanticsLabel('Review order'));
+    await _loaded(t);
+  }
 }

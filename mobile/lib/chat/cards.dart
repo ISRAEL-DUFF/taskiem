@@ -39,7 +39,6 @@ class CardFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    final dark = TkTheme.of(context).mode == TkMode.dark;
     final st = cardStatus(current ?? card, now);
     final steps = stepsFor(card);
     final sub = cardSub(card);
@@ -63,43 +62,7 @@ class CardFrame extends StatelessWidget {
       Text(breakAfterHyphens(title), style: tkText(size: 15, weight: 600, color: t.text)),
       if (sub.isNotEmpty) Text(sub, style: tkText(size: 14, color: mine ? t.chatOutMeta : t.muted)),
       if (card.deal != null) DealHistory(card: card, now: now),
-      if (step != null)
-        Semantics(
-          label: '${steps[step]}: step ${step + 1} of ${steps.length}',
-          excludeSemantics: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // `.tk-progress-bar`: four columns, 4 px apart, 5 px tall.
-              Row(
-                children: [
-                  for (var i = 0; i < steps.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 4),
-                    Expanded(
-                      child: Container(
-                        height: 5,
-                        decoration: BoxDecoration(color: i <= step ? (dark ? t.brandDark : t.brand) : t.borderStrong, borderRadius: BorderRadius.circular(3)),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 6),
-              // `.tk-progress-words`: the same columns with no gap.
-              Row(
-                children: [
-                  for (var i = 0; i < steps.length; i++)
-                    Expanded(
-                      child: Text(
-                        steps[i],
-                        style: tkText(size: 11.5, weight: i == step ? 600 : 400, color: i == step ? t.text : t.muted),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
+      if (step != null) CardProgress(steps: steps, step: step),
       if (actions.isNotEmpty) CardActionRows(children: actions),
       // `.tk-deal-form { margin-top: 6px }`, on a line of its own.
       if (deal != null) Padding(padding: const EdgeInsets.only(top: 6), child: deal),
@@ -510,6 +473,56 @@ class DiaryLine extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// chat.css `.tk-progress`: the steps as a bar of [steps] columns, the one
+/// it is at in words under it.
+class CardProgress extends StatelessWidget {
+  const CardProgress({super.key, required this.steps, required this.step});
+  final List<String> steps;
+  final int step;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    return Semantics(
+      label: '${steps[step]}: step ${step + 1} of ${steps.length}',
+      excludeSemantics: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // `.tk-progress-bar`: four columns, 4 px apart, 5 px tall.
+          Row(
+            children: [
+              for (var i = 0; i < steps.length; i++) ...[
+                if (i > 0) const SizedBox(width: 4),
+                Expanded(
+                  child: Container(
+                    height: 5,
+                    decoration: BoxDecoration(color: i <= step ? (dark ? t.brandDark : t.brand) : t.borderStrong, borderRadius: BorderRadius.circular(3)),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 6),
+          // `.tk-progress-words`: the same columns with no gap.
+          Row(
+            children: [
+              for (var i = 0; i < steps.length; i++)
+                Expanded(
+                  child: Text(
+                    steps[i],
+                    style: tkText(size: 11.5, weight: i == step ? 600 : 400, color: i == step ? t.text : t.muted),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

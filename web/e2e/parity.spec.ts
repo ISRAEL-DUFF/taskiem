@@ -474,6 +474,48 @@ const SCREENS: {
     },
   },
   {
+    // Their shop from a business's tools (M5): their prices, one item in
+    // the bag, the bag in pine at the foot.
+    name: "chat-order",
+    touch: true,
+    path: "/chat?with=e03b6c00-cf87-43ff-8421-3bad056db361",
+    fixture: "chat-order",
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-message").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "Open tools" }).click();
+      await p.getByTestId("tools-panel").getByRole("button", { name: /^Their shop/ }).click();
+      await expect(p.getByTestId("order-sheet")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: /^One more / }).first().click();
+      await p.waitForTimeout(800);
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // The same order's review: not one of our suppliers yet, the lines,
+    // Make an offer, the note, and Place order.
+    name: "chat-order-review",
+    touch: true,
+    path: "/chat?with=e03b6c00-cf87-43ff-8421-3bad056db361",
+    fixture: "chat-order",
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-message").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "Open tools" }).click();
+      await p.getByTestId("tools-panel").getByRole("button", { name: /^Their shop/ }).click();
+      await expect(p.getByTestId("order-sheet")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: /^One more / }).first().click();
+      await p.getByRole("button", { name: "Review order" }).click();
+      await p.waitForLoadState("networkidle");
+      await p.waitForTimeout(800);
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
     // The same, scrolled to its end: the briefing and the cards.
     name: "chat-taskiem-cards",
     touch: true,

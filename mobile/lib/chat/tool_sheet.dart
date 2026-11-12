@@ -30,17 +30,23 @@ Future<void> showToolSheet(
   required Tool tool,
   String? chip,
   void Function(BuildContext context, ToolRow row)? onRow,
+  ToolDetail? detail,
   Widget? footer,
+  String? openId,
 }) {
   tools.chats.prefs?.rememberTool(tool.key);
-  return showTkSheet<void>(context, (_) => ToolSheet(tools: tools, tool: tool, chip: chip, onRow: onRow, footer: footer));
+  return showTkSheet<void>(context, (_) => ToolSheet(tools: tools, tool: tool, chip: chip, onRow: onRow, detail: detail, footer: footer, openId: openId));
 }
+
+/// A row's detail in its sheet (ChatTools.tsx Detail): the body and its own
+/// foot; [done] with the words to show, once saved (the sheet then closes).
+typedef ToolDetail = Widget? Function(BuildContext context, Tool tool, ToolRow row, void Function(String words) done);
 
 /// A product not sold in sizes and colours already (ChatTools.tsx plainItem).
 bool _plain(ToolRow r) => ((r.data?['choices'] as List?)?.length ?? 0) == 0 && r.data?['variant_of'] == null;
 
 class ToolSheet extends StatefulWidget {
-  const ToolSheet({super.key, required this.tools, required this.tool, this.chip, this.onRow, this.footer});
+  const ToolSheet({super.key, required this.tools, required this.tool, this.chip, this.onRow, this.detail, this.footer, this.openId});
   final ToolsController tools;
   final Tool tool;
 
@@ -49,6 +55,13 @@ class ToolSheet extends StatefulWidget {
 
   /// A row pressed (its form, where the tool has one here).
   final void Function(BuildContext context, ToolRow row)? onRow;
+
+  /// A row opened in the sheet, where the tool's detail is here (null:
+  /// [onRow], else coming soon).
+  final ToolDetail? detail;
+
+  /// A row to open once the list is read (a card's View order).
+  final String? openId;
 
   /// The sheet's own button, in place of the tool's (New order).
   final Widget? footer;
@@ -60,6 +73,17 @@ class ToolSheet extends StatefulWidget {
 class _ToolSheetState extends State<ToolSheet> {
   final _search = TextEditingController();
   late String? _chip = widget.chip;
+  ToolRow? _open;
+  String? _saved;
+  late bool _opening = widget.openId != null;
+
+  void _done(String words) {
+    setState(() => _saved = words);
+    widget.tools.refresh(widget.tool);
+    Future<void>.delayed(const Duration(milliseconds: 1300), () {
+      if (mounted) Navigator.of(context).maybePop();
+    });
+  }
 
   @override
   void initState() {
@@ -86,6 +110,21 @@ class _ToolSheetState extends State<ToolSheet> {
         final name = title.toLowerCase();
         final add = tool.add;
         final canAdd = add != null && mayEdit(tool.key, c.can);
+        if (_opening && list != null) {
+          _opening = false;
+          _open = list.where((r) => r.id == widget.openId).firstOrNull;
+        }
+        final open = _open;
+        final detail = open == null ? null : widget.detail?.call(context, widget.tool, open, _done);
+        if (open != null && detail != null) {
+          return TkSheet(
+            title: open.name,
+            crumb: title,
+            onBack: () => setState(() => _open = null),
+            overlay: _saved == null ? null : TkSavedTick(words: _saved!),
+            body: detail,
+          );
+        }
         return TkSheet(
           title: title,
           count: list?.length,
@@ -165,7 +204,11 @@ class _ToolSheetState extends State<ToolSheet> {
           letters: tool.rowIcon == null ? tileLetters(r.name) : null,
           icon: tool.rowIcon,
           pill: r.pill == null ? null : TkPill(r.pill!.text, tone: r.pill!.tone),
-          onTap: () => widget.onRow != null ? widget.onRow!(context, r) : showComingSoon(context),
+          onTap: () => widget.detail?.call(context, widget.tool, r, _done) != null
+              ? setState(() => _open = r)
+              : widget.onRow != null
+              ? widget.onRow!(context, r)
+              : showComingSoon(context),
         );
       },
     );
