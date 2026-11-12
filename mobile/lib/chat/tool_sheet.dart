@@ -13,6 +13,7 @@ import '../kit/sheet.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'sizes_forms.dart' show GroupForm;
+import 'bookings_page.dart' show BookingsPage;
 import 'stock_page.dart' show StockPage;
 import 'tools.dart';
 import 'tools_panel.dart';
@@ -27,6 +28,7 @@ const soonTools = {'availability'};
 void openToolPage(BuildContext context, Tool tool, Auth auth) {
   final Widget? page = switch (tool.key) {
     'products' || 'stock' || 'sell' || 'handover' => StockPage(auth: auth),
+    'services' => BookingsPage(auth: auth),
     _ => null,
   };
   if (page == null) return showComingSoon(context);
@@ -83,6 +85,7 @@ class ToolHost {
 void openToolPage(BuildContext context, Tool tool, Auth auth) {
   final Widget? page = switch (tool.key) {
     'products' || 'stock' || 'sell' || 'handover' => StockPage(auth: auth),
+    'services' => BookingsPage(auth: auth),
     _ => null,
   };
   if (page == null) return showComingSoon(context);
