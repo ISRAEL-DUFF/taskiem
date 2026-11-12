@@ -253,8 +253,9 @@ String? splitProblem(List<String> amounts, int left) {
 /// invoices.ts splitHint.
 String splitHint(Map<String, dynamic> split, String number) {
   final whose = _maps(split['parts']).any((x) => x['sibling'] == true) ? 'the family’s' : 'the same customer’s';
-  if (split['over'] == true)
+  if (split['over'] == true) {
     return 'The payment is more than is due on $number. Offered across $whose open invoices, $number first then oldest first; change the amounts if you know better.';
+  }
   return '$number is offered all of it. If this payment is for several of $whose open invoices, give each its part. An invoice can take more of this payment later: a further part adds to the first.';
 }
 
