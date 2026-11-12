@@ -80,7 +80,6 @@ void main() {
     expect(find.text('1 item · shared with Rivers Foods'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Items of Trade'));
     await settle(t);
-    await snap(t, 'price_lists_page-0');
     await t.tap(find.text('Beans (bag)'));
     await t.pump();
     await t.tap(find.bySemanticsLabel('+ Lower price for more of Rice'));
@@ -104,7 +103,6 @@ void main() {
     final sent = await open(t);
     await t.tap(find.bySemanticsLabel('Share Trade'));
     await settle(t);
-    await snap(t, 'price_lists_page-1');
     await t.tap(find.text('Eko Events'));
     await t.pump();
     await t.tap(find.descendant(of: find.byType(TkModal), matching: find.bySemanticsLabel('Save')));

@@ -232,6 +232,7 @@ class TkRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!TkAppLook.on(context)) return _web(context);
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
     final (bg, ink) = switch (tone) {
@@ -276,6 +277,54 @@ class TkRow extends StatelessWidget {
                 const SizedBox(width: 4),
                 ExcludeSemantics(child: TkIcon('chevron', size: 18, color: t.muted)),
               ],
+            ],
+          ),
+        ),
+      ),
+    ),
+    );
+  }
+
+  /// The web's look, kept in the chat (its sheets match the web's).
+  Widget _web(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final (bg, ink) = switch (tone) {
+      CardTone.warn => (t.tintWarn, t.tintWarnText),
+      CardTone.danger => (t.tkDangerBg, t.tkDangerInk),
+      _ => icon != null ? (t.tkLimeSoft, dark ? t.brandDark : t.brand) : tkTone(t, toneOf(name)),
+    };
+    // One node: its name, line and pill read together, as the row they are.
+    return MergeSemantics(
+      child: Semantics(
+      button: onTap != null,
+      child: TkPress(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          child: Row(
+            children: [
+              ExcludeSemantics(
+                child: Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+                  alignment: Alignment.center,
+                  child: icon != null ? TkIcon(icon!, size: 24, color: ink) : Text(letters ?? '', style: tkText(size: 16, weight: 800, color: ink)),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name, style: tkText(size: 16, weight: 600, color: t.text)),
+                    if (sub.isNotEmpty) Text(sub, style: tkText(size: 14, color: t.muted)),
+                  ],
+                ),
+              ),
+              if (pill != null) ...[const SizedBox(width: 14), pill!],
+              if (trailing != null) ...[const SizedBox(width: 14), trailing!],
             ],
           ),
         ),

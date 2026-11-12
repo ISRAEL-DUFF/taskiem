@@ -157,7 +157,6 @@ void main() {
     await t.pump();
     await t.tap(find.bySemanticsLabel('Add the rider'));
     await settle(t);
-    await snap(t, 'riders_page-0');
     await t.pumpAndSettle();
     expect(sent.last, 'POST /v1/riders {"name":"Chidi Obi","zones":["Ajah"],"fee_kobo":120000,"phone":"0803 555 1234"}');
     await t.pump(const Duration(seconds: 5));
@@ -177,7 +176,6 @@ void main() {
     await t.pump();
     await t.tap(find.bySemanticsLabel('Save'));
     await settle(t);
-    await snap(t, 'riders_page-1');
     await t.pumpAndSettle();
     expect(sent.last, 'PATCH /v1/riders/R1 {"name":"Musa","zones":["Lekki"],"fee_kobo":100000,"active":false}');
     await t.pump(const Duration(seconds: 5));
@@ -190,7 +188,6 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Record it'));
     await settle(t);
-    await snap(t, 'riders_page-2');
     await t.pumpAndSettle();
     expect(sent.last, 'POST /v1/riders/R1/remit {"amount_kobo":500000,"how":"cash"}');
     await t.pump(const Duration(seconds: 5));

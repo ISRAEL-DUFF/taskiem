@@ -191,15 +191,14 @@ void main() {
   testWidgets('the list: each invoice, a filter asked of the server', (t) async {
     final sent = await open(t, (c) => InvoicesPage(auth: c.auth));
     expect(sent.first, 'LIST ');
-    expect(find.text('Bisi Ade · +234*******567'), findsOneWidget);
-    expect(find.text('INV-0007 · due 20 Nov 2026\n₦32,000 · ₦22,000 still due'), findsOneWidget);
-    await t.tap(find.text('Show: All'));
-    await t.pumpAndSettle();
-    await t.tap(find.text('Overdue'));
+    expect(find.text('Bisi Ade'), findsOneWidget);
+    expect(find.text('INV-0007 · ₦22,000 still due'), findsOneWidget);
+    expect(find.text('₦32,000'), findsOneWidget);
+    await t.ensureVisible(find.bySemanticsLabel('Overdue'));
+    await t.tap(find.bySemanticsLabel('Overdue'));
     await settle(t);
-    await snap(t, 'invoices_page-0');
     expect(sent.last, 'LIST status=overdue');
-    await t.tap(find.text('Bisi Ade · +234*******567'));
+    await t.tap(find.text('Bisi Ade'));
     await settle(t);
     expect(find.text('Invoice INV-0007'), findsOneWidget);
   });
@@ -212,7 +211,6 @@ void main() {
     expect(find.text('Sent by SMS.'), findsNothing);
     await t.tap(find.bySemanticsLabel('Send again'));
     await settle(t);
-    await snap(t, 'invoices_page-1');
     expect(sent.last, 'POST /v1/invoices/I1/send {} key');
     expect(find.text('Sent by SMS.'), findsOneWidget);
     expect(find.text('Share its page'), findsOneWidget);
@@ -231,7 +229,6 @@ void main() {
     await t.pump();
     await t.tap(find.bySemanticsLabel('Void invoice'));
     await settle(t);
-    await snap(t, 'invoices_page-2');
     expect(sent.last, 'POST /v1/invoices/I1/void {"reason":"Wrong customer"}');
 
     await t.tap(find.bySemanticsLabel('Undo the payment PSK-991'));

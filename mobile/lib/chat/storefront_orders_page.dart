@@ -481,6 +481,7 @@ class _StorefrontOrdersPageState extends State<StorefrontOrdersPage> with Pollin
                     semanticsLabel: '${kindLabel[o['kind']] ?? o['kind']}${front != null ? ', $front' : ''}',
                     icon: o['status'] == 'refund_due' ? 'refund' : (o['kind'] == 'booking' ? 'clock' : (o['kind'] == 'order' || o['kind'] == 'trade' ? null : 'inbox')),
                     sub: [
+                      if (_str(c['name']).isNotEmpty && _str(c['phone']).isNotEmpty) _str(c['phone']),
                       _str(o['reference']),
                       if (what.isNotEmpty) what,
                       ...extra.where((x) => x.isNotEmpty),

@@ -211,7 +211,7 @@ class TkScreen extends StatelessWidget {
     final dark = TkTheme.of(context).mode == TkMode.dark;
     final pad = MediaQuery.paddingOf(context);
     Widget list = SingleChildScrollView(
-      physics: onRefresh == null ? const BouncingScrollPhysics() : const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      physics: onRefresh == null ? const BouncingScrollPhysics() : const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16, 8, 16, 28 + pad.bottom),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -223,7 +223,8 @@ class TkScreen extends StatelessWidget {
     if (onRefresh != null) list = RefreshIndicator(onRefresh: onRefresh!, color: t.brand, child: list);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
-      child: ColoredBox(
+      child: TkAppLook(
+        child: ColoredBox(
         color: t.bg,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -256,6 +257,7 @@ class TkScreen extends StatelessWidget {
           ],
         ),
       ),
+      )
     );
   }
 }

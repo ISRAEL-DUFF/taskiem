@@ -264,7 +264,10 @@ class _InvoicesPageState extends State<InvoicesPage> with Polling {
         mainAxisSize: MainAxisSize.min,
         children: [
           TkHeadButton(icon: 'settings', label: 'Invoice settings', onTap: () => _push(context, InvoiceSettingsPage(auth: widget.auth))),
-          if (manage) ...[const SizedBox(width: 6), TkSmallButton(label: 'New', semantics: 'New invoice', primary: true, onPressed: _new)],
+          if (manage) ...[
+            const SizedBox(width: 6),
+            Flexible(child: TkSmallButton(label: 'New', semantics: 'New invoice', primary: true, onPressed: _new)),
+          ],
         ],
       ),
       under: TkChips<String>(

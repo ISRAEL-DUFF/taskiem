@@ -152,7 +152,6 @@ void main() {
     expect(find.text('5 at ₦1,000 · they proposed ₦900'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Yes, that is it for Rice 50kg'));
     await settle(t);
-    await snap(t, 'trade_orders_page-0');
     expect(sent.single, 'PUT /v1/trade-orders/T1/lines/0/item {"item_id":"rice"}');
     sent.clear();
     await t.tap(find.bySemanticsLabel('Their Beans: Not one of mine'));
@@ -179,7 +178,6 @@ void main() {
     await t.pump();
     await t.tap(find.bySemanticsLabel('Send the change'));
     await settle(t);
-    await snap(t, 'trade_orders_page-1');
     expect(
       sent.single,
       'POST /v1/trade-orders/T1/change {"lines":[{"item":"Rice 50kg","unit":"bag","quantity":2,"price_kobo":500000},{"item":"Beans","quantity":0,"price_kobo":100000}],"note":"Beans are out"}',
@@ -200,7 +198,6 @@ void main() {
     expect(find.bySemanticsLabel('Accept'), findsNothing);
     await t.tap(find.bySemanticsLabel('It is ready'));
     await settle(t);
-    await snap(t, 'trade_orders_page-2');
     expect(sent.single, 'POST /v1/trade-orders/T1/ready {}');
     await t.pump(const Duration(seconds: 5));
     sent.clear();

@@ -13,10 +13,10 @@ import 'package:taskiem/app/links.dart';
 import 'package:taskiem/chat/bookings_page.dart' show orderStatus;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/trade_orders_page.dart' show TradeOrdersPage;
-import 'package:taskiem/kit/list.dart' show TkRow;
 import 'package:taskiem/chat/storefront_orders_page.dart';
 import 'package:taskiem/chat/words.dart' show CardTone, Tone;
 import 'package:taskiem/kit/modal.dart' show TkModal;
+import 'package:taskiem/kit/mobile.dart' show TkListRow;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
@@ -171,16 +171,16 @@ void main() {
 
   testWidgets('the list: each order in words; filtered by status; one opened', (t) async {
     final r = await serve(t, (c) => StorefrontOrdersPage(auth: c.auth, now: () => _now));
-    expect(find.text('Ngozi · Order'), findsOneWidget);
-    expect(find.text('•••4567 · OR-5K2Q · 2 × Jollof rice, 1 × Chapman · 5 min ago\n₦6,500 · Pays when ordering · paid'), findsOneWidget);
+    expect(find.text('Ngozi'), findsOneWidget);
+    expect(find.text('•••4567 · OR-5K2Q · 2 × Jollof rice, 1 × Chapman · Pays when ordering · paid · 5 min ago'), findsOneWidget);
+    expect(find.text('₦6,500'), findsOneWidget, reason: 'the amount at the row’s end');
     expect(r.sent.last, 'GET /v1/storefront/orders status=open');
-    await t.tap(find.bySemanticsLabel('Show: Open'));
-    await t.pumpAndSettle();
-    await t.tap(find.text('Refund due'));
+    expect(find.bySemanticsLabel('Open'), findsWidgets);
+    await t.ensureVisible(find.bySemanticsLabel('Refund due'));
+    await t.tap(find.bySemanticsLabel('Refund due'));
     await settle(t);
-    await snap(t, 'storefront_orders_page-0');
     expect(r.sent.last, 'GET /v1/storefront/orders status=refund_due');
-    await t.tap(find.text('Ngozi · Order'));
+    await t.tap(find.text('Ngozi'));
     await settle(t);
     expect(find.text('Order OR-5K2Q'), findsOneWidget);
   });
@@ -194,7 +194,6 @@ void main() {
     expect(find.text('Suggested, confirmed by Ada'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Offer to a free rider'));
     await settle(t);
-    await snap(t, 'storefront_orders_page-1');
     expect(r.sent.single, 'POST /v1/storefront/orders/OR-5K2Q/offer {}');
     expect(find.text('Offered to Bayo. They have a few minutes to accept.'), findsOneWidget);
     r.sent.clear();
@@ -248,7 +247,6 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Take it back').last);
     await settle(t);
-    await snap(t, 'storefront_orders_page-2');
     expect(r.sent.single, 'POST /v1/storefront/orders/OR-5K2Q/release {}');
     await t.pump(const Duration(seconds: 5));
   });
@@ -494,14 +492,14 @@ void main() {
       },
     );
     expect(find.text('Try again.'), findsOneWidget);
-    await t.tap(find.bySemanticsLabel('Refresh'));
+    await t.fling(find.byType(Scrollable).last, const Offset(0, 400), 1000);
     await settle(t);
     expect(find.text('Try again.'), findsNothing);
     expect(find.text('This Taskiem does not take storefront orders yet.'), findsOneWidget);
     await serve(t, (c) => StorefrontOrdersPage(auth: c.auth, now: () => _now), order: _order(status: 'received'));
-    expect(t.widget<TkRow>(find.byType(TkRow)).tone, CardTone.warn);
+    expect(t.widget<TkListRow>(find.byType(TkListRow).last).waiting, isTrue);
     await serve(t, (c) => StorefrontOrdersPage(auth: c.auth, now: () => _now), order: _order(status: 'refund_due'));
-    expect(t.widget<TkRow>(find.byType(TkRow)).tone, CardTone.danger);
+    expect(t.widget<TkListRow>(find.byType(TkListRow).last).tone, CardTone.danger);
   });
 
   testWidgets('from more than one front: the From filter asks for that front', (t) async {
@@ -552,7 +550,7 @@ void main() {
     await t.tap(find.bySemanticsLabel('All your orders'));
     await settle(t);
     expect(find.text('Orders'), findsWidgets);
-    await t.tap(find.text('Ngozi · Order'));
+    await t.tap(find.text('Ngozi'));
     await settle(t);
     expect(find.bySemanticsLabel('Back to Orders'), findsOneWidget);
     await serve(t, (c) => StorefrontOrderPage(auth: c.auth, reference: 'OR-5K2Q', now: () => _now));
@@ -590,9 +588,8 @@ void main() {
       (c) => StorefrontOrdersPage(auth: c.auth, now: () => _now),
       also: (req) async => req.url.path == '/v1/trade-orders' ? json({'orders': [{'id': 'T1'}]}) : null,
     );
-    expect(find.text('Orders from businesses you are linked with are among these. '), findsOneWidget);
-    expect(find.bySemanticsLabel('Orders from linked businesses'), findsOneWidget);
-    expect(find.text(' has what is theirs alone.'), findsOneWidget);
+    expect(find.text('Orders from linked businesses'), findsOneWidget);
+    expect(find.text('What is theirs alone'), findsOneWidget);
   });
 
   testWidgets('a booking being cancelled: Move waits', (t) async {

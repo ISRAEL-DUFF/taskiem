@@ -209,7 +209,6 @@ void main() {
     expect(find.text('9 am to 10 am  In ₦0 · Out ₦0'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('This week'));
     await settle(t);
-    await snap(t, 'money_page-0');
     expect(sent.where((s) => s.startsWith('GET /v1/money/summary')).last, 'GET /v1/money/summary from=2026-11-09&to=2026-11-12');
     await t.tap(find.bySemanticsLabel('Download as a spreadsheet'));
     await t.pumpAndSettle();
@@ -223,7 +222,6 @@ void main() {
     await t.ensureVisible(find.bySemanticsLabel('Pick dates'));
     await t.tap(find.bySemanticsLabel('Pick dates'));
     await settle(t);
-    await snap(t, 'money_page-1');
     final asked = sent.where((s) => s.startsWith('GET /v1/money/summary')).length;
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^To')), matching: find.byType(EditableText)), '2026-10-01');
     await t.pump();
@@ -240,7 +238,6 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Assign: Fee above the agreed rate'));
     await settle(t);
-    await snap(t, 'money_page-2');
     expect(sent.where((s) => !s.startsWith('GET')).last, startsWith('POST /v1/money/leaks/K1/assign {"member":"'));
     expect(find.text('Fee above the agreed rate assigned to you.'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Close: Fee above the agreed rate'));

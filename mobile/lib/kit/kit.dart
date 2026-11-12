@@ -10,6 +10,17 @@ import 'tap_area.dart';
 
 /// A press, as the web's `button:active { transform: scale(0.98) }` with its
 /// 80 ms transition: the thing gives a little while held.
+/// Inside a page away from the chat: the kit draws itself in the app's
+/// own look (mobile.dart). Without it, the web's, as the chat keeps.
+class TkAppLook extends InheritedWidget {
+  const TkAppLook({super.key, required super.child});
+
+  static bool on(BuildContext context) => context.dependOnInheritedWidgetOfExactType<TkAppLook>() != null;
+
+  @override
+  bool updateShouldNotify(TkAppLook old) => false;
+}
+
 class TkPress extends StatefulWidget {
   const TkPress({super.key, required this.child, this.onTap, this.scale = 0.98});
 
@@ -281,6 +292,7 @@ class TkLinkButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!TkAppLook.on(context)) return _web(context);
     final t = TkTheme.tokens(context);
     return TapArea(child: Semantics(
       button: true,
@@ -294,6 +306,23 @@ class TkLinkButton extends StatelessWidget {
             heightFactor: 1,
             child: Text(label, style: tkText(size: 14, weight: 600, lineHeight: 1.2, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand)),
           ),
+        ),
+      ),
+    ));
+  }
+
+  /// The web's look, kept in the chat (its sheets match the web's).
+  Widget _web(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return TapArea(child: Semantics(
+      button: true,
+      child: TkPress(
+        onTap: onPressed ?? () {},
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 40),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(Tk.radiusSm), boxShadow: outsideOnly(t.shadow)),
+          child: Text(label, style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: t.accent, decoration: TextDecoration.underline)),
         ),
       ),
     ));
@@ -472,6 +501,7 @@ class TkSmallButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!TkAppLook.on(context)) return _web(context);
     final t = TkTheme.tokens(context);
     return TapArea(child: Semantics(
       button: true,
@@ -497,6 +527,33 @@ class TkSmallButton extends StatelessWidget {
               style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: primary ? t.primaryText : (danger ? t.tkDangerInk : t.text)),
             ),
           ),
+        ),
+      ),
+    ));
+  }
+
+  /// The web's look, kept in the chat (its sheets match the web's).
+  Widget _web(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return TapArea(child: Semantics(
+      button: true,
+      label: semantics,
+      enabled: onPressed != null,
+      onTap: onPressed,
+      excludeSemantics: semantics != null,
+      child: TkPress(
+        onTap: onPressed ?? () {},
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 36),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: primary ? t.primary : t.panel,
+            border: Border.all(color: primary ? t.primary : t.borderStrong),
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: primary ? const [BoxShadow(offset: Offset(0, 1), blurRadius: 0.87, color: Color(0x1F0E0F0C))] : t.shadow,
+          ),
+          child: Text(label, style: tkText(size: 11.9, weight: 500, lineHeight: 1.2, color: primary ? t.primaryText : (danger ? t.danger : t.text))),
         ),
       ),
     ));

@@ -44,7 +44,7 @@ class TkPageScreen extends StatelessWidget {
     // All built, none dropped when scrolled away: a card keeps what was
     // typed in it (a page is a few cards, not a long list).
     Widget list = SingleChildScrollView(
-      physics: onRefresh == null ? const BouncingScrollPhysics() : const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      physics: onRefresh == null ? const BouncingScrollPhysics() : const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.fromLTRB(16, 8, 16, 28 + pad.bottom),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -59,7 +59,8 @@ class TkPageScreen extends StatelessWidget {
     if (onRefresh != null) list = RefreshIndicator(onRefresh: onRefresh!, color: t.brand, child: list);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
-      child: ColoredBox(
+      child: TkAppLook(
+        child: ColoredBox(
         color: t.bg,
         child: Column(
           children: [
@@ -92,7 +93,7 @@ class TkPageScreen extends StatelessWidget {
                         builder: (context) => Text(description!, style: tkText(size: 15, lineHeight: 1.45, color: TkTheme.tokens(context).text)),
                       ),
                     ),
-                  if (action != null) ...[const SizedBox(width: 6), action!],
+                  if (action != null) ...[const SizedBox(width: 6), Flexible(child: action!)],
                 ],
               ),
             ),
@@ -101,6 +102,7 @@ class TkPageScreen extends StatelessWidget {
           ],
         ),
       ),
+      )
     );
   }
 }

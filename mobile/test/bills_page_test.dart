@@ -91,7 +91,6 @@ void main() {
     expect(find.text('Paid'), findsWidgets);
     await t.tap(find.text('Bayo Rice Mills').first);
     await settle(t);
-    await snap(t, 'bills_page-0');
     expect(find.text('INV-0042 from Bayo Rice Mills'), findsOneWidget);
   });
 
@@ -102,7 +101,6 @@ void main() {
     expect(find.text('Rice 50kg'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Pay ₦100,000'));
     await settle(t);
-    await snap(t, 'bills_page-1');
     expect(sent.last, 'POST /v1/bills/B1/pay {}');
     expect(find.text('Sent for approval'), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
@@ -112,7 +110,6 @@ void main() {
     final sent = await open(t, (c) => BillPage(auth: c.auth, id: 'B1', follow: false), ready: false);
     await t.tap(find.bySemanticsLabel('Set up paying bills'));
     await settle(t);
-    await snap(t, 'bills_page-2');
     expect(sent.last, 'PUT /v1/bills/pay/setup {}');
     expect(find.bySemanticsLabel('Pay ₦100,000'), findsOneWidget);
     await t.pump(const Duration(seconds: 5));

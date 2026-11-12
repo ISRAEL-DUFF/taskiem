@@ -220,7 +220,6 @@ void main() {
     expect(find.bySemanticsLabel('Remove Ada Obi'), findsNothing, reason: 'not yourself');
     await t.tap(find.bySemanticsLabel('Send again to Bisi'));
     await settle(t);
-    await snap(t, 'team_pages-0');
     expect(sent.last, 'POST /v1/staff/invites/I1/send {}');
     await t.pump(const Duration(seconds: 5));
     await t.tap(find.bySemanticsLabel('Add staff'));
@@ -251,7 +250,6 @@ void main() {
     expect(find.text('₦12,000 in 4 sales (Cash ₦7,000, Transfer ₦5,000)'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('This month'));
     await settle(t);
-    await snap(t, 'team_pages-1');
     await t.tap(find.bySemanticsLabel('Change Tunde'));
     await t.pumpAndSettle();
     await t.tap(find.text('Saturday'));
@@ -274,7 +272,6 @@ void main() {
     expect(find.textContaining('by 16:00'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Done: Count the cash float'));
     await settle(t);
-    await snap(t, 'team_pages-2');
     expect(sent.last, 'POST /v1/staff/tasks/T1/done {}');
     expect(find.text('Done. Thank you.'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('I’ll do it: Sweep the shop'));

@@ -153,7 +153,6 @@ void main() {
     await t.pump();
     await t.tap(find.bySemanticsLabel('Move'));
     await settle(t);
-    await snap(t, 'bookings_page-0');
     expect(sent.single, 'POST /v1/storefront/bookings/BK-1/move {"starts_at":"2099-11-14T11:00:00+01:00"}');
     expect(find.text('BK-1 is moved to Sat 14 Nov, 11:00; the customer is told.'), findsOneWidget);
     sent.clear();
@@ -178,7 +177,6 @@ void main() {
     expect(find.text('Unsaved changes'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Save booking settings'));
     await settle(t);
-    await snap(t, 'bookings_page-1');
     final body = jsonDecode(sent.single.substring(sent.single.indexOf('{'))) as Map<String, dynamic>;
     final av = body['availability'] as Map<String, dynamic>;
     expect(av['days'], [
