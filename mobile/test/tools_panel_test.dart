@@ -200,4 +200,22 @@ void main() {
     expect(find.text("Bayo Rice Mills's shop"), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('^One more ')), findsNothing);
   });
+
+  testWidgets('Make one product: two chosen, then its form', (t) async {
+    await taskiem(t);
+    await t.tap(find.bySemanticsLabel('Open tools'));
+    await settle(t);
+    await t.tap(tile('Products'));
+    await settle(t);
+    await t.tap(find.bySemanticsLabel('Make one product with sizes and colours'));
+    await t.pump();
+    expect(find.bySemanticsLabel('Choose at least two'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Asun'));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Afang soup and fufu'));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Make one product of 2'));
+    await settle(t);
+    expect(find.text('These 2 become one product’s sizes and colours. Each keeps its own stock, history and price.'), findsOneWidget);
+  });
 }

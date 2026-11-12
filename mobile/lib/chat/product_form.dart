@@ -27,6 +27,7 @@ import 'approve.dart' show TkTextBox;
 import 'attachments.dart' show PickedFile;
 import 'chats.dart' show toneColours;
 import 'composer.dart' show Pickers;
+import 'sizes_forms.dart';
 import 'tags.dart' show quantity;
 import 'tools.dart' show tileLetters;
 import 'words.dart' show naira, toneOf;
@@ -763,6 +764,9 @@ class _ProductFormState extends State<ProductForm> {
   bool _picking = false;
   List<Map<String, dynamic>>? _all;
 
+  /// Its sizes and colours, set up in place of the form.
+  bool _sizesOpen = false;
+
   @override
   void initState() {
     super.initState();
@@ -877,6 +881,9 @@ class _ProductFormState extends State<ProductForm> {
     final names = {for (final l in _linked ?? const <Map<String, dynamic>>[]) l['id'] as String: l['name'] as String? ?? ''};
     final sizes = hasSizes(_it);
     final line = sizes && _all != null ? sizesLine(_all!, _id) : null;
+    if (_sizesOpen) {
+      return SizesEditor(auth: widget.auth, item: _it, onSaved: widget.onSaved, onCancel: () => setState(() => _sizesOpen = false), pickers: widget.pickers);
+    }
     return TkToolForm(
       save: _save,
       onSaved: widget.onSaved,
@@ -1013,7 +1020,7 @@ class _ProductFormState extends State<ProductForm> {
               ? TkSoftButton(
                   label: sizes ? 'Change' : 'Set up',
                   semanticsLabel: '${sizes ? 'Change' : 'Set up'} sizes and colours',
-                  onTap: widget.onSizes,
+                  onTap: widget.onSizes ?? () => setState(() => _sizesOpen = true),
                 )
               : const SizedBox.shrink(),
         ),
@@ -1255,6 +1262,8 @@ class _StockInFormState extends State<StockInForm> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final it = widget.item;
+    // A product with sizes and colours: goods received by its grid.
+    if (hasSizes(it)) return GridStockIn(auth: widget.auth, item: it, onSaved: widget.onSaved, canEdit: widget.canEdit);
     final now = _int(it['stock']);
     return TkToolForm(
       save: _save,

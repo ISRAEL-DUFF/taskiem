@@ -4,7 +4,6 @@
 
 
 import '../app/auth.dart';
-import '../kit/modal.dart' show showComingSoon;
 import 'composer.dart' show Pickers;
 import 'product_form.dart';
 import 'purchase_view.dart';
@@ -33,9 +32,6 @@ ToolDetail toolDetail(
       onCancel: host.back,
       link: link,
       pickers: pickers,
-      // Its sizes and colours, set up in place of the form (part P's
-      // second half).
-      onSizes: () => showComingSoon(context),
     ),
     'stock' => StockInForm(auth: auth, item: data, onSaved: host.done, canEdit: host.canEdit),
     'purchases' => PurchaseView(

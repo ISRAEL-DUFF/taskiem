@@ -9,6 +9,9 @@ import 'package:flutter/widgets.dart';
 import '../kit/list.dart';
 import '../kit/modal.dart' show showComingSoon;
 import '../kit/sheet.dart';
+import '../kit/kit.dart';
+import '../theme/theme.dart';
+import 'sizes_forms.dart' show GroupForm;
 import 'tools.dart';
 import 'tools_panel.dart';
 
@@ -102,6 +105,11 @@ class _ToolSheetState extends State<ToolSheet> {
   late String? _chip = widget.chip;
   ToolRow? _open;
   bool _adding = false;
+
+  // Make one product with sizes and colours: choosing, then its form.
+  bool _picking = false;
+  bool _grouping = false;
+  final _picked = <String>[];
   bool _saved = false;
   late bool _opening = widget.openId != null;
 
@@ -160,12 +168,38 @@ class _ToolSheetState extends State<ToolSheet> {
             body: detail,
           );
         }
+        if (_grouping && list != null) {
+          return TkSheet(
+            title: 'Make one product',
+            onBack: () => setState(() => _grouping = false),
+            overlay: _saved ? const TkSavedTick() : null,
+            body: GroupForm(
+              auth: c.chats.auth,
+              items: [
+                for (final id in _picked) ?list.where((r) => r.id == id).firstOrNull?.data,
+              ],
+              onSaved: (line) {
+                setState(() {
+                  _picking = false;
+                  _grouping = false;
+                  _picked.clear();
+                });
+                _done(line);
+              },
+              onCancel: () => setState(() => _grouping = false),
+            ),
+          );
+        }
         final adds = canAdd && widget.detail?.call(context, widget.tool, null, host) != null;
         return TkSheet(
           title: title,
           count: list?.length,
-          footer:
-              widget.footer ??
+          footer: _picking
+              ? TkCta(
+                  label: _picked.length < 2 ? 'Choose at least two' : 'Make one product of ${_picked.length}',
+                  onTap: _picked.length < 2 ? null : () => setState(() => _grouping = true),
+                )
+              : widget.footer ??
               TkCta(
                 label: canAdd ? add : tool.more,
                 icon: canAdd ? 'plus' : null,
@@ -185,14 +219,36 @@ class _ToolSheetState extends State<ToolSheet> {
                   onPick: (tag) => setState(() => _chip = tag),
                 ),
               // Make one product with sizes and colours (Products, for those who
-              // may change them, with two plain items): its form is M6's.
+              // may change them, with two plain items): `.tk-group-bar`.
               if (tool.key == 'products' && mayEdit(tool.key, c.can) && (list ?? const []).where(_plain).length >= 2)
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: TkSoftButton(label: 'Make one product with sizes and colours', onTap: () => showComingSoon(context)),
-                  ),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: _picking
+                      ? Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Semantics(
+                              liveRegion: true,
+                              child: Text(
+                                'Choose the items that are one product in sizes and colours.',
+                                style: tkText(size: 15, color: TkTheme.tokens(context).muted),
+                              ),
+                            ),
+                            TkSoftButton(
+                              label: 'Cancel',
+                              onTap: () => setState(() {
+                                _picking = false;
+                                _picked.clear();
+                              }),
+                            ),
+                          ],
+                        )
+                      : Align(
+                          alignment: Alignment.centerLeft,
+                          child: TkSoftButton(label: 'Make one product with sizes and colours', onTap: () => setState(() => _picking = true)),
+                        ),
                 ),
               Expanded(child: _list(context, list, name)),
             ],
@@ -240,6 +296,7 @@ class _ToolSheetState extends State<ToolSheet> {
           return TkSheetMore(label: tool.more, onTap: () => showComingSoon(context));
         }
         final r = shown[i];
+        if (_picking) return _pickRow(context, r);
         return TkRow(
           name: r.name,
           sub: r.sub,
@@ -253,6 +310,42 @@ class _ToolSheetState extends State<ToolSheet> {
               : showComingSoon(context),
         );
       },
+    );
+  }
+
+  /// `.tk-row.tk-pick`: a box to choose it; one sold in sizes already is
+  /// shown, not to be chosen.
+  Widget _pickRow(BuildContext context, ToolRow r) {
+    final t = TkTheme.tokens(context);
+    final ok = _plain(r);
+    final on = _picked.contains(r.id);
+    return Semantics(
+      checked: on,
+      enabled: ok,
+      label: r.name,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: !ok ? null : () => setState(() => on ? _picked.remove(r.id) : _picked.add(r.id)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          child: Row(
+            children: [
+              TkCheckbox(checked: on),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(r.name, style: tkText(size: 16, weight: 600, color: ok ? t.text : t.muted)),
+                    Text(ok ? r.sub : 'Already sold in sizes and colours', style: tkText(size: 14, color: t.muted)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
