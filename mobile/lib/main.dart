@@ -9,7 +9,6 @@ import 'api/transport.dart';
 import 'app/auth.dart';
 import 'app/config.dart';
 import 'kit/keyboard.dart';
-import 'kit/modal.dart' show showComingSoon;
 import 'app/lock.dart';
 import 'app/prefs.dart';
 import 'app/session.dart';
@@ -18,6 +17,7 @@ import 'chat/chats.dart';
 import 'chat/conversation.dart';
 import 'chat/customer.dart';
 import 'chat/links_screen.dart';
+import 'chat/profile_screen.dart';
 import 'chat/live.dart';
 import 'chat/taskiem.dart';
 import 'screens/home_tabs.dart';
@@ -323,14 +323,17 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     );
   }
 
+  void _profile(BuildContext context) => Navigator.of(context).push(PageRouteBuilder<void>(
+    pageBuilder: (_, _, _) => ProfileScreen(chats: _chats),
+  ));
+
   Widget _chatsTab(BuildContext context) {
     return ChatsScreen(
       data: _chats,
       onLinks: () => Navigator.of(context).push(PageRouteBuilder<void>(
-        pageBuilder: (_, _, _) => LinksScreen(chats: _chats),
+        pageBuilder: (_, _, _) => LinksScreen(chats: _chats, onProfile: () => _profile(context)),
       )),
-      // Its screen comes with the profile (M5).
-      onProfile: () => showComingSoon(context),
+      onProfile: () => _profile(context),
       onMenu: () => Navigator.of(context).push(PageRouteBuilder<void>(
         pageBuilder: (_, _, _) => SignedInScreen(auth: widget.auth, prefs: widget.prefs, unlocker: widget.unlocker),
       )),
