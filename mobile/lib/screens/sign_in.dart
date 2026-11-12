@@ -57,8 +57,10 @@ class _SignInScreenState extends State<SignInScreen> {
                 if (widget.signup)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    // Inline on the web: it wraps when the words are large.
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Text('New to Taskiem? ', style: tkHint(t)),
                         TkLink(label: 'Create an account', onTap: widget.onSignUp),

@@ -1089,7 +1089,10 @@ class _Asked extends StatelessWidget {
             actions: manage
                 ? Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Row(
+                    child: Wrap(
+                      // `.row` wraps: three buttons do not fit large words.
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
                         TkSmallButton(
                           label: 'Accept',
@@ -1097,13 +1100,11 @@ class _Asked extends StatelessWidget {
                           primary: true,
                           onPressed: onAnswer == null ? null : () => onAnswer!(l, 'accept', 'Linked with ${l.name}'),
                         ),
-                        const SizedBox(width: 8),
                         TkSmallButton(
                           label: 'Decline',
                           semantics: 'Decline ${l.name}',
                           onPressed: onAnswer == null ? null : () => onAnswer!(l, 'decline', 'Declined. They are not told.'),
                         ),
-                        const SizedBox(width: 8),
                         TkSmallButton(
                           label: 'Block',
                           semantics: 'Block ${l.name}',

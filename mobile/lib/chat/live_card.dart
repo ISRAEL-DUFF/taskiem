@@ -105,8 +105,12 @@ class LiveCard extends StatelessWidget {
           // `.tk-live-foot { padding: 10px 12px; border-top: 1px solid }`
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(border: Border(top: BorderSide(color: t.border))),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // Its two ends; one under the other when the words are large.
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
               if (mine != null && ours != null)
                 CardPill(
@@ -122,7 +126,7 @@ class LiveCard extends StatelessWidget {
                   excludeSemantics: true,
                   child: GestureDetector(
                     // The Order sheet comes with the tools (M5 to M8).
-                    onTap: () => showTkToast(context, 'Ordering from a price list is not in the app yet. Order on the web for now.'),
+                    onTap: () => showComingSoon(context),
                     child: Container(
                       height: 40,
                       padding: const EdgeInsets.symmetric(horizontal: 16),

@@ -179,8 +179,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 TkButton(label: _busy ? 'Creating…' : 'Create account', primary: true, minHeight: 44, enabled: !_busy, onPressed: _submit),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  // Inline on the web: it wraps when the words are large.
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text('Already have an account? ', style: hint),
                       TkLink(label: 'Sign in', onTap: widget.onSignIn),

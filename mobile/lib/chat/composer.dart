@@ -718,7 +718,7 @@ class _AttachMenu extends StatelessWidget {
             children: [
               TkIcon(icon, size: 18, color: t.text),
               const SizedBox(width: 10),
-              Text(label, style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: t.text)),
+              Flexible(child: Text(label, style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: t.text))),
             ],
           ),
         ),

@@ -239,6 +239,33 @@ The questions as they stood:
 
 ## 7. M3's own "done when", not yet met
 
+**Done: T1–T4, T7** (12 November 2026).
+- T1, T3: `mobile/test/server/chat_server_test.dart`, the app's own code
+  against the server `web/e2e/serve.sh` starts, run by
+  `.github/workflows/mobile-server.yml`: two businesses sign up in the app
+  and link; a message unread, read, blue-ticked; a reply and a reaction
+  both see; a message that did not go sent once on retry; the live stream;
+  an owner making their page with Taskiem, publishing and running a
+  workflow by name, approving its request from the card. Not on an
+  emulator: these drive the code, the widget and parity tests the
+  screens. That server has no AI and no data tables (Xenibase), and no
+  phone to verify: building a workflow from words and adding products are
+  answered "not set up here", and publishing the page asks for a verified
+  phone; those need a server with them (staging) to show end to end.
+- T2: [chat-scenarios.md](chat-scenarios.md).
+- T4: `mobile/web_links.txt`, held by `test/web_links_test.dart`.
+- T7, the film's acts and the parity screens that hold them: 1 is the
+  film's own (no screen); 2 `chats`; 3 `chat-taskiem` (the briefing) and
+  `chat-taskiem-cards`; 4 `chat-taskiem`, `chat-taskiem-approval`; 5
+  `chat-tag`; 8 `chat-bayo` (the order's and the invoice's cards); 11 the
+  dark half of each, `chat-taskiem` with How did we do's chart; 12
+  `explore`, `explore-search` (the "@" row for a business not linked is
+  held by `ref_screens_test`, not yet a picture: it needs a recording
+  from the demo world with Explore asked from "@"); 13 `chat-deal`; 14
+  `chat-deal-counter`. Acts 6, 7, 9, 10 and 15 are the tools' (M5–M8).
+- T5, T6: `test/sizes_test.dart` and `test/targets_test.dart`, over every
+  parity screen.
+
 | # | What | Work |
 | --- | --- | --- |
 | T1 | **Against the real server** (§8): integration tests on an Android emulator in CI, against `web/e2e/serve.sh` | `mobile/integration_test/`, a CI job |

@@ -32,7 +32,9 @@ void main() {
           FlutterError.onError = (d) {
             final s = d.exceptionAsString();
             if (s.contains('overflowed')) {
-              overflows.add(s.split('\n').first);
+              // Where: the widget that overflowed, by its place in the code.
+              final at = RegExp(r'lib/[a-z_/]+\.dart:\d+').firstMatch(d.toString())?.group(0) ?? '?';
+              overflows.add('${s.split('\n').first} at $at');
             } else {
               was?.call(d);
             }
