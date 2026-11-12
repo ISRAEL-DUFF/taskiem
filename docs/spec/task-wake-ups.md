@@ -1,6 +1,6 @@
 # Task wake-ups outside the transaction
 
-Status: **spec; W1 to W3 built 12 November 2026, with the review machine's measurements of W4 (§9.1). W5, the target hardware, is open.** Written 2026-11-12. Decision: [0067](../decisions/0067-wake-ups-leave-the-transaction.md), which amends [0002](../decisions/0002-postgres-as-queue.md). It closes the first item of "What remains" in [performance](../performance.md#what-remains).
+Status: **spec; W1 to W3 built 12 November 2026 and audited the same day (§9.2), with the review machine's measurements of W4 (§9.1), which show no difference there. W5, the target hardware, is open, and is where the change has to prove itself.** Written 2026-11-12. Decision: [0067](../decisions/0067-wake-ups-leave-the-transaction.md), which amends [0002](../decisions/0002-postgres-as-queue.md). It closes the first item of "What remains" in [performance](../performance.md#what-remains).
 
 ## 1. Summary
 
@@ -66,9 +66,9 @@ select pg_notify('taskiem_tasks','connector');
 | The trigger | `taskiem_notify_task`, migration 00258 | After each insert statement on `tasks`, sends `pg_notify('taskiem_tasks', <queue>)` once for each queue with a task due within a second |
 | The listener | `engine/runtime/listen.go` | One `LISTEN` connection in a worker process; wakes the claimer when the payload is its queue; reconnects and wakes once after a drop |
 | The claim loop | `Run` in `engine/runtime/worker.go` | Claims for its free slots. If the claim came back short, waits for a wake-up or one second. If it came back full, claims again as soon as a slot is free |
-| The transaction helper | `db.InTenantTx` in `engine/db/db.go` | Every caller of `decideInline` reaches the database through it (the worker, the scheduler, approvals, signals, ingest, the operator's actions) |
+| The transaction helpers | `db.InTenantTx` in `engine/db/db.go`, and `db.InTenantTxRetry` in `engine/db/retry.go` | Every caller of `decideInline` reaches the database through one of them: the scheduler, approvals, signals, ingest and the operator's actions through the first, the worker (which rides out a failover) through the second |
 
-Two facts make the change small: tasks are inserted in exactly one place in Go, and every transaction that reaches it was opened by one helper.
+Two facts make the change small: tasks are inserted in exactly one place in Go, and every transaction that reaches it was opened by one of two helpers.
 
 ## 4. Decisions
 
@@ -86,10 +86,10 @@ Two facts make the change small: tasks are inserted in exactly one place in Go, 
 
 ### 5.1 After the commit
 
-`db.InTenantTx` hands its function a transaction that can also hold things to do once the commit has succeeded.
+`db.InTenantTx` and `db.InTenantTxRetry` hand their function a transaction that can also hold things to do once the commit has succeeded.
 
-- `db.AfterCommit(tx, fn)` adds `fn` and answers whether the transaction can hold it. It can when the transaction came from `InTenantTx`. It cannot for a savepoint opened inside one, or a transaction opened any other way.
-- The functions run in order after a successful commit, and never after a rollback. A function that panics is recovered and logged: the commit has happened and the caller is told so.
+- `db.AfterCommit(tx, fn)` adds `fn` and answers whether the transaction can hold it. It can when the transaction came from either helper. It cannot for a savepoint opened inside one, or a transaction opened any other way.
+- The functions run in order after a successful commit, and never after a rollback. A commit whose outcome is unknown (the connection was lost during it) runs none; the listener's reconnect wakes the worker in that case, as it always has. A function that panics is recovered and logged: the commit has happened and the caller is told so.
 - Nothing else about `InTenantTx` changes. Its 686 callers are not touched.
 
 ### 5.2 The engine says it will wake
@@ -118,7 +118,7 @@ One in each process that has a `Store`. It is not a loop that runs for the life 
 - **Being told.** The after-commit function marks the queue as owed and nudges the notifier. It never blocks and never touches the database, so it adds nothing to the caller's request.
 - **Sending.** When a queue is owed and 10 ms have passed since its last send, the notifier sends for it at once. Otherwise it sends when the 10 ms are up. One statement carries every queue owed at that moment: `SELECT pg_notify('taskiem_tasks', q) FROM unnest($1::text[]) AS q`.
 - **One at a time.** The notifier never has two sends under way. A slow database makes it send less often, with more behind each send. It cannot pile up.
-- **Its connection.** Taken from the pool for each send, with a one-second limit. If the pool has none to give or the send fails, the queue stays owed, the notifier tries again after 100 ms, and a counter records it. After ten failures in a row (about a second, or ten if no connection can be had) it drops what it owes: by then every worker has polled, and a database that was away wakes every listener when it returns. The next task starts it again.
+- **Its connection.** One of its own: taken from the pool at the first send and kept out of it, so a wake-up never waits behind the work it announces when the pool is busy, and closed after a minute with nothing to send. A process that schedules tasks therefore holds one connection more than `TASKIEM_DATABASE_POOL`. Each send has a one-second limit. If no connection can be had or the send fails, the connection is dropped, the queue stays owed, the notifier tries again after 100 ms, and a counter records it. After ten failures in a row (about a second, or ten if no connection can be had) it drops what it owes: by then every worker has polled, and a database that was away wakes every listener when it returns. The next task starts it again.
 - **Stopping.** Nothing to stop. A process that exits within a few milliseconds of a commit may not send that task's wake-up; the task waits for a poll.
 
 The interval is `TASKIEM_WAKE_INTERVAL` (default `10ms`; from `1ms` to `1s`). Ten milliseconds is a fifth of the dispatch objective's 50 ms ([reliability](../reliability.md)), and it is paid only by a task that arrives just after another for the same queue.
@@ -132,7 +132,7 @@ The `Store` keeps the wake channels of the workers running in its process, by qu
 - In a one-process install (`--role all`, the one-VM kit, `taskiem dev`) a task is claimed without waiting for the database to carry a message back.
 - The notifier still sends, because other processes may have idle workers for that queue.
 - **A worker does not wake twice for one task.** The notification its own process sends would arrive a moment after the wake in memory and cost a claim that finds nothing, and the claim is the engine's most expensive statement. The notifier records the database connection it sends on, and for a second the process's listener skips notifications from that connection (`sentHere`). A notification carries the sender's connection, so no change to the payload is needed and other processes are not affected.
-- The one thing this can skip wrongly is the trigger's own notification for a task inserted in a savepoint, if that transaction runs on a connection the notifier used within the last second. That task waits for a poll.
+- Nothing else is skipped by this: the notifier's connection carries only its own sends.
 
 ### 5.6 The listener and the claim loop
 
@@ -185,6 +185,7 @@ No alert is added. The dispatch objective already catches wake-ups that stop arr
 | `TestEngineTransactionsDoNotNotify` | With `app.task_wake` set, an insert into `tasks` sends nothing from the trigger; without it, 00258's tests (`TestTaskInsertsNotifyOncePerQueue`, `TestFutureTasksDoNotNotify`) pass unchanged |
 | `TestWakeAfterCommitChoosesWhoWakes` (`engine/runtime`) | The engine wakes for a task due now in a tenant transaction, after the commit and not before; a savepoint, a task due later and the switch are left to the trigger; a rollback sends nothing |
 | `TestTaskWakesAnotherProcess`, `TestTaskWakesItsOwnProcess` | Two stores on one database, and one: a run started while a worker waits completes well inside the worker's one-second poll, three times |
+| `TestWorkerCommitsDoNotNotify` | Ten runs of three steps, run by a worker: a handful of notifications where the trigger sent thirty, and no task's wake-up left to the trigger |
 | `TestEngineCommitsDoNotNotify` | 40 runs started one after another are announced in a handful of notifications, where the trigger sent one each; with the switch, the trigger sends 40 |
 | `TestWakeupsAreMerged` | 500 tasks for one queue cause no more sends than the interval allows, and one after the last |
 | `TestLocalWakeAndOwnNotifications` | The process's worker is woken in memory at once, another queue's is not, the process knows its own notification, another process does not, and a worker that stopped is not woken |
@@ -210,18 +211,29 @@ Before and after, the two builds interleaved, as [performance](../performance.md
 
 ### 9.1 The review machine, 12 November 2026
 
-The ramp (step 2) and low load (step 3, as the 20 and 40 runs/s stages) were run with one binary and `TASKIEM_WAKE_IN_TX` changed, interleaved twice. The table is in [performance](../performance.md#wake-ups-after-the-commit-decision-0067-migration-00426).
+The ramp (step 2) was run with one binary and `TASKIEM_WAKE_IN_TX` changed, interleaved: two rounds at 20, 40, 60 and 80 runs/s and three more at 50 and 60. The table is in [performance](../performance.md#wake-ups-after-the-commit-decision-0067-migration-00426).
 
 | "Done when" | Result |
 | --- | --- |
-| `Lock:object` waits gone from engine commits | Not sampled in these passes. That engine commits no longer notify is shown by `TestEngineCommitsDoNotNotify` |
-| Above the knee, throughput levels off instead of falling | It levelled off at about 58 runs/s with both settings: this machine ran out of CPU (97% to 98% busy) before commits, so it cannot tell the two apart there |
+| `Lock:object` waits gone from engine commits | Not sampled. That engine commits no longer notify is shown by `TestEngineCommitsDoNotNotify` and `TestWorkerCommitsDoNotNotify`, and by a trace of every suite: the only wake-up left to the trigger was the savepoint a test makes on purpose |
+| Above the knee, throughput levels off instead of falling | It levelled off at 56 to 58 runs/s with both settings: this machine ran out of CPU (96% to 98% busy) before commits, so it cannot tell the two apart there |
 | Dispatch at low load no worse | Met: every objective held at 20 and 40 runs/s either way |
-| No money moved twice | Every accepted run ended, about 24,000 across the four passes |
+| No money moved twice | Every accepted run ended, about 46,000 across the passes |
 
-At the knee (60 runs/s) the change helped in both rounds: dispatch within 50 ms rose from 59% to 67% up to 85% to 94%, and run start's 95th percentile about halved.
+**The ramp shows no difference between the two settings on this machine.** At 60 runs/s dispatch within 50 ms ranged from 67% to 95% one way and from 55% to 93% the other, round to round. A first pass that seemed to favour the change was taken on an incomplete build (below) and was not repeated.
 
-**Not shown:** the collapse this plan is for. It was recorded on a machine whose disk flush was slow; this one flushes in about 0.3 ms, which puts the notify lock's ceiling near 3,000 commits a second, far above what four CPUs can offer. The `pgbench` script of the engine's own transaction (step 1) was not run either. Both belong to W5.
+**Not shown:** the collapse this plan is for. It was recorded on a machine whose disk flush was slow; this one flushes in about 0.3 ms, which puts the notify lock's ceiling near 3,000 commits a second, far above what four CPUs can offer. The `pgbench` script of the engine's own transaction (step 1) was not run either. Both belong to W5. Until then the evidence for the change is §2's measurement of the lock itself.
+
+### 9.2 What an audit of the first build found
+
+| Found | Fixed |
+| --- | --- |
+| The worker records a step and schedules the next task through `db.InTenantTxRetry`, whose transactions could not hold an after-commit function. Those tasks, two of every three in a run of three steps, were still announced by the trigger inside the commit. §3 said every caller came through `InTenantTx`; it was wrong | `InTenantTxRetry`'s transactions hold after-commit functions. `TestWorkerCommitsDoNotNotify` runs three steps through a worker and fails on the first build |
+| The first test of "engine commits do not notify" started runs and ran no worker, so it passed | The test above; and every suite was run once with a trace of each wake-up left to the trigger |
+| The notifier took a connection from the pool for each send, so a wake-up could wait up to a second behind the work it announces when the pool was busy | It keeps a connection of its own, out of the pool (§5.4) |
+| A `Store` with no pool would have crashed the process from the notifier's goroutine | The send fails instead |
+| After giving up on a run of failed sends, the next failure was dropped without a retry | The count starts again |
+| The first ramp's figures were taken on the incomplete build and read as an improvement | Rerun, five rounds, and reported as no difference (§9.1) |
 
 No figure for runs a second is promised here. The review machine is shared and noisy, and the next limits (§10) are not touched. The number to quote comes from the target hardware (P4-R5).
 

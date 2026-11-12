@@ -64,7 +64,7 @@ Switches take `true` or `false`, `1` or `0`, `yes` or `no`, `on` or `off`, in an
 | `TASKIEM_DATABASE_RETRY_WINDOW` | `30s` | How long a worker keeps a step's outcome through a database failover before giving up to lease expiry ([cloud](cloud.md#what-happens-during-a-failover)) |
 | `TASKIEM_WORKER_POOL` | `shared` | The worker pool this worker serves ([cloud](cloud.md#dedicated-worker-pools)) |
 | `TASKIEM_DATABASE_ROLE` | `taskiem_app` | Role set on every connection (`SET ROLE`); row-level security applies to it. Empty disables. |
-| `TASKIEM_DATABASE_POOL` | `20` | Connections per process. A value that is not a whole number above 0 stops the process. |
+| `TASKIEM_DATABASE_POOL` | `20` | Connections per process, beside one a worker's listener holds and one a process that schedules tasks keeps for [wake-ups](spec/task-wake-ups.md). A value that is not a whole number above 0 stops the process. |
 | `TASKIEM_KMS` | `local` | `openbao` in production: transit key `TASKIEM_KMS_KEY` (`taskiem`) at `TASKIEM_OPENBAO_ADDR` with `TASKIEM_OPENBAO_TOKEN`. `local` takes a 32-byte base64 `TASKIEM_LOCAL_KMS_KEY` and is for development: with an `https://` `TASKIEM_PUBLIC_URL` it is refused at start unless `TASKIEM_ALLOW_LOCAL_KMS=true`. |
 | `TASKIEM_ARCHIVE_S3_BUCKET` | — | The S3-compatible bucket runs past retention are archived to before purging: one object per run, `<prefix><tenant>/<run>.jsonl.gz` (gzipped JSON lines, one event each). Use it in production and whenever more than one scheduler runs. Set, it wins over `TASKIEM_ARCHIVE_DIR` |
 | `TASKIEM_ARCHIVE_S3_ENDPOINT` | `https://s3.<region>.amazonaws.com` | The service's URL: AWS's regional endpoint, or a self-hosted one such as `http://seaweedfs:8333` |

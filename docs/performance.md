@@ -137,22 +137,21 @@ A transaction that schedules a task no longer notifies. The process sends the wa
 
 **The lock on its own** (PostgreSQL 16, a bare insert, `pgbench`, 12 November 2026; [the plan's §2](spec/task-wake-ups.md#2-the-problem-measured)): with `NOTIFY` in the transaction, 8 clients and 64 clients both committed about 3,000 times a second; without it, 64 clients committed about 20,000 times; with the wake-ups sent by one other connection 100 times a second, about 19,000.
 
-**The ramp.** 20, 40, 60 and 80 runs/s, 30 s a stage, 4 tenants, 2 workers, the two settings interleaved twice, 12 November 2026. A different machine from the rounds above: 4 CPUs (Xeon, 2.1 GHz), a disk that flushes in about 0.3 ms, the load tool, six server processes and Postgres all on it, load average 1 to 13.
+**The ramp.** One binary with `TASKIEM_WAKE_IN_TX` changed, the two settings interleaved, 4 tenants, 2 workers, three worker steps a run, 30 s a stage, 12 November 2026. A different machine from the rounds above: 4 CPUs (Xeon, 2.1 GHz), a disk that flushes in about 0.3 ms, the load tool, six server processes and Postgres all on it, load average 1 to 13. Two rounds at 20, 40, 60 and 80 runs/s, then three more at 50 and 60.
 
-| Wake-ups | Round | Runs/s achieved at 40 / 60 / 80 | Dispatch ≤ 50 ms at 40 / 60 / 80 | Run start p95 at 60 | Run p95 at 60 | Host CPU at 60 / 80 |
-| --- | --- | --- | --- | --- | --- | --- |
-| in the transaction | 1 | 39.8 / 59.5 / 57.9 | 99.9% / 66.9% / 51.0% | 294 ms | 673 ms | 98% / 98% |
-| after the commit | 1 | 39.8 / 59.5 / 57.8 | 100.0% / **93.7%** / 51.6% | **109 ms** | **503 ms** | 96% / 98% |
-| in the transaction | 2 | 39.7 / 59.2 / 57.2 | 99.9% / 58.8% / 51.8% | 474 ms | 860 ms | 97% / 98% |
-| after the commit | 2 | 39.8 / 59.5 / 57.9 | 100.0% / **85.2%** / 51.8% | **225 ms** | **670 ms** | 95% / 97% |
+| Wake-ups | Runs/s achieved at 60 / 80 | Dispatch ≤ 50 ms at 50 | Dispatch ≤ 50 ms at 60 | Run p95 at 60 |
+| --- | --- | --- | --- | --- |
+| in the transaction | 59.3, 59.3 / 55.7, 56.7 | 92.5%, 93.0%, 90.8% | 66.7%, 75.1%, 85.0%, 94.6%, 84.0% | 440 to 738 ms |
+| after the commit | 59.5, 58.7 / 57.5, 58.4 | 93.9%, 92.3%, 94.3% | 82.6%, 54.5%, 89.4%, 93.3%, 84.9% | 453 to 902 ms |
 
 What this shows, and what it does not:
 
-- **At the knee the change helps, in both rounds.** At 60 runs/s, steps dispatched within 50 ms went from 59% to 67% up to 85% to 94%, and the 95th percentile of run start roughly halved. Dispatch still breaks its objective (95%) at 60 runs/s on this machine.
-- **Below the knee nothing changed** (20 and 40 runs/s: every objective met either way), so the first wake-up for a quiet queue costs nothing.
-- **The ceiling did not move here, and this machine cannot show whether it moves.** Both settings levelled off at about 58 runs/s with the CPUs 97% to 98% busy: this machine runs out of CPU, not of commits. Its disk flushes in about 0.3 ms, so the notify lock allowed about 3,000 notifying commits a second, far above the 240 steps a second offered. The collapse recorded above was on a machine with a slow, contended disk, where one notifying commit per flush is a low ceiling. That case is the reason for the change and is **not reproduced here**; it has to be measured on a host with a slow flush or on the target hardware (W5 of the plan).
-- Neither setting fell away above the knee on this machine: 80 runs/s offered gave the same 58 achieved as 60.
-- About 6,000 runs a pass, 24,000 in all; every accepted run ended, in both settings. Wait-event samples were not taken in these passes.
+- **No difference on this machine, beyond the noise.** At 60 runs/s dispatch within 50 ms ranged from 67% to 95% with wake-ups in the transaction and from 55% to 93% with them after the commit, round to round, for the same binary. At 50 runs/s both sat between 91% and 94%. At 20 and 40 runs/s every objective was met either way.
+- **The ceiling did not move, and this machine cannot show whether it moves.** Both settings levelled off at 56 to 58 runs/s with the CPUs 96% to 98% busy: this machine runs out of CPU, not of commits. Its disk flushes in about 0.3 ms, so the notify lock allowed about 3,000 notifying commits a second, far above the 240 steps a second offered. The collapse recorded above was on a machine with a slow, contended disk, where one notifying commit per flush is a low ceiling. That case is the reason for the change and is **not reproduced here**; it has to be measured on a host with a slow flush or on the target hardware (W5 of the plan).
+- **What is shown is narrower:** the lock on its own (above), that the engine's commits no longer take it (`TestEngineCommitsDoNotNotify`, `TestWorkerCommitsDoNotNotify`), and that sending the wake-up after the commit costs nothing measurable here.
+- Every accepted run ended in every pass, about 46,000 runs in all. Wait-event samples were not taken.
+
+An earlier pass of this ramp, the same day, appeared to favour the change at 60 runs/s (59% and 67% against 85% and 94%). It was taken on a build in which only the transaction that starts a run had stopped notifying (the worker's transactions go through `InTenantTxRetry`, which the first build missed), and the five rounds above did not repeat it. It was noise.
 
 ## Failure tests
 
@@ -168,7 +167,7 @@ What this shows, and what it does not:
 
 ## What remains
 
-- **Commit serialisation by `NOTIFY`.** Resolved in code (decision [0067](decisions/0067-wake-ups-leave-the-transaction.md), above): transactions that schedule tasks no longer notify, so their commits share a WAL flush. What is still owed is the measurement on a host where the flush is slow enough for the lock to have been the ceiling: on the review machine of 12 November the ceiling was CPU, with or without the change.
+- **Commit serialisation by `NOTIFY`.** Resolved in code (decision [0067](decisions/0067-wake-ups-leave-the-transaction.md), above): transactions that schedule tasks no longer notify, so their commits can share a WAL flush. What is still owed is the measurement on a host where the flush is slow enough for the lock to have been the ceiling: on the review machine of 12 November the ceiling was CPU, and the ramp showed no difference with or without the change.
 - **No back-pressure at the edge.** Webhooks were accepted (202) even while runs waited minutes to start. Durable acceptance is by design ("zero accepted events lost"), but the edge could shed or slow down (429 with `Retry-After`) when the backlog of ready tasks is large. A decision for the product, not a performance fix.
 - **The claim statement.** Still the most expensive single statement (2 to 3 ms here, about 2 calls per step after fix 1). Each call walks the queue's tenants, one index probe each. Since migration 00259 only tenants with a task due now have their worker pool, cap and leased tasks looked up (with 2,000 tenants backing off and 20 with work due, a claim took 20 to 25 ms instead of 107 to 134 ms here); the probe per tenant remains. Worth a closer look with real tenant counts.
 - **The run row.** `FOR UPDATE` on the run row in decide waits on the worker's and the orchestrator's transactions for the same run (transactionid waits of 6 to 25% at and above the knee); expected, but it lengthens commits.
