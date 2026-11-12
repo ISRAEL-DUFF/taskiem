@@ -142,6 +142,7 @@ class TkFormButton extends StatelessWidget {
       button: true,
       enabled: onTap != null,
       label: label,
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,
@@ -244,6 +245,7 @@ class _TkStepperState extends State<TkStepper> {
       child: Semantics(
         button: true,
         label: label,
+        onTap: () => widget.onChanged(to < 0 ? 0 : to),
         excludeSemantics: true,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,

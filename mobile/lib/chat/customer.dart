@@ -487,6 +487,7 @@ class _StartOrder extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Start an order',
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,

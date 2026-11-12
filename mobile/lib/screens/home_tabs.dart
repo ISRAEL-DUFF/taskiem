@@ -122,6 +122,7 @@ class _Tab extends StatelessWidget {
       button: true,
       selected: on,
       label: tab.label,
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,

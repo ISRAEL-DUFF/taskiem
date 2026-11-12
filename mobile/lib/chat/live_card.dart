@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../kit/icon.dart';
 import '../kit/modal.dart';
+import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'cards.dart' show CardPill;
 import 'tags.dart';
@@ -124,9 +125,10 @@ class LiveCard extends StatelessWidget {
               else
                 const SizedBox.shrink(),
               if (canOrder)
-                Semantics(
+                TapArea(child: Semantics(
                   button: true,
                   label: 'Order ${m.name}',
+                  onTap: onOrder == null || m.itemId == null ? () => showComingSoon(context) : () => onOrder!(m.itemId!),
                   excludeSemantics: true,
                   child: GestureDetector(
                     // Their shop, opened on this item (in the bag when we may order).
@@ -144,7 +146,7 @@ class LiveCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                ),
+                )),
             ],
           ),
         ),

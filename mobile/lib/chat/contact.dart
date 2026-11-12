@@ -8,6 +8,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
+import '../kit/tap_area.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
@@ -327,15 +328,16 @@ class _Head extends StatelessWidget {
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.border))),
       child: Row(
         children: [
-          Semantics(
+          TapArea(child: Semantics(
             button: true,
             label: back ? 'Back to contact info' : 'Close contact info',
+            onTap: onTap,
             excludeSemantics: true,
             child: TkPress(
               onTap: onTap,
               child: SizedBox(width: 36, height: 40, child: Center(child: TkIcon(back ? 'back' : 'close', size: 18, color: t.text))),
             ),
-          ),
+          )),
           const SizedBox(width: 12),
           Expanded(
             child: Semantics(header: true, child: Text(title, style: tkText(size: 16, weight: 600, color: t.text))),
@@ -361,6 +363,7 @@ class _Round extends StatelessWidget {
       button: true,
       toggled: icon == 'pin' ? on : null,
       label: label,
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         onTap: onTap,
@@ -403,6 +406,8 @@ class _Row extends StatelessWidget {
       toggled: checked,
       expanded: expanded,
       label: label,
+      enabled: onTap != null,
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -595,8 +600,8 @@ class _MediaAll extends StatelessWidget {
               );
             } else {
               rows.add(
+                // Shown, not opened from here (it opens in the conversation).
                 Semantics(
-                  button: true,
                   label: '${attachmentLabel(a)}, ${fileSize(a.size)}',
                   excludeSemantics: true,
                   child: Container(

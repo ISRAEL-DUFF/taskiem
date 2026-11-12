@@ -393,6 +393,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   Semantics(
                     button: true,
                     label: 'Show more $moreWords',
+                    onTap: _busy ? null : () => _more(section),
                     excludeSemantics: true,
                     child: GestureDetector(
                       onTap: _busy ? null : () => _more(section),
@@ -434,15 +435,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   children: [
                     Row(
                       children: [
-                        Semantics(
+                        TapArea(child: Semantics(
                           button: true,
                           label: 'Back to the chats',
+                          onTap: () => Navigator.of(context).pop(),
                           excludeSemantics: true,
                           child: TkPress(
                             onTap: () => Navigator.of(context).pop(),
                             child: SizedBox(width: 40, height: 44, child: Center(child: TkIcon('back', size: 22, color: t.text))),
                           ),
-                        ),
+                        )),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Semantics(
@@ -564,9 +566,10 @@ class _Pill extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
     final (bg, ink) = soft ? (t.tkSoft, dark ? t.text : t.brand) : (dark ? t.brandDark : t.brand, dark ? t.brandDarkText : t.tkOnPine);
-    return Semantics(
+    return TapArea(child: Semantics(
       button: true,
       label: semantics ?? label,
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,
@@ -579,7 +582,7 @@ class _Pill extends StatelessWidget {
           child: Text(label, style: tkText(size: 14, weight: 700, lineHeight: 1.2, color: ink)),
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -632,6 +635,7 @@ class _Card extends StatelessWidget {
                 container: true,
                 button: true,
                 label: 'Withdraw request to ${c.name}',
+                onTap: busy || onWithdraw == null ? null : onWithdraw,
                 excludeSemantics: true,
                 child: GestureDetector(
                   onTap: busy || onWithdraw == null ? null : onWithdraw,
@@ -663,6 +667,7 @@ class _Card extends StatelessWidget {
                     container: true,
                     button: true,
                     label: 'Not now: say no to ${c.name}',
+                    onTap: busy ? null : () => onAnswer!('decline'),
                     excludeSemantics: true,
                     child: GestureDetector(
                       onTap: busy ? null : () => onAnswer!('decline'),
@@ -855,10 +860,11 @@ class _CarouselState extends State<_Carousel> {
                 children: [
                   for (var n = 0; n < count; n++) ...[
                     if (n > 0) const SizedBox(width: 2),
-                    Semantics(
+                    TapArea(child: Semantics(
                       button: true,
                       selected: n == _at,
                       label: 'Show photo ${n + 1} of $count',
+                      onTap: () => _go(n),
                       excludeSemantics: true,
                       child: GestureDetector(
                         onTap: () => _go(n),
@@ -878,7 +884,7 @@ class _CarouselState extends State<_Carousel> {
                           ),
                         ),
                       ),
-                    ),
+                    )),
                   ],
                 ],
               ),

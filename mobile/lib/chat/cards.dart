@@ -12,6 +12,7 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'deal.dart';
 import 'words.dart';
@@ -250,10 +251,11 @@ class CardButton extends StatelessWidget {
     final bg = primary ? t.primary : t.panel;
     final line = primary ? t.primary : t.borderStrong;
     final ink = primary ? t.primaryText : (dark ? t.text : t.brand);
-    return Semantics(
+    return TapArea(child: Semantics(
       button: true,
       enabled: !busy && onTap != null,
       label: semantics ?? label,
+      onTap: busy ? null : onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: busy ? null : onTap,
@@ -274,7 +276,7 @@ class CardButton extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 

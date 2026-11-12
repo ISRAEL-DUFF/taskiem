@@ -324,6 +324,7 @@ class _Way extends StatelessWidget {
         button: true,
         enabled: onTap != null,
         label: label,
+        onTap: onTap,
         excludeSemantics: true,
         child: TkPress(
           onTap: onTap,
@@ -473,6 +474,7 @@ class _PhotoLink extends StatelessWidget {
         button: true,
         enabled: onTap != null,
         label: said,
+        onTap: onTap,
         excludeSemantics: true,
         child: GestureDetector(
           onTap: onTap,
@@ -942,6 +944,7 @@ class _ProductFormState extends State<ProductForm> {
                     button: true,
                     expanded: _picking,
                     label: '${_picking ? 'Done' : 'Change'} who sees the ${chosen['name']} list',
+                    onTap: () => setState(() => _picking = !_picking),
                     excludeSemantics: true,
                     child: GestureDetector(
                       onTap: () => setState(() => _picking = !_picking),
@@ -1073,6 +1076,7 @@ class _ListPick extends StatelessWidget {
           child: Semantics(
             button: true,
             label: 'Price list: $now',
+            onTap: open,
             excludeSemantics: true,
             child: GestureDetector(
               onTap: open,

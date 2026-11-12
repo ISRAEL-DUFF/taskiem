@@ -732,6 +732,7 @@ class BagBar extends StatelessWidget {
         button: true,
         enabled: onGo != null,
         label: go,
+        onTap: onGo,
         excludeSemantics: true,
         child: TkPress(
           onTap: onGo,
@@ -786,10 +787,11 @@ class QtyStepper extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
     final (bg, ink) = !on ? (t.tkSoft, t.text) : (dark ? (t.brandDark, t.brandDarkText) : (t.brand, t.tkOnPine));
-    Widget step(String sign, String label, VoidCallback? onTap) => Semantics(
+    Widget step(String sign, String label, VoidCallback? onTap) => TapArea(child: Semantics(
       button: true,
       enabled: onTap != null,
       label: label,
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -804,7 +806,7 @@ class QtyStepper extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ));
     return Semantics(
       container: true,
       label: 'How many $name',
@@ -928,6 +930,7 @@ class _ChipButton extends StatelessWidget {
         button: true,
         toggled: on,
         label: label,
+        onTap: onTap,
         excludeSemantics: true,
         child: TkPress(
           onTap: onTap,
@@ -972,6 +975,7 @@ class _Select extends StatelessWidget {
                 button: true,
                 selected: id == value,
                 label: words,
+                onTap: () => Navigator.of(context).pop(id),
                 excludeSemantics: true,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -992,6 +996,7 @@ class _Select extends StatelessWidget {
       child: Semantics(
         button: true,
         label: '$label: $now',
+        onTap: open,
         excludeSemantics: true,
         child: GestureDetector(
           onTap: open,

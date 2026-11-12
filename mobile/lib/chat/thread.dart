@@ -258,6 +258,7 @@ class ThreadJump extends StatelessWidget {
           : count > 0
           ? '$count new ${count == 1 ? 'message' : 'messages'}: scroll to the newest'
           : 'Scroll to the newest messages',
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,
@@ -832,9 +833,13 @@ Future<void> showHeadMenu(BuildContext context, {required Rect at, required List
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         for (final (label, onTap) in items)
-                          Semantics(
+                          TapArea(child: Semantics(
                             button: true,
                             label: label,
+                            onTap: () {
+                                Navigator.of(context).pop();
+                                onTap();
+                              },
                             excludeSemantics: true,
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,
@@ -856,7 +861,7 @@ Future<void> showHeadMenu(BuildContext context, {required Rect at, required List
                                 child: Text(label, style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: t.text)),
                               ),
                             ),
-                          ),
+                          )),
                       ],
                     ),
                   ),

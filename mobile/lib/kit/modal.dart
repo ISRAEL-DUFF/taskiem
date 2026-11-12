@@ -166,6 +166,7 @@ class TkPlainButton extends StatelessWidget {
     return TapArea(child: Semantics(
       button: true,
       label: label,
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,
@@ -243,6 +244,10 @@ void showTkToast(BuildContext context, String text, {bool error = false, String?
                               child: Semantics(
                                 link: true,
                                 label: action,
+                                onTap: () {
+                                    close();
+                                    onAction();
+                                  },
                                 excludeSemantics: true,
                                 child: GestureDetector(
                                   onTap: () {
@@ -259,6 +264,7 @@ void showTkToast(BuildContext context, String text, {bool error = false, String?
                             child: Semantics(
                               button: true,
                               label: 'Dismiss',
+                              onTap: close,
                               excludeSemantics: true,
                               child: GestureDetector(
                                 onTap: close,
@@ -310,6 +316,7 @@ Future<String?> showTkModalChoices(BuildContext context, {required String title,
                 button: true,
                 selected: id == value,
                 label: words,
+                onTap: () => Navigator.of(context).pop(id),
                 excludeSemantics: true,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,

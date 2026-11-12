@@ -215,6 +215,7 @@ class _BriefingCardState extends State<BriefingCard> {
         Semantics(
           button: true,
           label: 'Sales yesterday ${naira(sales.yesterdayKobo ?? 0)}: ask how we did yesterday',
+          onTap: () => widget.onAsk?.call('how did we do yesterday'),
           excludeSemantics: true,
           child: TkPress(
             onTap: () => widget.onAsk?.call('how did we do yesterday'),
@@ -260,6 +261,7 @@ class _BriefingCardState extends State<BriefingCard> {
       Semantics(
         button: true,
         label: 'Got it: put the briefing away for today',
+        onTap: _gotIt,
         excludeSemantics: true,
         // chat.css `.tk-brief .tk-brief-ok`: plain words, 40 px tall, 10 px
         // below the tiles (over kit.css's pill).
@@ -435,6 +437,7 @@ class _Pill extends StatelessWidget {
       button: true,
       enabled: onTap != null,
       label: '$label: $named',
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         scale: 0.97,

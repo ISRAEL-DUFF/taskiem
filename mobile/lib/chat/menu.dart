@@ -201,9 +201,11 @@ class _MenuState extends State<_Menu> {
                       const SizedBox(width: 2),
                     ],
                     // "+": every emoji.
-                    Semantics(
+                    TapArea(child: Semantics(
+                      container: true,
                       button: true,
                       label: 'More reactions',
+                      onTap: _pickAny,
                       excludeSemantics: true,
                       child: TkPress(
                         onTap: _pickAny,
@@ -215,7 +217,7 @@ class _MenuState extends State<_Menu> {
                           child: TkIcon('plus', size: 20, color: t.muted),
                         ),
                       ),
-                    ),
+                    )),
                   ],
                 ),
               ),
@@ -274,10 +276,11 @@ class _Pick extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Semantics(
+    return TapArea(child: Semantics(
       button: true,
       selected: pressed,
       label: label,
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,
@@ -293,7 +296,7 @@ class _Pick extends StatelessWidget {
           child: Text(emoji, style: tkText(size: 24, lineHeight: 1)),
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -321,9 +324,10 @@ class _ItemState extends State<_Item> {
       if (item.done != null) setState(() => _done = true);
     }
 
-    return Semantics(
+    return TapArea(child: Semantics(
       button: true,
       label: label,
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,
@@ -341,6 +345,6 @@ class _ItemState extends State<_Item> {
           ),
         ),
       ),
-    );
+    ));
   }
 }

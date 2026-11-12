@@ -682,28 +682,36 @@ class _Head extends StatelessWidget {
           ),
           if (name != null) ...[const SizedBox(width: 6), Text(name!, style: tkText(size: 13, color: t.muted))],
           const SizedBox(width: 6),
-          Semantics(
-            // Its own button, not merged with the title beside it.
-            container: true,
-            button: true,
-            label: 'More about the chats',
-            excludeSemantics: true,
-            child: Builder(
-              builder: (context) => TkPress(
-              onTap: () {
+          // Its own button, not merged with the title beside it; the menu
+          // grows from where it is.
+          Builder(
+            builder: (context) {
+              void open() {
                 final box = context.findRenderObject()! as RenderBox;
                 onMenu?.call(box.localToGlobal(Offset.zero) & box.size);
-              },
-              // The web's `more`, turned upright, its dots bolder (`.chat-menu-wrap svg`).
-              child: SizedBox(
-                width: 40,
-                height: 40,
-                child: Center(
-                  child: RotatedBox(quarterTurns: 1, child: TkIcon('more', size: 18, stroke: 3, color: t.text)),
+              }
+
+              return TapArea(
+                child: Semantics(
+                  container: true,
+                  button: true,
+                  label: 'More about the chats',
+                  onTap: open,
+                  excludeSemantics: true,
+                  child: TkPress(
+                    onTap: open,
+                    // The web's `more`, turned upright, its dots bolder (`.chat-menu-wrap svg`).
+                    child: SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Center(
+                        child: RotatedBox(quarterTurns: 1, child: TkIcon('more', size: 18, stroke: 3, color: t.text)),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            ),
+              );
+            },
           ),
         ],
       ),
@@ -1615,6 +1623,7 @@ class _FindButton extends StatelessWidget {
     return Semantics(
       button: true,
       label: 'Find a business to link with',
+      onTap: onTap ?? () {},
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap ?? () {},
@@ -1771,6 +1780,7 @@ class _FindableState extends State<_Findable> {
     Widget button(String label, bool primary, VoidCallback onTap) => Semantics(
       button: true,
       label: label,
+      onTap: _busy ? null : onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: _busy ? null : onTap,

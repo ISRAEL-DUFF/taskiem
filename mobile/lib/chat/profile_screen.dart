@@ -600,6 +600,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           container: true,
                           button: true,
                           label: 'Add a photo',
+                          onTap: _busy || _uploading > 0 || gallery.length >= max ? null : _addPhotos,
                           excludeSemantics: true,
                           child: TkPress(
                             onTap: _busy || _uploading > 0 || gallery.length >= max ? null : _addPhotos,
@@ -707,6 +708,7 @@ class _PrimaryButton extends StatelessWidget {
         button: true,
         enabled: onTap != null,
         label: label,
+        onTap: onTap,
         excludeSemantics: true,
         child: TkPress(
           onTap: onTap,
@@ -963,6 +965,7 @@ class _PhotoTileState extends State<_PhotoTile> {
       button: true,
       enabled: onTap != null,
       label: label,
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         onTap: onTap,

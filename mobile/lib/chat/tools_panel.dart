@@ -331,6 +331,7 @@ class _ToolsPanelState extends State<ToolsPanel> {
                         child: Semantics(
                           button: true,
                           label: r.title,
+                          onTap: r.open,
                           excludeSemantics: true,
                           child: TkPress(
                             onTap: r.open,
@@ -398,6 +399,7 @@ class _Tile extends StatelessWidget {
     return Semantics(
       button: true,
       label: [title, if (line.trim().isNotEmpty) line, if (badge != null) badge!.text].join(', '),
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,

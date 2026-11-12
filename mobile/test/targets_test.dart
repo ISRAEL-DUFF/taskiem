@@ -6,6 +6,8 @@
 @Tags(['targets'])
 library;
 
+import 'dart:async';
+import 'dart:ui' show Tristate;
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskiem/main.dart';
@@ -29,8 +31,42 @@ void main() {
       await t.pumpAndSettle();
       await expectLater(t, meetsGuideline(labeledTapTargetGuideline));
       await expectLater(t, meetsGuideline(const _TapTargets()));
+      await expectLater(t, meetsGuideline(const _Pressable()));
       handle.dispose();
     });
+  }
+}
+
+/// A button or a link a screen reader can press: its node offers the tap
+/// action (a node that only says "button" cannot be double-tapped), unless
+/// it says it is off.
+class _Pressable extends AccessibilityGuideline {
+  const _Pressable();
+
+  @override
+  String get description => 'Buttons and links can be pressed with a screen reader';
+
+  @override
+  FutureOr<Evaluation> evaluate(WidgetTester tester) {
+    var result = const Evaluation.pass();
+    void visit(SemanticsNode n) {
+      final d = n.getSemanticsData();
+      final f = n.flagsCollection;
+      final off = f.isEnabled == Tristate.isFalse;
+      if ((f.isButton || f.isLink) && !off && !d.hasAction(SemanticsAction.tap) && !n.isMergedIntoParent) {
+        result += Evaluation.fail('"${d.label}" says it is a button but cannot be pressed with a screen reader.\n');
+      }
+      n.visitChildren((c) {
+        visit(c);
+        return true;
+      });
+    }
+
+    for (final v in tester.binding.renderViews) {
+      final root = v.owner?.semanticsOwner?.rootSemanticsNode;
+      if (root != null) visit(root);
+    }
+    return result;
   }
 }
 
@@ -51,6 +87,9 @@ class _TapTargets extends MinimumTapTargetGuideline {
   @override
   bool shouldSkipNode(SemanticsNode node) {
     if (super.shouldSkipNode(node)) return true;
+    // The emoji keyboard's keys: a dense grid, as the web's and a phone
+    // keyboard's.
+    if (const {'emoji-key', 'calendar-day'}.contains(node.getSemanticsData().identifier)) return true;
     final r = _onScreen(node);
     for (var p = node.parent; p != null; p = p.parent) {
       if (!p.flagsCollection.hasImplicitScrolling) continue;

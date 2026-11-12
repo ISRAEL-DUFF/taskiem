@@ -494,6 +494,9 @@ class ComposerState extends State<Composer> {
             button: true,
             label: 'Record a voice note',
             hint: 'Hold to record, release to send. Tap to record and send when you are done.',
+            // A screen reader's double tap: a tap, recording until Done or
+            // Cancel.
+            onTap: _record,
             child: Listener(
               onPointerDown: _press,
               onPointerMove: _move,
@@ -565,6 +568,7 @@ class ComposerState extends State<Composer> {
           Semantics(
             button: true,
             label: 'Done',
+            onTap: () => _stop(keep: true),
             excludeSemantics: true,
             child: TkPress(
               onTap: () => _stop(keep: true),
@@ -601,6 +605,7 @@ class _PlainSmall extends StatelessWidget {
     return Semantics(
       button: true,
       label: semantics ?? label,
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,
@@ -741,6 +746,7 @@ class _AttachMenu extends StatelessWidget {
     Widget item(String what, String icon, String label) => Semantics(
       button: true,
       label: label,
+      onTap: () => onChoose(what),
       excludeSemantics: true,
       child: TkPress(
         onTap: () => onChoose(what),
@@ -824,6 +830,7 @@ class _Replying extends StatelessWidget {
           Semantics(
             button: true,
             label: 'Cancel the reply',
+            onTap: onCancel,
             excludeSemantics: true,
             child: TkPress(
               onTap: onCancel,

@@ -82,20 +82,7 @@ class ToolHost {
   /// Back to the list (a form's Cancel).
   final VoidCallback back;
 
-  /// A tool's "Open …": the page it leads to (tools.ts `page`), where the
-/// app has it as a screen; the rest say they are coming.
-void openToolPage(BuildContext context, Tool tool, Auth auth) {
-  final Widget? page = switch (tool.key) {
-    'products' || 'stock' || 'sell' || 'handover' => StockPage(auth: auth),
-    'services' => BookingsPage(auth: auth),
-    'prices' => PriceListsPage(auth: auth),
-    _ => null,
-  };
-  if (page == null) return showComingSoon(context);
-  Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
-}
-
-/// ChatTools.tsx mayEdit: whether the person may change it.
+  /// ChatTools.tsx mayEdit: whether the person may change it.
   final bool canEdit;
 }
 

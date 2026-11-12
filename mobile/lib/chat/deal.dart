@@ -244,6 +244,7 @@ class _DealActionsState extends State<DealActions> {
               button: true,
               selected: d == _keep,
               label: label,
+              onTap: () => Navigator.of(context).pop(d),
               excludeSemantics: true,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -294,6 +295,7 @@ class _DealActionsState extends State<DealActions> {
             child: Semantics(
               button: true,
               label: 'Keep this price for them: ${keepChoices.firstWhere((c) => c.$1 == _keep).$2}',
+              onTap: _pickKeep,
               excludeSemantics: true,
               child: GestureDetector(
                 onTap: _pickKeep,

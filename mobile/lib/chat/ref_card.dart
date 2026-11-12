@@ -463,6 +463,7 @@ class _Btn extends StatelessWidget {
       button: true,
       enabled: onTap != null,
       label: '$label $named',
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,

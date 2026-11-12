@@ -629,6 +629,9 @@ Future<void> _hold(WidgetTester t) async {
   await _loaded(t);
   await t.longPress(find.textContaining('Good morning ma', findRichText: true));
   await t.pumpAndSettle();
+  // The reactions' pill is placed once the menu is measured.
+  await t.pump(const Duration(milliseconds: 50));
+  await t.pumpAndSettle();
 }
 
 /// Their shop from the tools panel, the first item it can add in the bag;

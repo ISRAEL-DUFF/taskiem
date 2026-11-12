@@ -157,6 +157,7 @@ class _Chip extends StatelessWidget {
         button: true,
         toggled: on,
         label: label,
+        onTap: onTap,
         excludeSemantics: true,
         child: TkPress(
           onTap: onTap,
@@ -432,6 +433,7 @@ class TkSheetMore extends StatelessWidget {
           child: Semantics(
             button: true,
             label: label,
+            onTap: onTap,
             excludeSemantics: true,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
@@ -478,6 +480,7 @@ class TkSoftButton extends StatelessWidget {
         button: true,
         enabled: onTap != null,
         label: semanticsLabel ?? label,
+        onTap: onTap,
         excludeSemantics: true,
         child: TkPress(
           onTap: onTap,

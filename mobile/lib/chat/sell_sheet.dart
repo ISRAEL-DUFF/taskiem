@@ -438,6 +438,7 @@ class _PickChip extends StatelessWidget {
         selected: on,
         enabled: enabled,
         label: label,
+        onTap: enabled ? onTap : null,
         excludeSemantics: true,
         child: GestureDetector(
           onTap: enabled ? onTap : null,

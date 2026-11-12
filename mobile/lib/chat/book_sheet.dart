@@ -377,6 +377,7 @@ class _Chips extends StatelessWidget {
           button: true,
           selected: pressed,
           label: v.$2,
+          onTap: () => onPick(v.$1),
           excludeSemantics: true,
           child: GestureDetector(
             onTap: () => onPick(v.$1),

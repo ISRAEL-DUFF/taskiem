@@ -136,6 +136,7 @@ class _PurchaseViewState extends State<PurchaseView> {
               button: true,
               selected: it['id'] == _pick(i),
               label: it['name'] as String? ?? '',
+              onTap: () => Navigator.of(context).pop(it['id'] as String),
               excludeSemantics: true,
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -299,6 +300,7 @@ class _PickBox extends StatelessWidget {
     return Semantics(
       button: true,
       label: '$label: $value',
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         onTap: onTap,

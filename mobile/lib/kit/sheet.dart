@@ -120,6 +120,7 @@ class TkSheet extends StatelessWidget {
                                     child: Semantics(
                                       button: true,
                                       label: '$crumb: back to the list',
+                                      onTap: onBack,
                                       excludeSemantics: true,
                                       child: GestureDetector(
                                         behavior: HitTestBehavior.opaque,
@@ -281,9 +282,10 @@ class _Round extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Semantics(
+    return TapArea(child: Semantics(
       button: true,
       label: label,
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,
@@ -295,7 +297,7 @@ class _Round extends StatelessWidget {
           child: TkIcon(icon, size: 18, color: t.text),
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -490,6 +492,7 @@ class TkGhostButton extends StatelessWidget {
       button: true,
       enabled: onTap != null,
       label: label,
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,
@@ -528,6 +531,7 @@ class TkCta extends StatelessWidget {
       button: true,
       enabled: onTap != null,
       label: label,
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,

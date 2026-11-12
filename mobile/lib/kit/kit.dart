@@ -227,6 +227,8 @@ class TkLink extends StatelessWidget {
     return TapArea(
       child: Semantics(
         link: true,
+        enabled: onTap != null,
+        onTap: onTap,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
@@ -464,6 +466,8 @@ class TkSmallButton extends StatelessWidget {
     return TapArea(child: Semantics(
       button: true,
       label: semantics,
+      enabled: onPressed != null,
+      onTap: onPressed,
       excludeSemantics: semantics != null,
       child: TkPress(
         onTap: onPressed ?? () {},

@@ -1008,6 +1008,7 @@ class _ReplyButtons extends StatelessWidget {
                         ? Semantics(
                             button: true,
                             label: b.title,
+                            onTap: () => onPress(b),
                             excludeSemantics: true,
                             child: TkPress(onTap: () => onPress(b), child: row),
                           )
