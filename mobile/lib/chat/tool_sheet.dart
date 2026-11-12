@@ -18,6 +18,7 @@ import 'price_lists_page.dart' show PriceListsPage;
 import 'stock_page.dart' show StockPage;
 import 'tools.dart';
 import 'tools_panel.dart';
+import 'trade_orders_page.dart' show TradeOrdersPage;
 
 /// A tool's "Open …": the page it leads to (tools.ts `page`), where the
 /// app has it as a screen; the rest say they are coming.
@@ -26,6 +27,7 @@ void openToolPage(BuildContext context, Tool tool, Auth auth) {
     'products' || 'stock' || 'sell' || 'handover' => StockPage(auth: auth),
     'services' => BookingsPage(auth: auth),
     'prices' => PriceListsPage(auth: auth),
+    'orders' => TradeOrdersPage(auth: auth),
     _ => null,
   };
   if (page == null) return showComingSoon(context);

@@ -493,46 +493,8 @@ class _StockPageState extends State<StockPage> {
   }
 }
 
-/// A form in a modal: its fields, an error, and its buttons (the primary
-/// first, then Cancel), as the web's `.toolbar`.
-class _ModalForm extends StatelessWidget {
-  const _ModalForm({required this.children, required this.save, required this.saveWords, this.problem, this.error, this.busy = false});
-  final List<Widget> children;
-  final VoidCallback? save;
-  final String saveWords;
-  final String? problem;
-  final String? error;
-  final bool busy;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final c in children) Padding(padding: const EdgeInsets.only(bottom: 14), child: c),
-        if (problem != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Text(problem!, style: tkText(size: 13, weight: 600, color: t.danger)),
-          ),
-        if (error != null) Padding(padding: const EdgeInsets.only(bottom: 10), child: TkErrorBox(error!)),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            TkButton(label: saveWords, primary: true, onPressed: busy || problem != null ? null : save),
-            TkButton(label: 'Cancel', onPressed: () => Navigator.of(context).pop(false)),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
 /// A field as the web's `Field`: its label, the box, a hint.
-Widget _field(String label, TextEditingController c, {String? hint, String? placeholder, bool money = false, bool number = false, int? max}) => TkKitField(
+Widget pageField(String label, TextEditingController c, {String? hint, String? placeholder, bool money = false, bool number = false, int? max}) => TkKitField(
   label: label,
   hint: hint,
   child: TkTextBox(controller: c, hint: placeholder, money: money, digits: number ? 7 : null, max: max),
@@ -649,34 +611,34 @@ class _ItemFormState extends State<_ItemForm> {
   @override
   Widget build(BuildContext context) {
     final adding = _it == null;
-    return _ModalForm(
+    return TkModalForm(
       saveWords: adding ? 'Add the item' : 'Save',
       busy: _busy,
       problem: _name.text.isEmpty ? null : _problem,
       error: _error,
       save: _problem == null ? _save : null,
       children: [
-        _field('Name', _name, max: 120),
+        pageField('Name', _name, max: 120),
         if (adding)
-          _field(
+          pageField(
             'How many you have',
             _quantity,
             hint: 'Recorded as goods received, so the count is explained from the start.',
             placeholder: '50',
             number: true,
           ),
-        _field('Unit', _unit, max: 30, hint: 'One word: bag, carton, piece. Leave it empty to count pieces.', placeholder: 'carton'),
-        _field('Cost price (₦)', _cost, hint: 'What you pay for one, for the value of your stock and what you lose.', placeholder: '8500', money: true),
-        _field(
+        pageField('Unit', _unit, max: 30, hint: 'One word: bag, carton, piece. Leave it empty to count pieces.', placeholder: 'carton'),
+        pageField('Cost price (₦)', _cost, hint: 'What you pay for one, for the value of your stock and what you lose.', placeholder: '8500', money: true),
+        pageField(
           'Selling price (₦)',
           _price,
           hint: 'Shown on your page once it is published. Without one, the item is not shown.',
           placeholder: '9500',
           money: true,
         ),
-        _field('Reorder at', _reorder, hint: 'When the count is this or less, the item is low and you are told each morning.', placeholder: '10', number: true),
-        _field('Order up to', _target, hint: 'What to order a low item back up to.', placeholder: '50', number: true),
-        _field('Supplier', _supplier, placeholder: 'Dangote Depot', max: 120),
+        pageField('Reorder at', _reorder, hint: 'When the count is this or less, the item is low and you are told each morning.', placeholder: '10', number: true),
+        pageField('Order up to', _target, hint: 'What to order a low item back up to.', placeholder: '50', number: true),
+        pageField('Supplier', _supplier, placeholder: 'Dangote Depot', max: 120),
       ],
     );
   }
@@ -771,7 +733,7 @@ class _MoveFormState extends State<_MoveForm> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final problem = _problem;
-    return _ModalForm(
+    return TkModalForm(
       saveWords: 'Record',
       busy: _busy,
       problem: _amount.text.isEmpty ? null : problem,
@@ -809,8 +771,8 @@ class _MoveFormState extends State<_MoveForm> {
               ],
             ),
           ),
-        _field(_kind == 'count' ? 'How many you counted' : 'How many', _amount, placeholder: _kind == 'count' ? '12' : '5', number: true),
-        _field(_kind == 'adjustment' ? 'Why' : 'Note', _note, hint: _kind == 'adjustment' ? 'Spoilt, lost, found, a gift.' : null, max: 200),
+        pageField(_kind == 'count' ? 'How many you counted' : 'How many', _amount, placeholder: _kind == 'count' ? '12' : '5', number: true),
+        pageField(_kind == 'adjustment' ? 'Why' : 'Note', _note, hint: _kind == 'adjustment' ? 'Spoilt, lost, found, a gift.' : null, max: 200),
         if (_preview != null && problem == null) Text('The count goes from $_preview.', style: tkHint(t)),
       ],
     );
@@ -945,7 +907,7 @@ class _SaleFormState extends State<_SaleForm> {
     final problem = _problem;
     final total = _total;
     final touched = _lines.any((l) => l.item.isNotEmpty);
-    return _ModalForm(
+    return TkModalForm(
       saveWords: 'Record the sale',
       busy: _busy,
       problem: touched ? problem : null,
@@ -976,9 +938,9 @@ class _SaleFormState extends State<_SaleForm> {
                 ),
               ),
               const SizedBox(height: 10),
-              _field('How many', _lines[i].quantity, number: true),
+              pageField('How many', _lines[i].quantity, number: true),
               const SizedBox(height: 10),
-              _field(
+              pageField(
                 'Price for one (₦)',
                 _lines[i].price,
                 money: true,
@@ -1018,14 +980,14 @@ class _SaleFormState extends State<_SaleForm> {
               ],
             ),
           ),
-          _field(
+          pageField(
             'Amount taken (₦)',
             _amount,
             money: true,
             hint: total != null ? 'Leave it empty for ${naira(total)}, the items’ prices.' : 'Needed when an item has no price.',
           ),
         ],
-        _field('Note', _note, max: 200),
+        pageField('Note', _note, max: 200),
         if (widget.entry == null && _how != 'cash')
           Text('The sale waits for its money, and is matched when the ${_how == 'pos' ? 'terminal reports it' : 'transfer comes in'}.', style: tkHint(t)),
       ],

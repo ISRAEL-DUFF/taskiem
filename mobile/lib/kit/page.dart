@@ -175,3 +175,41 @@ class TkHero extends StatelessWidget {
     );
   }
 }
+
+/// A form in a modal: its fields, an error, and its buttons (the primary
+/// first, then Cancel), as the web's `.toolbar`.
+class TkModalForm extends StatelessWidget {
+  const TkModalForm({super.key, required this.children, required this.save, required this.saveWords, this.problem, this.error, this.busy = false});
+  final List<Widget> children;
+  final VoidCallback? save;
+  final String saveWords;
+  final String? problem;
+  final String? error;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final c in children) Padding(padding: const EdgeInsets.only(bottom: 14), child: c),
+        if (problem != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Text(problem!, style: tkText(size: 13, weight: 600, color: t.danger)),
+          ),
+        if (error != null) Padding(padding: const EdgeInsets.only(bottom: 10), child: TkErrorBox(error!)),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            TkButton(label: saveWords, primary: true, onPressed: busy || problem != null ? null : save),
+            TkButton(label: 'Cancel', onPressed: () => Navigator.of(context).pop(false)),
+          ],
+        ),
+      ],
+    );
+  }
+}
