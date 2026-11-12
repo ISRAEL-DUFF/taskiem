@@ -293,6 +293,7 @@ class _DealActionsState extends State<DealActions> {
             field: false,
             label: 'Keep this price for them',
             child: Semantics(
+              container: true,
               button: true,
               label: 'Keep this price for them: ${keepChoices.firstWhere((c) => c.$1 == _keep).$2}',
               onTap: _pickKeep,
