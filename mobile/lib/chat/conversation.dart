@@ -30,6 +30,7 @@ import '../kit/sheet.dart' show TkCta;
 import 'composer.dart';
 import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
 import 'tool_sheet.dart';
+import 'storefront_orders_page.dart' show openStorefrontOrder;
 import 'trade_orders_page.dart' show openTradeOrder;
 import 'tools.dart';
 import 'tools_panel.dart';
@@ -800,6 +801,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
     // linkchat.ts cardHref: an order or a delivery has its own screen.
     if (card.doc == 'order' || card.doc == 'delivery') {
       openTradeOrder(context, widget.data.chats.auth, card.id ?? card.reference);
+      return;
+    }
+    if (card.doc == 'dispatch') {
+      openStorefrontOrder(context, widget.data.chats.auth, card.reference);
       return;
     }
     final tool = card.doc == 'purchase' ? tools.where((x) => x.key == 'purchases').firstOrNull : null;

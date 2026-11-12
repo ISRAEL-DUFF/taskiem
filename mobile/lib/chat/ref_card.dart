@@ -18,6 +18,7 @@ import '../kit/modal.dart';
 import '../theme/theme.dart';
 import 'cards.dart' show CardPill;
 import 'give_task.dart';
+import 'storefront_orders_page.dart' show openStorefrontOrder;
 import 'words.dart';
 
 // --- lib/refs.ts, lib/mentions.ts ---
@@ -264,8 +265,14 @@ class _RefCardState extends State<RefCard> {
     final giving = c.kind != 'customer' && can('member.manage|invoice.manage');
     final action = c.action;
     final acts = <Widget>[
-      // Open shows it where it is worked on, a tool's screen: coming.
-      if (c.kind != 'customer') _Btn(label: 'Open', named: label, onTap: () => showComingSoon(context)),
+      // Open shows it where it is worked on: an order on its own screen
+      // (ChatRefCard.tsx); invoices, bills and purchases with M8.
+      if (c.kind != 'customer')
+        _Btn(
+          label: 'Open',
+          named: label,
+          onTap: () => c.kind == 'order' ? openStorefrontOrder(context, widget.auth, c.name) : showComingSoon(context),
+        ),
       if (giving)
         _Btn(label: 'Give this to…', named: label, onTap: () => giveThis(context, widget.auth, (kind: c.kind, id: c.id, name: c.name))),
       if (action != null && (action != 'message' || widget.onMessage != null))

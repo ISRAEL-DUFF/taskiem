@@ -18,6 +18,7 @@ import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/give_task.dart';
 import 'package:taskiem/chat/thread.dart';
 import 'package:taskiem/chat/taskiem.dart';
+import 'package:taskiem/kit/sheet.dart' show TkSheet;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
@@ -378,7 +379,7 @@ void main() {
     expect(asksBriefing('briefings'), isFalse);
   });
 
-  testWidgets('D5–D6: what leads to a tool not here yet says so when pressed', (t) async {
+  testWidgets('D5–D6: the tools open and close; an alert’s step opens its tool', (t) async {
     await screen(t);
     // The tools button opens the tools (M5); pressed again, they close.
     await t.tap(find.bySemanticsLabel('Open tools'));
@@ -391,8 +392,10 @@ void main() {
     await t.ensureVisible(step);
     await t.pumpAndSettle();
     await t.tap(step);
-    await t.pump();
-    expect(find.text('This is coming to the app soon.'), findsOneWidget);
+    await t.pumpAndSettle();
+    // Record stock in: the item in the Stock sheet (M7), not "coming".
+    expect(find.text('This is coming to the app soon.'), findsNothing);
+    expect(find.byType(TkSheet), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
     await t.pumpAndSettle();
   });

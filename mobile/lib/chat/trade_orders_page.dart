@@ -16,6 +16,7 @@ import '../kit/sheet.dart' show TkKitField, TkLines;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show whenLabel;
+import 'storefront_orders_page.dart' show openStorefrontOrder;
 import 'tags.dart' show quantity;
 import 'words.dart' show CardTone, naira;
 
@@ -345,7 +346,7 @@ class _TradeOrderPageState extends State<TradeOrderPage> {
           children: [
             TkLink(
               label: delivery ? 'Its delivery and riders' : 'See it on the Orders page',
-              onTap: links.storefrontOrder == null ? _soon : () => links.storefrontOrder!(context, _str(o['order_reference'])),
+              onTap: () => (links.storefrontOrder ?? (c, r) => openStorefrontOrder(c, _auth, r))(context, _str(o['order_reference'])),
             ),
             Text(delivery ? ': a rider takes it to where $buyer said.' : '.', style: tkText(size: 15, color: t.text)),
           ],

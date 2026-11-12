@@ -106,6 +106,32 @@ class Notice {
   }
 }
 
+/// StorefrontBookings.tsx CancelDialog: asks first, with Keep it.
+Future<bool> askCancelBooking(BuildContext context, Map<String, dynamic> b) => showTkConfirm(
+  context,
+  title: 'Cancel booking ${b['reference']}?',
+  body:
+      '${b['service_name'] ?? ''}${b['starts_at'] != null ? ', ${whenLabel(b['starts_at'] as String)}' : ''}. The time is freed and the customer is texted that you cancelled.'
+      '${b['paid_at'] != null ? ' They have paid, so the booking shows as Refund due until you refund them in Paystack.' : ''}',
+  ok: 'Cancel the booking',
+  cancel: 'Keep it',
+  danger: true,
+);
+
+/// Cancels [b]; answers what to say.
+Future<String> cancelBooking(Auth auth, Map<String, dynamic> b) async {
+  final r = (await auth.transport.send('POST', '/v1/storefront/bookings/${Uri.encodeComponent(b['reference'] as String)}/cancel', body: const {}) as Map)['booking'] as Map;
+  return r['status'] == 'refund_due' ? '${r['reference']} is cancelled. They had paid: refund them in Paystack.' : '${r['reference']} is cancelled; the customer is told.';
+}
+
+/// StorefrontBookings.tsx MoveDialog: a new day and time; answers what to
+/// say, or null when it was not moved.
+Future<String?> moveBooking(BuildContext context, Auth auth, Map<String, dynamic> b) async {
+  final moved = await showTkModal<Map<String, dynamic>>(context, title: 'Move booking ${b['reference']}', builder: (_) => _MoveForm(auth: auth, booking: b));
+  if (moved == null) return null;
+  return '${moved['reference']} is moved to ${moved['starts_at'] != null ? whenLabel(moved['starts_at'] as String) : 'its new time'}; the customer is told.';
+}
+
 /// A booking period as typed.
 class _Span {
   _Span(String open, String close) : open = TextEditingController(text: open), close = TextEditingController(text: close);
@@ -355,27 +381,12 @@ class _BookingsPageState extends State<BookingsPage> {
 
   Future<void> _cancel(Map<String, dynamic> b) async {
     if (_cancelling) return;
-    final yes = await showTkConfirm(
-      context,
-      title: 'Cancel booking ${b['reference']}?',
-      body:
-          '${b['service_name'] ?? ''}${b['starts_at'] != null ? ', ${whenLabel(b['starts_at'] as String)}' : ''}. The time is freed and the customer is texted that you cancelled.'
-          '${b['paid_at'] != null ? ' They have paid, so the booking shows as Refund due until you refund them in Paystack.' : ''}',
-      ok: 'Cancel the booking',
-      cancel: 'Keep it',
-      danger: true,
-    );
-    if (!yes || !mounted) return;
+    if (!await askCancelBooking(context, b) || !mounted) return;
     setState(() => _cancelling = true);
     try {
-      final r =
-          (await _t.send('POST', '/v1/storefront/bookings/${Uri.encodeComponent(b['reference'] as String)}/cancel', body: const {}) as Map)['booking'] as Map;
+      final said = await cancelBooking(widget.auth, b);
       if (!mounted) return;
-      setState(
-        () => _notice = r['status'] == 'refund_due'
-            ? '${r['reference']} is cancelled. They had paid: refund them in Paystack.'
-            : '${r['reference']} is cancelled; the customer is told.',
-      );
+      setState(() => _notice = said);
       await _loadBookings();
     } on Object catch (e) {
       if (mounted) setState(() => _error = _why(e));
@@ -384,18 +395,12 @@ class _BookingsPageState extends State<BookingsPage> {
   }
 
   Future<void> _move(Map<String, dynamic> b) async {
-    final moved = await showTkModal<Map<String, dynamic>>(
-      context,
-      title: 'Move booking ${b['reference']}',
-      builder: (_) => _MoveForm(auth: widget.auth, booking: b),
-    );
-    if (moved == null || !mounted) return;
-    setState(
-      () => _notice =
-          '${moved['reference']} is moved to ${moved['starts_at'] != null ? whenLabel(moved['starts_at'] as String) : 'its new time'}; the customer is told.',
-    );
+    final said = await moveBooking(context, widget.auth, b);
+    if (said == null || !mounted) return;
+    setState(() => _notice = said);
     await _loadBookings();
   }
+
 
   @override
   Widget build(BuildContext context) {

@@ -38,6 +38,8 @@ import 'thread.dart';
 import 'tool_forms.dart' show toolDetail;
 import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
 import 'availability_sheet.dart' show showAvailabilitySheet;
+import 'bookings_page.dart' show BookingsPage;
+import 'storefront_orders_page.dart' show DeliveriesPage, openStorefrontOrder, showRiderSheet;
 import 'tool_sheet.dart';
 import 'tools.dart';
 import 'tools_panel.dart';
@@ -444,7 +446,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
   // The tools panel (ChatTools.tsx): every tool the person may open.
   late final _tools = ToolsController(chats: widget.data.chats)..clearSlash = _text.clear;
 
-  void _openTool(Tool tool) {
+  void _openTool(Tool tool, {String? openId}) {
     _tools.close();
     // Sell, the handover and availability have sheets of their own: not a
     // list.
@@ -472,6 +474,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       tools: _tools,
       tool: tool,
       detail: toolDetail(widget.data.chats.auth),
+      openId: openId,
       // Saved: its diary line here at once, and the alerts read again.
       onSaved: (_) {
         unawaited(widget.data.pull().catchError((Object _) {}));
@@ -703,6 +706,22 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                       briefing: d.briefing!,
                       auth: d.chats.auth,
                       onAsk: (w) => d.say(text: w),
+                      onTile: (key) {
+                        final auth = d.chats.auth;
+                        void push(Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+                        switch (key) {
+                          case 'stock':
+                            final tool = tools.where((x) => x.key == 'stock').firstOrNull;
+                            if (tool != null) _openTool(tool);
+                          case 'deliveries':
+                            push(DeliveriesPage(auth: auth));
+                          case 'bookings':
+                            push(BookingsPage(auth: auth));
+                          default:
+                            // Invoices (M8), staff and tasks: coming.
+                            showComingSoon(context);
+                        }
+                      },
                     ),
                     const SizedBox(height: 2),
                   ],
@@ -715,10 +734,28 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                       d.pull();
                     },
                     onOpen: (what, a) {
+                      final tool = tools.where((x) => x.key == what).firstOrNull;
                       if (what == 'customer' && (a.id ?? '').isNotEmpty) {
                         widget.onOpenCustomer?.call(a.id!);
+                      } else if (what == 'rider' && (a.reference ?? '').isNotEmpty) {
+                        // Assign rider: the next in turn, or one by name.
+                        unawaited(
+                          showRiderSheet(
+                            context,
+                            auth: d.chats.auth,
+                            reference: a.reference!,
+                            line: a.line,
+                            onDone: () {
+                              d.loadCards();
+                              unawaited(d.pull().catchError((Object _) {}));
+                            },
+                          ),
+                        );
+                      } else if (tool != null && (what == 'orders' || what == 'stock')) {
+                        // Review order, Record stock in: the row in its tool's sheet.
+                        _openTool(tool, openId: a.id);
                       } else {
-                        // Its tool's sheet comes with the tools.
+                        // Its sheet comes with M8 (reorder, match).
                         showComingSoon(context);
                       }
                     },
@@ -898,7 +935,12 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
           fontWeight: FontWeight.w600,
           fontVariations: const [FontVariation('wght', 600)],
         );
-        final open = ref.kind == 'customer' ? widget.onCustomer : null;
+        // TaskiemChat.tsx: an order opens on its own screen, by its reference.
+        final open = ref.kind == 'customer'
+            ? widget.onCustomer
+            : ref.kind == 'order' && widget.auth != null
+            ? (String _) => openStorefrontOrder(context, widget.auth!, ref.name)
+            : null;
         // Anything else opens in its tool, which comes with the tools.
         out.add(
           TextSpan(text: r.text, style: mention, recognizer: tap('ref:${ref.kind}:${ref.id}', () => open == null ? showComingSoon(context) : open(ref.id))),
