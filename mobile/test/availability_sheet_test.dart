@@ -1,6 +1,7 @@
 // Availability (M7 part A; web ChatAvailability.tsx): the state now and who
 // sees it; Free, Busy till a time, Off sent as the web sends them.
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
@@ -60,5 +61,44 @@ void main() {
     expect(changed, 2);
     await t.pump(const Duration(seconds: 2));
     await expectLargeText(t, TaskiemApp(mode: TkMode.dark, home: AvailabilitySheet(auth: chats.auth)), drive: settle);
+  });
+
+  testWidgets('refused: a time already past, none who use you; the box still while it sends', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chats');
+    var n = 0;
+    final hold = Completer<http.Response?>();
+    http.Response ok(Object body, [int status = 200]) => http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (req.url.path != '/v1/availability') return null;
+        if (req.method == 'GET') return ok({'state': 'free', 'businesses': 1});
+        n++;
+        if (n == 1) return ok({'error': 'That time has passed: say a time later today.'}, 400);
+        if (n == 2) return ok({'error': 'No business has added you as its rider yet.'}, 409);
+        return hold.future;
+      }),
+      now: () => f.at,
+    );
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: AvailabilitySheet(auth: chats.auth)));
+    await settle(t);
+    await t.enterText(find.byType(EditableText), '6am');
+    await t.tap(find.bySemanticsLabel('Busy'));
+    await settle(t);
+    expect(find.text('That time has passed: say a time later today.'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Off'));
+    await settle(t);
+    expect(find.text('No business has added you as its rider yet.'), findsOneWidget);
+    // Sending: the box takes no typing.
+    await t.tap(find.bySemanticsLabel('Free'));
+    await t.pump();
+    await t.enterText(find.byType(EditableText), '9pm');
+    await t.pump();
+    expect(find.text('9pm'), findsNothing);
+    hold.complete(ok({'state': 'free', 'businesses': 1}));
+    await settle(t);
+    await t.pump(const Duration(seconds: 2));
   });
 }

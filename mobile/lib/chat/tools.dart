@@ -623,13 +623,18 @@ final List<Tool> tools = [
 ];
 
 /// "Free", "Busy till 15:30", "Busy, 2 deliveries", "Off today".
-String availabilityWord(Map<String, dynamic> a) {
+String availabilityWord(Map<String, dynamic> a, [DateTime? now]) {
   switch (a['state']) {
     case 'off':
       return 'Off today';
     case 'busy':
       final until = DateTime.tryParse(_str(a['until']))?.toLocal();
-      if (until != null) return 'Busy till ${until.hour.toString().padLeft(2, '0')}:${until.minute.toString().padLeft(2, '0')}';
+      // time.ts shortWhen: the clock today; the day too when it is not
+      // (busy late at night runs past midnight).
+      if (until != null) {
+        final n = now ?? DateTime.now();
+        return 'Busy till ${dayWords(until, n) == 'Today' ? '${until.hour.toString().padLeft(2, '0')}:${until.minute.toString().padLeft(2, '0')}' : whenWords(until, n)}';
+      }
       final open = _int(a['open']) ?? 0;
       if (open > 0) return 'Busy, $open ${open == 1 ? 'delivery' : 'deliveries'}';
       return 'Busy';

@@ -6,7 +6,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../app/auth.dart';
-import '../kit/forms.dart' show CloseSoon, errorWords;
+import '../kit/forms.dart' show errorWords;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkLoading;
 import '../kit/sheet.dart';
@@ -31,7 +31,7 @@ class AvailabilitySheet extends StatefulWidget {
   State<AvailabilitySheet> createState() => _AvailabilitySheetState();
 }
 
-class _AvailabilitySheetState extends State<AvailabilitySheet> with CloseSoon {
+class _AvailabilitySheetState extends State<AvailabilitySheet> {
   Map<String, dynamic>? _a;
   String? _loadError;
   final _until = TextEditingController();
@@ -134,7 +134,11 @@ class _AvailabilitySheetState extends State<AvailabilitySheet> with CloseSoon {
                 ),
                 TkKitField(
                   label: 'Busy till (a time later today, like 3pm or 15:30)',
-                  child: TkTextBox(controller: _until, hint: 'Leave empty for the rest of the day (an hour at least)', max: 20),
+                  // Not changed while a change is sent (the web's disabled).
+                  child: Opacity(
+                    opacity: _busy ? 0.6 : 1,
+                    child: TkTextBox(controller: _until, hint: 'Leave empty for the rest of the day (an hour at least)', max: 20, enabled: !_busy),
+                  ),
                 ),
                 if (open > 0)
                   Text(

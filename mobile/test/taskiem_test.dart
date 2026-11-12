@@ -298,7 +298,12 @@ void main() {
 
   /// Taskiem's conversation from the fixture, every request kept, [also]
   /// answering first.
-  Future<List<String>> screen(WidgetTester t, {Future<http.Response?> Function(http.Request req, Fixture f)? also, ValueChanged<String>? onOpenCustomer}) async {
+  Future<List<String>> screen(
+    WidgetTester t, {
+    Future<http.Response?> Function(http.Request req, Fixture f)? also,
+    ValueChanged<String>? onOpenCustomer,
+    bool delivers = false,
+  }) async {
     t.view.physicalSize = const Size(390, 844);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
@@ -310,7 +315,10 @@ void main() {
         return also?.call(req, f);
       }),
       now: () => f.at,
-    )..load();
+    );
+    // A rider's business: Availability is among its tools.
+    if (delivers) chats.auth.me = Me.fromJson({...f.json('/v1/me'), 'delivers': true});
+    chats.load();
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: TaskiemScreen(data: TaskiemData(chats, follow: false), onOpenCustomer: onOpenCustomer)));
     await settle(t);
     return asked;
@@ -398,6 +406,29 @@ void main() {
     expect(find.byType(TkSheet), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
     await t.pumpAndSettle();
+  });
+
+  testWidgets('Availability changed: the tile, and the diary line it leaves, read again', (t) async {
+    final asked = await screen(
+      t,
+      delivers: true,
+      also: (req, f) async => req.url.path == '/v1/availability'
+          ? json({'state': req.method == 'PUT' ? 'busy' : 'free', 'businesses': 1, 'open': 0})
+          : null,
+    );
+    await t.tap(find.bySemanticsLabel('Open tools'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Availability'));
+    await settle(t);
+    await t.pumpAndSettle();
+    final before = asked.length;
+    await t.tap(find.bySemanticsLabel('Busy'));
+    await settle(t);
+    final after = asked.sublist(before);
+    expect(after, contains('PUT /v1/availability'));
+    expect(after.where((a) => a.startsWith('GET /v1/taskiem-chat')), isNotEmpty, reason: 'the diary line pulled');
+    expect(after.where((a) => a == 'GET /v1/availability'), isNotEmpty, reason: 'the tile read again');
+    await t.pump(const Duration(seconds: 2));
   });
 
   test('the cards\' words, as alerts.ts, approvals.ts and staff.ts say them', () {

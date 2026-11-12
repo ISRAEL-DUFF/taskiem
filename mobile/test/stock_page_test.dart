@@ -28,7 +28,8 @@ void main() {
     expect(movementTitle({'item': 'Rice', 'reason': 'count', 'set_to': 12}), 'Rice: counted 12');
   });
 
-  Future<List<String>> open(WidgetTester t) async {
+  Future<List<String>> open(WidgetTester t, {Future<http.Response?> Function(http.Request req)? also}) async {
+    await t.pumpWidget(const SizedBox());
     t.view.physicalSize = const Size(390, 4000);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
@@ -38,6 +39,11 @@ void main() {
     final chats = ChatsData(
       f.auth(also: (req) async {
         final p = req.url.path;
+        final own = await also?.call(req);
+        if (own != null) {
+          if (req.method != 'GET') sent.add('${req.method} $p ${req.body}');
+          return own;
+        }
         if (req.method == 'GET') {
           if (p == '/v1/stock') {
             return ok({
@@ -208,6 +214,39 @@ void main() {
     expect(sent.where((x) => !x.startsWith('GET')), ['PUT /v1/stock/settings {"count_limit_kobo":1000000}']);
     await t.pump(const Duration(seconds: 5));
   });
+
+  testWidgets('counts: the month’s figures failing leaves the counts; a refused limit and count say why where they were', (t) async {
+    http.Response bad(String words, int status) => http.Response(jsonEncode({'error': words}), status, headers: {'content-type': 'application/json'});
+    final sent = await open(
+      t,
+      also: (req) async => switch ((req.method, req.url.path)) {
+        ('GET', '/v1/stock/shrinkage') => bad('The month could not be added up.', 500),
+        ('PUT', '/v1/stock/settings') => bad('A limit is at most ₦10,000,000.', 400),
+        ('POST', '/v1/stock/counts') => bad('Rice is not counted by the shelf.', 400),
+        _ => null,
+      },
+    );
+    expect(find.text('The month could not be added up.'), findsOneWidget);
+    expect(find.text('CT-1 · 2 items, every item'), findsOneWidget, reason: 'the counts read on their own');
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^A count missing more')), matching: find.byType(EditableText)), '99999999');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save the limit'));
+    await settle(t);
+    final why = find.text('A limit is at most ₦10,000,000.');
+    expect(why, findsOneWidget);
+    expect(t.getTopLeft(why).dy, greaterThan(t.getTopLeft(find.bySemanticsLabel('Save the limit')).dy), reason: 'under its button');
+    sent.clear();
+    await t.tap(find.bySemanticsLabel('Count the shelf'));
+    await t.pumpAndSettle();
+    await t.enterText(find.descendant(of: find.byType(TkModal), matching: find.byType(EditableText)).at(1), '18');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Record the count'));
+    await settle(t);
+    expect(sent.single, 'POST /v1/stock/counts {"lines":[{"item_id":"rice","count":18}],"reason":""}');
+    expect(find.text('Rice is not counted by the shelf.'), findsOneWidget);
+    expect(find.byType(TkModal), findsOneWidget, reason: 'kept open, to try again');
+  });
+
 }
 
 Future<void> settle(WidgetTester t) async {

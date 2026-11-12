@@ -178,6 +178,7 @@ class TkTextBox extends StatefulWidget {
     this.plain = false,
     this.phone = false,
     this.max,
+    this.enabled = true,
   });
   final TextEditingController controller;
   final int lines;
@@ -205,6 +206,9 @@ class TkTextBox extends StatefulWidget {
 
   /// `maxLength`: at most this many characters.
   final int? max;
+
+  /// False: shown, not to be typed in (`disabled`).
+  final bool enabled;
 
   /// Only digits, at most this many (a code).
   final int? digits;
@@ -250,6 +254,7 @@ class _TkTextBoxState extends State<TkTextBox> {
               type: MaterialType.transparency,
               child: TextField(
                 controller: widget.controller,
+                enabled: widget.enabled,
                 focusNode: _focus,
                 minLines: widget.lines,
                 maxLines: area ? null : 1,

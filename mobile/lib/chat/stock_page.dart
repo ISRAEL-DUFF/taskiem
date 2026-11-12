@@ -1034,6 +1034,8 @@ class _CountsCardState extends State<_CountsCard> {
   Map<String, dynamic>? _shrink;
   List<Map<String, dynamic>>? _counts;
   String? _error;
+  String? _shrinkError;
+  String? _limitError;
   int? _limit;
   bool _hasLimit = false;
   final _limitBox = TextEditingController();
@@ -1055,14 +1057,29 @@ class _CountsCardState extends State<_CountsCard> {
     super.dispose();
   }
 
+  String _why(Object e) => e is ApiError ? e.message : 'You’re offline. This shows when you’re back online.';
+
+  /// The month's figures and the latest counts, each read on its own: one
+  /// failing leaves the other shown (the web's two loads).
   Future<void> _load() async {
-    try {
-      final s = (await _t.send('GET', '/v1/stock/shrinkage') as Map).cast<String, dynamic>();
-      final c = (await _t.send('GET', '/v1/stock/counts') as Map).cast<String, dynamic>();
-      if (mounted) setState(() => (_shrink = s, _counts = _maps(c['counts']), _error = null));
-    } on Object catch (e) {
-      if (mounted) setState(() => _error = e is ApiError ? e.message : 'You’re offline. This shows when you’re back online.');
-    }
+    await Future.wait([
+      () async {
+        try {
+          final s = (await _t.send('GET', '/v1/stock/shrinkage') as Map).cast<String, dynamic>();
+          if (mounted) setState(() => (_shrink = s, _shrinkError = null));
+        } on Object catch (e) {
+          if (mounted) setState(() => _shrinkError = _why(e));
+        }
+      }(),
+      () async {
+        try {
+          final c = (await _t.send('GET', '/v1/stock/counts') as Map).cast<String, dynamic>();
+          if (mounted) setState(() => (_counts = _maps(c['counts']), _error = null));
+        } on Object catch (e) {
+          if (mounted) setState(() => _error = _why(e));
+        }
+      }(),
+    ]);
   }
 
   Future<void> _loadLimit() async {
@@ -1102,12 +1119,13 @@ class _CountsCardState extends State<_CountsCard> {
       title: 'Counts and losses',
       trailing: TkSmallButton(label: 'Count the shelf', primary: true, onPressed: widget.items.isEmpty ? null : _count),
       children: [
-        if (_error != null) TkErrorBox(_error!),
+        if (_shrinkError != null) TkErrorBox(_shrinkError!),
         if (s != null)
           Text(
             'This month: ${shrinkLine(s)}.${worst != null ? ' Lost most: ${worst['item']} (${worst['lost']}${(_int(worst['lost_kobo']) ?? 0) > 0 ? ', ${naira(_int(worst['lost_kobo'])!)}' : ''}).' : ''}',
             style: tkHint(t),
           ),
+        if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_error!)),
         if (counts.isNotEmpty)
           LinkSection(
             top: 12,
@@ -1142,18 +1160,20 @@ class _CountsCardState extends State<_CountsCard> {
               onPressed: _busy || bad || typed == (_limit == null ? '' : feeInput(_limit!))
                   ? null
                   : () async {
-                      setState(() => _busy = true);
+                      setState(() => (_busy = true, _limitError = null));
                       try {
                         await _t.send('PUT', '/v1/stock/settings', body: {'count_limit_kobo': kobo});
                         if (mounted) showTkToast(this.context, 'Saved');
                         await _loadLimit();
                       } on Object catch (e) {
-                        if (mounted) setState(() => _error = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.');
+                        if (mounted) setState(() => _limitError = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.');
                       }
                       if (mounted) setState(() => _busy = false);
                     },
             ),
           ),
+          // Its error by its button, not at the top of the card.
+          if (_limitError != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_limitError!)),
         ],
       ],
     );

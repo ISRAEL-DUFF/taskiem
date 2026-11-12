@@ -60,6 +60,11 @@ void main() {
     expect(availabilityWord({'state': 'free', 'businesses': 1}), 'Free');
     expect(availabilityWord({'state': 'off', 'businesses': 1}), 'Off today');
     expect(availabilityWord({'state': 'busy', 'until': soon.toUtc().toIso8601String(), 'businesses': 1}), 'Busy till 12:30');
+    // Past midnight: the day too (time.ts shortWhen).
+    final late = DateTime(2026, 11, 12, 23, 40);
+    final after = DateTime(2026, 11, 13, 0, 40);
+    expect(availabilityWord({'state': 'busy', 'until': after.toUtc().toIso8601String(), 'businesses': 1}, late), 'Busy till 13 Nov, 00:40');
+    expect(availabilityWord({'state': 'busy', 'until': late.add(const Duration(minutes: 10)).toUtc().toIso8601String(), 'businesses': 1}, late), 'Busy till 23:50');
     expect(availabilityWord({'state': 'busy', 'open': 2, 'businesses': 1}), 'Busy, 2 deliveries');
     expect(availabilityWord({'state': 'busy', 'open': 1, 'businesses': 1}), 'Busy, 1 delivery');
     final rows = avail.rows({'state': 'off', 'businesses': 2});

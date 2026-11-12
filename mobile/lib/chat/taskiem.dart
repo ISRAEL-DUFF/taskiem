@@ -450,15 +450,26 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     _tools.close();
     // Sell, the handover and availability have sheets of their own: not a
     // list.
-    if (tool.key == 'availability') {
-      unawaited(showAvailabilitySheet(context, auth: widget.data.chats.auth, onChanged: () => _tools.load([tool], again: true)));
-      return;
-    }
-    // Sell and Handover have sheets of their own (ChatStaff.tsx); what
-    // they record lands here as a diary line.
+    // Sell, Handover and Availability have sheets of their own; what they
+    // record lands here as a diary line.
     void landed() {
       unawaited(widget.data.pull().catchError((Object _) {}));
       unawaited(widget.data.chats.load());
+    }
+
+    if (tool.key == 'availability') {
+      unawaited(
+        showAvailabilitySheet(
+          context,
+          auth: widget.data.chats.auth,
+          onChanged: () {
+            // Changed: read now, not only once five seconds old.
+            _tools.refresh(tool);
+            landed();
+          },
+        ),
+      );
+      return;
     }
 
     if (tool.key == 'sell') {

@@ -742,12 +742,23 @@ class _ConversationScreenState extends State<ConversationScreen> {
     _tools.close();
     // Sell, the handover and availability have sheets of their own: not a
     // list.
-    if (tool.key == 'availability') {
-      unawaited(showAvailabilitySheet(context, auth: widget.data.chats.auth, onChanged: () => _tools.load([tool], again: true)));
-      return;
-    }
     // Done: the diary line it leaves here, read at once.
     void landed() => unawaited(widget.data.pull().catchError((Object _) {}));
+    if (tool.key == 'availability') {
+      // The tile reads it again; the diary line the server writes lands.
+      unawaited(
+        showAvailabilitySheet(
+          context,
+          auth: widget.data.chats.auth,
+          onChanged: () {
+            // Changed: read now, not only once five seconds old.
+            _tools.refresh(tool);
+            landed();
+          },
+        ),
+      );
+      return;
+    }
     if (tool.key == 'sell') {
       unawaited(showSellSheet(context, auth: widget.data.chats.auth, onSold: landed));
       return;
