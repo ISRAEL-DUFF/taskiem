@@ -1094,18 +1094,18 @@ class _Asked extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        TkSmallButton(
+                        IntrinsicWidth(child: TkSmallButton(
                           label: 'Accept',
                           semantics: 'Accept ${l.name}',
                           primary: true,
                           onPressed: onAnswer == null ? null : () => onAnswer!(l, 'accept', 'Linked with ${l.name}'),
-                        ),
-                        TkSmallButton(
+                        )),
+                        IntrinsicWidth(child: TkSmallButton(
                           label: 'Decline',
                           semantics: 'Decline ${l.name}',
                           onPressed: onAnswer == null ? null : () => onAnswer!(l, 'decline', 'Declined. They are not told.'),
-                        ),
-                        TkSmallButton(
+                        )),
+                        IntrinsicWidth(child: TkSmallButton(
                           label: 'Block',
                           semantics: 'Block ${l.name}',
                           danger: true,
@@ -1121,7 +1121,7 @@ class _Asked extends StatelessWidget {
                                   );
                                   if (yes) onAnswer!(l, 'block', 'Blocked');
                                 },
-                        ),
+                        )),
                       ],
                     ),
                   )

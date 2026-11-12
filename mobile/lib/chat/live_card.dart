@@ -111,6 +111,7 @@ class LiveCard extends StatelessWidget {
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 8,
             runSpacing: 8,
+            // Each as wide as its words, not the line (a wrap gives the line).
             children: [
               if (mine != null && ours != null)
                 CardPill(
@@ -127,14 +128,16 @@ class LiveCard extends StatelessWidget {
                   child: GestureDetector(
                     // The Order sheet comes with the tools (M5 to M8).
                     onTap: () => showComingSoon(context),
-                    child: Container(
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(color: dark ? t.brandDark : t.brand, borderRadius: BorderRadius.circular(999)),
-                      child: Text(
-                        'Order',
-                        style: tkText(size: 14, weight: 700, lineHeight: 1.2, color: dark ? t.brandDarkText : const Color(0xFFFFFFFF)),
+                    child: IntrinsicWidth(
+                      child: Container(
+                        height: 40,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(color: dark ? t.brandDark : t.brand, borderRadius: BorderRadius.circular(999)),
+                        child: Text(
+                          'Order',
+                          style: tkText(size: 14, weight: 700, lineHeight: 1.2, color: dark ? t.brandDarkText : const Color(0xFFFFFFFF)),
+                        ),
                       ),
                     ),
                   ),
