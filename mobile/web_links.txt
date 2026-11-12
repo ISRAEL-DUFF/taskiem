@@ -16,8 +16,8 @@
 /signup | app lib/screens/sign_up.dart
 /settings/links | app lib/chat/links_screen.dart
 /settings/links/profile | app lib/chat/profile_screen.dart
-/staff | M5
-/tasks | M5
+/staff | app lib/chat/team_pages.dart
+/tasks | app lib/chat/team_pages.dart
 /storefront/stock | app lib/chat/stock_page.dart
 /storefront/price-lists | app lib/chat/price_lists_page.dart
 /storefront/bookings | app lib/chat/bookings_page.dart

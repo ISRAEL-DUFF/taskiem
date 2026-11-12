@@ -27,6 +27,7 @@ import 'approve.dart' show ApproveSheet;
 import 'invoice_match.dart' show InvoiceMatchPage, channelWords, unmatchedPath;
 import 'money_page.dart' show MoneyPage, lagosDate;
 import 'storefront_orders_page.dart' show StorefrontOrderPage, StorefrontOrdersPage;
+import 'team_pages.dart' show StaffPage, TasksPage;
 import 'words.dart' show CardTone, naira;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
@@ -197,6 +198,8 @@ class _TodayTabState extends State<TodayTab> with Polling {
   List<Map<String, dynamic>> _forms = const [];
   List<Map<String, dynamic>>? _workflows;
   Map<String, dynamic>? _setup;
+  Map<String, dynamic>? _clock;
+  List<Map<String, dynamic>>? _tasks;
   String? _runsError;
 
   Auth get _auth => widget.auth;
@@ -288,6 +291,23 @@ class _TodayTabState extends State<TodayTab> with Polling {
             // Not shown.
           }
         }(),
+      if (_auth.can('member.manage'))
+        () async {
+          try {
+            final c = await _get('/v1/staff/clock');
+            if (mounted) setState(() => _clock = c);
+          } on Object {
+            // No team card's staff line.
+          }
+        }(),
+      () async {
+        try {
+          final r = await _get('/v1/staff/tasks');
+          if (mounted) setState(() => _tasks = _maps(r?['tasks']));
+        } on Object {
+          // No tasks line.
+        }
+      }(),
       () async {
         try {
           final o = await _get('/v1/onboarding');
@@ -503,6 +523,35 @@ class _TodayTabState extends State<TodayTab> with Polling {
                   sub: shortWhen(_str(r['started_at']), now),
                   onTap: () => _web('/runs/${Uri.encodeComponent(_str(r['id']))}'),
                 ),
+            ],
+          ),
+        if (_clock != null || (_tasks != null && _tasks!.any((x) => x['state'] == 'open')))
+          TkPageCard(
+            title: 'Your team',
+            children: [
+              if (_clock case final c?)
+                () {
+                  final inNow = _maps(c['in']).length, late = _maps(c['late']).length;
+                  return TkRow(
+                    name: 'Staff',
+                    icon: 'members',
+                    tone: late > 0 ? CardTone.warn : null,
+                    sub: ['$inNow in', if (late > 0) '$late late'].join(' · '),
+                    onTap: () => _go(StaffPage(auth: _auth)),
+                  );
+                }(),
+              if (_tasks case final ts?)
+                () {
+                  final open = ts.where((x) => x['state'] == 'open').toList();
+                  final late = open.where((x) => x['late'] == true).length;
+                  return TkRow(
+                    name: 'Your tasks',
+                    icon: 'check',
+                    tone: late > 0 ? CardTone.warn : null,
+                    sub: open.isEmpty ? 'None open' : '${open.length} open${late > 0 ? ' · $late late' : ''}',
+                    onTap: () => _go(TasksPage(auth: _auth, now: widget.now)),
+                  );
+                }(),
             ],
           ),
         if (setup != null)

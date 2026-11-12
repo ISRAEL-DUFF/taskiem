@@ -44,6 +44,7 @@ import 'bills_page.dart' show openBill;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'purchases_page.dart' show openPurchase;
 import 'order_sheet.dart' show OrderStart, showOrderSheet;
+import 'team_pages.dart' show StaffPage, TasksPage, openTasks;
 import 'storefront_orders_page.dart' show DeliveriesPage, openStorefrontOrder, showRiderSheet;
 import 'tool_sheet.dart';
 import 'tools.dart';
@@ -509,8 +510,8 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
 
     return [
       if (d.briefs) (key: 'briefing', title: 'Briefing', icon: 'sparkle', line: "Today's numbers", onPick: () => pick(() => _showBriefing(d))),
-      // Tasks, given and done: its sheet is not in the app yet.
-      (key: 'tasks', title: 'Tasks', icon: 'check', line: 'To do, and given', onPick: () => pick(() => showComingSoon(context))),
+      // Tasks, given and done: the Tasks screen.
+      (key: 'tasks', title: 'Tasks', icon: 'check', line: 'To do, and given', onPick: () => pick(() => openTasks(context, d.chats.auth))),
       // Clocking in and out, as "in" and "out" are said: for staff.
       if (!can('member.manage')) ...[
         (key: 'clock-in', title: 'Clock in', icon: 'clock', line: 'Start your shift', onPick: () => pick(() => d.say(text: 'in'))),
@@ -735,8 +736,11 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                             push(BookingsPage(auth: auth));
                           case 'owed':
                             push(InvoicesPage(auth: auth));
+                          case 'staff':
+                            push(StaffPage(auth: auth));
+                          case 'tasks':
+                            push(TasksPage(auth: auth));
                           default:
-                            // Staff and tasks: coming.
                             showComingSoon(context);
                         }
                       },
