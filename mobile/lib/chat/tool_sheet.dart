@@ -24,6 +24,7 @@ import 'tools.dart';
 import 'tools_panel.dart';
 import 'table_tool.dart' show TablesPage;
 import 'trade_orders_page.dart' show TradeOrdersPage;
+import '../kit/mobile.dart' show TkRoute;
 
 /// A tool's "Open …": the page it leads to (tools.ts `page`), where the
 /// app has it as a screen; the rest say they are coming.
@@ -41,7 +42,7 @@ void openToolPage(BuildContext context, Tool tool, Auth auth) {
     _ => null,
   };
   if (page == null) return showComingSoon(context);
-  Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+  Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
 }
 
 /// ChatTools.tsx mayEdit: whether the person may change what a tool shows.

@@ -23,6 +23,7 @@ import 'doc_thread.dart' show DocThread;
 import 'invoices_page.dart' show fmtTime;
 import 'money_sheets.dart' show billHero, billStatus, canPay, dateLabel, sentLine;
 import 'words.dart' show naira;
+import '../kit/mobile.dart' show TkRoute;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -33,7 +34,7 @@ String billPath(String id, [String rest = '']) => '/v1/bills/${Uri.encodeCompone
 /// bills.ts billsDue: what is left to pay on them, the cancelled left out.
 int billsDue(List<Map<String, dynamic>> list) => list.fold(0, (n, b) => n + (b['status'] == 'void' ? 0 : _int(b['due_kobo'])));
 
-Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
 
 /// Opens Bills.
 Future<void> openBills(BuildContext context, Auth auth) => _push(context, BillsPage(auth: auth));
@@ -98,7 +99,7 @@ class _BillsPageState extends State<BillsPage> with Polling {
       pill: TkPill(st.label, tone: st.tone),
       onTap: () async {
         await Navigator.of(context).push(
-          PageRouteBuilder<void>(
+          TkRoute<void>(
             pageBuilder: (_, _, _) => BillPage(auth: widget.auth, id: _str(b['id']), backLabel: 'Back to Bills'),
           ),
         );

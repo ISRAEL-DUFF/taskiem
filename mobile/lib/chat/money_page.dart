@@ -19,6 +19,7 @@ import '../app/auth.dart';
 import '../kit/forms.dart' show errorWords, nairaKobo;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty, TkLoading, TkPill, TkRow;
+import '../kit/mobile.dart';
 import '../kit/modal.dart';
 import '../kit/page.dart';
 import '../kit/polling.dart';
@@ -37,7 +38,7 @@ List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereTyp
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
 String _str(Object? v) => v as String? ?? '';
 
-void _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+void _push(BuildContext context, Widget page) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
 
 /// Opens Money.
 void openMoney(BuildContext context, Auth auth) => _push(context, MoneyPage(auth: auth));
@@ -224,8 +225,6 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
   String? _error;
   List<Map<String, dynamic>> _waiting = const [];
   Map<String, dynamic>? _receive;
-  bool _reveal = false;
-  String? _exporting;
   int _asked = 0;
 
   DateTime get _now => (widget.now ?? DateTime.now)();
@@ -299,16 +298,23 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
     _load();
   }
 
-  Future<void> _export(String kind, Period p) async {
-    setState(() => _exporting = kind);
+  Future<void> _export(String kind, Period p, bool reveal) async {
     try {
-      final q = Uri(queryParameters: {'from': p.from, 'to': p.to, if (_reveal && kind == 'invoices') 'reveal': 'true'}).query;
+      final q = Uri(queryParameters: {'from': p.from, 'to': p.to, if (reveal && kind == 'invoices') 'reveal': 'true'}).query;
       final bytes = await widget.auth.transport.bytes('/v1/money/exports/$kind?$q');
       await handOffFile(Uint8List.fromList(bytes), '$kind-${p.from}-to-${p.to}.csv', 'text/csv', null);
     } on Object catch (e) {
       if (mounted) showTkToast(context, errorWords(e), error: true);
     }
-    if (mounted) setState(() => _exporting = null);
+  }
+
+  void _exports() {
+    final p = _period;
+    showTkModal<void>(
+      context,
+      title: 'Download ${periodWords(p)}',
+      builder: (_) => _Exports(reveals: widget.auth.can('pii.reveal'), export: (kind, reveal) => _export(kind, p, reveal)),
+    );
   }
 
   @override
@@ -321,282 +327,294 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
     final riders = s == null ? const <Map<String, dynamic>>[] : _maps(s['riders']);
     final buckets = s == null ? const <Map<String, dynamic>>[] : _maps(s['buckets']);
     final rate = feeRatePercent(s?['fee_rate_bp']);
-    final quick = const ['today', 'week', 'month'];
-    return TkPageScreen(
+    final inPending = _int(s?['in_pending_kobo']);
+    final outPending = _int(s?['out_pending_kobo']);
+    final unmatched = _waiting.fold(0, (n, w) => n + (w['left_kobo'] is num ? _int(w['left_kobo']) : _int(w['amount_kobo'])));
+    return TkScreen(
       title: 'Money',
       back: !widget.tab,
-      description: 'Your business’s money for a period: what came in and went out, settled and pending, the fees taken, invoices paid and leaks.',
+      actions: [if (problem == null) TkHeadButton(icon: 'file', label: 'Download as a spreadsheet', onTap: _exports)],
+      under: TkChips<String>(
+        label: 'Period',
+        chips: [for (final (v, words) in periodChoices) (v, v == 'custom' ? 'Pick dates' : words)],
+        on: _choice,
+        onPick: _choose,
+      ),
       onRefresh: () async {
         await _load();
         await _loadSide();
       },
       children: [
-        _moneyLinks(context, widget.auth, 'overview'),
-        if (_receive?['on'] == true) _ReceiveCard(r: _receive!),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final (v, label) in periodChoices.where((c) => quick.contains(c.$1)))
-              Semantics(
-                selected: _choice == v,
-                child: TkSmallButton(label: label, primary: _choice == v, onPressed: () => _choose(v)),
+        if (_choice == 'custom')
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TkKitField(
+                      label: 'From',
+                      child: TkTextBox(controller: _from, hint: '2026-11-01'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TkKitField(
+                      label: 'To',
+                      child: TkTextBox(controller: _to, hint: '2026-11-12'),
+                    ),
+                  ),
+                ],
               ),
-            TkSmallButton(
-              label: quick.contains(_choice) ? 'Other…' : periodChoices.firstWhere((c) => c.$1 == _choice).$2,
-              semantics: 'Other period: ${quick.contains(_choice) ? 'none chosen' : periodChoices.firstWhere((c) => c.$1 == _choice).$2}',
-              primary: !quick.contains(_choice),
-              onPressed: () async {
-                final v = await showTkModalChoices(
-                  context,
-                  title: 'Other period',
-                  value: _choice,
-                  choices: [
-                    for (final c in periodChoices)
-                      if (!quick.contains(c.$1)) c,
-                  ],
-                );
-                if (v != null) _choose(v);
-              },
-            ),
+              if (problem != null) _problemText(t, problem),
+            ],
+          ),
+        if (_error != null) TkErrorBox(_error!),
+        if (problem == null && s == null && _error == null) const TkSkeleton(rows: 3, label: 'Loading the period’s money…'),
+        if (s != null)
+          TkSummary(
+            key: ValueKey('sum ${p.from} ${p.to}'),
+            label: 'Kept · ${periodWords(p)}',
+            kobo: _int(s['in_settled_kobo']) - _int(s['out_settled_kobo']),
+            figures: [
+              (label: 'Money in', value: naira(_int(s['in_settled_kobo'])), dot: t.chartIn),
+              (label: 'Money out', value: naira(_int(s['out_settled_kobo'])), dot: t.chartOut),
+            ],
+            foot: inPending > 0 || outPending > 0
+                ? [if (inPending > 0) '${naira(inPending)} more coming in', if (outPending > 0) '${naira(outPending)} more going out'].join(' · ')
+                : null,
+          ),
+        TkTiles(
+          tiles: [
+            (icon: 'split', label: 'Match payments', badge: _waiting.length, onTap: () => _push(context, InvoiceMatchPage(auth: widget.auth)), semantics: null),
+            (icon: 'alerts', label: 'Leaks', badge: _int(s?['leaks_open']), onTap: () => _push(context, MoneyLeaksPage(auth: widget.auth)), semantics: null),
+            (icon: 'invoices', label: 'Invoices', badge: 0, onTap: () => _push(context, InvoicesPage(auth: widget.auth)), semantics: null),
+            (icon: 'file', label: 'Bank statement', badge: 0, onTap: () => _push(context, MoneyStatementsPage(auth: widget.auth)), semantics: 'Upload statement'),
+            (icon: 'note', label: 'Cash and expenses', badge: 0, onTap: () => _push(context, MoneyEntriesPage(auth: widget.auth)), semantics: null),
+            (icon: 'card', label: 'Fees', badge: 0, onTap: () => _push(context, MoneyFeesPage(auth: widget.auth)), semantics: null),
           ],
         ),
-        if (_choice == 'custom')
-          Wrap(
-            spacing: 10,
-            runSpacing: 8,
+        if (s != null && _str(s['unit']).isNotEmpty && buckets.length > 1)
+          TkSection(
+            title: _str(s['unit']) == 'hour' ? 'Hour by hour' : 'Day by day',
             children: [
-              SizedBox(
-                width: 160,
-                child: TkKitField(
-                  label: 'From',
-                  child: TkTextBox(controller: _from, hint: '2026-11-01'),
-                ),
-              ),
-              SizedBox(
-                width: 160,
-                child: TkKitField(
-                  label: 'To',
-                  child: TkTextBox(controller: _to, hint: '2026-11-12'),
-                ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                child: MoneyBars(key: ValueKey('${p.from} ${p.to}'), buckets: buckets, unit: _str(s['unit']), now: _now),
               ),
             ],
           ),
-        if (problem != null) _problemText(t, problem) else Text('${periodWords(p)}, in Lagos time.', style: tkHint(t)),
-        if (_error != null) TkErrorBox(_error!),
-        if (problem == null && s == null && _error == null) const TkLoading(rows: 3, label: 'Loading the period’s money…'),
-        if (s != null) ...[
-          TkPageCard(
-            children: [
-              _sumRow(t, t.chartIn, 'Money in', _int(s['in_settled_kobo']), _int(s['in_pending_kobo'])),
-              _sumRow(t, t.chartOut, 'Money out', _int(s['out_settled_kobo']), _int(s['out_pending_kobo'])),
-              MergeSemantics(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text('Kept', style: tkText(size: 15, weight: 700, color: t.text)),
-                      ),
-                      Text(naira(_int(s['in_settled_kobo']) - _int(s['out_settled_kobo'])), style: tkText(size: 17, weight: 700, color: t.text)),
-                    ],
-                  ),
-                ),
-              ),
-              if (_str(s['unit']).isNotEmpty && buckets.length > 1) ...[
-                const SizedBox(height: 14),
-                MoneyBars(key: ValueKey('${p.from} ${p.to}'), buckets: buckets, unit: _str(s['unit']), now: _now),
-              ],
-            ],
-          ),
-          if (_int(s['in_settled_kobo']) > 0 && channels.any((c) => _int(c['in_settled_kobo']) > 0))
-            TkPageCard(
-              title: 'Where it came from',
-              children: [
-                for (final c in channels.where((c) => _int(c['in_settled_kobo']) > 0))
-                  () {
-                    final share = (100 * _int(c['in_settled_kobo']) / _int(s['in_settled_kobo'])).round();
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: MergeSemantics(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(channelWords(_str(c['channel'])), style: tkText(size: 15, color: t.text)),
-                                ),
-                                Text(naira(_int(c['in_settled_kobo'])), style: tkText(size: 15, weight: 600, color: t.text)),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Semantics(
-                              label: '$share% of the money in',
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: SizedBox(
-                                  height: 8,
-                                  child: Stack(
-                                    children: [
-                                      Container(color: t.tkSoft),
-                                      FractionallySizedBox(
-                                        widthFactor: (share < 2 ? 2 : share) / 100,
-                                        child: Container(color: t.chartIn),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }(),
-              ],
-            ),
-          TkPageCard(
-            title: 'To look at',
+        if (s != null && (_waiting.isNotEmpty || _int(s['leaks_open']) > 0))
+          TkSection(
+            title: 'Needs a look',
             children: [
               if (_waiting.isNotEmpty)
-                TkRow(
-                  name: _waiting.length == 1 ? '1 payment not matched' : '${_waiting.length} payments not matched',
-                  icon: 'money',
+                TkListRow(
+                  title: _waiting.length == 1 ? '1 payment not matched' : '${_waiting.length} payments not matched',
+                  sub: 'No invoice for it yet',
+                  icon: 'split',
                   tone: CardTone.warn,
-                  sub: '${naira(_waiting.fold(0, (n, w) => n + (w['left_kobo'] is num ? _int(w['left_kobo']) : _int(w['amount_kobo']))))} with no invoice yet',
+                  amount: naira(unmatched),
                   onTap: () => _push(context, InvoiceMatchPage(auth: widget.auth)),
                 ),
-              TkRow(
-                name: 'See the leaks',
-                icon: 'alerts',
-                tone: _int(s['leaks_open']) > 0 ? CardTone.warn : null,
-                sub:
-                    'Open now: ${counted(_int(s['leaks_open']), 'leak')}, ${naira(_int(s['leaks_open_kobo']))} · opened in the period: ${counted(_int(s['leaks_opened']), 'leak')}${_int(s['leaks_opened']) > 0 ? ', ${naira(_int(s['leaks_opened_kobo']))}' : ''} · recovered so far: ${naira(_int(s['recovered_kobo']))}',
-                onTap: () => _push(context, MoneyLeaksPage(auth: widget.auth)),
+              if (_int(s['leaks_open']) > 0)
+                TkListRow(
+                  title: '${counted(_int(s['leaks_open']), 'leak')} open',
+                  sub: 'Recovered so far: ${naira(_int(s['recovered_kobo']))}',
+                  icon: 'alerts',
+                  tone: CardTone.warn,
+                  amount: naira(_int(s['leaks_open_kobo'])),
+                  onTap: () => _push(context, MoneyLeaksPage(auth: widget.auth)),
+                ),
+            ],
+          ),
+        if (s != null && _int(s['in_settled_kobo']) > 0 && channels.any((c) => _int(c['in_settled_kobo']) > 0))
+          TkSection(
+            title: 'Where it came from',
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                child: Column(
+                  children: [
+                    for (final c in channels.where((c) => _int(c['in_settled_kobo']) > 0)) _share(t, c, _int(s['in_settled_kobo'])),
+                  ],
+                ),
               ),
-              TkRow(
-                name: 'Fees taken: ${naira(_int(s['fees_kobo']))}',
-                icon: 'invoices',
+            ],
+          ),
+        if (s != null)
+          TkSection(
+            title: 'In this period',
+            children: [
+              TkListRow(
+                title: 'Fees taken',
                 sub: rate.isNotEmpty ? '$rate of the money they were taken on' : 'What each payments account charges',
+                icon: 'card',
+                amount: naira(_int(s['fees_kobo'])),
                 onTap: () => _push(context, MoneyFeesPage(auth: widget.auth)),
               ),
-              TkRow(
-                name: 'Invoices paid: ${naira(_int(s['invoices_paid_kobo']))}',
-                icon: 'invoices',
+              TkListRow(
+                title: 'Invoices paid',
                 sub: counted(_int(s['invoices_paid']), 'invoice'),
+                icon: 'invoices',
+                amount: naira(_int(s['invoices_paid_kobo'])),
                 onTap: () => _push(context, InvoicesPage(auth: widget.auth)),
               ),
+              if (_int(s['leaks_opened']) > 0)
+                TkListRow(
+                  title: 'Leaks found',
+                  sub: counted(_int(s['leaks_opened']), 'leak'),
+                  icon: 'alerts',
+                  amount: naira(_int(s['leaks_opened_kobo'])),
+                  onTap: () => _push(context, MoneyLeaksPage(auth: widget.auth)),
+                ),
               if (_int(s['collected_for_others_kobo']) > 0)
-                TkRow(
-                  name: 'Collected for others: ${naira(_int(s['collected_for_others_kobo']))}',
+                TkListRow(
+                  title: 'Collected for others',
+                  sub: '${collectedForLine(s)}. Your own: ${naira(_int(s['own_in_settled_kobo']))}',
                   icon: 'schools',
-                  sub: '${collectedForLine(s)}: not the business’s own. Its own money in: ${naira(_int(s['own_in_settled_kobo']))}.',
+                  amount: naira(_int(s['collected_for_others_kobo'])),
                 ),
             ],
           ),
-          TkPageCard(
+        if (s != null)
+          TkSection(
             title: 'By channel',
+            empty: 'No money moved in this period.',
             children: [
-              if (channels.isEmpty) Text('No money moved in this period.', style: tkHint(t)),
               for (final c in channels)
-                TkRow(
-                  name: '${channelWords(_str(c['channel']))} · ${c['channel']}',
+                TkListRow(
+                  title: channelWords(_str(c['channel'])),
                   letters: channelWords(_str(c['channel'])),
+                  semanticsLabel: '${channelWords(_str(c['channel']))}, ${c['channel']}',
                   sub: [
-                    'In ${naira(_int(c['in_settled_kobo']))}',
                     'Out ${naira(_int(c['out_settled_kobo']))}',
-                    if (_int(c['in_pending_kobo']) > 0 || _int(c['out_pending_kobo']) > 0)
-                      'Pending ${[if (_int(c['in_pending_kobo']) > 0) '${naira(_int(c['in_pending_kobo']))} in', if (_int(c['out_pending_kobo']) > 0) '${naira(_int(c['out_pending_kobo']))} out'].join(', ')}',
-                    'Fees ${naira(_int(c['fees_kobo']))}${feeRatePercent(c['fee_rate_bp']).isNotEmpty ? ' (${feeRatePercent(c['fee_rate_bp'])})' : ''}',
+                    'fees ${naira(_int(c['fees_kobo']))}',
                     counted(_int(c['movements']), 'movement'),
                   ].join(' · '),
+                  amount: naira(_int(c['in_settled_kobo'])),
+                  status: _int(c['in_pending_kobo']) > 0 ? '${naira(_int(c['in_pending_kobo']))} pending' : null,
+                  statusTone: CardTone.warn,
                 ),
             ],
           ),
-          if (riders.isNotEmpty)
-            TkPageCard(
-              title: 'Riders',
-              children: [
-                for (final r in riders)
-                  TkRow(
-                    name: _str(r['rider']),
-                    letters: _str(r['rider']),
-                    sub: riderDayLine(r),
-                    pill: _int(r['owed_kobo']) > 0 ? TkPill('owes ${naira(_int(r['owed_kobo']))}', tone: CardTone.warn) : null,
-                  ),
-              ],
-            ),
-        ],
-        if (problem == null)
-          TkPageCard(
-            title: 'Exports',
+        if (riders.isNotEmpty)
+          TkSection(
+            title: 'Riders',
             children: [
-              Text('${periodWords(p)} as a CSV file, for your accountant or a spreadsheet: share it, or keep it in your files.', style: tkHint(t)),
-              if (widget.auth.can('pii.reveal'))
-                TkChoiceRow(
-                  control: TkCheckbox(checked: _reveal),
-                  label: Text('Invoices with customers’ names (the access is recorded)', style: tkText(size: 15, color: t.text)),
-                  onTap: () => setState(() => _reveal = !_reveal),
-                ),
-              for (final (kind, label, help) in moneyExports)
-                Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TkSmallButton(
-                        label: _exporting == kind ? 'Getting it…' : 'Download ${label.toLowerCase()}',
-                        onPressed: _exporting != null ? null : () => _export(kind, p),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(help, style: tkHint(t)),
-                    ],
-                  ),
+              for (final r in riders)
+                TkListRow(
+                  title: _str(r['rider']),
+                  sub: riderDayLine(r),
+                  status: _int(r['owed_kobo']) > 0 ? 'owes ${naira(_int(r['owed_kobo']))}' : null,
+                  statusTone: CardTone.warn,
                 ),
             ],
           ),
+        if (_receive?['on'] == true) _ReceiveCard(r: _receive!),
       ],
     );
   }
 
-  Widget _sumRow(TkTokens t, Color swatch, String label, int settled, int pending) => MergeSemantics(
-    child: Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 5),
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(color: swatch, borderRadius: BorderRadius.circular(3)),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(label, style: tkText(size: 15, color: t.text)),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            flex: 2,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+  /// A channel's share of the money in, as a bar.
+  Widget _share(TkTokens t, Map<String, dynamic> c, int total) {
+    final share = (100 * _int(c['in_settled_kobo']) / total).round();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: MergeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
               children: [
-                Text(
-                  naira(settled),
-                  textAlign: TextAlign.end,
-                  style: tkText(size: 17, weight: 700, color: t.text),
+                Expanded(
+                  child: Text(channelWords(_str(c['channel'])), maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14.5, weight: 600, color: t.text)),
                 ),
-                if (pending > 0) Text('${naira(pending)} more pending', textAlign: TextAlign.end, style: tkHint(t)),
+                Text('$share%  ', style: tkText(size: 13, color: t.muted)),
+                Text(naira(_int(c['in_settled_kobo'])), style: tkText(size: 14.5, weight: 700, color: t.text)),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 6),
+            Semantics(
+              label: '$share% of the money in',
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  height: 8,
+                  child: Stack(
+                    children: [
+                      Container(color: t.tkSoft),
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0, end: (share < 2 ? 2 : share) / 100),
+                        duration: (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ? Duration.zero : const Duration(milliseconds: 700),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, w, _) => FractionallySizedBox(
+                          widthFactor: w,
+                          child: Container(
+                            decoration: BoxDecoration(color: t.chartIn, borderRadius: BorderRadius.circular(6)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
+}
+
+/// The CSV files of a period, in a modal: each shared through the phone's
+/// share sheet.
+class _Exports extends StatefulWidget {
+  const _Exports({required this.reveals, required this.export});
+  final bool reveals;
+  final Future<void> Function(String kind, bool reveal) export;
+
+  @override
+  State<_Exports> createState() => _ExportsState();
+}
+
+class _ExportsState extends State<_Exports> {
+  bool _reveal = false;
+  String? _getting;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('A CSV file for your accountant or a spreadsheet: share it, or keep it in your files.', style: tkHint(t)),
+        const SizedBox(height: 8),
+        for (final (kind, label, help) in moneyExports)
+          TkListRow(
+            title: _getting == kind ? 'Getting it…' : label,
+            sub: help,
+            icon: 'file',
+            semanticsLabel: 'Download ${label.toLowerCase()}',
+            onTap: _getting != null
+                ? null
+                : () async {
+                    setState(() => _getting = kind);
+                    await widget.export(kind, _reveal);
+                    if (mounted) setState(() => _getting = null);
+                  },
+          ),
+        if (widget.reveals)
+          TkChoiceRow(
+            control: TkCheckbox(checked: _reveal),
+            label: Text('Invoices with customers’ names (the access is recorded)', style: tkText(size: 15, color: t.text)),
+            onTap: () => setState(() => _reveal = !_reveal),
+          ),
+      ],
+    );
+  }
 }
 
 /// ReceiveMoneyCard: the business's own account number, with Taskiem.
@@ -613,27 +631,31 @@ class _ReceiveCard extends StatelessWidget {
     final sub = a == null
         ? (_str(r['account_problem']).isNotEmpty ? _str(r['account_problem']) : 'Asking the bank for your number…')
         : [_str(a['bank_name']), _str(a['account_name'])].where((x) => x.isNotEmpty).join(' · ');
-    return TkPageCard(
+    return TkSection(
       title: 'Your account number',
-      children: [
-        Text(a == null ? 'Not ready yet' : spaced, style: tkText(size: 22, weight: 700, color: t.text)),
-        if (sub.isNotEmpty) Text(sub, style: tkHint(t)),
-        if (a != null) ...[
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TkSmallButton(
-              label: 'Copy',
-              semantics: 'Copy your account number',
-              onPressed: () async {
+      trailing: a == null
+          ? null
+          : TkHeadButton(
+              icon: 'copy',
+              label: 'Copy your account number',
+              onTap: () async {
                 await Clipboard.setData(ClipboardData(text: number));
                 if (context.mounted) showTkToast(context, 'Copied');
               },
             ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(a == null ? 'Not ready yet' : spaced, style: tkText(size: 24, weight: 700, letterSpacing: 0.5, color: t.text)),
+              if (sub.isNotEmpty) Text(sub, style: tkText(size: 14, color: t.muted)),
+              const SizedBox(height: 8),
+              Text('Your balance and withdrawals are on the web, under Settings, Payments.', style: tkHint(t)),
+            ],
           ),
-        ],
-        const SizedBox(height: 8),
-        Text('Your balance and withdrawals are on the web, under Settings, Payments.', style: tkHint(t)),
+        ),
       ],
     );
   }

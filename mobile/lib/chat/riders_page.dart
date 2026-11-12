@@ -23,12 +23,13 @@ import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show lagosTime, whenLabel;
 import 'stock_page.dart' show feeInput, feeKobo;
 import 'words.dart' show CardTone, naira;
+import '../kit/mobile.dart' show TkRoute;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
 String _str(Object? v) => v as String? ?? '';
 
-void _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+void _push(BuildContext context, Widget page) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
 
 /// Opens Riders.
 void openRiders(BuildContext context, Auth auth) => _push(context, RidersPage(auth: auth));

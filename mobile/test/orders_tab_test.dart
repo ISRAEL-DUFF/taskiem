@@ -116,11 +116,13 @@ void main() {
   testWidgets('three kinds, waiting first; each row and See all lead to their screens', (t) async {
     final c = await chats();
     await show(t, c);
-    expect(find.text('From your customers'), findsOneWidget);
-    expect(find.text('From businesses you supply'), findsOneWidget);
-    expect(find.text('To your suppliers'), findsOneWidget);
+    expect(find.text('From customers'), findsOneWidget);
+    expect(find.text('From businesses'), findsOneWidget);
+    expect(find.text('To suppliers'), findsOneWidget);
     expect(find.bySemanticsLabel('Back'), findsNothing, reason: 'a tab of its own');
-    expect(find.text('1 waiting for you · 2 open'), findsOneWidget);
+    expect(find.bySemanticsLabel('3 waiting for you, 4 open'), findsOneWidget);
+    expect(find.text('4 orders open'), findsOneWidget);
+    expect(find.text('₦3,000'), findsOneWidget, reason: 'the amount at the row’s end');
     expect(find.textContaining('Bisi'), findsNothing, reason: 'delivered: on its screen, not here');
     expect(t.getTopLeft(find.textContaining('Tunde')).dy, lessThan(t.getTopLeft(find.textContaining('Ngozi')).dy));
     await t.tap(find.textContaining('Rivers Foods'));
@@ -128,7 +130,7 @@ void main() {
     expect(find.byType(TradeOrderPage), findsOneWidget);
     await t.tap(find.bySemanticsLabel(RegExp('^Back')).first);
     await t.pumpAndSettle();
-    await t.tap(find.text('Bayo Rice Mills · PO-0012'));
+    await t.tap(find.text('Bayo Rice Mills'));
     await t.pumpAndSettle();
     expect(find.byType(PurchasePage), findsOneWidget);
     await t.tap(find.bySemanticsLabel(RegExp('^Back')).first);
@@ -141,9 +143,9 @@ void main() {
   testWidgets('only what the person may see; no storefront said', (t) async {
     final c = await chats(permissions: const ['table.read'], noShop: true);
     await show(t, c);
-    expect(find.text('From your customers'), findsNothing);
-    expect(find.text('From businesses you supply'), findsNothing);
-    expect(find.text('To your suppliers'), findsOneWidget);
+    expect(find.text('From customers'), findsNothing);
+    expect(find.text('From businesses'), findsNothing);
+    expect(find.text('To suppliers'), findsOneWidget);
     final c2 = await chats(noShop: true);
     await show(t, c2);
     expect(find.textContaining('No storefront yet'), findsOneWidget);
@@ -167,5 +169,5 @@ Future<void> settle(WidgetTester t) async {
     await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));
     await t.pump();
   }
-  await t.pump(const Duration(milliseconds: 400));
+  await t.pump(const Duration(milliseconds: 800));
 }

@@ -23,6 +23,7 @@ import 'statement_page.dart' show openStatement;
 import 'storefront_orders_page.dart' show openStorefrontOrder, openStorefrontOrders;
 import 'tags.dart' show quantity;
 import 'words.dart' show CardTone, naira;
+import '../kit/mobile.dart' show TkRoute;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -136,7 +137,7 @@ Future<List<Map<String, dynamic>>> _ownItems(Auth auth) async {
   }
 }
 
-void _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+void _push(BuildContext context, Widget page) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
 
 /// What an order leads to that the app has elsewhere: the storefront's
 /// order (its delivery and riders), its invoice, the buyer's statement.
@@ -226,7 +227,7 @@ class _TradeOrdersPageState extends State<TradeOrdersPage> {
                   pill: TkPill(tradeStatus(_str(o['status'])).label, tone: tradeStatus(_str(o['status'])).tone),
                   onTap: () async {
                     await Navigator.of(context).push(
-                      PageRouteBuilder<void>(pageBuilder: (_, _, _) => TradeOrderPage(auth: widget.auth, id: _str(o['id']), links: widget.links)),
+                      TkRoute<void>(pageBuilder: (_, _, _) => TradeOrderPage(auth: widget.auth, id: _str(o['id']), links: widget.links)),
                     );
                     await _load();
                   },

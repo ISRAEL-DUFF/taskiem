@@ -381,7 +381,14 @@ class ComposerState extends State<Composer> {
           // phone): no strip of its own.
           // `.chat-pane .composer { padding: 8px 10px 12px; gap: 8px }`
           padding: EdgeInsets.fromLTRB(10, 8, 10, 12 + widget.bottom),
-          child: recording ? _recordingBar(t) : _row(t, dark, file, words),
+          child: AnimatedSwitcher(
+            duration: (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ? Duration.zero : const Duration(milliseconds: 180),
+            transitionBuilder: (child, a) => FadeTransition(
+              opacity: a,
+              child: SlideTransition(position: Tween(begin: const Offset(0, 0.25), end: Offset.zero).animate(a), child: child),
+            ),
+            child: recording ? KeyedSubtree(key: const ValueKey('recording'), child: _recordingBar(t)) : KeyedSubtree(key: const ValueKey('row'), child: _row(t, dark, file, words)),
+          ),
         ),
       ],
     );
@@ -534,10 +541,21 @@ class ComposerState extends State<Composer> {
               decoration: BoxDecoration(color: t.panel, borderRadius: BorderRadius.circular(24)),
               child: Row(
                 children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(color: t.danger, shape: BoxShape.circle),
+                  // The red dot breathing with each second.
+                  AnimatedOpacity(
+                    opacity: s.isEven ? 1 : 0.35,
+                    duration: (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ? Duration.zero : const Duration(milliseconds: 600),
+                    curve: Curves.easeInOut,
+                    child: AnimatedScale(
+                      scale: s.isEven ? 1 : 0.8,
+                      duration: (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ? Duration.zero : const Duration(milliseconds: 600),
+                      curve: Curves.easeInOut,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(color: t.danger, shape: BoxShape.circle),
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Flexible(

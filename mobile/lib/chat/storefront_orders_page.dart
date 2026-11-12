@@ -28,6 +28,7 @@ import 'stock_page.dart' show feeInput, feeKobo;
 import 'riders_page.dart' show openRiders, openRidersPay;
 import 'trade_orders_page.dart' show TradeOrdersPage, openTradeOrder;
 import 'words.dart' show CardTone, Tone, naira;
+import '../kit/mobile.dart' show TkRoute;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -252,7 +253,7 @@ String offerOutcome(Map<String, dynamic> o) => switch (o['status']) {
 /// Riders are not available on this Taskiem (text messages not set up).
 bool _dispatchOff(Object e) => e is ApiError && e.status == 409;
 
-void _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+void _push(BuildContext context, Widget page) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
 
 /// Opens Orders: every order, booking, question and call-back.
 void openStorefrontOrders(BuildContext context, Auth auth) => _push(context, StorefrontOrdersPage(auth: auth));
@@ -504,7 +505,7 @@ class _StorefrontOrdersPageState extends State<StorefrontOrdersPage> with Pollin
                         : (const {'received', 'awaiting_payment', 'price_changed'}.contains(o['status']) ? CardTone.warn : null),
                     onTap: () async {
                       await Navigator.of(context).push(
-                        PageRouteBuilder<void>(
+                        TkRoute<void>(
                           pageBuilder: (_, _, _) => StorefrontOrderPage(auth: _auth, reference: _str(o['reference']), now: widget.now, backLabel: 'Back to Orders'),
                         ),
                       );
@@ -1426,7 +1427,7 @@ class _DeliveriesPageState extends State<DeliveriesPage> with Polling {
                     tone: d['late'] != null ? CardTone.danger : _pillTone(deliveryStatus(_str(d['status'])).tone),
                   ),
                   onTap: () async {
-                    await Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => StorefrontOrderPage(auth: _auth, reference: _str(d['reference']))));
+                    await Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => StorefrontOrderPage(auth: _auth, reference: _str(d['reference']))));
                     await _load();
                   },
                 ),

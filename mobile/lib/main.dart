@@ -31,6 +31,7 @@ import 'screens/signed_in.dart';
 import 'screens/sign_in.dart';
 import 'screens/sign_up.dart';
 import 'theme/theme.dart';
+import 'kit/mobile.dart' show TkRoute;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -342,18 +343,16 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     );
   }
 
-  void _profile(BuildContext context, {String back = 'Back to Chat'}) => Navigator.of(context).push(PageRouteBuilder<void>(
+  void _profile(BuildContext context, {String back = 'Back to Chat'}) => Navigator.of(context).push(TkRoute<void>(
     pageBuilder: (_, _, _) => ProfileScreen(chats: _chats, backLabel: back),
   ));
 
-  void _openConv(BuildContext context, LinkConversation c) => Navigator.of(context).push(PageRouteBuilder<void>(
-    transitionDuration: Duration.zero,
-    reverseTransitionDuration: Duration.zero,
+  void _openConv(BuildContext context, LinkConversation c) => Navigator.of(context).push(TkRoute<void>(
     pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c),
   ));
 
   /// Linked businesses, over [context].
-  void _links(BuildContext context) => Navigator.of(context).push(PageRouteBuilder<void>(
+  void _links(BuildContext context) => Navigator.of(context).push(TkRoute<void>(
     pageBuilder: (_, _, _) => LinksScreen(
       chats: _chats,
       onProfile: () => _profile(context, back: 'Back to Linked businesses'),
@@ -367,26 +366,19 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
       data: _chats,
       onLinks: () => _links(context),
       onProfile: () => _profile(context),
-      onMenu: () => Navigator.of(context).push(PageRouteBuilder<void>(
+      onMenu: () => Navigator.of(context).push(TkRoute<void>(
         pageBuilder: (_, _, _) => SignedInScreen(auth: widget.auth, prefs: widget.prefs, unlocker: widget.unlocker),
       )),
-      // On a phone the web shows the conversation in the list's place, at
-      // once: no transition either way.
-      onOpenTaskiem: () => Navigator.of(context).push(PageRouteBuilder<void>(
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats),
+      // A conversation slides in over the list, as a phone's chats do.
+      onOpenTaskiem: () => Navigator.of(context).push(TkRoute<void>(
+    pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats),
       )),
-      onOpenCustomer: (c) => Navigator.of(context).push(PageRouteBuilder<void>(
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => _OpenCustomer(chats: _chats, id: c.id),
+      onOpenCustomer: (c) => Navigator.of(context).push(TkRoute<void>(
+    pageBuilder: (_, _, _) => _OpenCustomer(chats: _chats, id: c.id),
       )),
       onOpen: (c) => _openConv(context, c),
-      onOpenAt: (c, message) => Navigator.of(context).push(PageRouteBuilder<void>(
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c, focus: message),
+      onOpenAt: (c, message) => Navigator.of(context).push(TkRoute<void>(
+    pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c, focus: message),
       )),
     );
   }

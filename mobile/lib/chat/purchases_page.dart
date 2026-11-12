@@ -32,6 +32,7 @@ import 'stock_page.dart' show StockPage, feeInput, feeKobo;
 import 'tags.dart' show quantity;
 import 'trade_orders_page.dart' show linesWords;
 import 'words.dart' show CardTone, naira;
+import '../kit/mobile.dart' show TkRoute;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -39,7 +40,7 @@ String _str(Object? v) => v as String? ?? '';
 
 String _purchasePath(String id, [String rest = '']) => '/v1/stock/purchases/${Uri.encodeComponent(id)}$rest';
 
-Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
 
 /// Opens an order to a supplier.
 Future<void> openPurchase(BuildContext context, Auth auth, String id) => _push(context, PurchasePage(auth: auth, id: id));
@@ -394,7 +395,7 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
                   Text('Keep your stock on Taskiem to confirm it, so what comes is received into your items.', style: tkHint(t)),
                   TkLink(
                     label: 'Stock',
-                    onTap: () => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => StockPage(auth: _auth))),
+                    onTap: () => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => StockPage(auth: _auth))),
                   ),
                 ],
               )

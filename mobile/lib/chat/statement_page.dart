@@ -17,6 +17,7 @@ import 'bills_page.dart' show openBill;
 import 'invoices_page.dart' show openInvoice;
 import 'money_sheets.dart' show dateLabel;
 import 'words.dart' show CardTone, naira;
+import '../kit/mobile.dart' show TkRoute;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -31,7 +32,7 @@ String termsWords(int? days) {
 
 /// Opens the statement with a linked business.
 Future<void> openStatement(BuildContext context, Auth auth, String link) => Navigator.of(context).push(
-  PageRouteBuilder<void>(
+  TkRoute<void>(
     pageBuilder: (_, _, _) => StatementPage(auth: auth, link: link),
   ),
 );

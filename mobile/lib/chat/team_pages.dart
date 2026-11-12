@@ -24,6 +24,7 @@ import 'approve.dart' show TkTextBox;
 import 'give_task.dart' show GiveTask, roleWords, weekdays, whoChoices;
 import 'money_sheets.dart' show dateLabel;
 import 'words.dart' show CardTone, naira;
+import '../kit/mobile.dart' show TkRoute;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 Map<String, dynamic> _map(Object? v) => (v as Map?)?.cast<String, dynamic>() ?? const {};
@@ -31,7 +32,7 @@ int _int(Object? v) => (v as num?)?.toInt() ?? 0;
 String _str(Object? v) => v as String? ?? '';
 List<String> _strs(Object? v) => (v as List? ?? const []).whereType<String>().toList();
 
-Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
 
 /// Opens Staff.
 Future<void> openStaff(BuildContext context, Auth auth) => _push(context, StaffPage(auth: auth));

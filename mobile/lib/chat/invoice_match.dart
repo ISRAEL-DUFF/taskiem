@@ -21,6 +21,7 @@ import 'invoices_page.dart' show fmtTime, openInvoice;
 import 'money_sheets.dart' show dateLabel, invoiceStatus;
 import 'storefront_orders_page.dart' show openStorefrontOrder;
 import 'words.dart' show CardTone, naira;
+import '../kit/mobile.dart' show TkRoute;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -337,7 +338,7 @@ Map<String, Object> accountRequest({required bool byHand, required String connec
   };
 }
 
-void _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+void _push(BuildContext context, Widget page) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
 
 /// Opens To match.
 void openInvoiceMatch(BuildContext context, Auth auth) => _push(context, InvoiceMatchPage(auth: auth));

@@ -29,6 +29,7 @@ import 'money_page.dart' show MoneyPage, lagosDate;
 import 'storefront_orders_page.dart' show StorefrontOrderPage, StorefrontOrdersPage;
 import 'team_pages.dart' show StaffPage, TasksPage;
 import 'words.dart' show CardTone, naira;
+import '../kit/mobile.dart' show TkRoute;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 Map<String, dynamic> _map(Object? v) => (v as Map?)?.cast<String, dynamic>() ?? const {};
@@ -326,7 +327,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
   }
 
   Future<void> _go(Widget page) async {
-    await Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+    await Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
     await _load();
   }
 

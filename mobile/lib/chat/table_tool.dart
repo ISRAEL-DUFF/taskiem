@@ -27,6 +27,7 @@ import 'invoices_page.dart' show fmtTime;
 import 'money_page.dart' show csvHeader;
 import 'money_sheets.dart' show dateLabel, sheetFoot;
 import 'words.dart' show CardTone, naira;
+import '../kit/mobile.dart' show TkRoute;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 String _str(Object? v) => v as String? ?? '';
@@ -702,7 +703,7 @@ class _TablesPageState extends State<TablesPage> {
                   onTap: () async {
                     // Deleted there: the list read again.
                     await Navigator.of(context).push(
-                      PageRouteBuilder<bool>(
+                      TkRoute<bool>(
                         pageBuilder: (_, _, _) => TablePage(auth: widget.auth, table: x),
                       ),
                     );

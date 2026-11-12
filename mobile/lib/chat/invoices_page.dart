@@ -28,13 +28,14 @@ import 'money_sheets.dart' show dateLabel, invoiceActions, invoicePath, invoiceS
 import 'product_form.dart' show SaveKey, formKey;
 import 'storefront_orders_page.dart' show isMasked;
 import 'words.dart' show CardTone, naira;
+import '../kit/mobile.dart' show TkRoute;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
 String _str(Object? v) => v as String? ?? '';
 Map<String, dynamic> _map(Object? v) => (v as Map?)?.cast<String, dynamic>() ?? const {};
 
-Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
 
 /// Opens one invoice (its id or number) on its own screen.
 Future<void> openInvoice(BuildContext context, Auth auth, String id) => _push(context, InvoicePage(auth: auth, id: id));
@@ -247,7 +248,7 @@ class _InvoicesPageState extends State<InvoicesPage> with Polling {
   }
 
   Future<void> _new() async {
-    await Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => InvoiceEditorPage(auth: widget.auth)));
+    await Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => InvoiceEditorPage(auth: widget.auth)));
     await _load();
   }
 
@@ -279,7 +280,7 @@ class _InvoicesPageState extends State<InvoicesPage> with Polling {
               label: _waiting > 0 ? 'To match ($_waiting)' : 'To match',
               semantics: _waiting > 0 ? 'To match: $_waiting ${_waiting == 1 ? 'payment waiting' : 'payments waiting'}' : 'To match',
               onPressed: () async {
-                await Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => InvoiceMatchPage(auth: widget.auth)));
+                await Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => InvoiceMatchPage(auth: widget.auth)));
                 await _load();
               },
             ),
@@ -322,7 +323,7 @@ class _InvoicesPageState extends State<InvoicesPage> with Polling {
                     pill: TkPill(st.label, tone: _tone(_str(x['status']))),
                     onTap: () async {
                       await Navigator.of(context).push(
-                        PageRouteBuilder<void>(
+                        TkRoute<void>(
                           pageBuilder: (_, _, _) => InvoicePage(auth: widget.auth, id: _str(x['number']), backLabel: 'Back to Invoices'),
                         ),
                       );
@@ -512,7 +513,7 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
                 label: 'Edit',
                 onPressed: () async {
                   final out = await Navigator.of(context).push<({Map<String, dynamic>? sent})>(
-                    PageRouteBuilder(
+                    TkRoute(
                       pageBuilder: (_, _, _) => InvoiceEditorPage(auth: _auth, existing: x),
                     ),
                   );

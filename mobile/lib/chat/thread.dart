@@ -7,6 +7,7 @@
 
 import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/rendering.dart' show RenderDecoratedBox;
+import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/widgets.dart';
 
 import '../kit/icon.dart';
@@ -373,6 +374,11 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   bool _loadingOlder = false;
   final _focusKey = GlobalKey();
 
+  /// The messages drawn so far: one not among them arrives with motion
+  /// (those there when the thread opened, and older pages, do not).
+  final _known = <String>{};
+  bool _seeded = false;
+
   /// `.bubble.flash`: the ring round the message opened at, 1.8 s.
   late final AnimationController _flash = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800));
   String? _flashId;
@@ -380,6 +386,7 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   @override
   void initState() {
     super.initState();
+    PopIn.openedAt = DateTime.now();
     scroll.addListener(_onScroll);
     _follow(null);
   }
@@ -617,10 +624,22 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
         if (widget.unread?.id == of.id(m)) group.add(UnreadMark(widget.unread!.count, markKey: _unreadKey));
         final w = widget.render(m, prev);
         prev = m;
+        final id = of.id(m);
+        final fresh = _known.add(id) && _seeded && !of.at(m).isBefore(_newest ?? of.at(m));
         // Each message drawn once and kept: scrolling moves the pictures.
-        if (w != null) group.add(RepaintBoundary(child: widget.focus == of.id(m) ? KeyedSubtree(key: _focusKey, child: w) : w));
+        if (w != null) {
+          group.add(
+            MessageArrive(
+              key: ValueKey('arrive $id'),
+              animate: fresh,
+              mine: of.mine(m),
+              child: RepaintBoundary(child: widget.focus == id ? KeyedSubtree(key: _focusKey, child: w) : w),
+            ),
+          );
+        }
       }
       close();
+      _seeded = true;
     }
     return ThreadFlash(
       id: _flashId,
@@ -674,17 +693,127 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
           bottom: 16,
           child: ValueListenableBuilder(
             valueListenable: _jump,
-            builder: (context, jump, _) => jump.away || widget.detached
-                ? ThreadJump(
-                    count: jump.count,
-                    detached: widget.detached,
-                    onTap: widget.detached && widget.onLatest != null ? widget.onLatest! : _toBottom,
-                  )
-                : const SizedBox.shrink(),
+            builder: (context, jump, _) => AnimatedSwitcher(
+              duration: (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ? Duration.zero : const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOutBack,
+              switchOutCurve: Curves.easeIn,
+              transitionBuilder: (child, a) => FadeTransition(
+                opacity: a,
+                child: ScaleTransition(scale: Tween(begin: 0.6, end: 1.0).animate(a), child: child),
+              ),
+              child: jump.away || widget.detached
+                  ? ThreadJump(
+                      count: jump.count,
+                      detached: widget.detached,
+                      onTap: widget.detached && widget.onLatest != null ? widget.onLatest! : _toBottom,
+                    )
+                  : const SizedBox.shrink(),
+            ),
           ),
         ),
       ],
       ),
+    );
+  }
+}
+
+/// A message arriving: it rises from below its place and grows from its
+/// own side (the right for one's own), as a messaging app's do. Drawn as it
+/// is when it was already there, or when the phone asks for less motion.
+class MessageArrive extends StatefulWidget {
+  const MessageArrive({super.key, required this.child, required this.animate, required this.mine});
+  final Widget child;
+  final bool animate;
+  final bool mine;
+
+  @override
+  State<MessageArrive> createState() => _MessageArriveState();
+}
+
+class _MessageArriveState extends State<MessageArrive> with SingleTickerProviderStateMixin {
+  AnimationController? _a;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (widget.animate && !still && _a == null) {
+      _a = AnimationController(vsync: this, duration: const Duration(milliseconds: 340))..forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _a?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = _a;
+    if (a == null) return widget.child;
+    final rise = CurvedAnimation(parent: a, curve: Curves.easeOutCubic);
+    final grow = CurvedAnimation(parent: a, curve: Curves.easeOutBack);
+    return AnimatedBuilder(
+      animation: a,
+      builder: (context, child) => a.isCompleted
+          ? child!
+          : Opacity(
+              opacity: Curves.easeOut.transform(a.value.clamp(0, 1)),
+              child: Transform.translate(
+                offset: Offset(0, 22 * (1 - rise.value)),
+                child: Transform.scale(
+                  scale: 0.86 + 0.14 * grow.value,
+                  alignment: widget.mine ? Alignment.bottomRight : Alignment.bottomLeft,
+                  child: child,
+                ),
+              ),
+            ),
+      child: widget.child,
+    );
+  }
+}
+
+/// What appears in a thread already open (a reaction): it pops in, grown
+/// past its size and settling. What is there as the thread opens is not.
+class PopIn extends StatefulWidget {
+  const PopIn({super.key, required this.child});
+  final Widget child;
+
+  /// When the open thread opened.
+  static DateTime openedAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  @override
+  State<PopIn> createState() => _PopInState();
+}
+
+class _PopInState extends State<PopIn> with SingleTickerProviderStateMixin {
+  AnimationController? _a;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (_a == null && !still && DateTime.now().difference(PopIn.openedAt) > const Duration(milliseconds: 1500)) {
+      _a = AnimationController(vsync: this, duration: const Duration(milliseconds: 420))..forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _a?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = _a;
+    if (a == null) return widget.child;
+    final pop = CurvedAnimation(parent: a, curve: Curves.elasticOut);
+    return AnimatedBuilder(
+      animation: a,
+      builder: (context, child) => a.isCompleted ? child! : Transform.scale(scale: pop.value, child: child),
+      child: widget.child,
     );
   }
 }
@@ -891,8 +1020,39 @@ class BubbleHold extends StatefulWidget {
   State<BubbleHold> createState() => _BubbleHoldState();
 }
 
-class _BubbleHoldState extends State<BubbleHold> {
+class _BubbleHoldState extends State<BubbleHold> with SingleTickerProviderStateMixin {
   double _dx = 0;
+  bool _armed = false;
+
+  /// The bubble going back to its place, after a swipe.
+  late final AnimationController _back = AnimationController(vsync: this, duration: const Duration(milliseconds: 260))
+    ..addListener(() => setState(() => _dx = _from * (1 - Curves.easeOutBack.transform(_back.value)).clamp(-0.2, 1.0)));
+  double _from = 0;
+
+  @override
+  void dispose() {
+    _back.dispose();
+    super.dispose();
+  }
+
+  void _drag(double delta) {
+    _back.stop();
+    setState(() => _dx = (_dx + delta).clamp(0.0, 80.0));
+    final armed = _dx >= 60;
+    if (armed && !_armed) HapticFeedback.selectionClick();
+    _armed = armed;
+  }
+
+  void _release() {
+    if (_dx >= 60) widget.onReply!();
+    _armed = false;
+    _from = _dx;
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+      setState(() => _dx = 0);
+    } else {
+      _back.forward(from: 0);
+    }
+  }
 
   /// The bubble itself, on the screen (not its row).
   Rect _rect() {
@@ -918,15 +1078,37 @@ class _BubbleHoldState extends State<BubbleHold> {
       // bubble's own labels (its ticks, a star) apart.
       excludeFromSemantics: true,
       onLongPress: widget.onHold == null ? null : () => widget.onHold!(_rect()),
-      onHorizontalDragUpdate: widget.onReply == null ? null : (d) => setState(() => _dx = (_dx + d.delta.dx).clamp(0.0, 80.0)),
-      onHorizontalDragEnd: widget.onReply == null
-          ? null
-          : (_) {
-              if (_dx >= 60) widget.onReply!();
-              setState(() => _dx = 0);
-            },
-      onHorizontalDragCancel: widget.onReply == null ? null : () => setState(() => _dx = 0),
-      child: Transform.translate(offset: Offset(_dx, 0), child: widget.child),
+      onHorizontalDragUpdate: widget.onReply == null ? null : (d) => _drag(d.delta.dx),
+      onHorizontalDragEnd: widget.onReply == null ? null : (_) => _release(),
+      onHorizontalDragCancel: widget.onReply == null ? null : () => _release(),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // The reply arrow, coming in under the bubble as it is swiped.
+          if (_dx > 4)
+            Positioned(
+              left: 4,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: Opacity(
+                  opacity: (_dx / 60).clamp(0.0, 1.0),
+                  child: Transform.scale(
+                    scale: 0.6 + 0.4 * (_dx / 60).clamp(0.0, 1.0),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(color: TkTheme.tokens(context).chatIn, shape: BoxShape.circle),
+                      alignment: Alignment.center,
+                      child: TkIcon('reply', size: 17, color: TkTheme.tokens(context).text),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          Transform.translate(offset: Offset(_dx, 0), child: widget.child),
+        ],
+      ),
     );
     if (widget.onHold == null) return gestures;
     return Semantics(

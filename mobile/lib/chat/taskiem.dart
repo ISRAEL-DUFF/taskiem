@@ -50,6 +50,7 @@ import 'tool_sheet.dart';
 import 'tools.dart';
 import 'tools_panel.dart';
 import 'words.dart';
+import '../kit/mobile.dart' show TkRoute;
 
 /// TaskiemChat.tsx EVERY_MS: what is newer, every 5 seconds (20 with the
 /// stream connected).
@@ -725,7 +726,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                       onAsk: (w) => d.say(text: w),
                       onTile: (key) {
                         final auth = d.chats.auth;
-                        void push(Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+                        void push(Widget page) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
                         switch (key) {
                           case 'stock':
                             final tool = tools.where((x) => x.key == 'stock').firstOrNull;

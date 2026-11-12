@@ -2006,7 +2006,9 @@ class _Reactions extends StatelessWidget {
         children: [
           for (final r in list) ...[
             if (r != list.first) const SizedBox(width: 3),
-            Semantics(
+            PopIn(
+              key: ValueKey('react ${r.emoji}'),
+              child: Semantics(
               container: true,
               button: onReact != null,
               label: '${reactionWords(r)}. ${r.mine == true ? 'Tap to take yours back.' : 'Tap to react the same.'}',
@@ -2037,6 +2039,7 @@ class _Reactions extends StatelessWidget {
                   ),
                 ),
               ),
+            ),
             ),
           ],
         ],

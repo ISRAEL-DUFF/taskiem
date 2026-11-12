@@ -193,11 +193,12 @@ void main() {
     final sent = await open(t, (c) => MoneyPage(auth: c.auth, now: () => _now));
     expect(sent.where((s) => s.startsWith('GET /v1/money/summary')).first, 'GET /v1/money/summary from=2026-11-12&to=2026-11-12');
     expect(find.text('₦50,000'), findsWidgets);
-    expect(find.text('₦1,000 more pending'), findsOneWidget);
+    expect(find.text('₦1,000 more coming in'), findsOneWidget);
     expect(find.text('₦38,000'), findsOneWidget, reason: 'kept');
     expect(find.text('9900 000 001'), findsOneWidget);
     expect(find.text('1 payment not matched'), findsOneWidget);
-    expect(find.text('Fees taken: ₦750'), findsOneWidget);
+    expect(find.text('Fees taken'), findsOneWidget);
+    expect(find.text('₦750'), findsOneWidget);
     expect(find.textContaining('1.50% of the money they were taken on'), findsOneWidget);
     expect(find.textContaining('4 delivered · ₦8,500 paid at the door'), findsOneWidget);
     expect(find.text('owes ₦3,000'), findsOneWidget);
@@ -209,6 +210,8 @@ void main() {
     await t.tap(find.bySemanticsLabel('This week'));
     await settle(t);
     expect(sent.where((s) => s.startsWith('GET /v1/money/summary')).last, 'GET /v1/money/summary from=2026-11-09&to=2026-11-12');
+    await t.tap(find.bySemanticsLabel('Download as a spreadsheet'));
+    await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Download money log'));
     await settle(t);
     expect(shared.single, 'log-2026-11-09-to-2026-11-12.csv text/csv date,amount\n');
@@ -216,10 +219,7 @@ void main() {
 
   testWidgets('dates chosen: a bad one said, nothing asked', (t) async {
     final sent = await open(t, (c) => MoneyPage(auth: c.auth, now: () => _now));
-    await t.tap(find.bySemanticsLabel(RegExp('^Other period')));
-    await t.pumpAndSettle();
-    await t.tap(find.text('Choose dates'));
-    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Pick dates'));
     await settle(t);
     final asked = sent.where((s) => s.startsWith('GET /v1/money/summary')).length;
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^To')), matching: find.byType(EditableText)), '2026-10-01');
@@ -356,20 +356,17 @@ void main() {
 
   testWidgets('M8 fixes 17: Choose dates again starts from the period chosen, not the old dates', (t) async {
     await open(t, (c) => MoneyPage(auth: c.auth, now: () => _now));
-    Future<void> other(String words) async {
-      await t.tap(find.bySemanticsLabel(RegExp('^Other period')));
-      await t.pumpAndSettle();
-      await t.tap(find.text(words));
-      await t.pumpAndSettle();
+    Future<void> pick() async {
+      await t.tap(find.bySemanticsLabel('Pick dates'));
       await settle(t);
     }
 
-    await other('Choose dates');
+    await pick();
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^From')), matching: find.byType(EditableText)), '2026-10-01');
     await t.pump();
     await t.tap(find.bySemanticsLabel('This month'));
     await settle(t);
-    await other('Choose dates');
+    await pick();
     final from = t.widget<EditableText>(find.descendant(of: find.bySemanticsLabel(RegExp('^From')), matching: find.byType(EditableText)));
     expect(from.controller.text, '2026-11-01', reason: 'this month’s first day, not 1 October');
   });
@@ -454,5 +451,5 @@ Future<void> settle(WidgetTester t) async {
     await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));
     await t.pump();
   }
-  await t.pump(const Duration(milliseconds: 400));
+  await t.pump(const Duration(milliseconds: 800));
 }
