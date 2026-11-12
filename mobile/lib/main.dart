@@ -17,6 +17,7 @@ import 'api/api.g.dart';
 import 'chat/money_page.dart' show MoneyPage;
 import 'chat/order_sheet.dart' show showOrderSheet;
 import 'chat/orders_tab.dart' show OrdersTab;
+import 'chat/today_tab.dart' show TodayTab;
 import 'chat/chats.dart';
 import 'chat/conversation.dart';
 import 'chat/customer.dart';
@@ -324,11 +325,9 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
       counted: _chats,
       tabs: [
         (label: 'Chats', icon: 'chat', build: _chatsTab),
-        (
-          label: 'Updates',
-          icon: 'activity',
-          build: (_) => const ComingTab(title: 'Updates', icon: 'activity', words: 'What happened in your business, as it happens.'),
-        ),
+        // Today (the web's Home); Updates as WhatsApp's (status and
+        // channels) is planned for later: docs/spec/mobile-app-updates.md.
+        (label: 'Today', icon: 'home', build: (_) => TodayTab(auth: _chats.auth)),
         (
           label: 'Money',
           icon: 'money',

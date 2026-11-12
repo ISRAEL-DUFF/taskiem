@@ -10,6 +10,13 @@ product** that is ordered from it.
 This replaces the first draft, which took Updates for a feed of the
 business's own events.
 
+**Not built for now** (12 November 2026, the founder): the backend it
+needs is large (video above all) and its customers' WhatsApp messages cost
+money. The tab is **Today** instead (the web's Home: the day's money and
+orders, what needs you, the latest runs, the set-up left, the workflows
+running; `lib/chat/today_tab.dart`), and **Team** (staff and tasks) comes
+next. This plan stays for when Updates is built.
+
 ## 1. How WhatsApp does it
 
 **Status**:

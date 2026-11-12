@@ -1,7 +1,7 @@
-// The bottom bar of the app's home (as WhatsApp's): Chats, Updates, Money
+// The bottom bar of the app's home (as WhatsApp's): Chats, Today, Money
 // and Orders, the open one's icon in a pill (the web's `.tabbar`: lime on
-// pine, pine on lime in the dark theme). Chats, Money and Orders are the
-// app's own; Updates says it is coming. The bar shows on the home only: an open
+// pine, pine on lime in the dark theme). Each is the app's own; a tab not
+// built yet says it is coming (ComingTab). The bar shows on the home only: an open
 // conversation takes the whole screen, as it does on WhatsApp.
 
 import 'package:flutter/widgets.dart';
