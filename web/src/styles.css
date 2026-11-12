@@ -1721,7 +1721,9 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
 @keyframes chat-pulse { 50% { opacity: .3; } }
 .bubble .chat-photo { display: block; margin: 2px 0 4px; }
 .bubble .chat-photo img { display: block; max-width: 100%; max-height: 320px; border-radius: 8px; }
-.bubble .chat-voice { display: block; width: min(260px, 100%); margin: 2px 0; }
+/* A fixed width: the bubble is as wide as what it holds, so a percentage
+   would leave the player only its menu button. */
+.bubble .chat-voice { display: block; width: 260px; max-width: 100%; margin: 2px 0; }
 .bubble .chat-file { display: flex; align-items: center; gap: 8px; padding: 8px; margin: 2px 0 4px; border-radius: 8px; background: var(--panel-2); color: var(--text); text-decoration: none; }
 .bubble .chat-file svg { width: 22px; height: 22px; flex: none; }
 .bubble .chat-file .name { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
@@ -1887,6 +1889,8 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
    target, the camera. */
 .emoji-panel { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--border); background: var(--panel); max-height: 280px; }
 .emoji-search { width: 100%; }
+/* The search, the kinds and the tones keep their height; the grid scrolls. */
+.emoji-search, .emoji-tabs, .emoji-tones { flex: none; }
 .emoji-tabs { display: flex; gap: 2px; overflow-x: auto; }
 .emoji-tab { flex: none; width: 36px; height: 34px; min-height: 34px; padding: 0; border: 0; background: none; font-size: 18px; border-radius: 8px; filter: grayscale(1); opacity: .7; }
 .emoji-tab[aria-pressed="true"] { background: var(--chat-select); filter: none; opacity: 1; }
@@ -2114,7 +2118,8 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .chat-info-head .icon-button:hover:not(:disabled) { background: var(--chat-select); }
 .chat-info-head .icon-button:focus-visible { box-shadow: var(--ring); }
 .chat-search-row .icon-button[aria-expanded="true"] { background: var(--chat-select); }
-@media (max-width: 899px) { .chat-search { width: 100%; border-left: 0; } }
+/* On a phone the panels (search, contact info) take the whole screen, as WhatsApp's do. */
+@media (max-width: 899px) { .chat-info, .chat-search { width: 100%; border-left: 0; } }
 .chat-date-anchor { position: relative; flex: none; }
 .chat-date-note { padding: 0 16px 6px 56px; margin: 0; }
 .day-picker { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: min(330px, calc(100vw - 24px)); padding: 10px 12px 14px; background: var(--panel); border-radius: 14px; box-shadow: 0 4px 18px var(--chat-shadow); border: 1px solid var(--border); animation: pop-in 0.12s ease-out; }
@@ -2124,7 +2129,7 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .day-picker .dp-head .icon-button:disabled { color: var(--muted); opacity: 0.4; }
 .day-picker .dp-head .icon-button:hover:not(:disabled) { background: var(--chat-select); }
 .day-picker .dp-head .icon-button:focus-visible { box-shadow: var(--ring); }
-.dp-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.dp-grid, .main table.dp-grid { display: table; width: 100%; border-collapse: collapse; table-layout: fixed; border: 0; border-radius: 0; background: none; overflow: visible; }
 .dp-grid th { height: 32px; padding: 0 0 6px; font-size: 13px; font-weight: 500; color: var(--muted); border-bottom: 1px solid var(--border); background: none; text-align: center; }
 .dp-grid td { padding: 2px 0; text-align: center; border: 0; height: auto; }
 .dp-day { width: 38px; height: 38px; min-height: 38px; padding: 0; border: 0; border-radius: 50%; background: none; box-shadow: none; color: var(--text); font-size: 15px; font-variant-numeric: tabular-nums; }

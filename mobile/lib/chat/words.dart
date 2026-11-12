@@ -1,0 +1,483 @@
+// The chat's words, as the web's say them: the list's previews and times,
+// a link request's line, a link's state, and an avatar's initials and tone.
+// Each is the web function named beside it, ported; test/words_test.dart
+// holds them to the web's answers. The tables of an event's words are the
+// web's own (words.g.dart, generated).
+
+import 'dart:convert';
+
+import '../api/api.g.dart';
+import 'words.g.dart';
+
+// --- times (web/src/lib/time.ts, web/src/lib/linkchat.ts) ---
+
+const _days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const _longDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const _longMonths = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+String _pad(int n) => n.toString().padLeft(2, '0');
+
+int _daysBetween(DateTime d, DateTime now) {
+  final a = DateTime(d.year, d.month, d.day), b = DateTime(now.year, now.month, now.day);
+  return (b.difference(a).inHours / 24).round();
+}
+
+/// time.ts dayWords: "Today", "Yesterday", "Tue 14 Oct", "14 Oct", "14 Oct 2025".
+String dayWords(DateTime d, DateTime now) {
+  d = d.toLocal();
+  now = now.toLocal();
+  final days = _daysBetween(d, now);
+  if (days == 0) return 'Today';
+  if (days == 1) return 'Yesterday';
+  final date = '${d.day} ${_months[d.month - 1]}';
+  if (d.year != now.year) return '$date ${d.year}';
+  if (days > 1 && days < 7) return '${_days[d.weekday % 7]} $date';
+  return date;
+}
+
+/// time.ts whenWords: "Today, 09:41".
+String whenWords(DateTime d, DateTime now) {
+  final l = d.toLocal();
+  return '${dayWords(d, now)}, ${_pad(l.hour)}:${_pad(l.minute)}';
+}
+
+/// linkchat.ts clock: a message's time, 09:41.
+String clock(DateTime d) {
+  final l = d.toLocal();
+  return '${_pad(l.hour)}:${_pad(l.minute)}';
+}
+
+/// linkchat.ts dayLabel: the stream's day divider.
+String dayLabel(DateTime d, DateTime now) {
+  final l = d.toLocal();
+  final diff = _daysBetween(l, now.toLocal());
+  if (diff == 0) return 'Today';
+  if (diff == 1) return 'Yesterday';
+  if (diff < 7) return _longDays[l.weekday % 7];
+  return '${l.day} ${_longMonths[l.month - 1]} ${l.year}';
+}
+
+/// linkchat.ts listTime: today's clock, else the day.
+String listTime(DateTime d, DateTime now) {
+  final label = dayLabel(d, now);
+  return label == 'Today' ? clock(d) : label;
+}
+
+// --- messages (web/src/lib/linkchat.ts) ---
+
+bool isDelivery(LinkDocCard c) => c.doc == 'delivery' || c.doc == 'dispatch';
+
+/// linkchat.ts cardLine: "You sent order P-7QX4KD", "Dangote Stores sent invoice INV-0042".
+String cardLine(LinkDocCard card, bool mine, String other) {
+  final who = mine ? 'You' : other;
+  if (isDelivery(card)) {
+    final verb = deliveryVerbs[card.event] ?? card.event.replaceAll('_', ' ');
+    return '$who $verb ${card.reference}';
+  }
+  final verb = cardVerbs[card.event] ??
+      '${card.event.replaceAll('_', ' ')} ${card.doc == 'invoice' || card.doc == 'bill' ? 'invoice' : 'order'}';
+  return '$who $verb ${card.reference}';
+}
+
+/// linkchat.ts attachmentLabel.
+String attachmentLabel(LinkMessageAttachment a) {
+  if (a.kind == 'photo') return 'Photo';
+  if (a.kind == 'voice') return 'Voice note';
+  return (a.name ?? '').isEmpty ? 'File' : a.name!;
+}
+
+/// linkchat.ts previewLine: a message as one line.
+String previewLine(LinkMessage m, String other) {
+  final card = m.card;
+  if (m.kind == 'card' && card != null) return cardLine(card, m.mine, other);
+  if (m.kind == 'diary') return '✓ ${m.body ?? ''}';
+  final a = m.attachment;
+  final words = a != null ? [attachmentLabel(a), m.body ?? ''].where((s) => s.isNotEmpty).join(': ') : (m.body ?? '');
+  return (m.mine ? 'You: ' : '') + words;
+}
+
+/// The list's preview of a conversation's last message (Links.tsx): ours
+/// lose their "You: ", as the ticks before them say it.
+String listPreview(LinkMessage m, String other) {
+  final line = previewLine(m, other);
+  return m.mine && m.kind != 'card' && line.startsWith('You: ') ? line.substring(5) : line;
+}
+
+// --- links (web/src/lib/links.ts) ---
+
+/// linkchat.ts matchChats: each word typed begins a word of the chat's name
+/// or of its last message ("d" finds Dangote and not Ada).
+List<LinkConversation> matchChats(List<LinkConversation> convs, String q) {
+  final words = q.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  if (words.isEmpty) return const [];
+  final split = RegExp(r"[^\p{L}\p{N}']+", unicode: true);
+  return convs.where((c) {
+    final hay = '${c.name} ${c.last != null ? previewLine(c.last!, c.name) : ''}'.toLowerCase().split(split).where((w) => w.isNotEmpty).toList();
+    return words.every((w) => hay.any((h) => h.startsWith(w)));
+  }).toList();
+}
+
+/// links.ts matchLinked: the linked businesses whose name holds every word.
+List<BusinessLink> matchLinked(List<BusinessLink> links, String q) {
+  final words = q.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  if (words.isEmpty) return const [];
+  return links.where((l) => l.state == 'active' && words.every((w) => l.name.toLowerCase().contains(w))).toList();
+}
+
+/// links.ts cardSub (here foundSub): a business found, in one line: its area, then the
+/// items that matched with the prices its page shows.
+String foundSub(LinkCard c) {
+  final items = [for (final it in c.items) it.priceKobo is num ? '${it.name} ${naira((it.priceKobo as num).toInt())}' : it.name];
+  final line = [?c.area, ...items].where((s) => s.isNotEmpty).join(' · ');
+  return line.isNotEmpty ? line : ((c.tagline ?? '').isNotEmpty ? c.tagline! : 'On Taskiem');
+}
+
+/// links.ts cardAction: whether we may ask a business found to link, or it
+/// is ours to answer, or there is nothing to do.
+String? cardAction(LinkCard c) => switch (c.state) {
+  'none' || 'ended' => 'request',
+  'asked_us' => 'answer',
+  _ => null,
+};
+
+/// links.ts requestTo: the request we sent a business found, still waiting.
+BusinessLink? requestTo(List<BusinessLink> links, String business) =>
+    links.where((l) => l.business == business && l.state == 'requested' && l.askedByUs).firstOrNull;
+
+/// links.ts blindRowLine.
+String blindRowLine(String kind) => kind == 'phone'
+    ? 'If a business on Taskiem uses this number, it gets your request.'
+    : 'If a business on Taskiem has this page address, it gets your request.';
+
+/// links.ts ROLE_CHOICES.
+const roleChoices = [('supplier', 'They supply us'), ('customer', 'They buy from us'), ('both', 'Both')];
+
+/// links.ts roleLine.
+String roleLine(String role) => switch (role) {
+      'supplier' => 'They supply you',
+      'customer' => 'They buy from you',
+      _ => 'They supply you and buy from you',
+    };
+
+enum Tone { ok, warn, info, muted }
+
+/// links.ts stateWords: a link's state in a word or two, with its tone.
+({String label, Tone tone})? stateWords(String state) => switch (state) {
+      'active' => (label: 'Linked', tone: Tone.ok),
+      'asked_us' => (label: 'Asks to link', tone: Tone.warn),
+      'requested' => (label: 'Asked', tone: Tone.info),
+      'sent' => (label: 'Request sent', tone: Tone.info),
+      'not_accepted' => (label: 'Not accepted', tone: Tone.muted),
+      'blocked' => (label: 'Blocked', tone: Tone.muted),
+      'ended' => (label: 'Link ended', tone: Tone.muted),
+      _ => null,
+    };
+
+// --- avatars (web/src/pages/ChatAvatar.tsx, web/src/lib/tone.ts) ---
+
+final _startsWithLetter = RegExp(r'^[\p{L}\p{N}]', unicode: true);
+
+/// ChatAvatar.tsx initialsOf: "Bayo Rice Mills" is "BR".
+String initialsOf(String name) {
+  final words = name.split(RegExp(r'\s+')).where((w) => _startsWithLetter.hasMatch(w)).toList();
+  final s = words.take(2).map((w) => String.fromCharCode(w.runes.first).toUpperCase()).join();
+  if (s.isNotEmpty) return s;
+  return name.isEmpty ? '' : String.fromCharCode(name.runes.first).toUpperCase();
+}
+
+/// tone.ts TONES.
+const tones = ['pine', 'lime', 'peach', 'yellow', 'green', 'lavender', 'blue', 'sand'];
+
+/// tone.ts toneOf: a small hash of the name's letters over the tones.
+String toneOf(String name) {
+  var h = 0;
+  for (final ch in name.trim().toLowerCase().runes) {
+    h = (h * 31 + ch) & 0xFFFFFFFF;
+  }
+  return tones[h % tones.length];
+}
+
+// --- money (web/src/lib/storefront.ts formatPrice, invoices.ts naira) ---
+
+/// "₦820,000", "₦1,250.50".
+String naira(int kobo) {
+  final neg = kobo < 0;
+  final abs = kobo.abs();
+  final whole = (abs ~/ 100).toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
+  final frac = abs % 100;
+  return '${neg ? '-' : ''}₦$whole${frac != 0 ? '.${frac.toString().padLeft(2, '0')}' : ''}';
+}
+
+// --- cards (web/src/lib/cardframe.ts, linkchat.ts) ---
+
+enum CardTone { lime, warn, danger, plain }
+
+typedef CardStatus = ({String word, CardTone tone, int? step});
+
+const orderSteps = ['Placed', 'Accepted', 'On the way', 'Delivered'];
+const deliverySteps = ['Offered', 'Accepted', 'Picked up', 'Arrived', 'Delivered'];
+
+List<String> stepsFor(LinkDocCard c) => isDelivery(c) ? deliverySteps : orderSteps;
+
+const Map<String, CardStatus> _delivery = {
+  'offered': (word: 'Offered', tone: CardTone.warn, step: 0),
+  'accepted': (word: 'Accepted', tone: CardTone.lime, step: 1),
+  'picked_up': (word: 'Picked up', tone: CardTone.lime, step: 2),
+  'arrived': (word: 'At the door', tone: CardTone.lime, step: 3),
+  'delivered': (word: 'Delivered', tone: CardTone.lime, step: 4),
+  'confirmed': (word: 'Confirmed', tone: CardTone.lime, step: 4),
+  'paid': (word: 'Fee paid', tone: CardTone.lime, step: 4),
+  'not_paid': (word: 'Fee not paid', tone: CardTone.warn, step: 4),
+  'cant': (word: 'Passed', tone: CardTone.danger, step: null),
+  'passed': (word: 'Ran out', tone: CardTone.plain, step: null),
+  'withdrawn': (word: 'Withdrawn', tone: CardTone.plain, step: null),
+  'released': (word: 'Taken back', tone: CardTone.warn, step: null),
+};
+
+const Map<String, CardStatus> _order = {
+  'ordered': (word: 'New', tone: CardTone.lime, step: 0),
+  'offered': (word: 'Offer', tone: CardTone.warn, step: 0),
+  'countered': (word: 'Counter', tone: CardTone.warn, step: 0),
+  'proposed': (word: 'Draft', tone: CardTone.plain, step: 0),
+  'confirmed': (word: 'Placed', tone: CardTone.plain, step: 0),
+  'auto_changed': (word: 'Changed', tone: CardTone.warn, step: 0),
+  'change': (word: 'Change asked', tone: CardTone.warn, step: 0),
+  'accept': (word: 'Accepted', tone: CardTone.lime, step: 1),
+  'auto_accepted': (word: 'Accepted', tone: CardTone.lime, step: 1),
+  'change_accepted': (word: 'Accepted', tone: CardTone.lime, step: 1),
+  'keep': (word: 'Kept', tone: CardTone.lime, step: 1),
+  'ready': (word: 'Ready', tone: CardTone.lime, step: 1),
+  'dispatched': (word: 'On the way', tone: CardTone.lime, step: 2),
+  'delivered': (word: 'Delivered', tone: CardTone.lime, step: 3),
+  'received': (word: 'Received', tone: CardTone.lime, step: 3),
+  'agree': (word: 'Count agreed', tone: CardTone.lime, step: 3),
+  'short': (word: 'Not all came', tone: CardTone.warn, step: 3),
+  'decline': (word: 'Declined', tone: CardTone.danger, step: null),
+  'cancel': (word: 'Cancelled', tone: CardTone.danger, step: null),
+  'cancel_agreed': (word: 'Cancelled', tone: CardTone.danger, step: null),
+  'cancelled_by_buyer': (word: 'Cancelled', tone: CardTone.danger, step: null),
+  'cancel_asked': (word: 'Cancel asked', tone: CardTone.warn, step: null),
+};
+
+const Map<String, CardStatus> _invoice = {
+  'bill': (word: 'To pay', tone: CardTone.lime, step: null),
+  'declared': (word: 'Paid, they say', tone: CardTone.plain, step: null),
+  'queried': (word: 'Queried', tone: CardTone.warn, step: null),
+  'resolved': (word: 'Settled', tone: CardTone.lime, step: null),
+  'reminder': (word: 'Reminder', tone: CardTone.warn, step: null),
+};
+
+/// cardframe.ts cardStatus: the pill and the progress.
+CardStatus cardStatus(LinkDocCard c, DateTime now) {
+  CardStatus plain() => (word: c.event.replaceAll('_', ' '), tone: CardTone.plain, step: null);
+  if (isDelivery(c)) return _delivery[c.event] ?? plain();
+  final order = c.doc == 'order' || c.doc == 'purchase';
+  final until = c.deal?.until;
+  if (order && until != null && const ['offered', 'countered', 'change'].contains(c.event) && !until.isAfter(now)) {
+    return (word: 'Lapsed', tone: CardTone.plain, step: null);
+  }
+  if (order && c.event == 'change' && c.wasKobo != null) return (word: 'Counter', tone: CardTone.warn, step: 0);
+  return (order ? _order : _invoice)[c.event] ?? plain();
+}
+
+/// cardframe.ts cardKicker: "Order · P-7QX4KD".
+String cardKicker(LinkDocCard c) {
+  final word = isDelivery(c) ? 'Delivery' : (c.doc == 'order' || c.doc == 'purchase' ? 'Order' : 'Invoice');
+  return '$word · ${c.reference}';
+}
+
+/// cardframe.ts isDiary: a change we made ourselves that needs nothing more.
+bool isDiary(LinkDocCard c, bool mine) => mine && !const ['ordered', 'offered', 'bill', 'proposed'].contains(c.event);
+
+/// linkchat.ts cardSub: the amount, and a word.
+String cardSub(LinkDocCard c) => [
+      if (c.amountKobo != null) naira(c.amountKobo!),
+      if (c.wasKobo != null && c.wasKobo! > (c.amountKobo ?? 0)) 'was ${naira(c.wasKobo!)}',
+      if ((c.note ?? '').isNotEmpty) '“${c.note}”',
+    ].join(' · ');
+
+/// Chrome breaks a line after a hyphen even before a digit ("P-" then
+/// "9XTV54"); Flutter's breaker does not (UAX 14's LB25). A zero-width
+/// space after each hyphen between word characters lets it break there too.
+String breakAfterHyphens(String s) => s.replaceAllMapped(RegExp(r'(?<=\w)-(?=\w)'), (_) => '-\u200B');
+
+// --- long messages (web/src/lib/readmore.ts) ---
+
+/// What the first view holds, and what each "Read more" adds.
+const _firstChars = 600, _firstLines = 10, _stepChars = 1200, _stepLines = 20;
+
+/// Not worth a fold: what is left is shorter than this.
+const _tail = 150;
+
+/// readmore.ts reveal: what is shown after [taps] of "Read more", and
+/// whether more is left; cut where a word ends, never inside an emoji.
+({String shown, bool folded}) reveal(String text, int taps) {
+  final chars = _firstChars + taps * _stepChars;
+  final lines = _firstLines + taps * _stepLines;
+  var cut = text.length;
+  if (text.length > chars) cut = chars;
+  var n = 0;
+  for (var i = 0; i < (cut < text.length ? cut : text.length); i++) {
+    if (text.codeUnitAt(i) == 10 && ++n >= lines) {
+      cut = i;
+      break;
+    }
+  }
+  if (cut >= text.length || text.length - cut < _tail) return (shown: text, folded: false);
+  var end = cut;
+  final floor = cut - 60 < 0 ? 0 : cut - 60;
+  while (end > floor && !RegExp(r'\s').hasMatch(text[end])) {
+    end--;
+  }
+  if (end <= floor) end = cut;
+  final hi = text.codeUnitAt(end - 1);
+  if (hi >= 0xd800 && hi <= 0xdbff) end--;
+  return (shown: text.substring(0, end).trimRight(), folded: true);
+}
+
+// --- Taskiem (web/src/lib/taskiemchat.ts, lib/staff.ts) ---
+
+/// taskiemchat.ts boldParts: a message's text in parts, WhatsApp's *bold* marked.
+List<({String text, bool bold})> boldParts(String text) {
+  final out = <({String text, bool bold})>[];
+  final re = RegExp(r'\*[^*\n]+\*');
+  var at = 0;
+  for (final m in re.allMatches(text)) {
+    if (m.start > at) out.add((text: text.substring(at, m.start), bold: false));
+    out.add((text: text.substring(m.start + 1, m.end - 1), bold: true));
+    at = m.end;
+  }
+  if (at < text.length) out.add((text: text.substring(at), bold: false));
+  return out;
+}
+
+/// staff.ts changeWords: "Up 17% on the week before".
+String? changeWords(num? pct, String than) {
+  if (pct == null) return null;
+  if (pct > 0) return 'Up $pct% on $than';
+  if (pct < 0) return 'Down ${-pct}% on $than';
+  return 'The same as $than';
+}
+
+/// staff.ts barHeights: each bar 0 to 1 of the tallest (a quiet day still shows).
+List<double> barHeights(List<int> kobo) {
+  final top = kobo.fold<int>(0, (a, b) => a > b ? a : b);
+  return [for (final k in kobo) top == 0 ? 0.04 : (k / top < 0.04 ? 0.04 : k / top)];
+}
+
+// --- reactions (web/src/lib/linkchat.ts) ---
+
+/// linkchat.ts toggleReaction: our reaction (one at most) taken off where
+/// it was, and given on [emoji] when [mine].
+List<LinkReaction> toggleReaction(List<LinkReaction>? list, String emoji, bool mine, {String me = 'You'}) {
+  final out = <LinkReaction>[];
+  for (final r in list ?? const <LinkReaction>[]) {
+    if (r.mine != true) {
+      out.add(r);
+    } else if (r.count > 1) {
+      out.add(LinkReaction(emoji: r.emoji, count: r.count - 1, mine: false, by: r.by?.where((n) => n != me).toList()));
+    }
+  }
+  if (!mine) return out;
+  final at = out.indexWhere((r) => r.emoji == emoji);
+  if (at >= 0) {
+    final r = out[at];
+    out[at] = LinkReaction(emoji: r.emoji, count: r.count + 1, mine: true, by: [...?r.by, me]);
+  } else {
+    out.add(LinkReaction(emoji: emoji, count: 1, mine: true, by: [me]));
+  }
+  return out;
+}
+
+/// linkchat.ts reactionWords: "👍 2: Ada, You".
+String reactionWords(LinkReaction r) {
+  final who = (r.by ?? const []).join(', ');
+  return '${r.emoji} ${r.count}${who.isEmpty ? '' : ': $who'}';
+}
+
+/// A message with some of its fields changed (the generated type has no copy).
+LinkMessage changedMessage(LinkMessage m, {List<LinkReaction>? reactions, bool? starred}) {
+  final j = m.toJson();
+  if (reactions != null) j['reactions'] = reactions.map((r) => r.toJson()).toList();
+  if (starred != null) j['starred'] = starred;
+  return LinkMessage.fromJson(jsonDecode(jsonEncode(j)) as Map<String, dynamic>);
+}
+
+// --- a search result's line (web/src/lib/snippet.ts) ---
+
+/// snippet.ts terms: the query's words, longest first.
+List<String> searchTerms(String q) {
+  final t = q.toLowerCase().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toSet().toList();
+  t.sort((a, b) => b.length.compareTo(a.length));
+  return t;
+}
+
+/// snippet.ts highlight: [text] in parts, the query's words marked.
+List<({String text, bool hit})> highlight(String text, String q) {
+  final t = searchTerms(q);
+  if (t.isEmpty) return [(text: text, hit: false)];
+  final re = RegExp(t.map(RegExp.escape).join('|'), caseSensitive: false);
+  final out = <({String text, bool hit})>[];
+  var at = 0;
+  for (final m in re.allMatches(text)) {
+    if (m.start > at) out.add((text: text.substring(at, m.start), hit: false));
+    out.add((text: m[0]!, hit: true));
+    at = m.end;
+  }
+  if (at < text.length) out.add((text: text.substring(at), hit: false));
+  return out;
+}
+
+/// snippet.ts around: the words around the first hit, [width] characters
+/// at most, with "…" where cut.
+String around(String text, String q, {int width = 140}) {
+  final flat = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  if (flat.length <= width) return flat;
+  final low = flat.toLowerCase();
+  var at = -1;
+  for (final t in searchTerms(q)) {
+    final i = low.indexOf(t);
+    if (i >= 0 && (at < 0 || i < at)) at = i;
+  }
+  if (at < 0) at = 0;
+  final start = (at - 30).clamp(0, flat.length - width);
+  final end = (start + width).clamp(0, flat.length);
+  return '${start > 0 ? '…' : ''}${flat.substring(start, end).trim()}${end < flat.length ? '…' : ''}';
+}
+
+// --- a month as a calendar shows it (web/src/lib/calendar.ts) ---
+
+/// calendar.ts WEEKDAYS.
+const weekdays = _longDays;
+
+DateTime startOfDay(DateTime d) => DateTime(d.year, d.month, d.day);
+DateTime addDays(DateTime d, int n) => DateTime(d.year, d.month, d.day + n);
+
+/// n months on, the same day of the month or the last of a shorter one.
+DateTime addMonths(DateTime d, int n) {
+  final first = DateTime(d.year, d.month + n, 1);
+  final last = DateTime(first.year, first.month + 1, 0).day;
+  return DateTime(first.year, first.month, d.day < last ? d.day : last);
+}
+
+bool sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+bool sameMonth(DateTime a, DateTime b) => a.year == b.year && a.month == b.month;
+
+/// "2026-11-04", for a day.
+String dayKey(DateTime d) => '${d.year}-${_pad(d.month)}-${_pad(d.day)}';
+
+/// The six weeks that show a month, from Sunday.
+List<List<DateTime>> monthGrid(int year, int month) {
+  final first = DateTime(year, month, 1);
+  final start = addDays(first, -(first.weekday % 7));
+  return [
+    for (var w = 0; w < 6; w++) [for (var i = 0; i < 7; i++) addDays(start, w * 7 + i)],
+  ];
+}
+
+/// "November 2026".
+String monthLabel(DateTime d) => '${_longMonths[d.month - 1]} ${d.year}';
+
+/// "Wednesday 4 November 2026", for a day button's name.
+String calendarDayLabel(DateTime d) => '${_longDays[d.weekday % 7]} ${d.day} ${_longMonths[d.month - 1]} ${d.year}';

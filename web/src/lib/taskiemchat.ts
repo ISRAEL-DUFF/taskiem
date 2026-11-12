@@ -99,6 +99,14 @@ export function keepInflight(f: Inflight | undefined): void {
     // Storage may be blocked: a reload then loses it, as before.
   }
 }
+/**
+ * Forgets the message kept as on its way, only if it is still `f`: a page
+ * that has sent one of its own since keeps that one.
+ */
+export function forgetInflight(f: Inflight): void {
+  const now = inflight();
+  if (now && now.text === f.text && now.at === f.at) keepInflight(undefined);
+}
 export function inflight(): Inflight | undefined {
   try {
     const v = sessionStorage.getItem(INFLIGHT);

@@ -10,9 +10,12 @@ import { App } from "./App";
 import { Skeleton } from "./ui";
 import { applyTheme, savedTheme } from "./theme";
 import { applyBrand, savedBrand } from "./brand";
+import { registerWorker } from "./lib/worker";
 
 applyTheme(savedTheme());
 applyBrand(savedBrand());
+// The service worker: chat notifications, and "You're offline" (lib/worker.ts).
+registerWorker();
 // iOS Safari shows a tapped button's :active (the pressed look in
 // styles.css) only when the page listens for touches.
 document.addEventListener("touchstart", () => undefined, { passive: true });

@@ -15,6 +15,11 @@ export default tseslint.config(
       globals: { window: "readonly", document: "readonly", crypto: "readonly", TextEncoder: "readonly", setTimeout: "readonly", URLSearchParams: "readonly" },
     },
   },
+  // The phone app's fixture recorder (mobile/tool/capture.mjs) runs on Node.
+  {
+    files: ["mobile/tool/*.mjs"],
+    languageOptions: { globals: { process: "readonly", console: "readonly", URL: "readonly" } },
+  },
   // The explainer's renderer, the recordings and the how-to videos
   // (video/README.md) run on Node; the scenes'
   // timeline runs in Chromium.
@@ -27,6 +32,18 @@ export default tseslint.config(
     languageOptions: {
       sourceType: "script",
       globals: { window: "readonly", document: "readonly", location: "readonly", addEventListener: "readonly", performance: "readonly", requestAnimationFrame: "readonly", URLSearchParams: "readonly" },
+    },
+  },
+  // The service worker of chat push (docs/spec/chat-push.md): a plain script a
+  // browser runs apart from the page; its functions are also run by a test.
+  {
+    files: ["web/public/sw.js"],
+    languageOptions: {
+      sourceType: "script",
+      globals: {
+        self: "readonly", module: "writable", fetch: "readonly", URL: "readonly", JSON: "readonly", ServiceWorkerGlobalScope: "readonly",
+        btoa: "readonly", AbortController: "readonly", setTimeout: "readonly", clearTimeout: "readonly", Response: "readonly",
+      },
     },
   },
   // The card maker's Node script, whose callbacks also run in the browser (docs/strategy/marketing/cards).

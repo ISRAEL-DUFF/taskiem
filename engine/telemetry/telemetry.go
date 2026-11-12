@@ -64,6 +64,13 @@ var (
 	ChatStreamEvents = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "taskiem_chat_stream_events_total", Help: "Events sent on chat streams, by event (message, gone, conversation, taskiem, typing, ping).",
 	}, []string{"event"})
+	PushSent = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_push_total", Help: "Chat pushes by result (sent, gone: the browser is off for good, failed).",
+	}, []string{"result"})
+	PushSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "taskiem_push_seconds", Help: "How long a push service took to answer a push.",
+		Buckets: []float64{.05, .1, .25, .5, 1, 2.5, 5, 10},
+	})
 	ChatStreamRefused = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "taskiem_chat_stream_refused_total", Help: "Chat streams refused for the cap (business: its twelve are open; server: the server's are), which the page answers by polling.",
 	}, []string{"cap"})

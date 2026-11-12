@@ -52,6 +52,7 @@ const OWNER_FILES = [
   "pages/Areas.tsx",
   "pages/Links.tsx",
   "pages/BusinessProfile.tsx",
+  "pages/ChatPush.tsx",
   "pages/Bills.tsx",
   "pages/TradeOrders.tsx",
   "pages/Conversation.tsx",

@@ -49,6 +49,7 @@ taskiem_auth_password_reset_issue(uuid,bytea,bytea,interval,text)	@ISRAEL-DUFF (
 taskiem_auth_password_reset_use(bytea,bytea)	@ISRAEL-DUFF (identity)	Uses a link (00032)
 taskiem_auth_revoke_sessions(uuid,bytea)	@ISRAEL-DUFF (identity)	part of: Password reset (00032)
 taskiem_auth_session(bytea)	@ISRAEL-DUFF (identity)	part of: Identity hardening (00027)
+taskiem_auth_session_touch(bytea)	@ISRAEL-DUFF (identity)	renews a live device session (the phone app's, docs/spec/mobile-app.md §5.2) found by its token's hash: 30 days from now, never past 180 days from signing in, at most once an hour; answers nothing and touches no other session (00424)
 taskiem_auth_sso_begin(bytea,uuid,uuid,text,text,text,bytea)	@ISRAEL-DUFF (identity)	part of: Identity hardening (00027)
 taskiem_auth_sso_connection(uuid)	@ISRAEL-DUFF (identity)	part of: Identity hardening (00027)
 taskiem_auth_sso_enforced(uuid,uuid)	@ISRAEL-DUFF (identity)	part of: Identity hardening (00027)

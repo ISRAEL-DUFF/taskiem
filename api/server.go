@@ -43,6 +43,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/push"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
 	"github.com/israel-duff/taskiem/engine/riders"
@@ -87,6 +88,9 @@ type Server struct {
 	// AllowSignup enables POST /v1/signup (self-serve tenants; off by default
 	// until Phase 4).
 	AllowSignup bool
+	// AppMinVersion is the lowest phone app version this server serves
+	// (TASKIEM_APP_MIN_VERSION, GET /v1/app/config); empty is the first.
+	AppMinVersion string
 	// SignupPerAddress is how many signups one client address may make a
 	// day, across every replica (TASKIEM_SIGNUP_PER_ADDRESS); 0 is the
 	// default (5), negative is no limit.
@@ -132,6 +136,10 @@ type Server struct {
 	// Media stores storefront photos in tenants' Xenibase storage
 	// (docs/media.md); nil refuses uploads.
 	Media *media.Service
+	// Push sends a notification to the browsers a member allowed when a chat
+	// message comes and the app is closed (push.go, docs/spec/chat-push.md). Nil,
+	// or with no keys, it is off.
+	Push *push.Sender
 	// Moderator checks storefront images before they may be shown (S8);
 	// nil records them as unreviewed.
 	Moderator storefront.Moderator
@@ -358,6 +366,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/sso/saml/acs", s.samlACSHandler)
 		r.Get("/auth/sso/saml/{id}/metadata", s.samlMetadata)
 		r.Get("/signup", s.signupOptions)
+		r.Get("/app/config", s.appConfig) // the phone app's config (app_config.go)
 		if s.AllowSignup {
 			r.Post("/signup", s.signup) // self-serve signup (onboarding.go)
 		}
@@ -390,6 +399,10 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/me/invitations", s.myInvitations)
 			r.Post("/me/invitations/{tenant}/accept", s.acceptInvitation)
 			r.Post("/me/invitations/{tenant}/decline", s.declineInvitation)
+			r.Get("/me/businesses", s.listBusinesses) // the switcher (switch.go)
+			r.Post("/me/switch", s.switchBusiness)
+			r.Get("/me/devices", s.listDevices) // Your phones (devices.go)
+			r.Delete("/me/devices/{id}", s.removeDevice)
 			r.Get("/me/passkeys", s.listPasskeys)
 			r.Post("/me/passkeys/options", s.passkeyRegisterOptions)
 			r.Post("/me/passkeys", s.passkeyRegister)
@@ -658,6 +671,7 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/notifications/read", s.readNotifications)
 			r.Get("/me/notification-settings", s.getNotificationSettings)
 			r.Put("/me/notification-settings", s.putNotificationSettings)
+			s.pushRoutes(r) // the browsers a person allowed to be pushed to (push.go)
 
 			r.With(s.need(PermConnectionManage)).Get("/connections", s.listConnections)
 			r.With(s.need(PermConnectionManage)).Post("/connections", s.createConnection)

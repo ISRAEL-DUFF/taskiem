@@ -990,7 +990,9 @@ secret_reads.id
 secret_reads.tenant_id
 sessions.auth_method
 sessions.created_at
+sessions.device_id
 sessions.expires_at
+sessions.last_used_at
 sessions.revoked_at
 sessions.tenant_id
 sessions.token_hash
