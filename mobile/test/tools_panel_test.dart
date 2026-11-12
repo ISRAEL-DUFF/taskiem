@@ -3,8 +3,11 @@
 // opens its sheet, the chips and the search narrow its list, the tool is
 // then among Recent; in a business's conversation, only what is between us.
 
+import 'dart:convert';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/app/prefs.dart';
 import 'package:taskiem/app/session.dart';
@@ -35,7 +38,12 @@ void main() {
     final prefs = Prefs(MemoryKeyStore());
     await t.runAsync(prefs.load);
     final chats = ChatsData(f.auth(), now: () => f.at, prefs: prefs)..load();
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: TaskiemScreen(data: TaskiemData(chats, follow: false))));
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: TaskiemScreen(data: TaskiemData(chats, follow: false)),
+      ),
+    );
     await settle(t);
     return prefs;
   }
@@ -108,7 +116,12 @@ void main() {
     final f = Fixture('chat-bayo');
     final chats = ChatsData(f.auth(), now: () => f.at)..load();
     final conv = ListLinkChatsResponse.fromJson(f.json('/v1/link-chats')).conversations.firstWhere((c) => c.name == 'Bayo Rice Mills');
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ConversationScreen(data: ConversationData(chats, conv, follow: false))));
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: ConversationScreen(data: ConversationData(chats, conv, follow: false)),
+      ),
+    );
     await settle(t);
     await t.tap(find.bySemanticsLabel('Open tools'));
     await settle(t);
@@ -122,5 +135,67 @@ void main() {
       expect(tile(k), findsNothing, reason: k);
     }
     expect(tile('Statement'), findsOneWidget);
+  });
+
+  testWidgets('a panel opened by "/" and a word closes by its button, the word going too; tools not here yet say so', (t) async {
+    await taskiem(t);
+    await t.enterText(find.bySemanticsLabel('Message to Taskiem'), '/s');
+    await settle(t);
+    expect(find.text('Tools'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Close tools'));
+    await settle(t);
+    expect(find.text('Tools'), findsNothing);
+    expect(find.text('/s'), findsNothing, reason: 'the "/" and word put away with it');
+    // Sell has a sheet of its own (M6): coming, not a list.
+    await t.tap(find.bySemanticsLabel('Open tools'));
+    await settle(t);
+    await t.tap(tile('Sell'));
+    await t.pump();
+    expect(find.text('This is coming to the app soon.'), findsOneWidget);
+    expect(find.text('Search sell'), findsNothing);
+    await t.pump(const Duration(seconds: 5));
+    await t.pumpAndSettle();
+  });
+
+  Future<void> shop(WidgetTester t, String whose) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-bayo');
+    final chats = ChatsData(
+      f.auth(
+        also: (req) async {
+          if (req.url.path.endsWith('/items') && req.url.path.startsWith('/v1/link-chats/')) {
+            final j = f.json(req.url.path) as Map<String, dynamic>;
+            return http.Response(jsonEncode({...j, 'whose': whose}), 200, headers: {'content-type': 'application/json'});
+          }
+          return null;
+        },
+      ),
+      now: () => f.at,
+    )..load();
+    final conv = ListLinkChatsResponse.fromJson(f.json('/v1/link-chats')).conversations.firstWhere((c) => c.name == 'Bayo Rice Mills');
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: ConversationScreen(data: ConversationData(chats, conv, follow: false)),
+      ),
+    );
+    await settle(t);
+    await t.tap(find.bySemanticsLabel('Open tools'));
+    await settle(t);
+    await t.tap(find.bySemanticsLabel(RegExp('^Their shop')));
+    await settle(t);
+  }
+
+  testWidgets('their shop, from a business that sells to us: to order from', (t) async {
+    await shop(t, 'theirs');
+    expect(find.text('Order from Bayo Rice Mills'), findsOneWidget);
+  });
+
+  testWidgets('their shop, from one that does not sell to us: to look around', (t) async {
+    await shop(t, 'ours');
+    expect(find.text("Bayo Rice Mills's shop"), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^One more ')), findsNothing);
   });
 }

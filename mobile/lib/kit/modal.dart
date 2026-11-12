@@ -189,7 +189,8 @@ class TkPlainButton extends StatelessWidget {
 
 /// toast.tsx: a short word after something is done, over the bottom of the
 /// screen for 4 seconds (an error stays until closed), × to close it.
-void showTkToast(BuildContext context, String text, {bool error = false}) {
+/// [action] and [onAction]: a link in it (`toast(…, { href, linkText })`).
+void showTkToast(BuildContext context, String text, {bool error = false, String? action, VoidCallback? onAction}) {
   final overlay = Overlay.of(context, rootOverlay: true);
   late OverlayEntry entry;
   Timer? timer;
@@ -236,6 +237,23 @@ void showTkToast(BuildContext context, String text, {bool error = false}) {
                           Expanded(
                             child: Text(text, style: tkText(size: 14, color: t.text)),
                           ),
+                          if (action != null && onAction != null) ...[
+                            const SizedBox(width: 10),
+                            TapArea(
+                              child: Semantics(
+                                link: true,
+                                label: action,
+                                excludeSemantics: true,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    close();
+                                    onAction();
+                                  },
+                                  child: Text(action, style: tkText(size: 14, weight: 600, color: t.accent, decoration: TextDecoration.underline)),
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(width: 10),
                           TapArea(
                             child: Semantics(

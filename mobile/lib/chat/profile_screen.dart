@@ -15,10 +15,12 @@ import '../api/transport.dart';
 import '../kit/api_image.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/list.dart' show TkSoftButton;
 import '../kit/modal.dart';
 import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'chats.dart';
+import 'attachments.dart' show PickedFile;
 import 'composer.dart' show Pickers;
 import 'thread.dart' show ChatHeadBar;
 
@@ -32,6 +34,22 @@ List<String> splitAreas(String line) {
     if (a.isNotEmpty && !out.any((x) => x.toLowerCase() == a.toLowerCase())) out.add(a);
   }
   return out.take(maxDeliveryAreas).toList();
+}
+
+/// At most [max] characters as the server counts them (runes,
+/// engine/links/profile.go), not as the keyboard does: an emoji made of
+/// several is several.
+class RuneLimit extends TextInputFormatter {
+  RuneLimit(this.max);
+  final int max;
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.text.runes.length <= max) return newValue;
+    // Cut at the last whole character within the limit.
+    final cut = String.fromCharCodes(newValue.text.runes.take(max));
+    return TextEditingValue(text: cut, selection: TextSelection.collapsed(offset: cut.length));
+  }
 }
 
 /// The letter that stands where a logo would be.
@@ -56,9 +74,12 @@ String? photoPath(Map<String, dynamic>? p, [String size = '320']) {
 }
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key, required this.chats, this.pickers = const Pickers()});
+  const ProfileScreen({super.key, required this.chats, this.pickers = const Pickers(), this.backLabel = 'Back'});
   final ChatsData chats;
   final Pickers pickers;
+
+  /// Where Back goes, said ("Back to Linked businesses").
+  final String backLabel;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -188,23 +209,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _findable(bool on) => _act(() async {
     await _t.send('PUT', '/v1/link-settings', body: {'findable': on});
-    final s = await _t.send('GET', '/v1/link-settings') as Map<String, dynamic>;
-    if (mounted) setState(() => _settings = s);
+    // Saved: as it is now; not read, as it was asked.
+    try {
+      final s = await _t.send('GET', '/v1/link-settings') as Map<String, dynamic>;
+      if (mounted) setState(() => _settings = s);
+    } on Object {
+      if (mounted) setState(() => _settings = {...?_settings, 'findable': on, 'findable_now': on});
+    }
   }, 'Saved');
 
+  /// The phone's photos, or why they could not be opened.
+  Future<List<PickedFile>> _pick(int limit) async {
+    try {
+      return await widget.pickers.photos(limit);
+    } on Object {
+      if (mounted) setState(() => _error = 'Taskiem could not open your photos. Allow it in your phone’s settings, then try again.');
+      return const [];
+    }
+  }
+
+  /// An upload refused, said plainly; one cut off is checked by reading
+  /// the profile again (it may have gone through).
+  Future<void> _upload(String path, PickedFile f) async {
+    try {
+      _apply(await _t.sendFile(path, bytes: f.bytes, type: f.type));
+    } on ApiError catch (e) {
+      throw ApiError(e.status, {'error': e.status == 413 ? 'That photo is too large. Try a smaller one.' : e.message});
+    } on Offline {
+      try {
+        _apply(await _t.send('GET', '/v1/business-profile'));
+      } on Object {
+        // Still unreachable: said as offline.
+      }
+      rethrow;
+    }
+  }
+
   Future<void> _logo() async {
-    final f = await widget.pickers.photo();
-    if (f == null) return;
-    await _act(() async => _apply(await _t.sendFile('/v1/business-profile/logo', bytes: f.bytes, type: f.type)), 'Logo saved');
+    final f = (await _pick(1)).firstOrNull;
+    if (f == null || !mounted) return;
+    await _act(() => _upload('/v1/business-profile/logo', f), 'Logo saved');
   }
 
   void _dropLogo() => _act(() async => _apply(await _t.send('DELETE', '/v1/business-profile/logo')), 'Logo removed');
 
-  Future<void> _addPhoto() async {
-    final f = await widget.pickers.photo();
-    if (f == null) return;
-    setState(() => _uploading = 1);
-    await _act(() async => _apply(await _t.sendFile('/v1/business-profile/gallery', bytes: f.bytes, type: f.type)));
+  /// BusinessProfile.tsx addPhotos: as many as there is room for, one
+  /// after another.
+  Future<void> _addPhotos() async {
+    final d = _data;
+    if (d == null) return;
+    final room = ((d['max_gallery'] as num?)?.toInt() ?? 12) - ((d['gallery'] as List?)?.length ?? 0);
+    final fs = await _pick(room);
+    if (fs.isEmpty || !mounted) return;
+    setState(() => _uploading = fs.length);
+    await _act(() async {
+      for (final f in fs) {
+        await _upload('/v1/business-profile/gallery', f);
+        if (mounted) setState(() => _uploading--);
+      }
+    });
     if (mounted) setState(() => _uploading = 0);
   }
 
@@ -219,8 +282,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _act(() async => _apply(await _t.send('PUT', '/v1/business-profile/gallery/order', body: {'ids': next})));
   }
 
-  Future<void> _caption(String id, String was, String text) async {
-    if (text == was) return;
+  Future<void> _caption(String id, String text) async {
+    final was = ((_data?['gallery'] as List?) ?? const []).whereType<Map>().where((g) => g['id'] == id).map((g) => g['caption'] as String? ?? '').firstOrNull;
+    // Removed meanwhile, or the same: nothing to save.
+    if (was == null || text == was) return;
     await _try(() async {
       await _t.send('PATCH', '/v1/business-profile/gallery/${Uri.encodeComponent(id)}', body: {'caption': text});
       final d = _data;
@@ -255,7 +320,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               // `.tk-p-head`: back, and the title.
               Row(
                 children: [
-                  ChatHeadBar.iconButton('Back', TkIcon('back', size: 20, color: t.text), () => Navigator.of(context).maybePop()),
+                  ChatHeadBar.iconButton(widget.backLabel, TkIcon('back', size: 20, color: t.text), () => Navigator.of(context).maybePop()),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Semantics(
@@ -267,7 +332,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 16),
               if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 16), child: TkErrorBox(_error!)),
-              if (d == null)
+              if (d == null && _error != null)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TkSoftButton(
+                    label: 'Try again',
+                    onTap: () {
+                      setState(() => _error = null);
+                      _load();
+                    },
+                  ),
+                )
+              else if (d == null)
                 Text('Loading your profile…', style: tkHint(t))
               else ...[
                 _found(t, dark),
@@ -373,7 +449,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               TapArea(
                 child: Semantics(
                   button: _manage,
-                  label: _manage ? (logo != null ? 'Change logo' : 'Add a logo') : 'Your logo',
+                  // A letter, not to be changed: nothing to say (`aria-hidden`).
+                  label: _manage ? (logo != null ? 'Change logo' : 'Add a logo') : (logo != null ? 'Your logo' : null),
                   excludeSemantics: true,
                   child: GestureDetector(
                     onTap: _manage && !_busy ? _logo : null,
@@ -439,7 +516,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             radio: false,
             control: TkCheckbox(checked: _delivers),
             label: Text('I deliver for other businesses', style: tkText(size: 13, weight: 600, color: t.text)),
-            onTap: _manage ? () => setState(() => _delivers = !_delivers) : () {},
+            onTap: _manage ? () => setState(() => _delivers = !_delivers) : null,
           ),
           if (_delivers) ...[
             field('What you deliver with', _vehicle, max: maxVehicle, hint: 'Bike, van, on foot'),
@@ -475,7 +552,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               textBaseline: TextBaseline.alphabetic,
               children: [
                 Expanded(child: Semantics(container: true, header: true, child: Text('Photos', style: tkText(size: 17, weight: 800, color: t.text)))),
-                Semantics(container: true, liveRegion: true, child: Text('${gallery.length} of $max', style: tkText(size: 13, weight: 600, color: t.muted))),
+                Semantics(container: true, liveRegion: true, label: '${gallery.length} of $max photos', excludeSemantics: true, child: Text('${gallery.length} of $max', style: tkText(size: 13, weight: 600, color: t.muted))),
               ],
             ),
           ),
@@ -488,6 +565,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   for (var i = 0; i < gallery.length; i++)
                     SizedBox(
+                      // Its state (the caption typed) follows the photo, not the place.
+                      key: ValueKey(ids[i]),
                       width: w,
                       child: _PhotoTile(
                         transport: _t,
@@ -498,7 +577,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         busy: _busy,
                         onRemove: () => _remove(ids[i]),
                         onMove: (by) => _move(ids, i, by),
-                        onCaption: (text) => _caption(ids[i], gallery[i]['caption'] as String? ?? '', text),
+                        onCaption: (text) => _caption(ids[i], text),
                       ),
                     ),
                   if (_uploading > 0)
@@ -508,7 +587,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         height: 120,
                         decoration: BoxDecoration(color: t.tkSoft, borderRadius: BorderRadius.circular(16)),
                         alignment: Alignment.center,
-                        child: Semantics(liveRegion: true, child: Text('Adding 1 photo…', style: tkText(size: 13, color: t.muted))),
+                        child: Semantics(liveRegion: true, child: Text('Adding $_uploading ${_uploading == 1 ? 'photo' : 'photos'}…', style: tkText(size: 13, color: t.muted))),
                       ),
                     ),
                   if (_manage)
@@ -522,7 +601,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           label: 'Add a photo',
                           excludeSemantics: true,
                           child: TkPress(
-                            onTap: _busy || _uploading > 0 || gallery.length >= max ? null : _addPhoto,
+                            onTap: _busy || _uploading > 0 || gallery.length >= max ? null : _addPhotos,
                             child: CustomPaint(
                               painter: _Dashed(t.borderStrong),
                               child: Container(
@@ -639,7 +718,7 @@ class _Field extends StatelessWidget {
           Row(
             children: [
               Expanded(child: Text(label, style: tkText(size: 13, weight: 600, color: t.muted))),
-              if (count && max != null) Text('${controller.text.length} / $max', style: tkText(size: 13, weight: 500, color: t.muted)),
+              if (count && max != null) Text('${controller.text.runes.length} / $max', style: tkText(size: 13, weight: 500, color: t.muted)),
             ],
           ),
           const SizedBox(height: 6),
@@ -657,7 +736,7 @@ class _Field extends StatelessWidget {
                 maxLines: lines == 1 ? 1 : null,
                 cursorColor: t.text,
                 showCursor: !TkField.debugHideCaret,
-                inputFormatters: [if (max != null) LengthLimitingTextInputFormatter(max)],
+                inputFormatters: [if (max != null) RuneLimit(max!)],
                 style: tkText(size: 15, weight: 500, lineHeight: lines > 1 ? 1.5 : 1.3, color: t.text),
                 decoration: InputDecoration.collapsed(hintText: hint, hintStyle: tkText(size: 15, weight: 500, color: t.muted)),
               ),
@@ -894,17 +973,41 @@ class _PhotoTile extends StatefulWidget {
 class _PhotoTileState extends State<_PhotoTile> {
   late final _text = TextEditingController(text: widget.g['caption'] as String? ?? '');
   final _focus = FocusNode();
+  Timer? _wait;
+
+  // Saved as the web does on leaving the box, and on a phone, where the box
+  // is not left by a tap elsewhere, after a pause in typing too, and when
+  // the screen goes.
+  void _save() {
+    _wait?.cancel();
+    _wait = null;
+    widget.onCaption(_text.text.trim());
+  }
 
   @override
   void initState() {
     super.initState();
     _focus.addListener(() {
-      if (!_focus.hasFocus) widget.onCaption(_text.text.trim());
+      if (!_focus.hasFocus) _save();
+    });
+    _text.addListener(() {
+      if (!_focus.hasFocus) return;
+      _wait?.cancel();
+      _wait = Timer(const Duration(milliseconds: 1200), _save);
     });
   }
 
   @override
+  void didUpdateWidget(_PhotoTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Its caption changed elsewhere, while not being typed: the box says so.
+    final now = widget.g['caption'] as String? ?? '';
+    if (!_focus.hasFocus && now != (oldWidget.g['caption'] as String? ?? '') && now != _text.text) _text.text = now;
+  }
+
+  @override
   void dispose() {
+    if (_wait != null) _save();
     _text.dispose();
     _focus.dispose();
     super.dispose();
@@ -1007,8 +1110,9 @@ class _PhotoTileState extends State<_PhotoTile> {
                 child: TextField(
                   controller: _text,
                   focusNode: _focus,
-                  maxLength: maxCaption,
-                  buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
+                  inputFormatters: [RuneLimit(maxCaption)],
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _save(),
                   cursorColor: t.text,
                   showCursor: !TkField.debugHideCaret,
                   style: tkText(size: 13, lineHeight: 1.35, color: t.text),

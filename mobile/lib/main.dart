@@ -17,6 +17,7 @@ import 'chat/chats.dart';
 import 'chat/conversation.dart';
 import 'chat/customer.dart';
 import 'chat/links_screen.dart';
+import 'chat/explore.dart' show showExplore;
 import 'chat/profile_screen.dart';
 import 'chat/live.dart';
 import 'chat/taskiem.dart';
@@ -323,15 +324,26 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     );
   }
 
-  void _profile(BuildContext context) => Navigator.of(context).push(PageRouteBuilder<void>(
-    pageBuilder: (_, _, _) => ProfileScreen(chats: _chats),
+  void _profile(BuildContext context, {String back = 'Back to Chat'}) => Navigator.of(context).push(PageRouteBuilder<void>(
+    pageBuilder: (_, _, _) => ProfileScreen(chats: _chats, backLabel: back),
+  ));
+
+  void _openConv(BuildContext context, LinkConversation c) => Navigator.of(context).push(PageRouteBuilder<void>(
+    transitionDuration: Duration.zero,
+    reverseTransitionDuration: Duration.zero,
+    pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c),
   ));
 
   Widget _chatsTab(BuildContext context) {
     return ChatsScreen(
       data: _chats,
       onLinks: () => Navigator.of(context).push(PageRouteBuilder<void>(
-        pageBuilder: (_, _, _) => LinksScreen(chats: _chats, onProfile: () => _profile(context)),
+        pageBuilder: (_, _, _) => LinksScreen(
+          chats: _chats,
+          onProfile: () => _profile(context, back: 'Back to Linked businesses'),
+          // No links yet: Find a business, over this page.
+          onFind: (links) => showExplore(links, chats: _chats, onOpen: (c) => _openConv(context, c)),
+        ),
       )),
       onProfile: () => _profile(context),
       onMenu: () => Navigator.of(context).push(PageRouteBuilder<void>(
@@ -349,11 +361,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
         reverseTransitionDuration: Duration.zero,
         pageBuilder: (_, _, _) => _OpenCustomer(chats: _chats, id: c.id),
       )),
-      onOpen: (c) => Navigator.of(context).push(PageRouteBuilder<void>(
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c),
-      )),
+      onOpen: (c) => _openConv(context, c),
       onOpenAt: (c, message) => Navigator.of(context).push(PageRouteBuilder<void>(
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
@@ -390,6 +398,15 @@ class _OpenState extends State<_Open> {
     data: _data,
     // A business tagged in a message: its conversation, in this one's place.
     onOpenLink: (link) {
+      // "Open" on a save's toast: Taskiem's conversation, in this one's place.
+      if (link == 'taskiem') {
+        Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          pageBuilder: (_, _, _) => _OpenTaskiem(chats: widget.chats),
+        ));
+        return;
+      }
       final c = widget.chats.conversations.where((c) => c.link == link).firstOrNull;
       if (c == null) return;
       Navigator.of(context).pushReplacement(PageRouteBuilder<void>(

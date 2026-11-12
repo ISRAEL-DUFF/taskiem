@@ -12,6 +12,10 @@ import '../kit/sheet.dart';
 import 'tools.dart';
 import 'tools_panel.dart';
 
+/// The tools whose own sheet is not here yet (ChatComposer.tsx opens
+/// them in their own sheets, not a list): they say they are coming.
+const soonTools = {'sell', 'handover', 'availability'};
+
 /// ChatTools.tsx mayEdit: whether the person may change what a tool shows.
 bool mayEdit(String key, bool Function(String) can) => switch (key) {
   'products' || 'stock' || 'tables' || 'sell' => can('table.edit'),
@@ -19,8 +23,8 @@ bool mayEdit(String key, bool Function(String) can) => switch (key) {
   'purchases' => can('storefront.manage'),
   'orders' => can('storefront.manage|order.handle'),
   'order' => can('table.edit') && can('storefront.manage'),
-  'bills' || 'invoices' => can('invoice.manage'),
-  _ => false,
+  'bills' || 'invoices' || 'money' => can('invoice.manage'),
+  _ => can('storefront.manage'),
 };
 
 /// Opens [tool]'s sheet over the conversation.
@@ -33,9 +37,13 @@ Future<void> showToolSheet(
   ToolDetail? detail,
   Widget? footer,
   String? openId,
+  void Function(String words)? onSaved,
 }) {
   tools.chats.prefs?.rememberTool(tool.key);
-  return showTkSheet<void>(context, (_) => ToolSheet(tools: tools, tool: tool, chip: chip, onRow: onRow, detail: detail, footer: footer, openId: openId));
+  return showTkSheet<void>(
+    context,
+    (_) => ToolSheet(tools: tools, tool: tool, chip: chip, onRow: onRow, detail: detail, footer: footer, openId: openId, onSaved: onSaved),
+  );
 }
 
 /// A row's detail in its sheet (ChatTools.tsx Detail): the body and its own
@@ -46,7 +54,7 @@ typedef ToolDetail = Widget? Function(BuildContext context, Tool tool, ToolRow r
 bool _plain(ToolRow r) => ((r.data?['choices'] as List?)?.length ?? 0) == 0 && r.data?['variant_of'] == null;
 
 class ToolSheet extends StatefulWidget {
-  const ToolSheet({super.key, required this.tools, required this.tool, this.chip, this.onRow, this.detail, this.footer, this.openId});
+  const ToolSheet({super.key, required this.tools, required this.tool, this.chip, this.onRow, this.detail, this.footer, this.openId, this.onSaved});
   final ToolsController tools;
   final Tool tool;
 
@@ -60,8 +68,12 @@ class ToolSheet extends StatefulWidget {
   /// [onRow], else coming soon).
   final ToolDetail? detail;
 
-  /// A row to open once the list is read (a card's View order).
+  /// A row to open once the list is read (a card's View order): its id,
+  /// else its number when one row of those here has it.
   final String? openId;
+
+  /// Saved from a row's detail: where it was opened says where it went.
+  final void Function(String words)? onSaved;
 
   /// The sheet's own button, in place of the tool's (New order).
   final Widget? footer;
@@ -78,8 +90,10 @@ class _ToolSheetState extends State<ToolSheet> {
   late bool _opening = widget.openId != null;
 
   void _done(String words) {
-    setState(() => _saved = words);
     widget.tools.refresh(widget.tool);
+    widget.onSaved?.call(words);
+    if (!mounted) return;
+    setState(() => _saved = words);
     Future<void>.delayed(const Duration(milliseconds: 1300), () {
       if (mounted) Navigator.of(context).maybePop();
     });
@@ -89,7 +103,7 @@ class _ToolSheetState extends State<ToolSheet> {
   void initState() {
     super.initState();
     _search.addListener(() => setState(() {}));
-    widget.tools.load([widget.tool]);
+    widget.tools.load([widget.tool], again: true);
   }
 
   @override
@@ -112,7 +126,9 @@ class _ToolSheetState extends State<ToolSheet> {
         final canAdd = add != null && mayEdit(tool.key, c.can);
         if (_opening && list != null) {
           _opening = false;
-          _open = list.where((r) => r.id == widget.openId).firstOrNull;
+          // ChatTools.tsx startRow.
+          final named = list.where((r) => r.data?['reference'] == widget.openId).toList();
+          _open = list.where((r) => r.id == widget.openId).firstOrNull ?? (named.length == 1 ? named.single : null);
         }
         final open = _open;
         final detail = open == null ? null : widget.detail?.call(context, widget.tool, open, _done);

@@ -721,20 +721,34 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
 
   // The tools panel (ChatTools.tsx), about this business only.
-  late final _tools = ToolsController(chats: widget.data.chats, scope: widget.data.conv.link, business: widget.data.conv.name);
+  late final _tools = ToolsController(chats: widget.data.chats, scope: widget.data.conv.link, business: widget.data.conv.name)
+    ..clearSlash = _text.clear;
 
   /// ChatTools.tsx: a tool opened from the panel; "/" and its word, put away.
   void _openTool(Tool tool, {String? openId}) {
     _tools.close();
-    if (RegExp(r'^/\S*$').hasMatch(_text.text)) _text.clear();
+    // Sell, the handover and availability have sheets of their own (M6):
+    // not a list.
+    if (soonTools.contains(tool.key)) return showComingSoon(context);
     final d = widget.data;
-    final can = d.chats.auth.can;
-    final supplies = d.priceWhose == 'theirs' && can('table.edit') && can('storefront.manage');
+    final supplies = _supplies;
     showToolSheet(
       context,
       tools: _tools,
       tool: tool,
       openId: openId,
+      // Saved: the server tells it as a diary line in Taskiem's
+      // conversation; said where it went, with the way there.
+      onSaved: (_) {
+        unawaited(d.pull().catchError((Object _) {}));
+        if (!mounted) return;
+        showTkToast(
+          context,
+          'Saved. The change is in your Taskiem chat.',
+          action: 'Open',
+          onAction: () => widget.onOpenLink?.call('taskiem'),
+        );
+      },
       detail: toolDetail(
         d.chats.auth,
         // Reorder: the sheet closes; their shop opens with its lines.
@@ -774,17 +788,33 @@ class _ConversationScreenState extends State<ConversationScreen> {
   /// storefront.manage), else to look around.
   Future<void> _order([OrderStart? start]) async {
     final d = widget.data;
-    final can = d.chats.auth.can;
     _tools.close();
-    if (RegExp(r'^/\S*$').hasMatch(_text.text)) _text.clear();
     await showOrderSheet(
       context,
       chats: d.chats,
       link: d.conv.link,
       business: d.conv.name,
       start: start,
-      browse: !(can('table.edit') && can('storefront.manage')),
+      // Only from a business that sells to us, with leave to order;
+      // else their shop to look around.
+      browse: !_supplies,
+      // Sent: its card in the conversation now, and among Your orders.
+      onSent: (_) {
+        unawaited(d.pull().catchError((Object _) {}));
+        for (final t in tools.where((t) => t.key == 'purchases')) {
+          _tools.refresh(t);
+        }
+      },
     );
+  }
+
+  /// Conversation.tsx supplies: we buy from them (their prices are
+  /// theirs), and may draft (table.edit), send and keep the supplier
+  /// (storefront.manage).
+  bool get _supplies {
+    final d = widget.data;
+    final can = d.chats.auth.can;
+    return d.priceWhose == 'theirs' && can('table.edit') && can('storefront.manage');
   }
 
   /// Conversation.tsx businessTiles and the panel's own (Their shop): what

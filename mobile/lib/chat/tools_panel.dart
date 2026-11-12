@@ -45,15 +45,38 @@ class ToolsController extends ChangeNotifier {
   /// What follows "/", when it was typed.
   String get query => _slash ?? '';
 
+  /// Clears the box's "/" and word (ChatComposer.tsx closeTools): set by
+  /// the screen whose box it is.
+  VoidCallback? clearSlash;
+
   void toggle() {
-    _open = !_open;
+    if (shown) return close();
+    _open = true;
     notifyListeners();
   }
 
+  /// Put away, by the button, a tap outside or a tool opened: a "/" and
+  /// word typed for it goes too, or the panel would stay.
   void close() {
     if (!_open && _slash == null) return;
     _open = false;
-    notifyListeners();
+    if (_slash != null) {
+      _slash = null;
+      clearSlash?.call();
+    }
+    _notify();
+  }
+
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _notify() {
+    if (!_disposed) notifyListeners();
   }
 
   /// The box's words: "/" and a word alone opens the panel filtered by it.
@@ -62,15 +85,24 @@ class ToolsController extends ChangeNotifier {
     final q = m?.group(1);
     if (q == _slash) return;
     _slash = q;
-    notifyListeners();
+    _notify();
   }
 
-  // --- the lists, one read for each url, shared by the panel and its sheets ---
+  // --- the lists, shared by the panel and its sheets ---
 
   final _data = <String, Object?>{};
-  final _asked = <String>{};
+
+  /// When each was last asked for, and those being read now.
+  final _readAt = <String, DateTime>{};
+  final _reading = <String>{};
   Set<String>? _scopeIds;
-  bool _askedScope = false;
+  DateTime? _scopeAt;
+  bool _readingScope = false;
+
+  /// ChatTools.tsx useToolRows and useScopeIds: read again each time the
+  /// panel or a sheet opens, after a few seconds, so a new order or a
+  /// changed one shows; what was read shows meanwhile.
+  static const fresh = Duration(seconds: 5);
 
   bool can(String perm) => perm.isEmpty || chats.auth.can(perm);
   List<String>? get roles => (chats.auth.me?.roles as List?)?.whereType<String>().toList();
@@ -82,50 +114,63 @@ class ToolsController extends ChangeNotifier {
       if (scope == null || businessTools.contains(t.key)) t,
   ];
 
-  /// Reads each tool's list not read yet.
-  void load(List<Tool> ts) {
+  /// Reads each tool's list not read yet; with [again], those read more
+  /// than a few seconds ago too (the panel or a sheet opened).
+  void load(List<Tool> ts, {bool again = false}) {
+    final now = DateTime.now();
+    bool due(DateTime? at) => at == null || (again && now.difference(at) > fresh);
     for (final url in {for (final t in ts) t.url}) {
-      if (!_asked.add(url)) continue;
+      if (_reading.contains(url) || !due(_readAt[url])) continue;
+      _readAt[url] = now;
       unawaited(_read(url));
     }
-    if (scope != null && !_askedScope) {
-      _askedScope = true;
+    if (scope != null && !_readingScope && due(_scopeAt)) {
+      _scopeAt = now;
       unawaited(_readScope());
     }
   }
 
   Future<void> _read(String url) async {
+    _reading.add(url);
     try {
       _data[url] = await chats.auth.transport.send('GET', url);
     } on ApiError {
-      _data[url] = _failed;
+      // A list read before stays; none, it says it could not be read.
+      _data[url] = _data[url] ?? _failed;
     } on Offline {
-      _data[url] = _failed;
+      _data[url] = _data[url] ?? _failed;
+    } finally {
+      _reading.remove(url);
     }
-    notifyListeners();
+    _notify();
   }
 
   Future<void> _readScope() async {
+    _readingScope = true;
     try {
       final r = await chats.auth.transport.send('GET', '/v1/link-chats/${Uri.encodeComponent(scope!)}/refs');
       _scopeIds = {for (final x in ((r as Map?)?['refs'] as List?) ?? const []) if (x is Map && x['id'] is String) x['id'] as String};
     } on Object {
-      _scopeIds = {};
+      _scopeIds ??= {};
+    } finally {
+      _readingScope = false;
     }
-    notifyListeners();
+    _notify();
   }
 
   /// Read again (Try again).
   void retry(Tool t) {
-    _asked.remove(t.url);
+    _readAt.remove(t.url);
     _data.remove(t.url);
-    notifyListeners();
+    _notify();
     load([t]);
   }
 
-  /// Read again after a change, the list shown as it was meanwhile.
+  /// Read again after a change, the list shown as it was meanwhile; in a
+  /// business's conversation, what is between us too (a new order).
   void refresh(Tool t) {
-    _asked.remove(t.url);
+    _readAt.remove(t.url);
+    _scopeAt = null;
     load([t]);
   }
 
@@ -178,6 +223,13 @@ class ToolsPanel extends StatefulWidget {
 }
 
 class _ToolsPanelState extends State<ToolsPanel> {
+  @override
+  void initState() {
+    super.initState();
+    // Opened: the lists read again, for the tiles' lines and badges now.
+    widget.tools.load(widget.tools.toolsHere(), again: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);

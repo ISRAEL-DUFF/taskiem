@@ -36,6 +36,22 @@ final _list = {
     },
     {'item_id': 'beans', 'name': 'Oloyin beans', 'unit': 'bag', 'category': 'Grains', 'price_kobo': 3000000, 'min_quantity': 1, 'available': true},
     {'item_id': 'gari', 'name': 'Ijebu gari', 'unit': 'bag', 'category': 'Flour', 'price_kobo': 2000000, 'min_quantity': 1, 'available': false},
+    {
+      'item_id': 'sack',
+      'name': 'Jute sack',
+      'unit': 'sack',
+      'category': 'Flour',
+      'price_kobo': 50000,
+      'min_quantity': 1,
+      'available': true,
+      'choices': [
+        {'name': 'Size', 'values': ['S', 'L']},
+      ],
+      'sizes': [
+        {'item_id': 'sackS', 'name': 'Jute sack – S', 'variant': {'Size': 'S'}, 'available': true},
+        {'item_id': 'sackL', 'name': 'Jute sack – L', 'variant': {'Size': 'L'}, 'available': true},
+      ],
+    },
   ],
 };
 
@@ -62,7 +78,7 @@ void main() {
       final s = orderSections([...items, const PriceItem(id: 'x', name: 'Salt', price: 1)]);
       expect(s.map((x) => x.label), ['Grains', 'Flour', 'Other']);
       expect(orderShown(items, null, 'grain').map((x) => x.id), ['rice', 'beans']);
-      expect(priceChips(items).map((c) => c.label), ['Grains']);
+      expect(priceChips(items).map((c) => c.label), ['Flour', 'Grains']);
     });
     test('sizes as lines of their own, at the product\'s price unless their own', () {
       final shoe = PriceItem.fromJson({
@@ -100,7 +116,15 @@ void main() {
     await t.pumpAndSettle();
   }
 
-  Future<List<String>> open(WidgetTester t, {bool failSend = false, bool browse = false, OrderStart? start}) async {
+  Future<List<String>> open(
+    WidgetTester t, {
+    bool failSend = false,
+    bool browse = false,
+    OrderStart? start,
+    List<Object> purchases = const [],
+    void Function(String)? onSent,
+    Duration sendTakes = Duration.zero,
+  }) async {
     t.view.physicalSize = const Size(390, 1400);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
@@ -116,7 +140,7 @@ void main() {
             '/v1/supplier-prices' => ok({'suppliers': [_list]}),
             '/v1/item-links/L1' => ok({'item_links': <Object>[]}),
             '/v1/stock/suppliers' => ok({'suppliers': <Object>[]}),
-            '/v1/stock/purchases' => ok({'purchases': <Object>[]}),
+            '/v1/stock/purchases' => ok({'purchases': purchases}),
             '/v1/stock' => ok({'keeps_stock': true, 'items': <Object>[]}),
             _ => null,
           };
@@ -126,6 +150,7 @@ void main() {
         if (p == '/v1/stock/suppliers') return ok({'supplier': {'id': 'S1'}});
         if (p == '/v1/stock/items') return ok({'item': {'id': 'I1'}});
         if (p == '/v1/supplier-prices/L1/order') return ok({'purchase': {'id': 'P1', 'reference': 'PO-1'}});
+        if (p == '/v1/stock/purchases/P1/send') await Future<void>.delayed(sendTakes);
         if (p == '/v1/stock/purchases/P1/send' && failing) {
           failing = false;
           return http.Response(jsonEncode({'error': 'Something went wrong'}), 500, headers: {'content-type': 'application/json'});
@@ -137,7 +162,7 @@ void main() {
     await t.pumpWidget(
       TaskiemApp(
         mode: TkMode.light,
-        home: OrderSheet(chats: chats, link: 'L1', business: 'Bayo Rice Mills', browse: browse, start: start),
+        home: OrderSheet(chats: chats, link: 'L1', business: 'Bayo Rice Mills', browse: browse, start: start, onSent: onSent),
       ),
     );
     await settle(t);
@@ -218,5 +243,63 @@ void main() {
     await t.tap(find.bySemanticsLabel('Grains').first);
     await t.pump();
     expect(find.text('Ijebu gari'), findsNothing);
+  });
+
+  testWidgets('sizes: typed, the keyboard stays for the next digit; Same as last time fills the boxes', (t) async {
+    await open(
+      t,
+      purchases: [
+        {
+          'id': 'P0',
+          'reference': 'PO-0001',
+          'link_id': 'L1',
+          'status': 'received',
+          'seller_status': 'delivered',
+          'created_at': '2026-11-01T00:00:00Z',
+          'lines': [
+            {'item': 'Jute sack – L', 'quantity': 4},
+          ],
+        },
+      ],
+    );
+    await t.tap(find.bySemanticsLabel('Choose sizes of Jute sack'));
+    await t.pumpAndSettle();
+    final s = find.bySemanticsLabel(RegExp(r'^S: how many'));
+    await t.tap(s);
+    await t.pump();
+    t.testTextInput.enterText('1');
+    await t.pump();
+    // Still the box being typed in, after the bag changed with it.
+    final focused = FocusManager.instance.primaryFocus;
+    t.testTextInput.enterText('12');
+    await t.pump();
+    expect(FocusManager.instance.primaryFocus, same(focused));
+    expect(find.text('12 sacks in 1 size or colour'), findsOneWidget);
+    // The bag emptied, and filled again from the last order: L's box says 4.
+    t.testTextInput.enterText('');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel(RegExp('^Same as last time')));
+    await t.pump();
+    expect(find.text('4'), findsWidgets);
+    expect(find.text('4 sacks in 1 size or colour'), findsOneWidget);
+  });
+
+  testWidgets('closed while the order is sending: it is still said it was sent', (t) async {
+    final said = <String>[];
+    await open(t, start: const OrderStart(itemId: 'beans'), onSent: said.add, sendTakes: const Duration(milliseconds: 300));
+    await t.tap(find.bySemanticsLabel('Review order'));
+    await settle(t);
+    await t.enterText(find.bySemanticsLabel(RegExp('phone number')), '08031234567');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Place order'));
+    await t.pump();
+    // The sheet goes before the answer.
+    await t.pumpWidget(const SizedBox());
+    for (var i = 0; i < 10; i++) {
+      await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));
+      await t.pump(const Duration(milliseconds: 100));
+    }
+    expect(said, ['Order sent to Bayo Rice Mills: ₦30,000']);
+    expect(t.takeException(), isNull);
   });
 }

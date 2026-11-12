@@ -389,7 +389,9 @@ class TkChoiceRow extends StatelessWidget {
   const TkChoiceRow({super.key, required this.control, required this.label, required this.onTap, this.radio = true});
   final Widget control;
   final Widget label;
-  final VoidCallback onTap;
+
+  /// Null: shown, not to be changed (`disabled`), and said so.
+  final VoidCallback? onTap;
   final bool radio;
 
   @override
@@ -399,6 +401,7 @@ class TkChoiceRow extends StatelessWidget {
       child: TapArea(
         child: Semantics(
           inMutuallyExclusiveGroup: radio,
+          enabled: onTap != null,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onTap,

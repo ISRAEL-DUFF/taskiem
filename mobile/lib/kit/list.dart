@@ -3,7 +3,7 @@
 // states, and the "Open …" line under a list. Every tool's sheet and the
 // pages from the chat (Linked businesses, the profile) are made of them.
 
-import 'package:flutter/material.dart' show InputDecoration, Material, MaterialType, TextField;
+import 'package:flutter/material.dart' show InputBorder, InputDecoration, Material, MaterialType, TextField;
 import 'package:flutter/services.dart' show TextInputAction;
 import 'package:flutter/widgets.dart';
 
@@ -70,7 +70,13 @@ class _TkSearchBoxState extends State<TkSearchBox> {
                       cursorColor: t.text,
                       showCursor: !TkField.debugHideCaret,
                       style: tkText(size: 15, color: t.text),
-                      decoration: InputDecoration.collapsed(hintText: widget.hint, hintStyle: tkText(size: 15, color: t.muted)),
+                      // The box is named once, by its Semantics label: the
+                      // placeholder is only seen.
+                      decoration: InputDecoration(
+                        isCollapsed: true,
+                        border: InputBorder.none,
+                        hint: ExcludeSemantics(child: Text(widget.hint, style: tkText(size: 15, color: t.muted))),
+                      ),
                     ),
                   ),
                 ),
@@ -210,7 +216,9 @@ class TkRow extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
     final (bg, ink) = icon != null ? (t.tkLimeSoft, dark ? t.brandDark : t.brand) : tkTone(t, toneOf(name));
-    return Semantics(
+    // One node: its name, line and pill read together, as the row they are.
+    return MergeSemantics(
+      child: Semantics(
       button: onTap != null,
       child: TkPress(
         onTap: onTap,
@@ -243,6 +251,7 @@ class TkRow extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 }
@@ -435,8 +444,11 @@ class TkSheetMore extends StatelessWidget {
 /// kit.css `.tk-btn.soft`: a 44 px pill of the soft ground, pine words
 /// (lime in the dark theme); `.tk-btn.primary` filled in pine.
 class TkSoftButton extends StatelessWidget {
-  const TkSoftButton({super.key, required this.label, this.onTap, this.primary = false, this.icon});
+  const TkSoftButton({super.key, required this.label, this.onTap, this.primary = false, this.icon, this.semanticsLabel});
   final String label;
+
+  /// What a screen reader says, when more than its words (`sr-only`).
+  final String? semanticsLabel;
   final VoidCallback? onTap;
   final bool primary;
   final String? icon;
@@ -451,7 +463,7 @@ class TkSoftButton extends StatelessWidget {
       child: Semantics(
         button: true,
         enabled: onTap != null,
-        label: label,
+        label: semanticsLabel ?? label,
         excludeSemantics: true,
         child: TkPress(
           onTap: onTap,

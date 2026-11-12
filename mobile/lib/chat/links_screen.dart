@@ -5,6 +5,8 @@
 // Withdraw a request or take one off the list; Unblock. Opened from the
 // chats' ⋯ menu.
 
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:share_plus/share_plus.dart';
@@ -21,19 +23,27 @@ import 'thread.dart' show ChatHeadBar;
 import 'words.dart';
 
 /// links.ts groupLinks: asked, linked, waiting, then past.
-List<BusinessLink> _ordered(List<BusinessLink> all) => [
-  ...all.where((l) => l.state == 'asked_us'),
-  ...all.where((l) => l.state == 'active'),
-  ...all.where((l) => l.state == 'requested' || l.state == 'not_accepted'),
-  ...all.where((l) => l.state == 'ended' || l.state == 'blocked' || l.state == 'declined'),
-];
+/// links.ts groupLinks: asking us, linked, waiting, past; each but the
+/// first by name.
+List<BusinessLink> _ordered(List<BusinessLink> all) {
+  List<BusinessLink> by(Set<String> states) => all.where((l) => states.contains(l.state)).toList()..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  return [
+    ...all.where((l) => l.state == 'asked_us'),
+    ...by({'active'}),
+    ...by({'requested', 'not_accepted'}),
+    ...by({'ended', 'blocked'}),
+  ];
+}
 
 class LinksScreen extends StatefulWidget {
-  const LinksScreen({super.key, required this.chats, this.onProfile});
+  const LinksScreen({super.key, required this.chats, this.onProfile, this.onFind});
   final ChatsData chats;
 
   /// Edit your business in Explore.
   final VoidCallback? onProfile;
+
+  /// No links yet: Find a business (Explore), from this page's context.
+  final void Function(BuildContext context)? onFind;
 
   @override
   State<LinksScreen> createState() => _LinksScreenState();
@@ -50,6 +60,9 @@ class _LinksScreenState extends State<LinksScreen> {
   @override
   void initState() {
     super.initState();
+    // Links.tsx useLinks: the links read as the page opens, not as they
+    // were when the chats were.
+    unawaited(_d.load());
     _load();
   }
 
@@ -158,18 +171,21 @@ class _LinksScreenState extends State<LinksScreen> {
                         style: tkHint(t),
                       ),
                       const SizedBox(height: 16),
-                      if (_error != null) TkErrorBox(_error!),
+                      if ((_error ?? _d.error) != null) TkErrorBox((_error ?? _d.error)!),
                       _Card(
                         title: 'Let other businesses find us',
                         children: [
                           if (_settings == null)
                             Text('Loading the setting…', style: tkHint(t))
                           else
-                            TkChoiceRow(
-                              radio: false,
-                              control: TkCheckbox(checked: _settings!.findableNow),
-                              label: Text(findableLine(_settings!), style: tkText(size: 14, color: t.text)),
-                              onTap: manage && !_busy ? () => _findable(!_settings!.findableNow) : () {},
+                            Semantics(
+                              label: 'Let other businesses find us',
+                              child: TkChoiceRow(
+                                radio: false,
+                                control: TkCheckbox(checked: _settings!.findableNow),
+                                label: Text(findableLine(_settings!), style: tkText(size: 14, color: t.text)),
+                                onTap: manage && !_busy ? () => _findable(!_settings!.findableNow) : null,
+                              ),
                             ),
                           Text(
                             'A search shows only what your storefront already shows the public. Someone with your phone number or page address can always ask.',
@@ -196,7 +212,16 @@ class _LinksScreenState extends State<LinksScreen> {
                       else if (links.isEmpty && _d.sent.isEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 24),
-                          child: Center(child: Text('No links yet.', style: tkHint(t))),
+                          child: Column(
+                            children: [
+                              Text('No links yet.', style: tkHint(t)),
+                              const SizedBox(height: 12),
+                              TkButton(
+                                label: 'Find a business',
+                                onPressed: () => widget.onFind != null ? widget.onFind!(context) : Navigator.of(context).maybePop(),
+                              ),
+                            ],
+                          ),
                         )
                       else
                         LinkSection(

@@ -37,9 +37,24 @@ class Pickers {
   /// A photo taken now, with the phone's own camera.
   Future<PickedFile?> camera() => _image(ImageSource.camera);
 
+  /// Up to [limit] photos from the gallery at once (a profile's photos);
+  /// none when put away.
+  Future<List<PickedFile>> photos(int limit) async {
+    if (limit <= 0) return const [];
+    if (limit == 1) {
+      final one = await photo();
+      return one == null ? const [] : [one];
+    }
+    final xs = await ImagePicker().pickMultiImage(imageQuality: 85, requestFullMetadata: false, limit: limit);
+    return [for (final x in xs.take(limit)) await _file(x)];
+  }
+
   Future<PickedFile?> _image(ImageSource from) async {
     final x = await ImagePicker().pickImage(source: from, imageQuality: 85, requestFullMetadata: false);
-    if (x == null) return null;
+    return x == null ? null : _file(x);
+  }
+
+  Future<PickedFile> _file(XFile x) async {
     final bytes = await x.readAsBytes();
     final name = x.name.toLowerCase().endsWith('.png') ? x.name : '${x.name.split('.').first}.jpg';
     return PickedFile(bytes: bytes, name: name, type: name.endsWith('.png') ? 'image/png' : 'image/jpeg');

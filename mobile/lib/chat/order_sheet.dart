@@ -48,13 +48,14 @@ Future<String?> showOrderSheet(
   required String business,
   OrderStart? start,
   bool browse = false,
+  void Function(String words)? onSent,
 }) => showTkSheet<String>(
   context,
-  (_) => OrderSheet(chats: chats, link: link, business: business, start: start, browse: browse),
+  (_) => OrderSheet(chats: chats, link: link, business: business, start: start, browse: browse, onSent: onSent),
 );
 
 class OrderSheet extends StatefulWidget {
-  const OrderSheet({super.key, required this.chats, required this.link, required this.business, this.start, this.browse = false});
+  const OrderSheet({super.key, required this.chats, required this.link, required this.business, this.start, this.browse = false, this.onSent});
   final ChatsData chats;
   final String link;
   final String business;
@@ -63,6 +64,10 @@ class OrderSheet extends StatefulWidget {
   /// Someone who may not order looks around their shop: no bag, no
   /// steppers.
   final bool browse;
+
+  /// Sent (an order, an offer, a quote asked), with its words: told even
+  /// when the sheet was closed while it was sending.
+  final void Function(String words)? onSent;
 
   @override
   State<OrderSheet> createState() => _OrderSheetState();
@@ -77,6 +82,7 @@ class _OrderSheetState extends State<OrderSheet> {
 
   // What the sheet reads.
   _Load<Map<String, dynamic>?> _prices = (data: null, error: null);
+  bool _pricesRead = false;
   List<Map<String, dynamic>>? _links;
   List<Map<String, dynamic>>? _suppliers;
   Map<String, dynamic>? _last;
@@ -98,6 +104,7 @@ class _OrderSheetState extends State<OrderSheet> {
   String? _grid;
   bool _busy = false;
   bool _starting = false;
+  String? _stockError;
   String? _error;
   String? _done;
 
@@ -170,6 +177,7 @@ class _OrderSheetState extends State<OrderSheet> {
     try {
       final r = await _t.send('GET', '/v1/supplier-prices', query: {'link': widget.link}) as Map<String, dynamic>;
       _prices = (data: _maps(r['suppliers']).firstOrNull, error: null);
+      _pricesRead = true;
     } on ApiError catch (e) {
       _prices = (data: null, error: e.message);
     } on Offline {
@@ -228,11 +236,13 @@ class _OrderSheetState extends State<OrderSheet> {
 
   Future<Object?> _postOnce(String path, String key, Object body) => _t.send('POST', path, body: body, headers: {'Idempotency-Key': _keyOf(key)});
 
+  /// Sent: the tick and its words, then the sheet closes (busy still, so
+  /// nothing under the tick is pressed again). Closed meanwhile, the words
+  /// are said where the sheet was opened.
   void _finish(String words) {
-    setState(() {
-      _done = words;
-      _busy = false;
-    });
+    widget.onSent?.call(words);
+    if (!mounted) return;
+    setState(() => _done = words);
     Timer(const Duration(milliseconds: 1300), () {
       if (mounted) Navigator.of(context).maybePop(words);
     });
@@ -304,15 +314,15 @@ class _OrderSheetState extends State<OrderSheet> {
   }
 
   Future<void> _startStock() async {
-    setState(() => _starting = true);
+    setState(() => (_starting = true, _stockError = null));
     try {
       await _t.send('POST', '/v1/stock/setup', body: const {});
       await _loadStock();
       if (mounted) showTkToast(context, 'Your stock is kept on Taskiem now');
     } on ApiError catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) setState(() => _stockError = e.message);
     } on Offline {
-      if (mounted) setState(() => _error = 'You’re offline. Try again when you’re back online.');
+      if (mounted) setState(() => _stockError = 'You’re offline. Try again when you’re back online.');
     }
     if (mounted) setState(() => _starting = false);
   }
@@ -349,10 +359,7 @@ class _OrderSheetState extends State<OrderSheet> {
         : null;
     final canTrade = widget.chats.auth.can('chat.trade');
     final stopped = _busy || !loaded || _stockOff || needPhone || offerProblem.isNotEmpty;
-    final place = Opacity(
-      opacity: stopped ? 0.5 : 1,
-      child: TkCta(label: _busy ? 'Sending…' : (_offering ? 'Send offer' : 'Place order'), onTap: stopped ? null : () => _place(bag, offerKobo)),
-    );
+    final place = TkCta(label: _busy ? 'Sending…' : (_offering ? 'Send offer' : 'Place order'), onTap: stopped ? null : () => _place(bag, offerKobo));
 
     return TkSheet(
       title: _review ? 'Review your order' : (widget.browse ? '$_biz\'s shop' : 'Order from $_biz'),
@@ -425,6 +432,7 @@ class _OrderSheetState extends State<OrderSheet> {
                 ),
                 const SizedBox(height: 10),
                 TkSoftButton(label: _starting ? 'Starting…' : 'Start keeping my stock', onTap: _starting ? null : _startStock),
+                if (_stockError != null) ...[const SizedBox(height: 10), TkErrorBox(_stockError!)],
               ],
             ),
           )
@@ -434,7 +442,7 @@ class _OrderSheetState extends State<OrderSheet> {
         children: [
           if (_prices.error != null)
             Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: TkErrorBox(_prices.error.toString()))
-          else if (_prices.data == null && _links == null)
+          else if (!_pricesRead)
             const TkLoading(label: 'Loading their prices…')
           else
             TkEmpty(icon: 'tag', title: 'Nothing on $_biz\'s storefront yet', line: 'Ask them in the chat what they sell, or to share a price list.'),
@@ -447,28 +455,33 @@ class _OrderSheetState extends State<OrderSheet> {
       final sections = orderSections(shown);
       // One scroll for all of it, the search and chips too: with large
       // text the head and the bag leave a list of its own no room.
-      Widget side(Widget w) => Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: w);
+      // Each by its own key: Same as last time goes as the bag fills, and a
+      // row (a size being typed) must keep its state when the rest move up.
+      Widget side(Key key, Widget w) => Padding(key: key, padding: const EdgeInsets.symmetric(horizontal: 12), child: w);
       return ListView(
         padding: const EdgeInsets.only(bottom: 96),
         children: [
-          ?stockSection,
+          if (stockSection != null) KeyedSubtree(key: const ValueKey('stock'), child: stockSection),
           if (!widget.browse && _last != null && bag.lines.isEmpty)
             Padding(
+              key: const ValueKey('last'),
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: TkSoftButton(
                   label: 'Same as last time',
+                  semanticsLabel: 'Same as last time: ${_last!['reference'] ?? ''}',
                   onTap: () => setState(() => _qty = reorderQty(_maps(_last!['lines']), _links ?? const [], items)),
                 ),
               ),
             ),
-          TkSearchBox(controller: _search, hint: storefront ? 'Search their shop' : 'Search their price list'),
-          if (cats.isNotEmpty) TkChipRow(chips: cats, on: _chip, onPick: (tag) => setState(() => _chip = tag)),
-          if (shown.isEmpty) side(const TkEmpty(icon: 'search', title: 'Nothing matches', line: 'Try another word, or show all.')),
+          TkSearchBox(key: const ValueKey('search'), controller: _search, hint: storefront ? 'Search their shop' : 'Search their price list'),
+          if (cats.isNotEmpty) TkChipRow(key: const ValueKey('chips'), chips: cats, on: _chip, onPick: (tag) => setState(() => _chip = tag)),
+          if (shown.isEmpty) side(const ValueKey('none'), const TkEmpty(icon: 'search', title: 'Nothing matches', line: 'Try another word, or show all.')),
           for (final sec in sections) ...[
             if (sec.label.isNotEmpty)
               Padding(
+                key: ValueKey('cat:${sec.label}'),
                 // `.tk-order-cat`: 14 px above, in from the list's sides.
                 padding: const EdgeInsets.fromLTRB(32, 14, 32, 0),
                 child: Semantics(
@@ -479,7 +492,7 @@ class _OrderSheetState extends State<OrderSheet> {
                   child: Text(sec.label.toUpperCase(), style: tkText(size: 13, weight: 700, letterSpacing: 0.78, color: t.muted)),
                 ),
               ),
-            for (final it in sec.items) side(_row(t, dark, it)),
+            for (final it in sec.items) side(ValueKey('item:${it.id}'), _row(t, dark, it)),
           ],
         ],
       );
@@ -507,7 +520,7 @@ class _OrderSheetState extends State<OrderSheet> {
             TkKitField(
               label: '$_biz\'s phone number',
               hint: 'For their record with you; the order reaches them on Taskiem.',
-              child: TkTextBox(controller: _phone, hint: '0803 123 4567'),
+              child: TkTextBox(controller: _phone, phone: true, hint: '0803 123 4567'),
             ),
         ],
         Column(
@@ -634,6 +647,7 @@ class _OrderSheetState extends State<OrderSheet> {
                     expanded: _grid == it.id,
                     child: TkSoftButton(
                       label: sizesTaken(it, _qty).isEmpty ? 'Choose sizes' : sizesTaken(it, _qty),
+                      semanticsLabel: '${sizesTaken(it, _qty).isEmpty ? 'Choose sizes' : sizesTaken(it, _qty)} of ${it.name}',
                       onTap: !it.available || it.sizes.isEmpty ? null : () => setState(() => _grid = _grid == it.id ? null : it.id),
                     ),
                   )
@@ -826,10 +840,21 @@ class _SizeCell extends StatefulWidget {
 
 class _SizeCellState extends State<_SizeCell> {
   late final _text = TextEditingController(text: widget.qty > 0 ? '${widget.qty}' : '');
+  // Its own, kept across builds: a new one each build loses the keyboard
+  // at every digit.
+  final _focus = FocusNode();
+
+  @override
+  void didUpdateWidget(_SizeCell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The bag changed elsewhere (Same as last time): the box says so.
+    if (widget.qty != (int.tryParse(_text.text) ?? 0)) _text.text = widget.qty > 0 ? '${widget.qty}' : '';
+  }
 
   @override
   void dispose() {
     _text.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -838,6 +863,7 @@ class _SizeCellState extends State<_SizeCell> {
     final t = TkTheme.tokens(context);
     final z = widget.size;
     final name = z.label.isEmpty ? z.name : z.label;
+    _focus.canRequestFocus = z.available;
     return Opacity(
       opacity: z.available ? 1 : 0.55,
       child: Container(
@@ -857,13 +883,15 @@ class _SizeCellState extends State<_SizeCell> {
             Semantics(
               label: '$name: how many',
               textField: true,
+              enabled: z.available,
               child: Container(
                 height: 36,
                 decoration: BoxDecoration(color: t.panel, borderRadius: BorderRadius.circular(10)),
                 alignment: Alignment.center,
                 child: EditableText(
                   controller: _text,
-                  focusNode: FocusNode(),
+                  focusNode: _focus,
+                  // Not on sale now: no box to type in (`disabled`).
                   readOnly: !z.available,
                   textAlign: TextAlign.center,
                   keyboardType: TextInputType.number,

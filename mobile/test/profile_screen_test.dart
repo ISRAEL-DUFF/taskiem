@@ -21,6 +21,9 @@ class _Picks extends Pickers {
   const _Picks();
   @override
   Future<PickedFile?> photo() async => PickedFile(bytes: Uint8List.fromList(const [1, 2, 3]), name: 'a.jpg', type: 'image/jpeg');
+
+  @override
+  Future<List<PickedFile>> photos(int limit) async => [(await photo())!];
 }
 
 Map<String, dynamic> _photo(String id) => {
@@ -129,4 +132,72 @@ void main() {
     await t.pump(const Duration(seconds: 5));
     await t.pumpAndSettle();
   });
+
+  Future<List<String>> serve(WidgetTester t, {Pickers pickers = const _Picks()}) async {
+    t.view.physicalSize = const Size(390, 4000);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chats');
+    final sent = <String>[];
+    var gallery = [_photo('a'), _photo('b')];
+    Map<String, dynamic> profile() => {
+      'name': 'Mama Nkechi Kitchen',
+      'tagline': '',
+      'area': '',
+      'about': '',
+      'logo': null,
+      'gallery': gallery,
+      'max_gallery': 12,
+      'delivers': false,
+      'vehicle': '',
+      'delivery_areas': <String>[],
+    };
+    http.Response ok(Object body) => http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        final p = req.url.path;
+        if (req.method == 'GET' && p == '/v1/business-profile') return ok(profile());
+        if (req.method == 'GET' && p == '/v1/link-settings') return ok({'findable': true, 'findable_now': true});
+        if (req.method == 'GET') return null;
+        sent.add('${req.method} $p ${req.body}');
+        if (p == '/v1/business-profile/gallery/order') {
+          final ids = ((jsonDecode(req.body) as Map)['ids'] as List).cast<String>();
+          gallery = [for (final id in ids) gallery.firstWhere((g) => g['id'] == id)];
+        }
+        return ok(profile());
+      }),
+      now: () => f.at,
+    )..load();
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ProfileScreen(chats: chats, pickers: pickers)));
+    await settle(t);
+    return sent;
+  }
+
+  testWidgets('a caption stays with its photo when the photos move; typed, it is saved after a pause', (t) async {
+    final sent = await serve(t);
+    expect(find.text('Caption a'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Move photo 1 later'));
+    await settle(t);
+    // Photo b first now, with its own caption; a's with a.
+    final first = t.widget<EditableText>(find.descendant(of: find.bySemanticsLabel('Caption for photo 1'), matching: find.byType(EditableText)));
+    expect(first.controller.text, 'Caption b');
+    sent.clear();
+    await t.enterText(find.descendant(of: find.bySemanticsLabel('Caption for photo 2'), matching: find.byType(EditableText)), 'Our kitchen');
+    await t.pump(const Duration(seconds: 2));
+    await settle(t);
+    expect(sent.single, 'PATCH /v1/business-profile/gallery/a {"caption":"Our kitchen"}');
+  });
+
+  testWidgets('photos the phone will not open: said, not silent', (t) async {
+    await serve(t, pickers: const _Refused());
+    await t.tap(find.bySemanticsLabel('Add a photo'));
+    await settle(t);
+    expect(find.textContaining('could not open your photos'), findsOneWidget);
+  });
+}
+
+class _Refused extends Pickers {
+  const _Refused();
+  @override
+  Future<List<PickedFile>> photos(int limit) async => throw Exception('photo access denied');
 }

@@ -87,4 +87,53 @@ void main() {
     await t.pump(const Duration(seconds: 5));
     await t.pumpAndSettle();
   });
+
+  testWidgets('linked businesses by name; a failed read said, not "No links yet"', (t) async {
+    t.view.physicalSize = const Size(390, 2400);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chats');
+    var fail = false;
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (fail && req.url.path == '/v1/links') return http.Response(jsonEncode({'error': 'Links are resting.'}), 500, headers: {'content-type': 'application/json'});
+        return null;
+      }),
+      now: () => f.at,
+    )..load();
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: LinksScreen(chats: chats)));
+    await settle(t);
+    // Linked ones, A to Z.
+    final linked = [for (final l in chats.links) if (l.state == 'active') l.name]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final ys = [for (final n in linked) t.getTopLeft(find.text(n).first).dy];
+    expect(ys, [...ys]..sort());
+    // Read again as it opens: a failure shows.
+    fail = true;
+    await t.pumpWidget(const SizedBox());
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: LinksScreen(chats: chats)));
+    await settle(t);
+    expect(find.text('Links are resting.'), findsOneWidget);
+  });
+
+  testWidgets('no links yet: Find a business', (t) async {
+    final f = Fixture('chats');
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (req.url.path == '/v1/links') {
+          return http.Response(jsonEncode({'links': <Object>[], 'sent': <Object>[]}), 200, headers: {'content-type': 'application/json'});
+        }
+        return null;
+      }),
+      now: () => f.at,
+    )..load();
+    var found = 0;
+    t.view.physicalSize = const Size(390, 2400);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: LinksScreen(chats: chats, onFind: (_) => found++)));
+    await settle(t);
+    expect(find.text('No links yet.'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Find a business'));
+    expect(found, 1);
+  });
 }

@@ -167,7 +167,7 @@ class _ApproveSheetState extends State<ApproveSheet> {
 /// `.tk-field textarea` / `input`: the soft filled box, 17 px semibold, and
 /// Chromium's resize grip in a text area's corner, as the web is seen.
 class TkTextBox extends StatefulWidget {
-  const TkTextBox({super.key, required this.controller, this.lines = 1, this.digits, this.height = 54, this.size = 17, this.hint, this.money = false, this.secret = false, this.plain = false});
+  const TkTextBox({super.key, required this.controller, this.lines = 1, this.digits, this.height = 54, this.size = 17, this.hint, this.money = false, this.secret = false, this.plain = false, this.phone = false});
   final TextEditingController controller;
   final int lines;
 
@@ -188,6 +188,9 @@ class TkTextBox extends StatefulWidget {
   /// Pasted as it is (`autocomplete="off" spellcheck="false"`): no
   /// suggestions, no corrections.
   final bool plain;
+
+  /// A phone number (`type="tel"`): the phone's dial pad.
+  final bool phone;
 
   /// Only digits, at most this many (a code).
   final int? digits;
@@ -240,6 +243,8 @@ class _TkTextBoxState extends State<TkTextBox> {
               enableSuggestions: !(widget.secret || widget.plain),
               keyboardType: widget.digits != null
                   ? TextInputType.number
+                  : widget.phone
+                  ? TextInputType.phone
                   : widget.money
                   ? const TextInputType.numberWithOptions(decimal: true)
                   : (area ? TextInputType.multiline : TextInputType.text),

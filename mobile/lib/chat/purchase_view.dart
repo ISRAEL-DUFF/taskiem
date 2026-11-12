@@ -24,7 +24,7 @@ int _int(Object? v) => (v as num?)?.toInt() ?? 0;
 
 /// purchases.ts answersDelivery: delivered, and not yet said what came.
 bool answersDelivery(Map<String, dynamic> p) =>
-    (p['link_id'] as String? ?? '').isNotEmpty && p['seller_status'] == 'delivered' && p['short_at'] == null && p['status'] != 'cancelled';
+    (p['link_id'] as String? ?? '').isNotEmpty && p['seller_status'] == 'delivered' && (p['short_at'] as String? ?? '').isEmpty && p['status'] != 'cancelled';
 
 /// tradeorders.ts buyerSteps: what the buyer may do with it now.
 ({bool confirmProposed, bool acceptChange, bool cancel}) buyerSteps(Map<String, dynamic> p) {
@@ -110,6 +110,7 @@ class _PurchaseViewState extends State<PurchaseView> {
     setState(() {
       _mode = _Mode.confirm;
       _error = null;
+      _ownFailed = false;
     });
     if (_own != null) return;
     try {
@@ -170,7 +171,7 @@ class _PurchaseViewState extends State<PurchaseView> {
     final delivered = DateTime.tryParse(_p['delivered_at'] as String? ?? '')?.toLocal();
     Widget note(String s) => Text(s, style: tkText(size: 14, color: t.muted));
     final back = TkGhostButton(label: 'Not now', onTap: _busy ? null : () => setState(() => (_mode = _Mode.none, _error = null)));
-    Widget cta(String label, VoidCallback? onTap) => Opacity(opacity: onTap == null ? 0.5 : 1, child: TkCta(label: label, onTap: onTap));
+    Widget cta(String label, VoidCallback? onTap) => TkCta(label: label, onTap: onTap);
 
     final buttons = <Widget>[
       if (_mode == _Mode.confirm) ...[
@@ -263,14 +264,23 @@ class _PurchaseViewState extends State<PurchaseView> {
         ),
         if (buttons.isNotEmpty)
           TkSheetFoot(
-            child: Row(
-              children: [
-                for (var i = 0; i < buttons.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 10),
-                  Expanded(child: buttons[i]),
-                ],
-              ],
-            ),
+            // `.tk-foot-two`: side by side, as the web; with large text one
+            // under another, the whole width, so each keeps its words.
+            child: buttons.length > 1 && MediaQuery.textScalerOf(context).scale(10) > 15
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var i = 0; i < buttons.length; i++) ...[if (i > 0) const SizedBox(height: 10), buttons[i]],
+                    ],
+                  )
+                : Row(
+                    children: [
+                      for (var i = 0; i < buttons.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 10),
+                        Expanded(child: buttons[i]),
+                      ],
+                    ],
+                  ),
           ),
       ],
     );

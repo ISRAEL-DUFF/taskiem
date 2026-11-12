@@ -440,12 +440,22 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
   );
 
   // The tools panel (ChatTools.tsx): every tool the person may open.
-  late final _tools = ToolsController(chats: widget.data.chats);
+  late final _tools = ToolsController(chats: widget.data.chats)..clearSlash = _text.clear;
 
   void _openTool(Tool tool) {
     _tools.close();
-    if (RegExp(r'^/\S*$').hasMatch(_text.text)) _text.clear();
-    showToolSheet(context, tools: _tools, tool: tool, detail: toolDetail(widget.data.chats.auth));
+    if (soonTools.contains(tool.key)) return showComingSoon(context);
+    showToolSheet(
+      context,
+      tools: _tools,
+      tool: tool,
+      detail: toolDetail(widget.data.chats.auth),
+      // Saved: its diary line here at once, and the alerts read again.
+      onSaved: (_) {
+        unawaited(widget.data.pull().catchError((Object _) {}));
+        unawaited(widget.data.chats.load());
+      },
+    );
   }
 
   /// TaskiemChat.tsx extras: the briefing, tasks, and clocking in and out.
