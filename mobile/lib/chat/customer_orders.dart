@@ -20,6 +20,8 @@ import '../kit/polling.dart';
 import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
+import 'stock_page.dart' as stock show feeInput, feeKobo;
+import '../kit/sheet.dart' show TkKitField;
 import 'words.dart' show CardTone, naira;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
@@ -98,7 +100,7 @@ String orderSource(Map<String, dynamic> d) => d['by_reader'] == true ? 'Order fr
 
 /// The orders of one customer's conversation, followed as the thread is.
 class CustomerOrders extends StatefulWidget {
-  const CustomerOrders({super.key, required this.auth, required this.chatId, required this.canSend, this.follow = true});
+  const CustomerOrders({super.key, required this.auth, required this.chatId, required this.canSend, this.follow = true, this.maxHeight = double.infinity});
   final Auth auth;
   final String chatId;
 
@@ -107,6 +109,10 @@ class CustomerOrders extends StatefulWidget {
 
   /// Read again every 4 seconds: a customer's answer lands on the card.
   final bool follow;
+
+  /// The most it takes of the conversation (the rest is the thread's): its
+  /// body gives way, then the whole card scrolls (see [_Frame]).
+  final double maxHeight;
 
   @override
   State<CustomerOrders> createState() => _CustomerOrdersState();
@@ -140,14 +146,16 @@ class _CustomerOrdersState extends State<CustomerOrders> with Polling {
 
   Future<void> _run(Future<void> Function() f, [String done = '']) async {
     setState(() => (_busy = true, _error = null));
+    String? failed;
     try {
       await f();
       if (mounted && done.isNotEmpty) showTkToast(context, done);
     } on Object catch (e) {
-      if (mounted) setState(() => _error = errorWords(e));
+      failed = errorWords(e);
     }
-    if (mounted) setState(() => _busy = false);
+    // Read again, then say what went wrong: the read does not wipe it.
     await _load();
+    if (mounted) setState(() => (_busy = false, _error = failed));
   }
 
   @override
@@ -159,22 +167,27 @@ class _CustomerOrdersState extends State<CustomerOrders> with Polling {
     final orders = _maps(data['orders']);
     final working = workingOn(orders);
     final confirmed = lastConfirmed(orders);
-    return Padding(
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: widget.maxHeight),
+      child: Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: TkErrorBox(_error!)),
           if (working != null)
-            _OrderCard(
+            Flexible(child: _OrderCard(
               key: ValueKey(working['id']),
               auth: widget.auth,
               d: working,
               data: data,
               canSend: widget.canSend,
               onChanged: _load,
-              onTold: (id, error) => setState(() => _told = error == null ? null : (id: id, error: error)),
-            )
+              onTold: (id, error) {
+                if (mounted) setState(() => _told = error == null ? null : (id: id, error: error));
+              },
+            ))
           else ...[
             if (confirmed != null)
               Padding(
@@ -199,19 +212,27 @@ class _CustomerOrdersState extends State<CustomerOrders> with Polling {
           ],
         ],
       ),
+      ),
     );
   }
 }
 
 /// `.tk-chatcard.customer-order`: the panel, its kicker and pill, the line.
 class _Frame extends StatelessWidget {
-  const _Frame({required this.kicker, required this.pill, required this.title, required this.children, this.fold, this.label});
+  const _Frame({required this.kicker, required this.pill, required this.title, required this.children, this.fold, this.label, this.body});
   final String kicker;
   final ({String word, CardTone tone}) pill;
   final String title;
+
+  /// Under the body: the card's buttons and why it waits.
   final List<Widget> children;
   final Widget? fold;
   final String? label;
+
+  /// What gives way when there is little room (`.customer-order-body
+  /// { overflow-y: auto }`): it scrolls inside the card, the head and the
+  /// buttons staying.
+  final Widget? body;
 
   @override
   Widget build(BuildContext context) {
@@ -222,21 +243,45 @@ class _Frame extends StatelessWidget {
       explicitChildNodes: true,
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-        decoration: BoxDecoration(color: t.panel, border: Border.all(color: t.border), borderRadius: BorderRadius.circular(16)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(child: Text(kicker.toUpperCase(), style: tkText(size: 11, weight: 700, letterSpacing: 0.66, color: t.muted))),
-                TkPill(pill.word, tone: pill.tone),
-                ?fold,
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(title, style: tkText(size: 15, weight: 700, color: t.text)),
-            ...children,
-          ],
+        decoration: BoxDecoration(
+          color: t.panel,
+          border: Border.all(color: t.border),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final head = [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(kicker.toUpperCase(), style: tkText(size: 11, weight: 700, letterSpacing: 0.66, color: t.muted)),
+                  ),
+                  TkPill(pill.word, tone: pill.tone),
+                  ?fold,
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(title, style: tkText(size: 15, weight: 700, color: t.text)),
+            ];
+            // Room for the head and buttons with some body: the body scrolls
+            // inside. Less (the keyboard up, large text): the whole card
+            // scrolls, so nothing is cut off and the box typed in stays seen.
+            final roomy = box.maxHeight == double.infinity || box.maxHeight >= 200 * MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0);
+            if (roomy) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ...head,
+                  if (body != null) Flexible(child: SingleChildScrollView(child: body)),
+                  ...children,
+                ],
+              );
+            }
+            return SingleChildScrollView(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [...head, ?body, ...children]),
+            );
+          },
         ),
       ),
     );
@@ -267,9 +312,15 @@ class _ConfirmedCard extends StatelessWidget {
       children: [
         if (told != null) ...[
           const SizedBox(height: 8),
-          Semantics(liveRegion: true, child: Text('Not sent to them: $told', style: tkText(size: 13, weight: 600, color: t.danger))),
+          Semantics(
+            liveRegion: true,
+            child: Text('Not sent to them: $told', style: tkText(size: 13, weight: 600, color: t.danger)),
+          ),
           const SizedBox(height: 8),
-          Align(alignment: Alignment.centerLeft, child: TkSmallButton(label: 'Send it again', onPressed: busy ? null : onAgain)),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TkSmallButton(label: 'Send it again', onPressed: busy ? null : onAgain),
+          ),
         ],
       ],
     );
@@ -315,18 +366,21 @@ class _OrderCardState extends State<_OrderCard> {
   @override
   void didUpdateWidget(_OrderCard old) {
     super.didUpdateWidget(old);
-    // What was saved since, unless it is what is typed now.
-    if (old.d['address'] != _d['address'] || old.d['delivery_kobo'] != _d['delivery_kobo']) _fill();
+    // What was saved since, each box on its own: an area picked (its fee
+    // saved) leaves an address typed and not saved as it is (the web's
+    // separate effects, CustomerOrders.tsx).
+    if (old.d['address'] != _d['address']) _address.text = _str(_d['address']);
+    if (old.d['delivery_kobo'] != _d['delivery_kobo']) _fee.text = _feeOf(_d);
     if (old.d['fulfilment'] != _d['fulfilment']) _getBy = null;
-    if (old.d['pay'] != _d['pay']) _pay = null;
+    if (old.d['pay'] != _d['pay'] || old.d['fulfilment'] != _d['fulfilment']) _pay = null;
   }
 
   void _fill() {
     _address.text = _str(_d['address']);
-    _fee.text = _int(_d['delivery_kobo']) > 0 ? _feeText(_int(_d['delivery_kobo'])) : '';
+    _fee.text = _feeOf(_d);
   }
 
-  static String _feeText(int kobo) => kobo % 100 == 0 ? '${kobo ~/ 100}' : (kobo / 100).toStringAsFixed(2);
+  static String _feeOf(Map<String, dynamic> d) => _int(d['delivery_kobo']) > 0 ? stock.feeInput(_int(d['delivery_kobo'])) : '';
 
   @override
   void dispose() {
@@ -341,7 +395,9 @@ class _OrderCardState extends State<_OrderCard> {
     try {
       await widget.auth.transport.send('PUT', _base, body: {'version': _d['version'], ...body});
     } on Object catch (e) {
-      if (mounted) setState(() => _error = errorWords(e));
+      // Refused (a change made since, say): the choices go back to what is
+      // saved, not left showing what was not.
+      if (mounted) setState(() => (_error = errorWords(e), _getBy = null, _pay = null));
     }
     await widget.onChanged();
     if (mounted) setState(() => _busy = false);
@@ -368,15 +424,21 @@ class _OrderCardState extends State<_OrderCard> {
     final lines = _maps(d['lines']);
     final items = _maps(data['items']);
     final zones = _maps(data['zones']);
-    final pay = _pay ?? payNow(d, _payPage);
     final getBy = _getBy ?? _str(d['fulfilment']);
+    // A way to pay this order no longer offers (at the door, then picked
+    // up): the first it offers, as the web's payNow.
+    final choices = payChoices({...d, 'fulfilment': getBy}, _payPage);
+    final shown = _pay ?? payNow({...d, 'fulfilment': getBy}, _payPage);
+    final pay = choices.contains(shown) ? shown : choices.first;
     final waits = d['ready'] == true ? '' : _str(d['waits']);
-    final feeKobo = (num.tryParse(_fee.text.trim().isEmpty ? '0' : _fee.text.trim()) ?? -1) * 100;
-    final dirty = _address.text != _str(d['address']) || feeKobo.round() != _int(d['delivery_kobo']);
+    // As typed: "1,500" and "₦1500" are amounts (orders.ts feeKobo); empty, none.
+    final feeKobo = _fee.text.trim().isEmpty ? 0 : (stock.feeKobo(_fee.text) ?? -1);
+    final dirty = _address.text != _str(d['address']) || feeKobo != _int(d['delivery_kobo']);
     final said = [_str(d['when']), _str(d['note'])].where((x) => x.isNotEmpty).join(' · ');
     final busy = _busy;
     return _Frame(
       kicker: orderSource(d),
+      label: '${orderSource(d)}, ${orderPill(d).word}',
       pill: orderPill(d),
       title: _items(d),
       fold: TapArea(
@@ -391,131 +453,144 @@ class _OrderCardState extends State<_OrderCard> {
             onTap: () => setState(() => _open = !_open),
             child: Padding(
               padding: const EdgeInsets.only(left: 6),
-              child: RotatedBox(quarterTurns: _open ? 2 : 0, child: TkIcon('chevron', size: 18, color: t.muted)),
+              child: RotatedBox(
+                quarterTurns: _open ? 2 : 0,
+                child: TkIcon('chevron', size: 18, color: t.muted),
+              ),
             ),
           ),
         ),
       ),
-      children: [
-        if (_open)
-          ConstrainedBox(
-            // `.customer-order-body { max-height: 45vh; overflow-y: auto }`.
-            constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.45),
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: TkErrorBox(_error!)),
-                    for (var i = 0; i < lines.length; i++)
-                      _LineRow(key: ValueKey(lines[i]['id'] ?? '$i ${lines[i]['item_id'] ?? lines[i]['said']}'), l: lines[i], i: i, items: items, busy: busy, change: _change),
-                    if (items.isNotEmpty)
+      body: !_open
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: TkErrorBox(_error!)),
+                  for (var i = 0; i < lines.length; i++)
+                    _LineRow(
+                      key: ValueKey(lines[i]['id'] ?? '$i ${lines[i]['item_id'] ?? lines[i]['said']}'),
+                      l: lines[i],
+                      i: i,
+                      items: items,
+                      busy: busy,
+                      change: _change,
+                    ),
+                  if (items.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: TkSmallButton(
+                          label: 'Add an item…',
+                          semantics: 'Add an item',
+                          onPressed: busy
+                              ? null
+                              : () async {
+                                  final pick = await showTkModalChoices(
+                                    context,
+                                    title: 'Add an item',
+                                    choices: [
+                                      for (final it in items)
+                                        (_str(it['id']), '${_str(it['name'])}${it['price_kobo'] != null ? ' · ${naira(_int(it['price_kobo']))}' : ''}'),
+                                    ],
+                                  );
+                                  if (pick != null) await _change({'op': 'add', 'item_id': pick, 'quantity': 1});
+                                },
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  _legend(t, 'How they get it'),
+                  for (final (f, words) in const [('delivery', 'Delivered'), ('pickup', 'They pick it up')])
+                    TkChoiceRow(
+                      radio: true,
+                      control: TkRadio(checked: getBy == f),
+                      label: Text(words, style: tkText(size: 14, color: t.text)),
+                      onTap: busy
+                          ? null
+                          : () {
+                              setState(() => _getBy = f);
+                              _change({'op': 'details', 'fulfilment': f});
+                            },
+                    ),
+                  if (getBy == 'delivery') ...[
+                    const SizedBox(height: 6),
+                    TkKitField(label: 'Deliver to', child: TkTextBox(controller: _address, height: 44, size: 15, max: 300)),
+                    if (zones.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      _label(t, 'Delivery area'),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TkSmallButton(
+                          label: _str(d['zone']).isEmpty ? 'Pick the area…' : _str(d['zone']),
+                          semantics: 'Delivery area: ${_str(d['zone']).isEmpty ? 'none picked' : d['zone']}',
+                          onPressed: busy
+                              ? null
+                              : () async {
+                                  final pick = await showTkModalChoices(
+                                    context,
+                                    title: 'Delivery area',
+                                    value: _str(d['zone']),
+                                    choices: [for (final z in zones) (_str(z['name']), '${_str(z['name'])} · ${naira(_int(z['fee_kobo']))}')],
+                                  );
+                                  if (pick == null) return;
+                                  final z = zones.where((x) => x['name'] == pick).firstOrNull;
+                                  await _change({'op': 'details', 'zone': pick, 'delivery_kobo': _int(z?['fee_kobo'])});
+                                },
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 6),
+                    TkKitField(
+                      label: 'Delivery fee, ₦',
+                      error: feeKobo < 0 ? 'Enter an amount, like 1500.' : null,
+                      child: TkTextBox(controller: _fee, money: true, height: 44, size: 15),
+                    ),
+                    if (dirty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.only(top: 6),
                         child: Align(
                           alignment: Alignment.centerLeft,
                           child: TkSmallButton(
-                            label: 'Add an item…',
-                            semantics: 'Add an item',
-                            onPressed: busy
+                            label: 'Save',
+                            semantics: 'Save the address and fee',
+                            onPressed: busy || feeKobo < 0
                                 ? null
-                                : () async {
-                                    final pick = await showTkModalChoices(
-                                      context,
-                                      title: 'Add an item',
-                                      choices: [
-                                        for (final it in items)
-                                          (_str(it['id']), '${_str(it['name'])}${it['price_kobo'] != null ? ' · ${naira(_int(it['price_kobo']))}' : ''}'),
-                                      ],
-                                    );
-                                    if (pick != null) await _change({'op': 'add', 'item_id': pick, 'quantity': 1});
-                                  },
+                                : () => _change({'op': 'details', 'address': _address.text, 'delivery_kobo': feeKobo}),
                           ),
                         ),
                       ),
-                    const SizedBox(height: 10),
-                    _legend(t, 'How they get it'),
-                    for (final (f, words) in const [('delivery', 'Delivered'), ('pickup', 'They pick it up')])
-                      TkChoiceRow(
-                        radio: true,
-                        control: TkRadio(checked: getBy == f),
-                        label: Text(words, style: tkText(size: 14, color: t.text)),
-                        onTap: busy
-                            ? null
-                            : () {
-                                setState(() => _getBy = f);
-                                _change({'op': 'details', 'fulfilment': f});
-                              },
-                      ),
-                    if (getBy == 'delivery') ...[
-                      const SizedBox(height: 6),
-                      _label(t, 'Deliver to'),
-                      TkTextBox(controller: _address, height: 44, size: 15, max: 300),
-                      if (zones.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        _label(t, 'Delivery area'),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: TkSmallButton(
-                            label: _str(d['zone']).isEmpty ? 'Pick the area…' : _str(d['zone']),
-                            semantics: 'Delivery area: ${_str(d['zone']).isEmpty ? 'none picked' : d['zone']}',
-                            onPressed: busy
-                                ? null
-                                : () async {
-                                    final pick = await showTkModalChoices(
-                                      context,
-                                      title: 'Delivery area',
-                                      value: _str(d['zone']),
-                                      choices: [for (final z in zones) (_str(z['name']), '${_str(z['name'])} · ${naira(_int(z['fee_kobo']))}')],
-                                    );
-                                    if (pick == null) return;
-                                    final z = zones.where((x) => x['name'] == pick).firstOrNull;
-                                    await _change({'op': 'details', 'zone': pick, 'delivery_kobo': _int(z?['fee_kobo'])});
-                                  },
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 6),
-                      _label(t, 'Delivery fee, ₦'),
-                      TkTextBox(controller: _fee, money: true, height: 44, size: 15),
-                      if (dirty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: TkSmallButton(
-                              label: 'Save',
-                              semantics: 'Save the address and fee',
-                              onPressed: busy || feeKobo < 0 ? null : () => _change({'op': 'details', 'address': _address.text, 'delivery_kobo': feeKobo.round()}),
-                            ),
-                          ),
-                        ),
-                    ],
-                    const SizedBox(height: 10),
-                    _legend(t, 'How they pay'),
-                    for (final p in payChoices({...d, 'fulfilment': getBy}, _payPage))
-                      TkChoiceRow(
-                        radio: true,
-                        control: TkRadio(checked: pay == p),
-                        label: Text(payWords[p] ?? p, style: tkText(size: 14, color: t.text)),
-                        onTap: busy
-                            ? null
-                            : () {
-                                setState(() => _pay = p);
-                                _change({'op': 'details', 'pay': p});
-                              },
-                      ),
-                    if (said.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(said, style: tkText(size: 13, color: t.muted))),
-                    const SizedBox(height: 8),
-                    _sum(t, 'Items', naira(_int(d['items_kobo']))),
-                    if (getBy == 'delivery') _sum(t, 'Delivery', naira(_int(d['delivery_kobo']))),
-                    _sum(t, 'Total', naira(_int(d['total_kobo'])), bold: true),
                   ],
-                ),
+                  const SizedBox(height: 10),
+                  _legend(t, 'How they pay'),
+                  for (final p in payChoices({...d, 'fulfilment': getBy}, _payPage))
+                    TkChoiceRow(
+                      radio: true,
+                      control: TkRadio(checked: pay == p),
+                      label: Text(payWords[p] ?? p, style: tkText(size: 14, color: t.text)),
+                      onTap: busy
+                          ? null
+                          : () {
+                              setState(() => _pay = p);
+                              _change({'op': 'details', 'pay': p});
+                            },
+                    ),
+                  if (said.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(said, style: tkText(size: 13, color: t.muted)),
+                    ),
+                  const SizedBox(height: 8),
+                  _sum(t, 'Items', naira(_int(d['items_kobo']))),
+                  if (getBy == 'delivery') _sum(t, 'Delivery', naira(_int(d['delivery_kobo']))),
+                  _sum(t, 'Total', naira(_int(d['total_kobo'])), bold: true),
+                ],
               ),
             ),
-          ),
+      children: [
         const SizedBox(height: 10),
         Wrap(
           spacing: 8,
@@ -531,25 +606,40 @@ class _OrderCardState extends State<_OrderCard> {
             TkSmallButton(label: 'Drop', onPressed: busy ? null : () => _step('drop', 'Order dropped')),
           ],
         ),
-        if (waits.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(waits, style: tkText(size: 13, color: t.muted))),
+        if (waits.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(waits, style: tkText(size: 13, color: t.muted)),
+          ),
       ],
     );
   }
 
   Widget _legend(TkTokens t, String s) => Padding(
     padding: const EdgeInsets.only(bottom: 4),
-    child: Semantics(header: true, child: Text(s, style: tkText(size: 13, weight: 700, color: t.text))),
+    child: Semantics(
+      header: true,
+      child: Text(s, style: tkText(size: 13, weight: 700, color: t.text)),
+    ),
   );
 
-  Widget _label(TkTokens t, String s) => Padding(padding: const EdgeInsets.only(bottom: 4), child: Text(s, style: tkText(size: 13, color: t.muted)));
+  Widget _label(TkTokens t, String s) => Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Text(s, style: tkText(size: 13, color: t.muted)),
+  );
 
   Widget _sum(TkTokens t, String k, String v, {bool bold = false}) => Padding(
     padding: const EdgeInsets.only(top: 2),
     child: MergeSemantics(
       child: Row(
         children: [
-          Expanded(child: Text(k, style: tkText(size: 14, color: t.text))),
-          Text(v, style: tkText(size: 14, weight: bold ? 700 : 400, color: t.text)),
+          Expanded(
+            child: Text(k, style: tkText(size: 14, color: t.text)),
+          ),
+          Text(
+            v,
+            style: tkText(size: 14, weight: bold ? 700 : 400, color: t.text),
+          ),
         ],
       ),
     ),
@@ -616,7 +706,10 @@ class _LineRowState extends State<_LineRow> {
             width: 32,
             height: 32,
             alignment: Alignment.center,
-            decoration: BoxDecoration(border: Border.all(color: t.borderStrong), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(
+              border: Border.all(color: t.borderStrong),
+              borderRadius: BorderRadius.circular(8),
+            ),
             child: TkIcon(icon, size: 14, color: go == null ? t.muted : t.text),
           ),
         ),
@@ -624,7 +717,9 @@ class _LineRowState extends State<_LineRow> {
     );
     return Container(
       padding: const EdgeInsets.only(bottom: 8, top: 8),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.border))),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: t.border)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -632,7 +727,9 @@ class _LineRowState extends State<_LineRow> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: Text(lineWords(l), style: tkText(size: 14, weight: 600, color: t.text))),
+                Expanded(
+                  child: Text(lineWords(l), style: tkText(size: 14, weight: 600, color: t.text)),
+                ),
                 if (kobo != null) Text(naira(kobo), style: tkText(size: 14, color: t.text)),
               ],
             ),
@@ -657,7 +754,10 @@ class _LineRowState extends State<_LineRow> {
                       Row(
                         children: [
                           Expanded(
-                            child: Semantics(label: 'How many $what', child: TkTextBox(controller: _howMany, digits: 6, height: 40, size: 15)),
+                            child: Semantics(
+                              label: 'How many $what',
+                              child: TkTextBox(controller: _howMany, digits: 6, height: 40, size: 15),
+                            ),
                           ),
                           const SizedBox(width: 8),
                           TkSmallButton(
@@ -709,7 +809,12 @@ class _LineRowState extends State<_LineRow> {
               padding: const EdgeInsets.only(top: 6),
               child: Row(
                 children: [
-                  Expanded(child: Semantics(label: 'Price of $what, in naira', child: TkTextBox(controller: _price, money: true, height: 40, size: 15, hint: 'Price, ₦'))),
+                  Expanded(
+                    child: Semantics(
+                      label: 'Price of $what, in naira',
+                      child: TkTextBox(controller: _price, money: true, height: 40, size: 15, hint: 'Price, ₦'),
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   TkSmallButton(
                     label: 'Set',
@@ -758,7 +863,11 @@ class StartOrderButton extends StatelessWidget {
           child: Container(
             constraints: const BoxConstraints(minHeight: 40),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(color: t.panel, border: Border.all(color: t.borderStrong), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(
+              color: t.panel,
+              border: Border.all(color: t.borderStrong),
+              borderRadius: BorderRadius.circular(8),
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

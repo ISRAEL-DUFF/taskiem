@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/chat/chats.dart';
+import 'package:taskiem/chat/customer.dart' show CustomerData, CustomerScreen;
 import 'package:taskiem/chat/customer_orders.dart';
 import 'package:taskiem/chat/words.dart' show CardTone;
 import 'package:taskiem/main.dart';
@@ -60,7 +61,14 @@ void main() {
     expect(workingOn([_draft(status: 'confirmed'), _draft(status: 'asked')])?['status'], 'asked');
   });
 
-  Future<List<String>> open(WidgetTester t, List<Map<String, dynamic>> orders, {bool canSend = true, Map<String, Object?> confirm = const {}}) async {
+  Future<List<String>> open(
+    WidgetTester t,
+    List<Map<String, dynamic>> orders, {
+    bool canSend = true,
+    Map<String, Object?> confirm = const {},
+    Future<http.Response?> Function(http.Request req, List<Map<String, dynamic>> orders)? also,
+  }) async {
+    await t.pumpWidget(const SizedBox());
     t.view.physicalSize = const Size(390, 2400);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
@@ -70,6 +78,11 @@ void main() {
     final chats = ChatsData(
       f.auth(also: (req) async {
         final p = req.url.path;
+        final own = await also?.call(req, orders);
+        if (own != null) {
+          if (req.method != 'GET') sent.add('${req.method} $p ${req.body}');
+          return own;
+        }
         if (req.method == 'GET' && p == '/v1/customer-chats/C1/orders') {
           return ok({
             'orders': orders,
@@ -171,6 +184,172 @@ void main() {
   testWidgets('a customer who sent STOP: no Start an order', (t) async {
     await open(t, const [], canSend: false);
     expect(find.bySemanticsLabel('Start an order'), findsNothing);
+  });
+
+  http.Response json(Object body, [int status = 200]) => http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
+
+  testWidgets('an address typed and not saved stays when an area is picked', (t) async {
+    final orders = [_draft()];
+    await open(
+      t,
+      orders,
+      also: (req, list) async {
+        if (req.method == 'PUT') {
+          final b = jsonDecode(req.body) as Map;
+          list[0] = {...list[0], if (b['zone'] != null) 'zone': b['zone'], if (b['delivery_kobo'] != null) 'delivery_kobo': b['delivery_kobo']};
+          return json({});
+        }
+        return null;
+      },
+    );
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Deliver to')), matching: find.byType(EditableText)), '9 Broad Street');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Delivery area: none picked'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Lekki · ₦2,500'));
+    await settle(t);
+    expect(find.text('9 Broad Street'), findsOneWidget, reason: 'typed, not saved: kept');
+    expect(find.text('2500'), findsOneWidget, reason: 'the fee saved: shown');
+  });
+
+  testWidgets('the address and a fee typed “1,500” saved; not money said', (t) async {
+    final sent = await open(t, [_draft()]);
+    final fee = find.descendant(of: find.bySemanticsLabel(RegExp('^Delivery fee')), matching: find.byType(EditableText));
+    await t.enterText(fee, 'abc');
+    await t.pump();
+    expect(find.text('Enter an amount, like 1500.'), findsOneWidget);
+    await t.enterText(fee, '1,500');
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Deliver to')), matching: find.byType(EditableText)), '9 Broad Street');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save the address and fee'));
+    await settle(t);
+    expect(sent.last, 'PUT /v1/order-drafts/OD1 {"version":3,"op":"details","address":"9 Broad Street","delivery_kobo":150000}');
+  });
+
+  testWidgets('paid at the door, then picked up: the choice it still offers shows chosen', (t) async {
+    final orders = [_draft(more: {'pay': 'on_delivery'})];
+    await open(
+      t,
+      orders,
+      also: (req, list) async {
+        if (req.method == 'PUT') {
+          final b = jsonDecode(req.body) as Map;
+          if (b['fulfilment'] != null) list[0] = {...list[0], 'fulfilment': b['fulfilment']};
+          return json({});
+        }
+        return null;
+      },
+    );
+    await t.ensureVisible(find.text('They pick it up'));
+    await t.tap(find.text('They pick it up'));
+    await settle(t);
+    final h = t.ensureSemantics();
+    // With a pay page, the first it offers (customerorders.ts payNow).
+    final now = t.getSemantics(find.text('They pay now, by bank transfer (we send them the page)'));
+    expect(now.flagsCollection.isChecked.toString(), 'CheckedState.isTrue');
+    expect(find.text('They pay when it arrives'), findsNothing);
+    h.dispose();
+  });
+
+  testWidgets('a change someone made since (409): the error, the choices back, read again', (t) async {
+    var reads = 0;
+    await open(
+      t,
+      [_draft()],
+      also: (req, list) async {
+        if (req.method == 'GET' && req.url.path.endsWith('/orders')) reads++;
+        return req.method == 'PUT' ? json({'error': 'Someone changed this order. Look again.'}, 409) : null;
+      },
+    );
+    final before = reads;
+    await t.ensureVisible(find.text('They pick it up'));
+    await t.tap(find.text('They pick it up'));
+    await settle(t);
+    expect(find.text('Someone changed this order. Look again.'), findsOneWidget);
+    expect(reads, greaterThan(before));
+    final h = t.ensureSemantics();
+    expect(t.getSemantics(find.text('Delivered')).flagsCollection.isChecked.toString(), 'CheckedState.isTrue');
+    h.dispose();
+  });
+
+  testWidgets('a price given, an item added, dropped', (t) async {
+    final sent = await open(t, [
+      _draft(more: {
+        'lines': [
+          {'id': 'L1', 'said': 'suya', 'item_id': 'sy', 'name': 'Suya', 'quantity': 1, 'no_price': true},
+        ],
+      }),
+    ]);
+    expect(find.text('No price in your catalogue: give one.'), findsOneWidget);
+    await t.enterText(find.descendant(of: find.bySemanticsLabel('Price of Suya, in naira'), matching: find.byType(EditableText)), '2500');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Set the price of Suya'));
+    await settle(t);
+    expect(sent.last, 'PUT /v1/order-drafts/OD1 {"version":3,"op":"price","line":0,"price_kobo":250000}');
+    await t.tap(find.bySemanticsLabel('Add an item'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Small chops · ₦3,000'));
+    await settle(t);
+    expect(sent.last, 'PUT /v1/order-drafts/OD1 {"version":3,"op":"add","item_id":"sc","quantity":1}');
+    await t.tap(find.bySemanticsLabel('Drop'));
+    await settle(t);
+    expect(sent.last, 'POST /v1/order-drafts/OD1/drop {"version":3}');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('confirmed but not sent to them: said, and sent again', (t) async {
+    final orders = [_draft(questions: 0, ready: true)];
+    final sent = await open(
+      t,
+      orders,
+      confirm: {'told': false, 'told_error': 'Outside the 24 hours'},
+      also: (req, list) async {
+        if (req.method == 'POST' && req.url.path.endsWith('/confirm')) {
+          list[0] = {...list[0], 'status': 'confirmed', 'reference': 'OR-9', 'order_status': 'accepted'};
+          return json({'told': false, 'told_error': 'Outside the 24 hours'});
+        }
+        return null;
+      },
+    );
+    await t.tap(find.bySemanticsLabel('Confirm'));
+    await settle(t);
+    expect(find.text('Not sent to them: Outside the 24 hours'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Send it again'));
+    await settle(t);
+    expect(sent.last, 'POST /v1/order-drafts/OD1/tell {}');
+    expect(find.text('Not sent to them: Outside the 24 hours'), findsNothing);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('Start an order refused: the server’s words', (t) async {
+    await open(t, const [], also: (req, list) async => req.method == 'POST' ? json({'error': 'This customer asked not to get messages.'}, 409) : null);
+    await t.tap(find.bySemanticsLabel('Start an order'));
+    await settle(t);
+    expect(find.text('This customer asked not to get messages.'), findsOneWidget);
+  });
+
+  testWidgets('the card has a name for a screen reader', (t) async {
+    await open(t, [_draft()]);
+    expect(find.bySemanticsLabel(RegExp(r'^Order from their message, 1 question')), findsOneWidget);
+  });
+
+  testWidgets('in the conversation on a small phone, large text, the keyboard up: nothing cut off', (t) async {
+    final f = Fixture('customer-chidi');
+    const chidi = '01a1caf1-bffd-7bf6-b932-a1e10d4b7bab';
+    final chats = ChatsData(
+      f.auth(also: (req) async => req.url.path == '/v1/customer-chats/$chidi/orders'
+          ? json({'orders': [_draft()], 'zones': [{'name': 'Yaba', 'fee_kobo': 100000}], 'pay_page': true, 'items': [{'id': 'jr', 'name': 'Jollof rice'}]})
+          : null),
+      now: () => f.at,
+    )..load();
+    Widget screen() => TaskiemApp(mode: TkMode.light, home: CustomerScreen(data: CustomerData(chats, chidi, follow: false)));
+    await expectLargeText(t, screen(), drive: settle);
+    // The keyboard up: 280 px of the 640 taken.
+    t.view.viewInsets = const FakeViewPadding(bottom: 280);
+    addTearDown(t.view.resetViewInsets);
+    await t.pumpAndSettle();
+    await settle(t);
+    await expectPressable(t);
   });
 
   testWidgets('at large text on a small phone: nothing cut off, all pressable', (t) async {

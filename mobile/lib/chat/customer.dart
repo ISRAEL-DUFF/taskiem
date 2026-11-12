@@ -15,6 +15,7 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../kit/icon.dart';
+import '../kit/keyboard.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/tap_area.dart';
@@ -337,30 +338,48 @@ class _CustomerScreenState extends State<CustomerScreen> {
                       ),
                     ),
                   ),
+                  // The thread and the order card share what is under the
+                  // head (and over the keyboard): the card at most half, a
+                  // little more while the keyboard is up (it is typed in).
                   Expanded(
-                    child: ThreadView<CustomerLine>(
-                      items: d.messages,
-                      of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
-                      now: d.chats.now(),
-                      hasOlder: d.hasOlder,
-                      onOlder: d.older,
-                      errors: [?d.error],
-                      empty: Text(
-                        c?.stopped == true
-                            ? 'What they wrote was deleted when they sent STOP.'
-                            : 'Nothing here yet. What this customer writes to your WhatsApp number shows here.',
-                        textAlign: TextAlign.center,
-                        style: tkHint(t),
+                    child: LayoutBuilder(
+                      builder: (context, box) => Column(
+                        children: [
+                        Expanded(
+                          child: ThreadView<CustomerLine>(
+                            items: d.messages,
+                            of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
+                            now: d.chats.now(),
+                            hasOlder: d.hasOlder,
+                            onOlder: d.older,
+                            errors: [?d.error],
+                            empty: Text(
+                              c?.stopped == true
+                                  ? 'What they wrote was deleted when they sent STOP.'
+                                  : 'Nothing here yet. What this customer writes to your WhatsApp number shows here.',
+                              textAlign: TextAlign.center,
+                              style: tkHint(t),
+                            ),
+                            render: (m, prev) {
+                              final first = prev == null || prev.m.mine != m.m.mine || prev.m.senderName != m.m.senderName;
+                              return Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: _CustomerBubble(x: m, first: first));
+                            },
+                          ),
+                        ),
+                        // CustomerOrders.tsx: the order read from their messages, or
+                        // Start an order.
+                          if (c != null)
+                            CustomerOrders(
+                              auth: d.chats.auth,
+                              chatId: d.id,
+                              canSend: canSend,
+                              follow: d.follow,
+                              maxHeight: box.maxHeight * (MediaQuery.viewInsetsOf(context).bottom > 0 || KeyboardRoom.up(context) ? 0.75 : 0.5),
+                            ),
+                        ],
                       ),
-                      render: (m, prev) {
-                        final first = prev == null || prev.m.mine != m.m.mine || prev.m.senderName != m.m.senderName;
-                        return Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: _CustomerBubble(x: m, first: first));
-                      },
                     ),
                   ),
-                  // CustomerOrders.tsx: the order read from their messages, or
-                  // Start an order.
-                  if (c != null) CustomerOrders(auth: d.chats.auth, chatId: d.id, canSend: canSend, follow: d.follow),
                   if (note != null) _Note(text: note.text, stop: note.stop),
                   if (canSend && tooLong)
                     _Note(

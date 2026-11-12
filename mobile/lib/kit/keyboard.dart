@@ -16,7 +16,7 @@ class KeyboardRoom extends StatelessWidget {
   Widget build(BuildContext context) {
     final q = MediaQuery.of(context);
     final keys = q.viewInsets.bottom;
-    if (keys <= 0) return child;
+    if (keys <= 0) return _Up(up: false, child: child);
     return Padding(
       padding: EdgeInsets.only(bottom: keys),
       child: MediaQuery(
@@ -26,8 +26,20 @@ class KeyboardRoom extends StatelessWidget {
           viewInsets: q.viewInsets.copyWith(bottom: 0),
           padding: q.padding.copyWith(bottom: math.max(0, q.padding.bottom - keys)),
         ),
-        child: child,
+        child: _Up(up: true, child: child),
       ),
     );
   }
+
+  /// Whether the phone's keyboard is up now (the screens under this see no
+  /// keyboard in their MediaQuery: the room is taken off already).
+  static bool up(BuildContext context) => context.dependOnInheritedWidgetOfExactType<_Up>()?.up ?? false;
+}
+
+class _Up extends InheritedWidget {
+  const _Up({required this.up, required super.child});
+  final bool up;
+
+  @override
+  bool updateShouldNotify(_Up old) => old.up != up;
 }
