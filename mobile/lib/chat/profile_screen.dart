@@ -13,7 +13,7 @@ import 'package:flutter/widgets.dart';
 
 import '../api/transport.dart';
 import '../kit/api_image.dart';
-import '../kit/forms.dart' show TkSwitch;
+import '../kit/forms.dart' show RuneLimit, TkSwitch;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkSoftButton;
@@ -35,22 +35,6 @@ List<String> splitAreas(String line) {
     if (a.isNotEmpty && !out.any((x) => x.toLowerCase() == a.toLowerCase())) out.add(a);
   }
   return out.take(maxDeliveryAreas).toList();
-}
-
-/// At most [max] characters as the server counts them (runes,
-/// engine/links/profile.go), not as the keyboard does: an emoji made of
-/// several is several.
-class RuneLimit extends TextInputFormatter {
-  RuneLimit(this.max);
-  final int max;
-
-  @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
-    if (newValue.text.runes.length <= max) return newValue;
-    // Cut at the last whole character within the limit.
-    final cut = String.fromCharCodes(newValue.text.runes.take(max));
-    return TextEditingValue(text: cut, selection: TextSelection.collapsed(offset: cut.length));
-  }
 }
 
 /// The letter that stands where a logo would be.
@@ -402,12 +386,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(width: 14),
-            TkSwitch(
-              label: 'Be found in Explore',
-              on: on,
-              onPine: on,
-              onChanged: !_manage || _busy || _settings == null ? null : _findable,
-            ),
+            TkSwitch(label: 'Be found in Explore', on: on, onPine: on, onChanged: !_manage || _busy || _settings == null ? null : _findable),
           ],
         ),
       ),
@@ -479,7 +458,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: Container(
                                 width: 26,
                                 height: 26,
-                                decoration: BoxDecoration(color: t.brand, shape: BoxShape.circle, border: Border.all(color: t.panel, width: 2)),
+                                decoration: BoxDecoration(
+                                  color: t.brand,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: t.panel, width: 2),
+                                ),
                                 alignment: Alignment.center,
                                 child: TkIcon(logo != null ? 'pencil' : 'plus', size: 12, color: t.brandDark),
                               ),
@@ -552,8 +535,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
-                Expanded(child: Semantics(container: true, header: true, child: Text('Photos', style: tkText(size: 17, weight: 800, color: t.text)))),
-                Semantics(container: true, liveRegion: true, label: '${gallery.length} of $max photos', excludeSemantics: true, child: Text('${gallery.length} of $max', style: tkText(size: 13, weight: 600, color: t.muted))),
+                Expanded(
+                  child: Semantics(
+                    container: true,
+                    header: true,
+                    child: Text('Photos', style: tkText(size: 17, weight: 800, color: t.text)),
+                  ),
+                ),
+                Semantics(
+                  container: true,
+                  liveRegion: true,
+                  label: '${gallery.length} of $max photos',
+                  excludeSemantics: true,
+                  child: Text('${gallery.length} of $max', style: tkText(size: 13, weight: 600, color: t.muted)),
+                ),
               ],
             ),
           ),
@@ -588,7 +583,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         height: 120,
                         decoration: BoxDecoration(color: t.tkSoft, borderRadius: BorderRadius.circular(16)),
                         alignment: Alignment.center,
-                        child: Semantics(liveRegion: true, child: Text('Adding $_uploading ${_uploading == 1 ? 'photo' : 'photos'}…', style: tkText(size: 13, color: t.muted))),
+                        child: Semantics(
+                          liveRegion: true,
+                          child: Text('Adding $_uploading ${_uploading == 1 ? 'photo' : 'photos'}…', style: tkText(size: 13, color: t.muted)),
+                        ),
                       ),
                     ),
                   if (_manage)
@@ -636,7 +634,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           if (_manage && gallery.length >= max)
-            Padding(padding: const EdgeInsets.only(top: 12), child: Text('That is the most photos.', style: tkText(size: 13, color: t.muted))),
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text('That is the most photos.', style: tkText(size: 13, color: t.muted)),
+            ),
         ],
       ),
     );
@@ -663,7 +664,9 @@ class _Field extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: Text(label, style: tkText(size: 13, weight: 600, color: t.muted))),
+              Expanded(
+                child: Text(label, style: tkText(size: 13, weight: 600, color: t.muted)),
+              ),
               if (count && max != null) Text('${controller.text.runes.length} / $max', style: tkText(size: 13, weight: 500, color: t.muted)),
             ],
           ),
@@ -684,7 +687,10 @@ class _Field extends StatelessWidget {
                 showCursor: !TkField.debugHideCaret,
                 inputFormatters: [if (max != null) RuneLimit(max!)],
                 style: tkText(size: 15, weight: 500, lineHeight: lines > 1 ? 1.5 : 1.3, color: t.text),
-                decoration: InputDecoration.collapsed(hintText: hint, hintStyle: tkText(size: 15, weight: 500, color: t.muted)),
+                decoration: InputDecoration.collapsed(
+                  hintText: hint,
+                  hintStyle: tkText(size: 15, weight: 500, color: t.muted),
+                ),
               ),
             ),
           ),
@@ -883,7 +889,12 @@ class _Caption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
         decoration: BoxDecoration(color: t.tkPhotoChip, borderRadius: BorderRadius.circular(9)),
-        child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 12, weight: 600, color: t.tkPhotoInk)),
+        child: Text(
+          text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: tkText(size: 12, weight: 600, color: t.tkPhotoInk),
+        ),
       ),
     );
   }
@@ -1039,7 +1050,13 @@ class _PhotoTileState extends State<_PhotoTile> {
                       children: [
                         _round('back', 'Move photo $n earlier', t.tkPhotoBtn, t.tkPhotoInk, widget.busy || i == 0 ? null : () => widget.onMove(-1)),
                         const SizedBox(width: 4),
-                        _round('chevron', 'Move photo $n later', t.tkPhotoBtn, t.tkPhotoInk, widget.busy || i == widget.count - 1 ? null : () => widget.onMove(1)),
+                        _round(
+                          'chevron',
+                          'Move photo $n later',
+                          t.tkPhotoBtn,
+                          t.tkPhotoInk,
+                          widget.busy || i == widget.count - 1 ? null : () => widget.onMove(1),
+                        ),
                       ],
                     ),
                   ),
@@ -1064,7 +1081,10 @@ class _PhotoTileState extends State<_PhotoTile> {
                   cursorColor: t.text,
                   showCursor: !TkField.debugHideCaret,
                   style: tkText(size: 13, lineHeight: 1.35, color: t.text),
-                  decoration: InputDecoration.collapsed(hintText: 'Add a caption', hintStyle: tkText(size: 13, color: t.muted)),
+                  decoration: InputDecoration.collapsed(
+                    hintText: 'Add a caption',
+                    hintStyle: tkText(size: 13, color: t.muted),
+                  ),
                 ),
               ),
             ),

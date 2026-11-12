@@ -73,11 +73,16 @@ class _ServiceFormState extends State<ServiceForm> {
   void initState() {
     super.initState();
     _name.addListener(() => setState(() {}));
-    _t.send('GET', '/v1/storefront').then((r) {
-      if (mounted) setState(() => _sf = (r as Map?)?.cast<String, dynamic>() ?? {});
-    }, onError: (Object e) {
-      if (mounted) setState(() => _error = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.');
-    });
+    _t
+        .send('GET', '/v1/storefront')
+        .then(
+          (r) {
+            if (mounted) setState(() => _sf = (r as Map?)?.cast<String, dynamic>() ?? {});
+          },
+          onError: (Object e) {
+            if (mounted) setState(() => _error = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.');
+          },
+        );
   }
 
   @override
@@ -90,7 +95,7 @@ class _ServiceFormState extends State<ServiceForm> {
   Future<void> _refresh() async {
     try {
       await _t.send('POST', '/v1/storefront/catalogue/refresh', body: const {});
-    } on ApiError {
+    } on Object {
       // The page reads it later.
     }
   }
@@ -103,7 +108,9 @@ class _ServiceFormState extends State<ServiceForm> {
     }
     final table = sf['services_table'] as String?;
     if (table == null || table.isEmpty) {
-      return ListView(children: const [TkEmpty(icon: 'clock', title: 'Services are not set up yet', line: 'Open services to choose where your services are kept.')]);
+      return ListView(
+        children: const [TkEmpty(icon: 'clock', title: 'Services are not set up yet', line: 'Open services to choose where your services are kept.')],
+      );
     }
     final cols = (sf['services_columns'] as Map?)?.cast<String, dynamic>() ?? const {};
     final s = widget.service;
@@ -127,10 +134,8 @@ class _ServiceFormState extends State<ServiceForm> {
         await _t.send('DELETE', '/v1/tables/$table/rows/${Uri.encodeComponent(s['id'] as String)}');
         await _refresh();
         widget.onSaved('${s['name']}: removed');
-      } on ApiError catch (e) {
-        if (mounted) setState(() => _error = e.message);
-      } on Offline {
-        if (mounted) setState(() => _error = 'You’re offline. Try again when you’re back online.');
+      } on Object catch (e) {
+        if (mounted) setState(() => _error = errorWords(e));
       }
     }
 
@@ -141,7 +146,10 @@ class _ServiceFormState extends State<ServiceForm> {
       ready: _name.text.trim().isNotEmpty && _minutes > 0,
       canEdit: widget.canEdit,
       children: [
-        TkKitField(label: 'Name', child: TkTextBox(controller: _name, hint: 'Rice milling, per bag')),
+        TkKitField(
+          label: 'Name',
+          child: TkTextBox(controller: _name, hint: 'Rice milling, per bag', max: 120),
+        ),
         TkFormRow(
           title: 'Takes',
           sub: 'Minutes',
@@ -188,7 +196,10 @@ class _PriceListFormState extends State<PriceListForm> {
       final it = _items[i];
       final to = nairaKobo(_prices[i].text);
       if (to != _int(it['price_kobo'])) changed++;
-      final own = [for (final z in _maps(it['sizes'])) if ((_int(z['price_kobo']) ?? 0) > 0) {'item_id': z['item_id'], 'price_kobo': z['price_kobo']}];
+      final own = [
+        for (final z in _maps(it['sizes']))
+          if ((_int(z['price_kobo']) ?? 0) > 0) {'item_id': z['item_id'], 'price_kobo': z['price_kobo']},
+      ];
       items.add({
         'item_id': it['item_id'],
         'price_kobo': to,
@@ -205,7 +216,9 @@ class _PriceListFormState extends State<PriceListForm> {
   @override
   Widget build(BuildContext context) {
     if (_items.isEmpty) {
-      return ListView(children: const [TkEmpty(icon: 'tag', title: 'Nothing on this list yet', line: 'Open price lists to add items to it.')]);
+      return ListView(
+        children: const [TkEmpty(icon: 'tag', title: 'Nothing on this list yet', line: 'Open price lists to add items to it.')],
+      );
     }
     final bad = _prices.any((p) => !((nairaKobo(p.text) ?? 0) > 0));
     return TkToolForm(

@@ -11,6 +11,7 @@ import 'package:flutter/widgets.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/session.dart' show uuid4;
+import '../kit/forms.dart' show CloseSoon, errorWords;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart';
@@ -86,7 +87,7 @@ final _cache = <String, ({DateTime at, Future<Map<String, dynamic>> got})>{};
 Future<Map<String, dynamic>> linkServices(Transport t, String link) {
   final hit = _cache[link];
   if (hit != null && DateTime.now().difference(hit.at) < const Duration(minutes: 1)) return hit.got;
-  final got = t.send('GET', '/v1/link-chats/${Uri.encodeComponent(link)}/services').then((r) => (r as Map).cast<String, dynamic>());
+  final got = t.send('GET', '/v1/link-chats/${Uri.encodeComponent(link)}/services').then((r) => r is Map ? r.cast<String, dynamic>() : <String, dynamic>{});
   got.catchError((Object _) {
     _cache.remove(link);
     return <String, dynamic>{};
@@ -96,14 +97,18 @@ Future<Map<String, dynamic>> linkServices(Transport t, String link) {
 }
 
 /// Opens Book; the future ends with what was booked, said.
-Future<String?> showBookSheet(BuildContext context, {required Auth auth, required String link, required String business}) =>
-    showTkSheet<String>(context, (_) => BookSheet(auth: auth, link: link, business: business));
+Future<String?> showBookSheet(BuildContext context, {required Auth auth, required String link, required String business, ValueChanged<String>? onBooked}) =>
+    showTkSheet<String>(context, (_) => BookSheet(auth: auth, link: link, business: business, onBooked: onBooked));
 
 class BookSheet extends StatefulWidget {
-  const BookSheet({super.key, required this.auth, required this.link, required this.business});
+  const BookSheet({super.key, required this.auth, required this.link, required this.business, this.onBooked});
   final Auth auth;
   final String link;
   final String business;
+
+  /// Booked: its words, at once (the sheet may be closed before it closes
+  /// itself).
+  final ValueChanged<String>? onBooked;
 
   @override
   State<BookSheet> createState() => _BookSheetState();
@@ -111,7 +116,8 @@ class BookSheet extends StatefulWidget {
 
 enum _Step { service, time, confirm }
 
-class _BookSheetState extends State<BookSheet> {
+class _BookSheetState extends State<BookSheet> with CloseSoon {
+  int _asked = 0;
   Map<String, dynamic>? _data;
   String? _loadError;
   Map<String, dynamic>? _service;
@@ -135,15 +141,18 @@ class _BookSheetState extends State<BookSheet> {
   @override
   void initState() {
     super.initState();
-    linkServices(_t, widget.link).then((d) {
-      if (!mounted) return;
-      setState(() {
-        _data = d;
-        _phone = TextEditingController(text: d['phone'] as String? ?? '')..addListener(() => setState(() {}));
-      });
-    }, onError: (Object e) {
-      if (mounted) setState(() => _loadError = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.');
-    });
+    linkServices(_t, widget.link).then(
+      (d) {
+        if (!mounted) return;
+        setState(() {
+          _data = d;
+          _phone = TextEditingController(text: d['phone'] as String? ?? '')..addListener(() => setState(() {}));
+        });
+      },
+      onError: (Object e) {
+        if (mounted) setState(() => _loadError = errorWords(e));
+      },
+    );
   }
 
   @override
@@ -156,6 +165,9 @@ class _BookSheetState extends State<BookSheet> {
   Future<void> _loadTimes() async {
     final s = _service;
     if (s == null) return;
+    // Only the last asked is shown: a day pressed after another, or the
+    // service changed, answers last whatever answers first.
+    final asked = ++_asked;
     setState(() => (_times = null, _timesError = null));
     try {
       final r = await _t.send(
@@ -163,11 +175,9 @@ class _BookSheetState extends State<BookSheet> {
         '/v1/link-chats/${Uri.encodeComponent(widget.link)}/services/${Uri.encodeComponent(s['id'] as String)}/times',
         query: {'day': ?_day},
       );
-      if (mounted) setState(() => _times = (r as Map).cast<String, dynamic>());
-    } on ApiError catch (e) {
-      if (mounted) setState(() => _timesError = e.message);
-    } on Offline {
-      if (mounted) setState(() => _timesError = 'You’re offline. Try again when you’re back online.');
+      if (mounted && asked == _asked) setState(() => _times = (r as Map).cast<String, dynamic>());
+    } on Object catch (e) {
+      if (mounted && asked == _asked) setState(() => _timesError = errorWords(e));
     }
   }
 
@@ -197,11 +207,10 @@ class _BookSheetState extends State<BookSheet> {
       ) as Map<String, dynamic>;
       final b = (out['booking'] as Map).cast<String, dynamic>();
       final words = 'Booked with $_biz: ${b['service_name']}, ${whenLabel(b['starts_at'] as String)}';
+      widget.onBooked?.call(words);
       if (!mounted) return;
       setState(() => _done = words);
-      Timer(const Duration(milliseconds: 1300), () {
-        if (mounted) Navigator.of(context).maybePop(words);
-      });
+      closeSoon(words);
     } on ApiError catch (e) {
       if (!mounted) return;
       if (e.body['code'] == 'slot_taken') {
@@ -216,8 +225,8 @@ class _BookSheetState extends State<BookSheet> {
         return;
       }
       setState(() => (_error = e.message, _busy = false));
-    } on Offline {
-      if (mounted) setState(() => (_error = 'You’re offline. Try again when you’re back online.', _busy = false));
+    } on Object catch (e) {
+      if (mounted) setState(() => (_error = errorWords(e), _busy = false));
     }
   }
 
@@ -256,13 +265,18 @@ class _BookSheetState extends State<BookSheet> {
     if (data == null) {
       return ListView(
         children: [
-          if (_loadError != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: TkErrorBox(_loadError!)) else const TkLoading(label: 'Loading their services…'),
+          if (_loadError != null)
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: TkErrorBox(_loadError!))
+          else
+            const TkLoading(label: 'Loading their services…'),
         ],
       );
     }
     final services = _maps(data['services']);
     if (services.isEmpty) {
-      return ListView(children: [TkEmpty(icon: 'calendar', title: '$_biz has no services to book', line: 'Ask them in the chat.')]);
+      return ListView(
+        children: [TkEmpty(icon: 'calendar', title: '$_biz has no services to book', line: 'Ask them in the chat.')],
+      );
     }
     final open = data['open'] == true;
     switch (_step) {
@@ -270,7 +284,11 @@ class _BookSheetState extends State<BookSheet> {
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           children: [
-            if (!open) Padding(padding: const EdgeInsets.fromLTRB(8, 4, 8, 12), child: Text(data['closed'] as String? ?? '', style: tkFormNow(t))),
+            if (!open)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+                child: Text(data['closed'] as String? ?? '', style: tkFormNow(t)),
+              ),
             for (final s in services)
               TkRow(
                 name: s['name'] as String? ?? '',
@@ -297,11 +315,7 @@ class _BookSheetState extends State<BookSheet> {
             if (times == null)
               _timesError != null ? TkErrorBox(_timesError!) : const TkLoading(label: 'Loading free times…')
             else if (((times['days'] as List?) ?? const []).isEmpty)
-              TkEmpty(
-                icon: 'calendar',
-                title: 'No free times',
-                line: '$_biz has no free time for this in the days they take bookings. Ask them in the chat.',
-              )
+              TkEmpty(icon: 'calendar', title: 'No free times', line: '$_biz has no free time for this in the days they take bookings. Ask them in the chat.')
             else ...[
               _head(t, 'Day'),
               _Chips(
@@ -315,7 +329,10 @@ class _BookSheetState extends State<BookSheet> {
               ),
               _head(t, 'Time'),
               if (((times['times'] as List?) ?? const []).isEmpty)
-                Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: Text('No free time that day. Please choose another.', style: tkFormNow(t)))
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: Text('No free time that day. Please choose another.', style: tkFormNow(t)),
+                )
               else
                 _Chips(
                   label: 'Time',
@@ -339,7 +356,11 @@ class _BookSheetState extends State<BookSheet> {
                 hint: 'Given to $_biz with the booking.',
                 child: TkTextBox(controller: _phone!, phone: true, hint: '0803 123 4567'),
               ),
-              TkKitField(label: 'Note for them', hint: 'Optional', child: TkTextBox(controller: _note, lines: 2)),
+              TkKitField(
+                label: 'Note for them',
+                hint: 'Optional',
+                child: TkTextBox(controller: _note, lines: 2, max: 500),
+              ),
             ] else
               Text('Your role cannot book with other businesses. Ask the owner.', style: tkFormNow(t)),
             if (_error != null) TkErrorBox(_error!),
@@ -351,7 +372,10 @@ class _BookSheetState extends State<BookSheet> {
   /// `.tk-book-head`: 8 px round, 14 px bold, muted.
   Widget _head(TkTokens t, String words) => Padding(
     padding: const EdgeInsets.all(8),
-    child: Semantics(header: true, child: Text(words, style: tkText(size: 14, weight: 700, color: t.muted))),
+    child: Semantics(
+      header: true,
+      child: Text(words, style: tkText(size: 14, weight: 700, color: t.muted)),
+    ),
   );
 }
 
@@ -404,12 +428,20 @@ class _Chips extends StatelessWidget {
                 builder: (context, box) {
                   final cols = ((box.maxWidth + 8) / (84 + 8)).floor().clamp(1, 99);
                   final w = (box.maxWidth - 8 * (cols - 1)) / cols;
-                  return Wrap(spacing: 8, runSpacing: 8, children: [for (final v in values) SizedBox(width: w, child: chip(v))]);
+                  return Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [for (final v in values) SizedBox(width: w, child: chip(v))],
+                  );
                 },
               )
             : SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                child: Row(children: [for (var i = 0; i < values.length; i++) ...[if (i > 0) const SizedBox(width: 8), chip(values[i])]]),
+                child: Row(
+                  children: [
+                    for (var i = 0; i < values.length; i++) ...[if (i > 0) const SizedBox(width: 8), chip(values[i])],
+                  ],
+                ),
               ),
       ),
     );

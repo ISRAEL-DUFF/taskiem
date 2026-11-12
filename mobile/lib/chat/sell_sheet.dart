@@ -11,7 +11,7 @@ import 'package:flutter/widgets.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/session.dart' show uuid4;
-import '../kit/forms.dart' show nairaKobo;
+import '../kit/forms.dart' show CloseSoon, errorWords, nairaKobo;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart';
@@ -51,7 +51,7 @@ Set<String> pickable(List<Map<String, dynamic>> items, String product, String ch
     if (vv == null || (n != null && n <= 0)) continue;
     final fits = picked.entries.every((e) => e.key == choice || vv[e.key] == e.value);
     final x = vv[choice];
-    if (fits && x != null) out.add(x);
+    if (fits && x != null && x.isNotEmpty) out.add(x);
   }
   return out;
 }
@@ -77,7 +77,7 @@ class SellSheet extends StatefulWidget {
   State<SellSheet> createState() => _SellSheetState();
 }
 
-class _SellSheetState extends State<SellSheet> {
+class _SellSheetState extends State<SellSheet> with CloseSoon {
   List<Map<String, dynamic>>? _items;
   String? _loadError;
   final _qty = <String, int>{};
@@ -107,10 +107,8 @@ class _SellSheetState extends State<SellSheet> {
     try {
       final r = await _t.send('GET', '/v1/stock') as Map<String, dynamic>;
       _items = _maps(r['items']).where((x) => x['price_kobo'] != null && x['available'] == true).toList();
-    } on ApiError catch (e) {
-      _loadError = e.message;
-    } on Offline {
-      _loadError = 'You’re offline. Try again when you’re back online.';
+    } on Object catch (e) {
+      _loadError = errorWords(e);
     }
     if (mounted) setState(() {});
   }
@@ -136,7 +134,9 @@ class _SellSheetState extends State<SellSheet> {
         'POST',
         '/v1/stock/sales',
         body: {
-          'lines': [for (final l in sale.lines) {'item_id': l.item['id'], 'quantity': l.quantity}],
+          'lines': [
+            for (final l in sale.lines) {'item_id': l.item['id'], 'quantity': l.quantity},
+          ],
           'paid_how': _how,
         },
         headers: {'Idempotency-Key': key},
@@ -144,13 +144,9 @@ class _SellSheetState extends State<SellSheet> {
       widget.onSold?.call();
       if (!mounted) return;
       setState(() => _done = 'Sold: ${naira(sale.total)}');
-      Timer(const Duration(milliseconds: 1300), () {
-        if (mounted) Navigator.of(context).maybePop();
-      });
-    } on ApiError catch (e) {
-      if (mounted) setState(() => (_error = e.message, _busy = false));
-    } on Offline {
-      if (mounted) setState(() => (_error = 'You’re offline. Try again when you’re back online.', _busy = false));
+      closeSoon();
+    } on Object catch (e) {
+      if (mounted) setState(() => (_error = errorWords(e), _busy = false));
     }
   }
 
@@ -180,7 +176,9 @@ class _SellSheetState extends State<SellSheet> {
                   crossAxisAlignment: CrossAxisAlignment.baseline,
                   textBaseline: TextBaseline.alphabetic,
                   children: [
-                    Expanded(child: Text('Total', style: tkText(size: 15, color: t.text))),
+                    Expanded(
+                      child: Text('Total', style: tkText(size: 15, color: t.text)),
+                    ),
                     Text(naira(sale.total), style: tkText(size: 22, weight: 800, color: t.text)),
                   ],
                 ),
@@ -198,7 +196,9 @@ class _SellSheetState extends State<SellSheet> {
               ],
             )
           : items.isEmpty
-          ? ListView(children: const [TkEmpty(icon: 'box', title: 'Nothing with a price yet', line: 'Give your products a price to sell them here.')])
+          ? ListView(
+              children: const [TkEmpty(icon: 'box', title: 'Nothing with a price yet', line: 'Give your products a price to sell them here.')],
+            )
           : !_pay
           ? _pick(t, items)
           : TkFormBody(
@@ -213,7 +213,9 @@ class _SellSheetState extends State<SellSheet> {
                     children: [
                       for (var i = 0; i < _hows.length; i++) ...[
                         if (i > 0) const SizedBox(width: 8),
-                        Expanded(child: _How(words: _hows[i].$2, on: _how == _hows[i].$1, onTap: () => setState(() => _how = _hows[i].$1))),
+                        Expanded(
+                          child: _How(words: _hows[i].$2, on: _how == _hows[i].$1, onTap: () => setState(() => _how = _hows[i].$1)),
+                        ),
                       ],
                     ],
                   ),
@@ -263,7 +265,9 @@ class _SellSheetState extends State<SellSheet> {
     final unit = it['unit'] as String? ?? '';
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.border))),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: t.border)),
+      ),
       child: Row(
         children: [
           _tile(t),
@@ -309,13 +313,21 @@ class _SellSheetState extends State<SellSheet> {
     final open = _open == id;
     Widget stepper(Map<String, dynamic> v) {
       final m = _qty[v['id']] ?? 0;
-      return QtyStepper(name: '$name, ${variantLabel(variantOf(v), cs)}', n: m, on: m > 0, onLess: m == 0 ? null : () => _set(v, m - 1), onMore: () => _set(v, m + 1));
+      return QtyStepper(
+        name: '$name, ${variantLabel(variantOf(v), cs)}',
+        n: m,
+        on: m > 0,
+        onLess: m == 0 ? null : () => _set(v, m - 1),
+        onMore: () => _set(v, m + 1),
+      );
     }
 
     final price = _int(it['price_kobo']);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.border))),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: t.border)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -451,7 +463,10 @@ class _PickChip extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(label, style: tkText(size: 14, weight: 600, color: ink, decoration: enabled ? null : TextDecoration.lineThrough)),
+                  Text(
+                    label,
+                    style: tkText(size: 14, weight: 600, color: ink, decoration: enabled ? null : TextDecoration.lineThrough),
+                  ),
                 ],
               ),
             ),
@@ -510,7 +525,7 @@ class HandoverSheet extends StatefulWidget {
   State<HandoverSheet> createState() => _HandoverSheetState();
 }
 
-class _HandoverSheetState extends State<HandoverSheet> {
+class _HandoverSheetState extends State<HandoverSheet> with CloseSoon {
   Map<String, dynamic>? _h;
   String? _loadError;
   final _cash = TextEditingController();
@@ -525,11 +540,16 @@ class _HandoverSheetState extends State<HandoverSheet> {
   void initState() {
     super.initState();
     _cash.addListener(() => setState(() {}));
-    _t.send('GET', '/v1/chat-handover').then((r) {
-      if (mounted) setState(() => _h = r as Map<String, dynamic>?);
-    }, onError: (Object e) {
-      if (mounted) setState(() => _loadError = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.');
-    });
+    _t
+        .send('GET', '/v1/chat-handover')
+        .then(
+          (r) {
+            if (mounted) setState(() => _h = r as Map<String, dynamic>?);
+          },
+          onError: (Object e) {
+            if (mounted) setState(() => _loadError = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.');
+          },
+        );
   }
 
   @override
@@ -551,13 +571,9 @@ class _HandoverSheetState extends State<HandoverSheet> {
       widget.onSent?.call();
       if (!mounted) return;
       setState(() => _done = true);
-      Timer(const Duration(milliseconds: 1300), () {
-        if (mounted) Navigator.of(context).maybePop();
-      });
-    } on ApiError catch (e) {
-      if (mounted) setState(() => (_error = e.message, _busy = false));
-    } on Offline {
-      if (mounted) setState(() => (_error = 'You’re offline. Try again when you’re back online.', _busy = false));
+      closeSoon();
+    } on Object catch (e) {
+      if (mounted) setState(() => (_error = errorWords(e), _busy = false));
     }
   }
 
@@ -615,12 +631,13 @@ class _HandoverSheetState extends State<HandoverSheet> {
                 ]),
                 TkKitField(
                   label: 'Cash counted (₦)',
-                  hint: counted != null && counted >= 0 ? '${cashWords(counted, sold)} · ${naira(sold)} sold in cash' : '${naira(sold)} sold in cash',
+                  error: counted == -1 ? 'The cash in naira, like 45,000.' : null,
+                  hint: counted == -1 ? null : (counted != null ? '${cashWords(counted, sold)} · ${naira(sold)} sold in cash' : '${naira(sold)} sold in cash'),
                   child: TkTextBox(controller: _cash, money: true, hint: '0'),
                 ),
                 TkKitField(
                   label: 'A note for the next shift (optional)',
-                  child: TkTextBox(controller: _note, lines: 2, hint: 'The freezer is making a noise'),
+                  child: TkTextBox(controller: _note, lines: 2, hint: 'The freezer is making a noise', max: 500),
                 ),
                 if (_error != null) TkErrorBox(_error!),
               ],

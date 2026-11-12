@@ -35,6 +35,15 @@ String nairaText(int kobo) {
 /// changed to tell).
 typedef Saver = Future<String?> Function();
 
+/// What went wrong, in words for a form: the server's, offline, the form's
+/// own problem, or anything else.
+String errorWords(Object e) => switch (e) {
+  ApiError() => e.message,
+  Offline() => 'You’re offline. Try again when you’re back online.',
+  FormProblem() => e.words,
+  _ => 'That did not go. Try again.',
+};
+
 /// FormFrame.tsx: the form's body, scrolling, and its foot: Save (or
 /// Cancel | Save changes), or, for someone who may only look, the words
 /// that say so. A failed save says why over the button.
@@ -74,12 +83,8 @@ class _TkToolFormState extends State<TkToolForm> {
     try {
       final line = await widget.save();
       widget.onSaved(line);
-    } on ApiError catch (e) {
-      if (mounted) setState(() => (_error = e.message, _busy = false));
-    } on Offline {
-      if (mounted) setState(() => (_error = 'You’re offline. Try again when you’re back online.', _busy = false));
-    } on FormProblem catch (e) {
-      if (mounted) setState(() => (_error = e.words, _busy = false));
+    } on Object catch (e) {
+      if (mounted) setState(() => (_error = errorWords(e), _busy = false));
     }
   }
 
@@ -111,7 +116,9 @@ class _TkToolFormState extends State<TkToolForm> {
                   children: [
                     TkFormButton(label: 'Cancel', onTap: widget.onCancel),
                     const SizedBox(width: 12),
-                    Expanded(child: TkCta(label: words, onTap: go)),
+                    Expanded(
+                      child: TkCta(label: words, onTap: go),
+                    ),
                   ],
                 )
               : TkCta(label: words, onTap: go),
@@ -250,7 +257,13 @@ class _TkStepperState extends State<TkStepper> {
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => widget.onChanged(to < 0 ? 0 : to),
-          child: SizedBox(width: 44, height: 44, child: Center(child: Text(sign, style: tkText(size: 20, color: t.text)))),
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Center(
+              child: Text(sign, style: tkText(size: 20, color: t.text)),
+            ),
+          ),
         ),
       ),
     );
@@ -421,3 +434,41 @@ class TkSwitch extends StatelessWidget {
   }
 }
 
+/// At most [max] characters as the server counts them (runes,
+/// engine/links/profile.go), not as the keyboard does: an emoji made of
+/// several is several.
+class RuneLimit extends TextInputFormatter {
+  RuneLimit(this.max);
+  final int max;
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.text.runes.length <= max) return newValue;
+    // Cut at the last whole character within the limit.
+    final cut = String.fromCharCodes(newValue.text.runes.take(max));
+    return TextEditingValue(
+      text: cut,
+      selection: TextSelection.collapsed(offset: cut.length),
+    );
+  }
+}
+
+/// After the tick, the sheet closes itself: 1.3 s later, only while it is
+/// still the one on top (not a sheet opened over it since), and not at all
+/// once it is gone.
+mixin CloseSoon<T extends StatefulWidget> on State<T> {
+  Timer? _closing;
+
+  void closeSoon([Object? result]) {
+    _closing?.cancel();
+    _closing = Timer(const Duration(milliseconds: 1300), () {
+      if (mounted && (ModalRoute.of(context)?.isCurrent ?? true)) Navigator.of(context).maybePop(result);
+    });
+  }
+
+  @override
+  void dispose() {
+    _closing?.cancel();
+    super.dispose();
+  }
+}

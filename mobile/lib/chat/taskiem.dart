@@ -448,7 +448,11 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     if (soonTools.contains(tool.key)) return showComingSoon(context);
     // Sell and Handover have sheets of their own (ChatStaff.tsx); what
     // they record lands here as a diary line.
-    void landed() => unawaited(widget.data.pull().catchError((Object _) {}));
+    void landed() {
+      unawaited(widget.data.pull().catchError((Object _) {}));
+      unawaited(widget.data.chats.load());
+    }
+
     if (tool.key == 'sell') {
       unawaited(showSellSheet(context, auth: widget.data.chats.auth, onSold: landed));
       return;
@@ -500,7 +504,14 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
         for (final p in d.suppliers)
           for (final it in p.items)
             if (it.available)
-              TagSuggestion(kind: 'item', id: '${p.link}:${it.itemId}', name: it.name, sub: '${p.business} · ${priceWords(it)}', category: it.category, words: it.description),
+              TagSuggestion(
+                kind: 'item',
+                id: '${p.link}:${it.itemId}',
+                name: it.name,
+                sub: '${p.business} · ${priceWords(it)}',
+                category: it.category,
+                words: it.description,
+              ),
       ],
       services: const [],
       businesses: [
@@ -582,13 +593,8 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                 _tags.anchor(context),
                 ToolsAnchor(
                   tools: _tools,
-                  panel: (context, room) => ToolsPanel(
-                    tools: _tools,
-                    onOpen: _openTool,
-                    extras: _extras(d),
-                    recent: d.chats.prefs?.recentTools ?? const [],
-                    maxHeight: room,
-                  ),
+                  panel: (context, room) =>
+                      ToolsPanel(tools: _tools, onOpen: _openTool, extras: _extras(d), recent: d.chats.prefs?.recentTools ?? const [], maxHeight: room),
                 ),
                 Composer(
                   tools: d.chats.chatTools ? _tools : null,
@@ -686,7 +692,12 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (d.briefing != null) ...[
-                    BriefingCard(key: ValueKey(d.briefingShown), briefing: d.briefing!, auth: d.chats.auth, onAsk: (w) => d.say(text: w)),
+                    BriefingCard(
+                      key: ValueKey(d.briefingShown),
+                      briefing: d.briefing!,
+                      auth: d.chats.auth,
+                      onAsk: (w) => d.say(text: w),
+                    ),
                     const SizedBox(height: 2),
                   ],
                   AlertCards(
@@ -876,34 +887,40 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
           out.addAll(linked(r.text, style, tap));
           continue;
         }
-        final mention = (style ?? const TextStyle()).copyWith(color: t.tintText, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]);
+        final mention = (style ?? const TextStyle()).copyWith(
+          color: t.tintText,
+          fontWeight: FontWeight.w600,
+          fontVariations: const [FontVariation('wght', 600)],
+        );
         final open = ref.kind == 'customer' ? widget.onCustomer : null;
         // Anything else opens in its tool, which comes with the tools.
-        out.add(TextSpan(text: r.text, style: mention, recognizer: tap('ref:${ref.kind}:${ref.id}', () => open == null ? showComingSoon(context) : open(ref.id))));
+        out.add(
+          TextSpan(text: r.text, style: mention, recognizer: tap('ref:${ref.kind}:${ref.id}', () => open == null ? showComingSoon(context) : open(ref.id))),
+        );
       }
       return out;
     }
 
     final words = TapsOwner(
       builder: (context, tap) => Text.rich(
-      TextSpan(
-        children: [
-          for (final p in boldParts(fold.shown))
-            ...part(p.text, p.bold ? const TextStyle(fontWeight: FontWeight.w700, fontVariations: [FontVariation('wght', 700)]) : null, tap),
-          if (fold.folded) ...[
-            const TextSpan(text: '… '),
-            TextSpan(
-              text: 'Read more',
-              style: TextStyle(color: t.accent, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]),
-              recognizer: null,
-            ),
+        TextSpan(
+          children: [
+            for (final p in boldParts(fold.shown))
+              ...part(p.text, p.bold ? const TextStyle(fontWeight: FontWeight.w700, fontVariations: [FontVariation('wght', 700)]) : null, tap),
+            if (fold.folded) ...[
+              const TextSpan(text: '… '),
+              TextSpan(
+                text: 'Read more',
+                style: TextStyle(color: t.accent, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]),
+                recognizer: null,
+              ),
+            ],
+            // TaskiemText's `.stamp-gap` is never the wider `.mine` one: 52 px
+            // either side, even beside the person's own ticks.
+            if (inline) const WidgetSpan(alignment: PlaceholderAlignment.bottom, child: SizedBox(width: 52, height: 1)),
           ],
-          // TaskiemText's `.stamp-gap` is never the wider `.mine` one: 52 px
-          // either side, even beside the person's own ticks.
-          if (inline) const WidgetSpan(alignment: PlaceholderAlignment.bottom, child: SizedBox(width: 52, height: 1)),
-        ],
-      ),
-      style: tkText(size: 16, lineHeight: 23 / 16, color: t.text),
+        ),
+        style: tkText(size: 16, lineHeight: 23 / 16, color: t.text),
       ),
     );
     // TaskiemChat.tsx: a message's menu holds Copy (not one still going).
@@ -920,31 +937,31 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
             )
           : null,
       child: BubbleFrame(
-      mine: mine,
-      first: widget.first,
-      stamp: stamp,
-      inline: inline,
-      children: [
-        if (!mine && widget.first) Text('Taskiem', style: tkText(size: 12, weight: 600, color: t.tintText)),
-        if (fold.folded)
-          Semantics(
-            button: true,
-            label: 'Read more',
-            child: GestureDetector(onTap: () => setState(() => _taps++), child: words),
-          )
-        else
-          words,
-        // The documents it names, each as its card, read now.
-        for (final r in cardRefs(m.text, widget.known))
-          RefCard(
-            key: ValueKey('${r.kind}:${r.id}'),
-            auth: widget.auth!,
-            now: widget.now ?? DateTime.now(),
-            load: () => widget.auth!.api.chatCard(kind: r.kind, id: r.id),
-            onMessage: widget.onCustomer,
-          ),
-        if (buttons.isNotEmpty) _ReplyButtons(buttons: buttons, choice: widget.choice, pressable: widget.pressable, onPress: widget.onPress),
-      ],
+        mine: mine,
+        first: widget.first,
+        stamp: stamp,
+        inline: inline,
+        children: [
+          if (!mine && widget.first) Text('Taskiem', style: tkText(size: 12, weight: 600, color: t.tintText)),
+          if (fold.folded)
+            Semantics(
+              button: true,
+              label: 'Read more',
+              child: GestureDetector(onTap: () => setState(() => _taps++), child: words),
+            )
+          else
+            words,
+          // The documents it names, each as its card, read now.
+          for (final r in cardRefs(m.text, widget.known))
+            RefCard(
+              key: ValueKey('${r.kind}:${r.id}'),
+              auth: widget.auth!,
+              now: widget.now ?? DateTime.now(),
+              load: () => widget.auth!.api.chatCard(kind: r.kind, id: r.id),
+              onMessage: widget.onCustomer,
+            ),
+          if (buttons.isNotEmpty) _ReplyButtons(buttons: buttons, choice: widget.choice, pressable: widget.pressable, onPress: widget.onPress),
+        ],
       ),
     );
   }

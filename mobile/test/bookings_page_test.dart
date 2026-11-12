@@ -11,6 +11,7 @@ import 'package:taskiem/chat/bookings_page.dart';
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/kit/forms.dart';
 import 'package:taskiem/kit/modal.dart' show TkModal;
+import 'package:taskiem/chat/words.dart' show Tone;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
@@ -18,6 +19,15 @@ import 'support.dart';
 
 void main() {
   setUpAll(loadFonts);
+
+  test('a day typed is a real one; statuses as the web words them', () {
+    expect(isDay('2026-12-25'), isTrue);
+    expect(isDay('2026-02-30'), isFalse);
+    expect(isDay('2026-13-01'), isFalse);
+    expect(isDay('25/12/2026'), isFalse);
+    expect(orderStatus('refund_due'), (label: 'Refund due', tone: Tone.danger));
+    expect(orderStatus('price_changed').label, 'Waiting for the customer to confirm new prices');
+  });
 
   test('bookings by day, their spans and states', () {
     final g = groupByDay([
@@ -131,6 +141,13 @@ void main() {
     await t.tap(find.bySemanticsLabel('Move Braids BK-1'));
     await t.pumpAndSettle();
     final inModal = find.descendant(of: find.byType(TkModal), matching: find.byType(EditableText));
+    await t.enterText(inModal.at(1), '11:00');
+    await t.enterText(inModal.at(0), '2099-02-30');
+    await t.pump();
+    expect(find.text('That is not a date.'), findsOneWidget);
+    await t.enterText(inModal.at(0), '2020-01-01');
+    await t.pump();
+    expect(find.text('Choose a date from today.'), findsOneWidget);
     await t.enterText(inModal.at(0), '2099-11-14');
     await t.enterText(inModal.at(1), '11:00');
     await t.pump();
@@ -141,6 +158,8 @@ void main() {
     sent.clear();
     await t.tap(find.bySemanticsLabel('Cancel Braids BK-1'));
     await t.pumpAndSettle();
+    // Not two Cancels: the one that keeps it says so.
+    expect(find.bySemanticsLabel('Keep it'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Cancel the booking'));
     await settle(t);
     expect(sent.single, 'POST /v1/storefront/bookings/BK-1/cancel {}');

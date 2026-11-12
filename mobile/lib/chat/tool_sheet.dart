@@ -87,7 +87,7 @@ class ToolHost {
 }
 
 /// A product not sold in sizes and colours already (ChatTools.tsx plainItem).
-bool _plain(ToolRow r) => ((r.data?['choices'] as List?)?.length ?? 0) == 0 && r.data?['variant_of'] == null;
+bool _plain(ToolRow r) => r.data != null && ((r.data!['choices'] as List?)?.length ?? 0) == 0 && r.data!['variant_of'] == null;
 
 class ToolSheet extends StatefulWidget {
   const ToolSheet({super.key, required this.tools, required this.tool, this.chip, this.onRow, this.detail, this.footer, this.openId, this.onSaved});
@@ -194,7 +194,9 @@ class _ToolSheetState extends State<ToolSheet> {
             body: GroupForm(
               auth: c.chats.auth,
               items: [
-                for (final id in _picked) ?list.where((r) => r.id == id).firstOrNull?.data,
+                // In the list's order, as the web's picked rows.
+                for (final r in list)
+                  if (_picked.contains(r.id) && r.data != null) r.data!,
               ],
               onSaved: (line) {
                 setState(() {
@@ -212,17 +214,18 @@ class _ToolSheetState extends State<ToolSheet> {
         return TkSheet(
           title: title,
           count: list?.length,
+          overlay: _saved ? const TkSavedTick() : null,
           footer: _picking
               ? TkCta(
                   label: _picked.length < 2 ? 'Choose at least two' : 'Make one product of ${_picked.length}',
                   onTap: _picked.length < 2 ? null : () => setState(() => _grouping = true),
                 )
               : widget.footer ??
-              TkCta(
-                label: canAdd ? add : tool.more,
-                icon: canAdd ? 'plus' : null,
-                onTap: adds ? () => setState(() => _adding = true) : () => openToolPage(context, tool, c.chats.auth),
-              ),
+                    TkCta(
+                      label: canAdd ? add : tool.more,
+                      icon: canAdd ? 'plus' : null,
+                      onTap: adds ? () => setState(() => _adding = true) : () => openToolPage(context, tool, c.chats.auth),
+                    ),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -293,14 +296,22 @@ class _ToolSheetState extends State<ToolSheet> {
         ],
       );
     }
-    if (list == null) return ListView(padding: pad, children: [TkLoading(label: 'Loading $name…')]);
+    if (list == null)
+      return ListView(
+        padding: pad,
+        children: [TkLoading(label: 'Loading $name…')],
+      );
     final shown = filterRows(list, _chip, _search.text);
     if (shown.isEmpty) {
       return ListView(
         padding: pad,
         children: [
           list.isEmpty
-              ? TkEmpty(icon: tool.icon, title: 'No $name yet', line: tool.add != null ? '${tool.add} to put the first one here.' : '${tool.more} to add the first.')
+              ? TkEmpty(
+                  icon: tool.icon,
+                  title: 'No $name yet',
+                  line: tool.add != null ? '${tool.add} to put the first one here.' : '${tool.more} to add the first.',
+                )
               : const TkEmpty(icon: 'search', title: 'Nothing matches', line: 'Try another word, or show all.'),
         ],
       );

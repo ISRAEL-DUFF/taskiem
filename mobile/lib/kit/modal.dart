@@ -34,7 +34,14 @@ Future<T?> showTkModal<T>(BuildContext context, {required String title, required
 }
 
 /// Asks first; true when the person agrees.
-Future<bool> showTkConfirm(BuildContext context, {required String title, String? body, required String ok, bool danger = false}) async {
+Future<bool> showTkConfirm(
+  BuildContext context, {
+  required String title,
+  String? body,
+  required String ok,
+  String cancel = 'Cancel',
+  bool danger = false,
+}) async {
   final yes = await showTkModal<bool>(
     context,
     title: title,
@@ -49,7 +56,7 @@ Future<bool> showTkConfirm(BuildContext context, {required String title, String?
             spacing: 8,
             runSpacing: 8,
             children: [
-              TkPlainButton(label: 'Cancel', onTap: () => Navigator.of(context).pop(false)),
+              TkPlainButton(label: cancel, onTap: () => Navigator.of(context).pop(false)),
               TkPlainButton(label: ok, danger: danger, primary: !danger, onTap: () => Navigator.of(context).pop(true)),
             ],
           ),
@@ -163,28 +170,30 @@ class TkPlainButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return TapArea(child: Semantics(
-      button: true,
-      label: label,
-      onTap: onTap,
-      excludeSemantics: true,
-      child: TkPress(
+    return TapArea(
+      child: Semantics(
+        button: true,
+        label: label,
         onTap: onTap,
-        child: IntrinsicWidth(
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 36),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: primary ? t.primary : t.panel,
-              border: Border.all(color: primary ? t.primary : t.borderStrong),
-              borderRadius: BorderRadius.circular(999),
+        excludeSemantics: true,
+        child: TkPress(
+          onTap: onTap,
+          child: IntrinsicWidth(
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 36),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: primary ? t.primary : t.panel,
+                border: Border.all(color: primary ? t.primary : t.borderStrong),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(label, style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: primary ? t.primaryText : (danger ? t.danger : t.text))),
             ),
-            child: Text(label, style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: primary ? t.primaryText : (danger ? t.danger : t.text))),
           ),
         ),
       ),
-    ));
+    );
   }
 }
 
@@ -245,16 +254,19 @@ void showTkToast(BuildContext context, String text, {bool error = false, String?
                                 link: true,
                                 label: action,
                                 onTap: () {
-                                    close();
-                                    onAction();
-                                  },
+                                  close();
+                                  onAction();
+                                },
                                 excludeSemantics: true,
                                 child: GestureDetector(
                                   onTap: () {
                                     close();
                                     onAction();
                                   },
-                                  child: Text(action, style: tkText(size: 14, weight: 600, color: t.accent, decoration: TextDecoration.underline)),
+                                  child: Text(
+                                    action,
+                                    style: tkText(size: 14, weight: 600, color: t.accent, decoration: TextDecoration.underline),
+                                  ),
                                 ),
                               ),
                             ),
@@ -323,7 +335,10 @@ Future<String?> showTkModalChoices(BuildContext context, {required String title,
                   onTap: () => Navigator.of(context).pop(id),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Text(words, style: tkText(size: 16, weight: id == value ? 700 : 500, color: t.text)),
+                    child: Text(
+                      words,
+                      style: tkText(size: 16, weight: id == value ? 700 : 500, color: t.text),
+                    ),
                   ),
                 ),
               ),

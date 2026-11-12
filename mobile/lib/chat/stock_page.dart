@@ -99,7 +99,8 @@ String byHowLine(Map<String, dynamic> day) {
 }
 
 /// stock.ts saleTitle: what was sold.
-String saleTitle(Map<String, dynamic> s) => [for (final l in _maps(s['lines'])) '${stockQuantity(_int(l['quantity']) ?? 0, l['unit'] as String?)} ${l['item']}'].join(', ');
+String saleTitle(Map<String, dynamic> s) =>
+    [for (final l in _maps(s['lines'])) '${stockQuantity(_int(l['quantity']) ?? 0, l['unit'] as String?)} ${l['item']}'].join(', ');
 
 /// stock.ts saleSub: when, how paid, whether its money came, its reference.
 String saleSub(Map<String, dynamic> s) {
@@ -190,13 +191,21 @@ class _StockPageState extends State<StockPage> {
   }
 
   Future<void> _loadMoves() async {
+    // A filter changed while the last was asked: only the newest is shown.
+    final asked = ++_movesAsked;
     try {
-      final r = await _t.send('GET', '/v1/stock/movements', query: {'limit': '50', if (_item.isNotEmpty) 'item': _item, if (_reason.isNotEmpty) 'reason': _reason});
-      if (mounted) setState(() => _moves = _maps((r as Map)['movements']));
+      final r = await _t.send(
+        'GET',
+        '/v1/stock/movements',
+        query: {'limit': '50', if (_item.isNotEmpty) 'item': _item, if (_reason.isNotEmpty) 'reason': _reason},
+      );
+      if (mounted && asked == _movesAsked) setState(() => _moves = _maps((r as Map)['movements']));
     } on Object catch (e) {
-      if (mounted) setState(() => _error = _why(e));
+      if (mounted && asked == _movesAsked) setState(() => _error = _why(e));
     }
   }
+
+  int _movesAsked = 0;
 
   Future<void> _setup() async {
     setState(() => _busy = true);
@@ -228,7 +237,13 @@ class _StockPageState extends State<StockPage> {
       title: 'Stock',
       description: 'Your items and how many are left. Every change is kept, so a count can always be explained.',
       onRefresh: _reload,
-      action: keeps ? TkSmallButton(label: 'Add items', primary: true, onPressed: () => _open((c) => _ItemForm(auth: widget.auth), 'Add an item')) : null,
+      action: keeps
+          ? TkSmallButton(
+              label: 'Add items',
+              primary: true,
+              onPressed: () => _open((c) => _ItemForm(auth: widget.auth), 'Add an item'),
+            )
+          : null,
       children: [
         if (_error != null) TkErrorBox(_error!),
         if (v == null && _error == null) Text('Loading your stock…', style: tkHint(t)),
@@ -242,7 +257,10 @@ class _StockPageState extends State<StockPage> {
                 style: tkHint(t),
               ),
               const SizedBox(height: 12),
-              Align(alignment: Alignment.centerLeft, child: TkSmallButton(label: 'Keep my stock', primary: true, onPressed: _busy ? null : _setup)),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TkSmallButton(label: 'Keep my stock', primary: true, onPressed: _busy ? null : _setup),
+              ),
             ],
           ),
         if (keeps) ...[
@@ -250,7 +268,11 @@ class _StockPageState extends State<StockPage> {
           if (stuck > 0)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-              decoration: BoxDecoration(color: cssMix(t.info, t.panel, 0.06), border: Border.all(color: t.info.withValues(alpha: 0.22)), borderRadius: BorderRadius.circular(10)),
+              decoration: BoxDecoration(
+                color: cssMix(t.info, t.panel, 0.06),
+                border: Border.all(color: t.info.withValues(alpha: 0.22)),
+                borderRadius: BorderRadius.circular(10),
+              ),
               child: Text(
                 '${stuck == 1 ? '1 change has' : '$stuck changes have'} not reached your ${v!['catalogue']} table yet. Taskiem sends ${stuck == 1 ? 'it' : 'them'} again by itself.',
                 style: tkText(size: 14, color: t.text),
@@ -303,7 +325,9 @@ class _StockPageState extends State<StockPage> {
                         badge: r.sizes != null
                             ? '${sizesWords(r.sizes!.count)}${r.sizes!.stock != null ? ' · ${r.sizes!.stock} in stock' : ''}${r.sizes!.low > 0 ? ' · ${r.sizes!.low} low' : ''}'
                             : stockLine(r.it),
-                        badgeTone: r.it['low'] == true || (r.sizes?.low ?? 0) > 0 ? Tone.warn : (_int(r.it['stock']) == null && r.sizes == null ? Tone.muted : Tone.ok),
+                        badgeTone: r.it['low'] == true || (r.sizes?.low ?? 0) > 0
+                            ? Tone.warn
+                            : (_int(r.it['stock']) == null && r.sizes == null ? Tone.muted : Tone.ok),
                         sub: r.size != null ? 'Of ${r.size!['name']}' : itemSub(r.it),
                         actions: _actions([
                           if (r.sizes == null) _recordStock(r.it),
@@ -408,7 +432,11 @@ class _StockPageState extends State<StockPage> {
         tag: (_int(day['waiting']) ?? 0) > 0 ? '${day['waiting']} waiting for money' : null,
         amount: naira(_int(day['total_kobo']) ?? 0),
         sub: count == 0 ? 'No sales recorded today.' : '${count == 1 ? '1 sale' : '$count sales'}${by.isNotEmpty ? ' · $by' : ''}',
-        action: TkSmallButton(label: 'Record a sale', primary: true, onPressed: canSell ? () => _open((c) => _SaleForm(auth: widget.auth, items: items), 'Record a sale') : null),
+        action: TkSmallButton(
+          label: 'Record a sale',
+          primary: true,
+          onPressed: canSell ? () => _open((c) => _SaleForm(auth: widget.auth, items: items), 'Record a sale') : null,
+        ),
       ),
       if (unsold.isNotEmpty)
         TkPageCard(
@@ -430,7 +458,9 @@ class _StockPageState extends State<StockPage> {
                     actions: TkSmallButton(
                       label: 'Say what was sold',
                       semantics: 'Say what was sold for ${naira(_int(u['amount_kobo']) ?? 0)}',
-                      onPressed: canSell ? () => _open((c) => _SaleForm(auth: widget.auth, items: items, entry: u), 'What was sold for ${naira(_int(u['amount_kobo']) ?? 0)}') : null,
+                      onPressed: canSell
+                          ? () => _open((c) => _SaleForm(auth: widget.auth, items: items, entry: u), 'What was sold for ${naira(_int(u['amount_kobo']) ?? 0)}')
+                          : null,
                     ),
                   ),
               ],
@@ -482,7 +512,11 @@ class _ModalForm extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final c in children) Padding(padding: const EdgeInsets.only(bottom: 14), child: c),
-        if (problem != null) Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(problem!, style: tkText(size: 13, weight: 600, color: t.danger))),
+        if (problem != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Text(problem!, style: tkText(size: 13, weight: 600, color: t.danger)),
+          ),
         if (error != null) Padding(padding: const EdgeInsets.only(bottom: 10), child: TkErrorBox(error!)),
         Wrap(
           spacing: 8,
@@ -498,8 +532,11 @@ class _ModalForm extends StatelessWidget {
 }
 
 /// A field as the web's `Field`: its label, the box, a hint.
-Widget _field(String label, TextEditingController c, {String? hint, String? placeholder, bool money = false, bool number = false}) =>
-    TkKitField(label: label, hint: hint, child: TkTextBox(controller: c, hint: placeholder, money: money, digits: number ? 7 : null));
+Widget _field(String label, TextEditingController c, {String? hint, String? placeholder, bool money = false, bool number = false, int? max}) => TkKitField(
+  label: label,
+  hint: hint,
+  child: TkTextBox(controller: c, hint: placeholder, money: money, digits: number ? 7 : null, max: max),
+);
 
 /// StorefrontStock.tsx ItemModal: an item added with how many there are,
 /// or its name, unit, prices, levels and supplier changed.
@@ -619,14 +656,27 @@ class _ItemFormState extends State<_ItemForm> {
       error: _error,
       save: _problem == null ? _save : null,
       children: [
-        _field('Name', _name),
-        if (adding) _field('How many you have', _quantity, hint: 'Recorded as goods received, so the count is explained from the start.', placeholder: '50', number: true),
-        _field('Unit', _unit, hint: 'One word: bag, carton, piece. Leave it empty to count pieces.', placeholder: 'carton'),
+        _field('Name', _name, max: 120),
+        if (adding)
+          _field(
+            'How many you have',
+            _quantity,
+            hint: 'Recorded as goods received, so the count is explained from the start.',
+            placeholder: '50',
+            number: true,
+          ),
+        _field('Unit', _unit, max: 30, hint: 'One word: bag, carton, piece. Leave it empty to count pieces.', placeholder: 'carton'),
         _field('Cost price (₦)', _cost, hint: 'What you pay for one, for the value of your stock and what you lose.', placeholder: '8500', money: true),
-        _field('Selling price (₦)', _price, hint: 'Shown on your page once it is published. Without one, the item is not shown.', placeholder: '9500', money: true),
+        _field(
+          'Selling price (₦)',
+          _price,
+          hint: 'Shown on your page once it is published. Without one, the item is not shown.',
+          placeholder: '9500',
+          money: true,
+        ),
         _field('Reorder at', _reorder, hint: 'When the count is this or less, the item is low and you are told each morning.', placeholder: '10', number: true),
         _field('Order up to', _target, hint: 'What to order a low item back up to.', placeholder: '50', number: true),
-        _field('Supplier', _supplier, placeholder: 'Dangote Depot'),
+        _field('Supplier', _supplier, placeholder: 'Dangote Depot', max: 120),
       ],
     );
   }
@@ -711,7 +761,11 @@ class _MoveFormState extends State<_MoveForm> {
     }
   }
 
-  Widget _radio(String label, bool on, VoidCallback onTap) => TkChoiceRow(control: TkRadio(checked: on), label: Text(label, style: tkText(size: 15, color: TkTheme.tokens(context).text)), onTap: onTap);
+  Widget _radio(String label, bool on, VoidCallback onTap) => TkChoiceRow(
+    control: TkRadio(checked: on),
+    label: Text(label, style: tkText(size: 15, color: TkTheme.tokens(context).text)),
+    onTap: onTap,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -756,7 +810,7 @@ class _MoveFormState extends State<_MoveForm> {
             ),
           ),
         _field(_kind == 'count' ? 'How many you counted' : 'How many', _amount, placeholder: _kind == 'count' ? '12' : '5', number: true),
-        _field(_kind == 'adjustment' ? 'Why' : 'Note', _note, hint: _kind == 'adjustment' ? 'Spoilt, lost, found, a gift.' : null),
+        _field(_kind == 'adjustment' ? 'Why' : 'Note', _note, hint: _kind == 'adjustment' ? 'Spoilt, lost, found, a gift.' : null, max: 200),
         if (_preview != null && problem == null) Text('The count goes from $_preview.', style: tkHint(t)),
       ],
     );
@@ -863,15 +917,14 @@ class _SaleFormState extends State<_SaleForm> {
         body: {
           'lines': [
             for (final l in _lines)
-              {
-                'item_id': l.item,
-                'quantity': _whole(l.quantity.text),
-                if (l.price.text.trim().isNotEmpty) 'price_kobo': feeKobo(l.price.text),
-              },
+              {'item_id': l.item, 'quantity': _whole(l.quantity.text), if (l.price.text.trim().isNotEmpty) 'price_kobo': feeKobo(l.price.text)},
           ],
           'paid_how': entry != null ? 'pos' : _how,
-          if (entry != null) ...{'amount_kobo': entry['amount_kobo'], 'entry_id': entry['entry_id']}
-          else if (_amount.text.trim().isNotEmpty) 'amount_kobo': feeKobo(_amount.text),
+          if (entry != null) ...{
+            'amount_kobo': entry['amount_kobo'],
+            'entry_id': entry['entry_id'],
+          } else if (_amount.text.trim().isNotEmpty)
+            'amount_kobo': feeKobo(_amount.text),
           'note': _note.text.trim(),
         },
         headers: {'Idempotency-Key': _key},
@@ -934,11 +987,18 @@ class _SaleFormState extends State<_SaleForm> {
               if (_lines.length > 1)
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: TkSmallButton(label: 'Take this item off', semantics: 'Take this item off ${i + 1}', onPressed: () => setState(() => _lines.removeAt(i))),
+                  child: TkSmallButton(
+                    label: 'Take this item off',
+                    semantics: 'Take this item off ${i + 1}',
+                    onPressed: () => setState(() => _lines.removeAt(i)),
+                  ),
                 ),
             ],
           ),
-        Align(alignment: Alignment.centerLeft, child: TkSmallButton(label: 'Add another item', onPressed: () => setState(() => _lines.add(_Line(_changed))))),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TkSmallButton(label: 'Add another item', onPressed: () => setState(() => _lines.add(_Line(_changed)))),
+        ),
         if (widget.entry == null) ...[
           Semantics(
             container: true,
@@ -950,7 +1010,11 @@ class _SaleFormState extends State<_SaleForm> {
                 Text('How it was paid', style: tkText(size: 12.5, weight: 500, color: t.text)),
                 const SizedBox(height: 6),
                 for (final h in const [('cash', 'Cash'), ('transfer', 'Transfer'), ('pos', 'Terminal')])
-                  TkChoiceRow(control: TkRadio(checked: _how == h.$1), label: Text(h.$2, style: tkText(size: 15, color: t.text)), onTap: () => setState(() => _how = h.$1)),
+                  TkChoiceRow(
+                    control: TkRadio(checked: _how == h.$1),
+                    label: Text(h.$2, style: tkText(size: 15, color: t.text)),
+                    onTap: () => setState(() => _how = h.$1),
+                  ),
               ],
             ),
           ),
@@ -961,7 +1025,7 @@ class _SaleFormState extends State<_SaleForm> {
             hint: total != null ? 'Leave it empty for ${naira(total)}, the items’ prices.' : 'Needed when an item has no price.',
           ),
         ],
-        _field('Note', _note),
+        _field('Note', _note, max: 200),
         if (widget.entry == null && _how != 'cash')
           Text('The sale waits for its money, and is matched when the ${_how == 'pos' ? 'terminal reports it' : 'transfer comes in'}.', style: tkHint(t)),
       ],

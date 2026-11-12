@@ -8,6 +8,7 @@
 // a diary line.
 
 import 'dart:async';
+import 'dart:convert' show jsonEncode;
 
 import 'package:flutter/widgets.dart';
 
@@ -40,6 +41,21 @@ const sendSide = 1600.0;
 
 /// FormFrame.tsx formKey: one change, sent once however often it is tried.
 String formKey() => 'chat-${uuid4()}';
+
+/// A save's Idempotency-Key: the same while what is sent is the same (a
+/// retry after a dropped answer is not saved twice), a new one once it
+/// changes (the server would refuse an old key with a new body).
+class SaveKey {
+  String? _sent;
+  String _key = formKey();
+
+  String of(Object? body) {
+    final now = jsonEncode(body);
+    if (_sent != null && _sent != now) _key = formKey();
+    _sent = now;
+    return _key;
+  }
+}
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int? _int(Object? v) => (v as num?)?.toInt();
@@ -98,7 +114,12 @@ List<Map<String, Object?>> itemsWithPrice(Map<String, dynamic> list, String item
         'price_kobo': x['item_id'] == itemId ? kobo : x['price_kobo'],
         'min_quantity': x['min_quantity'],
         'available': x['available'],
-        'breaks': x['item_id'] == itemId ? [for (final b in _maps(x['breaks'])) if ((_int(b['price_kobo']) ?? 0) < kobo) b] : x['breaks'],
+        'breaks': x['item_id'] == itemId
+            ? [
+                for (final b in _maps(x['breaks']))
+                  if ((_int(b['price_kobo']) ?? 0) < kobo) b,
+              ]
+            : x['breaks'],
         if (_maps(x['sizes']).any((z) => (_int(z['price_kobo']) ?? 0) > 0))
           'sizes': [
             for (final z in _maps(x['sizes']))
@@ -169,7 +190,7 @@ class _CategoryFieldState extends State<CategoryField> {
         TkKitField(
           label: 'Category',
           hint: 'Sneakers, Soft drinks… Search and the chips use it.',
-          child: TkTextBox(controller: widget.controller, hint: 'None'),
+          child: TkTextBox(controller: widget.controller, hint: 'None', max: 60),
         ),
         if (offer.isNotEmpty) ...[
           const SizedBox(height: 8),
@@ -216,6 +237,13 @@ class PhotoAdd extends StatefulWidget {
 /// photos.ts PhotoPick: a photo chosen, a file or a link.
 typedef PhotoPick = ({PickedFile? file, String? url});
 
+/// photos.ts sendProblem: what is wrong with a photo to send, or null.
+String? sendProblem(PickedFile f) {
+  if (!const ['image/jpeg', 'image/png', 'image/webp'].contains(f.type)) return 'Choose a JPEG, PNG or WebP photo.';
+  if (f.bytes.length > 10 << 20) return 'That photo is larger than 10 MB, even made smaller. Choose a smaller one.';
+  return null;
+}
+
 /// photos.ts linkProblem.
 String? linkProblem(String raw) {
   final v = raw.trim();
@@ -243,13 +271,21 @@ class _PhotoAddState extends State<PhotoAdd> {
     super.dispose();
   }
 
-  Future<void> _take(Future<List<PickedFile>> Function() pick) async {
+  Future<void> _take(Future<List<PickedFile>> Function() pick, {bool camera = false}) async {
+    final List<PickedFile> fs;
     try {
-      final fs = await pick();
-      if (fs.isNotEmpty) widget.onPick([for (final f in fs.take(widget.room)) (file: f, url: null)]);
+      fs = await pick();
     } on Object {
-      widget.onError?.call('Taskiem could not open your photos. Allow it in your phone’s settings, then try again.');
+      widget.onError?.call('Taskiem could not open your ${camera ? 'camera' : 'photos'}. Allow it in your phone’s settings, then try again.');
+      return;
     }
+    // photos.ts sendProblem: said before the upload, not after it.
+    final ok = [
+      for (final f in fs)
+        if (sendProblem(f) == null) f,
+    ];
+    if (ok.length < fs.length) widget.onError?.call(sendProblem(fs.firstWhere((f) => sendProblem(f) != null))!);
+    if (ok.isNotEmpty) widget.onPick([for (final f in ok.take(widget.room)) (file: f, url: null)]);
   }
 
   void _addLink() {
@@ -282,7 +318,7 @@ class _PhotoAddState extends State<PhotoAdd> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              way('camera', 'Take a photo', () => _take(() async => [?await widget.pickers.camera(side: sendSide)])),
+              way('camera', 'Take a photo', () => _take(() async => [?await widget.pickers.camera(side: sendSide)], camera: true)),
               way('image', 'From your phone', () => _take(() => widget.pickers.photos(widget.room, side: sendSide))),
               way('link', 'Paste a link', () => setState(() => (_linking = !_linking, _problem = null))),
             ],
@@ -412,7 +448,10 @@ class PhotoFailures extends StatelessWidget {
         ),
         if (onRetry != null) ...[
           const SizedBox(height: 8),
-          Align(alignment: Alignment.centerLeft, child: TkSoftButton(label: 'Try again', onTap: busy ? null : onRetry)),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TkSoftButton(label: 'Try again', onTap: busy ? null : onRetry),
+          ),
         ],
       ],
     );
@@ -478,7 +517,10 @@ class _PhotoLink extends StatelessWidget {
         excludeSemantics: true,
         child: GestureDetector(
           onTap: onTap,
-          child: Text(label, style: tkText(size: 13, color: t.accent, decoration: TextDecoration.underline)),
+          child: Text(
+            label,
+            style: tkText(size: 13, color: t.accent, decoration: TextDecoration.underline),
+          ),
         ),
       ),
     );
@@ -543,9 +585,15 @@ class _ProductPhotosState extends State<ProductPhotos> {
       _error = null;
       _sending = (done: 0, of: picks.length);
     });
-    final bad = await sendAll(_t, widget.row, picks, _ids.length, onSent: () {
-      if (mounted) setState(() => _sending = (done: _sending!.done + 1, of: _sending!.of));
-    });
+    final bad = await sendAll(
+      _t,
+      widget.row,
+      picks,
+      _ids.length,
+      onSent: () {
+        if (mounted) setState(() => _sending = (done: _sending!.done + 1, of: _sending!.of));
+      },
+    );
     if (!mounted) return;
     setState(() {
       _sending = null;
@@ -625,13 +673,7 @@ class _ProductPhotosState extends State<ProductPhotos> {
         ),
         if (may && _read) ...[
           const SizedBox(height: 10),
-          PhotoAdd(
-            pickers: widget.pickers,
-            room: maxGallery + 1 - ids.length,
-            busy: quiet,
-            onPick: _send,
-            onError: (w) => setState(() => _error = w),
-          ),
+          PhotoAdd(pickers: widget.pickers, room: maxGallery + 1 - ids.length, busy: quiet, onPick: _send, onError: (w) => setState(() => _error = w)),
         ],
         if (_sending != null) ...[const SizedBox(height: 8), sendingLine(context, _sending)],
         if (_failed.isNotEmpty) ...[
@@ -692,15 +734,15 @@ class PendingPhotos extends StatelessWidget {
                               padding: const EdgeInsets.all(6),
                               color: t.tkSoft,
                               alignment: Alignment.center,
-                              child: Text(pickName(picks[i]), textAlign: TextAlign.center, style: tkText(size: 11, weight: 600, color: t.text)),
+                              child: Text(
+                                pickName(picks[i]),
+                                textAlign: TextAlign.center,
+                                style: tkText(size: 11, weight: 600, color: t.text),
+                              ),
                             ),
                     ),
                     const SizedBox(height: 4),
-                    _PhotoLink(
-                      label: 'Remove',
-                      said: 'Remove photo ${i + 1}',
-                      onTap: busy ? null : () => onChange([...picks]..removeAt(i)),
-                    ),
+                    _PhotoLink(label: 'Remove', said: 'Remove photo ${i + 1}', onTap: busy ? null : () => onChange([...picks]..removeAt(i))),
                   ],
                 ),
             ],
@@ -898,16 +940,23 @@ class _ProductFormState extends State<ProductForm> {
           floorKobo != null,
       children: [
         ProductPhotos(auth: widget.auth, row: _id, name: _it['name'] as String? ?? '', canEdit: widget.canEdit, pickers: widget.pickers),
-        TkKitField(label: 'Name', child: TkTextBox(controller: _name)),
+        TkKitField(
+          label: 'Name',
+          child: TkTextBox(controller: _name, max: 120),
+        ),
         CategoryField(transport: _t, controller: _category),
         if (chosen != null) ...[
           // `.tk-form-two`: two columns, 12 apart.
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: TkMoneyField(label: 'Storefront price', controller: _price)),
+              Expanded(
+                child: TkMoneyField(label: 'Storefront price', controller: _price),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: TkMoneyField(label: listLabel(chosen['name'] as String? ?? ''), controller: _tradePrice)),
+              Expanded(
+                child: TkMoneyField(label: listLabel(chosen['name'] as String? ?? ''), controller: _tradePrice),
+              ),
             ],
           ),
           if ((_lists?.length ?? 0) > 1)
@@ -963,7 +1012,10 @@ class _ProductFormState extends State<ProductForm> {
           if (_picking)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(border: Border.all(color: t.border), borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(
+                border: Border.all(color: t.border),
+                borderRadius: BorderRadius.circular(14),
+              ),
               child: (_linked ?? const []).isEmpty
                   ? Text('No linked businesses yet. Link with a business to share a list.', style: tkText(size: 13, color: t.muted))
                   : Column(
@@ -986,7 +1038,9 @@ class _ProductFormState extends State<ProductForm> {
                                     children: [
                                       TkCheckbox(checked: _sharing.contains(l['id'])),
                                       const SizedBox(width: 10),
-                                      Expanded(child: Text(l['name'] as String? ?? '', style: tkText(size: 14, weight: 500, color: t.text))),
+                                      Expanded(
+                                        child: Text(l['name'] as String? ?? '', style: tkText(size: 14, weight: 500, color: t.text)),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -1040,7 +1094,10 @@ class _ProductFormState extends State<ProductForm> {
             child: Text.rich(
               TextSpan(
                 children: [
-                  TextSpan(text: 'Saving posts a line in this chat', style: tkText(size: 13, weight: 700, lineHeight: 1.45, color: t.toneGreenInk)),
+                  TextSpan(
+                    text: 'Saving posts a line in this chat',
+                    style: tkText(size: 13, weight: 700, lineHeight: 1.45, color: t.toneGreenInk),
+                  ),
                   TextSpan(text: ' and updates the price for every business on the ${listLabel(chosen['name'] as String? ?? '')}.'),
                 ],
               ),
@@ -1064,13 +1121,20 @@ class _ListPick extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final now = lists.where((l) => l['id'] == value).map((l) => l['name'] as String? ?? '').firstOrNull ?? '';
     Future<void> open() async {
-      final v = await showTkModalChoices(context, title: 'Price list', choices: [for (final l in lists) (l['id'] as String, l['name'] as String? ?? '')], value: value);
+      final v = await showTkModalChoices(
+        context,
+        title: 'Price list',
+        choices: [for (final l in lists) (l['id'] as String, l['name'] as String? ?? '')],
+        value: value,
+      );
       if (v != null) onPick(v);
     }
 
     return Row(
       children: [
-        Expanded(child: Text('Price list', style: tkText(size: 13, weight: 600, color: t.muted))),
+        Expanded(
+          child: Text('Price list', style: tkText(size: 13, weight: 600, color: t.muted)),
+        ),
         const SizedBox(width: 12),
         TapArea(
           child: Semantics(
@@ -1087,7 +1151,14 @@ class _ListPick extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Flexible(child: Text(now, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 15, weight: 600, color: t.text))),
+                    Flexible(
+                      child: Text(
+                        now,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tkText(size: 15, weight: 600, color: t.text),
+                      ),
+                    ),
                     const SizedBox(width: 8),
                     RotatedBox(quarterTurns: 1, child: TkIcon('chevron', size: 12, color: t.text)),
                   ],
@@ -1100,7 +1171,6 @@ class _ListPick extends StatelessWidget {
     );
   }
 }
-
 
 /// ChatToolForms.tsx ProductAdd: a new product, its name, category,
 /// price, unit and how many; its photos held until it exists, then sent.
@@ -1125,7 +1195,7 @@ class _ProductAddState extends State<ProductAdd> {
   List<({PhotoPick pick, String why})> _failed = const [];
   ({int done, int of})? _sending;
   String? _photoError;
-  late final _key = formKey();
+  final _key = SaveKey();
 
   Transport get _t => widget.auth.transport;
   bool get _photosOK => widget.auth.can('storefront.manage');
@@ -1150,26 +1220,28 @@ class _ProductAddState extends State<ProductAdd> {
     final kobo = nairaKobo(_price.text)!;
     var id = _added;
     if (id == null) {
-      final out = await _t.send(
-        'POST',
-        '/v1/stock/items',
-        body: {
-          'name': _name.text.trim(),
-          'price_kobo': kobo,
-          'unit': _unit.text.trim(),
-          'quantity': _count,
-          if (_category.text.trim().isNotEmpty) 'category': _category.text.trim(),
-        },
-        headers: {'Idempotency-Key': _key},
-      ) as Map<String, dynamic>;
+      final body = {
+        'name': _name.text.trim(),
+        'price_kobo': kobo,
+        'unit': _unit.text.trim(),
+        'quantity': _count,
+        if (_category.text.trim().isNotEmpty) 'category': _category.text.trim(),
+      };
+      final out = await _t.send('POST', '/v1/stock/items', body: body, headers: {'Idempotency-Key': _key.of(body)}) as Map<String, dynamic>;
       id = (out['item'] as Map)['id'] as String;
     }
     final todo = _added != null ? [for (final f in _failed) f.pick] : (_photosOK ? _picks : const <PhotoPick>[]);
     if (todo.isNotEmpty) {
-      setState(() => _sending = (done: 0, of: todo.length));
-      final bad = await sendAll(_t, id, todo, _added != null ? _picks.length - _failed.length : 0, onSent: () {
-        if (mounted) setState(() => _sending = (done: _sending!.done + 1, of: _sending!.of));
-      });
+      if (mounted) setState(() => _sending = (done: 0, of: todo.length));
+      final bad = await sendAll(
+        _t,
+        id,
+        todo,
+        _added != null ? _picks.length - _failed.length : 0,
+        onSent: () {
+          if (mounted) setState(() => _sending = (done: _sending!.done + 1, of: _sending!.of));
+        },
+      );
       if (mounted) setState(() => _sending = null);
       try {
         await _t.send('POST', '/v1/storefront/catalogue/refresh', body: const {});
@@ -1177,10 +1249,12 @@ class _ProductAddState extends State<ProductAdd> {
         // The page reads them later.
       }
       if (bad.isNotEmpty) {
-        setState(() {
-          _added = id;
-          _failed = bad;
-        });
+        if (mounted) {
+          setState(() {
+            _added = id;
+            _failed = bad;
+          });
+        }
         throw FormProblem(
           '${_name.text.trim()} is added, but ${bad.length == 1 ? 'a photo' : '${bad.length} photos'} did not go. Press Send the photos again, or close: the product stays.',
         );
@@ -1204,20 +1278,22 @@ class _ProductAddState extends State<ProductAdd> {
           if (_added != null)
             PhotoFailures(failed: _failed)
           else
-            PendingPhotos(
-              picks: _picks,
-              pickers: widget.pickers,
-              onChange: (p) => setState(() => _picks = p),
-              onError: (w) => setState(() => _photoError = w),
-            ),
+            PendingPhotos(picks: _picks, pickers: widget.pickers, onChange: (p) => setState(() => _picks = p), onError: (w) => setState(() => _photoError = w)),
         if (_photoError != null) TkErrorBox(_photoError!),
         if (_added != null)
           Text('${_name.text.trim()} is in your products.', style: tkFormNow(t))
         else ...[
-          TkKitField(label: 'Name', child: TkTextBox(controller: _name, hint: 'Rice, 50kg bag')),
+          TkKitField(
+            label: 'Name',
+            child: TkTextBox(controller: _name, hint: 'Rice, 50kg bag', max: 120),
+          ),
           CategoryField(transport: _t, controller: _category),
           TkMoneyField(label: 'Price', controller: _price),
-          TkKitField(label: 'Sold by the', hint: 'bag, carton, piece…', child: TkTextBox(controller: _unit)),
+          TkKitField(
+            label: 'Sold by the',
+            hint: 'bag, carton, piece…',
+            child: TkTextBox(controller: _unit),
+          ),
           TkFormRow(
             title: 'In stock now',
             trailing: TkStepper(label: 'In stock now', value: _count, onChanged: (n) => setState(() => _count = n)),
@@ -1243,7 +1319,7 @@ class StockInForm extends StatefulWidget {
 class _StockInFormState extends State<StockInForm> {
   int _n = 1;
   final _note = TextEditingController();
-  late final _key = formKey();
+  final _key = SaveKey();
 
   @override
   void dispose() {
@@ -1253,12 +1329,8 @@ class _StockInFormState extends State<StockInForm> {
 
   Future<String?> _save() async {
     final it = widget.item;
-    await widget.auth.transport.send(
-      'POST',
-      '/v1/stock/movements',
-      body: {'item_id': it['id'], 'reason': 'received', 'change': _n, 'note': _note.text.trim().isEmpty ? 'Recorded in chat' : _note.text.trim()},
-      headers: {'Idempotency-Key': _key},
-    );
+    final body = {'item_id': it['id'], 'reason': 'received', 'change': _n, 'note': _note.text.trim().isEmpty ? 'Recorded in chat' : _note.text.trim()};
+    await widget.auth.transport.send('POST', '/v1/stock/movements', body: body, headers: {'Idempotency-Key': _key.of(body)});
     return stockInLine(it['name'] as String? ?? '', _n, _int(it['stock']), it['unit'] as String?);
   }
 
@@ -1277,8 +1349,15 @@ class _StockInFormState extends State<StockInForm> {
       canEdit: widget.canEdit,
       children: [
         Text('Now: ${now == null ? 'no count yet' : quantity(now, it['unit'] as String?)}', style: tkFormNow(t)),
-        TkFormRow(title: 'Came in', trailing: TkStepper(label: 'Came in', value: _n, onChanged: (n) => setState(() => _n = n))),
-        TkKitField(label: 'Note', hint: 'Who brought it, a delivery note…', child: TkTextBox(controller: _note)),
+        TkFormRow(
+          title: 'Came in',
+          trailing: TkStepper(label: 'Came in', value: _n, onChanged: (n) => setState(() => _n = n)),
+        ),
+        TkKitField(
+          label: 'Note',
+          hint: 'Who brought it, a delivery note…',
+          child: TkTextBox(controller: _note, max: 200),
+        ),
       ],
     );
   }

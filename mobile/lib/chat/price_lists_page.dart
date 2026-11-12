@@ -113,6 +113,7 @@ class _PriceListsPageState extends State<PriceListsPage> {
     final lists = _lists;
     return TkPageScreen(
       title: 'Price lists',
+      onRefresh: _load,
       description: 'The prices linked businesses that buy from you see, from your own stock items. Share a list with them, and give one their own prices.',
       children: [
         if (_error != null) TkErrorBox(_error!),
@@ -141,7 +142,11 @@ class _PriceListsPageState extends State<PriceListsPage> {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            TkSmallButton(label: 'Items', semantics: 'Items of ${l['name']}', onPressed: () => _modal('Items of ${l['name']}', (_) => _ListItems(auth: widget.auth, list: l))),
+                            TkSmallButton(
+                              label: 'Items',
+                              semantics: 'Items of ${l['name']}',
+                              onPressed: () => _modal('Items of ${l['name']}', (_) => _ListItems(auth: widget.auth, list: l)),
+                            ),
                             TkSmallButton(
                               label: 'Share',
                               semantics: 'Share ${l['name']}',
@@ -172,7 +177,12 @@ class _PriceListsPageState extends State<PriceListsPage> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(child: Semantics(label: 'New price list’s name', child: TkTextBox(controller: _name, hint: 'Trade prices', height: 44, size: 16))),
+                  Expanded(
+                    child: Semantics(
+                      label: 'New price list’s name',
+                      child: TkTextBox(controller: _name, hint: 'Trade prices', height: 44, size: 16, max: 80),
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   TkSmallButton(
                     label: 'Make a price list',
@@ -216,7 +226,7 @@ class _PriceListsPageState extends State<PriceListsPage> {
                 ),
               ],
             ),
-          _Offers(auth: widget.auth),
+          _Offers(key: const ValueKey('offers'), auth: widget.auth),
         ],
       ],
     );
@@ -239,13 +249,19 @@ class _Row {
       min = TextEditingController(text: '${_int(on?['min_quantity']) ?? 1}'),
       available = on?['available'] as bool? ?? true,
       breaks = [
-        for (final b in _maps(on?['breaks'])) (qty: TextEditingController(text: '${b['min_quantity']}'), price: TextEditingController(text: feeInput(_int(b['price_kobo']) ?? 0))),
+        for (final b in _maps(on?['breaks']))
+          (qty: TextEditingController(text: '${b['min_quantity']}'), price: TextEditingController(text: feeInput(_int(b['price_kobo']) ?? 0))),
       ],
       sizePrices = {
         for (final z in _maps(on?['sizes']))
           if ((_int(z['price_kobo']) ?? 0) > 0) z['item_id'] as String: TextEditingController(text: feeInput(_int(z['price_kobo'])!)),
       } {
-    for (final c in [price, min, for (final b in breaks) ...[b.qty, b.price], ...sizePrices.values]) {
+    for (final c in [
+      price,
+      min,
+      for (final b in breaks) ...[b.qty, b.price],
+      ...sizePrices.values,
+    ]) {
       c.addListener(changed);
     }
   }
@@ -286,23 +302,28 @@ class _ListItemsState extends State<_ListItems> {
   @override
   void initState() {
     super.initState();
-    widget.auth.transport.send('GET', '/v1/stock').then((r) {
-      if (!mounted) return;
-      final items = _maps((r as Map)['items']);
-      final on = _maps(widget.list['items']);
-      setState(() {
-        _all = items;
-        _rows = [for (final it in items.where((x) => x['variant_of'] == null)) _Row(it, on.where((x) => x['item_id'] == it['id']).firstOrNull, _changed)];
-      });
-    }, onError: (Object e) {
-      if (mounted) {
-        setState(
-          () => _error = e is ApiError && e.status == 409
-              ? 'Keep your stock on Taskiem first: its items are what a price list sells.'
-              : (e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.'),
+    widget.auth.transport
+        .send('GET', '/v1/stock')
+        .then(
+          (r) {
+            if (!mounted) return;
+            final items = _maps((r as Map)['items']);
+            final on = _maps(widget.list['items']);
+            setState(() {
+              _all = items;
+              _rows = [for (final it in items.where((x) => x['variant_of'] == null)) _Row(it, on.where((x) => x['item_id'] == it['id']).firstOrNull, _changed)];
+            });
+          },
+          onError: (Object e) {
+            if (mounted) {
+              setState(
+                () => _error = e is ApiError && e.status == 409
+                    ? 'Keep your stock on Taskiem first: its items are what a price list sells.'
+                    : (e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.'),
+              );
+            }
+          },
         );
-      }
-    });
   }
 
   Future<void> _save() async {
@@ -319,7 +340,9 @@ class _ListItemsState extends State<_ListItems> {
                 'price_kobo': feeKobo(r.price.text),
                 'min_quantity': int.parse(r.min.text),
                 'available': r.available,
-                'breaks': [for (final b in r.typedBreaks) {'min_quantity': b.qty, 'price_kobo': b.price}],
+                'breaks': [
+                  for (final b in r.typedBreaks) {'min_quantity': b.qty, 'price_kobo': b.price},
+                ],
                 if (hasSizes(r.item))
                   'sizes': [
                     for (final e in r.sizePrices.entries)
@@ -372,7 +395,10 @@ class _ListItemsState extends State<_ListItems> {
                   TkChoiceRow(
                     radio: false,
                     control: TkCheckbox(checked: r.on),
-                    label: Text('${r.item['name']}${(r.item['unit'] as String? ?? '').isNotEmpty ? ' (${r.item['unit']})' : ''}', style: tkText(size: 15, weight: 600, color: t.text)),
+                    label: Text(
+                      '${r.item['name']}${(r.item['unit'] as String? ?? '').isNotEmpty ? ' (${r.item['unit']})' : ''}',
+                      style: tkText(size: 15, weight: 600, color: t.text),
+                    ),
                     onTap: () => setState(() => r.on = !r.on),
                   ),
                   if (r.on)
@@ -383,9 +409,20 @@ class _ListItemsState extends State<_ListItems> {
                         children: [
                           Row(
                             children: [
-                              Expanded(child: TkKitField(label: 'Price (₦)', child: TkTextBox(controller: r.price, money: true, height: 44, size: 16))),
+                              Expanded(
+                                child: TkKitField(
+                                  label: 'Price (₦)',
+                                  child: TkTextBox(controller: r.price, money: true, height: 44, size: 16),
+                                ),
+                              ),
                               const SizedBox(width: 10),
-                              SizedBox(width: 100, child: TkKitField(label: 'At least', child: TkTextBox(controller: r.min, digits: 6, height: 44, size: 16))),
+                              SizedBox(
+                                width: 100,
+                                child: TkKitField(
+                                  label: 'At least',
+                                  child: TkTextBox(controller: r.min, digits: 6, height: 44, size: 16),
+                                ),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 8),
@@ -398,7 +435,8 @@ class _ListItemsState extends State<_ListItems> {
                           if (hasSizes(r.item)) ...[
                             TkLink(
                               label: '${sizesWords(sizesOf(_all, r.item['id'] as String).length)}: some cost more or less',
-                              onTap: () => setState(() => _openSizes.contains(r.item['id']) ? _openSizes.remove(r.item['id']) : _openSizes.add(r.item['id'] as String)),
+                              onTap: () =>
+                                  setState(() => _openSizes.contains(r.item['id']) ? _openSizes.remove(r.item['id']) : _openSizes.add(r.item['id'] as String)),
                             ),
                             if (_openSizes.contains(r.item['id'])) ...[
                               Text('Each goes on the list at the price above unless you give it its own.', style: tkHint(t)),
@@ -428,9 +466,20 @@ class _ListItemsState extends State<_ListItems> {
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    SizedBox(width: 90, child: TkKitField(label: 'From', child: TkTextBox(controller: r.breaks[k].qty, digits: 6, height: 44, size: 16))),
+                                    SizedBox(
+                                      width: 90,
+                                      child: TkKitField(
+                                        label: 'From',
+                                        child: TkTextBox(controller: r.breaks[k].qty, digits: 6, height: 44, size: 16),
+                                      ),
+                                    ),
                                     const SizedBox(width: 8),
-                                    Expanded(child: TkKitField(label: 'Price (₦)', child: TkTextBox(controller: r.breaks[k].price, money: true, height: 44, size: 16))),
+                                    Expanded(
+                                      child: TkKitField(
+                                        label: 'Price (₦)',
+                                        child: TkTextBox(controller: r.breaks[k].price, money: true, height: 44, size: 16),
+                                      ),
+                                    ),
                                     const SizedBox(width: 8),
                                     TkSmallButton(
                                       label: 'Remove',
@@ -462,7 +511,11 @@ class _ListItemsState extends State<_ListItems> {
                 ],
               ),
             ),
-        if (bad != null) Padding(padding: const EdgeInsets.only(bottom: 8), child: Text('${bad.item['name']} needs a price and a whole number for “At least”.', style: tkHint(t))),
+        if (bad != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text('${bad.item['name']} needs a price and a whole number for “At least”.', style: tkHint(t)),
+          ),
         if (badBreaks != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -551,19 +604,24 @@ class _LinkPricesState extends State<_LinkPrices> {
   @override
   void initState() {
     super.initState();
-    widget.auth.transport.send('GET', '/v1/link-prices/${widget.link}').then((r) {
-      if (!mounted) return;
-      final items = _maps((r as Map)['items']);
-      setState(() {
-        _items = items;
-        for (final it in items) {
-          _prices[it['item_id'] as String] = TextEditingController(text: it['overridden'] == true ? feeInput(_int(it['price_kobo']) ?? 0) : '')
-            ..addListener(() => setState(() {}));
-        }
-      });
-    }, onError: (Object e) {
-      if (mounted) setState(() => _error = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.');
-    });
+    widget.auth.transport
+        .send('GET', '/v1/link-prices/${widget.link}')
+        .then(
+          (r) {
+            if (!mounted) return;
+            final items = _maps((r as Map)['items']);
+            setState(() {
+              _items = items;
+              for (final it in items) {
+                _prices[it['item_id'] as String] = TextEditingController(text: it['overridden'] == true ? feeInput(_int(it['price_kobo']) ?? 0) : '')
+                  ..addListener(() => setState(() {}));
+              }
+            });
+          },
+          onError: (Object e) {
+            if (mounted) setState(() => _error = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.');
+          },
+        );
   }
 
   Future<void> _save() async {
@@ -607,7 +665,8 @@ class _LinkPricesState extends State<_LinkPrices> {
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: TkKitField(
-                label: '${it['name']} (list: ${naira(items.where((x) => x['item_id'] == it['item_id'] && x['overridden'] != true).map((x) => _int(x['price_kobo'])).firstOrNull ?? _int(it['price_kobo']) ?? 0)})',
+                label:
+                    '${it['name']} (list: ${naira(items.where((x) => x['item_id'] == it['item_id'] && x['overridden'] != true).map((x) => _int(x['price_kobo'])).firstOrNull ?? _int(it['price_kobo']) ?? 0)})',
                 child: TkTextBox(controller: _prices[it['item_id']]!, money: true, hint: 'The list’s', height: 44, size: 16),
               ),
             ),
@@ -621,7 +680,7 @@ class _LinkPricesState extends State<_LinkPrices> {
 /// whole order; under it, or under an item's lowest price, an offer waits
 /// for the owner.
 class _Offers extends StatefulWidget {
-  const _Offers({required this.auth});
+  const _Offers({super.key, required this.auth});
   final Auth auth;
 
   @override
@@ -631,14 +690,16 @@ class _Offers extends StatefulWidget {
 class _OffersState extends State<_Offers> {
   Map<String, dynamic>? _view;
   final _pct = TextEditingController();
-  bool _typed = false;
+
+  /// What is saved, as the box shows it: Save is for a change from it.
+  String _saved = '';
   bool _busy = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _pct.addListener(() => setState(() => _typed = true));
+    _pct.addListener(() => setState(() {}));
     _load();
   }
 
@@ -648,8 +709,7 @@ class _OffersState extends State<_Offers> {
       if (!mounted) return;
       setState(() {
         _view = r;
-        _pct.text = (_int(r['max_discount_pct']) ?? 0) > 0 ? '${r['max_discount_pct']}' : '';
-        _typed = false;
+        _pct.text = _saved = (_int(r['max_discount_pct']) ?? 0) > 0 ? '${r['max_discount_pct']}' : '';
       });
     } on Object catch (e) {
       if (mounted) setState(() => _error = e is ApiError ? e.message : 'You’re offline. This shows when you’re back online.');
@@ -682,12 +742,17 @@ class _OffersState extends State<_Offers> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Expanded(child: TkKitField(label: 'Largest discount staff can agree (%)', child: TkTextBox(controller: _pct, digits: 2, hint: 'No limit', height: 44, size: 16))),
+            Expanded(
+              child: TkKitField(
+                label: 'Largest discount staff can agree (%)',
+                child: TkTextBox(controller: _pct, digits: 2, hint: 'No limit', height: 44, size: 16),
+              ),
+            ),
             const SizedBox(width: 8),
             TkSmallButton(
               label: 'Save',
               primary: true,
-              onPressed: _busy || _view == null || bad || !_typed
+              onPressed: _busy || _view == null || bad || v == _saved
                   ? null
                   : () async {
                       setState(() => (_busy = true, _error = null));
@@ -703,7 +768,11 @@ class _OffersState extends State<_Offers> {
             ),
           ],
         ),
-        if (bad) Padding(padding: const EdgeInsets.only(top: 6), child: Semantics(liveRegion: true, child: Text('A whole number from 1 to 90.', style: tkHint(t)))),
+        if (bad)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Semantics(liveRegion: true, child: Text('A whole number from 1 to 90.', style: tkHint(t))),
+          ),
       ],
     );
   }

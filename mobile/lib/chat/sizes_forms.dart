@@ -110,9 +110,7 @@ String _kindOf(String word) {
 /// their names share at the start), its choices (from what the rest of
 /// each name is) and each item's values. Only a proposal.
 ({String name, List<String> choices, Map<String, Variant> values}) proposeGroup(List<({String id, String name})> items) {
-  final words = [
-    for (final it in items) it.name.split(RegExp(r'[\s,–—|]+')).where((w) => w.isNotEmpty && !RegExp(r'^[-/]+$').hasMatch(w)).toList(),
-  ];
+  final words = [for (final it in items) it.name.split(RegExp(r'[\s,–—|]+')).where((w) => w.isNotEmpty && !RegExp(r'^[-/]+$').hasMatch(w)).toList()];
   final head = words.isEmpty ? const <String>[] : words.first;
   var common = 0;
   while (common < head.length && words.every((w) => common < w.length - 1 && w[common].toLowerCase() == head[common].toLowerCase())) {
@@ -190,7 +188,10 @@ class TkFieldset extends StatelessWidget {
           Container(
             margin: const EdgeInsets.only(top: 9),
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-            decoration: BoxDecoration(border: Border.all(color: t.border), borderRadius: BorderRadius.circular(14)),
+            decoration: BoxDecoration(
+              border: Border.all(color: t.border),
+              borderRadius: BorderRadius.circular(14),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -226,14 +227,28 @@ class GridCells extends StatelessWidget {
     builder: (context, box) {
       final cols = math.max(1, ((box.maxWidth + 8) / (84 + 8)).floor());
       final w = (box.maxWidth - 8 * (cols - 1)) / cols;
-      return Wrap(spacing: 8, runSpacing: 8, children: [for (final c in children) SizedBox(width: w, child: c)]);
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [for (final c in children) SizedBox(width: w, child: c)],
+      );
     },
   );
 }
 
 /// `.tk-grid-cell`: a size's name (and a line under it), and its box.
 class GridCell extends StatefulWidget {
-  const GridCell({super.key, required this.name, this.small, required this.label, required this.value, required this.onChanged, this.hint = '', this.low = false, this.price});
+  const GridCell({
+    super.key,
+    required this.name,
+    this.small,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.hint = '',
+    this.low = false,
+    this.price,
+  });
   final String name;
   final String? small;
   final String label;
@@ -282,7 +297,10 @@ class _GridCellState extends State<GridCell> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          if (c.text.isEmpty) ExcludeSemantics(child: Text(hint, style: tkText(size: 15, weight: 600, color: t.muted))),
+          if (c.text.isEmpty)
+            ExcludeSemantics(
+              child: Text(hint, style: tkText(size: 15, weight: 600, color: t.muted)),
+            ),
           EditableText(
             controller: c,
             focusNode: f,
@@ -371,7 +389,7 @@ class _SizesEditorState extends State<SizesEditor> {
   final _fill = TextEditingController();
   List<Map<String, dynamic>>? _all;
   String? _error;
-  late final _key = formKey();
+  final _key = SaveKey();
 
   _Draft _draft(String name, String text) {
     final d = _Draft(name, text);
@@ -384,11 +402,14 @@ class _SizesEditorState extends State<SizesEditor> {
   void initState() {
     super.initState();
     _fill.addListener(() => setState(() {}));
-    _stock(widget.auth.transport).then((x) {
-      if (mounted) setState(() => _all = x);
-    }, onError: (Object e) {
-      if (mounted) setState(() => _error = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.');
-    });
+    _stock(widget.auth.transport).then(
+      (x) {
+        if (mounted) setState(() => _all = x);
+      },
+      onError: (Object e) {
+        if (mounted) setState(() => _error = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.');
+      },
+    );
   }
 
   @override
@@ -435,9 +456,7 @@ class _SizesEditorState extends State<SizesEditor> {
     final dark = TkTheme.of(context).mode == TkMode.dark;
     final name = _it['name'] as String? ?? '';
     if (_all == null) {
-      return _error != null
-          ? Padding(padding: const EdgeInsets.all(20), child: TkErrorBox(_error!))
-          : const TkLoading(label: 'Loading its sizes and colours…');
+      return _error != null ? Padding(padding: const EdgeInsets.all(20), child: TkErrorBox(_error!)) : const TkLoading(label: 'Loading its sizes and colours…');
     }
     final cs = _cs;
     final cells = allCells(cs);
@@ -454,22 +473,25 @@ class _SizesEditorState extends State<SizesEditor> {
         ? 'A price in naira, like 45,000.'
         : '';
     Future<String?> save() async {
+      final body = {
+        'choices': [
+          for (final c in cs) {'name': c.name, 'values': c.values},
+        ],
+        'cells': [
+          for (final v in sold)
+            {
+              'id': _old(v, cs)?['id'],
+              'variant': v,
+              'count': int.parse(_countOf(v, cs)),
+              if (_own && _priceOf(v, cs).trim().isNotEmpty) 'price_kobo': nairaKobo(_priceOf(v, cs)),
+            },
+        ],
+      };
       await widget.auth.transport.send(
         'PUT',
         '/v1/stock/items/${Uri.encodeComponent(_it['id'] as String)}/variants',
-        body: {
-          'choices': [for (final c in cs) {'name': c.name, 'values': c.values}],
-          'cells': [
-            for (final v in sold)
-              {
-                'id': _old(v, cs)?['id'],
-                'variant': v,
-                'count': int.parse(_countOf(v, cs)),
-                if (_own && _priceOf(v, cs).trim().isNotEmpty) 'price_kobo': nairaKobo(_priceOf(v, cs)),
-              },
-          ],
-        },
-        headers: {'Idempotency-Key': _key, 'X-Taskiem-Diary': '1'},
+        body: body,
+        headers: {'Idempotency-Key': _key.of(body), 'X-Taskiem-Diary': '1'},
       );
       return '$name: ${sizesWords(sold.length)}';
     }
@@ -486,8 +508,16 @@ class _SizesEditorState extends State<SizesEditor> {
           TkFieldset(
             legend: 'Choice ${i + 1}',
             children: [
-              TkKitField(label: 'Its name', hint: 'Size, Colour, Material…', child: TkTextBox(controller: _drafts[i].name)),
-              TkKitField(label: 'Its values', hint: 'With commas between: 40, 41, 42', child: TkTextBox(controller: _drafts[i].text)),
+              TkKitField(
+                label: 'Its name',
+                hint: 'Size, Colour, Material…',
+                child: TkTextBox(controller: _drafts[i].name, max: 30),
+              ),
+              TkKitField(
+                label: 'Its values',
+                hint: 'With commas between: 40, 41, 42',
+                child: TkTextBox(controller: _drafts[i].text),
+              ),
               TkChipRow(
                 padding: EdgeInsets.zero,
                 all: false,
@@ -503,7 +533,18 @@ class _SizesEditorState extends State<SizesEditor> {
               if (_drafts.length > 1)
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: TkLink(label: 'Remove this choice', onTap: () => setState(() => _drafts.removeAt(i))),
+                  child: TkLink(
+                    label: 'Remove this choice',
+                    onTap: () {
+                      final gone = _drafts[i];
+                      setState(() => _drafts.removeAt(i));
+                      // Once its fields are gone from the screen.
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        gone.name.dispose();
+                        gone.text.dispose();
+                      });
+                    },
+                  ),
                 ),
             ],
           ),
@@ -518,7 +559,11 @@ class _SizesEditorState extends State<SizesEditor> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: TkKitField(label: 'Same number for all', hint: 'Then change the ones that differ.', child: TkTextBox(controller: _fill, digits: 6)),
+                child: TkKitField(
+                  label: 'Same number for all',
+                  hint: 'Then change the ones that differ.',
+                  child: TkTextBox(controller: _fill, digits: 6),
+                ),
               ),
               const SizedBox(width: 10),
               Padding(
@@ -560,7 +605,7 @@ class _SizesEditorState extends State<SizesEditor> {
                         price: _own
                             ? (
                                 value: _priceOf(v, cs),
-                                hint: price != null ? '${price ~/ 100}' : '₦',
+                                hint: price != null ? nairaText(price) : '₦',
                                 label: '${variantLabel(v, cs)}: its own price in naira',
                                 onChanged: (x) => setState(() => _prices[keyOf(v)] = x),
                               )
@@ -579,7 +624,11 @@ class _SizesEditorState extends State<SizesEditor> {
               style: tkFormNow(t),
             ),
         ],
-        if (problem.isNotEmpty) Semantics(liveRegion: true, child: Text(problem, style: tkText(size: 13, weight: 600, color: t.danger))),
+        if (problem.isNotEmpty)
+          Semantics(
+            liveRegion: true,
+            child: Text(problem, style: tkText(size: 13, weight: 600, color: t.danger)),
+          ),
         if (_was.isNotEmpty) ColourPhotos(auth: widget.auth, item: _it, pickers: widget.pickers),
         if (_was.isNotEmpty) _StopSizes(auth: widget.auth, item: _it, onSaved: widget.onSaved, dark: dark),
       ],
@@ -631,10 +680,8 @@ class _ColourPhotosState extends State<ColourPhotos> {
       await f();
       _said = line;
       await _load();
-    } on ApiError catch (e) {
-      _error = e.message;
-    } on Offline {
-      _error = 'You’re offline. Try again when you’re back online.';
+    } on Object catch (e) {
+      _error = errorWords(e);
     }
     if (mounted) setState(() => _busy = null);
   }
@@ -659,7 +706,9 @@ class _ColourPhotosState extends State<ColourPhotos> {
         for (final value in colour.values.where((v) => of(v).isNotEmpty))
           Container(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            decoration: BoxDecoration(border: Border(top: BorderSide(color: t.border))),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: t.border)),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -676,7 +725,9 @@ class _ColourPhotosState extends State<ColourPhotos> {
                             ),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(child: Text(value, style: tkText(size: 15, weight: 600, color: t.text))),
+                    Expanded(
+                      child: Text(value, style: tkText(size: 15, weight: 600, color: t.text)),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -734,12 +785,15 @@ class _StopSizes extends StatefulWidget {
 class _StopSizesState extends State<_StopSizes> {
   bool _sure = false;
   String? _error;
-  late final _key = formKey();
+  final _key = SaveKey();
 
   @override
   Widget build(BuildContext context) {
     if (!_sure) {
-      return Align(alignment: Alignment.centerLeft, child: TkLink(label: 'Stop selling it in sizes and colours', onTap: () => setState(() => _sure = true)));
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: TkLink(label: 'Stop selling it in sizes and colours', onTap: () => setState(() => _sure = true)),
+      );
     }
     final t = TkTheme.tokens(context);
     return Column(
@@ -755,13 +809,11 @@ class _StopSizesState extends State<_StopSizes> {
                 'PUT',
                 '/v1/stock/items/${Uri.encodeComponent(widget.item['id'] as String)}/variants',
                 body: {'choices': <Object>[], 'cells': <Object>[]},
-                headers: {'Idempotency-Key': _key, 'X-Taskiem-Diary': '1'},
+                headers: {'Idempotency-Key': _key.of(null), 'X-Taskiem-Diary': '1'},
               );
               widget.onSaved('${widget.item['name']}: no sizes and colours');
-            } on ApiError catch (e) {
-              if (mounted) setState(() => _error = e.message);
-            } on Offline {
-              if (mounted) setState(() => _error = 'You’re offline. Try again when you’re back online.');
+            } on Object catch (e) {
+              if (mounted) setState(() => _error = errorWords(e));
             }
           },
         ),
@@ -788,16 +840,19 @@ class _GridStockInState extends State<GridStockIn> {
   List<Map<String, dynamic>>? _all;
   String? _error;
   final _came = <String, String>{};
-  late final _key = formKey();
+  final _key = SaveKey();
 
   @override
   void initState() {
     super.initState();
-    _stock(widget.auth.transport).then((x) {
-      if (mounted) setState(() => _all = x);
-    }, onError: (Object e) {
-      if (mounted) setState(() => _error = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.');
-    });
+    _stock(widget.auth.transport).then(
+      (x) {
+        if (mounted) setState(() => _all = x);
+      },
+      onError: (Object e) {
+        if (mounted) setState(() => _error = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.');
+      },
+    );
   }
 
   @override
@@ -805,9 +860,7 @@ class _GridStockInState extends State<GridStockIn> {
     final t = TkTheme.tokens(context);
     final all = _all;
     if (all == null) {
-      return _error != null
-          ? Padding(padding: const EdgeInsets.all(20), child: TkErrorBox(_error!))
-          : const TkLoading(label: 'Loading its sizes and colours…');
+      return _error != null ? Padding(padding: const EdgeInsets.all(20), child: TkErrorBox(_error!)) : const TkLoading(label: 'Loading its sizes and colours…');
     }
     final cs = choicesOf(widget.item);
     final sizes = sizesOf(all, widget.item['id'] as String).where((v) => variantOf(v) != null).toList();
@@ -823,7 +876,7 @@ class _GridStockInState extends State<GridStockIn> {
         'POST',
         '/v1/stock/movements/grid',
         body: {'reason': 'received', 'lines': lines},
-        headers: {'Idempotency-Key': _key, 'X-Taskiem-Diary': '1'},
+        headers: {'Idempotency-Key': _key.of(lines), 'X-Taskiem-Diary': '1'},
       );
       final n = lines.fold<int>(0, (a, l) => a + (l['change'] as int));
       return 'Stock in: ${widget.item['name']}, +$n';
@@ -881,10 +934,14 @@ class GroupForm extends StatefulWidget {
 class _GroupFormState extends State<GroupForm> {
   late final _first = proposeGroup([for (final it in widget.items) (id: it['id'] as String, name: it['name'] as String? ?? '')]);
   late final _name = _ctl(_first.name);
-  late final List<TextEditingController> _choices = [for (final c in (_first.choices.isEmpty ? const ['Size'] : _first.choices)) _ctl(c)];
+  late final List<TextEditingController> _choices = [
+    for (final c in (_first.choices.isEmpty ? const ['Size'] : _first.choices)) _ctl(c),
+  ];
   late final Map<String, List<TextEditingController>> _values = {
     for (final it in widget.items)
-      it['id'] as String: [for (final c in (_first.choices.isEmpty ? const ['Size'] : _first.choices)) _ctl(_first.values[it['id']]?[c] ?? '')],
+      it['id'] as String: [
+        for (final c in (_first.choices.isEmpty ? const ['Size'] : _first.choices)) _ctl(_first.values[it['id']]?[c] ?? ''),
+      ],
   };
   late final _key = formKey();
 
@@ -925,7 +982,9 @@ class _GroupFormState extends State<GroupForm> {
         body: {
           'name': _name.text.trim(),
           'choices': named,
-          'items': [for (var i = 0; i < widget.items.length; i++) {'item_id': widget.items[i]['id'], 'variant': filled[i]}],
+          'items': [
+            for (var i = 0; i < widget.items.length; i++) {'item_id': widget.items[i]['id'], 'variant': filled[i]},
+          ],
         },
         headers: {'Idempotency-Key': _key, 'X-Taskiem-Diary': '1'},
       );
@@ -940,12 +999,19 @@ class _GroupFormState extends State<GroupForm> {
       ready: problem.isEmpty,
       children: [
         Text('These ${widget.items.length} become one product’s sizes and colours. Each keeps its own stock, history and price.', style: tkFormNow(t)),
-        TkKitField(label: 'The product’s name', child: TkTextBox(controller: _name)),
+        TkKitField(
+          label: 'The product’s name',
+          child: TkTextBox(controller: _name, max: 120),
+        ),
         TkFieldset(
           legend: 'Its choices',
           children: [
             for (var i = 0; i < _choices.length; i++)
-              TkKitField(label: 'Choice ${i + 1}', hint: 'Size, Colour, Style…', child: TkTextBox(controller: _choices[i])),
+              TkKitField(
+                label: 'Choice ${i + 1}',
+                hint: 'Size, Colour, Style…',
+                child: TkTextBox(controller: _choices[i], max: 30),
+              ),
             if (_choices.length < maxChoices)
               Align(
                 alignment: Alignment.centerLeft,
@@ -981,7 +1047,7 @@ class _GroupFormState extends State<GroupForm> {
               for (var i = 0; i < _choices.length; i++)
                 TkKitField(
                   label: _choices[i].text.trim().isEmpty ? 'Choice ${i + 1}' : _choices[i].text.trim(),
-                  child: TkTextBox(controller: _values[it['id']]![i]),
+                  child: TkTextBox(controller: _values[it['id']]![i], max: 30),
                 ),
             ],
           ),

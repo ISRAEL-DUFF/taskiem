@@ -152,20 +152,20 @@ class ConversationData extends ChangeNotifier {
     for (final m in messages ?? const <LinkMessage>[]) ThreadMessage(m),
     // Not after a window away from the newest page.
     if (!detached)
-    for (final o in outbox)
-      ThreadMessage(
-        LinkMessage(
-          id: 'local-${o.clientId}',
-          link: conv.link,
-          mine: true,
-          kind: 'text',
-          body: o.body.isEmpty ? null : o.body,
-          attachment: o.file?.attachment,
-          reply: o.reply == null ? null : quoteOf(o.reply!),
-          createdAt: o.at,
+      for (final o in outbox)
+        ThreadMessage(
+          LinkMessage(
+            id: 'local-${o.clientId}',
+            link: conv.link,
+            mine: true,
+            kind: 'text',
+            body: o.body.isEmpty ? null : o.body,
+            attachment: o.file?.attachment,
+            reply: o.reply == null ? null : quoteOf(o.reply!),
+            createdAt: o.at,
+          ),
+          out: o,
         ),
-        out: o,
-      ),
   ];
 
   /// The conversation's price list and whose it is ("ours" or "theirs");
@@ -732,8 +732,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
 
   // The tools panel (ChatTools.tsx), about this business only.
-  late final _tools = ToolsController(chats: widget.data.chats, scope: widget.data.conv.link, business: widget.data.conv.name)
-    ..clearSlash = _text.clear;
+  late final _tools = ToolsController(chats: widget.data.chats, scope: widget.data.conv.link, business: widget.data.conv.name)..clearSlash = _text.clear;
 
   /// ChatTools.tsx: a tool opened from the panel; "/" and its word, put away.
   void _openTool(Tool tool, {String? openId}) {
@@ -741,12 +740,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
     // Sell, the handover and availability have sheets of their own (M6):
     // not a list.
     if (soonTools.contains(tool.key)) return showComingSoon(context);
+    // Done: the diary line it leaves here, read at once.
+    void landed() => unawaited(widget.data.pull().catchError((Object _) {}));
     if (tool.key == 'sell') {
-      unawaited(showSellSheet(context, auth: widget.data.chats.auth));
+      unawaited(showSellSheet(context, auth: widget.data.chats.auth, onSold: landed));
       return;
     }
     if (tool.key == 'handover') {
-      unawaited(showHandoverSheet(context, auth: widget.data.chats.auth));
+      unawaited(showHandoverSheet(context, auth: widget.data.chats.auth, onSent: landed));
       return;
     }
     final d = widget.data;
@@ -761,12 +762,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
       onSaved: (_) {
         unawaited(d.pull().catchError((Object _) {}));
         if (!mounted) return;
-        showTkToast(
-          context,
-          'Saved. The change is in your Taskiem chat.',
-          action: 'Open',
-          onAction: () => widget.onOpenLink?.call('taskiem'),
-        );
+        showTkToast(context, 'Saved. The change is in your Taskiem chat.', action: 'Open', onAction: () => widget.onOpenLink?.call('taskiem'));
       },
       detail: toolDetail(
         d.chats.auth,
@@ -834,8 +830,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   Future<void> _book() async {
     final d = widget.data;
     _tools.close();
-    final words = await showBookSheet(context, auth: d.chats.auth, link: d.conv.link, business: d.conv.name);
-    if (words != null) unawaited(d.pull().catchError((Object _) {}));
+    await showBookSheet(context, auth: d.chats.auth, link: d.conv.link, business: d.conv.name, onBooked: (_) => unawaited(d.pull().catchError((Object _) {})));
   }
 
   /// Conversation.tsx supplies: we buy from them (their prices are
@@ -932,13 +927,16 @@ class _ConversationScreenState extends State<ConversationScreen> {
       // offer (§4).
       services: [
         if (!tools)
-        for (final x in d.services)
-          TagSuggestion(
-            kind: 'service',
-            id: x.id,
-            name: x.name,
-            sub: [x.priceKobo != null ? naira(x.priceKobo!) : 'Price on the day', if (x.durationMinutes != null && x.durationMinutes! > 0) '${x.durationMinutes} min'].join(' · '),
-          ),
+          for (final x in d.services)
+            TagSuggestion(
+              kind: 'service',
+              id: x.id,
+              name: x.name,
+              sub: [
+                x.priceKobo != null ? naira(x.priceKobo!) : 'Price on the day',
+                if (x.durationMinutes != null && x.durationMinutes! > 0) '${x.durationMinutes} min',
+              ].join(' · '),
+            ),
       ],
       businesses: [
         for (final o in d.chats.conversations)
@@ -1561,49 +1559,49 @@ class _Bubble extends StatelessWidget {
     final fold = reveal(body, taps);
     Widget text = TapsOwner(
       builder: (context, tap) => Text.rich(
-      TextSpan(
-        children: [
-          // Mentions.tsx MentionText: a business (its conversation), an
-          // item with its price; `.bubble .mention`: 600, the tint's ink.
-          for (final p in tagParts(fold.shown, msg.mentions))
-            if (p.tag == null)
-              TextSpan(text: p.text)
-            else
-              TextSpan(
-                style: TextStyle(color: t.tintText, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]),
-                children: [
-                  TextSpan(
-                    text: p.text,
-                    recognizer: p.tag!.kind == 'business' && p.tag!.link != null && onOpenLink != null
-                        ? tap(p.tag!.link!, () => onOpenLink!(p.tag!.link!))
-                        : null,
-                  ),
-                  if (p.tag!.kind == 'item' && p.tag!.priceKobo != null)
+        TextSpan(
+          children: [
+            // Mentions.tsx MentionText: a business (its conversation), an
+            // item with its price; `.bubble .mention`: 600, the tint's ink.
+            for (final p in tagParts(fold.shown, msg.mentions))
+              if (p.tag == null)
+                TextSpan(text: p.text)
+              else
+                TextSpan(
+                  style: TextStyle(color: t.tintText, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]),
+                  children: [
                     TextSpan(
-                      text: ' (${naira(p.tag!.priceKobo!)}${(p.tag!.unit ?? '').isNotEmpty ? ' a ${p.tag!.unit}' : ''})',
-                      style: tkText(size: 13, weight: 600, color: t.muted),
+                      text: p.text,
+                      recognizer: p.tag!.kind == 'business' && p.tag!.link != null && onOpenLink != null
+                          ? tap(p.tag!.link!, () => onOpenLink!(p.tag!.link!))
+                          : null,
                     ),
-                ],
+                    if (p.tag!.kind == 'item' && p.tag!.priceKobo != null)
+                      TextSpan(
+                        text: ' (${naira(p.tag!.priceKobo!)}${(p.tag!.unit ?? '').isNotEmpty ? ' a ${p.tag!.unit}' : ''})',
+                        style: tkText(size: 13, weight: 600, color: t.muted),
+                      ),
+                  ],
+                ),
+            if (fold.folded) ...[
+              const TextSpan(text: '… '),
+              TextSpan(
+                text: 'Read more',
+                style: TextStyle(color: t.accent, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]),
               ),
-          if (fold.folded) ...[
-            const TextSpan(text: '… '),
-            TextSpan(
-              text: 'Read more',
-              style: TextStyle(color: t.accent, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]),
-            ),
+            ],
+            // `.stamp-gap`: room kept at the end of the text for the time.
+            if (inline)
+              WidgetSpan(
+                // 1 px tall: at the line's bottom it leaves the line as it is
+                // (on the baseline, Flutter cannot size it in a bubble sized
+                // to its content).
+                alignment: PlaceholderAlignment.bottom,
+                child: SizedBox(width: mine ? 74 : 52, height: 1),
+              ),
           ],
-          // `.stamp-gap`: room kept at the end of the text for the time.
-          if (inline)
-            WidgetSpan(
-              // 1 px tall: at the line's bottom it leaves the line as it is
-              // (on the baseline, Flutter cannot size it in a bubble sized
-              // to its content).
-              alignment: PlaceholderAlignment.bottom,
-              child: SizedBox(width: mine ? 74 : 52, height: 1),
-            ),
-        ],
-      ),
-      style: tkText(size: 16, lineHeight: 23 / 16, color: t.text),
+        ),
+        style: tkText(size: 16, lineHeight: 23 / 16, color: t.text),
       ),
     );
     if (fold.folded) {
@@ -1753,7 +1751,12 @@ class _Bubble extends StatelessWidget {
         );
       },
     );
-    final held = BubbleHold(label: mine ? 'Your message' : 'Message from $other', onHold: out == null ? onHold : null, onReply: out == null ? onReply : null, child: bubble);
+    final held = BubbleHold(
+      label: mine ? 'Your message' : 'Message from $other',
+      onHold: out == null ? onHold : null,
+      onReply: out == null ? onReply : null,
+      child: bubble,
+    );
     final placed = held;
     if (!failed) return placed;
     return Column(
@@ -1816,9 +1819,9 @@ class _PreviewCard extends StatelessWidget {
       button: true,
       label: '${p.title}, ${p.host}',
       onTap: () async {
-          final ok = await openInBrowser(Uri.parse(p.url));
-          if (!ok && context.mounted) showTkToast(context, 'That link could not be opened.', error: true);
-        },
+        final ok = await openInBrowser(Uri.parse(p.url));
+        if (!ok && context.mounted) showTkToast(context, 'That link could not be opened.', error: true);
+      },
       excludeSemantics: true,
       child: GestureDetector(
         onTap: () async {

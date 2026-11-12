@@ -3,12 +3,15 @@
 // changed.
 
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/product_form.dart';
+import 'package:taskiem/api/transport.dart' show ApiError, Offline;
+import 'package:taskiem/chat/attachments.dart' show PickedFile;
 import 'package:taskiem/kit/forms.dart';
 import 'package:taskiem/kit/sheet.dart';
 import 'package:taskiem/main.dart';
@@ -18,6 +21,26 @@ import 'support.dart';
 
 void main() {
   setUpAll(loadFonts);
+
+  test('a save’s key: the same for a retry, new once what is sent changes', () {
+    final k = SaveKey();
+    final a = k.of({'name': 'Garri'});
+    expect(k.of({'name': 'Garri'}), a);
+    final b = k.of({'name': 'Garri, Ijebu'});
+    expect(b, isNot(a));
+    expect(k.of({'name': 'Garri, Ijebu'}), b);
+  });
+
+  test('a photo is checked before it goes; what went wrong in words', () {
+    PickedFile f(String type, int size) => PickedFile(bytes: Uint8List(size), name: 'x', type: type);
+    expect(sendProblem(f('image/jpeg', 1000)), isNull);
+    expect(sendProblem(f('image/heic', 1000)), 'Choose a JPEG, PNG or WebP photo.');
+    expect(sendProblem(f('image/png', (10 << 20) + 1)), 'That photo is larger than 10 MB, even made smaller. Choose a smaller one.');
+    expect(errorWords(ApiError(422, {'error': 'Name is taken'})), 'Name is taken');
+    expect(errorWords(const Offline()), 'You’re offline. Try again when you’re back online.');
+    expect(errorWords(FormProblem('Say a price.')), 'Say a price.');
+    expect(errorWords(StateError('x')), 'That did not go. Try again.');
+  });
 
   test('naira typed, and back', () {
     expect(nairaKobo('78,000'), 7800000);

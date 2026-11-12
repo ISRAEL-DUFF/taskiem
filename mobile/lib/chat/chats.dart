@@ -246,15 +246,20 @@ class ChatsData extends ChangeNotifier {
     final failed = _logoFailed[business];
     if (failed != null && now().difference(failed) < const Duration(minutes: 1)) return null;
     logos[business] = null;
-    auth.transport.bytes('/v1/links/$business/logo').then((b) {
-      logos[business] = Uint8List.fromList(b);
-      _logoFailed.remove(business);
-      notifyListeners();
-    }, onError: (Object e) {
-      if (e is ApiError && e.status == 404) return;
-      logos.remove(business);
-      _logoFailed[business] = now();
-    });
+    auth.transport
+        .bytes('/v1/links/$business/logo')
+        .then(
+          (b) {
+            logos[business] = Uint8List.fromList(b);
+            _logoFailed.remove(business);
+            notifyListeners();
+          },
+          onError: (Object e) {
+            if (e is ApiError && e.status == 404) return;
+            logos.remove(business);
+            _logoFailed[business] = now();
+          },
+        );
     return null;
   }
 
@@ -315,7 +320,18 @@ class ChatsData extends ChangeNotifier {
 enum ChatFilter { all, unread, starred, archived }
 
 class ChatsScreen extends StatefulWidget {
-  const ChatsScreen({super.key, required this.data, this.onMenu, this.onFind, this.onOpen, this.onOpenTaskiem, this.onOpenCustomer, this.onOpenAt, this.onLinks, this.onProfile});
+  const ChatsScreen({
+    super.key,
+    required this.data,
+    this.onMenu,
+    this.onFind,
+    this.onOpen,
+    this.onOpenTaskiem,
+    this.onOpenCustomer,
+    this.onOpenAt,
+    this.onLinks,
+    this.onProfile,
+  });
 
   final ChatsData data;
   final VoidCallback? onMenu;
@@ -386,11 +402,16 @@ class _ChatsScreenState extends State<ChatsScreen> {
     final d = widget.data;
     _found = null;
     if (d.linksOn) {
-      d.api.searchLinks(q: q).then((r) {
-        if (mounted && _query == q) setState(() => (_found = r, _searchError = null));
-      }, onError: (Object e) {
-        if (mounted && _query == q) setState(() => _searchError = e);
-      });
+      d.api
+          .searchLinks(q: q)
+          .then(
+            (r) {
+              if (mounted && _query == q) setState(() => (_found = r, _searchError = null));
+            },
+            onError: (Object e) {
+              if (mounted && _query == q) setState(() => _searchError = e);
+            },
+          );
       d.api.searchLinkChats(q: q).then((r) {
         if (mounted && _query == q) setState(() => _foundMessages = r.messages);
       }, onError: (_) {});
@@ -477,7 +498,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         },
                       ),
                     if (d.error != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: TkErrorBox(d.error!)),
-                    if (_searchError != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: TkErrorBox(_searchError is ApiError ? (_searchError as ApiError).message : 'You’re offline. Try again when you’re back online.')),
+                    if (_searchError != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: TkErrorBox(_searchError is ApiError ? (_searchError as ApiError).message : 'You’re offline. Try again when you’re back online.'),
+                      ),
                     if (!searching && !archived && _filter != ChatFilter.starred && (query.isEmpty || 'taskiem'.startsWith(query.toLowerCase())))
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -594,7 +619,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: _Waiting(links: d.waitingLinks, sent: d.sent, now: d.now()),
                       ),
-                    if (!searching && d.manage && d.linkSettings != null && d.linkSettings!.askedAt == null && _filter != ChatFilter.starred) _Findable(data: d),
+                    if (!searching && d.manage && d.linkSettings != null && d.linkSettings!.askedAt == null && _filter != ChatFilter.starred)
+                      _Findable(data: d),
                   ],
                 ),
                 if (d.linksOn)
@@ -625,11 +651,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         if (widget.onLinks != null) ('Linked businesses', widget.onLinks!),
         if (widget.onProfile != null) ('Your business in Explore', widget.onProfile!),
         if (widget.onMenu != null) ('Settings', widget.onMenu!),
-        if (d.chatTools && p != null)
-          (
-            'Sound for new orders and payments: ${p.sound ? 'on' : 'off'}',
-            () => p.setSound(!p.sound),
-          ),
+        if (d.chatTools && p != null) ('Sound for new orders and payments: ${p.sound ? 'on' : 'off'}', () => p.setSound(!p.sound)),
       ],
     );
   }
@@ -641,7 +663,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
       return Text.rich(
         TextSpan(
           children: [
-            TextSpan(text: 'Draft:', style: tkText(size: 14.5, weight: 600, color: t.ok)),
+            TextSpan(
+              text: 'Draft:',
+              style: tkText(size: 14.5, weight: 600, color: t.ok),
+            ),
             TextSpan(text: ' ${draft.replaceAll('\n', ' ')}'),
           ],
         ),
@@ -730,35 +755,37 @@ class _Search extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       // The field's name, with what is typed in it or its hint.
-      child: TapField(child: Semantics(
-        label: 'Find a business',
-        child: Container(
-          height: 42,
-          decoration: BoxDecoration(color: t.field, borderRadius: BorderRadius.circular(999)),
-          padding: const EdgeInsets.only(left: 11, right: 11),
-          child: Row(
-            children: [
-              TkIcon('search', size: 16, color: t.muted),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Material(
-                  type: MaterialType.transparency,
-                  child: TextField(
-                    controller: controller,
-                    textInputAction: TextInputAction.search,
-                    cursorColor: t.text,
-                    showCursor: !TkField.debugHideCaret,
-                    style: tkText(size: 15, weight: 500, color: t.text),
-                    decoration: InputDecoration.collapsed(
-                      hintText: 'Search chats, messages, businesses',
-                      hintStyle: tkText(size: 15, weight: 500, color: cssMix(t.muted, const Color(0x00000000), 0.72)),
+      child: TapField(
+        child: Semantics(
+          label: 'Find a business',
+          child: Container(
+            height: 42,
+            decoration: BoxDecoration(color: t.field, borderRadius: BorderRadius.circular(999)),
+            padding: const EdgeInsets.only(left: 11, right: 11),
+            child: Row(
+              children: [
+                TkIcon('search', size: 16, color: t.muted),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: TextField(
+                      controller: controller,
+                      textInputAction: TextInputAction.search,
+                      cursorColor: t.text,
+                      showCursor: !TkField.debugHideCaret,
+                      style: tkText(size: 15, weight: 500, color: t.text),
+                      decoration: InputDecoration.collapsed(
+                        hintText: 'Search chats, messages, businesses',
+                        hintStyle: tkText(size: 15, weight: 500, color: cssMix(t.muted, const Color(0x00000000), 0.72)),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        )),
+        ),
       ),
     );
   }
@@ -796,28 +823,28 @@ class _Chips extends StatelessWidget {
             // The 8 px above and below are the chip's to a finger too.
             return TapArea(
               child: Semantics(
-              button: true,
-              selected: on,
-              child: TkPress(
-                onTap: () => onPick(f),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Container(
-                  height: 34,
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: t.borderStrong),
-                    borderRadius: BorderRadius.circular(999),
-                    boxShadow: outsideOnly(t.shadow),
-                  ),
-                  child: Text(
-                    label,
-                    style: tkText(size: 14, weight: on ? 600 : 500, lineHeight: 1.2, color: on ? t.tintText : t.text),
+                button: true,
+                selected: on,
+                child: TkPress(
+                  onTap: () => onPick(f),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Container(
+                      height: 34,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: t.borderStrong),
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: outsideOnly(t.shadow),
+                      ),
+                      child: Text(
+                        label,
+                        style: tkText(size: 14, weight: on ? 600 : 500, lineHeight: 1.2, color: on ? t.tintText : t.text),
+                      ),
+                    ),
                   ),
                 ),
-                ),
-              ),
               ),
             );
           },
@@ -1005,6 +1032,7 @@ class LinkSection extends StatelessWidget {
       Tone.warn => t.warn,
       Tone.info => t.info,
       Tone.ok => t.ok,
+      Tone.danger => t.danger,
       _ => t.muted,
     };
     // `.list-icon`, `.list-icon.warn`, `.list-icon.info`.
@@ -1118,34 +1146,40 @@ class _Asked extends StatelessWidget {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
-                        IntrinsicWidth(child: TkSmallButton(
-                          label: 'Accept',
-                          semantics: 'Accept ${l.name}',
-                          primary: true,
-                          onPressed: onAnswer == null ? null : () => onAnswer!(l, 'accept', 'Linked with ${l.name}'),
-                        )),
-                        IntrinsicWidth(child: TkSmallButton(
-                          label: 'Decline',
-                          semantics: 'Decline ${l.name}',
-                          onPressed: onAnswer == null ? null : () => onAnswer!(l, 'decline', 'Declined. They are not told.'),
-                        )),
-                        IntrinsicWidth(child: TkSmallButton(
-                          label: 'Block',
-                          semantics: 'Block ${l.name}',
-                          danger: true,
-                          onPressed: onAnswer == null
-                              ? null
-                              : () async {
-                                  final yes = await showTkConfirm(
-                                    context,
-                                    title: 'Block ${l.name}?',
-                                    body: 'Their requests will not reach you, and they are not told.',
-                                    ok: 'Block',
-                                    danger: true,
-                                  );
-                                  if (yes) onAnswer!(l, 'block', 'Blocked');
-                                },
-                        )),
+                        IntrinsicWidth(
+                          child: TkSmallButton(
+                            label: 'Accept',
+                            semantics: 'Accept ${l.name}',
+                            primary: true,
+                            onPressed: onAnswer == null ? null : () => onAnswer!(l, 'accept', 'Linked with ${l.name}'),
+                          ),
+                        ),
+                        IntrinsicWidth(
+                          child: TkSmallButton(
+                            label: 'Decline',
+                            semantics: 'Decline ${l.name}',
+                            onPressed: onAnswer == null ? null : () => onAnswer!(l, 'decline', 'Declined. They are not told.'),
+                          ),
+                        ),
+                        IntrinsicWidth(
+                          child: TkSmallButton(
+                            label: 'Block',
+                            semantics: 'Block ${l.name}',
+                            danger: true,
+                            onPressed: onAnswer == null
+                                ? null
+                                : () async {
+                                    final yes = await showTkConfirm(
+                                      context,
+                                      title: 'Block ${l.name}?',
+                                      body: 'Their requests will not reach you, and they are not told.',
+                                      ok: 'Block',
+                                      danger: true,
+                                    );
+                                    if (yes) onAnswer!(l, 'block', 'Blocked');
+                                  },
+                          ),
+                        ),
                       ],
                     ),
                   )
@@ -1272,7 +1306,13 @@ class _Results extends StatelessWidget {
       return v;
     }
 
-    Widget preview(String s) => Text(s, maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false, style: tkText(size: 14.5, color: t.muted));
+    Widget preview(String s) => Text(
+      s,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+      style: tkText(size: 14.5, color: t.muted),
+    );
     return Semantics(
       container: true,
       label: 'Search results',
@@ -1322,7 +1362,9 @@ class _Results extends StatelessWidget {
                   actions: d.manage
                       ? Padding(
                           padding: const EdgeInsets.only(top: 8),
-                          child: Row(children: [TkSmallButton(label: 'Send request', onPressed: () => onBlind(blind))]),
+                          child: Row(
+                            children: [TkSmallButton(label: 'Send request', onPressed: () => onBlind(blind))],
+                          ),
                         )
                       : null,
                 ),
@@ -1394,7 +1436,11 @@ class _Empty extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 56),
-      decoration: BoxDecoration(color: t.panel, border: Border.all(color: t.border), borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        color: t.panel,
+        border: Border.all(color: t.border),
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Column(
         children: [
           Container(
@@ -1405,7 +1451,11 @@ class _Empty extends StatelessWidget {
             child: TkIcon(icon, size: 26, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand),
           ),
           const SizedBox(height: 14),
-          Text(words, textAlign: TextAlign.center, style: tkText(size: 14, color: t.muted)),
+          Text(
+            words,
+            textAlign: TextAlign.center,
+            style: tkText(size: 14, color: t.muted),
+          ),
         ],
       ),
     );
@@ -1426,7 +1476,13 @@ class _CustomersFound extends StatelessWidget {
     final f = found;
     if (f == null || (f.chats.isEmpty && f.messages.isEmpty)) return const SizedBox.shrink();
     final now = data.now();
-    Widget preview(String s) => Text(s, maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false, style: tkText(size: 14.5, color: t.muted));
+    Widget preview(String s) => Text(
+      s,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+      style: tkText(size: 14.5, color: t.muted),
+    );
     CustomerChat? chatOf(String id) => [...data.customers, ...data.archivedCustomerChats, ...f.chats].where((c) => c.id == id).firstOrNull;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1702,7 +1758,11 @@ class _Customers extends StatelessWidget {
               title: customerTitle(c),
               letter: customerLetter(c),
               time: listTime(c.lastAt, now),
-              preview: _ChatsScreenState._previewText(context, c.stopped ? 'Sent STOP' : '${c.lastMine ? 'You: ' : ''}${c.last}', draft: drafts['customer:${c.id}']),
+              preview: _ChatsScreenState._previewText(
+                context,
+                c.stopped ? 'Sent STOP' : '${c.lastMine ? 'You: ' : ''}${c.last}',
+                draft: drafts['customer:${c.id}'],
+              ),
               unread: c.unread,
               onTap: onOpen == null ? null : () => onOpen!(c),
             ),

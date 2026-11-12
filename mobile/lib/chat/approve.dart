@@ -13,6 +13,7 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
+import '../kit/forms.dart' show RuneLimit;
 import '../kit/kit.dart';
 import '../kit/sheet.dart';
 import '../kit/tap_area.dart';
@@ -24,16 +25,11 @@ import 'words.dart';
 /// The approve sheet; it closes with true once decided.
 /// The decision, as the sheet sends it (POST /v1/approvals/{run}/{step}):
 /// approved or rejected, with its comment and the code a rule asks for.
-Future<void> decideApproval(Auth auth, Approval ap, String decision, {String comment = '', String code = ''}) =>
-    auth.transport.send(
-      'POST',
-      '/v1/approvals/${ap.runId}/${Uri.encodeComponent(ap.stepId)}',
-      body: {
-        'decision': decision,
-        if (comment.trim().isNotEmpty) 'comment': comment.trim(),
-        if (code.isNotEmpty) 'totp': code,
-      },
-    );
+Future<void> decideApproval(Auth auth, Approval ap, String decision, {String comment = '', String code = ''}) => auth.transport.send(
+  'POST',
+  '/v1/approvals/${ap.runId}/${Uri.encodeComponent(ap.stepId)}',
+  body: {'decision': decision, if (comment.trim().isNotEmpty) 'comment': comment.trim(), if (code.isNotEmpty) 'totp': code},
+);
 
 class ApproveSheet extends StatefulWidget {
   const ApproveSheet({super.key, required this.a, required this.decision, required this.auth});
@@ -141,15 +137,17 @@ class _ApproveSheetState extends State<ApproveSheet> {
                 ],
               ),
             ),
-          TkKitField(label: 'A comment (optional, recorded)', child: TkTextBox(controller: _comment, lines: 2)),
+          TkKitField(
+            label: 'A comment (optional, recorded)',
+            child: TkTextBox(controller: _comment, lines: 2),
+          ),
           if (_stepUp != null && !passkeyOnly)
             TkKitField(
               label: 'Or a code from your authenticator app',
               hint: 'No authenticator yet? Add one under Account on the web.',
               child: TkTextBox(controller: _code, lines: 1, digits: 6),
             ),
-          if (passkeyOnly)
-            Text('This needs your passkey, and this phone cannot use one yet. Decide it on a device with your passkey.', style: tkFormNow(t)),
+          if (passkeyOnly) Text('This needs your passkey, and this phone cannot use one yet. Decide it on a device with your passkey.', style: tkFormNow(t)),
           if (_error != null) TkErrorBox(_error!),
         ],
       ),
@@ -167,7 +165,20 @@ class _ApproveSheetState extends State<ApproveSheet> {
 /// `.tk-field textarea` / `input`: the soft filled box, 17 px semibold, and
 /// Chromium's resize grip in a text area's corner, as the web is seen.
 class TkTextBox extends StatefulWidget {
-  const TkTextBox({super.key, required this.controller, this.lines = 1, this.digits, this.height = 54, this.size = 17, this.hint, this.money = false, this.secret = false, this.plain = false, this.phone = false});
+  const TkTextBox({
+    super.key,
+    required this.controller,
+    this.lines = 1,
+    this.digits,
+    this.height = 54,
+    this.size = 17,
+    this.hint,
+    this.money = false,
+    this.secret = false,
+    this.plain = false,
+    this.phone = false,
+    this.max,
+  });
   final TextEditingController controller;
   final int lines;
 
@@ -191,6 +202,9 @@ class TkTextBox extends StatefulWidget {
 
   /// A phone number (`type="tel"`): the phone's dial pad.
   final bool phone;
+
+  /// `maxLength`: at most this many characters.
+  final int? max;
 
   /// Only digits, at most this many (a code).
   final int? digits;
@@ -218,53 +232,66 @@ class _TkTextBoxState extends State<TkTextBox> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final area = widget.lines > 1;
-    return TapField(child: Container(
-      constraints: BoxConstraints(minHeight: widget.height),
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: area ? 14 : 0),
-      alignment: Alignment.centerLeft,
-      decoration: BoxDecoration(
-        color: _focus.hasFocus ? t.fieldFocus : t.field,
-        border: Border.all(color: const Color(0x00000000), width: 1.5),
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: _focus.hasFocus ? t.ring : const [],
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Material(
-            type: MaterialType.transparency,
-            child: TextField(
-              controller: widget.controller,
-              focusNode: _focus,
-              minLines: widget.lines,
-              maxLines: area ? null : 1,
-              obscureText: widget.secret && !area,
-              autocorrect: !(widget.secret || widget.plain),
-              enableSuggestions: !(widget.secret || widget.plain),
-              keyboardType: widget.digits != null
-                  ? TextInputType.number
-                  : widget.phone
-                  ? TextInputType.phone
-                  : widget.money
-                  ? const TextInputType.numberWithOptions(decimal: true)
-                  : (area ? TextInputType.multiline : TextInputType.text),
-              autofillHints: widget.digits != null ? const [AutofillHints.oneTimeCode] : null,
-              inputFormatters: widget.digits == null
-                  ? const <TextInputFormatter>[]
-                  : [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(widget.digits)],
-              cursorColor: t.text,
-              showCursor: !TkField.debugHideCaret,
-              style: tkText(size: widget.size, weight: 600, lineHeight: 1.5, color: t.text),
-              decoration: InputDecoration.collapsed(
-                hintText: widget.hint,
-                hintStyle: tkText(size: widget.size, weight: 600, lineHeight: 1.5, color: t.muted.withValues(alpha: t.muted.a * 0.72)),
+    return TapField(
+      child: Container(
+        constraints: BoxConstraints(minHeight: widget.height),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: area ? 14 : 0),
+        alignment: Alignment.centerLeft,
+        decoration: BoxDecoration(
+          color: _focus.hasFocus ? t.fieldFocus : t.field,
+          border: Border.all(color: const Color(0x00000000), width: 1.5),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: _focus.hasFocus ? t.ring : const [],
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Material(
+              type: MaterialType.transparency,
+              child: TextField(
+                controller: widget.controller,
+                focusNode: _focus,
+                minLines: widget.lines,
+                maxLines: area ? null : 1,
+                obscureText: widget.secret && !area,
+                autocorrect: !(widget.secret || widget.plain),
+                enableSuggestions: !(widget.secret || widget.plain),
+                keyboardType: widget.digits != null
+                    ? TextInputType.number
+                    : widget.phone
+                    ? TextInputType.phone
+                    : widget.money
+                    ? const TextInputType.numberWithOptions(decimal: true)
+                    : (area ? TextInputType.multiline : TextInputType.text),
+                autofillHints: widget.digits != null ? const [AutofillHints.oneTimeCode] : null,
+                inputFormatters: [
+                  if (widget.digits != null) ...[FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(widget.digits)],
+                  if (widget.max != null) RuneLimit(widget.max!),
+                ],
+                cursorColor: t.text,
+                showCursor: !TkField.debugHideCaret,
+                style: tkText(size: widget.size, weight: 600, lineHeight: 1.5, color: t.text),
+                decoration: InputDecoration.collapsed(
+                  hintText: widget.hint,
+                  hintStyle: tkText(
+                    size: widget.size,
+                    weight: 600,
+                    lineHeight: 1.5,
+                    color: t.muted.withValues(alpha: t.muted.a * 0.72),
+                  ),
+                ),
               ),
             ),
-          ),
-          if (area) Positioned(right: -14, bottom: -12, child: CustomPaint(size: const Size(9, 9), painter: _Grip(t.muted))),
-        ],
+            if (area)
+              Positioned(
+                right: -14,
+                bottom: -12,
+                child: CustomPaint(size: const Size(9, 9), painter: _Grip(t.muted)),
+              ),
+          ],
+        ),
       ),
-    ));
+    );
   }
 }
 
