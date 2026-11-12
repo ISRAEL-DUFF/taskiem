@@ -249,6 +249,33 @@ final screens = <String, Screen>{
     },
     drive: _loaded,
   ),
+  // The tools panel over Taskiem's conversation (M5), and a tool's sheet.
+  'chat-tools': (
+    build: () {
+      final f = Fixture('chat-tools');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Open tools'));
+      await _loaded(t);
+    },
+  ),
+  'chat-tool-sheet': (
+    build: () {
+      final f = Fixture('chat-tools');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Open tools'));
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel(RegExp('^Products')));
+      await _loaded(t);
+    },
+  ),
   'chat-taskiem-cards': (
     build: () {
       final f = Fixture('chat-taskiem');

@@ -24,6 +24,7 @@ import '../kit/modal.dart' show showComingSoon;
 import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
+import 'tools_panel.dart';
 
 /// Where a file to send comes from: the phone's gallery, camera and files.
 class Pickers {
@@ -161,6 +162,7 @@ class Composer extends StatefulWidget {
     this.busy = false,
     this.replying,
     this.onCancelReply,
+    this.tools,
   });
 
   final TextEditingController text;
@@ -168,6 +170,9 @@ class Composer extends StatefulWidget {
   /// The message being answered, in a line (ChatComposer's replyLine).
   final String? replying;
   final VoidCallback? onCancelReply;
+
+  /// The tools panel this composer's button opens (with chat tools).
+  final ToolsController? tools;
 
   /// Sends the words, with the file waiting for its caption if there is one.
   final void Function(String text, PickedFile? file) onSend;
@@ -383,21 +388,31 @@ class ComposerState extends State<Composer> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        TapArea(child: Semantics(
-          button: true,
-          label: 'Chat tools',
-          child: TkPress(
-            // The tools come with M5 to M8.
-            onTap: () => showComingSoon(context),
-            child: Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(color: t.panel, shape: BoxShape.circle, boxShadow: _lift),
-              alignment: Alignment.center,
-              child: TkIcon('grid', size: 22, stroke: 2, color: dark ? t.text : t.brand),
-            ),
-          ),
-        )),
+        ListenableBuilder(
+          listenable: widget.tools ?? const _Still(),
+          builder: (context, _) {
+            // `.composer-tools.open { background: var(--brand); color: var(--brand-dark) }`
+            final open = widget.tools?.shown ?? false;
+            return TapArea(
+              child: Semantics(
+                button: true,
+                expanded: widget.tools == null ? null : open,
+                label: widget.tools == null ? 'Chat tools' : (open ? 'Close tools' : 'Open tools'),
+                child: TkPress(
+                  // Without chat tools, the tools are not here yet.
+                  onTap: widget.tools?.toggle ?? () => showComingSoon(context),
+                  child: Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(color: open ? t.brand : t.panel, shape: BoxShape.circle, boxShadow: _lift),
+                    alignment: Alignment.center,
+                    child: TkIcon('grid', size: 22, stroke: 2, color: open ? t.brandDark : (dark ? t.text : t.brand)),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: Container(
@@ -808,4 +823,12 @@ class _Replying extends StatelessWidget {
       ),
     );
   }
+}
+
+class _Still extends Listenable {
+  const _Still();
+  @override
+  void addListener(VoidCallback listener) {}
+  @override
+  void removeListener(VoidCallback listener) {}
 }

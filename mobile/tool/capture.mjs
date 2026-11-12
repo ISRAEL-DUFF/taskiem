@@ -5,6 +5,7 @@
 //
 //   node mobile/tool/capture.mjs <name> <path> [email]
 //   EXPLORE=1 node mobile/tool/capture.mjs explore /chat
+//   TOOLS=1 node mobile/tool/capture.mjs chat-tools "/chat?with=taskiem"
 //
 // Needs the demo world running (serve-demo.sh, seed.ts) and Playwright.
 import fs from "node:fs";
@@ -54,6 +55,14 @@ if (process.env.EXPLORE) {
   await p.getByTestId("new-chat").click();
   await p.waitForTimeout(4000);
   await p.getByTestId("explore-search").fill("rice");
+  await p.waitForTimeout(3000);
+}
+// TOOLS=1: the tools panel opened (every tool's list read for its tile),
+// then the Products sheet.
+if (process.env.TOOLS) {
+  await p.getByRole("button", { name: "Open tools" }).click();
+  await p.waitForTimeout(4000);
+  await p.getByTestId("tools-panel").getByRole("button", { name: /^Products/ }).click();
   await p.waitForTimeout(3000);
 }
 fs.writeFileSync(path.join(out, "answers.json"), JSON.stringify({ at, answers }, null, 1));

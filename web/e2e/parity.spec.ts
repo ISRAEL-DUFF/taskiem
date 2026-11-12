@@ -438,6 +438,42 @@ const SCREENS: {
     },
   },
   {
+    // The tools panel open over Taskiem's conversation (M5): every tool the
+    // owner may open, its line and badge from its list.
+    name: "chat-tools",
+    touch: true,
+    path: "/chat?with=taskiem",
+    fixture: "chat-tools",
+    ready: async (p) => {
+      await expect(p.getByTestId("taskiem-stream")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "Open tools" }).click();
+      await expect(p.getByTestId("tools-panel")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      // The tiles' counts rolled into place.
+      await p.waitForTimeout(600);
+    },
+  },
+  {
+    // A tool's sheet from it: Products, its search, chips and rows.
+    name: "chat-tool-sheet",
+    touch: true,
+    path: "/chat?with=taskiem",
+    fixture: "chat-tools",
+    ready: async (p) => {
+      await expect(p.getByTestId("taskiem-stream")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "Open tools" }).click();
+      await p.getByTestId("tools-panel").getByRole("button", { name: /^Products/ }).click();
+      await expect(p.getByTestId("tool-sheet")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.waitForTimeout(600);
+      // Not hovering the first row, where the tile was pressed.
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
     // The same, scrolled to its end: the briefing and the cards.
     name: "chat-taskiem-cards",
     touch: true,

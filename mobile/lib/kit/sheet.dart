@@ -64,7 +64,7 @@ class _SheetFrame extends InheritedWidget {
 
 /// kit.tsx Sheet.
 class TkSheet extends StatelessWidget {
-  const TkSheet({super.key, required this.title, required this.body, this.footer, this.onBack, this.overlay, this.semanticsLabel});
+  const TkSheet({super.key, required this.title, required this.body, this.footer, this.onBack, this.overlay, this.semanticsLabel, this.count, this.crumb});
 
   final String title;
 
@@ -80,6 +80,12 @@ class TkSheet extends StatelessWidget {
   /// Over everything in the sheet: the saved tick.
   final Widget? overlay;
   final String? semanticsLabel;
+
+  /// `.tk-sheet-count`: how many the list holds, after the title.
+  final int? count;
+
+  /// What the title is in ("Products" over a product's name).
+  final String? crumb;
 
   @override
   Widget build(BuildContext context) {
@@ -160,7 +166,25 @@ class TkSheet extends StatelessWidget {
                                 Expanded(
                                   child: Semantics(
                                     header: true,
-                                    child: Text(title, style: tkText(size: 26, weight: 800, lineHeight: 1.35, letterSpacing: -0.52, color: t.text)),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        if (crumb != null) Text(crumb!, style: tkText(size: 13, weight: 600, color: t.muted)),
+                                        Text.rich(
+                                          TextSpan(
+                                            text: title,
+                                            children: [
+                                              // `.tk-sheet-count { font-size: 14px; font-weight: 400; color: var(--muted) }`, 8 px after.
+                                              if (count != null) ...[
+                                                const WidgetSpan(child: SizedBox(width: 8)),
+                                                TextSpan(text: '$count', style: tkText(size: 14, weight: 400, letterSpacing: 0, color: t.muted)),
+                                              ],
+                                            ],
+                                          ),
+                                          style: tkText(size: 26, weight: 800, lineHeight: 1.35, letterSpacing: -0.52, color: t.text),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                                 const SizedBox(width: 12),

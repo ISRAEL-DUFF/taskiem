@@ -69,6 +69,18 @@ class Transport {
     return _answer(res.statusCode, utf8.decode(res.bodyBytes), t);
   }
 
+  /// Sends a file as the body itself, its type the Content-Type (api.ts
+  /// uploadFile: a logo, a profile's photo), and answers the JSON.
+  Future<Object?> sendFile(String path, {required List<int> bytes, required String type}) async {
+    final req = http.Request('POST', _uri(path))
+      ..headers['Accept'] = 'application/json'
+      ..headers['Content-Type'] = type
+      ..bodyBytes = bytes;
+    final t = _sign(req);
+    final res = await _reach(() async => http.Response.fromStream(await _client.send(req)), timeout * 2);
+    return _answer(res.statusCode, utf8.decode(res.bodyBytes), t);
+  }
+
   /// Sends a file as a multipart form (`file`, and the [fields] beside it)
   /// and answers the JSON, as [send] does.
   Future<Object?> upload(String path, {required List<int> bytes, required String filename, required String type, Map<String, String> fields = const {}}) async {

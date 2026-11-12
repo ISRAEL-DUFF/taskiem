@@ -380,11 +380,13 @@ void main() {
 
   testWidgets('D5–D6: what leads to a tool not here yet says so when pressed', (t) async {
     await screen(t);
-    await t.tap(find.bySemanticsLabel('Chat tools'));
-    await t.pump();
-    expect(find.text('This is coming to the app soon.'), findsOneWidget);
-    await t.pump(const Duration(seconds: 5));
+    // The tools button opens the tools (M5); pressed again, they close.
+    await t.tap(find.bySemanticsLabel('Open tools'));
     await t.pumpAndSettle();
+    expect(find.text('Tools'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Close tools'));
+    await t.pumpAndSettle();
+    expect(find.text('Tools'), findsNothing);
     final step = find.bySemanticsLabel('Record stock in: Palm oil 25L is running low');
     await t.ensureVisible(step);
     await t.pumpAndSettle();

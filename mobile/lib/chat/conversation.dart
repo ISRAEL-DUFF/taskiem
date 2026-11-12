@@ -23,6 +23,9 @@ import 'attachments.dart';
 import 'cards.dart';
 import 'chats.dart';
 import 'composer.dart';
+import 'tool_sheet.dart';
+import 'tools.dart';
+import 'tools_panel.dart';
 import 'thread.dart';
 import 'live.dart';
 import 'menu.dart';
@@ -708,8 +711,43 @@ class _ConversationScreenState extends State<ConversationScreen> {
   @override
   void dispose() {
     _tags.dispose();
+    _tools.dispose();
     _text.dispose();
     super.dispose();
+  }
+
+  // The tools panel (ChatTools.tsx), about this business only.
+  late final _tools = ToolsController(chats: widget.data.chats, scope: widget.data.conv.link, business: widget.data.conv.name);
+
+  /// ChatTools.tsx: a tool opened from the panel; "/" and its word, put away.
+  void _openTool(Tool tool) {
+    _tools.close();
+    if (RegExp(r'^/\S*$').hasMatch(_text.text)) _text.clear();
+    showToolSheet(context, tools: _tools, tool: tool);
+  }
+
+  /// Conversation.tsx businessTiles and the panel's own (Their shop): what
+  /// is between us and them. Their shop and the tiles of M7 and M8 say they
+  /// are coming until their sheets are here.
+  ({List<ExtraTile> lead, List<ExtraTile> extras}) _tiles() {
+    final d = widget.data;
+    final can = d.chats.auth.can;
+    // We buy from them: the Order sheet (drafting needs table.edit; sending
+    // and the supplier, storefront.manage).
+    final supplies = d.priceWhose == 'theirs' && can('table.edit') && can('storefront.manage');
+    void soon() {
+      _tools.close();
+      showComingSoon(context);
+    }
+
+    return (
+      lead: [(key: 'order', title: 'Their shop', icon: 'plus', line: 'From ${d.conv.name}', onPick: soon)],
+      extras: [
+        if (supplies) (key: 'offer', title: 'Make an offer', icon: 'tag', line: 'Your price for an order', onPick: soon),
+        if (can('invoice.manage')) (key: 'invoice-them', title: 'Invoice them', icon: 'invoices', line: 'A new invoice to ${d.conv.name}', onPick: soon),
+        if (can('invoice.read')) (key: 'statement', title: 'Statement', icon: 'money', line: 'What is owed each way', onPick: soon),
+      ],
+    );
   }
 
   // Tags (Mentions.tsx useMentions), shared with Taskiem's conversation.
@@ -737,6 +775,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
       d.chats.setDraft(d.conv.link, d.chats.chatTools && RegExp(r'^/\S*$').hasMatch(_words) ? '' : _words);
     }
     _tags.typed();
+    // "/" and a word as the whole message: the panel, filtered by it ("/invoice/"
+    // picks a thing to tag instead).
+    _tools.typed(_tags.query?.mark == '/' ? '' : _text.text);
   }
 
   /// What "@" and "#" offer here: the price list's items on sale, our own
@@ -1062,7 +1103,22 @@ class _ConversationScreenState extends State<ConversationScreen> {
               // The tools' picker floats over the thread from the box, 8 px
               // above it, its shadow over the box too (`.composer > .tk-picker`).
               ListenableBuilder(listenable: d, builder: (context, _) => _tags.anchor(context)),
+              ToolsAnchor(
+                tools: _tools,
+                panel: (context, room) {
+                  final tiles = _tiles();
+                  return ToolsPanel(
+                    tools: _tools,
+                    onOpen: _openTool,
+                    lead: tiles.lead,
+                    extras: tiles.extras,
+                    recent: d.chats.prefs?.recentTools ?? const [],
+                    maxHeight: room,
+                  );
+                },
+              ),
               Composer(
+                tools: d.chats.chatTools ? _tools : null,
                 key: composerKey,
                 text: _text,
                 replying: _reply == null ? null : previewLine(_reply!, c.name),

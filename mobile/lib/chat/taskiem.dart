@@ -35,6 +35,9 @@ import 'ref_card.dart';
 import 'tag_box.dart';
 import 'tags.dart';
 import 'thread.dart';
+import 'tool_sheet.dart';
+import 'tools.dart';
+import 'tools_panel.dart';
 import 'words.dart';
 
 /// TaskiemChat.tsx EVERY_MS: what is newer, every 5 seconds (20 with the
@@ -435,6 +438,35 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     onExplore: (c) => showExploreCard(context, widget.data.chats, c, onOpen: widget.onOpenLink),
   );
 
+  // The tools panel (ChatTools.tsx): every tool the person may open.
+  late final _tools = ToolsController(chats: widget.data.chats);
+
+  void _openTool(Tool tool) {
+    _tools.close();
+    if (RegExp(r'^/\S*$').hasMatch(_text.text)) _text.clear();
+    showToolSheet(context, tools: _tools, tool: tool);
+  }
+
+  /// TaskiemChat.tsx extras: the briefing, tasks, and clocking in and out.
+  List<ExtraTile> _extras(TaskiemData d) {
+    final can = d.chats.auth.can;
+    void pick(VoidCallback f) {
+      _tools.close();
+      f();
+    }
+
+    return [
+      if (d.briefs) (key: 'briefing', title: 'Briefing', icon: 'sparkle', line: "Today's numbers", onPick: () => pick(() => _showBriefing(d))),
+      // Tasks, given and done: its sheet is not in the app yet.
+      (key: 'tasks', title: 'Tasks', icon: 'check', line: 'To do, and given', onPick: () => pick(() => showComingSoon(context))),
+      // Clocking in and out, as "in" and "out" are said: for staff.
+      if (!can('member.manage')) ...[
+        (key: 'clock-in', title: 'Clock in', icon: 'clock', line: 'Start your shift', onPick: () => pick(() => d.say(text: 'in'))),
+        (key: 'clock-out', title: 'Clock out', icon: 'clock', line: 'End your shift', onPick: () => pick(() => d.say(text: 'out'))),
+      ],
+    ];
+  }
+
   TagSources _tagSources() {
     final d = widget.data;
     final own = d.ownProducts;
@@ -466,6 +498,8 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     _text.text = widget.data.chats.draft('taskiem');
     _text.addListener(() => widget.data.chats.setDraft('taskiem', _text.text));
     _text.addListener(_tags.typed);
+    // "/" and a word as the whole message: the panel, filtered by it.
+    _text.addListener(() => _tools.typed(_tags.query?.mark == '/' ? '' : _text.text));
     if (widget.data.messages == null) widget.data.open();
     widget.data.chats.viewingTaskiem = true;
     _back = widget.data.givenBack.listen((words) {
@@ -475,6 +509,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
 
   @override
   void dispose() {
+    _tools.dispose();
     widget.data.chats.viewingTaskiem = false;
     _back?.cancel();
     _tags.dispose();
@@ -522,7 +557,18 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                 Expanded(child: _thread(context, d)),
                 _tags.plain(),
                 _tags.anchor(context),
+                ToolsAnchor(
+                  tools: _tools,
+                  panel: (context, room) => ToolsPanel(
+                    tools: _tools,
+                    onOpen: _openTool,
+                    extras: _extras(d),
+                    recent: d.chats.prefs?.recentTools ?? const [],
+                    maxHeight: room,
+                  ),
+                ),
                 Composer(
+                  tools: d.chats.chatTools ? _tools : null,
                   text: _text,
                   // TaskiemChat.tsx: with chat tools "Ask Taskiem, or @ to
                   // tag"; a phone shows the words before the comma.

@@ -315,11 +315,15 @@ class ChatsData extends ChangeNotifier {
 enum ChatFilter { all, unread, starred, archived }
 
 class ChatsScreen extends StatefulWidget {
-  const ChatsScreen({super.key, required this.data, this.onMenu, this.onFind, this.onOpen, this.onOpenTaskiem, this.onOpenCustomer, this.onOpenAt});
+  const ChatsScreen({super.key, required this.data, this.onMenu, this.onFind, this.onOpen, this.onOpenTaskiem, this.onOpenCustomer, this.onOpenAt, this.onLinks, this.onProfile});
 
   final ChatsData data;
   final VoidCallback? onMenu;
   final VoidCallback? onFind;
+
+  /// The ⋯ menu's Linked businesses and Your business in Explore.
+  final VoidCallback? onLinks;
+  final VoidCallback? onProfile;
 
   /// A conversation with a linked business, opened.
   final ValueChanged<LinkConversation>? onOpen;
@@ -618,6 +622,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
       context,
       at: at,
       items: [
+        if (widget.onLinks != null) ('Linked businesses', widget.onLinks!),
+        if (widget.onProfile != null) ('Your business in Explore', widget.onProfile!),
         if (widget.onMenu != null) ('Settings', widget.onMenu!),
         if (d.chatTools && p != null)
           (
@@ -972,14 +978,14 @@ class ChatAvatar extends StatelessWidget {
 /// Links.tsx: the businesses asking to link, each with its answers.
 /// One row of a section of links (ui.tsx Row): a tinted letter or icon,
 /// the name and its state's badge, a line under them, and its buttons.
-typedef _LinkRow = ({String? letter, String? icon, Tone? tone, String title, String? badge, Tone? badgeTone, String sub, Widget? actions});
+typedef LinkRowData = ({String? letter, String? icon, Tone? tone, String title, String? badge, Tone? badgeTone, String sub, Widget? actions});
 
 /// Links.tsx's sections of links (Asks to link, Waiting for an answer): a
 /// heading, then the rows in a card.
-class _LinkSection extends StatelessWidget {
-  const _LinkSection({this.title, required this.rows, this.top = 32});
+class LinkSection extends StatelessWidget {
+  const LinkSection({super.key, this.title, required this.rows, this.top = 32});
   final String? title;
-  final List<_LinkRow> rows;
+  final List<LinkRowData> rows;
 
   /// The heading's room above (CSS's 32, less a margin it collapses into).
   final double top;
@@ -1084,7 +1090,7 @@ class _Asked extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final badge = stateWords('asked_us')!;
-    return _LinkSection(
+    return LinkSection(
       title: 'Asks to link',
       rows: [
         for (final l in links)
@@ -1293,7 +1299,7 @@ class _Results extends StatelessWidget {
               ),
           ],
           if (blind != null)
-            _LinkSection(
+            LinkSection(
               title: 'Businesses on Taskiem',
               top: next(),
               rows: [
@@ -1321,7 +1327,7 @@ class _Results extends StatelessWidget {
             _Heading('Businesses on Taskiem', top: next()),
             _Empty(icon: 'search', words: 'No business found for “$query”. Only businesses that chose to be found are listed.'),
           ] else
-            _LinkSection(
+            LinkSection(
               title: 'Businesses on Taskiem',
               top: next(),
               rows: [
@@ -1566,7 +1572,7 @@ class _Waiting extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sentWords = stateWords('sent')!;
-    return _LinkSection(
+    return LinkSection(
       title: 'Waiting for an answer',
       rows: [
         for (final l in links)
