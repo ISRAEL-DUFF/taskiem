@@ -756,9 +756,8 @@ class _MessageArriveState extends State<MessageArrive> with SingleTickerProvider
     final grow = CurvedAnimation(parent: a, curve: Curves.easeOutBack);
     return AnimatedBuilder(
       animation: a,
-      builder: (context, child) => a.isCompleted
-          ? child!
-          : Opacity(
+      builder: (context, child) => Opacity(
+              alwaysIncludeSemantics: true,
               opacity: Curves.easeOut.transform(a.value.clamp(0, 1)),
               child: Transform.translate(
                 offset: Offset(0, 22 * (1 - rise.value)),
@@ -768,7 +767,7 @@ class _MessageArriveState extends State<MessageArrive> with SingleTickerProvider
                   child: child,
                 ),
               ),
-            ),
+      ),
       child: widget.child,
     );
   }
@@ -812,7 +811,7 @@ class _PopInState extends State<PopIn> with SingleTickerProviderStateMixin {
     final pop = CurvedAnimation(parent: a, curve: Curves.elasticOut);
     return AnimatedBuilder(
       animation: a,
-      builder: (context, child) => a.isCompleted ? child! : Transform.scale(scale: pop.value, child: child),
+      builder: (context, child) => Transform.scale(scale: pop.value, child: child),
       child: widget.child,
     );
   }
@@ -1081,7 +1080,11 @@ class _BubbleHoldState extends State<BubbleHold> with SingleTickerProviderStateM
       onHorizontalDragUpdate: widget.onReply == null ? null : (d) => _drag(d.delta.dx),
       onHorizontalDragEnd: widget.onReply == null ? null : (_) => _release(),
       onHorizontalDragCancel: widget.onReply == null ? null : () => _release(),
-      child: Stack(
+      // Only while swiped: around the bubble, a Stack would keep taps from
+      // what hangs outside it (Retry under a message not sent).
+      child: _dx <= 0
+          ? widget.child
+          : Stack(
         clipBehavior: Clip.none,
         children: [
           // The reply arrow, coming in under the bubble as it is swiped.

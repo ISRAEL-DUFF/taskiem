@@ -381,14 +381,7 @@ class ComposerState extends State<Composer> {
           // phone): no strip of its own.
           // `.chat-pane .composer { padding: 8px 10px 12px; gap: 8px }`
           padding: EdgeInsets.fromLTRB(10, 8, 10, 12 + widget.bottom),
-          child: AnimatedSwitcher(
-            duration: (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ? Duration.zero : const Duration(milliseconds: 180),
-            transitionBuilder: (child, a) => FadeTransition(
-              opacity: a,
-              child: SlideTransition(position: Tween(begin: const Offset(0, 0.25), end: Offset.zero).animate(a), child: child),
-            ),
-            child: recording ? KeyedSubtree(key: const ValueKey('recording'), child: _recordingBar(t)) : KeyedSubtree(key: const ValueKey('row'), child: _row(t, dark, file, words)),
-          ),
+          child: recording ? _recordingBar(t) : _row(t, dark, file, words),
         ),
       ],
     );

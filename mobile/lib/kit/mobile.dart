@@ -105,6 +105,7 @@ class _TkEnterState extends State<TkEnter> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: _curve,
     builder: (context, child) => Opacity(
+      alwaysIncludeSemantics: true,
       opacity: _curve.value,
       child: Transform.translate(offset: Offset(0, 14 * (1 - _curve.value)), child: child),
     ),

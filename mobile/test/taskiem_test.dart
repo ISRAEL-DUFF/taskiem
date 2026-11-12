@@ -199,6 +199,7 @@ void main() {
     await t.pump();
     await t.tap(find.bySemanticsLabel('Send'));
     await settle(t);
+    await t.pump(const Duration(milliseconds: 400));
     final thread = t.state<ThreadViewState<Object?>>(find.byWidgetPredicate((w) => w is ThreadView));
     final view = t.getRect(find.byWidgetPredicate((w) => w is ThreadView));
     final answer = t.getRect(find.textContaining('All good today.', findRichText: true));

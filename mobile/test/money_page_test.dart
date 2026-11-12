@@ -212,13 +212,14 @@ void main() {
     expect(sent.where((s) => s.startsWith('GET /v1/money/summary')).last, 'GET /v1/money/summary from=2026-11-09&to=2026-11-12');
     await t.tap(find.bySemanticsLabel('Download as a spreadsheet'));
     await t.pumpAndSettle();
-    await t.tap(find.bySemanticsLabel('Download money log'));
+    await t.tap(find.bySemanticsLabel(RegExp('^Download money log')));
     await settle(t);
     expect(shared.single, 'log-2026-11-09-to-2026-11-12.csv text/csv date,amount\n');
   });
 
   testWidgets('dates chosen: a bad one said, nothing asked', (t) async {
     final sent = await open(t, (c) => MoneyPage(auth: c.auth, now: () => _now));
+    await t.ensureVisible(find.bySemanticsLabel('Pick dates'));
     await t.tap(find.bySemanticsLabel('Pick dates'));
     await settle(t);
     final asked = sent.where((s) => s.startsWith('GET /v1/money/summary')).length;
@@ -357,6 +358,7 @@ void main() {
   testWidgets('M8 fixes 17: Choose dates again starts from the period chosen, not the old dates', (t) async {
     await open(t, (c) => MoneyPage(auth: c.auth, now: () => _now));
     Future<void> pick() async {
+      await t.ensureVisible(find.bySemanticsLabel('Pick dates'));
       await t.tap(find.bySemanticsLabel('Pick dates'));
       await settle(t);
     }
@@ -364,6 +366,7 @@ void main() {
     await pick();
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^From')), matching: find.byType(EditableText)), '2026-10-01');
     await t.pump();
+    await t.ensureVisible(find.bySemanticsLabel('This month'));
     await t.tap(find.bySemanticsLabel('This month'));
     await settle(t);
     await pick();

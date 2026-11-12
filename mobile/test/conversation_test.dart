@@ -41,6 +41,8 @@ void main() {
       await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 40)));
       await t.pump();
     }
+    // A screen sliding in, a message arriving: done.
+    await t.pump(const Duration(milliseconds: 400));
   }
 
   testWidgets('opened from the chats, a message is sent and shows its ticks', (t) async {
