@@ -26,8 +26,8 @@
 /trade-orders | app lib/chat/trade_orders_page.dart
 /trade-orders/ | app lib/chat/trade_orders_page.dart
 /links/ | M8
-/invoices | M8
-/invoices/ | M8
+/invoices | app lib/chat/invoices_page.dart
+/invoices/ | app lib/chat/invoices_page.dart
 /bills | M8
 /bills/ | M8
 /purchases/ | M8

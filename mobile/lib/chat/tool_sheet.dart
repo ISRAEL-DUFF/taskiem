@@ -14,6 +14,7 @@ import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'sizes_forms.dart' show GroupForm;
 import 'bookings_page.dart' show BookingsPage;
+import 'invoices_page.dart' show InvoicesPage;
 import 'price_lists_page.dart' show PriceListsPage;
 import 'stock_page.dart' show StockPage;
 import 'tools.dart';
@@ -30,6 +31,7 @@ void openToolPage(BuildContext context, Tool tool, Auth auth) {
     'prices' => PriceListsPage(auth: auth),
     'orders' => TradeOrdersPage(auth: auth),
     'tables' => TablesPage(auth: auth),
+    'invoices' => InvoicesPage(auth: auth),
     _ => null,
   };
   if (page == null) return showComingSoon(context);
@@ -296,7 +298,10 @@ class _ToolSheetState extends State<ToolSheet> {
       );
     }
     if (list == null) {
-      return ListView(padding: pad, children: [TkLoading(label: 'Loading $name…')]);
+      return ListView(
+        padding: pad,
+        children: [TkLoading(label: 'Loading $name…')],
+      );
     }
     final shown = filterRows(list, _chip, _search.text);
     if (shown.isEmpty) {
