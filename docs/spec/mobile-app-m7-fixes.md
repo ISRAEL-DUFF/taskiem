@@ -74,7 +74,7 @@ they say otherwise; line numbers are as of commit `f970e6b5`.
 |---|---|---|---|---|---|
 | 4.1 | **bug** | `:409`, in `customer.dart:337-370` | The card's body is 45% of the screen's height, keyboard or not; the screen's column does not scroll. On a 360×640 phone with the keyboard up (typing the address or fee, which are in that body) the screen overflows; at twice the text, likely without it. | Measure the room left (`LayoutBuilder` around the thread and card) and give the card at most 45% of it; with the keyboard up, the card shrinks and scrolls inside. The thread keeps at least its head room. | `CustomerScreen` with an order at 360×640, text ×2, and with `viewInsets.bottom = 280`: no overflow; `expectPressable`. |
 | 4.2 | **bug** | `:325` `didUpdateWidget` | Either saved field changing refills both boxes: picking a delivery area (which sets the fee) wipes an address typed but not saved. | Refill the address only when `address` changed, the fee only when `delivery_kobo` changed (as the web, `CustomerOrders.tsx:575-579`). | Type an address, pick an area: the address stays. |
-| 4.3 | minor bug | `:327, 377, 503` | The pay choice is cleared only when `pay` changes. Pay at the door, then pickup: the server keeps `on_delivery`, which pickup does not offer, so no choice shows chosen. A refused change leaves the choice shown that the server refused. | Show `payNow` whenever the shown choice is not among `payChoices`; clear `_getBy`/`_pay` when a change fails. | Door, then pickup: "I'll arrange payment" shows chosen. A 409: the choices go back. |
+| 4.3 | minor bug | `:327, 377, 503` | The pay choice is cleared only when `pay` changes. Pay at the door, then pickup: the server keeps `on_delivery`, which pickup does not offer, so no choice shows chosen. A refused change leaves the choice shown that the server refused. | Show `payNow` whenever the shown choice is not among `payChoices`; clear `_getBy`/`_pay` when a change fails. | Door, then pickup: the first way it still offers shows chosen (with a pay page, "They pay now, by bank transfer"). A 409: the choices go back. |
 | 4.4 | gap (accessibility) | `:459-460, 486-487` | "Deliver to" and "Delivery fee, ₦" are text beside their boxes: the boxes have no name for a screen reader. | `TkKitField(label:)` around each (as the line rows do). | Fields found by label. |
 | 4.5 | gap | `:380` | The fee is read with `num.tryParse`: "1,500" or "₦1500" disables Save with no word. | `feeKobo()` (the web's), and "Enter an amount, like 1500." under the box when it is not money. | "1,500" saves 150000; "abc" shows the words. |
 | 4.6 | minor | `:182` | `onTold` calls the parent's `setState` after an await, with no `mounted` check. | Check `mounted`. | — |
@@ -172,10 +172,10 @@ Test: the thread's bubbles and the latest card shown; a reply sent with
 
 | Part | Done |
 |---|---|
-| 1 | |
-| 2 | |
-| 3 | |
-| 4 | |
-| 5, 6 | |
-| 8 | |
+| 1 | 1.1, 1.2: a choice row says it is checked (from its own radio or checkbox, every screen); the `Polling` mixin on every screen that reads again (`lib/kit/polling.dart`) |
+| 2 | 2.1 to 2.7; the shell's Linked businesses and Explore opened from a tool's screen through `lib/app/openers.dart`; `openOrSay` says when a call, map or mail cannot open |
+| 3 | 3.1 to 3.16; the list opened from Orders from linked businesses ("All your orders"); `TkRow` gained a tone |
+| 4 | 4.1 to 4.7; `KeyboardRoom.up` says when the keyboard is up; a refused Start an order keeps its words (found by the tests) |
+| 5, 6 | 5.1 to 5.4, 6.1 to 6.4; Availability's tile read at once after a change (it waited until five seconds old: found by the tests); text boxes can be disabled |
+| 8 | Every test listed, and one for each fix; the full suite: 742 passed |
 | 7 | |

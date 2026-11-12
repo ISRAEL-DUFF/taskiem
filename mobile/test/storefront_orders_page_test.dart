@@ -581,6 +581,38 @@ void main() {
     await expectLargeText(t, TaskiemApp(mode: TkMode.light, home: RiderSheet(auth: chats.auth, reference: 'OR-5K2Q', line: 'OR-5K2Q needs a rider')), drive: settle);
   });
 
+  testWidgets('orders from linked businesses among these: said, with the way to them', (t) async {
+    await serve(
+      t,
+      (c) => StorefrontOrdersPage(auth: c.auth, now: () => _now),
+      also: (req) async => req.url.path == '/v1/trade-orders' ? json({'orders': [{'id': 'T1'}]}) : null,
+    );
+    expect(find.text('Orders from businesses you are linked with are among these. '), findsOneWidget);
+    expect(find.bySemanticsLabel('Orders from linked businesses'), findsOneWidget);
+    expect(find.text(' has what is theirs alone.'), findsOneWidget);
+  });
+
+  testWidgets('a booking being cancelled: Move waits', (t) async {
+    final hold = Completer<http.Response?>();
+    await serve(
+      t,
+      (c) => StorefrontOrderPage(auth: c.auth, reference: 'OR-5K2Q', now: () => _now),
+      order: _order(kind: 'booking', more: {'service_name': 'Braids', 'starts_at': '2099-11-14T09:00:00Z', 'ends_at': '2099-11-14T10:30:00Z', 'fulfilment': null, 'basket': null}),
+      also: (req) async => req.method == 'POST' && req.url.path.endsWith('/cancel') ? hold.future : null,
+    );
+    await t.tap(find.bySemanticsLabel('Cancel Braids OR-5K2Q'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Cancel the booking'));
+    await t.pump();
+    await t.pump();
+    final h = t.ensureSemantics();
+    expect(t.getSemantics(find.bySemanticsLabel('Move Braids OR-5K2Q')).flagsCollection.isEnabled.toString(), 'Tristate.isFalse');
+    h.dispose();
+    hold.complete(json({'booking': {'reference': 'OR-5K2Q', 'status': 'cancelled'}}));
+    await settle(t);
+    await t.pump(const Duration(seconds: 5));
+  });
+
   testWidgets('at large text on a small phone: nothing cut off, all pressable', (t) async {
     final f = Fixture('chats');
     http.Response ok(Object body) => http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
