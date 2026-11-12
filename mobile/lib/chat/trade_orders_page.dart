@@ -7,6 +7,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../app/auth.dart';
+import '../app/openers.dart';
 import '../kit/forms.dart' show TkSwitchRow, errorWords, nairaKobo, nairaText;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkPill, TkRow, TkEmpty;
@@ -200,7 +201,12 @@ class _TradeOrdersPageState extends State<TradeOrdersPage> {
         if (_error != null) TkErrorBox(_error!),
         if (orders == null && _error == null) Text('Loading the orders…', style: tkHint(t)),
         if (orders != null && orders.isEmpty)
-          const TkEmpty(icon: 'invoices', title: 'No orders yet', line: 'When a business that buys from you orders on Taskiem, it arrives here.')
+          TkEmpty(
+            icon: 'invoices',
+            title: 'No orders yet',
+            line: 'When a business that buys from you orders on Taskiem, it arrives here.',
+            action: Openers.linkedBusinesses == null ? null : TkSmallButton(label: 'Linked businesses', onPressed: () => Openers.linkedBusinesses!(context)),
+          )
         else if (orders != null)
           TkPageCard(
             children: [
@@ -332,6 +338,10 @@ class _TradeOrderPageState extends State<TradeOrderPage> {
         _Notice(
           'This order takes $buyer past the credit limit you give them. It was not accepted by itself; it waits for them to pay, and you can still accept it.',
           warn: true,
+          link: (
+            label: 'Their statement',
+            onTap: links.statement == null ? _soon : () => links.statement!(context, _str(o['link'])),
+          ),
         ),
       if (note.isNotEmpty) Text('Their note: “$note”', style: tkHint(t)),
       TkPageCard(
@@ -422,19 +432,29 @@ class _TradeOrderPageState extends State<TradeOrderPage> {
 
 /// `.notice` (and `.notice.warn`): what needs us, said once.
 class _Notice extends StatelessWidget {
-  const _Notice(this.words, {this.warn = false});
+  const _Notice(this.words, {this.warn = false, this.link});
   final String words;
   final bool warn;
+
+  /// A link after the words (the web's "Their statement").
+  final ({String label, VoidCallback onTap})? link;
 
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     return Semantics(
       liveRegion: true,
+      container: true,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(color: warn ? t.tintWarn : t.tkLimeSoft, borderRadius: BorderRadius.circular(14)),
-        child: Text(words, style: tkText(size: 14, weight: 500, color: warn ? t.tintWarnText : t.text)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(words, style: tkText(size: 14, weight: 500, color: warn ? t.tintWarnText : t.text)),
+            if (link != null) ...[const SizedBox(height: 6), TkLink(label: link!.label, onTap: link!.onTap)],
+          ],
+        ),
       ),
     );
   }
@@ -798,14 +818,19 @@ class _TradeSettingsState extends State<_TradeSettings> {
     super.dispose();
   }
 
-  Future<void> _loadTerms() async {
+  /// Reads the terms; the boxes are filled from them only when [fill]
+  /// (the first read, and after Save terms): what is typed and not saved
+  /// stays through another change (the web's `days ?? terms`).
+  Future<void> _loadTerms({bool fill = true}) async {
     try {
       final r = (await widget.auth.transport.send('GET', '/v1/links/$_link/trade') as Map).cast<String, dynamic>();
       if (!mounted) return;
       setState(() {
         _terms = r;
-        _days.text = r['terms_days'] != null ? '${r['terms_days']}' : '';
-        _limit.text = r['credit_limit_kobo'] != null ? nairaText(_int(r['credit_limit_kobo'])) : '';
+        if (fill) {
+          _days.text = r['terms_days'] != null ? '${r['terms_days']}' : '';
+          _limit.text = r['credit_limit_kobo'] != null ? nairaText(_int(r['credit_limit_kobo'])) : '';
+        }
       });
     } on Object catch (e) {
       if (mounted) setState(() => _error = errorWords(e));
@@ -818,7 +843,7 @@ class _TradeSettingsState extends State<_TradeSettings> {
       await widget.auth.transport.send('PUT', '/v1/links/$_link/trade', body: body);
       if (mounted) showTkToast(context, 'Saved');
       await widget.onDone();
-      await _loadTerms();
+      await _loadTerms(fill: body.containsKey('terms_days'));
     } on Object catch (e) {
       if (mounted) setState(() => _error = errorWords(e));
     }
@@ -975,7 +1000,24 @@ class _DraftFormState extends State<_DraftForm> with _Sends {
         children: [
           if (error != null) TkErrorBox(error!) else Text('You are not linked with a business that buys from you yet.', style: tkHint(t)),
           const SizedBox(height: 12),
-          Align(alignment: Alignment.centerLeft, child: TkButton(label: 'Close', onPressed: () => Navigator.of(context).pop(false))),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (error == null && Openers.findBusiness != null)
+                TkButton(
+                  label: 'Find them',
+                  primary: true,
+                  onPressed: () {
+                    // Explore over the page, once the draft is closed.
+                    final nav = Navigator.of(context);
+                    nav.pop(false);
+                    Openers.findBusiness!(nav.context);
+                  },
+                ),
+              TkButton(label: 'Close', onPressed: () => Navigator.of(context).pop(false)),
+            ],
+          ),
         ],
       );
     }

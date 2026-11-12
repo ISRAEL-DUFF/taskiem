@@ -5,6 +5,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/semantics.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -58,7 +59,7 @@ void main() {
     },
   };
 
-  Future<({List<String> sent, List<String?> lines})> open(WidgetTester t, Map<String, dynamic> o, {Pickers pickers = const Pickers()}) async {
+  Future<({List<String> sent, List<String?> lines})> open(WidgetTester t, Map<String, dynamic> o, {Pickers pickers = const Pickers(), http.Response? answer}) async {
     t.view.physicalSize = const Size(390, 844);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
@@ -70,7 +71,7 @@ void main() {
         if (req.method == 'GET') return null;
         final type = req.headers['content-type'] ?? req.headers['Content-Type'] ?? '';
         sent.add('${req.method} ${req.url.path} ${type.startsWith('multipart/') ? 'photo' : req.body}');
-        return http.Response(jsonEncode({}), 200, headers: {'content-type': 'application/json'});
+        return answer ?? http.Response(jsonEncode({}), 200, headers: {'content-type': 'application/json'});
       }),
       now: () => f.at,
     );
@@ -162,6 +163,60 @@ void main() {
     await settle(t);
     expect(r.sent.single, 'POST /v1/trade-orders/d1/delivered photo');
     expect(r.lines.single, 'Delivered DL-1 for Ada Stores');
+  });
+
+  testWidgets('a cashier under the lowest price: it waits for the owner, nothing said as accepted', (t) async {
+    final r = await open(
+      t,
+      order,
+      answer: http.Response(jsonEncode({'waiting': 'owner', 'why': 'Under the lowest price for Rice 50kg: it waits for the owner’s OK.'}), 202, headers: {'content-type': 'application/json'}),
+    );
+    await t.tap(find.bySemanticsLabel('Accept'));
+    await settle(t);
+    expect(r.sent.single, 'POST /v1/trade-orders/o1/accept {}');
+    expect(r.lines, isEmpty, reason: 'no "Accepted" line: nothing was accepted');
+    expect(find.text('Under the lowest price for Rice 50kg: it waits for the owner’s OK.'), findsOneWidget);
+    expect(find.bySemanticsLabel('Decline'), findsOneWidget);
+  });
+
+  testWidgets('a changed order waits for the buyer: Decline, no Accept', (t) async {
+    await open(t, {...order, 'status': 'changed'});
+    expect(find.bySemanticsLabel('Decline'), findsOneWidget);
+    expect(find.bySemanticsLabel('Accept'), findsNothing);
+  });
+
+  testWidgets('an order at the door: its word and step', (t) async {
+    await open(t, {...order, 'status': 'arrived'});
+    expect(find.text('At the door'), findsOneWidget);
+    expect(find.bySemanticsLabel('On the way: step 3 of 4'), findsOneWidget);
+  });
+
+  testWidgets('a call that cannot be made says so', (t) async {
+    final was = callPhone;
+    callPhone = (p) async => false;
+    addTearDown(() => callPhone = was);
+    await open(t, delivery('received'));
+    await t.tap(find.bySemanticsLabel(RegExp('^Call ')));
+    await t.pump();
+    expect(find.text('That number could not be called.'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a refused step: the server’s words, the buttons back', (t) async {
+    final r = await open(t, order, answer: http.Response(jsonEncode({'error': 'AD-7Q4K2P is cancelled'}), 409, headers: {'content-type': 'application/json'}));
+    await t.tap(find.bySemanticsLabel('Accept'));
+    await settle(t);
+    expect(r.lines, isEmpty);
+    expect(find.text('AD-7Q4K2P is cancelled'), findsOneWidget);
+    final accept = t.getSemantics(find.bySemanticsLabel('Accept'));
+    expect(accept.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+  });
+
+  testWidgets('delivered with no proof asked: sent as JSON, not a form', (t) async {
+    final r = await open(t, delivery('arrived'));
+    await t.tap(find.bySemanticsLabel('Delivered'));
+    await settle(t);
+    expect(r.sent.single, 'POST /v1/trade-orders/d1/delivered {}');
   });
 
   testWidgets('at large text on a small phone: nothing cut off, all pressable', (t) async {

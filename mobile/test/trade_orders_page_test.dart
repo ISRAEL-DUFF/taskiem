@@ -7,6 +7,8 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:taskiem/api/api.g.dart' show Me;
+import 'package:taskiem/app/openers.dart';
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/trade_orders_page.dart';
 import 'package:taskiem/chat/words.dart' show CardTone;
@@ -64,7 +66,17 @@ void main() {
     expect(daysValue('x'), -1);
   });
 
-  Future<List<String>> open(WidgetTester t, Map<String, dynamic> order, {bool list = false, Size size = const Size(390, 1600)}) async {
+  Future<List<String>> open(
+    WidgetTester t,
+    Map<String, dynamic> order, {
+    bool list = false,
+    Size size = const Size(390, 1600),
+    bool none = false,
+    bool noBuyers = false,
+    List<String>? perms,
+  }) async {
+    // Each opening its own screen, not the last one's kept.
+    await t.pumpWidget(const SizedBox());
     t.view.physicalSize = size;
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
@@ -78,7 +90,7 @@ void main() {
         if (req.method == 'GET') {
           return switch (p) {
             '/v1/trade-orders' => ok({
-              'orders': [o],
+              'orders': [if (!none) o],
             }),
             '/v1/trade-orders/T1' => ok({'order': o}),
             '/v1/stock' => ok({
@@ -91,7 +103,7 @@ void main() {
             '/v1/links/L1/trade' => ok({'terms_days': 30, 'credit_limit_kobo': null}),
             '/v1/links' => ok({
               'links': [
-                {'id': 'L1', 'name': 'Rivers Foods', 'state': 'active', 'role': 'customer'},
+                if (!noBuyers) {'id': 'L1', 'name': 'Rivers Foods', 'state': 'active', 'role': 'customer'},
                 {'id': 'L2', 'name': 'Eko Supplies', 'state': 'active', 'role': 'supplier'},
               ],
               'sent': [],
@@ -105,6 +117,7 @@ void main() {
       }),
       now: () => f.at,
     );
+    if (perms != null) chats.auth.me = Me.fromJson({...f.json('/v1/me'), 'permissions': perms});
     await t.pumpWidget(
       TaskiemApp(
         mode: TkMode.light,
@@ -238,6 +251,105 @@ void main() {
     await t.tap(find.text('Rivers Foods'));
     await settle(t);
     expect(find.text('PO-12 from Rivers Foods'), findsOneWidget);
+  });
+
+  testWidgets('their terms typed and not saved stay through another change', (t) async {
+    final sent = await open(t, _order('accepted'));
+    await t.enterText(find.byType(EditableText).at(0), '14');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Accept their orders by themselves when every item has a price').last);
+    await settle(t);
+    expect(sent.single, 'PUT /v1/links/L1/trade {"auto_accept":true}');
+    expect(find.text('14'), findsOneWidget, reason: 'typed, not saved: kept');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('past their credit limit: the notice, and their statement (with money, coming)', (t) async {
+    await open(t, _order('received', more: {'over_limit_at': '2026-11-12T09:00:00Z'}));
+    expect(find.textContaining('past the credit limit you give them'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Their statement').first);
+    await t.pump();
+    expect(find.text('This is coming to the app soon.'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('kept after they asked to cancel; their count agreed; cancelled after yes', (t) async {
+    var sent = await open(t, _order('accepted', more: {'cancel_asked_at': '2026-11-12T10:00:00Z'}));
+    expect(find.text('Rivers Foods asks to cancel it. Cancel it, or keep it.'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Keep the order'));
+    await settle(t);
+    expect(sent.single, 'POST /v1/trade-orders/T1/keep {}');
+    await t.pump(const Duration(seconds: 5));
+    sent.clear();
+    await t.tap(find.bySemanticsLabel('Cancel the order'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Cancel the order').last);
+    await settle(t);
+    expect(sent.single, 'POST /v1/trade-orders/T1/cancel {}');
+    await t.pump(const Duration(seconds: 5));
+    sent = await open(t, _order('delivered', more: {'short_at': '2026-11-12T10:00:00Z', 'short': [2, 4]}));
+    expect(find.text('2 bags at ₦5,000 · they counted 2'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Agree their count'));
+    await settle(t);
+    expect(sent.single, 'POST /v1/trade-orders/T1/agree {}');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('without storefront.manage no answers; without link.manage no terms', (t) async {
+    await open(t, _order('received'), perms: ['link.manage']);
+    expect(find.text('Answer Rivers Foods'), findsNothing);
+    expect(find.text('Your items'), findsNothing);
+    expect(find.text('Rivers Foods’s orders'), findsOneWidget);
+    await open(t, _order('received'), perms: ['storefront.manage']);
+    expect(find.text('Answer Rivers Foods'), findsOneWidget);
+    expect(find.text('Rivers Foods’s orders'), findsNothing);
+  });
+
+  testWidgets('Record the delivery waits for every count', (t) async {
+    final sent = await open(t, _order('accepted'));
+    await t.tap(find.bySemanticsLabel('Delivered'));
+    await t.pumpAndSettle();
+    await t.enterText(find.descendant(of: find.byType(TkModal), matching: find.byType(EditableText)).at(0), '');
+    await t.pump();
+    expect(find.text('How many is a whole number.'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Record the delivery'));
+    await settle(t);
+    expect(sent, isEmpty);
+  });
+
+  testWidgets('no orders yet: Linked businesses; a draft with no buyers: Find them', (t) async {
+    final opened = <String>[];
+    Openers.linkedBusinesses = (_) => opened.add('links');
+    Openers.findBusiness = (_) => opened.add('explore');
+    addTearDown(() => (Openers.linkedBusinesses = null, Openers.findBusiness = null));
+    await open(t, _order('received'), list: true, none: true, noBuyers: true);
+    expect(find.text('No orders yet'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Linked businesses'));
+    expect(opened, ['links']);
+    await t.tap(find.bySemanticsLabel('Draft an order for them'));
+    await settle(t);
+    expect(find.text('You are not linked with a business that buys from you yet.'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Find them'));
+    await t.pumpAndSettle();
+    expect(opened, ['links', 'explore']);
+    expect(find.byType(TkModal), findsNothing);
+  });
+
+  testWidgets('an order drafted from our own item: the item and how many, no price', (t) async {
+    final sent = await open(t, _order('received'), list: true);
+    await t.tap(find.bySemanticsLabel('Draft an order for them'));
+    await settle(t);
+    await t.tap(find.bySemanticsLabel('Item 1, your item'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Rice, 50kg bag'));
+    await t.pumpAndSettle();
+    final boxes = find.descendant(of: find.byType(TkModal), matching: find.byType(EditableText));
+    await t.enterText(boxes.at(0), '4');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Send for them to confirm'));
+    await settle(t);
+    expect(sent.single, 'POST /v1/trade-orders {"link":"L1","lines":[{"item_id":"rice","quantity":4}],"note":""}');
+    await t.pump(const Duration(seconds: 5));
   });
 
   testWidgets('at large text on a small phone: nothing cut off, all pressable', (t) async {

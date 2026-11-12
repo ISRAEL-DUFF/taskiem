@@ -346,3 +346,10 @@ Future<String?> showTkModalChoices(BuildContext context, {required String title,
         );
       },
     );
+
+/// Opens something outside the app (a call, a map, a mail); says so when
+/// the phone could not.
+Future<void> openOrSay(BuildContext context, Future<bool> Function() open, String fail) async {
+  final ok = await open();
+  if (!ok && context.mounted) showTkToast(context, fail, error: true);
+}

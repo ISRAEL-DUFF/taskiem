@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 
 import 'api/transport.dart';
 import 'app/auth.dart';
+import 'app/openers.dart';
 import 'app/config.dart';
 import 'kit/keyboard.dart';
 import 'app/lock.dart';
@@ -269,6 +270,9 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _live.start();
     _chats.follow(true);
+    // What a tool's screen leads to: the shell's own screens.
+    Openers.linkedBusinesses = _links;
+    Openers.findBusiness = (context) => showExplore(context, chats: _chats, onOpen: (c) => _openConv(context, c));
   }
 
   @override
@@ -286,6 +290,8 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    Openers.linkedBusinesses = null;
+    Openers.findBusiness = null;
     // Stopped now; let go once the screens closed with this session (which
     // may still hold them this frame) are gone.
     _chats.follow(false);
@@ -334,17 +340,20 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c),
   ));
 
+  /// Linked businesses, over [context].
+  void _links(BuildContext context) => Navigator.of(context).push(PageRouteBuilder<void>(
+    pageBuilder: (_, _, _) => LinksScreen(
+      chats: _chats,
+      onProfile: () => _profile(context, back: 'Back to Linked businesses'),
+      // No links yet: Find a business, over this page.
+      onFind: (links) => showExplore(links, chats: _chats, onOpen: (c) => _openConv(context, c)),
+    ),
+  ));
+
   Widget _chatsTab(BuildContext context) {
     return ChatsScreen(
       data: _chats,
-      onLinks: () => Navigator.of(context).push(PageRouteBuilder<void>(
-        pageBuilder: (_, _, _) => LinksScreen(
-          chats: _chats,
-          onProfile: () => _profile(context, back: 'Back to Linked businesses'),
-          // No links yet: Find a business, over this page.
-          onFind: (links) => showExplore(links, chats: _chats, onOpen: (c) => _openConv(context, c)),
-        ),
-      )),
+      onLinks: () => _links(context),
       onProfile: () => _profile(context),
       onMenu: () => Navigator.of(context).push(PageRouteBuilder<void>(
         pageBuilder: (_, _, _) => SignedInScreen(auth: widget.auth, prefs: widget.prefs, unlocker: widget.unlocker),

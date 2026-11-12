@@ -11,7 +11,7 @@ import '../app/links.dart';
 import '../kit/forms.dart' show errorWords;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkPill;
-import '../kit/modal.dart' show showTkConfirm;
+import '../kit/modal.dart' show openOrSay, showTkConfirm;
 import '../kit/sheet.dart';
 import '../theme/theme.dart';
 import 'cards.dart' show CardProgress;
@@ -32,13 +32,14 @@ const tradeStatusWords = {
   'accepted': 'Accepted',
   'ready': 'Ready',
   'dispatched': 'On the way',
+  'arrived': 'At the door',
   'delivered': 'Delivered',
   'declined': 'Declined',
   'cancelled': 'Cancelled',
 };
 
 /// Where an order is on Placed, Accepted, On the way, Delivered.
-const tradeStep = {'received': 0, 'changed': 0, 'proposed': 0, 'accepted': 1, 'ready': 1, 'dispatched': 2, 'delivered': 3};
+const tradeStep = {'received': 0, 'changed': 0, 'proposed': 0, 'accepted': 1, 'ready': 1, 'dispatched': 2, 'arrived': 2, 'delivered': 3};
 
 /// Where a delivery is on Offered, Accepted, Picked up, Arrived, Delivered.
 const deliveryStep = {'received': 0, 'accepted': 1, 'dispatched': 2, 'arrived': 3, 'delivered': 4};
@@ -120,6 +121,10 @@ class _TradeOrderViewState extends State<_TradeOrderView> {
   bool _busy = false;
   String? _error;
 
+  /// The server's answer for staff under the lowest price: it waits for
+  /// the owner's OK, and nothing was accepted.
+  String? _waits;
+
   Map<String, dynamic> get _o => widget.order;
   String get _ref => _str(_o['order_reference']);
 
@@ -128,7 +133,18 @@ class _TradeOrderViewState extends State<_TradeOrderView> {
     if (!mounted) return;
     setState(() => (_busy = true, _error = null));
     try {
-      await widget.auth.transport.send('POST', '/v1/trade-orders/${Uri.encodeComponent(_str(_o['id']))}/$step', body: const {});
+      final out = await widget.auth.transport.send('POST', '/v1/trade-orders/${Uri.encodeComponent(_str(_o['id']))}/$step', body: const {});
+      // 202 waiting: under the lowest price, a cashier's accept waits for
+      // the owner (api/link_orders.go); it is not accepted.
+      if (out is Map && out['waiting'] == 'owner') {
+        if (mounted) {
+          setState(() {
+            _busy = false;
+            _waits = _str(out['why']).isNotEmpty ? _str(out['why']) : 'Under your lowest price: $_ref waits for the owner’s OK.';
+          });
+        }
+        return;
+      }
       widget.onSaved(orderLine(step, _ref, _str(_o['buyer_name'])));
     } on Object catch (e) {
       if (mounted) setState(() => (_error = errorWords(e), _busy = false));
@@ -139,7 +155,11 @@ class _TradeOrderViewState extends State<_TradeOrderView> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final status = _str(_o['status']);
+    // Accept a new order only: the server accepts nothing else
+    // (engine/links/orders.go DecideTx); a changed one waits for the buyer,
+    // and may still be declined.
     final open = widget.canEdit && (status == 'received' || status == 'changed');
+    final accept = status == 'received';
     final step = tradeStep[status];
     final note = _str(_o['note']);
     return Column(
@@ -161,6 +181,7 @@ class _TradeOrderViewState extends State<_TradeOrderView> {
                 ('Total', naira(_int(_o['total_kobo']))),
               ]),
               if (note.isNotEmpty) Text('Their note: “$note”', style: tkText(size: 14, color: t.muted)),
+              if (_waits != null) Semantics(liveRegion: true, child: Text(_waits!, style: tkText(size: 14, weight: 600, color: t.text))),
               if (_error != null) TkErrorBox(_error!),
             ],
           ),
@@ -168,7 +189,7 @@ class _TradeOrderViewState extends State<_TradeOrderView> {
         if (open)
           _foot(context, [
             TkGhostButton(label: 'Decline', onTap: _busy ? null : () => _act('decline')),
-            TkCta(label: 'Accept', onTap: _busy ? null : () => _act('accept')),
+            if (accept) TkCta(label: 'Accept', onTap: _busy || _waits != null ? null : () => _act('accept')),
           ]),
       ],
     );
@@ -281,9 +302,10 @@ class _DeliveryViewState extends State<DeliveryView> {
                   spacing: 16,
                   runSpacing: 4,
                   children: [
-                    if (pickupLink.isNotEmpty) link('Map of the pick-up', () => openOutside(Uri.parse(pickupLink))),
-                    if (pin.isNotEmpty) link('Open the customer’s map', () => openOutside(Uri.parse(pin))),
-                    if (phone.isNotEmpty) link('Call ${phoneWords(phone)}', () => callPhone(phone)),
+                    if (pickupLink.isNotEmpty)
+                      link('Map of the pick-up', () => openOrSay(context, () => openOutside(Uri.parse(pickupLink)), 'The map could not be opened.')),
+                    if (pin.isNotEmpty) link('Open the customer’s map', () => openOrSay(context, () => openOutside(Uri.parse(pin)), 'The map could not be opened.')),
+                    if (phone.isNotEmpty) link('Call ${phoneWords(phone)}', () => openOrSay(context, () => callPhone(phone), 'That number could not be called.')),
                   ],
                 ),
               if (proof)
