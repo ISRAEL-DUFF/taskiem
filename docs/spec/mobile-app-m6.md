@@ -42,3 +42,18 @@ product's form, Sell, a service, the Stock page, the Bookings page, the
 Price lists page); widget tests for what each button sends; large text
 and touch targets as every screen; committed on its own. After the last
 part, an audit as M5's.
+
+## Where it stands
+
+| Part | Done | Parity pictures |
+|---|---|---|
+| F, P | The forms' kit; a product's form (photos, prices on the storefront and a list, who sees it, the lowest price, the count, showing), Add product, sizes and colours (choices, the grid, own prices, colour photos, off sale), Make one product | `chat-product` |
+| K | Stock in, by the grid for a product sold in sizes | Widget tests |
+| S | Sell (sizes picked under their product, paid three ways, sent once) and Handover | `chat-sell`; Handover is staff's alone, and the demo world has no staff |
+| V, L | A service and Add service; a price list's prices | Widget tests |
+| B | Book in a business's conversation (their services, a day, a time, the booking; another time when one is taken) | Widget tests |
+| T, O, R | The Stock, Bookings and Price lists screens, from each tool's "Open …" | Widget tests: these are the web's desktop pages, drawn in the app's page look (as Linked businesses), not compared picture for picture |
+
+Left for later: the Stock page's counts and shrinkage card and its
+suppliers' orders card (M7, with purchases and suppliers); the services
+table's set-up (on the web, or by talking to `@Taskiem`).
