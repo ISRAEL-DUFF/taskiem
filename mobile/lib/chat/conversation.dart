@@ -26,6 +26,7 @@ import 'availability_sheet.dart' show showAvailabilitySheet;
 import 'book_sheet.dart' show bookLine, linkServices, showBookSheet;
 import 'money_sheets.dart' show InvoiceAdd;
 import 'order_sheet.dart';
+import 'statement_page.dart' show openStatement;
 import 'tool_forms.dart' show toolDetail;
 import '../kit/sheet.dart' show TkCta, TkSheet, showTkSheet;
 import 'composer.dart';
@@ -901,10 +902,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
     // We buy from them: the Order sheet (drafting needs table.edit; sending
     // and the supplier, storefront.manage).
     final supplies = d.priceWhose == 'theirs' && can('table.edit') && can('storefront.manage');
-    void soon() {
-      _tools.close();
-      showComingSoon(context);
-    }
 
     return (
       lead: [
@@ -917,7 +914,17 @@ class _ConversationScreenState extends State<ConversationScreen> {
         if (supplies) (key: 'offer', title: 'Make an offer', icon: 'tag', line: 'Your price for an order', onPick: () => _order(const OrderStart(offer: true))),
         if (can('invoice.manage'))
           (key: 'invoice-them', title: 'Invoice them', icon: 'invoices', line: 'A new invoice to ${d.conv.name}', onPick: () => _invoiceThem()),
-        if (can('invoice.read')) (key: 'statement', title: 'Statement', icon: 'money', line: 'What is owed each way', onPick: soon),
+        if (can('invoice.read'))
+          (
+            key: 'statement',
+            title: 'Statement',
+            icon: 'money',
+            line: 'What is owed each way',
+            onPick: () {
+              _tools.close();
+              openStatement(context, d.chats.auth, d.conv.link);
+            },
+          ),
       ],
     );
   }

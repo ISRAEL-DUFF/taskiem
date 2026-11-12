@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:taskiem/api/api.g.dart' show Me;
 import 'package:taskiem/app/openers.dart';
 import 'package:taskiem/chat/chats.dart';
+import 'package:taskiem/chat/statement_page.dart' show StatementPage;
 import 'package:taskiem/chat/trade_orders_page.dart';
 import 'package:taskiem/chat/words.dart' show CardTone;
 import 'package:taskiem/kit/modal.dart' show TkModal;
@@ -277,13 +278,13 @@ void main() {
     await t.pump(const Duration(seconds: 5));
   });
 
-  testWidgets('past their credit limit: the notice, and their statement (with money, coming)', (t) async {
+  testWidgets('past their credit limit: the notice, and their statement', (t) async {
     await open(t, _order('received', more: {'over_limit_at': '2026-11-12T09:00:00Z'}));
     expect(find.textContaining('past the credit limit you give them'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Their statement').first);
-    await t.pump();
-    expect(find.text('This is coming to the app soon.'), findsOneWidget);
-    await t.pump(const Duration(seconds: 5));
+    await t.pumpAndSettle();
+    expect(find.text('This is coming to the app soon.'), findsNothing);
+    expect(find.byType(StatementPage), findsOneWidget);
   });
 
   testWidgets('kept after they asked to cancel; their count agreed; cancelled after yes', (t) async {

@@ -226,6 +226,8 @@ void main() {
     final sent = await open(t, (c) => SuppliersPage(auth: c.auth));
     expect(find.text('Owed ₦20,000'), findsOneWidget, reason: 'a linked supplier is owed its open bills');
     expect(find.text('Owed ₦3,000'), findsOneWidget);
+    expect(find.bySemanticsLabel('Statement with Bayo Rice Mills'), findsOneWidget);
+    expect(find.bySemanticsLabel('Statement with Dangote Depot'), findsNothing, reason: 'not linked');
     await t.tap(find.bySemanticsLabel('On Taskiem for Dangote Depot'));
     await t.pumpAndSettle();
     await t.tap(find.text('Dangote Depot Ltd'));

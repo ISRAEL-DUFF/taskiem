@@ -18,6 +18,8 @@ import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show whenLabel;
 import 'doc_thread.dart' show DocThread;
+import 'invoices_page.dart' show openInvoice;
+import 'statement_page.dart' show openStatement;
 import 'storefront_orders_page.dart' show openStorefrontOrder, openStorefrontOrders;
 import 'tags.dart' show quantity;
 import 'words.dart' show CardTone, naira;
@@ -138,7 +140,7 @@ void _push(BuildContext context, Widget page) => Navigator.of(context).push(Page
 
 /// What an order leads to that the app has elsewhere: the storefront's
 /// order (its delivery and riders), its invoice, the buyer's statement.
-/// Null: it says it is coming.
+/// Null: the app's own screen.
 class TradeLinks {
   const TradeLinks({this.storefrontOrder, this.invoice, this.statement});
   final void Function(BuildContext context, String reference)? storefrontOrder;
@@ -304,7 +306,6 @@ class _TradeOrderPageState extends State<TradeOrderPage> {
     }
   }
 
-  void _soon() => showComingSoon(context);
 
   @override
   Widget build(BuildContext context) {
@@ -349,7 +350,7 @@ class _TradeOrderPageState extends State<TradeOrderPage> {
           warn: true,
           link: (
             label: 'Their statement',
-            onTap: links.statement == null ? _soon : () => links.statement!(context, _str(o['link'])),
+            onTap: () => (links.statement ?? (c, l) => openStatement(c, _auth, l))(context, _str(o['link'])),
           ),
         ),
       if (note.isNotEmpty) Text('Their note: “$note”', style: tkHint(t)),
@@ -374,14 +375,14 @@ class _TradeOrderPageState extends State<TradeOrderPage> {
         Wrap(
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            TkLink(label: 'Its invoice', onTap: links.invoice == null ? _soon : () => links.invoice!(context, invoiceId)),
+            TkLink(label: 'Its invoice', onTap: () => (links.invoice ?? (c, id) => openInvoice(c, _auth, id))(context, invoiceId)),
             Text(', which is $buyer’s bill on Taskiem.', style: tkText(size: 15, color: t.text)),
           ],
         ),
       if (manage && _any(sellerSteps(o))) _actions(t, o),
       // TradeOrders.tsx DocThread: the order's thread, under its steps.
       DocThread(key: ValueKey('thread ${o['reference']}'), auth: _auth, doc: 'order', reference: _str(o['reference']), follow: widget.follow),
-      if (_auth.can('link.manage')) _TradeSettings(auth: _auth, order: o, onDone: _load, onStatement: links.statement, onSoon: _soon),
+      if (_auth.can('link.manage')) _TradeSettings(auth: _auth, order: o, onDone: _load, onStatement: links.statement),
     ];
   }
 
@@ -794,12 +795,11 @@ class _DeliveredFormState extends State<_DeliveredForm> with _Sends {
 /// their invoice is raised, whether they are accepted by themselves, days
 /// to pay and a credit limit.
 class _TradeSettings extends StatefulWidget {
-  const _TradeSettings({required this.auth, required this.order, required this.onDone, required this.onStatement, required this.onSoon});
+  const _TradeSettings({required this.auth, required this.order, required this.onDone, required this.onStatement});
   final Auth auth;
   final Map<String, dynamic> order;
   final Future<void> Function() onDone;
   final void Function(BuildContext context, String link)? onStatement;
-  final VoidCallback onSoon;
 
   @override
   State<_TradeSettings> createState() => _TradeSettingsState();
@@ -924,7 +924,7 @@ class _TradeSettingsState extends State<_TradeSettings> {
             ),
             TkSmallButton(
               label: 'Their statement',
-              onPressed: widget.onStatement == null ? widget.onSoon : () => widget.onStatement!(context, _link),
+              onPressed: () => (widget.onStatement ?? (c, l) => openStatement(c, widget.auth, l))(context, _link),
             ),
           ],
         ),

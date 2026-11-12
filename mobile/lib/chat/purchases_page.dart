@@ -27,6 +27,7 @@ import 'book_sheet.dart' show whenLabel;
 import 'doc_thread.dart' show DocThread;
 import 'product_form.dart' show formKey;
 import 'purchase_view.dart' show answersDelivery, buyerSteps, sameName;
+import 'statement_page.dart' show openStatement;
 import 'stock_page.dart' show feeInput, feeKobo;
 import 'tags.dart' show quantity;
 import 'trade_orders_page.dart' show linesWords;
@@ -1061,6 +1062,7 @@ class _SuppliersPageState extends State<SuppliersPage> {
                       open(context, link, name);
                     },
                   ),
+                if (link.isNotEmpty) TkSmallButton(label: 'Statement', semantics: 'Statement with $name', onPressed: () => openStatement(context, _auth, link)),
                 TkSmallButton(label: 'On Taskiem', semantics: 'On Taskiem for $name', onPressed: () => _link(s)),
                 if (s['reached'] == 'sms')
                   TkSmallButton(

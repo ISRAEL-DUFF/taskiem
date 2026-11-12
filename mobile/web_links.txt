@@ -25,7 +25,7 @@
 /storefront/deliveries | app lib/chat/storefront_orders_page.dart
 /trade-orders | app lib/chat/trade_orders_page.dart
 /trade-orders/ | app lib/chat/trade_orders_page.dart
-/links/ | M8
+/links/ | app lib/chat/statement_page.dart
 /invoices | app lib/chat/invoices_page.dart
 /invoices/ | app lib/chat/invoices_page.dart
 /bills | app lib/chat/bills_page.dart
