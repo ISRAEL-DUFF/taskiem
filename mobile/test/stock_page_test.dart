@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/stock_page.dart';
+import 'package:taskiem/kit/modal.dart' show TkModal;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
@@ -74,6 +75,27 @@ void main() {
               ],
             });
           }
+          if (p == '/v1/stock/shrinkage') {
+            return ok({
+              'from': '2026-11-01',
+              'to': '2026-11-12',
+              'received': 40,
+              'sold': 30,
+              'lost': 3,
+              'lost_kobo': 2550000,
+              'items': [
+                {'item_id': 'indomie', 'item': 'Indomie', 'received': 20, 'sold': 15, 'lost': 3, 'lost_kobo': 2550000},
+              ],
+            });
+          }
+          if (p == '/v1/stock/counts') {
+            return ok({
+              'counts': [
+                {'id': 'K1', 'reference': 'CT-1', 'lines': [{}, {}], 'full': true, 'reason': 'rats', 'lost_kobo': 2550000, 'by': 'Ada', 'counted_at': '2026-11-10T09:00:00Z', 'changed': 1},
+              ],
+            });
+          }
+          if (p == '/v1/stock/settings') return ok({'settings': {'purchase_limit_kobo': null, 'count_limit_kobo': null}});
           if (p == '/v1/stock/movements') {
             sent.add('GET $p ${req.url.query}');
             return ok({
@@ -112,8 +134,9 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.text('Some were spoilt, lost or found'));
     await t.pump();
-    await t.enterText(find.byType(EditableText).at(0), '2');
-    await t.enterText(find.byType(EditableText).at(1), 'spoilt');
+    final inModal = find.descendant(of: find.byType(TkModal), matching: find.byType(EditableText));
+    await t.enterText(inModal.at(0), '2');
+    await t.enterText(inModal.at(1), 'spoilt');
     await t.pump();
     expect(find.text('The count goes from 4 → 2 cartons.'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Record'));
@@ -146,7 +169,7 @@ void main() {
     await t.tap(find.bySemanticsLabel('Change Rice'));
     await t.pumpAndSettle();
     // Name, unit, cost, price, reorder at, order up to, supplier.
-    await t.enterText(find.byType(EditableText).at(4), '5');
+    await t.enterText(find.descendant(of: find.byType(TkModal), matching: find.byType(EditableText)).at(4), '5');
     await t.pump();
     await t.tap(find.bySemanticsLabel('Save'));
     await settle(t);
@@ -156,6 +179,33 @@ void main() {
     await settle(t);
     expect(sent.single, 'GET /v1/stock/movements limit=50&item=rice');
     expect(find.text('Rice: every change'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('counts and losses: the month, the latest count; the shelf counted with why; the limit saved', (t) async {
+    final sent = await open(t);
+    expect(find.text('This month: 40 in, 30 sold, 3 lost (₦25,500 at cost). Lost most: Indomie (3, ₦25,500).'), findsOneWidget);
+    expect(find.text('CT-1 · 2 items, every item'), findsOneWidget);
+    expect(find.text('₦25,500 missing'), findsOneWidget);
+    sent.clear();
+    await t.tap(find.bySemanticsLabel('Count the shelf'));
+    await t.pumpAndSettle();
+    final boxes = find.descendant(of: find.byType(TkModal), matching: find.byType(EditableText));
+    await t.enterText(boxes.at(0), '1');
+    await t.pump();
+    expect(find.text('4 → 1 carton (3 fewer)'), findsOneWidget);
+    await t.enterText(boxes.at(2), 'rats');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Record the count'));
+    await settle(t);
+    expect(sent.first, 'POST /v1/stock/counts {"lines":[{"item_id":"indomie","count":1}],"reason":"rats"}');
+    await t.pump(const Duration(seconds: 5));
+    sent.clear();
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^A count missing more')), matching: find.byType(EditableText)), '10000');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save the limit'));
+    await settle(t);
+    expect(sent.where((x) => !x.startsWith('GET')), ['PUT /v1/stock/settings {"count_limit_kobo":1000000}']);
     await t.pump(const Duration(seconds: 5));
   });
 }

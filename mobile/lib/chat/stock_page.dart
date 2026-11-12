@@ -307,7 +307,9 @@ class _StockPageState extends State<StockPage> {
                 ),
             ],
           ),
+          _CountsCard(key: const ValueKey('counts'), auth: widget.auth, items: items, onChanged: _reload),
           TkPageCard(
+            key: const ValueKey('items'),
             title: 'Your items',
             children: [
               if (items.isEmpty)
@@ -990,6 +992,252 @@ class _SaleFormState extends State<_SaleForm> {
         pageField('Note', _note, max: 200),
         if (widget.entry == null && _how != 'cash')
           Text('The sale waits for its money, and is matched when the ${_how == 'pos' ? 'terminal reports it' : 'transfer comes in'}.', style: tkHint(t)),
+      ],
+    );
+  }
+}
+
+/// stock.ts shrinkLine: this month's in, sold and lost.
+String shrinkLine(Map<String, dynamic> s) {
+  final received = _int(s['received']) ?? 0, sold = _int(s['sold']) ?? 0, lost = _int(s['lost']) ?? 0;
+  if (received == 0 && sold == 0 && lost == 0) return 'Nothing moved yet this month.';
+  final lostWords = lost == 0 ? 'nothing lost' : '$lost lost${(_int(s['lost_kobo']) ?? 0) > 0 ? ' (${naira(_int(s['lost_kobo'])!)} at cost)' : ''}';
+  return '$received in, $sold sold, $lostWords';
+}
+
+/// stock.ts countDiff: how a counted item differs from what Taskiem has.
+String? countDiff(Map<String, dynamic> it, String v) {
+  final n = _whole(v);
+  if (n == null) return null;
+  final unit = it['unit'] as String?;
+  final have = _int(it['stock']);
+  if (have == null) return '${stockQuantity(n, unit)}, first count';
+  if (n == have) return 'as Taskiem has it';
+  final d = n - have;
+  return '$have → ${stockQuantity(n, unit)} (${d.abs()} ${d < 0 ? 'fewer' : 'more'})';
+}
+
+/// StockCounts.tsx CountsCard: this month's in, sold and lost; Count the
+/// shelf; the latest counts; and the loss a count may find before it is a
+/// leak.
+class _CountsCard extends StatefulWidget {
+  const _CountsCard({super.key, required this.auth, required this.items, required this.onChanged});
+  final Auth auth;
+  final List<Map<String, dynamic>> items;
+  final Future<void> Function() onChanged;
+
+  @override
+  State<_CountsCard> createState() => _CountsCardState();
+}
+
+class _CountsCardState extends State<_CountsCard> {
+  Map<String, dynamic>? _shrink;
+  List<Map<String, dynamic>>? _counts;
+  String? _error;
+  int? _limit;
+  bool _hasLimit = false;
+  final _limitBox = TextEditingController();
+  bool _busy = false;
+
+  Transport get _t => widget.auth.transport;
+
+  @override
+  void initState() {
+    super.initState();
+    _limitBox.addListener(() => setState(() {}));
+    _load();
+    _loadLimit();
+  }
+
+  @override
+  void dispose() {
+    _limitBox.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final s = (await _t.send('GET', '/v1/stock/shrinkage') as Map).cast<String, dynamic>();
+      final c = (await _t.send('GET', '/v1/stock/counts') as Map).cast<String, dynamic>();
+      if (mounted) setState(() => (_shrink = s, _counts = _maps(c['counts']), _error = null));
+    } on Object catch (e) {
+      if (mounted) setState(() => _error = e is ApiError ? e.message : 'You’re offline. This shows when you’re back online.');
+    }
+  }
+
+  Future<void> _loadLimit() async {
+    try {
+      final r = (await _t.send('GET', '/v1/stock/settings') as Map).cast<String, dynamic>();
+      final l = _int((r['settings'] as Map?)?['count_limit_kobo']);
+      if (!mounted) return;
+      setState(() {
+        _hasLimit = true;
+        _limit = l;
+        _limitBox.text = l == null ? '' : feeInput(l);
+      });
+    } on Object {
+      // No settings: the limit is not offered.
+    }
+  }
+
+  Future<void> _count() async {
+    final saved = await showTkModal<bool>(context, title: 'Count the shelf', builder: (_) => _CountForm(auth: widget.auth, items: widget.items));
+    if (saved == true && mounted) {
+      showTkToast(context, 'Count recorded');
+      await _load();
+      await widget.onChanged();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final s = _shrink;
+    final worst = s == null ? null : _maps(s['items']).where((i) => (_int(i['lost']) ?? 0) > 0).firstOrNull;
+    final counts = _counts ?? const [];
+    final typed = _limitBox.text.trim();
+    final kobo = typed.isEmpty ? null : feeKobo(typed);
+    final bad = typed.isNotEmpty && kobo == null;
+    return TkPageCard(
+      title: 'Counts and losses',
+      trailing: TkSmallButton(label: 'Count the shelf', primary: true, onPressed: widget.items.isEmpty ? null : _count),
+      children: [
+        if (_error != null) TkErrorBox(_error!),
+        if (s != null)
+          Text(
+            'This month: ${shrinkLine(s)}.${worst != null ? ' Lost most: ${worst['item']} (${worst['lost']}${(_int(worst['lost_kobo']) ?? 0) > 0 ? ', ${naira(_int(worst['lost_kobo'])!)}' : ''}).' : ''}',
+            style: tkHint(t),
+          ),
+        if (counts.isNotEmpty)
+          LinkSection(
+            top: 12,
+            title: 'Latest counts',
+            rows: [
+              for (final c in counts.take(5))
+                (
+                  letter: '#',
+                  icon: null,
+                  tone: null,
+                  title: '${c['reference']} · ${_maps(c['lines']).length == 1 ? '1 item' : '${_maps(c['lines']).length} items'}${c['full'] == true ? ', every item' : ''}',
+                  badge: (_int(c['lost_kobo']) ?? 0) > 0 ? '${naira(_int(c['lost_kobo'])!)} missing' : (_int(c['changed']) == 1 ? '1 change' : '${_int(c['changed']) ?? 0} changes'),
+                  badgeTone: (_int(c['lost_kobo']) ?? 0) > 0 ? Tone.warn : Tone.muted,
+                  sub: '${whenLabel(c['counted_at'] as String? ?? '')}${(c['reason'] as String? ?? '').isNotEmpty ? ' · ${c['reason']}' : ''}',
+                  actions: null,
+                ),
+            ],
+          ),
+        if (_hasLimit) ...[
+          const SizedBox(height: 14),
+          TkKitField(
+            label: 'A count missing more than this is a leak (₦)',
+            hint: bad ? null : 'Valued at cost. Leave it empty for ₦5,000. Items with no cost price are always shown.',
+            error: bad ? 'Enter an amount, like 5000.' : null,
+            child: TkTextBox(controller: _limitBox, money: true, hint: '5000'),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TkSmallButton(
+              label: 'Save the limit',
+              onPressed: _busy || bad || typed == (_limit == null ? '' : feeInput(_limit!))
+                  ? null
+                  : () async {
+                      setState(() => _busy = true);
+                      try {
+                        await _t.send('PUT', '/v1/stock/settings', body: {'count_limit_kobo': kobo});
+                        if (mounted) showTkToast(this.context, 'Saved');
+                        await _loadLimit();
+                      } on Object catch (e) {
+                        if (mounted) setState(() => _error = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.');
+                      }
+                      if (mounted) setState(() => _busy = false);
+                    },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// CountModal: how many of each item are on the shelf, with why they
+/// differ. (The web also reads a CSV; on a phone the shelf is counted by
+/// hand.)
+class _CountForm extends StatefulWidget {
+  const _CountForm({required this.auth, required this.items});
+  final Auth auth;
+  final List<Map<String, dynamic>> items;
+
+  @override
+  State<_CountForm> createState() => _CountFormState();
+}
+
+class _CountFormState extends State<_CountForm> {
+  late final _boxes = {for (final it in widget.items) it['id'] as String: TextEditingController()..addListener(_changed)};
+  final _reason = TextEditingController();
+  late final _key = uuid4();
+  bool _busy = false;
+  String? _error;
+
+  void _changed() => setState(() {});
+
+  @override
+  void dispose() {
+    for (final c in _boxes.values) {
+      c.dispose();
+    }
+    _reason.dispose();
+    super.dispose();
+  }
+
+  /// stock.ts countProblem.
+  String? get _problem {
+    final filled = [for (final c in _boxes.values) if (c.text.trim().isNotEmpty) c.text];
+    if (filled.isEmpty) return 'Enter how many of at least one item.';
+    if (filled.any((v) => _whole(v) == null)) return 'How many is a whole number, like 12.';
+    return null;
+  }
+
+  Future<void> _save() async {
+    setState(() => (_busy = true, _error = null));
+    try {
+      await widget.auth.transport.send(
+        'POST',
+        '/v1/stock/counts',
+        body: {
+          'lines': [
+            for (final e in _boxes.entries)
+              if (e.value.text.trim().isNotEmpty) {'item_id': e.key, 'count': _whole(e.value.text)},
+          ],
+          'reason': _reason.text.trim(),
+        },
+        headers: {'Idempotency-Key': _key},
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } on Object catch (e) {
+      if (mounted) setState(() => (_error = e is ApiError ? e.message : 'You’re offline. Try again when you’re back online.', _busy = false));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final filled = _boxes.values.any((c) => c.text.trim().isNotEmpty);
+    return TkModalForm(
+      saveWords: _busy ? 'Recording…' : 'Record the count',
+      busy: _busy,
+      problem: filled ? _problem : null,
+      error: _error,
+      save: _problem != null ? null : _save,
+      children: [
+        Text('Enter what is on the shelf. Leave an item empty to skip it. Count every item to close the month’s count.', style: tkHint(t)),
+        for (final it in widget.items)
+          TkKitField(
+            label: it['name'] as String? ?? '',
+            hint: countDiff(it, _boxes[it['id']]!.text) ?? 'Taskiem has ${stockLine(it)}.',
+            child: TkTextBox(controller: _boxes[it['id']]!, digits: 7),
+          ),
+        TkKitField(label: 'Why they differ', hint: 'Spoilt, rats, a miscount.', child: TkTextBox(controller: _reason, max: 200)),
       ],
     );
   }

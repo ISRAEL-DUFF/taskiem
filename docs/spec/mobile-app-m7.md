@@ -44,3 +44,20 @@ an audit as M5's and M6's.
 
 | Part | Done |
 |---|---|
+| A | Availability's sheet from its tile, in Taskiem's conversation and a business's |
+| V | An order in the Orders sheet (Accept, Decline after yes); a rider's delivery (Accept or Can't, Picked up, Arrived, Delivered with the photo the business asks for; the maps, the customer rung) |
+| T | The order screen (a card's View order, Open orders): its total, what it needs, lines, our items matched, every seller step with its form, the buyer's terms; the list, an order drafted for a buyer |
+| S | Orders from customers: the list (filters, read again while open) and an order (refund, details, a booking's Move and Cancel, money matched and undone, the customer shown); a reference card's Open and a tagged order lead here |
+| D | Deliveries: the day's and those under way, how orders are offered, deliveries turned on; an order's delivery (offer, choose the rider, take back, confirm the fee); Assign rider from the alerts; the briefing's Deliveries and Bookings tiles |
+| C | Orders from a customer's messages: the card above the reply box, every answer, Ask them, Confirm, Drop; Start an order |
+| K | Counts and losses on the Stock screen: the month, the latest counts, Count the shelf, the leak limit |
+
+Each has widget tests for what it sends, and a check at large text on a
+360 px phone. They are the web's desktop pages drawn in the app's page
+look, not compared picture for picture (no parity pictures).
+
+Left for later, each saying it is coming: a buyer's statement and an
+order's invoice (M8, with money); the alerts' Reorder and Match it (M8);
+the briefing's Owed, Staff and Tasks tiles; reading a count from a CSV
+(the web's; on a phone the shelf is counted by hand); the riders' own
+page (`/storefront/riders`, adding riders) and paying riders (M8).
