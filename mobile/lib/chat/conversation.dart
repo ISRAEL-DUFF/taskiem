@@ -24,9 +24,10 @@ import 'cards.dart';
 import 'chats.dart';
 import 'availability_sheet.dart' show showAvailabilitySheet;
 import 'book_sheet.dart' show bookLine, linkServices, showBookSheet;
+import 'money_sheets.dart' show InvoiceAdd;
 import 'order_sheet.dart';
 import 'tool_forms.dart' show toolDetail;
-import '../kit/sheet.dart' show TkCta;
+import '../kit/sheet.dart' show TkCta, TkSheet, showTkSheet;
 import 'composer.dart';
 import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
 import 'tool_sheet.dart';
@@ -826,6 +827,29 @@ class _ConversationScreenState extends State<ConversationScreen> {
     _openTool(tool, openId: card.id);
   }
 
+  /// Conversation.tsx Invoice them: a new invoice to this business; it
+  /// reaches them on Taskiem as a bill, and the diary line lands here.
+  Future<void> _invoiceThem() async {
+    final d = widget.data;
+    _tools.close();
+    await showTkSheet<void>(
+      context,
+      (sheet) => TkSheet(
+        title: 'Invoice ${d.conv.name}',
+        body: InvoiceAdd(
+          auth: d.chats.auth,
+          to: (name: d.conv.name, key: 'link:${d.conv.business}'),
+          onCancel: () => Navigator.of(sheet).pop(),
+          onSaved: (line) {
+            unawaited(d.pull().catchError((Object _) {}));
+            if (line != null) showTkToast(sheet, line);
+            Navigator.of(sheet).pop();
+          },
+        ),
+      ),
+    );
+  }
+
   /// ChatComposer.tsx's OrderSheet: their shop, to order from when we may
   /// (drafting needs table.edit; sending and the supplier,
   /// storefront.manage), else to look around.
@@ -891,7 +915,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
       ],
       extras: [
         if (supplies) (key: 'offer', title: 'Make an offer', icon: 'tag', line: 'Your price for an order', onPick: () => _order(const OrderStart(offer: true))),
-        if (can('invoice.manage')) (key: 'invoice-them', title: 'Invoice them', icon: 'invoices', line: 'A new invoice to ${d.conv.name}', onPick: soon),
+        if (can('invoice.manage'))
+          (key: 'invoice-them', title: 'Invoice them', icon: 'invoices', line: 'A new invoice to ${d.conv.name}', onPick: () => _invoiceThem()),
         if (can('invoice.read')) (key: 'statement', title: 'Statement', icon: 'money', line: 'What is owed each way', onPick: soon),
       ],
     );

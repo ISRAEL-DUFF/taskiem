@@ -34,8 +34,8 @@
 /storefront/suppliers | M8
 /storefront/suppliers/ | M8
 /money | M8
-/tables | M8
-/tables/ | M8
+/tables | app lib/chat/table_tool.dart
+/tables/ | app lib/chat/table_tool.dart
 /invoice | not a page
 /invoice/ | not a page
 /bill | not a page
