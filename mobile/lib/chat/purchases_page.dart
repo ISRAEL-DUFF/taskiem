@@ -28,7 +28,7 @@ import 'doc_thread.dart' show DocThread;
 import 'product_form.dart' show formKey;
 import 'purchase_view.dart' show answersDelivery, buyerSteps, sameName;
 import 'statement_page.dart' show openStatement;
-import 'stock_page.dart' show feeInput, feeKobo;
+import 'stock_page.dart' show StockPage, feeInput, feeKobo;
 import 'tags.dart' show quantity;
 import 'trade_orders_page.dart' show linesWords;
 import 'words.dart' show CardTone, naira;
@@ -39,10 +39,10 @@ String _str(Object? v) => v as String? ?? '';
 
 String _purchasePath(String id, [String rest = '']) => '/v1/stock/purchases/${Uri.encodeComponent(id)}$rest';
 
-void _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
 
 /// Opens an order to a supplier.
-void openPurchase(BuildContext context, Auth auth, String id) => _push(context, PurchasePage(auth: auth, id: id));
+Future<void> openPurchase(BuildContext context, Auth auth, String id) => _push(context, PurchasePage(auth: auth, id: id));
 
 /// Opens Suppliers.
 void openSuppliers(BuildContext context, Auth auth) => _push(context, SuppliersPage(auth: auth));
@@ -281,7 +281,7 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
       if (_own == null && !_ownFailed && _auth.can('storefront.manage') && buyerSteps(p).confirmProposed) {
         try {
           final s = (await _auth.transport.send('GET', '/v1/stock') as Map).cast<String, dynamic>();
-          if (mounted) setState(() => _own = _maps(s['items']));
+          if (mounted) setState(() => _own = s['keeps_stock'] == true ? _maps(s['items']) : const []);
         } on Object {
           if (mounted) setState(() => _ownFailed = true);
         }
@@ -388,7 +388,16 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
           title: 'Confirm it',
           children: [
             if (_ownFailed || (_own != null && _own!.isEmpty))
-              Text('Keep your stock on Taskiem to confirm it, so what comes is received into your items.', style: tkHint(t))
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Keep your stock on Taskiem to confirm it, so what comes is received into your items.', style: tkHint(t)),
+                  TkLink(
+                    label: 'Stock',
+                    onTap: () => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => StockPage(auth: _auth))),
+                  ),
+                ],
+              )
             else if (_own == null)
               const TkLoading(rows: 2, label: 'Loading your items…')
             else ...[
@@ -524,12 +533,15 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
 /// Orders to suppliers, on the Stock screen: order what is low, approve
 /// and send, mark confirmed, goods in, a payment, cancel.
 class PurchasesCard extends StatefulWidget {
-  const PurchasesCard({super.key, required this.auth, required this.items, required this.onChanged});
+  const PurchasesCard({super.key, required this.auth, required this.items, required this.onChanged, this.round = 0});
   final Auth auth;
 
   /// The business's own items (a product's sizes are told together).
   final List<Map<String, dynamic>> items;
   final VoidCallback onChanged;
+
+  /// Changed when the screen is read again: the card is too.
+  final int round;
 
   @override
   State<PurchasesCard> createState() => _PurchasesCardState();
@@ -550,6 +562,12 @@ class _PurchasesCardState extends State<PurchasesCard> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(PurchasesCard old) {
+    super.didUpdateWidget(old);
+    if (old.round != widget.round) _load();
   }
 
   Future<void> _load() async {
@@ -577,6 +595,12 @@ class _PurchasesCardState extends State<PurchasesCard> {
       if (mounted) setState(() => _actError = errorWords(e));
     }
     if (mounted) setState(() => _busy = false);
+  }
+
+  /// An order opened on its screen; the card read again on return.
+  Future<void> _open(String id) async {
+    await openPurchase(context, widget.auth, id);
+    await _reload();
   }
 
   void _step(Map<String, dynamic> p, String what, String done) =>
@@ -654,13 +678,13 @@ class _PurchasesCardState extends State<PurchasesCard> {
             letters: supplier,
             sub: [purchaseSub(p, parents), if (_str(p['counter']).isNotEmpty) '$supplier asked: “${p['counter']}”', if (seller.isNotEmpty) seller].join('\n'),
             pill: TkPill(st.label, tone: st.tone),
-            onTap: linked ? () => openPurchase(context, widget.auth, _str(p['id'])) : null,
+            onTap: linked ? () => _open(_str(p['id'])) : null,
           ),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              if (linked) TkSmallButton(label: 'Open', semantics: 'Open $ref', onPressed: () => openPurchase(context, widget.auth, _str(p['id']))),
+              if (linked) TkSmallButton(label: 'Open', semantics: 'Open $ref', onPressed: () => _open(_str(p['id']))),
               if (can.send)
                 TkSmallButton(
                   label: 'Approve and send',
@@ -675,8 +699,7 @@ class _PurchasesCardState extends State<PurchasesCard> {
                   onPressed: _busy ? null : () => _step(p, 'confirm', '$ref marked confirmed'),
                 ),
               if (can.receive) TkSmallButton(label: 'Goods came in', semantics: 'Goods came in on $ref', onPressed: () => _receive(p)),
-              if (can.answerDelivery)
-                TkSmallButton(label: 'Goods came in', semantics: 'Goods came in on $ref', onPressed: () => openPurchase(context, widget.auth, _str(p['id']))),
+              if (can.answerDelivery) TkSmallButton(label: 'Goods came in', semantics: 'Goods came in on $ref', onPressed: () => _open(_str(p['id']))),
               if (can.pay && _int(p['owed_kobo']) > 0)
                 TkSmallButton(label: 'Record a payment', semantics: 'Record a payment for $ref', onPressed: () => _pay(p)),
               if (can.cancel)
@@ -1182,8 +1205,16 @@ class _SuppliersPageState extends State<SuppliersPage> {
     try {
       final r = (await _auth.transport.send('GET', '/v1/links') as Map).cast<String, dynamic>();
       linked = _maps(r['links']).where((l) => l['state'] == 'active' && (l['role'] == 'supplier' || l['role'] == 'both')).toList();
-    } on Object {
+    } on ApiError catch (e) {
+      // Links not available on this Taskiem: none. Any other failure is said.
+      if (e.status != 503) {
+        if (mounted) setState(() => _actError = e.message);
+        return;
+      }
       linked = const [];
+    } on Object catch (e) {
+      if (mounted) setState(() => _actError = errorWords(e));
+      return;
     }
     if (!mounted) return;
     final name = _str(s['name']);
@@ -1192,9 +1223,25 @@ class _SuppliersPageState extends State<SuppliersPage> {
       await showTkModal<void>(
         context,
         title: '$name on Taskiem',
-        builder: (ctx) => Text(
-          'You are not linked with a business that supplies you yet. Find them from Chats, then say here which business $name is.',
-          style: tkHint(TkTheme.tokens(ctx)),
+        builder: (ctx) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'You are not linked with a business that supplies you yet. Find them, then say here which business $name is.',
+              style: tkHint(TkTheme.tokens(ctx)),
+            ),
+            if (Openers.findBusiness != null) ...[
+              const SizedBox(height: 8),
+              TkLink(
+                label: 'Find them',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  Openers.findBusiness!(context);
+                },
+              ),
+            ],
+          ],
         ),
       );
       return;

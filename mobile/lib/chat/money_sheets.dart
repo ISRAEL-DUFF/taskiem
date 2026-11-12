@@ -749,7 +749,8 @@ class _MoneyEntryViewState extends State<MoneyEntryView> {
               if (words.isNotEmpty) _now(t, words),
               if (_picking)
                 if (owed == null)
-                  _now(t, 'Loading invoices…')
+                  // Its error, when reading them failed, says so instead.
+                  (_error == null ? _now(t, 'Loading invoices…') : const SizedBox.shrink())
                 else if (owed.isEmpty)
                   _now(t, 'No invoices are waiting to be paid.')
                 else

@@ -6,9 +6,11 @@
 import 'package:flutter/widgets.dart';
 
 import '../app/auth.dart';
+import '../app/openers.dart';
 import '../kit/forms.dart' show errorWords;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty, TkLoading, TkPill, TkRow;
+import '../kit/modal.dart' show showTkToast;
 import '../kit/page.dart';
 import '../theme/theme.dart';
 import 'bills_page.dart' show openBill;
@@ -28,7 +30,7 @@ String termsWords(int? days) {
 }
 
 /// Opens the statement with a linked business.
-void openStatement(BuildContext context, Auth auth, String link) => Navigator.of(context).push(
+Future<void> openStatement(BuildContext context, Auth auth, String link) => Navigator.of(context).push(
   PageRouteBuilder<void>(
     pageBuilder: (_, _, _) => StatementPage(auth: auth, link: link),
   ),
@@ -72,6 +74,15 @@ class _StatementPageState extends State<StatementPage> {
       title: st == null ? 'Statement' : 'Statement with $business',
       description: 'What is open between your two businesses, oldest due first. Theirs shows the same numbers.',
       onRefresh: _load,
+      action: Openers.conversation == null
+          ? null
+          : TkSmallButton(
+              label: 'Chat',
+              semantics: 'Chat with ${business.isEmpty ? 'them' : business}',
+              onPressed: () {
+                if (!Openers.conversation!(context, widget.link)) showTkToast(context, 'Their conversation could not be found.', error: true);
+              },
+            ),
       children: [
         if (_error != null) TkErrorBox(_error!),
         if (st == null && _error == null) const TkLoading(rows: 3, label: 'Loading the statement…'),
@@ -116,7 +127,11 @@ class _StatementPageState extends State<StatementPage> {
                 if (d['disputed'] == true) 'queried',
               ].join(' · '),
               pill: TkPill(naira(_int(d['due_kobo'])), tone: CardTone.plain),
-              onTap: () => kind == 'invoice' ? openInvoice(context, widget.auth, _str(d['id'])) : openBill(context, widget.auth, _str(d['reference'])),
+              onTap: () async {
+                await (kind == 'invoice' ? openInvoice(context, widget.auth, _str(d['id'])) : openBill(context, widget.auth, _str(d['reference'])));
+                // Paid or changed there: the statement read again.
+                await _load();
+              },
             ),
         ],
       ),

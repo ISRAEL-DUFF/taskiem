@@ -354,6 +354,37 @@ void main() {
     expect(find.text('Fee for paystack/main saved: 1.25% + ₦100, at most ₦2,000.'), findsOneWidget);
   });
 
+  testWidgets('M8 fixes 17: Choose dates again starts from the period chosen, not the old dates', (t) async {
+    await open(t, (c) => MoneyPage(auth: c.auth, now: () => _now));
+    Future<void> other(String words) async {
+      await t.tap(find.bySemanticsLabel(RegExp('^Other period')));
+      await t.pumpAndSettle();
+      await t.tap(find.text(words));
+      await t.pumpAndSettle();
+      await settle(t);
+    }
+
+    await other('Choose dates');
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^From')), matching: find.byType(EditableText)), '2026-10-01');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('This month'));
+    await settle(t);
+    await other('Choose dates');
+    final from = t.widget<EditableText>(find.descendant(of: find.bySemanticsLabel(RegExp('^From')), matching: find.byType(EditableText)));
+    expect(from.controller.text, '2026-11-01', reason: 'this month’s first day, not 1 October');
+  });
+
+  testWidgets('M8 fixes 26, 27, 28: the account card says where withdrawals are; names used before offered; the tab has no Back', (t) async {
+    await open(t, (c) => MoneyPage(auth: c.auth, now: () => _now, tab: true));
+    expect(find.text('Your balance and withdrawals are on the web, under Settings, Payments.'), findsOneWidget);
+    expect(find.bySemanticsLabel('Back'), findsNothing);
+    await open(t, (c) => MoneyEntriesPage(auth: c.auth, now: () => _now));
+    expect(find.text('Used before:'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Use paystack/main'));
+    await t.pump();
+    expect(find.text('paystack/main'), findsWidgets);
+  });
+
   testWidgets('at large text on a small phone: nothing cut off, all pressable', (t) async {
     final f = Fixture('chats');
     http.Response ok(Object b) => http.Response(jsonEncode(b), 200, headers: {'content-type': 'application/json'});

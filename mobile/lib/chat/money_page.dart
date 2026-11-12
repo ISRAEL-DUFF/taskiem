@@ -203,8 +203,11 @@ Widget _problemText(TkTokens t, String text) => Semantics(
 
 /// Money > Overview: a period's money.
 class MoneyPage extends StatefulWidget {
-  const MoneyPage({super.key, required this.auth, this.now});
+  const MoneyPage({super.key, required this.auth, this.now, this.tab = false});
   final Auth auth;
+
+  /// The bottom bar's Money tab: no Back.
+  final bool tab;
 
   /// The clock (a test sets it).
   final DateTime Function()? now;
@@ -285,7 +288,9 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
   }
 
   void _choose(String v) {
-    if (v == 'custom' && _from.text.isEmpty) {
+    // Choose dates starts from the period chosen before (its old dates are
+    // dropped on leaving it, as the web's address drops them).
+    if (v == 'custom' && _choice != 'custom') {
       final p = _period;
       _from.text = p.from;
       _to.text = p.to;
@@ -319,6 +324,7 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
     final quick = const ['today', 'week', 'month'];
     return TkPageScreen(
       title: 'Money',
+      back: !widget.tab,
       description: 'Your business’s money for a period: what came in and went out, settled and pending, the fees taken, invoices paid and leaks.',
       onRefresh: () async {
         await _load();
@@ -626,6 +632,8 @@ class _ReceiveCard extends StatelessWidget {
             ),
           ),
         ],
+        const SizedBox(height: 8),
+        Text('Your balance and withdrawals are on the web, under Settings, Payments.', style: tkHint(t)),
       ],
     );
   }
@@ -1535,6 +1543,7 @@ class _MoneyStatementsPageState extends State<MoneyStatementsPage> {
                 hint: 'The bank and the account, in small letters with a / between them: gtbank/current, access/savings.',
                 child: TkTextBox(controller: _channel, plain: true, hint: 'gtbank/current'),
               ),
+              KnownChannels(auth: widget.auth, controller: _channel),
               const SizedBox(height: 10),
               TkKitField(
                 field: false,
@@ -1547,7 +1556,7 @@ class _MoneyStatementsPageState extends State<MoneyStatementsPage> {
                     semantics: 'Statement file: ${_file?.name ?? 'none chosen'}',
                     onPressed: () async {
                       final f = await pickStatement();
-                      if (f != null && mounted) setState(() => (_file = f, _refusal = null, _said = '', _cols = null, _headers = null));
+                      if (f != null && mounted) setState(() => (_file = f, _refusal = null, _said = ''));
                     },
                   ),
                 ),
@@ -1895,6 +1904,7 @@ class _MoneyEntriesPageState extends State<MoneyEntriesPage> {
                 hint: 'Where the money moved. Leave it empty for cash; or name an account, such as gtbank/current.',
                 child: TkTextBox(controller: _channel, plain: true, hint: 'cash'),
               ),
+              KnownChannels(auth: widget.auth, controller: _channel),
               if (_tried && _problem != null) _problemText(t, _problem!),
               if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_error!)),
               const SizedBox(height: 12),
@@ -2072,6 +2082,7 @@ class _MoneyFeesPageState extends State<MoneyFeesPage> {
                 hint: 'As the money log names it: the rail and the connection, such as paystack/main.',
                 child: TkTextBox(controller: _channel, plain: true, hint: 'paystack/main', enabled: !_editing),
               ),
+              if (!_editing) KnownChannels(auth: widget.auth, controller: _channel),
               const SizedBox(height: 10),
               TkKitField(
                 label: 'Percent of the amount',
@@ -2132,6 +2143,64 @@ class _MoneyFeesPageState extends State<MoneyFeesPage> {
             ],
           ),
       ],
+    );
+  }
+}
+
+/// money.ts knownChannels: names of accounts already used, each once, in
+/// order, cash left out.
+List<String> knownChannels(Iterable<String> a, Iterable<String> b) => ({...a, ...b}..removeWhere((c) => c.isEmpty || c == 'cash')).toList()..sort();
+
+/// Money.tsx useKnownChannels: the accounts already used (the fees' and
+/// the money waiting to be matched), offered under an account's box; one
+/// pressed is typed in.
+class KnownChannels extends StatefulWidget {
+  const KnownChannels({super.key, required this.auth, required this.controller});
+  final Auth auth;
+  final TextEditingController controller;
+
+  @override
+  State<KnownChannels> createState() => _KnownChannelsState();
+}
+
+class _KnownChannelsState extends State<KnownChannels> {
+  List<String> _names = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    Future<List<String>> read(String path, String key) async {
+      try {
+        final r = (await widget.auth.transport.send('GET', path) as Map).cast<String, dynamic>();
+        return [for (final x in _maps(r[key])) _str(x['channel'])];
+      } on Object {
+        return const [];
+      }
+    }
+
+    final got = await Future.wait([read('/v1/money/fee-rates', 'fee_rates'), read(unmatchedPath, 'payments')]);
+    if (mounted) setState(() => _names = knownChannels(got[0], got[1]));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    if (_names.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text('Used before:', style: tkHint(t)),
+          for (final n in _names) TkSmallButton(label: n, semantics: 'Use $n', onPressed: () => widget.controller.text = n),
+        ],
+      ),
     );
   }
 }

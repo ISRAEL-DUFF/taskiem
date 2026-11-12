@@ -176,6 +176,9 @@ class _StockPageState extends State<StockPage> {
 
   String _why(Object e) => e is ApiError ? e.message : 'You’re offline. This shows when you’re back online.';
 
+  /// Each pull: the orders card is read again too.
+  int _round = 0;
+
   Future<void> _reload() async {
     try {
       final v = await _t.send('GET', '/v1/stock') as Map<String, dynamic>;
@@ -237,7 +240,10 @@ class _StockPageState extends State<StockPage> {
     return TkPageScreen(
       title: 'Stock',
       description: 'Your items and how many are left. Every change is kept, so a count can always be explained.',
-      onRefresh: _reload,
+      onRefresh: () async {
+        setState(() => _round++);
+        await _reload();
+      },
       action: keeps
           ? TkSmallButton(
               label: 'Add items',
@@ -308,7 +314,7 @@ class _StockPageState extends State<StockPage> {
                 ),
             ],
           ),
-          PurchasesCard(key: const ValueKey('purchases'), auth: widget.auth, items: items, onChanged: _reload),
+          PurchasesCard(key: const ValueKey('purchases'), auth: widget.auth, items: items, onChanged: _reload, round: _round),
           _CountsCard(key: const ValueKey('counts'), auth: widget.auth, items: items, onChanged: _reload),
           TkPageCard(
             key: const ValueKey('items'),

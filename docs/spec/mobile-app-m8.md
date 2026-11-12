@@ -68,3 +68,6 @@ its own. After the last part, an audit as M5's to M7's.
 The server makes no PDF of an invoice: after Send the app shares the
 invoice's page link through the phone's share sheet instead, as the web
 shows the link.
+
+The audit after M8 and its fixes: [mobile-app-m8-fixes.md](mobile-app-m8-fixes.md),
+every finding fixed with its test.

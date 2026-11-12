@@ -187,8 +187,9 @@ class _RefCardState extends State<RefCard> {
       return;
     }
     if (c.action == 'pay') {
-      // Paying is the bill's screen.
-      openBill(context, widget.auth, c.id);
+      // Paying is the bill's screen; the card read again on return.
+      await openBill(context, widget.auth, c.id);
+      if (mounted) await _read();
       return;
     }
     setState(() => _busy = true);
@@ -274,11 +275,15 @@ class _RefCardState extends State<RefCard> {
         _Btn(
           label: 'Open',
           named: label,
-          onTap: () => switch (c.kind) {
-            'order' => openStorefrontOrder(context, widget.auth, c.name),
-            'invoice' => openInvoice(context, widget.auth, c.id),
-            'bill' => openBill(context, widget.auth, c.id),
-            _ => openPurchase(context, widget.auth, c.id),
+          onTap: () async {
+            if (c.kind == 'order') return openStorefrontOrder(context, widget.auth, c.name);
+            await (c.kind == 'invoice'
+                ? openInvoice(context, widget.auth, c.id)
+                : c.kind == 'bill'
+                ? openBill(context, widget.auth, c.id)
+                : openPurchase(context, widget.auth, c.id));
+            // Paid or changed there: read again.
+            if (mounted) await _read();
           },
         ),
       if (giving)

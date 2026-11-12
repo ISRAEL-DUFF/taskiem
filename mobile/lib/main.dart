@@ -14,6 +14,7 @@ import 'app/lock.dart';
 import 'app/prefs.dart';
 import 'app/session.dart';
 import 'api/api.g.dart';
+import 'chat/money_page.dart' show MoneyPage;
 import 'chat/order_sheet.dart' show showOrderSheet;
 import 'chat/chats.dart';
 import 'chat/conversation.dart';
@@ -275,6 +276,11 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     Openers.linkedBusinesses = _links;
     Openers.findBusiness = (context) => showExplore(context, chats: _chats, onOpen: (c) => _openConv(context, c));
     // Drafting an order needs table.edit; else their shop to look around.
+    Openers.conversation = (context, link) {
+      final c = _chats.conversations.where((x) => x.link == link).firstOrNull;
+      if (c != null) _openConv(context, c);
+      return c != null;
+    };
     Openers.orderFrom = (context, link, business) =>
         showOrderSheet(context, chats: _chats, link: link, business: business, browse: !_chats.auth.can('table.edit'));
   }
@@ -297,6 +303,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     Openers.linkedBusinesses = null;
     Openers.findBusiness = null;
     Openers.orderFrom = null;
+    Openers.conversation = null;
     // Stopped now; let go once the screens closed with this session (which
     // may still hold them this frame) are gone.
     _chats.follow(false);
@@ -324,7 +331,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
         (
           label: 'Money',
           icon: 'money',
-          build: (_) => const ComingTab(title: 'Money', icon: 'money', words: 'Your invoices, bills and payments.'),
+          build: (_) => MoneyPage(auth: _chats.auth, tab: true),
         ),
         (
           label: 'Orders',

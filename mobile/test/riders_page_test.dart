@@ -70,7 +70,14 @@ void main() {
     expect(payoutStatus('failed').label, 'Not paid');
   });
 
-  Future<List<String>> open(WidgetTester t, Widget Function(ChatsData c) home, {bool stepUp = false}) async {
+  Future<List<String>> open(
+    WidgetTester t,
+    Widget Function(ChatsData c) home, {
+    bool stepUp = false,
+    bool owedFails = false,
+    List<String> methods = const ['totp'],
+    bool noBanks = false,
+  }) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = const Size(390, 2600);
     t.view.devicePixelRatio = 1;
@@ -85,6 +92,12 @@ void main() {
           if (req.method == 'GET') {
             return switch (p) {
               '/v1/riders' => ok(_riders),
+              '/v1/riders/owed' when owedFails => http.Response(
+                jsonEncode({'error': 'The cash owed could not be read.'}),
+                500,
+                headers: {'content-type': 'application/json'},
+              ),
+              '/v1/receive-money/banks' when noBanks => ok({'banks': []}),
               '/v1/riders/owed' => ok({
                 'owed': [
                   {'rider_id': 'R1', 'rider': 'Musa', 'owed_kobo': 500000, 'deliveries': 2},
@@ -118,12 +131,7 @@ void main() {
           }
           sent.add('${req.method} $p ${req.body}');
           if (stepUp && p.endsWith('/bank') && !req.body.contains('totp')) {
-            return ok({
-              'error': 'Confirm it is you.',
-              'step_up': 'required',
-              'operation': 'rider.bank',
-              'methods': ['totp'],
-            }, 403);
+            return ok({'error': 'Confirm it is you.', 'step_up': 'required', 'operation': 'rider.bank', 'methods': methods}, 403);
           }
           return ok({'ok': true});
         },
@@ -236,6 +244,26 @@ void main() {
     await t.pumpAndSettle();
     expect(sent.last, 'PUT /v1/riders/pay/setup {"pay_day":1,"pay_time":"17:00"}');
     await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('M8 fixes 15: the cash owed failing to read leaves the pay shown', (t) async {
+    await open(t, (c) => RidersPayPage(auth: c.auth), owedFails: true);
+    expect(find.text('The cash owed could not be read.'), findsOneWidget);
+    expect(find.text('Due to riders now'), findsOneWidget);
+    expect(find.bySemanticsLabel('Add bank account for Musa'), findsOneWidget);
+  });
+
+  testWidgets('M8 fixes 16, 32: a bank code with letters; no way to confirm: the server’s words and Account', (t) async {
+    final sent = await open(t, (c) => RidersPayPage(auth: c.auth), stepUp: true, methods: const [], noBanks: true);
+    await t.tap(find.bySemanticsLabel('Add bank account for Musa'));
+    await t.pumpAndSettle();
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Bank code')), matching: find.byType(EditableText)), 'MFB01');
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Account number')), matching: find.byType(EditableText)), '0123456789');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save'));
+    await settle(t);
+    expect(sent.single, startsWith('PUT /v1/riders/R1/bank {"bank_code":"MFB01"'));
+    expect(find.text('Confirm it is you. Go to Account.'), findsOneWidget);
   });
 
   testWidgets('at large text on a small phone: nothing cut off, all pressable', (t) async {

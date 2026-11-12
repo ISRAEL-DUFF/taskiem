@@ -144,7 +144,7 @@ Future<T> withStepUp<T>(BuildContext context, String title, Future<T> Function(M
       throw ApiError(403, {
         'error': methods.contains('passkey')
             ? 'This change is confirmed with your passkey, which the app does not use yet. Make it on a device with your passkey.'
-            : '${e.message} Set up an authenticator app under Account first.',
+            : '${e.message} Go to Account.',
       });
     }
     if (!context.mounted) rethrow;
@@ -584,12 +584,27 @@ class _RidersPayPageState extends State<RidersPayPage> {
   }
 
   Future<void> _load() async {
-    try {
-      final r = await Future.wait([_auth.transport.send('GET', '/v1/riders/owed'), _auth.transport.send('GET', '/v1/riders/pay')]);
-      if (mounted) setState(() => (_owed = _maps((r[0] as Map)['owed']), _pay = (r[1] as Map).cast<String, dynamic>(), _error = null));
-    } on Object catch (e) {
-      if (mounted) setState(() => _error = e);
-    }
+    // Each on its own: one that fails leaves the other shown.
+    Object? failed;
+    await Future.wait([
+      () async {
+        try {
+          final r = (await _auth.transport.send('GET', '/v1/riders/owed') as Map).cast<String, dynamic>();
+          if (mounted) setState(() => _owed = _maps(r['owed']));
+        } on Object catch (e) {
+          failed ??= e;
+        }
+      }(),
+      () async {
+        try {
+          final r = (await _auth.transport.send('GET', '/v1/riders/pay') as Map).cast<String, dynamic>();
+          if (mounted) setState(() => _pay = r);
+        } on Object catch (e) {
+          failed ??= e;
+        }
+      }(),
+    ]);
+    if (mounted) setState(() => _error = failed);
   }
 
   Future<void> _run(Future<void> Function() f, String done) async {
@@ -624,7 +639,7 @@ class _RidersPayPageState extends State<RidersPayPage> {
         else if (_error != null)
           TkErrorBox(errorWords(_error!)),
         if (_actError != null) TkErrorBox(_actError!),
-        if (owed == null && _error == null) const TkLoading(rows: 4, label: 'Loading riders’ pay…'),
+        if (owed == null && p == null && _error == null) const TkLoading(rows: 4, label: 'Loading riders’ pay…'),
         if (p != null)
           TkHero(
             label: 'Due to riders now',
@@ -975,7 +990,7 @@ class _BankState extends State<_Bank> {
           TkKitField(
             label: 'Bank code',
             hint: 'The bank’s code, such as 058 for GTBank.',
-            child: TkTextBox(controller: _codeBox, digits: 6),
+            child: TkTextBox(controller: _codeBox, plain: true, max: 6),
           ),
         const SizedBox(height: 10),
         TkKitField(

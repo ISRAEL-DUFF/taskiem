@@ -70,7 +70,14 @@ void main() {
     );
   });
 
-  Future<List<String>> open(WidgetTester t, Widget Function(ChatsData c) home, {Map<String, dynamic>? purchase, List<Map<String, dynamic>>? list}) async {
+  Future<List<String>> open(
+    WidgetTester t,
+    Widget Function(ChatsData c) home, {
+    Map<String, dynamic>? purchase,
+    List<Map<String, dynamic>>? list,
+    bool keeps = true,
+    bool linksFail = false,
+  }) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = const Size(390, 2600);
     t.view.devicePixelRatio = 1;
@@ -88,7 +95,7 @@ void main() {
                 'purchases': list ?? [purchase ?? _purchase()],
               }),
               '/v1/stock' => ok({
-                'keeps_stock': true,
+                'keeps_stock': keeps,
                 'items': [
                   {'id': 'MY1', 'name': 'rice 50kg'},
                   {'id': 'MY2', 'name': 'Beans'},
@@ -107,6 +114,7 @@ void main() {
                 ],
               }),
               '/v1/stock/deliver-to' => ok({'address': '', 'phone': ''}),
+              '/v1/links' when linksFail => http.Response(jsonEncode({'error': 'Something broke.'}), 500, headers: {'content-type': 'application/json'}),
               '/v1/links' => ok({
                 'links': [
                   {'id': 'L9', 'name': 'Dangote Depot Ltd', 'state': 'active', 'role': 'supplier'},
@@ -262,6 +270,46 @@ void main() {
     expect(sent.last, 'POST /v1/stock/suppliers {"name":"Ada Oils","phone":"0803 123 4567","items":["MY2"]}');
     expect(find.text('Ada Oils added; the link is on its way by SMS'), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('M8 fixes 5, 21: no stock kept on Taskiem: no items offered, and Stock leads there', (t) async {
+    await open(
+      t,
+      (c) => PurchasePage(auth: c.auth, id: 'P1', follow: false),
+      purchase: _purchase(status: 'drafted', seller: 'proposed'),
+      keeps: false,
+    );
+    expect(find.text('Keep your stock on Taskiem to confirm it, so what comes is received into your items.'), findsOneWidget);
+    expect(find.bySemanticsLabel('Confirm the order'), findsNothing);
+    expect(find.text('Stock'), findsOneWidget);
+  });
+
+  testWidgets('M8 fixes 3: the links failing to read is said, not "not linked"', (t) async {
+    await open(t, (c) => SuppliersPage(auth: c.auth), linksFail: true);
+    await t.tap(find.bySemanticsLabel('On Taskiem for Dangote Depot'));
+    await settle(t);
+    expect(find.text('Something broke.'), findsOneWidget);
+    expect(find.textContaining('You are not linked'), findsNothing);
+  });
+
+  testWidgets('M8 fixes 2: the Stock card read again on return from an order', (t) async {
+    final f = <String>[];
+    final sent = await open(
+      t,
+      (c) => TkPageScreen(
+        title: 'Stock',
+        children: [PurchasesCard(auth: c.auth, items: const [], onChanged: () => f.add('changed'))],
+      ),
+      purchase: _purchase(seller: 'accepted'),
+    );
+    await t.tap(find.bySemanticsLabel('Open PO-0012'));
+    await t.pumpAndSettle();
+    await settle(t);
+    await t.tap(find.bySemanticsLabel('Back').first);
+    await t.pumpAndSettle();
+    await settle(t);
+    expect(f, contains('changed'), reason: 'the card and the screen read again');
+    expect(sent, isNotNull);
   });
 
   testWidgets('at large text on a small phone: nothing cut off, all pressable', (t) async {

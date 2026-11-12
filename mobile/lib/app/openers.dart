@@ -12,6 +12,10 @@ class Openers {
   /// to order from with leave to, else to look around.
   static void Function(BuildContext context, String link, String business)? orderFrom;
 
+  /// A linked business's conversation, by its link (a statement's Chat);
+  /// false when it is not among the chats.
+  static bool Function(BuildContext context, String link)? conversation;
+
   /// Find a business (Explore).
   static void Function(BuildContext context)? findBusiness;
 }

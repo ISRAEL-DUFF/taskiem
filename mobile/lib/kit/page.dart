@@ -14,8 +14,11 @@ import 'kit.dart';
 /// A page as a screen: its head (Back, the title, actions), and its body
 /// scrolling, the page's description first.
 class TkPageScreen extends StatelessWidget {
-  const TkPageScreen({super.key, required this.title, required this.children, this.description, this.backLabel = 'Back', this.action, this.onRefresh});
+  const TkPageScreen({super.key, required this.title, required this.children, this.description, this.backLabel = 'Back', this.action, this.onRefresh, this.back = true});
   final String title;
+
+  /// False for a page that is a tab of its own (the Money tab): no Back.
+  final bool back;
   final String? description;
   final String backLabel;
 
@@ -54,11 +57,13 @@ class TkPageScreen extends StatelessWidget {
             ColoredBox(
               color: t.panel,
               child: Padding(
-                padding: EdgeInsets.fromLTRB(8, 10 + pad.top, 16, 10),
+                padding: EdgeInsets.fromLTRB(back ? 8 : 16, 10 + pad.top, 16, 10),
                 child: Row(
                   children: [
-                    ChatHeadBar.iconButton(backLabel, TkIcon('back', size: 20, color: t.text), () => Navigator.of(context).maybePop()),
-                    const SizedBox(width: 6),
+                    if (back) ...[
+                      ChatHeadBar.iconButton(backLabel, TkIcon('back', size: 20, color: t.text), () => Navigator.of(context).maybePop()),
+                      const SizedBox(width: 6),
+                    ],
                     Expanded(
                       child: Semantics(
                         header: true,

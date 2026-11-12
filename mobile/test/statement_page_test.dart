@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:taskiem/app/openers.dart';
 import 'package:taskiem/chat/bills_page.dart' show BillPage;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/invoices_page.dart' show InvoicePage;
@@ -49,12 +50,12 @@ void main() {
     expect(termsWords(30), '30 days to pay');
   });
 
-  Future<ChatsData> chatsWith(Object statement) async {
+  Future<ChatsData> chatsWith(Object statement, [List<String>? asked]) async {
     final f = Fixture('chats');
     http.Response ok(Object b) => http.Response(jsonEncode(b), 200, headers: {'content-type': 'application/json'});
     return ChatsData(
       f.auth(
-        also: (req) async => switch (req.url.path) {
+        also: (req) async => switch ((asked?..add(req.url.path), req.url.path).$2) {
           '/v1/links/L1/statement' => ok(statement),
           '/v1/invoices/I1' => ok({
             'invoice': {'id': 'I1', 'number': 'INV-0007', 'status': 'overdue', 'customer': {}, 'lines': [], 'payments': []},
@@ -93,6 +94,36 @@ void main() {
     await t.tap(find.text('INV-0042'));
     await t.pumpAndSettle();
     expect(find.byType(BillPage), findsOneWidget);
+  });
+
+  testWidgets('M8 fixes 4, 19: read again on return from a document; Chat opens their conversation', (t) async {
+    t.view.physicalSize = const Size(390, 1800);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final opened = <String>[];
+    Openers.conversation = (context, link) {
+      opened.add(link);
+      return true;
+    };
+    addTearDown(() => Openers.conversation = null);
+    final asked = <String>[];
+    final chats = await chatsWith(_statement, asked);
+    await t.pumpWidget(
+      TaskiemApp(
+        mode: TkMode.light,
+        home: StatementPage(auth: chats.auth, link: 'L1'),
+      ),
+    );
+    await settle(t);
+    await t.tap(find.bySemanticsLabel('Chat with Rivers Foods'));
+    expect(opened, ['L1']);
+    final before = asked.where((p) => p == '/v1/links/L1/statement').length;
+    await t.tap(find.text('INV-0007'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Back').first);
+    await t.pumpAndSettle();
+    await settle(t);
+    expect(asked.where((p) => p == '/v1/links/L1/statement').length, before + 1);
   });
 
   testWidgets('nothing open between you', (t) async {

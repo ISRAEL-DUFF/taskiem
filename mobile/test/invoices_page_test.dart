@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:taskiem/api/api.g.dart' show Me;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/invoices_page.dart';
 import 'package:taskiem/kit/forms.dart' show TkSwitch;
@@ -87,7 +88,14 @@ void main() {
     expect(fmtTime('2026-11-12T13:05:00Z'), '12 Nov 2026, 14:05');
   });
 
-  Future<List<String>> open(WidgetTester t, Widget Function(ChatsData c) home, {Map<String, dynamic>? invoice, double height = 2400}) async {
+  Future<List<String>> open(
+    WidgetTester t,
+    Widget Function(ChatsData c) home, {
+    Map<String, dynamic>? invoice,
+    double height = 2400,
+    bool voidFails = false,
+    bool schools = false,
+  }) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = Size(390, height);
     t.view.devicePixelRatio = 1;
@@ -102,6 +110,14 @@ void main() {
           final p = req.url.path;
           final key = req.headers['idempotency-key'] ?? req.headers['Idempotency-Key'];
           if (req.method == 'GET') {
+            if (p == '/v1/schools/receipts') {
+              sent.add('RECEIPTS ${req.url.query}');
+              return ok({
+                'receipts': [
+                  {'id': 'RC1', 'number': 'R-0042', 'part_id': 'P1', 'voided': false},
+                ],
+              });
+            }
             if (p == '/v1/invoices') {
               sent.add('LIST ${req.url.query}');
               return ok({
@@ -142,6 +158,9 @@ void main() {
             return null;
           }
           sent.add('${req.method} $p ${req.body}${key != null ? ' key' : ''}');
+          if (voidFails && p.endsWith('/void')) {
+            return http.Response(jsonEncode({'error': 'It cannot be voided now.'}), 409, headers: {'content-type': 'application/json'});
+          }
           if (p.endsWith('/send')) {
             return ok({
               'invoice': x,
@@ -163,6 +182,7 @@ void main() {
       ),
       now: () => f.at,
     );
+    if (schools) chats.auth.me = Me.fromJson({...f.json('/v1/me'), 'schools': true});
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: home(chats)));
     await settle(t);
     return sent;
@@ -311,6 +331,76 @@ void main() {
     await settle(t);
     expect(sent.last, 'PUT /v1/invoice-settings/credit-terms {"credit_days":30,"apply_open":true}');
     expect(find.text('3 open debts now follow these terms.'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('M8 fixes 6, 23, 29: a line added after sending says so; the query asks its question; the payments say where matching is', (t) async {
+    final x = _invoice(disputed: true);
+    x['lines'] = [
+      ...(x['lines'] as List),
+      {'description': 'Extra tray', 'quantity': 1, 'unit_kobo': 500000, 'amendment': 'A1'},
+    ];
+    x['payments'] = <Object>[];
+    await open(
+      t,
+      (c) => InvoicePage(auth: c.auth, id: 'INV-0007', follow: false),
+      invoice: x,
+      height: 3200,
+    );
+    expect(find.textContaining('Added after the invoice was sent.'), findsOneWidget);
+    expect(find.text('How do you settle it?'), findsOneWidget);
+    expect(find.textContaining('matched to this invoice on To match.'), findsOneWidget);
+  });
+
+  testWidgets('M8 fixes 8: a void that fails says so in its own card; Keep it clears it', (t) async {
+    await open(t, (c) => InvoicePage(auth: c.auth, id: 'INV-0007', follow: false), voidFails: true);
+    await t.tap(find.bySemanticsLabel('Void'));
+    await t.pump();
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Reason')), matching: find.byType(EditableText)), 'Wrong customer');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Void invoice'));
+    await settle(t);
+    final err = find.text('It cannot be voided now.');
+    expect(err, findsOneWidget);
+    expect(t.getTopLeft(err).dy, greaterThan(t.getTopLeft(find.bySemanticsLabel('Void invoice')).dy), reason: 'under its button, in its card');
+    await t.tap(find.bySemanticsLabel('Keep it').first);
+    await t.pump();
+    expect(err, findsNothing);
+  });
+
+  testWidgets('M8 fixes 22: a school sees each payment’s receipt', (t) async {
+    final sent = await open(t, (c) => InvoicePage(auth: c.auth, id: 'INV-0007', follow: false), schools: true, height: 3200);
+    expect(sent, contains('RECEIPTS invoice=I1'));
+    expect(find.text('Receipt R-0042'), findsOneWidget);
+    expect(find.bySemanticsLabel('Open PDF of receipt R-0042'), findsOneWidget);
+  });
+
+  testWidgets('M8 fixes 7: saving credit terms keeps the numbering typed but not saved', (t) async {
+    await open(t, (c) => InvoiceSettingsPage(auth: c.auth));
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Number prefix')), matching: find.byType(EditableText)), 'TK-');
+    await t.pump();
+    await t.tap(find.text('30 days'));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save credit terms'));
+    await settle(t);
+    expect(find.text('TK-'), findsOneWidget, reason: 'not put back to INV-');
+    await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('M8 fixes 24: a draft changed from its screen goes back to it, not to a second copy', (t) async {
+    await open(
+      t,
+      (c) => InvoicePage(auth: c.auth, id: 'INV-0007', follow: false),
+      invoice: _invoice(status: 'draft'),
+    );
+    await t.tap(find.bySemanticsLabel('Edit'));
+    await t.pumpAndSettle();
+    await settle(t);
+    await t.tap(find.bySemanticsLabel('Save draft'));
+    await settle(t);
+    await t.pumpAndSettle();
+    expect(find.byType(InvoicePage), findsOneWidget);
+    expect(find.byType(InvoiceEditorPage), findsNothing);
     await t.pump(const Duration(seconds: 5));
   });
 

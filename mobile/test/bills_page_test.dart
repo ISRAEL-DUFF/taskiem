@@ -45,7 +45,7 @@ void main() {
     expect(billPath('B 1', '/pay'), '/v1/bills/B%201/pay');
   });
 
-  Future<List<String>> open(WidgetTester t, Widget Function(ChatsData c) home, {Map<String, dynamic>? bill, bool ready = true}) async {
+  Future<List<String>> open(WidgetTester t, Widget Function(ChatsData c) home, {Map<String, dynamic>? bill, bool ready = true, bool fail = false}) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = const Size(390, 2600);
     t.view.devicePixelRatio = 1;
@@ -70,6 +70,8 @@ void main() {
             return null;
           }
           sent.add('${req.method} $p ${req.body}');
+          if (fail) await Future<void>.delayed(const Duration(milliseconds: 100));
+          if (fail) return http.Response(jsonEncode({'error': 'The supplier could not be told.'}), 500, headers: {'content-type': 'application/json'});
           if (p == '/v1/bills/pay/setup') set = true;
           return ok({'ok': true});
         },
@@ -136,6 +138,19 @@ void main() {
     await t.pumpAndSettle();
     expect(sent.last, 'POST /v1/bills/B1/query {"reason":"Short by one bag"}');
     await t.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('M8 fixes 1: Record it pressed once while it sends; its failure said in the modal', (t) async {
+    final sent = await open(t, (c) => BillPage(auth: c.auth, id: 'B1', follow: false), fail: true);
+    await t.tap(find.bySemanticsLabel('Paid outside Taskiem'));
+    await t.pumpAndSettle();
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Amount')), matching: find.byType(EditableText)), '25,000');
+    await t.tap(find.bySemanticsLabel('Record it'));
+    await t.tap(find.bySemanticsLabel('Record it'));
+    await settle(t);
+    expect(sent.where((s) => s.contains('/declare')), hasLength(1), reason: 'not sent twice');
+    expect(find.text('The supplier could not be told.'), findsOneWidget, reason: 'in the modal, still open');
+    expect(find.bySemanticsLabel('Record it'), findsOneWidget);
   });
 
   testWidgets('a queried bill says so, and is not paid from Taskiem', (t) async {

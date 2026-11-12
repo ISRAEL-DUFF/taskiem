@@ -244,6 +244,24 @@ void main() {
     expect(r.lines.single, 'Matched +₦35,000 to INV-0042');
   });
 
+  testWidgets('M8 fixes 9: the invoices failing to read: said, not "Loading" beside it', (t) async {
+    await open(
+      t,
+      (c, saved) => MoneyEntryView(
+        auth: c.auth,
+        entry: {'id': 'E1', 'kind': 'payment', 'direction': 'in', 'amount_kobo': 3500000, 'status': 'settled', 'left_kobo': 3500000, 'to_match': true, 'when': '2026-11-12T09:00:00Z'},
+        onSaved: saved,
+      ),
+      also: (req) async => req.method == 'GET' && req.url.path == '/v1/invoices'
+          ? http.Response(jsonEncode({'error': 'The invoices could not be read.'}), 500, headers: {'content-type': 'application/json'})
+          : null,
+    );
+    await t.tap(find.bySemanticsLabel('Match to an invoice'));
+    await settle(t);
+    expect(find.text('The invoices could not be read.'), findsOneWidget);
+    expect(find.text('Loading invoices…'), findsNothing);
+  });
+
   testWidgets('cash or an expense added; what is missing said first', (t) async {
     final r = await open(t, (c, saved) => MoneyAdd(auth: c.auth, onSaved: saved, now: () => DateTime(2026, 11, 12)));
     await t.tap(find.bySemanticsLabel('Add it'));

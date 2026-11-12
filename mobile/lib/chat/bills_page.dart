@@ -8,6 +8,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../app/auth.dart';
+import '../app/openers.dart';
 import '../app/links.dart';
 import '../kit/forms.dart' show errorWords, nairaKobo;
 import '../kit/kit.dart';
@@ -32,13 +33,13 @@ String billPath(String id, [String rest = '']) => '/v1/bills/${Uri.encodeCompone
 /// bills.ts billsDue: what is left to pay on them, the cancelled left out.
 int billsDue(List<Map<String, dynamic>> list) => list.fold(0, (n, b) => n + (b['status'] == 'void' ? 0 : _int(b['due_kobo'])));
 
-void _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
 
 /// Opens Bills.
-void openBills(BuildContext context, Auth auth) => _push(context, BillsPage(auth: auth));
+Future<void> openBills(BuildContext context, Auth auth) => _push(context, BillsPage(auth: auth));
 
 /// Opens one bill.
-void openBill(BuildContext context, Auth auth, String id) => _push(context, BillPage(auth: auth, id: id));
+Future<void> openBill(BuildContext context, Auth auth, String id) => _push(context, BillPage(auth: auth, id: id));
 
 Widget _box(TkTokens t, String text, {bool warn = false}) => Semantics(
   liveRegion: !warn,
@@ -125,7 +126,12 @@ class _BillsPageState extends State<BillsPage> with Polling {
             semanticsLabel: 'Left to pay',
           ),
           if (list.isEmpty)
-            const TkEmpty(icon: 'invoices', title: 'No bills to pay', line: 'An invoice a linked supplier sends you arrives here.')
+            TkEmpty(
+              icon: 'invoices',
+              title: 'No bills to pay',
+              line: 'An invoice a linked supplier sends you arrives here.',
+              action: Openers.linkedBusinesses == null ? null : TkSmallButton(label: 'Linked businesses', onPressed: () => Openers.linkedBusinesses!(context)),
+            )
           else
             TkPageCard(children: [for (final b in list) _row(b)]),
           if (_paid.isNotEmpty) TkPageCard(title: 'Paid', children: [for (final b in _paid) _row(b)]),
@@ -380,8 +386,8 @@ class _BillPageState extends State<BillPage> with Polling {
     title: 'Paid outside Taskiem',
     builder: (ctx) => _Declare(
       supplier: _str(b['supplier_name']),
-      onSave: (kobo, how) => _run(
-        () => _auth.transport.send('POST', billPath(_str(b['id']), '/declare'), body: {'amount_kobo': kobo, 'how': how}),
+      onSave: (kobo, how) => _sent(
+        _auth.transport.send('POST', billPath(_str(b['id']), '/declare'), body: {'amount_kobo': kobo, 'how': how}),
         'Recorded, and the supplier is told',
       ),
     ),
@@ -392,22 +398,48 @@ class _BillPageState extends State<BillPage> with Polling {
     title: 'Query this bill',
     builder: (ctx) => _Query(
       supplier: _str(b['supplier_name']),
-      onSend: (reason) => _run(() => _auth.transport.send('POST', billPath(_str(b['id']), '/query'), body: {'reason': reason}), 'Query sent'),
+      onSend: (reason) => _sent(_auth.transport.send('POST', billPath(_str(b['id']), '/query'), body: {'reason': reason}), 'Query sent'),
     ),
   );
+
+  /// A modal's request: said and read again once done; its failure is the
+  /// modal's to show.
+  Future<void> _sent(Future<Object?> f, String done) async {
+    await f;
+    if (mounted) showTkToast(context, done);
+    await _load();
+  }
+}
+
+/// A modal's button and its error: pressed once, busy till done.
+mixin _Sending<T extends StatefulWidget> on State<T> {
+  bool busy = false;
+  String? error;
+
+  Future<void> sending(Future<void> Function() f) async {
+    // A second press before the button shows it is busy sends nothing.
+    if (busy) return;
+    setState(() => (busy = true, error = null));
+    try {
+      await f();
+      if (mounted) Navigator.of(context).pop();
+    } on Object catch (e) {
+      if (mounted) setState(() => (error = errorWords(e), busy = false));
+    }
+  }
 }
 
 /// Paid outside Taskiem: the amount and how; its own record, the supplier told.
 class _Declare extends StatefulWidget {
   const _Declare({required this.supplier, required this.onSave});
   final String supplier;
-  final Future<bool> Function(int kobo, String how) onSave;
+  final Future<void> Function(int kobo, String how) onSave;
 
   @override
   State<_Declare> createState() => _DeclareState();
 }
 
-class _DeclareState extends State<_Declare> {
+class _DeclareState extends State<_Declare> with _Sending {
   final _amount = TextEditingController();
   String _how = 'transfer';
 
@@ -439,14 +471,8 @@ class _DeclareState extends State<_Declare> {
             onTap: () => setState(() => _how = v),
           ),
         const SizedBox(height: 10),
-        TkButton(
-          label: 'Record it',
-          primary: true,
-          onPressed: () async {
-            final ok = await widget.onSave(nairaKobo(_amount.text) ?? 0, _how);
-            if (ok && context.mounted) Navigator.of(context).pop();
-          },
-        ),
+        if (error != null) Padding(padding: const EdgeInsets.only(bottom: 10), child: TkErrorBox(error!)),
+        TkButton(label: 'Record it', primary: true, enabled: !busy, onPressed: () => sending(() => widget.onSave(nairaKobo(_amount.text) ?? 0, _how))),
       ],
     );
   }
@@ -456,13 +482,13 @@ class _DeclareState extends State<_Declare> {
 class _Query extends StatefulWidget {
   const _Query({required this.supplier, required this.onSend});
   final String supplier;
-  final Future<bool> Function(String reason) onSend;
+  final Future<void> Function(String reason) onSend;
 
   @override
   State<_Query> createState() => _QueryState();
 }
 
-class _QueryState extends State<_Query> {
+class _QueryState extends State<_Query> with _Sending {
   final _reason = TextEditingController();
 
   @override
@@ -491,14 +517,12 @@ class _QueryState extends State<_Query> {
           child: TkTextBox(controller: _reason, lines: 3, max: 500),
         ),
         const SizedBox(height: 10),
+        if (error != null) Padding(padding: const EdgeInsets.only(bottom: 10), child: TkErrorBox(error!)),
         TkButton(
           label: 'Send the query',
           primary: true,
-          enabled: _reason.text.trim().isNotEmpty,
-          onPressed: () async {
-            final ok = await widget.onSend(_reason.text.trim());
-            if (ok && context.mounted) Navigator.of(context).pop();
-          },
+          enabled: !busy && _reason.text.trim().isNotEmpty,
+          onPressed: () => sending(() => widget.onSend(_reason.text.trim())),
         ),
       ],
     );

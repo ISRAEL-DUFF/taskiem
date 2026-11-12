@@ -174,6 +174,7 @@ class TkTextBox extends StatefulWidget {
     this.size = 17,
     this.hint,
     this.money = false,
+    this.signed = false,
     this.secret = false,
     this.plain = false,
     this.phone = false,
@@ -193,6 +194,10 @@ class TkTextBox extends StatefulWidget {
 
   /// A price typed (`inputmode="decimal"`).
   final bool money;
+
+  /// A number that may be below nothing (`inputmode="text"` on the web):
+  /// the keypad with its minus.
+  final bool signed;
 
   /// A key (`type="password"`): hidden as typed.
   final bool secret;
@@ -265,6 +270,8 @@ class _TkTextBoxState extends State<TkTextBox> {
                     ? TextInputType.number
                     : widget.phone
                     ? TextInputType.phone
+                    : widget.signed
+                    ? const TextInputType.numberWithOptions(decimal: true, signed: true)
                     : widget.money
                     ? const TextInputType.numberWithOptions(decimal: true)
                     : (area ? TextInputType.multiline : TextInputType.text),

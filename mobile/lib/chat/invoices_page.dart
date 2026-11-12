@@ -5,6 +5,8 @@
 // invoice settings and credit terms. Each invoice is marked paid only by
 // the payments counted towards it.
 
+import 'dart:typed_data';
+
 import 'package:flutter/widgets.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -19,6 +21,7 @@ import '../kit/polling.dart';
 import '../kit/sheet.dart' show TkKitField;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
+import 'attachments.dart' show handOffFile;
 import 'doc_thread.dart' show DocThread;
 import 'invoice_match.dart' show CustomerMatching, InvoiceMatchPage, groupSuggestions, suggestionsPath;
 import 'money_sheets.dart' show dateLabel, invoiceActions, invoicePath, invoiceStatus;
@@ -31,13 +34,13 @@ int _int(Object? v) => (v as num?)?.toInt() ?? 0;
 String _str(Object? v) => v as String? ?? '';
 Map<String, dynamic> _map(Object? v) => (v as Map?)?.cast<String, dynamic>() ?? const {};
 
-void _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
+Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => page));
 
 /// Opens one invoice (its id or number) on its own screen.
-void openInvoice(BuildContext context, Auth auth, String id) => _push(context, InvoicePage(auth: auth, id: id));
+Future<void> openInvoice(BuildContext context, Auth auth, String id) => _push(context, InvoicePage(auth: auth, id: id));
 
 /// Opens Invoices.
-void openInvoices(BuildContext context, Auth auth) => _push(context, InvoicesPage(auth: auth));
+Future<void> openInvoices(BuildContext context, Auth auth) => _push(context, InvoicesPage(auth: auth));
 
 /// invoices.ts INVOICE_FILTERS: "" is all; credit, the notebook debts.
 const invoiceFilters = [
@@ -81,7 +84,7 @@ List<String> sentLines(Map<String, dynamic> s) {
 /// invoices.ts lineNote.
 String lineNote(Map<String, dynamic> l) => [
   if (_str(l['pass_through_for']).isNotEmpty) 'Collected on behalf of ${l['pass_through_for']}.',
-  if (l['amendment'] == true && _str(l['kind']).isEmpty) 'Added after the invoice was sent.',
+  if ((l['amendment'] == true || _str(l['amendment']).isNotEmpty) && _str(l['kind']).isEmpty) 'Added after the invoice was sent.',
   if (_str(l['reason']).isNotEmpty) _str(l['reason']),
 ].join(' ');
 
@@ -364,6 +367,9 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
   Map<String, dynamic>? _revealed;
   bool _busy = false;
   String? _actError;
+  String? _voidError;
+  Map<String, Map<String, dynamic>> _receipts = const {};
+  String? _undoError;
   int _asked = 0;
 
   Auth get _auth => widget.auth;
@@ -387,19 +393,45 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
     try {
       final r = (await _auth.transport.send('GET', invoicePath(widget.id)) as Map).cast<String, dynamic>();
       if (mounted && asked == _asked) setState(() => (_view = r, _error = null));
+      // A school's receipts for the payments counted (docs/schools.md#receipts).
+      final x = _map(r['invoice']);
+      if (_auth.me?.schools == true && x['status'] != 'draft') {
+        try {
+          final rc = (await _auth.transport.send('GET', '/v1/schools/receipts', query: {'invoice': _str(x['id'])}) as Map).cast<String, dynamic>();
+          if (mounted && asked == _asked) setState(() => _receipts = {for (final rr in _maps(rc['receipts'])) _str(rr['part_id']): rr});
+        } on Object {
+          // The payments show without their receipts.
+        }
+      }
     } on Object catch (e) {
       if (mounted && asked == _asked) setState(() => _error = errorWords(e));
     }
   }
 
-  Future<void> _run(Future<void> Function() f, String done) async {
-    setState(() => (_busy = true, _actError = null));
+  /// A receipt's PDF, handed to the phone to open or keep.
+  Future<void> _receiptPdf(Map<String, dynamic> rc) async {
+    try {
+      final bytes = await _auth.transport.bytes('/v1/schools/receipts/${Uri.encodeComponent(_str(rc['id']))}/pdf');
+      await handOffFile(Uint8List.fromList(bytes), 'receipt-${rc['number']}.pdf', 'application/pdf', null);
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, errorWords(e), error: true);
+    }
+  }
+
+  /// An action, its failure said where it was pressed ([fail]: its card),
+  /// else under the buttons at the top.
+  Future<void> _run(Future<void> Function() f, String done, {void Function(String? words)? fail}) async {
+    final said = fail ?? (String? w) => _actError = w;
+    setState(() {
+      _busy = true;
+      said(null);
+    });
     try {
       await f();
       if (mounted && done.isNotEmpty) showTkToast(context, done);
       await _load();
     } on Object catch (e) {
-      if (mounted) setState(() => _actError = errorWords(e));
+      if (mounted) setState(() => said(errorWords(e)));
     }
     if (mounted) setState(() => _busy = false);
   }
@@ -479,11 +511,12 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
               TkSmallButton(
                 label: 'Edit',
                 onPressed: () async {
-                  await Navigator.of(context).push(
-                    PageRouteBuilder<void>(
+                  final out = await Navigator.of(context).push<({Map<String, dynamic>? sent})>(
+                    PageRouteBuilder(
                       pageBuilder: (_, _, _) => InvoiceEditorPage(auth: _auth, existing: x),
                     ),
                   );
+                  if (out?.sent != null && mounted) setState(() => _sent = out!.sent);
                   await _load();
                 },
               ),
@@ -520,15 +553,20 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
                       : () {
                           setState(() => _voidTried = true);
                           if (reasonProblem != null) return;
-                          _run(() async {
-                            await _auth.transport.send('POST', invoicePath(_str(x['id']), '/void'), body: {'reason': _reason.text.trim()});
-                            if (mounted) setState(() => (_voiding = false, _voidTried = false, _reason.text = ''));
-                          }, 'Invoice voided');
+                          _run(
+                            () async {
+                              await _auth.transport.send('POST', invoicePath(_str(x['id']), '/void'), body: {'reason': _reason.text.trim()});
+                              if (mounted) setState(() => (_voiding = false, _voidTried = false, _reason.text = ''));
+                            },
+                            'Invoice voided',
+                            fail: (w) => _voidError = w,
+                          );
                         },
                 ),
-                TkSmallButton(label: 'Keep it', onPressed: () => setState(() => (_voiding = false, _voidTried = false))),
+                TkSmallButton(label: 'Keep it', onPressed: () => setState(() => (_voiding = false, _voidTried = false, _voidError = null))),
               ],
             ),
+            if (_voidError != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_voidError!)),
           ],
         ),
       TkPageCard(
@@ -663,7 +701,7 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
     final rows = paymentRows(_maps(x['payments']));
     if (rows.isEmpty) {
       return Text(
-        'No payments yet. Payments are counted here as they come in from your payments connection, or when money received is matched to this invoice. Nobody marks an invoice paid without a payment.',
+        'No payments yet. Payments are counted here as they come in from your payments connection, or when money received is matched to this invoice on To match. Nobody marks an invoice paid without a payment.',
         style: tkHint(t),
       );
     }
@@ -706,6 +744,19 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
                       ],
                     ),
                   ),
+                  if (_receipts[_str(p['id'])] case final rc?)
+                    Wrap(
+                      spacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text('Receipt ${rc['number']}${rc['voided'] == true ? ' (voided)' : ''}', style: tkHint(t)),
+                        Semantics(
+                          label: 'Open PDF of receipt ${rc['number']}',
+                          excludeSemantics: true,
+                          child: TkLink(label: 'PDF', onTap: () => _receiptPdf(rc)),
+                        ),
+                      ],
+                    ),
                   if (canUndo && !undone && _undoing != p['id'])
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
@@ -741,18 +792,23 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
                                   danger: true,
                                   onPressed: _busy
                                       ? null
-                                      : () => _run(() async {
-                                          await _auth.transport.send(
-                                            'POST',
-                                            invoicePath(_str(x['id']), '/payments/${Uri.encodeComponent(_str(p['id']))}/undo'),
-                                            body: const {},
-                                          );
-                                          if (mounted) setState(() => _undoing = null);
-                                        }, 'Payment undone'),
+                                      : () => _run(
+                                          () async {
+                                            await _auth.transport.send(
+                                              'POST',
+                                              invoicePath(_str(x['id']), '/payments/${Uri.encodeComponent(_str(p['id']))}/undo'),
+                                              body: const {},
+                                            );
+                                            if (mounted) setState(() => _undoing = null);
+                                          },
+                                          'Payment undone',
+                                          fail: (w) => _undoError = w,
+                                        ),
                                 ),
-                                TkSmallButton(label: 'Keep it', onPressed: () => setState(() => _undoing = null)),
+                                TkSmallButton(label: 'Keep it', onPressed: () => setState(() => (_undoing = null, _undoError = null))),
                               ],
                             ),
+                            if (_undoError != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_undoError!)),
                           ],
                         ),
                       ),
@@ -1015,12 +1071,13 @@ class _SettleQueryState extends State<_SettleQuery> {
       title: 'Queried by the customer',
       children: [
         Text(
-          'Money that does not name this invoice is not counted towards it until you settle the query. Their reason is in your conversation with them.',
+          'Money that does not name this invoice is not counted towards it until you settle the query. Their reason is in your conversation with them below.',
           style: tkHint(t),
         ),
         if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_error!)),
         if (widget.auth.can('invoice.manage')) ...[
           const SizedBox(height: 10),
+          Text('How do you settle it?', style: tkText(size: 13, weight: 600, color: t.muted)),
           for (final (v, words) in const [('as_it_stands', 'The invoice stands as it is'), ('discount', 'Take an amount off')])
             TkChoiceRow(
               control: TkRadio(checked: _how == v),
@@ -1302,6 +1359,11 @@ class _InvoiceEditorPageState extends State<InvoiceEditorPage> {
       }
       if (!mounted) return;
       showTkToast(context, send ? 'Invoice sent' : 'Draft saved');
+      // A draft changed from its own screen: back there, with what Send did.
+      if (widget.existing != null) {
+        Navigator.of(context).pop<({Map<String, dynamic>? sent})>((sent: sent));
+        return;
+      }
       Navigator.of(context).pushReplacement(
         PageRouteBuilder<void>(
           pageBuilder: (_, _, _) => InvoicePage(auth: widget.auth, id: _str(x['number']), sent: sent, backLabel: 'Back to Invoices'),
@@ -1328,7 +1390,7 @@ class _InvoiceEditorPageState extends State<InvoiceEditorPage> {
         else if (!_ready)
           Text('Loading…', style: tkHint(t))
         else ...[
-          if (_hidden) Text('The customer’s details are hidden from you. Enter them again to save your changes.', style: tkHint(t)),
+          if (_hidden && _linked == null) Text('The customer’s details are hidden from you. Enter them again to save your changes.', style: tkHint(t)),
           TkPageCard(
             title: 'Customer',
             children: [
@@ -1611,13 +1673,25 @@ class _InvoiceSettingsPageState extends State<InvoiceSettingsPage> {
   }
 
   void _fill(Map<String, dynamic> s) {
-    _saved = s;
+    _fillSettings(s);
+    _fillCredit(s);
+  }
+
+  /// The settings card's form, from what was saved; the other card's
+  /// unsaved choices are left as they are.
+  void _fillSettings(Map<String, dynamic> s) {
+    _saved = {...?_saved, ...s};
     _prefix.text = _str(s['prefix']);
     _next.text = '${_int(s['next_number'])}';
     _connection.text = _str(s['connection']);
     _fee = s['fee_paid_by'] == 'customer' ? 'customer' : 'business';
     _part = s['allow_part_payments'] == true;
     _auto = s['auto_match'] == true;
+  }
+
+  /// The credit terms card's form, from what was saved.
+  void _fillCredit(Map<String, dynamic> s) {
+    _saved = {...?_saved, ...s};
     // invoices.ts creditChoice.
     if (_str(s['credit_terms_at']).isEmpty) {
       _choice = '14';
@@ -1761,7 +1835,7 @@ class _InvoiceSettingsPageState extends State<InvoiceSettingsPage> {
                                 if (mounted) {
                                   showTkToast(this.context, 'Settings saved');
                                   setState(() {
-                                    _fill(out);
+                                    _fillSettings(out);
                                     _tried = false;
                                   });
                                 }
@@ -1844,7 +1918,7 @@ class _InvoiceSettingsPageState extends State<InvoiceSettingsPage> {
                                   setState(() {
                                     _said = _applyOpen ? '$applied open ${applied == 1 ? 'debt' : 'debts'} now follow these terms.' : '';
                                     _applyOpen = false;
-                                    _fill({...?_saved, ..._map(r['settings'])});
+                                    _fillCredit(_map(r['settings']));
                                   });
                                 }
                               } on Object catch (e) {
