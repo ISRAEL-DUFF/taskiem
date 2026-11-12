@@ -1,0 +1,52 @@
+<!doctype html><meta charset="utf-8"><title>Taskiem cast</title>
+<style>
+:root{--pine:#0d3b2e;--pine2:#164a3b;--lime:#c8f169;--paper:#efeae2;--ink:#0e1a14;--muted:#55615a}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);font-family:Inter,system-ui,sans-serif;color:var(--ink);padding:40px}
+h1{margin:0 0 4px;font-size:34px;color:var(--pine)}p.sub{margin:0 0 28px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.card{background:#fff;border-radius:22px;overflow:hidden;box-shadow:0 10px 30px -16px rgba(13,59,46,.4)}
+.card svg{display:block;width:100%;height:auto}
+.card div{padding:14px 18px 18px}.card b{font-size:20px}.card span{display:block;color:var(--muted);font-size:14px;margin-top:2px}
+.card em{display:inline-block;margin-top:8px;font-style:normal;font-size:12px;font-weight:700;background:var(--pine);color:var(--lime);padding:4px 10px;border-radius:99px}
+</style>
+<h1>Taskiem cast</h1><p class="sub">Flat shapes, no outlines, brand colours only. Lime is the accent; skin and hair carry the variety.</p>
+<div class="grid" id="g"></div>
+<script>
+const P=[
+ {n:"Ada Obi",r:"Owner, Ada's Kitchen, Yaba. Our hero.",t:"Hero · warm, quick, always mid-task",bg:"#c8f169",skin:"#7a4a2e",top:"#0d3b2e",hair:"head",hc:"#e8a33d",acc:"apron",sh:"#a3401c"},
+ {n:"Tunde",r:"Cashier. Learns the shop fast; she trusts him with limits.",t:"Staff · calm, tidy, phone in hand",bg:"#fde3d8",skin:"#5b3622",top:"#164a3b",hair:"short",hc:"#1a120d",acc:"lanyard"},
+ {n:"Bayo Adeyemi",r:"Bayo Rice Mills, the supplier. Sells by the bag.",t:"Supplier · steady, dry humour",bg:"#efeae2",skin:"#8a5634",top:"#b08968",hair:"cap",hc:"#7f5539",acc:"beard"},
+ {n:"Ibinabo George",r:"Rivers Foods, the buyer. Haggles politely.",t:"Buyer · sharp, polished",bg:"#fdf0dc",skin:"#6a3f27",top:"#ffffff",hair:"puff",hc:"#1a120d",acc:"glasses",sh:"#0d3b2e"},
+ {n:"Kola Adebayo",r:"Kola's Bakery. The neighbour Ada finds on Explore.",t:"Neighbour · friendly, flour on his shirt",bg:"#e2e7df",skin:"#9a6a45",top:"#bc6c25",hair:"fade",hc:"#1a120d",acc:"flour"},
+ {n:"Emeka Nwosu",r:"CoolBox Logistics. Rider and van, same-day.",t:"Delivery · always moving",bg:"#a8dadc",skin:"#4d2f1e",top:"#0d3b2e",hair:"helmet",hc:"#c8f169",acc:"box"}
+];
+function svg(c){
+ const s=c.skin;let o=`<svg viewBox="0 0 300 300"><rect width="300" height="300" fill="${c.bg}"/>`;
+ // shoulders
+ o+=`<path d="M40 300 C40 232 90 214 150 214 C210 214 260 232 260 300Z" fill="${c.top}"/>`;
+ if(c.sh) o+=`<path d="M110 216 L150 262 L190 216 Z" fill="${c.sh}" opacity=".9"/>`;
+ if(c.acc==="apron") o+=`<path d="M105 226 H195 V300 H105Z" fill="#c8f169"/><rect x="128" y="250" width="44" height="26" rx="6" fill="#0d3b2e" opacity=".15"/>`;
+ if(c.acc==="lanyard") o+=`<path d="M118 216 L150 270 L182 216" stroke="#c8f169" stroke-width="8" fill="none"/><rect x="138" y="268" width="24" height="30" rx="4" fill="#fff"/>`;
+ if(c.acc==="flour") o+=`<circle cx="100" cy="262" r="9" fill="#fff" opacity=".8"/><circle cx="196" cy="274" r="6" fill="#fff" opacity=".8"/><circle cx="168" cy="250" r="4" fill="#fff" opacity=".8"/>`;
+ if(c.acc==="box") o+=`<rect x="190" y="250" width="70" height="50" rx="6" fill="#c8f169"/><path d="M190 270 H260" stroke="#0d3b2e" stroke-width="4"/>`;
+ // neck + head
+ o+=`<rect x="132" y="190" width="36" height="40" rx="14" fill="${s}"/><ellipse cx="150" cy="150" rx="54" ry="62" fill="${s}"/>`;
+ o+=`<ellipse cx="98" cy="154" rx="8" ry="13" fill="${s}"/><ellipse cx="202" cy="154" rx="8" ry="13" fill="${s}"/>`;
+ // hair
+ const h=c.hc;
+ if(c.hair==="head") o+=`<path d="M92 128 C90 70 130 62 150 62 C190 62 212 90 208 128 C190 108 170 100 150 100 C130 100 108 108 92 128Z" fill="${h}"/><ellipse cx="150" cy="70" rx="60" ry="22" fill="${h}"/><path d="M112 66 C130 36 176 36 190 66" fill="${h}"/><circle cx="196" cy="62" r="14" fill="#c8f169"/>`;
+ if(c.hair==="short") o+=`<path d="M96 130 C92 78 128 70 150 70 C176 70 208 82 204 130 C196 106 176 96 150 96 C124 96 104 106 96 130Z" fill="${h}"/>`;
+ if(c.hair==="cap") o+=`<path d="M94 118 C94 76 124 66 150 66 C178 66 206 76 206 118Z" fill="${h}"/><rect x="96" y="112" width="108" height="14" rx="7" fill="#5c3b25"/>`;
+ if(c.hair==="puff") o+=`<circle cx="150" cy="76" r="48" fill="${h}"/><path d="M98 124 C100 96 124 92 150 92 C176 92 200 96 202 124 C184 108 168 102 150 102 C132 102 116 108 98 124Z" fill="${h}"/>`;
+ if(c.hair==="fade") o+=`<path d="M98 122 C96 86 124 80 150 80 C176 80 204 86 202 122 C190 104 172 98 150 98 C128 98 110 104 98 122Z" fill="${h}"/>`;
+ if(c.hair==="helmet") o+=`<path d="M92 130 C86 64 120 54 150 54 C182 54 214 64 208 130Z" fill="${h}"/><rect x="104" y="108" width="92" height="12" rx="6" fill="#0d3b2e"/>`;
+ // face
+ const ey=c.hair==="helmet"?146:148;
+ o+=`<circle cx="128" cy="${ey}" r="5.5" fill="#0e1a14"/><circle cx="172" cy="${ey}" r="5.5" fill="#0e1a14"/>`;
+ o+=`<path d="M154 156 q-4 12 0 14" stroke="#0e1a14" stroke-opacity=".3" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+ o+=`<path d="M128 182 Q150 202 172 182" stroke="#0e1a14" stroke-width="5" fill="none" stroke-linecap="round"/>`;
+ if(c.acc==="glasses") o+=`<g stroke="#0e1a14" stroke-width="4" fill="none"><circle cx="128" cy="148" r="15"/><circle cx="172" cy="148" r="15"/><path d="M143 148 H157"/></g>`;
+ if(c.acc==="beard") o+=`<path d="M104 168 C104 214 196 214 196 168 C186 192 166 196 150 196 C134 196 114 192 104 168Z" fill="#3a2616"/><path d="M128 182 Q150 200 172 182" stroke="${s}" stroke-width="0" fill="none"/>`;
+ return o+`</svg>`}
+g.innerHTML=P.map(c=>`<div class="card">${svg(c)}<div><b>${c.n}</b><span>${c.r}</span><em>${c.t}</em></div></div>`).join("");
+</script>
