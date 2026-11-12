@@ -628,7 +628,12 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                       d.pull();
                     },
                     onOpen: (what, a) {
-                      if (what == 'customer' && (a.id ?? '').isNotEmpty) widget.onOpenCustomer?.call(a.id!);
+                      if (what == 'customer' && (a.id ?? '').isNotEmpty) {
+                        widget.onOpenCustomer?.call(a.id!);
+                      } else {
+                        // Its tool's sheet comes with the tools.
+                        showComingSoon(context);
+                      }
                     },
                   ),
                 ],
@@ -803,7 +808,8 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
         }
         final mention = (style ?? const TextStyle()).copyWith(color: t.tintText, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]);
         final open = ref.kind == 'customer' ? widget.onCustomer : null;
-        out.add(TextSpan(text: r.text, style: mention, recognizer: open == null ? null : tap('ref:${ref.kind}:${ref.id}', () => open(ref.id))));
+        // Anything else opens in its tool, which comes with the tools.
+        out.add(TextSpan(text: r.text, style: mention, recognizer: tap('ref:${ref.kind}:${ref.id}', () => open == null ? showComingSoon(context) : open(ref.id))));
       }
       return out;
     }

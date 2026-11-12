@@ -687,7 +687,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
   late final CardActs _acts = CardActs(
     auth: widget.data.chats.auth,
     onDone: () => widget.data.pull(),
-    onOpen: widget.onOpenDoc,
+    // A document's own screen comes with the tools (M5 to M8).
+    onOpen: widget.onOpenDoc ?? (_) => showComingSoon(context),
     ask: (title, ok) => showTkConfirm(context, title: title, ok: ok, danger: true),
     said: (words) {
       if (mounted) showTkToast(context, words);

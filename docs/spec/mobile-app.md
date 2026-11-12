@@ -73,7 +73,7 @@ as a screen of its own.**
 | Sign in | A code to your WhatsApp or Telegram; email and password; a passkey; staying signed in (§5.2) | `Login.tsx`; `/v1/auth/chat/*`, `/v1/auth/login`, `/v1/auth/passkey` with `bearer: true` |
 | Chats | `@Taskiem` first, then linked businesses and customers; unread, drafts, pinned, muted, archived; search across chats; the business switcher | `Conversation.tsx`, `ChatRow`, `ChatSearch`, `/v1/link-chats` |
 | A conversation | Text, photos, camera, voice notes, files, replies, reactions, ticks, typing, forward, star, delete for me, `@` and `#` mentions, requests typed as words | `Conversation.tsx`, `ChatComposer`, `ThreadParts`, `BubbleShell`, `Mentions`, `RequestChip`, `/v1/chat/stream` |
-| A customer's conversation | On the business's own WhatsApp number: replies within the 24-hour window, templates outside it, STOP honoured; **orders read from their messages**, confirmed, paid, sent out | `CustomerChat.tsx`, `CustomerOrders.tsx` ([five flows](chat-five-more-flows.md), phases 1 and 2) |
+| A customer's conversation | On the business's own WhatsApp number: replies within the 24-hour window, templates outside it, STOP honoured; **orders read from their messages**, confirmed, paid, sent out (with the order sheet, M7: decided 12 November 2026) | `CustomerChat.tsx`, `CustomerOrders.tsx` ([five flows](chat-five-more-flows.md), phases 1 and 2) |
 | Cards | Live cards, reference cards, deals, money, alerts and approvals, the briefing and its chart, orders and deliveries | `ChatLiveCard`, `ChatRefCard`, `ChatDeal`, `ChatMoney`, `ChatAlerts`, `ChatStaff`, `CustomerOrders` |
 
 ### 3.2 `@Taskiem`
@@ -132,6 +132,14 @@ phases 3 to 6), **paying people and payroll** from the chat
 ([paying people](chat-pay-people.md)), and **riders** as participants
 ([riders](chat-riders.md)). Each adds cards, sheets and screens on the same
 pattern; the app's milestone for each follows the web's.
+
+Settled 12 November 2026 (founder): what opens a tool comes with the tool's
+milestone (M5 to M8), not M3: requests typed as words (the suggestion chip,
+`RequestChip.tsx`), Taskiem's tools menu's **Tasks** and, for staff,
+**Clock in** and **Clock out** (`TaskiemChat.tsx`), and a link that opens a
+tool (`?tool=`, with M4's links too). Until a tool comes, what leads to it
+is shown as the web shows it, and pressed says it is coming to the app
+soon: never a press that does nothing.
 
 ### 3.5 Where the app opens a browser, and why
 
@@ -448,7 +456,7 @@ for one engineer who knows Flutter.
 | M1 | **Foundation**: `mobile/`, the generated client and theme, the app's kit of parts matching the web's, the parity test in CI, the licence gate for Dart, S1 | M | A build from `main` installs on a phone, and its sign-in screen passes the parity test against the web's |
 | M2 | **Signing up and signing in**: sign-up as on WhatsApp; chat code, password, passkey; S2; the app lock; the business switcher; the app's settings (§3.6) | M | A stranger signs up from the app and is still signed in a week later, on a real phone |
 | M3 | **The chat** (§3.1, §3.2): chats, a conversation, sending, files, voice notes, the stream; customers' conversations; `@Taskiem` with every command, reply buttons, voice notes, approvals with the chat PIN, and connecting (§3.5) | L | Two businesses chat from two phones; an owner sets up their shop, adds products and publishes a workflow by talking to `@Taskiem` in the app; every web chat e2e scenario on the shared list passes; every screen and moment of the chat film's acts passes the parity test |
-| M4 | **Notifications and links** (S3, S6): the switch, **Your phones**, the icon's count, links that open the app | M | A message to a closed app shows on a real Android phone's lock screen in under 5 seconds and opens that conversation |
+| M4 | **Notifications and links** (S3, S6): the switch, **Your phones**, the icon's count, links that open the app; passkeys; **signing up as on WhatsApp** (a phone proved by a WhatsApp or Telegram code, then the sign-up conversation with Taskiem, the server's `app` way in, §3.6; settled 12 November 2026) | M | A message to a closed app shows on a real Android phone's lock screen in under 5 seconds and opens that conversation |
 | M5 | **Linked businesses** (§3.3): Explore, cards, linking, your profile, the tools' picker and sheets | M | Two businesses find each other and link from the app alone |
 | M6 | **Selling** (§3.3): products and stock, Sell, Handover, services and bookings, price lists and deals | L | A shop keeps its products, stock and prices from the app alone for a week |
 | M7 | **Orders and deliveries** (§3.3): orders from linked businesses and from customers' messages, deliveries and availability, their cards | L | An order goes from a buyer's message to delivered and received with both sides in the app |
@@ -807,8 +815,10 @@ demo world's data (recorded answers, the clock stopped: `mobile/README.md`).
 - **Not yet in M3**: the steps that open a tool's sheet
   (Record stock in, Reorder, Review order, Match it, Assign rider: the
   tools' sheets are M5 to M8), the documents the cards open (View order, View
-  invoice, Pay: the tools' sheets and those screens are M5, M7 and M8 in
-  the milestones), and the chat tools: M5 to M8.
+  invoice, Open, Pay: the tools' sheets and those screens are M5, M7 and M8
+  in the milestones), Start an order in a customer's conversation (M7), and
+  the chat tools: M5 to M8. Each is shown as the web shows it and says
+  "This is coming to the app soon." when pressed (§3.4).
 - **Review** (11 November 2026): the bugs and gaps found reading the app
   and setting it against the web chat, and the work to finish M3, are in
   [Finishing M3](mobile-app-m3-fixes.md).

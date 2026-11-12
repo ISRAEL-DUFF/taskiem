@@ -378,6 +378,23 @@ void main() {
     expect(asksBriefing('briefings'), isFalse);
   });
 
+  testWidgets('D5–D6: what leads to a tool not here yet says so when pressed', (t) async {
+    await screen(t);
+    await t.tap(find.bySemanticsLabel('Chat tools'));
+    await t.pump();
+    expect(find.text('This is coming to the app soon.'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+    await t.pumpAndSettle();
+    final step = find.bySemanticsLabel('Record stock in: Palm oil 25L is running low');
+    await t.ensureVisible(step);
+    await t.pumpAndSettle();
+    await t.tap(step);
+    await t.pump();
+    expect(find.text('This is coming to the app soon.'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+    await t.pumpAndSettle();
+  });
+
   test('the cards\' words, as alerts.ts, approvals.ts and staff.ts say them', () {
     final now = DateTime.utc(2026, 11, 11, 12);
     expect(ago(now.subtract(const Duration(seconds: 30)), now), 'Just now');

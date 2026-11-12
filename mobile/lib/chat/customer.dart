@@ -362,7 +362,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                       child: Align(
                         alignment: Alignment.centerLeft,
-                        child: _StartOrder(onTap: () {}),
+                        child: _StartOrder(onTap: () => showComingSoon(context)),
                       ),
                     ),
                   if (note != null) _Note(text: note.text, stop: note.stop),

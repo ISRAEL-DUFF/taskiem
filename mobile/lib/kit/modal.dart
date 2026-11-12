@@ -265,3 +265,8 @@ void showTkToast(BuildContext context, String text, {bool error = false}) {
   overlay.insert(entry);
   if (!error) timer = Timer(const Duration(seconds: 4), close);
 }
+
+/// A step whose screen or tool the app has not got yet (it comes with the
+/// tools, docs/spec/mobile-app.md M5 to M8): shown as the web shows it,
+/// and said plainly when pressed, never a press that does nothing.
+void showComingSoon(BuildContext context) => showTkToast(context, 'This is coming to the app soon.');

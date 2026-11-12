@@ -213,9 +213,19 @@ businesses, Your phones, Appearance, Sign out):
 | S5 | The chat tools switch, for owners and admins | |
 | S6 | Notifications and showing what a message says | M4 (§5.3), not M3 |
 
-## 6. Scope to settle in the spec
+## 6. Scope settled in the spec
 
-The spec says two things about each of these; the plan proposes one.
+**Settled 12 November 2026** (the founder, as proposed): D1 orders from a
+customer's messages with the order sheet (M7); D2–D4 with the tools'
+milestones (M5–M8; `?tool=` with M4's links too), Tasks and Clock in/out
+written into §3.4; D5–D6 shown as the web shows them and pressed saying
+"This is coming to the app soon." (the composer's tools button, the alert
+steps, a card's View, Open and Pay, Start an order, a tag that opens a
+tool), so the app still matches the web's pictures and no press does
+nothing; D7 with M4. The spec says so in §3.1, §3.4, the M4 row and As
+built.
+
+The questions as they stood:
 
 | # | What | The conflict | Proposed |
 | --- | --- | --- | --- |

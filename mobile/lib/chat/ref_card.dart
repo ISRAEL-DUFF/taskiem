@@ -182,6 +182,11 @@ class _RefCardState extends State<RefCard> {
       widget.onMessage?.call(c.id);
       return;
     }
+    if (c.action == 'pay') {
+      // Paying is the bill's screen: coming with the tools.
+      showComingSoon(context);
+      return;
+    }
     setState(() => _busy = true);
     try {
       await widget.auth.transport.send('POST', '/v1/invoices/${Uri.encodeComponent(c.id)}/send', body: const {}, headers: {'Idempotency-Key': '$_key:$_tick'});
@@ -257,9 +262,10 @@ class _RefCardState extends State<RefCard> {
     };
     final can = widget.auth.can;
     final giving = c.kind != 'customer' && can('member.manage|invoice.manage');
-    // Open and Pay lead to the tools' screens: they come with them.
-    final action = c.action == 'pay' ? null : c.action;
+    final action = c.action;
     final acts = <Widget>[
+      // Open shows it where it is worked on, a tool's screen: coming.
+      if (c.kind != 'customer') _Btn(label: 'Open', named: label, onTap: () => showComingSoon(context)),
       if (giving)
         _Btn(label: 'Give this to…', named: label, onTap: () => giveThis(context, widget.auth, (kind: c.kind, id: c.id, name: c.name))),
       if (action != null && (action != 'message' || widget.onMessage != null))

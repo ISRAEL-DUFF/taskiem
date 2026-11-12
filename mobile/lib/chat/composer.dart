@@ -20,6 +20,7 @@ import 'package:record/record.dart';
 
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/modal.dart' show showComingSoon;
 import '../theme/theme.dart';
 import 'attachments.dart';
 
@@ -382,7 +383,8 @@ class ComposerState extends State<Composer> {
           button: true,
           label: 'Chat tools',
           child: TkPress(
-            onTap: () {},
+            // The tools come with M5 to M8.
+            onTap: () => showComingSoon(context),
             child: Container(
               width: 46,
               height: 46,
