@@ -18,6 +18,7 @@ import 'chat/conversation.dart';
 import 'chat/customer.dart';
 import 'chat/live.dart';
 import 'chat/taskiem.dart';
+import 'screens/home_tabs.dart';
 import 'screens/signed_in.dart';
 import 'screens/sign_in.dart';
 import 'screens/sign_up.dart';
@@ -296,6 +297,31 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    return HomeTabs(
+      count: () => _chats.tabCount,
+      counted: _chats,
+      tabs: [
+        (label: 'Chats', icon: 'chat', build: _chatsTab),
+        (
+          label: 'Updates',
+          icon: 'activity',
+          build: (_) => const ComingTab(title: 'Updates', icon: 'activity', words: 'What happened in your business, as it happens.'),
+        ),
+        (
+          label: 'Money',
+          icon: 'money',
+          build: (_) => const ComingTab(title: 'Money', icon: 'money', words: 'Your invoices, bills and payments.'),
+        ),
+        (
+          label: 'Orders',
+          icon: 'orders',
+          build: (_) => const ComingTab(title: 'Orders', icon: 'orders', words: 'Your orders, from placed to delivered.'),
+        ),
+      ],
+    );
+  }
+
+  Widget _chatsTab(BuildContext context) {
     return ChatsScreen(
       data: _chats,
       onMenu: () => Navigator.of(context).push(PageRouteBuilder<void>(

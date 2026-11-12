@@ -306,6 +306,10 @@ class ChatsData extends ChangeNotifier {
   List<BusinessLink> get waitingLinks => links.where((l) => l.state == 'requested' || l.state == 'not_accepted').toList();
   int get unreadCount => conversations.where((c) => !c.archived && c.unread > 0).length;
   int get archivedCount => conversations.where((c) => c.archived).length + archivedCustomers;
+
+  /// The count on the Chats tab (App.tsx ChatTabCount): conversations and
+  /// customers with something unread, and Taskiem when it said something.
+  int get tabCount => unreadCount + customers.where((c) => !c.archived && c.unread > 0).length + (taskiemUnread > 0 ? 1 : 0);
 }
 
 enum ChatFilter { all, unread, starred, archived }
