@@ -1,6 +1,6 @@
 # Taskiem cast
 
-First-pass character sheet: open `sheet.html` (the SVGs are drawn in the page,
+The full written design is in [bible.md](bible.md) (the source of truth, tool-agnostic). Below: the first-pass flat sheet: open `sheet.html` (the SVGs are drawn in the page,
 so a change to a face or a colour is a change to one line), or see
 `cast-sheet-v1.png`. Names, businesses and prices come from the demo world
 (`web/e2e/demo/seed.ts`) so the films and the app recordings show the same people.
