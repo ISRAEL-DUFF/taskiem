@@ -166,6 +166,7 @@ void main() {
     };
     addTearDown(() => openInBrowser = was);
     final asked = await open(t);
+    await snap(t, 'today_tab-0');
     expect(asked, contains('GET /v1/money/summary?from=2026-11-12&to=2026-11-12'));
     expect(find.textContaining('Good afternoon'), findsOneWidget);
     expect(find.text('₦45,000'), findsOneWidget);

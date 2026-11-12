@@ -617,7 +617,7 @@ class TkListRow extends StatelessWidget {
       CardTone.danger => (t.tkDangerBg, t.tkDangerInk),
       _ => icon != null ? (t.tkLimeSoft, dark ? t.brandDark : t.brand) : tkTone(t, toneOf(letters ?? title)),
     };
-    final initials = _initials(letters ?? title);
+    final initials = tkInitials(letters ?? title);
     final (pillBg, pillInk) = switch (statusTone) {
       CardTone.lime => (t.brandDark, t.brandDarkText),
       CardTone.warn => (t.tkWarnBg, t.tkWarnInk),
@@ -741,7 +741,7 @@ class TkListRow extends StatelessWidget {
   }
 }
 
-String _initials(String name) {
+String tkInitials(String name) {
   final words = name.split(RegExp(r'[\s·]+')).where((w) => w.isNotEmpty && RegExp(r'[A-Za-z0-9]').hasMatch(w[0])).toList();
   if (words.isEmpty) return '?';
   if (words.length == 1) return words.first.substring(0, math.min(2, words.first.length)).toUpperCase();

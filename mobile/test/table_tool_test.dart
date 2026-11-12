@@ -152,6 +152,7 @@ void main() {
     expect(find.text('1–2 of 3'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Next page'));
     await settle(t);
+    await snap(t, 'table_tool-0');
     expect(sent.last, 'QUERY {"limit":25,"count":"exact","cursor":"c2"}');
     expect(find.text('Chidi'), findsOneWidget);
     expect(find.text('26–26 of 3'), findsOneWidget);
@@ -180,6 +181,7 @@ void main() {
     );
     await t.tap(find.text('Ada Obi'));
     await settle(t);
+    await snap(t, 'table_tool-1');
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Balance')), matching: find.byType(EditableText)), '0');
     await t.pump();
     await t.tap(find.bySemanticsLabel('Save changes'));
@@ -199,6 +201,7 @@ void main() {
     );
     await t.tap(find.bySemanticsLabel('Add a row'));
     await settle(t);
+    await snap(t, 'table_tool-2');
     final add = find.bySemanticsLabel('Add the row');
     expect(t.getSemantics(add).flagsCollection.isEnabled.toString(), 'Tristate.isFalse');
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Name')), matching: find.byType(EditableText)), 'Dayo');

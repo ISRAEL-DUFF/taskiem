@@ -246,30 +246,36 @@ class TkRow extends StatelessWidget {
       child: TkPress(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
           child: Row(
             children: [
               ExcludeSemantics(
                 child: Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
                   alignment: Alignment.center,
-                  child: icon != null ? TkIcon(icon!, size: 24, color: ink) : Text(letters ?? '', style: tkText(size: 16, weight: 800, color: ink)),
+                  child: icon != null
+                      ? TkIcon(icon!, size: 21, color: ink)
+                      : Text(_short(letters ?? ''), maxLines: 1, textScaler: TextScaler.noScaling, style: tkText(size: 15, weight: 800, color: ink)),
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name, style: tkText(size: 16, weight: 600, color: t.text)),
-                    if (sub.isNotEmpty) Text(sub, style: tkText(size: 14, color: t.muted)),
+                    Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 15.5, weight: 600, color: t.text)),
+                    if (sub.isNotEmpty) Text(sub, maxLines: 3, overflow: TextOverflow.ellipsis, style: tkText(size: 13.5, color: t.muted)),
                   ],
                 ),
               ),
-              if (pill != null) ...[const SizedBox(width: 14), pill!],
-              if (trailing != null) ...[const SizedBox(width: 14), trailing!],
+              if (pill != null) ...[const SizedBox(width: 10), pill!],
+              if (trailing != null) ...[const SizedBox(width: 10), trailing!],
+              if (onTap != null && pill == null && trailing == null) ...[
+                const SizedBox(width: 4),
+                ExcludeSemantics(child: TkIcon('chevron', size: 18, color: t.muted)),
+              ],
             ],
           ),
         ),
@@ -508,4 +514,13 @@ class TkSoftButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A tile's letters: as given when short, else the name's initials.
+String _short(String letters) {
+  if (letters.length <= 2) return letters.toUpperCase();
+  final words = letters.split(RegExp(r'[\s·()/]+')).where((w) => w.isNotEmpty && RegExp(r'[A-Za-z0-9]').hasMatch(w[0])).toList();
+  if (words.isEmpty) return '';
+  if (words.length == 1) return words.first.substring(0, words.first.length < 2 ? words.first.length : 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
 }

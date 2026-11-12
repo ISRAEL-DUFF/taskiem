@@ -193,6 +193,7 @@ void main() {
     expect(find.textContaining('Paystack (main)'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Match to INV-0001'));
     await settle(t);
+    await snap(t, 'invoice_match-0');
     expect(sent.single, 'POST /v1/money/suggestions/S1/confirm {}');
     expect(find.text('₦30,000 matched to INV-0001. If that is wrong, undo it on the invoice.'), findsOneWidget);
   });
@@ -201,6 +202,7 @@ void main() {
     final sent = await open(t, (c) => InvoiceMatchPage(auth: c.auth));
     await t.tap(find.bySemanticsLabel('Not this one: INV-0001'));
     await settle(t);
+    await snap(t, 'invoice_match-1');
     expect(sent.last, 'POST /v1/money/suggestions/S1/reject {}');
     expect(find.text('INV-0001 will not be suggested for this payment again.'), findsOneWidget);
     await t.tap(find.textContaining('Match to another invoice or order…'));
@@ -241,6 +243,7 @@ void main() {
     expect(find.text('₦15,000 left to match afterwards.'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Match these parts'));
     await settle(t);
+    await snap(t, 'invoice_match-2');
     expect(sent.last, 'POST /v1/money/entries/E1/match {"parts":[{"invoice":"I-INV-0003","amount_kobo":1500000}]}');
     expect(find.text('Matched in parts: INV-0003 ₦15,000. ₦15,000 is left to match.'), findsOneWidget);
   });

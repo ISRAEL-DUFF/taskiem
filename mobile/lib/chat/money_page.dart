@@ -165,22 +165,6 @@ const moneyExports = [
   ('journal', 'Accounting journal', 'Double-entry lines a bookkeeping tool can import; debits equal credits.'),
 ];
 
-/// The tabs of Money, as buttons to their screens.
-Widget _moneyLinks(BuildContext context, Auth auth, String here) => Wrap(
-  spacing: 8,
-  runSpacing: 8,
-  children: [
-    for (final (key, label, page) in [
-      ('overview', 'Overview', () => MoneyPage(auth: auth)),
-      ('leaks', 'Leaks', () => MoneyLeaksPage(auth: auth)),
-      ('statements', 'Upload statement', () => MoneyStatementsPage(auth: auth)),
-      ('entries', 'Cash and expenses', () => MoneyEntriesPage(auth: auth)),
-      ('fees', 'Fees', () => MoneyFeesPage(auth: auth)),
-    ])
-      if (key != here && key != 'overview') TkSmallButton(label: label, onPressed: () => _push(context, page())),
-  ],
-);
-
 Widget _notice(TkTokens t, String text) => Semantics(
   liveRegion: true,
   container: true,
@@ -921,7 +905,6 @@ class _MoneyLeaksPageState extends State<MoneyLeaksPage> with Polling {
       backLabel: 'Back to Money',
       onRefresh: _load,
       children: [
-        _moneyLinks(context, widget.auth, 'leaks'),
         if (tt != null)
           TkPageCard(
             children: [
@@ -945,22 +928,24 @@ class _MoneyLeaksPageState extends State<MoneyLeaksPage> with Polling {
                 ),
             ],
           ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TkSmallButton(
-            label: 'Show: ${const {'open': 'Open', 'closed': 'Closed', 'all': 'All'}[_status]}',
-            onPressed: () async {
-              final v = await showTkModalChoices(
-                context,
-                title: 'Show',
-                value: _status,
-                choices: const [('open', 'Open'), ('closed', 'Closed'), ('all', 'All')],
-              );
-              if (v == null || v == _status) return;
-              setState(() => (_status = v, _leaks = null));
-              await _load();
-            },
-          ),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final (v, words) in const [('open', 'Open'), ('closed', 'Closed'), ('all', 'All')])
+              Semantics(
+                selected: _status == v,
+                child: TkSmallButton(
+                  label: words,
+                  primary: _status == v,
+                  onPressed: () async {
+                    if (v == _status) return;
+                    setState(() => (_status = v, _leaks = null));
+                    await _load();
+                  },
+                ),
+              ),
+          ],
         ),
         if (_said.isNotEmpty) _notice(t, _said),
         if (_error != null) TkErrorBox(_error!),
@@ -1552,7 +1537,6 @@ class _MoneyStatementsPageState extends State<MoneyStatementsPage> {
           : null,
       backLabel: 'Back to Money',
       children: [
-        _moneyLinks(context, widget.auth, 'statements'),
         if (!manage)
           Text('You can see money, but not add to it. Someone who manages invoices can upload statements.', style: tkHint(t))
         else ...[
@@ -1875,7 +1859,6 @@ class _MoneyEntriesPageState extends State<MoneyEntriesPage> {
           : null,
       backLabel: 'Back to Money',
       children: [
-        _moneyLinks(context, widget.auth, 'entries'),
         if (!manage)
           Text('You can see money, but not add to it. Someone who manages invoices can enter cash and expenses.', style: tkHint(t))
         else ...[
@@ -2050,7 +2033,6 @@ class _MoneyFeesPageState extends State<MoneyFeesPage> {
       backLabel: 'Back to Money',
       onRefresh: _load,
       children: [
-        _moneyLinks(context, widget.auth, 'fees'),
         _notice(t, 'A fee above the agreed rate becomes a leak, so you can claim the difference back.'),
         if (_said.isNotEmpty) _notice(t, _said),
         if (_error != null) TkErrorBox(_error!),

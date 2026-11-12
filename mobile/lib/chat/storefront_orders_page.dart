@@ -28,7 +28,7 @@ import 'stock_page.dart' show feeInput, feeKobo;
 import 'riders_page.dart' show openRiders, openRidersPay;
 import 'trade_orders_page.dart' show TradeOrdersPage, openTradeOrder;
 import 'words.dart' show CardTone, Tone, naira;
-import '../kit/mobile.dart' show TkRoute;
+import '../kit/mobile.dart';
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -412,54 +412,43 @@ class _StorefrontOrdersPageState extends State<StorefrontOrdersPage> with Pollin
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
     final orders = _orders;
     final now = _now;
     final share = _sf != null && _int(_sf!['published_version']) > 0 ? _str(_sf!['preview_url']) : '';
     return TkPageScreen(
       title: 'Orders',
-      description: 'Orders, bookings, questions and call-back requests from your storefront, newest first. The list refreshes itself.',
+      description: 'Orders, bookings, questions and call-back requests from your storefront, newest first. The list refreshes itself.\n\n$decideWhere',
       onRefresh: _load,
+      under: TkChips<String>(label: 'Show', chips: orderFilters, on: _status, onPick: (pick) => pick == _status ? null : _filter(status: pick)),
+      action: _fronts.length > 1
+          ? TkSmallButton(
+              label: _front.isEmpty ? 'Every front' : (_frontName(_front) ?? 'Every front'),
+              semantics: 'From: ${_front.isEmpty ? 'Every front' : (_frontName(_front) ?? 'Every front')}',
+              onPressed: () async {
+                final pick = await showTkModalChoices(
+                  context,
+                  title: 'From',
+                  value: _front,
+                  choices: [('', 'Every front'), for (final f in _fronts) (_str(f['id']), _str(f['name']))],
+                );
+                if (pick != null && pick != _front) _filter(front: pick);
+              },
+            )
+          : null,
       children: [
-        Text(decideWhere, style: tkHint(t)),
         if (_trade)
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
+          TkPanel(
             children: [
-              Text('Orders from businesses you are linked with are among these. ', style: tkHint(t)),
-              TkLink(label: 'Orders from linked businesses', onTap: () => openTradeOrders(context, _auth)),
-              Text(' has what is theirs alone.', style: tkHint(t)),
+              TkListRow(
+                title: 'Orders from linked businesses',
+                sub: 'What is theirs alone',
+                icon: 'link',
+                onTap: () => openTradeOrders(context, _auth),
+              ),
             ],
           ),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            TkSmallButton(
-              label: 'Show: ${orderFilters.firstWhere((f) => f.$1 == _status).$2}',
-              onPressed: () async {
-                final pick = await showTkModalChoices(context, title: 'Show', value: _status, choices: orderFilters);
-                if (pick != null && pick != _status) _filter(status: pick);
-              },
-            ),
-            if (_fronts.length > 1)
-              TkSmallButton(
-                label: 'From: ${_front.isEmpty ? 'Every front' : (_frontName(_front) ?? 'Every front')}',
-                onPressed: () async {
-                  final pick = await showTkModalChoices(
-                    context,
-                    title: 'From',
-                    value: _front,
-                    choices: [('', 'Every front'), for (final f in _fronts) (_str(f['id']), _str(f['name']))],
-                  );
-                  if (pick != null && pick != _front) _filter(front: pick);
-                },
-              ),
-            TkSmallButton(label: 'Refresh', onPressed: _load),
-          ],
-        ),
         if (_error != null) TkErrorBox(_error!),
-        if (orders == null && _error == null) Text('Loading orders…', style: tkHint(t)),
+        if (orders == null && _error == null) const TkSkeleton(rows: 4, label: 'Loading orders…'),
         if (orders != null && _none) const TkEmpty(icon: 'storefront', title: 'This Taskiem does not take storefront orders yet.'),
         if (orders != null && !_none && orders.isEmpty)
           TkEmpty(
@@ -472,7 +461,7 @@ class _StorefrontOrdersPageState extends State<StorefrontOrdersPage> with Pollin
                 : null,
           ),
         if (orders != null && orders.isNotEmpty)
-          TkPageCard(
+          TkPanel(
             children: [
               for (final o in orders)
                 () {
@@ -487,22 +476,22 @@ class _StorefrontOrdersPageState extends State<StorefrontOrdersPage> with Pollin
                     if (_str(o['note']).isNotEmpty) _str(o['note']),
                     if (o['status'] == 'refund_due') refundLine(_int(o['total_kobo']), o['paid_by'] as String?),
                   ];
-                  return TkRow(
-                    name: '${[_str(c['name']), _str(c['phone'])].firstWhere((x) => x.isNotEmpty, orElse: () => 'A customer')} · ${kindLabel[o['kind']] ?? o['kind']}${front != null ? ' · $front' : ''}',
-                    icon: o['status'] == 'refund_due'
-                        ? 'refund'
-                        : o['kind'] == 'booking'
-                        ? 'clock'
-                        : (o['kind'] == 'order' || o['kind'] == 'trade' ? 'invoices' : 'inbox'),
+                  return TkListRow(
+                    title: [_str(c['name']), _str(c['phone'])].firstWhere((x) => x.isNotEmpty, orElse: () => 'A customer'),
+                    semanticsLabel: '${kindLabel[o['kind']] ?? o['kind']}${front != null ? ', $front' : ''}',
+                    icon: o['status'] == 'refund_due' ? 'refund' : (o['kind'] == 'booking' ? 'clock' : (o['kind'] == 'order' || o['kind'] == 'trade' ? null : 'inbox')),
                     sub: [
-                      '${_str(c['name']).isNotEmpty && _str(c['phone']).isNotEmpty ? '${c['phone']} · ' : ''}${_str(o['reference'])}${what.isNotEmpty ? ' · $what' : ''} · ${relativeAge(_str(o['created_at']), now)}',
-                      '${orderTotal(o)} · ${extra.join(' · ')}',
-                    ].join('\n'),
-                    pill: TkPill(st.label, tone: _pillTone(st.tone)),
-                    // StorefrontOrders.tsx WAITING: amber; a refund due, red.
-                    tone: o['status'] == 'refund_due'
-                        ? CardTone.danger
-                        : (const {'received', 'awaiting_payment', 'price_changed'}.contains(o['status']) ? CardTone.warn : null),
+                      _str(o['reference']),
+                      if (what.isNotEmpty) what,
+                      ...extra.where((x) => x.isNotEmpty),
+                      relativeAge(_str(o['created_at']), now),
+                    ].join(' · '),
+                    amount: orderTotal(o).isEmpty ? null : orderTotal(o),
+                    status: st.label,
+                    statusTone: _pillTone(st.tone),
+                    // StorefrontOrders.tsx WAITING: the dot; a refund due, red.
+                    tone: o['status'] == 'refund_due' ? CardTone.danger : null,
+                    waiting: const {'received', 'awaiting_payment', 'price_changed', 'refund_due'}.contains(o['status']),
                     onTap: () async {
                       await Navigator.of(context).push(
                         TkRoute<void>(

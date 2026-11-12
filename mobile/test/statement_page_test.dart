@@ -79,6 +79,7 @@ void main() {
       ),
     );
     await settle(t);
+    await snap(t, 'statement_page-0');
     expect(find.text('Statement with Rivers Foods'), findsOneWidget);
     expect(find.text('Rivers Foods owes you'), findsWidgets);
     expect(find.text('Over the limit'), findsOneWidget);
@@ -115,6 +116,7 @@ void main() {
       ),
     );
     await settle(t);
+    await snap(t, 'statement_page-1');
     await t.tap(find.bySemanticsLabel('Chat with Rivers Foods'));
     expect(opened, ['L1']);
     final before = asked.where((p) => p == '/v1/links/L1/statement').length;
@@ -135,6 +137,7 @@ void main() {
       ),
     );
     await settle(t);
+    await snap(t, 'statement_page-2');
     expect(find.text('Nothing is open between you and Rivers Foods.'), findsOneWidget);
   });
 

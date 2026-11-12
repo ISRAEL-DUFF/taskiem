@@ -288,9 +288,12 @@ class TkLinkButton extends StatelessWidget {
         onTap: onPressed ?? () {},
         child: Container(
           constraints: const BoxConstraints(minHeight: 40),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(Tk.radiusSm), boxShadow: outsideOnly(t.shadow)),
-          child: Text(label, style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: t.accent, decoration: TextDecoration.underline)),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Align(
+            widthFactor: 1,
+            heightFactor: 1,
+            child: Text(label, style: tkText(size: 14, weight: 600, lineHeight: 1.2, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand)),
+          ),
         ),
       ),
     ));
@@ -480,15 +483,20 @@ class TkSmallButton extends StatelessWidget {
         onTap: onPressed ?? () {},
         child: Container(
           constraints: const BoxConstraints(minHeight: 36),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
           decoration: BoxDecoration(
-            color: primary ? t.primary : t.panel,
-            border: Border.all(color: primary ? t.primary : t.borderStrong),
+            color: primary ? t.primary : (danger ? t.tkDangerBg : t.tkSoft),
             borderRadius: BorderRadius.circular(999),
-            boxShadow: primary ? const [BoxShadow(offset: Offset(0, 1), blurRadius: 0.87, color: Color(0x1F0E0F0C))] : t.shadow,
           ),
-          child: Text(label, style: tkText(size: 11.9, weight: 500, lineHeight: 1.2, color: primary ? t.primaryText : (danger ? t.danger : t.text))),
+          // As wide as its words, not the row it is in.
+          child: Align(
+            widthFactor: 1,
+            heightFactor: 1,
+            child: Text(
+              label,
+              style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: primary ? t.primaryText : (danger ? t.tkDangerInk : t.text)),
+            ),
+          ),
         ),
       ),
     ));

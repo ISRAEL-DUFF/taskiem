@@ -434,17 +434,19 @@ class _BookingsPageState extends State<BookingsPage> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            TkSmallButton(
-              label: _range == 'week' ? 'This week' : 'Next 30 days',
-              semantics: 'Show: ${_range == 'week' ? 'This week' : 'Next 30 days'}',
-              onPressed: () async {
-                final r = await showTkModalChoices(context, title: 'Show', value: _range, choices: const [('week', 'This week'), ('month', 'Next 30 days')]);
-                if (r == null || r == _range) return;
-                setState(() => _range = r);
-                _loadBookings();
-              },
-            ),
-            TkSmallButton(label: 'Refresh', onPressed: _loadBookings),
+            for (final (v, words) in const [('week', 'This week'), ('month', 'Next 30 days')])
+              Semantics(
+                selected: _range == v,
+                child: TkSmallButton(
+                  label: words,
+                  primary: _range == v,
+                  onPressed: () {
+                    if (v == _range) return;
+                    setState(() => _range = v);
+                    _loadBookings();
+                  },
+                ),
+              ),
           ],
         ),
         if (_notice.isNotEmpty) ...[

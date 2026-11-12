@@ -14,7 +14,7 @@ import '../app/auth.dart';
 import '../app/links.dart';
 import '../kit/forms.dart' show TkSwitchRow, errorWords, nairaKobo;
 import '../kit/kit.dart';
-import '../kit/list.dart' show TkEmpty, TkPill, TkRow;
+import '../kit/list.dart' show TkEmpty, TkPill;
 import '../kit/modal.dart';
 import '../kit/page.dart';
 import '../kit/polling.dart';
@@ -28,7 +28,7 @@ import 'money_sheets.dart' show dateLabel, invoiceActions, invoicePath, invoiceS
 import 'product_form.dart' show SaveKey, formKey;
 import 'storefront_orders_page.dart' show isMasked;
 import 'words.dart' show CardTone, naira;
-import '../kit/mobile.dart' show TkRoute;
+import '../kit/mobile.dart';
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -254,45 +254,48 @@ class _InvoicesPageState extends State<InvoicesPage> with Polling {
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
     final list = _list;
     final manage = widget.auth.can('invoice.manage');
     return TkPageScreen(
       title: 'Invoices',
       description: 'What you ask your customers to pay, newest first. Each one is marked paid only by the payments counted towards it.',
       onRefresh: _load,
-      action: manage ? TkSmallButton(label: 'New', semantics: 'New invoice', primary: true, onPressed: _new) : null,
+      action: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TkHeadButton(icon: 'settings', label: 'Invoice settings', onTap: () => _push(context, InvoiceSettingsPage(auth: widget.auth))),
+          if (manage) ...[const SizedBox(width: 6), TkSmallButton(label: 'New', semantics: 'New invoice', primary: true, onPressed: _new)],
+        ],
+      ),
+      under: TkChips<String>(
+        label: 'Show',
+        chips: invoiceFilters,
+        on: _status,
+        onPick: (pick) async {
+          if (pick == _status) return;
+          setState(() => (_status = pick, _list = null));
+          await _load();
+        },
+      ),
       children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            TkSmallButton(
-              label: 'Show: ${invoiceFilters.firstWhere((f) => f.$1 == _status).$2}',
-              onPressed: () async {
-                final pick = await showTkModalChoices(context, title: 'Show', value: _status, choices: invoiceFilters);
-                if (pick == null || pick == _status) return;
-                setState(() => (_status = pick, _list = null));
-                await _load();
-              },
-            ),
-            TkSmallButton(
-              label: _waiting > 0 ? 'To match ($_waiting)' : 'To match',
-              semantics: _waiting > 0 ? 'To match: $_waiting ${_waiting == 1 ? 'payment waiting' : 'payments waiting'}' : 'To match',
-              onPressed: () async {
-                await Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => InvoiceMatchPage(auth: widget.auth)));
-                await _load();
-              },
-            ),
-            TkSmallButton(
-              label: 'Settings',
-              semantics: 'Invoice settings',
-              onPressed: () => _push(context, InvoiceSettingsPage(auth: widget.auth)),
-            ),
-          ],
-        ),
+        if (_waiting > 0)
+          TkPanel(
+            children: [
+              TkListRow(
+                title: _waiting == 1 ? '1 payment to match' : '$_waiting payments to match',
+                sub: 'Money in with no invoice yet',
+                icon: 'split',
+                tone: CardTone.warn,
+                semanticsLabel: 'To match: $_waiting ${_waiting == 1 ? 'payment waiting' : 'payments waiting'}',
+                onTap: () async {
+                  await Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => InvoiceMatchPage(auth: widget.auth)));
+                  await _load();
+                },
+              ),
+            ],
+          ),
         if (_error != null) TkErrorBox(_error!),
-        if (list == null && _error == null) Text('Loading invoices…', style: tkHint(t)),
+        if (list == null && _error == null) const TkSkeleton(rows: 4, label: 'Loading invoices…'),
         if (list != null && list.isEmpty)
           TkEmpty(
             icon: 'invoices',
@@ -301,26 +304,25 @@ class _InvoicesPageState extends State<InvoicesPage> with Polling {
             action: _status.isEmpty && manage ? TkSmallButton(label: 'New invoice', primary: true, onPressed: _new) : null,
           ),
         if (list != null && list.isNotEmpty)
-          TkPageCard(
+          TkPanel(
             children: [
               for (final x in list)
                 () {
                   final c = _map(x['customer']);
-                  final who = [_str(c['name']), _str(c['phone']).isNotEmpty ? _str(c['phone']) : _str(c['email'])].where((s) => s.isNotEmpty).join(' · ');
+                  final name = _str(c['name']).isNotEmpty ? _str(c['name']) : (_str(c['phone']).isNotEmpty ? _str(c['phone']) : _str(c['email']));
                   final st = invoiceStatus(_str(x['status']));
-                  return TkRow(
-                    name: who.isEmpty ? '—' : who,
+                  final owing = x['status'] != 'void' && x['status'] != 'paid' && _int(x['due_kobo']) != _int(x['total_kobo']);
+                  return TkListRow(
+                    title: name.isEmpty ? '—' : name,
                     icon: 'invoices',
                     tone: x['status'] == 'overdue' ? CardTone.danger : null,
                     sub: [
-                      '${x['number']}${_str(x['due_on']).isNotEmpty ? ' · due ${dateLabel(_str(x['due_on']))}' : ''}',
-                      [
-                        naira(_int(x['total_kobo'])),
-                        if (x['status'] != 'void' && x['status'] != 'paid' && _int(x['due_kobo']) != _int(x['total_kobo']))
-                          '${naira(_int(x['due_kobo']))} still due',
-                      ].join(' · '),
-                    ].join('\n'),
-                    pill: TkPill(st.label, tone: _tone(_str(x['status']))),
+                      '${x['number']}',
+                      if (owing) '${naira(_int(x['due_kobo']))} still due' else if (_str(x['due_on']).isNotEmpty) 'due ${dateLabel(_str(x['due_on']))}',
+                    ].join(' · '),
+                    amount: naira(_int(x['total_kobo'])),
+                    status: st.label,
+                    statusTone: _tone(_str(x['status'])),
                     onTap: () async {
                       await Navigator.of(context).push(
                         TkRoute<void>(

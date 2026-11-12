@@ -380,11 +380,16 @@ class _TodayTabState extends State<TodayTab> with Polling {
       back: false,
       onRefresh: _load,
       children: [
-        Semantics(
-          header: true,
-          child: Text('${greeting(now)}${first.isNotEmpty ? ', $first' : ''}', style: tkText(size: 24, weight: 700, color: t.text)),
+        Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${greeting(now)}${first.isNotEmpty ? ', $first' : ''}', style: tkText(size: 17, weight: 600, color: t.text)),
+              Text('${todayWords(now)}${tenant.isNotEmpty ? ' · $tenant' : ''}', style: tkText(size: 14, color: t.muted)),
+            ],
+          ),
         ),
-        Text('${todayWords(now)}${tenant.isNotEmpty ? ' · $tenant' : ''}', style: tkHint(t)),
         if (day != null)
           TkHero(
             label: 'Money in today',

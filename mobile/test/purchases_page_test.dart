@@ -151,6 +151,7 @@ void main() {
     expect(find.bySemanticsLabel('Their Rice 50kg: rice 50kg'), findsOneWidget, reason: 'the same name, chosen');
     await t.tap(find.bySemanticsLabel('Confirm the order'));
     await settle(t);
+    await snap(t, 'purchases_page-0');
     expect(sent.single, 'POST /v1/stock/purchases/P1/confirm-proposed {"items":["MY1"]}');
     await t.pump(const Duration(seconds: 5));
   });
@@ -170,6 +171,7 @@ void main() {
     expect(find.text('₦80,000'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Accept the change'));
     await settle(t);
+    await snap(t, 'purchases_page-1');
     expect(sent.last, 'POST /v1/stock/purchases/P1/accept-change {}');
     await t.pump(const Duration(seconds: 5));
     await t.tap(find.bySemanticsLabel('Cancel the order'));
@@ -193,6 +195,7 @@ void main() {
     await t.pump();
     await t.tap(find.bySemanticsLabel('Record what came'));
     await settle(t);
+    await snap(t, 'purchases_page-2');
     await t.pumpAndSettle();
     expect(sent.last, 'POST /v1/stock/purchases/P1/not-all-came {"counts":[1]}');
     await t.pump(const Duration(seconds: 5));

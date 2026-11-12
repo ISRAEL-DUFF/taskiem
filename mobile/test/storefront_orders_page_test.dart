@@ -178,6 +178,7 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.text('Refund due'));
     await settle(t);
+    await snap(t, 'storefront_orders_page-0');
     expect(r.sent.last, 'GET /v1/storefront/orders status=refund_due');
     await t.tap(find.text('Ngozi · Order'));
     await settle(t);
@@ -193,6 +194,7 @@ void main() {
     expect(find.text('Suggested, confirmed by Ada'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Offer to a free rider'));
     await settle(t);
+    await snap(t, 'storefront_orders_page-1');
     expect(r.sent.single, 'POST /v1/storefront/orders/OR-5K2Q/offer {}');
     expect(find.text('Offered to Bayo. They have a few minutes to accept.'), findsOneWidget);
     r.sent.clear();
@@ -246,6 +248,7 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Take it back').last);
     await settle(t);
+    await snap(t, 'storefront_orders_page-2');
     expect(r.sent.single, 'POST /v1/storefront/orders/OR-5K2Q/release {}');
     await t.pump(const Duration(seconds: 5));
   });

@@ -124,6 +124,7 @@ void main() {
 
   testWidgets('what the page shows', (t) async {
     await open(t);
+    await snap(t, 'stock_page-0');
     expect(find.text('₦19,000'), findsNWidgets(2), reason: 'today’s sales, and the sale');
     expect(find.text('1 sale · Cash ₦19,000'), findsOneWidget);
     expect(find.text('Terminal sales with no items'), findsOneWidget);
@@ -147,6 +148,7 @@ void main() {
     expect(find.text('The count goes from 4 → 2 cartons.'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Record'));
     await settle(t);
+    await snap(t, 'stock_page-1');
     expect(sent.first, 'POST /v1/stock/movements {"item_id":"indomie","reason":"adjustment","note":"spoilt","change":-2}');
     await t.pump(const Duration(seconds: 5));
   });
@@ -162,6 +164,7 @@ void main() {
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Record the sale'));
     await settle(t);
+    await snap(t, 'stock_page-2');
     expect(
       sent.first,
       'POST /v1/stock/sales {"lines":[{"item_id":"indomie","quantity":1}],"paid_how":"pos","amount_kobo":950000,"entry_id":"E1","note":""}',
