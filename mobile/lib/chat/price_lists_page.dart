@@ -237,7 +237,7 @@ class _PriceListsPageState extends State<PriceListsPage> {
 Widget _saveCancel(BuildContext context, {required VoidCallback? save, bool busy = false}) => Wrap(
   spacing: 8,
   children: [
-    TkButton(label: 'Save', primary: true, onPressed: busy ? null : save),
+    TkButton(label: 'Save', primary: true, enabled: !busy, onPressed: save),
     TkButton(label: 'Cancel', onPressed: () => Navigator.of(context).pop(false)),
   ],
 );

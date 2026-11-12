@@ -40,6 +40,7 @@ import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
 import 'availability_sheet.dart' show showAvailabilitySheet;
 import 'bookings_page.dart' show BookingsPage;
 import 'invoice_match.dart' show showMatchSheet;
+import 'order_sheet.dart' show OrderStart, showOrderSheet;
 import 'storefront_orders_page.dart' show DeliveriesPage, openStorefrontOrder, showRiderSheet;
 import 'tool_sheet.dart';
 import 'tools.dart';
@@ -781,8 +782,26 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                             },
                           ),
                         );
+                      } else if (what == 'reorder' && a.reorder != null) {
+                        // Reorder: the supplier's shop, the low item (or
+                        // its low sizes, in the product's grid) in the bag.
+                        final r = a.reorder!;
+                        unawaited(
+                          showOrderSheet(
+                            context,
+                            chats: d.chats,
+                            link: r.link,
+                            business: r.supplier,
+                            start: r.sizes != null
+                                ? OrderStart(itemId: r.sellerItemId, qty: {for (final e in r.sizes!.entries) e.key: (e.value as num).toInt()})
+                                : OrderStart(qty: {r.sellerItemId: r.quantity}),
+                            onSent: (_) {
+                              d.loadCards();
+                              unawaited(d.pull().catchError((Object _) {}));
+                            },
+                          ),
+                        );
                       } else {
-                        // Its sheet comes with M8 (reorder).
                         showComingSoon(context);
                       }
                     },

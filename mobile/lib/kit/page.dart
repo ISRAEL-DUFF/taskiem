@@ -205,7 +205,7 @@ class TkModalForm extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            TkButton(label: saveWords, primary: true, onPressed: busy || problem != null ? null : save),
+            TkButton(label: saveWords, primary: true, enabled: !(busy || problem != null), onPressed: save),
             TkButton(label: 'Cancel', onPressed: () => Navigator.of(context).pop(false)),
           ],
         ),

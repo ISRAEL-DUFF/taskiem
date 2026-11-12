@@ -14,6 +14,7 @@ import 'app/lock.dart';
 import 'app/prefs.dart';
 import 'app/session.dart';
 import 'api/api.g.dart';
+import 'chat/order_sheet.dart' show showOrderSheet;
 import 'chat/chats.dart';
 import 'chat/conversation.dart';
 import 'chat/customer.dart';
@@ -31,12 +32,14 @@ import 'theme/theme.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   // The bars over the app take the web's `theme-color`: pine, light icons.
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Color(0x00000000),
-    statusBarIconBrightness: Brightness.light,
-    statusBarBrightness: Brightness.dark,
-  ));
-  final auth = Auth(transport: Transport(base: taskiemUrl), store: SessionStore(const SecureKeyStore()), version: appVersion);
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(statusBarColor: Color(0x00000000), statusBarIconBrightness: Brightness.light, statusBarBrightness: Brightness.dark),
+  );
+  final auth = Auth(
+    transport: Transport(base: taskiemUrl),
+    store: SessionStore(const SecureKeyStore()),
+    version: appVersion,
+  );
   final prefs = Prefs(const SecureKeyStore())..load();
   auth.start();
   runApp(TaskiemApp(auth: auth, unlocker: PhoneUnlocker(), prefs: prefs));
@@ -81,18 +84,18 @@ class TaskiemApp extends StatelessWidget {
             // Above the keyboard when it is up, every screen and sheet.
             child: KeyboardRoom(
               child: auth == null || unlocker == null || home != null
-                ? child!
-                : ListenableBuilder(
-                    listenable: Listenable.merge([auth!, ?prefs]),
-                    builder: (context, _) => AppLock(
-                      // Signed in, and the lock not turned off here.
-                      active: auth!.state == AuthState.signedIn && (prefs?.lock ?? true),
-                      unlocker: unlocker!,
-                      startLocked: auth!.restored,
-                      now: now,
-                      child: child!,
+                  ? child!
+                  : ListenableBuilder(
+                      listenable: Listenable.merge([auth!, ?prefs]),
+                      builder: (context, _) => AppLock(
+                        // Signed in, and the lock not turned off here.
+                        active: auth!.state == AuthState.signedIn && (prefs?.lock ?? true),
+                        unlocker: unlocker!,
+                        startLocked: auth!.restored,
+                        now: now,
+                        child: child!,
+                      ),
                     ),
-                  ),
             ),
           ),
         ),
@@ -233,7 +236,11 @@ class _Outdated extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Update Taskiem', textAlign: TextAlign.center, style: tkText(size: 24, weight: 700, lineHeight: 1.2, color: white)),
+              Text(
+                'Update Taskiem',
+                textAlign: TextAlign.center,
+                style: tkText(size: 24, weight: 700, lineHeight: 1.2, color: white),
+              ),
               const SizedBox(height: 12),
               Text(
                 'This version of the app is older than Taskiem works with. Update it from the Play Store or the App Store, then open it again.',
@@ -273,6 +280,9 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     // What a tool's screen leads to: the shell's own screens.
     Openers.linkedBusinesses = _links;
     Openers.findBusiness = (context) => showExplore(context, chats: _chats, onOpen: (c) => _openConv(context, c));
+    // Drafting an order needs table.edit; else their shop to look around.
+    Openers.orderFrom = (context, link, business) =>
+        showOrderSheet(context, chats: _chats, link: link, business: business, browse: !_chats.auth.can('table.edit'));
   }
 
   @override
@@ -292,6 +302,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     Openers.linkedBusinesses = null;
     Openers.findBusiness = null;
+    Openers.orderFrom = null;
     // Stopped now; let go once the screens closed with this session (which
     // may still hold them this frame) are gone.
     _chats.follow(false);
@@ -316,66 +327,72 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
           icon: 'activity',
           build: (_) => const ComingTab(title: 'Updates', icon: 'activity', words: 'What happened in your business, as it happens.'),
         ),
-        (
-          label: 'Money',
-          icon: 'money',
-          build: (_) => const ComingTab(title: 'Money', icon: 'money', words: 'Your invoices, bills and payments.'),
-        ),
-        (
-          label: 'Orders',
-          icon: 'orders',
-          build: (_) => const ComingTab(title: 'Orders', icon: 'orders', words: 'Your orders, from placed to delivered.'),
-        ),
+        (label: 'Money', icon: 'money', build: (_) => const ComingTab(title: 'Money', icon: 'money', words: 'Your invoices, bills and payments.')),
+        (label: 'Orders', icon: 'orders', build: (_) => const ComingTab(title: 'Orders', icon: 'orders', words: 'Your orders, from placed to delivered.')),
       ],
     );
   }
 
-  void _profile(BuildContext context, {String back = 'Back to Chat'}) => Navigator.of(context).push(PageRouteBuilder<void>(
-    pageBuilder: (_, _, _) => ProfileScreen(chats: _chats, backLabel: back),
-  ));
+  void _profile(BuildContext context, {String back = 'Back to Chat'}) => Navigator.of(context).push(
+    PageRouteBuilder<void>(
+      pageBuilder: (_, _, _) => ProfileScreen(chats: _chats, backLabel: back),
+    ),
+  );
 
-  void _openConv(BuildContext context, LinkConversation c) => Navigator.of(context).push(PageRouteBuilder<void>(
-    transitionDuration: Duration.zero,
-    reverseTransitionDuration: Duration.zero,
-    pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c),
-  ));
+  void _openConv(BuildContext context, LinkConversation c) => Navigator.of(context).push(
+    PageRouteBuilder<void>(
+      transitionDuration: Duration.zero,
+      reverseTransitionDuration: Duration.zero,
+      pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c),
+    ),
+  );
 
   /// Linked businesses, over [context].
-  void _links(BuildContext context) => Navigator.of(context).push(PageRouteBuilder<void>(
-    pageBuilder: (_, _, _) => LinksScreen(
-      chats: _chats,
-      onProfile: () => _profile(context, back: 'Back to Linked businesses'),
-      // No links yet: Find a business, over this page.
-      onFind: (links) => showExplore(links, chats: _chats, onOpen: (c) => _openConv(context, c)),
+  void _links(BuildContext context) => Navigator.of(context).push(
+    PageRouteBuilder<void>(
+      pageBuilder: (_, _, _) => LinksScreen(
+        chats: _chats,
+        onProfile: () => _profile(context, back: 'Back to Linked businesses'),
+        // No links yet: Find a business, over this page.
+        onFind: (links) => showExplore(links, chats: _chats, onOpen: (c) => _openConv(context, c)),
+      ),
     ),
-  ));
+  );
 
   Widget _chatsTab(BuildContext context) {
     return ChatsScreen(
       data: _chats,
       onLinks: () => _links(context),
       onProfile: () => _profile(context),
-      onMenu: () => Navigator.of(context).push(PageRouteBuilder<void>(
-        pageBuilder: (_, _, _) => SignedInScreen(auth: widget.auth, prefs: widget.prefs, unlocker: widget.unlocker),
-      )),
+      onMenu: () => Navigator.of(context).push(
+        PageRouteBuilder<void>(
+          pageBuilder: (_, _, _) => SignedInScreen(auth: widget.auth, prefs: widget.prefs, unlocker: widget.unlocker),
+        ),
+      ),
       // On a phone the web shows the conversation in the list's place, at
       // once: no transition either way.
-      onOpenTaskiem: () => Navigator.of(context).push(PageRouteBuilder<void>(
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats),
-      )),
-      onOpenCustomer: (c) => Navigator.of(context).push(PageRouteBuilder<void>(
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => _OpenCustomer(chats: _chats, id: c.id),
-      )),
+      onOpenTaskiem: () => Navigator.of(context).push(
+        PageRouteBuilder<void>(
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats),
+        ),
+      ),
+      onOpenCustomer: (c) => Navigator.of(context).push(
+        PageRouteBuilder<void>(
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          pageBuilder: (_, _, _) => _OpenCustomer(chats: _chats, id: c.id),
+        ),
+      ),
       onOpen: (c) => _openConv(context, c),
-      onOpenAt: (c, message) => Navigator.of(context).push(PageRouteBuilder<void>(
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c, focus: message),
-      )),
+      onOpenAt: (c, message) => Navigator.of(context).push(
+        PageRouteBuilder<void>(
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c, focus: message),
+        ),
+      ),
     );
   }
 }
@@ -409,20 +426,24 @@ class _OpenState extends State<_Open> {
     onOpenLink: (link) {
       // "Open" on a save's toast: Taskiem's conversation, in this one's place.
       if (link == 'taskiem') {
-        Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          pageBuilder: (_, _, _) => _OpenTaskiem(chats: widget.chats),
-        ));
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder<void>(
+            transitionDuration: Duration.zero,
+            reverseTransitionDuration: Duration.zero,
+            pageBuilder: (_, _, _) => _OpenTaskiem(chats: widget.chats),
+          ),
+        );
         return;
       }
       final c = widget.chats.conversations.where((c) => c.link == link).firstOrNull;
       if (c == null) return;
-      Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => _Open(chats: widget.chats, conv: c),
-      ));
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder<void>(
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          pageBuilder: (_, _, _) => _Open(chats: widget.chats, conv: c),
+        ),
+      );
     },
   );
 }
@@ -448,16 +469,20 @@ class _OpenTaskiemState extends State<_OpenTaskiem> {
   @override
   Widget build(BuildContext context) => TaskiemScreen(
     data: _data,
-    onOpenCustomer: (id) => Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
-      transitionDuration: Duration.zero,
-      reverseTransitionDuration: Duration.zero,
-      pageBuilder: (_, _, _) => _OpenCustomer(chats: widget.chats, id: id),
-    )),
-    onOpenLink: (c) => Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
-      transitionDuration: Duration.zero,
-      reverseTransitionDuration: Duration.zero,
-      pageBuilder: (_, _, _) => _Open(chats: widget.chats, conv: c),
-    )),
+    onOpenCustomer: (id) => Navigator.of(context).pushReplacement(
+      PageRouteBuilder<void>(
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, _, _) => _OpenCustomer(chats: widget.chats, id: id),
+      ),
+    ),
+    onOpenLink: (c) => Navigator.of(context).pushReplacement(
+      PageRouteBuilder<void>(
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (_, _, _) => _Open(chats: widget.chats, conv: c),
+      ),
+    ),
   );
 }
 

@@ -13,6 +13,7 @@ import 'product_form.dart';
 import 'purchase_view.dart';
 import 'service_form.dart';
 import 'tool_sheet.dart';
+import 'bills_page.dart' show openBill;
 import 'invoices_page.dart' show openInvoice;
 
 ToolDetail toolDetail(
@@ -46,7 +47,13 @@ ToolDetail toolDetail(
       canEdit: host.canEdit,
       onOpen: openers?.invoice ?? (context, id) => openInvoice(context, auth, id),
     ),
-    'bills' => BillView(auth: auth, bill: data, onSaved: host.done, canEdit: host.canEdit, onOpen: openers?.bill),
+    'bills' => BillView(
+      auth: auth,
+      bill: data,
+      onSaved: host.done,
+      canEdit: host.canEdit,
+      onOpen: openers?.bill ?? (context, id) => openBill(context, auth, id),
+    ),
     'money' => MoneyEntryView(auth: auth, entry: data, onSaved: host.done, canEdit: host.canEdit),
     'tables' => TableTool(auth: auth, table: data, onSaved: host.done, canEdit: host.canEdit),
     'orders' => OrderView(auth: auth, order: data, onSaved: host.done, canEdit: host.canEdit, pickers: pickers),

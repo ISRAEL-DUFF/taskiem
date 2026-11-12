@@ -1527,8 +1527,8 @@ class _InvoiceEditorPageState extends State<InvoiceEditorPage> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              TkButton(label: 'Save draft', onPressed: _busy ? null : () => _save(false)),
-              TkButton(label: 'Save and send', primary: true, onPressed: _busy ? null : () => _save(true)),
+              TkButton(label: 'Save draft', enabled: !_busy, onPressed: () => _save(false)),
+              TkButton(label: 'Save and send', primary: true, enabled: !_busy, onPressed: () => _save(true)),
             ],
           ),
           Text(

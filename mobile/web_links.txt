@@ -28,11 +28,11 @@
 /links/ | M8
 /invoices | app lib/chat/invoices_page.dart
 /invoices/ | app lib/chat/invoices_page.dart
-/bills | M8
-/bills/ | M8
-/purchases/ | M8
-/storefront/suppliers | M8
-/storefront/suppliers/ | M8
+/bills | app lib/chat/bills_page.dart
+/bills/ | app lib/chat/bills_page.dart
+/purchases/ | app lib/chat/purchases_page.dart
+/storefront/suppliers | app lib/chat/purchases_page.dart
+/storefront/suppliers/ | app lib/chat/purchases_page.dart
 /money | M8
 /tables | app lib/chat/table_tool.dart
 /tables/ | app lib/chat/table_tool.dart

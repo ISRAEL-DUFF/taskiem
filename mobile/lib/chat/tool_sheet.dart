@@ -13,6 +13,7 @@ import '../kit/sheet.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'sizes_forms.dart' show GroupForm;
+import 'bills_page.dart' show BillsPage;
 import 'bookings_page.dart' show BookingsPage;
 import 'invoices_page.dart' show InvoicesPage;
 import 'price_lists_page.dart' show PriceListsPage;
@@ -32,6 +33,7 @@ void openToolPage(BuildContext context, Tool tool, Auth auth) {
     'orders' => TradeOrdersPage(auth: auth),
     'tables' => TablesPage(auth: auth),
     'invoices' => InvoicesPage(auth: auth),
+    'bills' => BillsPage(auth: auth),
     _ => null,
   };
   if (page == null) return showComingSoon(context);
