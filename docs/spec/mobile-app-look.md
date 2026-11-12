@@ -33,7 +33,7 @@ All of it stands still when the phone asks for less motion.
   - a reaction pops in (`PopIn`);
   - a swiped bubble shows the reply arrow and springs back, with a tick of the phone at the point it replies;
   - the round jump button fades and grows in;
-  - the recording dot breathes, and the recording bar slides in over the box.
+  - the recording dot breathes.
 
 ## Order
 
