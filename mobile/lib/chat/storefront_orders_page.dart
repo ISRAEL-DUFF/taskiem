@@ -25,6 +25,7 @@ import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show lagosDay, lagosTime, whenLabel;
 import 'bookings_page.dart' show askCancelBooking, canChange, cancelBooking, moveBooking, orderStatus, timeSpan;
 import 'stock_page.dart' show feeInput, feeKobo;
+import 'riders_page.dart' show openRiders, openRidersPay;
 import 'trade_orders_page.dart' show TradeOrdersPage, openTradeOrder;
 import 'words.dart' show CardTone, Tone, naira;
 
@@ -1205,7 +1206,10 @@ class _ChooseRiderState extends State<_ChooseRider> {
       children: [
         if (_error != null) TkErrorBox(_error!),
         if (riders == null && _error == null) Text('Loading your riders…', style: tkHint(t)),
-        if (riders != null && riders.isEmpty) Text('No riders yet. Add your riders on the web, under Storefront, Riders.', style: tkHint(t)),
+        if (riders != null && riders.isEmpty) ...[
+          Text('No riders yet. Add the people who deliver your orders.', style: tkHint(t)),
+          Align(alignment: Alignment.centerLeft, child: TkLink(label: 'Riders', onTap: () => openRiders(context, widget.auth))),
+        ],
         if (riders != null)
           for (final r in riders)
             Padding(
@@ -1354,6 +1358,15 @@ class _DeliveriesPageState extends State<DeliveriesPage> with Polling {
               },
             ),
       children: [
+        if (!_off)
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              TkSmallButton(label: 'Riders', onPressed: () => openRiders(context, _auth)),
+              TkSmallButton(label: 'Pay riders', onPressed: () => openRidersPay(context, _auth)),
+            ],
+          ),
         if (_off) const TkEmpty(icon: 'members', title: 'Deliveries need text messages, which are not set up on this Taskiem yet.'),
         if (!_off && _error != null) TkErrorBox(_error!),
         // Turning on needs the owner who may also publish workflows.
@@ -1629,7 +1642,7 @@ class _RiderSheetState extends State<RiderSheet> with CloseSoon {
           if (_note != null) Padding(padding: const EdgeInsets.fromLTRB(4, 0, 4, 10), child: _Notice(_note!, tone: Tone.warn)),
           if (_error != null) TkErrorBox(_error!),
           if (riders == null && _error == null) const TkLoading(rows: 2, label: 'Loading your riders…'),
-          if (riders != null && riders.isEmpty) const TkEmpty(icon: 'store', title: 'No riders on duty', line: 'Add riders on the Deliveries page.'),
+          if (riders != null && riders.isEmpty) const TkEmpty(icon: 'store', title: 'No riders on duty', line: 'Add riders on the Riders page, under Deliveries.'),
           if (riders != null && riders.isNotEmpty) ...[
             TkRow(name: 'Next in turn', icon: 'loop', sub: 'Riders are asked one after another', onTap: _busy ? null : () => _offer()),
             for (final r in riders)
