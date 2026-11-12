@@ -85,6 +85,24 @@ class ChatsData extends ChangeNotifier {
   /// What Taskiem said since, as the list's row counts it.
   int taskiemUnread = 0;
 
+  /// drafts.ts: the unsent words of each conversation (by its link,
+  /// "taskiem", or `customer:<id>`), kept while signed in, as the web keeps
+  /// them while the tab is open; the list says "Draft: …" for them.
+  final drafts = <String, String>{};
+
+  String draft(String key) => drafts[key] ?? '';
+
+  /// Keeps the words (empty ones are not a draft) and tells the list.
+  void setDraft(String key, String text) {
+    final was = drafts[key];
+    if (text.trim().isEmpty) {
+      if (drafts.remove(key) != null) notifyListeners();
+    } else if (was != text) {
+      drafts[key] = text;
+      notifyListeners();
+    }
+  }
+
   /// The newest seen.
   void markTaskiemSeen(DateTime at) {
     if (taskiemSeen != null && !at.isAfter(taskiemSeen!)) return;
@@ -447,7 +465,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           title: 'Taskiem',
                           unread: d.taskiemUnread,
                           onTap: widget.onOpenTaskiem,
-                          preview: d.waiting > 0
+                          preview: d.draft('taskiem').isNotEmpty
+                              ? _previewText(context, '', draft: d.draft('taskiem'))
+                              : d.waiting > 0
                               ? Text(
                                   d.waiting == 1 ? '1 thing needs you' : '${d.waiting} things need you',
                                   maxLines: 1,
@@ -460,7 +480,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     if (d.customersOn && _filter != ChatFilter.starred)
                       query.length >= 2
                           ? _CustomersFound(found: _foundCustomers, data: d, onOpen: widget.onOpenCustomer)
-                          : _Customers(chats: customers, archived: archived, now: d.now(), onOpen: widget.onOpenCustomer),
+                          : _Customers(chats: customers, archived: archived, now: d.now(), drafts: d.drafts, onOpen: widget.onOpenCustomer),
                     if (searching)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -538,6 +558,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                       ? 'Linked'
                                       : 'The link has ended',
                                   typing: d.typingIn(c),
+                                  draft: d.draft(c.link),
                                 ),
                                 unread: c.unread,
                                 pinned: c.pinned,
@@ -572,8 +593,23 @@ class _ChatsScreenState extends State<ChatsScreen> {
     );
   }
 
-  static Widget _previewText(BuildContext context, String s, {bool typing = false}) {
+  static Widget _previewText(BuildContext context, String s, {bool typing = false, String? draft}) {
     final t = TkTheme.tokens(context);
+    // `.chat-row-sub .draft { color: var(--ok); font-weight: 600 }`
+    if (draft != null && draft.isNotEmpty) {
+      return Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(text: 'Draft:', style: tkText(size: 14.5, weight: 600, color: t.ok)),
+            TextSpan(text: ' ${draft.replaceAll('\n', ' ')}'),
+          ],
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        softWrap: false,
+        style: tkText(size: 14.5, color: t.muted),
+      );
+    }
     return Text(
       s,
       maxLines: 1,
@@ -1569,8 +1605,11 @@ class UnreadCount extends StatelessWidget {
 
 /// CustomerChat.tsx CustomerRows: the Customers section, how many wait.
 class _Customers extends StatelessWidget {
-  const _Customers({required this.chats, required this.archived, required this.now, this.onOpen});
+  const _Customers({required this.chats, required this.archived, required this.now, this.drafts = const {}, this.onOpen});
   final List<CustomerChat> chats;
+
+  /// The unsent words, by `customer:<id>`.
+  final Map<String, String> drafts;
   final bool archived;
   final DateTime now;
   final ValueChanged<CustomerChat>? onOpen;
@@ -1599,7 +1638,7 @@ class _Customers extends StatelessWidget {
               title: customerTitle(c),
               letter: customerLetter(c),
               time: listTime(c.lastAt, now),
-              preview: _ChatsScreenState._previewText(context, c.stopped ? 'Sent STOP' : '${c.lastMine ? 'You: ' : ''}${c.last}'),
+              preview: _ChatsScreenState._previewText(context, c.stopped ? 'Sent STOP' : '${c.lastMine ? 'You: ' : ''}${c.last}', draft: drafts['customer:${c.id}']),
               unread: c.unread,
               onTap: onOpen == null ? null : () => onOpen!(c),
             ),

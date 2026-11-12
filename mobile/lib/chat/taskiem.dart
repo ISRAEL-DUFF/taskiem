@@ -351,6 +351,9 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
   @override
   void initState() {
     super.initState();
+    // The words left unsent here, back in the box, and kept as they change.
+    _text.text = widget.data.chats.draft('taskiem');
+    _text.addListener(() => widget.data.chats.setDraft('taskiem', _text.text));
     if (widget.data.messages == null) widget.data.open();
     widget.data.chats.viewingTaskiem = true;
     _back = widget.data.givenBack.listen((words) {

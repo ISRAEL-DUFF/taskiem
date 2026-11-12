@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
+import '../app/links.dart';
 import '../api/transport.dart';
 import '../app/session.dart' show uuid4;
 import '../kit/icon.dart';
@@ -635,6 +636,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
   @override
   void initState() {
     super.initState();
+    // The words left unsent here, back in the box.
+    _text.text = widget.data.chats.draft(widget.data.conv.link);
+    _words = _text.text;
     _text.addListener(_typed);
     if (widget.data.messages == null) widget.data.open();
   }
@@ -663,6 +667,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
     if (_text.text != _words) {
       _words = _text.text;
       widget.data.typed(_words);
+      // Kept unsent; "/pro" opening the tools is not a message to keep.
+      final d = widget.data;
+      d.chats.setDraft(d.conv.link, d.chats.chatTools && RegExp(r'^/\S*$').hasMatch(_words) ? '' : _words);
     }
     if (_tagging) return;
     final v = _text.value;
@@ -1529,6 +1536,7 @@ class _Bubble extends StatelessWidget {
                                 if (live != null && liveTag(msg.mentions) != null)
                                   LiveCard(m: liveTag(msg.mentions)!, items: live!.items, whose: live!.whose, stock: live!.stock),
                                 if (body.isNotEmpty) text,
+                                if (msg.preview != null) _PreviewCard(p: msg.preview!),
                                 if (!inline)
                                   Padding(
                                     // `.stamp { margin-top: 1px }`, which collapses
@@ -1613,6 +1621,50 @@ class _Bubble extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Conversation.tsx PreviewCard (`.bubble .chat-preview`): a link's page,
+/// its host, title and words, opening it in the phone's browser tab.
+class _PreviewCard extends StatelessWidget {
+  const _PreviewCard({required this.p});
+  final LinkMessagePreview p;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final desc = p.description ?? '';
+    return Semantics(
+      link: true,
+      button: true,
+      label: '${p.title}, ${p.host}',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: () async {
+          final ok = await openInBrowser(Uri.parse(p.url));
+          if (!ok && context.mounted) showTkToast(context, 'That link could not be opened.', error: true);
+        },
+        child: Container(
+          // `margin: 4px 0; padding: 6px 8px; border-left: 3px solid var(--accent); border-radius: 6px`
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+          decoration: BoxDecoration(
+            color: t.panel2,
+            borderRadius: BorderRadius.circular(6),
+            border: Border(left: BorderSide(color: t.accent, width: 3)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(p.host, style: tkText(size: 12, color: t.muted)),
+              const SizedBox(height: 2),
+              Text(p.title, style: tkText(size: 14, weight: 600, color: t.text)),
+              if (desc.isNotEmpty) ...[const SizedBox(height: 2), Text(desc, style: tkText(size: 13, color: t.muted))],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

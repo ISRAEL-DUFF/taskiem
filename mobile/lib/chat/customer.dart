@@ -251,7 +251,13 @@ class _CustomerScreenState extends State<CustomerScreen> {
   void initState() {
     super.initState();
     if (widget.data.messages == null) widget.data.open();
-    _text.addListener(() => setState(() {}));
+    // The words left unsent here, back in the box, and kept as they change.
+    final key = 'customer:${widget.data.id}';
+    _text.text = widget.data.chats.draft(key);
+    _text.addListener(() {
+      widget.data.chats.setDraft(key, _text.text);
+      setState(() {});
+    });
     _back = widget.data.givenBack.listen((w) {
       if (_text.text.isEmpty) _text.text = w;
     });

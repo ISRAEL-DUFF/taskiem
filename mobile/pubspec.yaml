@@ -31,7 +31,10 @@ dependencies:
   just_audio: 0.10.6
   # Where a voice note is recorded before it is sent (lib/chat/voice.dart). BSD-3-Clause.
   path_provider: 2.1.6
-
+  # A link opened in the phone's browser tab: a link someone sent, connecting a service (docs/spec/mobile-app.md §3.5). BSD-3-Clause.
+  url_launcher: 6.3.3
+  # A PDF someone sent, to the phone's share sheet (open it in a viewer, keep it), as the web downloads it. BSD-3-Clause.
+  share_plus: 13.3.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

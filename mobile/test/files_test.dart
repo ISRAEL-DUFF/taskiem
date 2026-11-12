@@ -84,7 +84,7 @@ void main() {
     }
   }
 
-  Future<(_Sent, ConversationData)> open(WidgetTester t, {Recorder? recorder, bool hold = false}) async {
+  Future<(_Sent, ConversationData)> open(WidgetTester t, {Recorder? recorder, bool hold = false, Future<http.Response?> Function(http.Request req)? also}) async {
     t.view.physicalSize = const Size(390, 844);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
@@ -92,6 +92,8 @@ void main() {
     final sent = _Sent();
     final chats = ChatsData(
       f.auth(also: (req) async {
+        final own = await also?.call(req);
+        if (own != null) return own;
         if (req.method == 'POST' && req.url.path == '/v1/link-chats/$_link/files') {
           final m = await _multipart(req);
           sent.uploads.add(m);
@@ -131,6 +133,46 @@ void main() {
     await settle(t);
     return (sent, data);
   }
+
+  testWidgets('G5: a photo they sent opens full size, and closes', (t) async {
+    await open(t);
+    final photo = find.bySemanticsLabel(RegExp(r'^Photo from '));
+    await t.ensureVisible(photo.first);
+    await t.pumpAndSettle();
+    await t.tap(photo.first);
+    await t.pumpAndSettle();
+    expect(find.byType(InteractiveViewer), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Close'));
+    await t.pumpAndSettle();
+    expect(find.byType(InteractiveViewer), findsNothing);
+  });
+
+  testWidgets('G5: a PDF goes to the phone\'s share sheet, to open or keep', (t) async {
+    final handed = <(int, String, String)>[];
+    final was = handOffFile;
+    handOffFile = (bytes, name, type, from) async => handed.add((bytes.length, name, type));
+    addTearDown(() => handOffFile = was);
+    var down = true;
+    await open(
+      t,
+      also: (req) async => req.method == 'GET' && req.url.path.startsWith('/v1/link-chats/$_link/files/')
+          ? (down ? http.Response('{"error":"not found"}', 404) : http.Response.bytes(utf8.encode('%PDF-1.4 the list'), 200))
+          : null,
+    );
+    final pdf = find.bySemanticsLabel(RegExp(r'^Price list November\.pdf, '));
+    await t.ensureVisible(pdf);
+    await t.pumpAndSettle();
+    await t.tap(pdf);
+    await settle(t);
+    expect(handed, isEmpty);
+    expect(find.text('The file didn\'t load. Try again.'), findsOneWidget);
+    await t.pump(const Duration(seconds: 5));
+    await t.pumpAndSettle();
+    down = false;
+    await t.tap(pdf);
+    await settle(t);
+    expect(handed, [(17, 'Price list November.pdf', 'application/pdf')]);
+  });
 
   testWidgets('a photo from the clip waits for its caption, then goes with it and the client id', (t) async {
     final (sent, data) = await open(t, hold: true);

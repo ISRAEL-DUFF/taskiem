@@ -91,6 +91,21 @@ G16 needs no change: the app's sheet says what the web chat's card says
 ("Needs your passkey or a code"); the chat PIN is typed only in WhatsApp,
 and here such an approval takes the passkey or a code, as on the web.
 
+**Done: G4, G5, G11** (`test/gaps_test.dart`, `test/files_test.dart`).
+Unsent words are kept for each conversation (its link, `taskiem`,
+`customer:<id>`) while signed in, as the web keeps them while its tab is
+open (`ChatsData.drafts`), back in the box when it opens and gone once
+sent; the list says "Draft:" in green with them. A photo opens full size
+over everything (pinched to look closer, Close or Back); a PDF is handed
+to the phone's share sheet (`share_plus`: open it in a viewer, or keep it),
+as the web downloads it, and a file that did not load says so. A link's
+preview is drawn in its bubble and opens the page in the phone's browser
+tab (`url_launcher`, `lib/app/links.dart`, which G1 will use). Both
+packages are BSD-3-Clause; `open_filex` was tried and not taken (it asks
+for the phone's photos, videos and music, and shares from anywhere on
+it). No parity picture yet for a preview: the demo world has no message
+with one.
+
 | # | Gap | The web | The app | Work |
 | --- | --- | --- | --- | --- |
 | G1 | **Connecting a service** (`connect <service>`; §3.5, named in M3) | The one-time link `/c/<token>` in Taskiem's answer (`api/connect_links.go`, `api/chat_history.go:482`) | No way to open a browser at all (no url_launcher / custom tabs); no return to the app; no form for key-based services | Open `/c/` links (and only §3.5's) in the phone's browser tab (Custom Tabs / SFSafariViewController); come back to Taskiem's conversation on return (an app link, with M4's S6, or on resume); a key-based service (Paystack, Termii…) gets a secure form in the app, posting where the web's connect page does, never through a message. Needs: the server's answer to say which kind a connect is. Test: a connect answer opens the browser; a key form saves |

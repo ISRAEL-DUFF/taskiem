@@ -12,11 +12,13 @@ import 'dart:ui' as ui;
 import 'package:flutter/widgets.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/modal.dart';
 import '../theme/theme.dart';
 import 'words.dart';
 
@@ -185,6 +187,75 @@ Size photoSize(Size natural, double room) {
   return Size(natural.width * s, natural.height * s);
 }
 
+/// Hands a file to the phone's share sheet, from where it opens in a
+/// viewer or is kept (the web downloads it). A test stands in for it.
+typedef FileHandOff = Future<void> Function(Uint8List bytes, String name, String type, Rect? from);
+
+FileHandOff handOffFile = (bytes, name, type, from) async {
+  await SharePlus.instance.share(
+    ShareParams(files: [XFile.fromData(bytes, mimeType: type, name: name)], fileNameOverrides: [name], sharePositionOrigin: from),
+  );
+};
+
+/// Conversation.tsx AttachmentView's link: a photo opens full size, as the
+/// web opens it in a tab of its own; here over everything, pinched to look
+/// closer, closed with Close or Back.
+Future<void> showPhoto(BuildContext context, Uint8List bytes, String label) {
+  return Navigator.of(context).push<void>(
+    PageRouteBuilder<void>(
+      opaque: false,
+      transitionDuration: (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ? Duration.zero : const Duration(milliseconds: 120),
+      reverseTransitionDuration: Duration.zero,
+      pageBuilder: (context, _, _) => _PhotoView(bytes: bytes, label: label),
+      transitionsBuilder: (context, a, _, child) => FadeTransition(opacity: a, child: child),
+    ),
+  );
+}
+
+class _PhotoView extends StatelessWidget {
+  const _PhotoView({required this.bytes, required this.label});
+  final Uint8List bytes;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final pad = MediaQuery.paddingOf(context);
+    const white = Color(0xFFFFFFFF);
+    return Semantics(
+      scopesRoute: true,
+      namesRoute: true,
+      explicitChildNodes: true,
+      label: label,
+      child: ColoredBox(
+        color: const Color(0xF2000000),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: InteractiveViewer(
+                maxScale: 5,
+                child: Center(child: Semantics(image: true, label: label, child: Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true))),
+              ),
+            ),
+            Positioned(
+              top: pad.top + 8,
+              left: 8,
+              child: Semantics(
+                button: true,
+                label: 'Close',
+                excludeSemantics: true,
+                child: TkPress(
+                  onTap: () => Navigator.of(context).maybePop(),
+                  child: const SizedBox(width: 48, height: 48, child: Center(child: TkIcon('close', size: 24, color: white))),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// The attachment in its bubble.
 class AttachmentView extends StatelessWidget {
   const AttachmentView({super.key, required this.m, required this.files, required this.other, required this.room, this.local});
@@ -226,11 +297,15 @@ class AttachmentView extends StatelessWidget {
               padding: const EdgeInsets.only(top: 2, bottom: 4),
               child: Semantics(
                 image: true,
+                button: true,
                 label: m.mine ? 'Your photo' : 'Photo from $other',
+                onTapHint: 'Open it',
                 // As wide as the photo is (up to the room), the picture at
                 // its start: a tall photo leaves the bubble as wide as the
                 // web's, which sizes it by the photo's own width.
-                child: SizedBox(
+                child: GestureDetector(
+                  onTap: () => showPhoto(context, f.bytes, m.mine ? 'Your photo' : 'Photo from $other'),
+                  child: SizedBox(
                   width: size.width < room ? size.width : room,
                   child: Align(
                     alignment: Alignment.centerLeft,
@@ -239,6 +314,7 @@ class AttachmentView extends StatelessWidget {
                       child: Image.memory(f.bytes, width: s.width, height: s.height, fit: BoxFit.fill, gaplessPlayback: true),
                     ),
                   ),
+                ),
                 ),
               ),
             );
@@ -250,18 +326,36 @@ class AttachmentView extends StatelessWidget {
           child: VoicePlayer(m: m, files: files, label: m.mine ? 'Your voice note' : 'Voice note from $other', width: room < 260 ? room : 260),
         );
       default:
-        return _fileRow(t, a);
+        return _fileRow(t, a, onTap: (from) => _open(context, a, from));
     }
   }
 
+  /// A PDF pressed: fetched if it is not here, then to the share sheet.
+  Future<void> _open(BuildContext context, LinkMessageAttachment a, Rect from) async {
+    final f = files.of(m) ?? await files.fetch(m);
+    if (f == null) {
+      if (context.mounted) showTkToast(context, 'The file didn\'t load. Try again.', error: true);
+      return;
+    }
+    await handOffFile(f.bytes, a.name ?? attachmentLabel(a), a.type, from);
+  }
+
   /// `.chat-file`: the file's icon, its name, its size, on panel-2.
-  Widget _fileRow(TkTokens t, LinkMessageAttachment a) => Padding(
+  Widget _fileRow(TkTokens t, LinkMessageAttachment a, {void Function(Rect from)? onTap}) => Padding(
     padding: const EdgeInsets.only(top: 2, bottom: 4),
     child: Semantics(
       button: true,
       label: '${attachmentLabel(a)}, ${fileSize(a.size)}',
       excludeSemantics: true,
-      child: Container(
+      child: Builder(
+        builder: (context) => GestureDetector(
+          onTap: onTap == null
+              ? null
+              : () {
+                  final box = context.findRenderObject() as RenderBox?;
+                  onTap(box == null ? Rect.zero : box.localToGlobal(Offset.zero) & box.size);
+                },
+          child: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(color: t.panel2, borderRadius: BorderRadius.circular(8)),
         child: Row(
@@ -275,6 +369,8 @@ class AttachmentView extends StatelessWidget {
             const SizedBox(width: 8),
             Text(fileSize(a.size), style: tkText(size: 13, color: m.mine ? t.chatOutMeta : t.muted)),
           ],
+        ),
+      ),
         ),
       ),
     ),
