@@ -139,7 +139,7 @@ void main() {
     expect(tile('Statement'), findsOneWidget);
   });
 
-  testWidgets('a panel opened by "/" and a word closes by its button, the word going too; tools not here yet say so', (t) async {
+  testWidgets('a panel opened by "/" and a word closes by its button, the word going too; Sell opens its own sheet', (t) async {
     await taskiem(t);
     await t.enterText(find.bySemanticsLabel('Message to Taskiem'), '/s');
     await settle(t);
@@ -148,15 +148,13 @@ void main() {
     await settle(t);
     expect(find.text('Tools'), findsNothing);
     expect(find.text('/s'), findsNothing, reason: 'the "/" and word put away with it');
-    // Sell has a sheet of its own (M6): coming, not a list.
+    // Sell has a sheet of its own, not a list of its rows.
     await t.tap(find.bySemanticsLabel('Open tools'));
     await settle(t);
     await t.tap(tile('Sell'));
-    await t.pump();
-    expect(find.text('This is coming to the app soon.'), findsOneWidget);
+    await settle(t);
+    expect(find.bySemanticsLabel('Search what you sell'), findsOneWidget);
     expect(find.text('Search sell'), findsNothing);
-    await t.pump(const Duration(seconds: 5));
-    await t.pumpAndSettle();
   });
 
   Future<void> shop(WidgetTester t, String whose) async {
