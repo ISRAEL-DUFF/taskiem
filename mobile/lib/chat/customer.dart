@@ -298,8 +298,9 @@ class _CustomerScreenState extends State<CustomerScreen> {
           return Semantics(
             label: 'Conversation with ${c == null ? 'a customer' : title}',
             container: true,
-            child: CustomPaint(
-              painter: Wallpaper(t.chatWallpaper, t.chatDoodle),
+            child: WallpaperBox(
+              ground: t.chatWallpaper,
+              doodle: t.chatDoodle,
               child: Column(
                 children: [
                   ColoredBox(

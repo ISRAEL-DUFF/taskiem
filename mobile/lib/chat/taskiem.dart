@@ -493,8 +493,9 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       child: Semantics(
         label: 'Conversation with Taskiem',
         container: true,
-        child: CustomPaint(
-          painter: Wallpaper(t.chatWallpaper, t.chatDoodle),
+        child: WallpaperBox(
+          ground: t.chatWallpaper,
+          doodle: t.chatDoodle,
           child: ListenableBuilder(
             listenable: d,
             builder: (context, _) => Column(

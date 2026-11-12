@@ -1030,9 +1030,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
       child: Semantics(
         label: 'Conversation with ${c.name}',
         container: true,
-        child: CustomPaint(
+        child: WallpaperBox(
           // `.chat-mode .chat-pane { background: var(--chat-pattern), var(--chat-wallpaper) }`
-          painter: Wallpaper(t.chatWallpaper, t.chatDoodle),
+          ground: t.chatWallpaper,
+          doodle: t.chatDoodle,
           child: Column(
             children: [
               ColoredBox(

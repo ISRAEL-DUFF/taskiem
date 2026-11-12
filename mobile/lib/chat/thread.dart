@@ -50,6 +50,28 @@ class Wallpaper extends CustomPainter {
   bool shouldRepaint(Wallpaper old) => old.ground != ground || old.doodle != doodle;
 }
 
+/// The chat's wallpaper under [child], drawn once in a layer of its own:
+/// nothing drawn over it (a caret blinking, a list scrolling) draws the
+/// dots again.
+class WallpaperBox extends StatelessWidget {
+  const WallpaperBox({super.key, required this.ground, required this.doodle, required this.child});
+  final Color ground;
+  final Color doodle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Stack(
+    children: [
+      Positioned.fill(
+        child: RepaintBoundary(
+          child: CustomPaint(painter: Wallpaper(ground, doodle), isComplex: true),
+        ),
+      ),
+      child,
+    ],
+  );
+}
+
 /// ChatHead.tsx: Back, the avatar, the name with a line under it (or
 /// "typing…"), the head's own buttons, and the menu.
 class ChatHeadBar extends StatelessWidget {
@@ -330,7 +352,12 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   final _groupKeys = <String, GlobalKey>{};
   bool _placed = false;
   DateTime? _newest;
-  bool _away = false;
+  /// Away from the newest (the round button shows) and how many came
+  /// since: their own listener, as the day chip's.
+  final _jump = ValueNotifier<({bool away, int count})>((away: false, count: 0));
+  bool get _away => _jump.value.away;
+  int get _newCount => _jump.value.count;
+  set _newCount(int n) => _jump.value = (away: _away, count: n);
 
   /// Kept at the bottom as what is below grows: opened at the end, or
   /// scrolled there by the reader (not opened at the unread or a message).
@@ -339,8 +366,9 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   /// At the very end of the thread (not merely with the newest message in
   /// view), as the reader last left it.
   bool _atEnd = false;
-  int _newCount = 0;
-  ({String label, double top})? _stuck;
+  /// The day chip held at the top while scrolling: its own listener, so a
+  /// frame of scrolling redraws the chip, not every message.
+  final _stuck = ValueNotifier<({String label, double top})?>(null);
   bool _loadingOlder = false;
   final _focusKey = GlobalKey();
 
@@ -365,6 +393,8 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   @override
   void dispose() {
     _flash.dispose();
+    _stuck.dispose();
+    _jump.dispose();
     scroll.dispose();
     super.dispose();
   }
@@ -465,13 +495,8 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
     _atEnd = end;
     final away = !near;
     final stuck = _sticky();
-    if (away != _away || stuck != _stuck || (!away && _newCount > 0)) {
-      setState(() {
-        _away = away;
-        if (!away) _newCount = 0;
-        _stuck = stuck;
-      });
-    }
+    _stuck.value = stuck;
+    if (away != _away || (!away && _newCount > 0)) _jump.value = (away: away, count: away ? _newCount : 0);
   }
 
   /// lib/useThread.ts: opened at the first unread, 40 px under the top
@@ -518,9 +543,9 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
         // The newest message in view, not what follows it (Taskiem's
         // cards): an answer is never left out of sight.
         _toNewest();
-        setState(() => _newCount = 0);
+        _newCount = 0;
       } else {
-        setState(() => _newCount += arrived.where((m) => !of.mine(m)).length);
+        _newCount += arrived.where((m) => !of.mine(m)).length;
       }
     });
   }
@@ -547,7 +572,7 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
 
   void _toBottom() {
     scroll.jumpTo(scroll.position.maxScrollExtent);
-    setState(() => _newCount = 0);
+    _newCount = 0;
   }
 
   @override
@@ -580,8 +605,9 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
           prev = null;
           group.add(
             Center(
-              child: Opacity(
-                opacity: _stuck?.label == label ? 0 : 1,
+              child: ValueListenableBuilder(
+                valueListenable: _stuck,
+                builder: (context, stuck, chip) => Opacity(opacity: stuck?.label == label ? 0 : 1, child: chip),
                 child: DayChip(label, chipKey: _chipKeys.putIfAbsent(label, GlobalKey.new)),
               ),
             ),
@@ -590,7 +616,8 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
         if (widget.unread?.id == of.id(m)) group.add(UnreadMark(widget.unread!.count, markKey: _unreadKey));
         final w = widget.render(m, prev);
         prev = m;
-        if (w != null) group.add(widget.focus == of.id(m) ? KeyedSubtree(key: _focusKey, child: w) : w);
+        // Each message drawn once and kept: scrolling moves the pictures.
+        if (w != null) group.add(RepaintBoundary(child: widget.focus == of.id(m) ? KeyedSubtree(key: _focusKey, child: w) : w));
       }
       close();
     }
@@ -627,23 +654,34 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
             ),
           ),
         ),
-        if (_stuck != null)
-          Positioned(
-            top: _stuck!.top,
-            left: 0,
-            right: 0,
-            child: IgnorePointer(child: Center(child: DayChip(_stuck!.label, margin: false))),
-          ),
-        if (_away || widget.detached)
-          Positioned(
-            right: 16,
-            bottom: 16,
-            child: ThreadJump(
-              count: _newCount,
-              detached: widget.detached,
-              onTap: widget.detached && widget.onLatest != null ? widget.onLatest! : _toBottom,
+        Positioned.fill(
+          child: IgnorePointer(
+            child: ValueListenableBuilder(
+              valueListenable: _stuck,
+              builder: (context, stuck, _) => stuck == null
+                  ? const SizedBox.shrink()
+                  : Stack(
+                      children: [
+                        Positioned(top: stuck.top, left: 0, right: 0, child: Center(child: DayChip(stuck.label, margin: false))),
+                      ],
+                    ),
             ),
           ),
+        ),
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: ValueListenableBuilder(
+            valueListenable: _jump,
+            builder: (context, jump, _) => jump.away || widget.detached
+                ? ThreadJump(
+                    count: jump.count,
+                    detached: widget.detached,
+                    onTap: widget.detached && widget.onLatest != null ? widget.onLatest! : _toBottom,
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ),
       ],
       ),
     );

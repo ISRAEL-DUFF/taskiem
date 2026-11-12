@@ -315,7 +315,16 @@ class AttachmentView extends StatelessWidget {
                     alignment: Alignment.centerLeft,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.memory(f.bytes, width: s.width, height: s.height, fit: BoxFit.fill, gaplessPlayback: true, excludeFromSemantics: true),
+                      child: Image.memory(
+                        f.bytes,
+                        width: s.width,
+                        height: s.height,
+                        // Decoded at the size it is shown, not the camera's.
+                        cacheWidth: (s.width * MediaQuery.devicePixelRatioOf(context)).round(),
+                        fit: BoxFit.fill,
+                        gaplessPlayback: true,
+                        excludeFromSemantics: true,
+                      ),
                     ),
                   ),
                 ),
@@ -417,7 +426,7 @@ class _LocalPhotoState extends State<_LocalPhoto> {
         label: 'Your photo',
         child: ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child: Image.memory(widget.file.bytes, width: s.width, height: s.height, fit: BoxFit.fill, gaplessPlayback: true),
+          child: Image.memory(widget.file.bytes, width: s.width, height: s.height, cacheWidth: (s.width * MediaQuery.devicePixelRatioOf(context)).round(), fit: BoxFit.fill, gaplessPlayback: true),
         ),
       ),
     );
