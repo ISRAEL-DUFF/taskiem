@@ -16,6 +16,7 @@ import 'app/session.dart';
 import 'api/api.g.dart';
 import 'chat/money_page.dart' show MoneyPage;
 import 'chat/order_sheet.dart' show showOrderSheet;
+import 'chat/orders_tab.dart' show OrdersTab;
 import 'chat/chats.dart';
 import 'chat/conversation.dart';
 import 'chat/customer.dart';
@@ -336,7 +337,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
         (
           label: 'Orders',
           icon: 'orders',
-          build: (_) => const ComingTab(title: 'Orders', icon: 'orders', words: 'Your orders, from placed to delivered.'),
+          build: (_) => OrdersTab(auth: _chats.auth),
         ),
       ],
     );
