@@ -35,7 +35,7 @@ Each is fixed with its test unless it says otherwise.
 | 19 | Statement | No Chat | Chat opens the conversation |
 | 20 | Bills, empty | No Linked businesses | Added |
 | 21 | Confirm it; On Taskiem | "Stock" and "Find them" were words, not links | Links |
-| 22 | An invoice's payments | A school's receipts (number, voided, PDF) | Shown, the PDF in the browser |
+| 22 | An invoice's payments | A school's receipts (number, voided, PDF) | Shown, the PDF handed to the phone to open or keep |
 | 23 | Settle the query | Its question "How do you settle it?" | Added |
 | 24 | A draft saved from its screen | Two copies of the invoice's screen | Back to the one it came from |
 | 25 | A table | Export CSV, import CSV, delete the table; the notes for a table Taskiem keeps and tables not available; sorting by a column; product photos | Export (share sheet), import (phone's files), delete after its name, the notes, sorting; photos counted in words |
