@@ -22,6 +22,7 @@ import '../theme/theme.dart';
 import 'attachments.dart';
 import 'cards.dart';
 import 'chats.dart';
+import 'book_sheet.dart' show bookLine, linkServices, showBookSheet;
 import 'order_sheet.dart';
 import 'tool_forms.dart' show toolDetail;
 import '../kit/sheet.dart' show TkCta;
@@ -711,7 +712,16 @@ class _ConversationScreenState extends State<ConversationScreen> {
     _words = _text.text;
     _text.addListener(_typed);
     if (widget.data.messages == null) widget.data.open();
+    // Their services, for Book (ChatTools.tsx useLinkServices).
+    if (widget.data.chats.chatTools) {
+      linkServices(widget.data.chats.auth.transport, widget.data.conv.link).then((s) {
+        if (mounted) setState(() => _services = s);
+      }, onError: (Object _) {});
+    }
   }
+
+  /// Their services, once read: Book shows only when they offer some.
+  Map<String, dynamic>? _services;
 
   @override
   void dispose() {
@@ -819,6 +829,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
     );
   }
 
+  /// ChatComposer.tsx's BookSheet: their services, a time, a booking;
+  /// its card here after.
+  Future<void> _book() async {
+    final d = widget.data;
+    _tools.close();
+    final words = await showBookSheet(context, auth: d.chats.auth, link: d.conv.link, business: d.conv.name);
+    if (words != null) unawaited(d.pull().catchError((Object _) {}));
+  }
+
   /// Conversation.tsx supplies: we buy from them (their prices are
   /// theirs), and may draft (table.edit), send and keep the supplier
   /// (storefront.manage).
@@ -843,7 +862,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
     }
 
     return (
-      lead: [(key: 'order', title: 'Their shop', icon: 'plus', line: 'From ${d.conv.name}', onPick: () => _order())],
+      lead: [
+        (key: 'order', title: 'Their shop', icon: 'plus', line: 'From ${d.conv.name}', onPick: () => _order()),
+        // Book, after it: their services, shown only when they offer any.
+        if (((_services?['services'] as List?) ?? const []).isNotEmpty)
+          (key: 'book', title: 'Book', icon: 'calendar', line: bookLine(_services!), onPick: () => _book()),
+      ],
       extras: [
         if (supplies) (key: 'offer', title: 'Make an offer', icon: 'tag', line: 'Your price for an order', onPick: () => _order(const OrderStart(offer: true))),
         if (can('invoice.manage')) (key: 'invoice-them', title: 'Invoice them', icon: 'invoices', line: 'A new invoice to ${d.conv.name}', onPick: soon),

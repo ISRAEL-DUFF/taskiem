@@ -7,6 +7,7 @@ import '../app/auth.dart';
 import 'composer.dart' show Pickers;
 import 'product_form.dart';
 import 'purchase_view.dart';
+import 'service_form.dart';
 import 'tool_sheet.dart';
 
 ToolDetail toolDetail(
@@ -19,6 +20,7 @@ ToolDetail toolDetail(
   if (row == null) {
     return switch (tool.key) {
       'products' => ProductAdd(auth: auth, onSaved: host.done, pickers: pickers),
+      'services' => ServiceForm(auth: auth, onSaved: host.done),
       _ => null,
     };
   }
@@ -34,6 +36,8 @@ ToolDetail toolDetail(
       pickers: pickers,
     ),
     'stock' => StockInForm(auth: auth, item: data, onSaved: host.done, canEdit: host.canEdit),
+    'services' => ServiceForm(auth: auth, service: data, onSaved: host.done, canEdit: host.canEdit),
+    'prices' => PriceListForm(auth: auth, list: data, onSaved: host.done, canEdit: host.canEdit),
     'purchases' => PurchaseView(
       auth: auth,
       purchase: data,

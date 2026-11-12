@@ -507,17 +507,23 @@ class TkGhostButton extends StatelessWidget {
 
 /// `.tk-cta`: the sheet's main button (`.tk-cta-danger` red), with an icon.
 class TkCta extends StatelessWidget {
-  const TkCta({super.key, required this.label, this.onTap, this.icon, this.danger = false});
+  const TkCta({super.key, required this.label, this.onTap, this.icon, this.danger = false, this.iconAfter = false});
   final String label;
   final VoidCallback? onTap;
   final String? icon;
   final bool danger;
+
+  /// The icon after the words (an arrow), not before.
+  final bool iconAfter;
 
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
     final (bg, ink) = danger ? (t.danger, t.tkOnPine) : (dark ? (t.brandDark, t.brandDarkText) : (t.brand, const Color(0xFFFFFFFF)));
+    // `.tk-cta svg { color: var(--brand-dark) }`: lime on pine (pine on lime
+    // in the dark theme).
+    final mark = danger ? ink : (dark ? t.brandDarkText : t.brandDark);
     return Semantics(
       button: true,
       enabled: onTap != null,
@@ -536,8 +542,9 @@ class TkCta extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (icon != null) ...[TkIcon(icon!, size: 20, color: ink), const SizedBox(width: 8)],
+                if (icon != null && !iconAfter) ...[TkIcon(icon!, size: 20, color: mark), const SizedBox(width: 8)],
                 Flexible(child: Text(label, textAlign: TextAlign.center, style: tkText(size: 16, weight: 700, lineHeight: 1.2, color: ink))),
+                if (icon != null && iconAfter) ...[const SizedBox(width: 8), TkIcon(icon!, size: 20, color: mark)],
               ],
             ),
           ),
