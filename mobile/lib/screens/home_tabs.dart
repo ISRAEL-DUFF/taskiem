@@ -30,12 +30,16 @@ class HomeTabs extends StatefulWidget {
 
 class HomeTabsState extends State<HomeTabs> {
   int _open = 0;
+
+  /// Where the last tab was, so the new one comes in from that side.
+  int _was = 0;
   // A tab is built when first opened and kept (its place, its scrolling).
   final _built = <int>{0};
 
   int get open => _open;
 
   void show(int i) => setState(() {
+    _was = _open;
     _open = i;
     _built.add(i);
   });
@@ -55,7 +59,9 @@ class HomeTabsState extends State<HomeTabs> {
               index: _open,
               children: [
                 for (var i = 0; i < widget.tabs.length; i++)
-                  _built.contains(i) ? Builder(builder: widget.tabs[i].build) : const SizedBox.shrink(),
+                  _built.contains(i)
+                      ? _TabIn(on: i == _open, fromRight: i > _was, child: Builder(builder: widget.tabs[i].build))
+                      : const SizedBox.shrink(),
               ],
             ),
           ),
@@ -94,6 +100,54 @@ class HomeTabsState extends State<HomeTabs> {
       ],
     );
   }
+}
+
+/// A tab coming into view: it fades in and slides a little from the side
+/// of the bar it was chosen toward. Kept as it was while hidden.
+class _TabIn extends StatefulWidget {
+  const _TabIn({required this.on, required this.fromRight, required this.child});
+  final bool on;
+  final bool fromRight;
+  final Widget child;
+
+  @override
+  State<_TabIn> createState() => _TabInState();
+}
+
+class _TabInState extends State<_TabIn> with SingleTickerProviderStateMixin {
+  late final _a = AnimationController(vsync: this, duration: const Duration(milliseconds: 260), value: 1);
+  late final _curve = CurvedAnimation(parent: _a, curve: Curves.easeOutCubic);
+
+  @override
+  void didUpdateWidget(_TabIn old) {
+    super.didUpdateWidget(old);
+    if (widget.on && !old.on) {
+      final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+      if (still) {
+        _a.value = 1;
+      } else {
+        _a.forward(from: 0);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _curve.dispose();
+    _a.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _curve,
+    builder: (context, child) => Opacity(
+      alwaysIncludeSemantics: true,
+      opacity: 0.2 + 0.8 * _curve.value,
+      child: FractionalTranslation(translation: Offset((widget.fromRight ? 0.06 : -0.06) * (1 - _curve.value), 0), child: child),
+    ),
+    child: widget.child,
+  );
 }
 
 class _Never extends Listenable {
@@ -139,12 +193,18 @@ class _Tab extends StatelessWidget {
                   // The open tab's icon in its pill (`.tabbar .tab-icon`), a
                   // little larger, as WhatsApp's.
                   AnimatedContainer(
-                    duration: still ? Duration.zero : const Duration(milliseconds: 150),
+                    duration: still ? Duration.zero : const Duration(milliseconds: 220),
+                    curve: Curves.easeOut,
                     width: 64,
                     height: 32,
                     decoration: BoxDecoration(color: pill, borderRadius: BorderRadius.circular(16)),
                     alignment: Alignment.center,
-                    child: TkIcon(tab.icon, size: 24, color: ink),
+                    child: AnimatedScale(
+                      scale: on ? 1 : 0.88,
+                      duration: still ? Duration.zero : const Duration(milliseconds: 260),
+                      curve: Curves.easeOutBack,
+                      child: TkIcon(tab.icon, size: 24, color: ink),
+                    ),
                   ),
                   // `.tab-count { top: -3px; right: 5px }`
                   if (count != null) Positioned(top: -4, right: 6, child: count!),

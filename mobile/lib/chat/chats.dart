@@ -507,6 +507,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: ChatRow(
+                          key: const ValueKey('row taskiem'),
                           accent: true,
                           title: 'Taskiem',
                           unread: d.taskiemUnread,
@@ -589,6 +590,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                               ),
                             for (final c in listed)
                               ChatRow(
+                                key: ValueKey('row link ${c.link}'),
                                 title: c.name,
                                 logo: c.logo ? d.logo(c.business) : null,
                                 letter: c.name,
@@ -886,7 +888,8 @@ class ChatRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return GestureDetector(
+    return ChatRowMotion(
+      child: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
@@ -939,6 +942,114 @@ class ChatRow extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+      ),
+    );
+  }
+}
+
+/// A chat row's motion: rows rise in one after another as the list
+/// appears (and a new one as it arrives); a row whose chat moves (a new
+/// message takes it to the top) glides to its new place; pressed, it
+/// gives a little. Still when the phone asks for less motion.
+class ChatRowMotion extends StatefulWidget {
+  const ChatRowMotion({super.key, required this.child});
+  final Widget child;
+
+  @override
+  State<ChatRowMotion> createState() => _ChatRowMotionState();
+}
+
+class _ChatRowMotionState extends State<ChatRowMotion> with TickerProviderStateMixin {
+  // Rows made together (one frame's) come in one after another.
+  static DateTime _lastBorn = DateTime.fromMillisecondsSinceEpoch(0);
+  static int _inBatch = 0;
+
+  late final AnimationController _enter;
+  late final CurvedAnimation _enterCurve;
+  final _move = ValueNotifier<double>(0);
+  AnimationController? _glide;
+  double? _at;
+  bool _down = false;
+
+  bool get _still => MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _inBatch = now.difference(_lastBorn) < const Duration(milliseconds: 60) ? _inBatch + 1 : 0;
+    _lastBorn = now;
+    final delay = (_inBatch < 10 ? _inBatch : 10) * 35;
+    _enter = AnimationController(vsync: this, duration: Duration(milliseconds: 320 + delay));
+    _enterCurve = CurvedAnimation(parent: _enter, curve: Interval(delay / (320 + delay), 1, curve: Curves.easeOutCubic));
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_still) {
+      _enter.value = 1;
+    } else if (_enter.value == 0 && !_enter.isAnimating) {
+      _enter.forward();
+    }
+  }
+
+  /// Where the row is in the list (not on the screen: scrolling is not a
+  /// move).
+  double? _place() {
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.attached || !box.hasSize) return null;
+    final scroll = Scrollable.maybeOf(context);
+    return box.localToGlobal(Offset.zero).dy + (scroll?.position.hasPixels == true ? scroll!.position.pixels : 0);
+  }
+
+  void _measure() {
+    if (!mounted) return;
+    final now = _place();
+    if (now == null) return;
+    final was = _at;
+    _at = now;
+    if (was == null || (was - now).abs() < 1 || _still) return;
+    // From where it was to where it is.
+    final from = was - now + _move.value;
+    _glide?.dispose();
+    final g = AnimationController(vsync: this, duration: const Duration(milliseconds: 320));
+    final c = CurvedAnimation(parent: g, curve: Curves.easeOutCubic);
+    g.addListener(() => _move.value = from * (1 - c.value));
+    _glide = g;
+    _move.value = from;
+    g.forward();
+  }
+
+  @override
+  void dispose() {
+    _glide?.dispose();
+    _enterCurve.dispose();
+    _enter.dispose();
+    _move.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measure());
+    return Listener(
+      onPointerDown: (_) => setState(() => _down = true),
+      onPointerUp: (_) => setState(() => _down = false),
+      onPointerCancel: (_) => setState(() => _down = false),
+      child: AnimatedScale(
+        scale: _down && !_still ? 0.985 : 1,
+        duration: const Duration(milliseconds: 120),
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_enterCurve, _move]),
+          builder: (context, child) => Opacity(
+            alwaysIncludeSemantics: true,
+            opacity: _enterCurve.value,
+            child: Transform.translate(offset: Offset(0, _move.value + 16 * (1 - _enterCurve.value)), child: child),
+          ),
+          child: widget.child,
         ),
       ),
     );
@@ -1755,6 +1866,7 @@ class _Customers extends StatelessWidget {
           const SizedBox(height: 6),
           for (final c in chats)
             ChatRow(
+              key: ValueKey('row customer ${c.id}'),
               title: customerTitle(c),
               letter: customerLetter(c),
               time: listTime(c.lastAt, now),
