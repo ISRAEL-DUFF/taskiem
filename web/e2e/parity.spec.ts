@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,6 +16,7 @@ import { expect, test, type Page } from "@playwright/test";
 const here = dirname(fileURLToPath(import.meta.url));
 const KEPT = resolve(here, "../../mobile/test/parity/web");
 const UPDATE = process.env.PARITY_UPDATE === "1";
+const FONTS = resolve(here, "fonts/fonts.conf");
 
 // Text as a phone draws it, on any machine: glyphs at their exact, fractional
 // places and edges in grey, not hinted, not in colour. Without these Chromium
@@ -25,7 +27,7 @@ test.use({
   launchOptions: {
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
     args: ["--font-render-hinting=none"],
-    env: { ...process.env, FONTCONFIG_FILE: resolve(here, "fonts/fonts.conf") },
+    env: { ...process.env, FONTCONFIG_FILE: FONTS },
   },
 });
 
@@ -742,7 +744,17 @@ for (const s of SCREENS)
             const fonts = await page.evaluate(() =>
               [...document.fonts].map((f) => `${f.family} ${f.weight} ${f.status}`).join("; "),
             );
-            console.log(`${file}: ${(share * 100).toFixed(2)}% differs, ${box}; fonts: ${fonts}`);
+            // And the colour fonts the machine offers for emoji.
+            let emoji = "?";
+            try {
+              emoji = execFileSync("fc-list", [":color=true", "family", "file"], {
+                env: { ...process.env, FONTCONFIG_FILE: FONTS },
+                encoding: "utf8",
+              }).replace(/\n/g, "; ");
+            } catch {
+              // fc-list is not on every machine.
+            }
+            console.log(`${file}: ${(share * 100).toFixed(2)}% differs, ${box}; fonts: ${fonts}; emoji: ${emoji}`);
           }
           expect(share, `${file}: the web looks different from what the app copies (${box}); if meant, run with PARITY_UPDATE=1 and make the app the same`).toBeLessThan(0.002);
         }
