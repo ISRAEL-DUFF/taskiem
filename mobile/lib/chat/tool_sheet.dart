@@ -19,11 +19,6 @@ import 'stock_page.dart' show StockPage;
 import 'tools.dart';
 import 'tools_panel.dart';
 
-/// The tools whose own sheet is not here yet (ChatComposer.tsx opens
-/// them in their own sheets, not a list): they say they are coming
-/// (Availability with deliveries, M7).
-const soonTools = {'availability'};
-
 /// A tool's "Open …": the page it leads to (tools.ts `page`), where the
 /// app has it as a screen; the rest say they are coming.
 void openToolPage(BuildContext context, Tool tool, Auth auth) {

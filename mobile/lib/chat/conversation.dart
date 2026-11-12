@@ -22,6 +22,7 @@ import '../theme/theme.dart';
 import 'attachments.dart';
 import 'cards.dart';
 import 'chats.dart';
+import 'availability_sheet.dart' show showAvailabilitySheet;
 import 'book_sheet.dart' show bookLine, linkServices, showBookSheet;
 import 'order_sheet.dart';
 import 'tool_forms.dart' show toolDetail;
@@ -737,9 +738,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
   /// ChatTools.tsx: a tool opened from the panel; "/" and its word, put away.
   void _openTool(Tool tool, {String? openId}) {
     _tools.close();
-    // Sell, the handover and availability have sheets of their own (M6):
-    // not a list.
-    if (soonTools.contains(tool.key)) return showComingSoon(context);
+    // Sell, the handover and availability have sheets of their own: not a
+    // list.
+    if (tool.key == 'availability') {
+      unawaited(showAvailabilitySheet(context, auth: widget.data.chats.auth, onChanged: () => _tools.load([tool], again: true)));
+      return;
+    }
     // Done: the diary line it leaves here, read at once.
     void landed() => unawaited(widget.data.pull().catchError((Object _) {}));
     if (tool.key == 'sell') {

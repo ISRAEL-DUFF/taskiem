@@ -37,6 +37,7 @@ import 'tags.dart';
 import 'thread.dart';
 import 'tool_forms.dart' show toolDetail;
 import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
+import 'availability_sheet.dart' show showAvailabilitySheet;
 import 'tool_sheet.dart';
 import 'tools.dart';
 import 'tools_panel.dart';
@@ -445,7 +446,12 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
 
   void _openTool(Tool tool) {
     _tools.close();
-    if (soonTools.contains(tool.key)) return showComingSoon(context);
+    // Sell, the handover and availability have sheets of their own: not a
+    // list.
+    if (tool.key == 'availability') {
+      unawaited(showAvailabilitySheet(context, auth: widget.data.chats.auth, onChanged: () => _tools.load([tool], again: true)));
+      return;
+    }
     // Sell and Handover have sheets of their own (ChatStaff.tsx); what
     // they record lands here as a diary line.
     void landed() {

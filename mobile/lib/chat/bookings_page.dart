@@ -605,7 +605,10 @@ class _BookingsPageState extends State<BookingsPage> {
                                     onPressed: () {
                                       final gone = _days[i].spans[n];
                                       setState(() => _days[i].spans.removeAt(n));
-                                      WidgetsBinding.instance.addPostFrameCallback((_) => [gone.open, gone.close].forEach((c) => c.dispose()));
+                                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                                        gone.open.dispose();
+                                        gone.close.dispose();
+                                      });
                                     },
                                   ),
                               ],
