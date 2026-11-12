@@ -474,6 +474,27 @@ const SCREENS: {
     },
   },
   {
+    // A product's form from Products (M6): its photos, name, category,
+    // prices on the storefront and the list, who sees it, the lowest price.
+    name: "chat-product",
+    touch: true,
+    path: "/chat?with=taskiem",
+    fixture: "chat-product",
+    ready: async (p) => {
+      await expect(p.getByTestId("taskiem-stream")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "Open tools" }).click();
+      await p.getByTestId("tools-panel").getByRole("button", { name: /^Products/ }).click();
+      await expect(p.getByTestId("tool-sheet")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("tool-sheet").locator("li button").first().click();
+      await p.waitForLoadState("networkidle");
+      await p.waitForTimeout(800);
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
     // Their shop from a business's tools (M5): their prices, one item in
     // the bag, the bag in pine at the foot.
     name: "chat-order",

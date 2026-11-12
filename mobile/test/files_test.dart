@@ -28,7 +28,7 @@ class _Pickers extends Pickers {
   _Pickers(this.photoBytes);
   final Uint8List photoBytes;
   @override
-  Future<PickedFile?> photo() async => PickedFile(bytes: photoBytes, name: 'tomatoes.jpg', type: 'image/jpeg');
+  Future<PickedFile?> photo({double? side}) async => PickedFile(bytes: photoBytes, name: 'tomatoes.jpg', type: 'image/jpeg');
   @override
   Future<PickedFile?> document() async => PickedFile(bytes: Uint8List.fromList(utf8.encode('%PDF-1.4 x')), name: 'List.pdf', type: 'application/pdf');
 }

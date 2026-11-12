@@ -93,7 +93,21 @@ class _TkSearchBoxState extends State<TkSearchBox> {
 /// in pine with white words. Sliding sideways when they are more than the
 /// width.
 class TkChipRow extends StatelessWidget {
-  const TkChipRow({super.key, required this.chips, required this.on, required this.onPick, this.padding = const EdgeInsets.fromLTRB(20, 0, 20, 10)});
+  const TkChipRow({
+    super.key,
+    required this.chips,
+    required this.on,
+    required this.onPick,
+    this.padding = const EdgeInsets.fromLTRB(20, 0, 20, 10),
+    this.all = true,
+    this.label = 'Show',
+  });
+
+  /// All first (a filter); without, chips that each put a word in.
+  final bool all;
+
+  /// The group's name for a screen reader.
+  final String label;
 
   /// The chips after All: their words and tags.
   final List<({String label, String tag})> chips;
@@ -105,10 +119,10 @@ class TkChipRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final items = <(String, String?)>[('All', null), for (final c in chips) (c.label, c.tag)];
+    final items = <(String, String?)>[if (all) ('All', null), for (final c in chips) (c.label, c.tag)];
     return Semantics(
       container: true,
-      label: 'Show',
+      label: label,
       explicitChildNodes: true,
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,

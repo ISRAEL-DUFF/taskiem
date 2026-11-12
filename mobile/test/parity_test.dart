@@ -26,6 +26,7 @@ import 'package:taskiem/api/transport.dart';
 import 'package:taskiem/app/auth.dart';
 import 'package:taskiem/app/session.dart';
 import 'package:taskiem/kit/kit.dart';
+import 'package:taskiem/kit/list.dart' show TkRow;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/chat/chats.dart';
@@ -273,6 +274,22 @@ final screens = <String, Screen>{
       await t.tap(find.bySemanticsLabel('Open tools'));
       await _loaded(t);
       await t.tap(find.bySemanticsLabel(RegExp('^Products')));
+      await _loaded(t);
+    },
+  ),
+  'chat-product': (
+    build: () {
+      final f = Fixture('chat-product');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Open tools'));
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel(RegExp('^Products')));
+      await _loaded(t);
+      await t.tap(find.byType(TkRow).first);
       await _loaded(t);
     },
   ),

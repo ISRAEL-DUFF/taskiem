@@ -48,7 +48,22 @@ Future<void> showToolSheet(
 
 /// A row's detail in its sheet (ChatTools.tsx Detail): the body and its own
 /// foot; [done] with the words to show, once saved (the sheet then closes).
-typedef ToolDetail = Widget? Function(BuildContext context, Tool tool, ToolRow row, void Function(String words) done);
+typedef ToolDetail = Widget? Function(BuildContext context, Tool tool, ToolRow? row, ToolHost host);
+
+/// What a row's form (or a tool's Add) is given by its sheet.
+class ToolHost {
+  const ToolHost({required this.done, required this.back, required this.canEdit});
+
+  /// Saved: the tick, the list read again, the sheet closing; [line], the
+  /// change in words for where it was opened (null: nothing to tell).
+  final void Function(String? line) done;
+
+  /// Back to the list (a form's Cancel).
+  final VoidCallback back;
+
+  /// ChatTools.tsx mayEdit: whether the person may change it.
+  final bool canEdit;
+}
 
 /// A product not sold in sizes and colours already (ChatTools.tsx plainItem).
 bool _plain(ToolRow r) => ((r.data?['choices'] as List?)?.length ?? 0) == 0 && r.data?['variant_of'] == null;
@@ -86,14 +101,16 @@ class _ToolSheetState extends State<ToolSheet> {
   final _search = TextEditingController();
   late String? _chip = widget.chip;
   ToolRow? _open;
-  String? _saved;
+  bool _adding = false;
+  bool _saved = false;
   late bool _opening = widget.openId != null;
 
-  void _done(String words) {
+  void _done(String? line) {
     widget.tools.refresh(widget.tool);
-    widget.onSaved?.call(words);
+    if (line != null) widget.onSaved?.call(line);
     if (!mounted) return;
-    setState(() => _saved = words);
+    // FormFrame's SavedTick: "Saved", whatever was saved.
+    setState(() => _saved = true);
     Future<void>.delayed(const Duration(milliseconds: 1300), () {
       if (mounted) Navigator.of(context).maybePop();
     });
@@ -131,20 +148,29 @@ class _ToolSheetState extends State<ToolSheet> {
           _open = list.where((r) => r.id == widget.openId).firstOrNull ?? (named.length == 1 ? named.single : null);
         }
         final open = _open;
-        final detail = open == null ? null : widget.detail?.call(context, widget.tool, open, _done);
-        if (open != null && detail != null) {
+        final host = ToolHost(done: _done, back: () => setState(() => (_open = null, _adding = false)), canEdit: mayEdit(tool.key, c.can));
+        final detail = open == null && !_adding ? null : widget.detail?.call(context, widget.tool, open, host);
+        if ((open != null || _adding) && detail != null) {
           return TkSheet(
-            title: open.name,
-            crumb: title,
-            onBack: () => setState(() => _open = null),
-            overlay: _saved == null ? null : TkSavedTick(words: _saved!),
+            // A row: its name, the tool's above; a new one: its Add's words.
+            title: open?.name ?? add ?? title,
+            crumb: open == null ? null : title,
+            onBack: host.back,
+            overlay: _saved ? const TkSavedTick() : null,
             body: detail,
           );
         }
+        final adds = canAdd && widget.detail?.call(context, widget.tool, null, host) != null;
         return TkSheet(
           title: title,
           count: list?.length,
-          footer: widget.footer ?? TkCta(label: canAdd ? add : tool.more, icon: canAdd ? 'plus' : null, onTap: () => showComingSoon(context)),
+          footer:
+              widget.footer ??
+              TkCta(
+                label: canAdd ? add : tool.more,
+                icon: canAdd ? 'plus' : null,
+                onTap: adds ? () => setState(() => _adding = true) : () => showComingSoon(context),
+              ),
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -220,7 +246,7 @@ class _ToolSheetState extends State<ToolSheet> {
           letters: tool.rowIcon == null ? tileLetters(r.name) : null,
           icon: tool.rowIcon,
           pill: r.pill == null ? null : TkPill(r.pill!.text, tone: r.pill!.tone),
-          onTap: () => widget.detail?.call(context, widget.tool, r, _done) != null
+          onTap: () => widget.detail?.call(context, widget.tool, r, ToolHost(done: _done, back: () {}, canEdit: false)) != null
               ? setState(() => _open = r)
               : widget.onRow != null
               ? widget.onRow!(context, r)

@@ -32,25 +32,28 @@ class Pickers {
 
   /// A photo from the gallery. JPEG at 85: an iPhone's HEIC comes as a
   /// photo the server takes, and a phone's large photo well under the limit.
-  Future<PickedFile?> photo() => _image(ImageSource.gallery);
+  Future<PickedFile?> photo({double? side}) => _image(ImageSource.gallery, side: side);
 
   /// A photo taken now, with the phone's own camera.
-  Future<PickedFile?> camera() => _image(ImageSource.camera);
+  Future<PickedFile?> camera({double? side}) => _image(ImageSource.camera, side: side);
 
   /// Up to [limit] photos from the gallery at once (a profile's photos);
   /// none when put away.
-  Future<List<PickedFile>> photos(int limit) async {
+  ///
+  /// [side]: the longest side it is sent at (photos.ts SEND_SIDE, a
+  /// product's 1600), drawn smaller on the phone before it goes.
+  Future<List<PickedFile>> photos(int limit, {double? side}) async {
     if (limit <= 0) return const [];
     if (limit == 1) {
-      final one = await photo();
+      final one = await photo(side: side);
       return one == null ? const [] : [one];
     }
-    final xs = await ImagePicker().pickMultiImage(imageQuality: 85, requestFullMetadata: false, limit: limit);
+    final xs = await ImagePicker().pickMultiImage(imageQuality: 85, requestFullMetadata: false, limit: limit, maxWidth: side, maxHeight: side);
     return [for (final x in xs.take(limit)) await _file(x)];
   }
 
-  Future<PickedFile?> _image(ImageSource from) async {
-    final x = await ImagePicker().pickImage(source: from, imageQuality: 85, requestFullMetadata: false);
+  Future<PickedFile?> _image(ImageSource from, {double? side}) async {
+    final x = await ImagePicker().pickImage(source: from, imageQuality: 85, requestFullMetadata: false, maxWidth: side, maxHeight: side);
     return x == null ? null : _file(x);
   }
 

@@ -35,7 +35,7 @@ import 'ref_card.dart';
 import 'tag_box.dart';
 import 'tags.dart';
 import 'thread.dart';
-import 'purchase_view.dart' show toolDetail;
+import 'tool_forms.dart' show toolDetail;
 import 'tool_sheet.dart';
 import 'tools.dart';
 import 'tools_panel.dart';

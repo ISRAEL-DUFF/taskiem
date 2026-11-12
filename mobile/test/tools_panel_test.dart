@@ -92,14 +92,16 @@ void main() {
     await t.enterText(find.bySemanticsLabel('Search products'), 'zzzz');
     await settle(t);
     expect(find.text('Nothing matches'), findsOneWidget);
-    // A row's form is not here yet: it says so.
+    // A row opens its form in the sheet; Back is the list again.
     await t.enterText(find.bySemanticsLabel('Search products'), '');
     await settle(t);
     await t.tap(find.text('Asun'));
-    await t.pump();
-    expect(find.text('This is coming to the app soon.'), findsOneWidget);
-    await t.pump(const Duration(seconds: 5));
-    await t.pumpAndSettle();
+    await settle(t);
+    expect(find.bySemanticsLabel('Save changes'), findsOneWidget);
+    expect(find.text('Show on your storefront'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Cancel'));
+    await settle(t);
+    expect(find.bySemanticsLabel('Search products'), findsOneWidget);
     expect(prefs.recentTools, ['products']);
     // Closed, and the panel opened again: Products among Recent.
     await t.tap(find.bySemanticsLabel('Close'));

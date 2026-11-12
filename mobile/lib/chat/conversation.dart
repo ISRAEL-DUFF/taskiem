@@ -23,7 +23,7 @@ import 'attachments.dart';
 import 'cards.dart';
 import 'chats.dart';
 import 'order_sheet.dart';
-import 'purchase_view.dart' show toolDetail;
+import 'tool_forms.dart' show toolDetail;
 import '../kit/sheet.dart' show TkCta;
 import 'composer.dart';
 import 'tool_sheet.dart';
@@ -751,6 +751,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
       },
       detail: toolDetail(
         d.chats.auth,
+        link: d.conv.link,
+        pickers: widget.pickers,
         // Reorder: the sheet closes; their shop opens with its lines.
         onReorder: supplies
             ? (p) {

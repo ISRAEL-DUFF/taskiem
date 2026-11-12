@@ -292,3 +292,35 @@ void showTkToast(BuildContext context, String text, {bool error = false, String?
 /// tools, docs/spec/mobile-app.md M5 to M8): shown as the web shows it,
 /// and said plainly when pressed, never a press that does nothing.
 void showComingSoon(BuildContext context) => showTkToast(context, 'This is coming to the app soon.');
+
+/// A choice among a few (a `<select>`'s list), in a modal: the one chosen,
+/// or null when put away.
+Future<String?> showTkModalChoices(BuildContext context, {required String title, required List<(String, String)> choices, String? value}) =>
+    showTkModal<String>(
+      context,
+      title: title,
+      builder: (context) {
+        final t = TkTheme.tokens(context);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final (id, words) in choices)
+              Semantics(
+                button: true,
+                selected: id == value,
+                label: words,
+                excludeSemantics: true,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.of(context).pop(id),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(words, style: tkText(size: 16, weight: id == value ? 700 : 500, color: t.text)),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );

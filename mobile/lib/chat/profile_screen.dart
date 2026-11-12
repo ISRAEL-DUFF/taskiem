@@ -13,6 +13,7 @@ import 'package:flutter/widgets.dart';
 
 import '../api/transport.dart';
 import '../kit/api_image.dart';
+import '../kit/forms.dart' show TkSwitch;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkSoftButton;
@@ -636,62 +637,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (_manage && gallery.length >= max)
             Padding(padding: const EdgeInsets.only(top: 12), child: Text('That is the most photos.', style: tkText(size: 13, color: t.muted))),
         ],
-      ),
-    );
-  }
-}
-
-/// kit.css `.tk-switch`: 52 by 32, the knob sliding; pine when on (lime
-/// in the dark theme, and on a pine card).
-class TkSwitch extends StatelessWidget {
-  const TkSwitch({super.key, required this.label, required this.on, this.onChanged, this.onPine = false});
-  final String label;
-  final bool on;
-  final ValueChanged<bool>? onChanged;
-
-  /// On a pine ground (`.tk-p-found.on`): the lime track, the knob in pine's ink.
-  final bool onPine;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    final dark = TkTheme.of(context).mode == TkMode.dark;
-    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    final track = !on ? t.borderStrong : (onPine || dark ? t.brandDark : t.brand);
-    final knob = on && onPine ? t.tkOnPine : const Color(0xFFFFFFFF);
-    return TapArea(
-      child: Semantics(
-        toggled: on,
-        label: label,
-        enabled: onChanged != null,
-        excludeSemantics: true,
-        child: GestureDetector(
-          onTap: onChanged == null ? null : () => onChanged!(!on),
-          child: Opacity(
-            opacity: onChanged == null ? 0.6 : 1,
-            child: AnimatedContainer(
-              duration: still ? Duration.zero : const Duration(milliseconds: 200),
-              width: 52,
-              height: 32,
-              decoration: BoxDecoration(color: track, borderRadius: BorderRadius.circular(999)),
-              child: AnimatedAlign(
-                duration: still ? Duration.zero : const Duration(milliseconds: 250),
-                curve: Curves.easeOutBack,
-                alignment: on ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  width: 26,
-                  height: 26,
-                  margin: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    color: knob,
-                    shape: BoxShape.circle,
-                    boxShadow: const [BoxShadow(color: Color(0x40000000), offset: Offset(0, 1), blurRadius: 3)],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

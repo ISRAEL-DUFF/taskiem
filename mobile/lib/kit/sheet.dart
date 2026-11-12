@@ -108,10 +108,38 @@ class TkSheet extends StatelessWidget {
                             padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
                             child: Row(
                               children: [
-                                if (onBack != null) ...[
+                                if (onBack != null && crumb == null) ...[
                                   _Round(icon: 'back', label: 'Back', onTap: onBack!),
                                   // `.tk-back { margin-right: 4px }` with the head's 12 px gap.
-                                  SizedBox(width: crumb == null ? 16 : 12),
+                                  const SizedBox(width: 16),
+                                ],
+                                // `.tk-sheet-head.crumbed`: "Products / Jollof rice", the
+                                // first word the way back.
+                                if (onBack != null && crumb != null) ...[
+                                  TapArea(
+                                    child: Semantics(
+                                      button: true,
+                                      label: '$crumb: back to the list',
+                                      excludeSemantics: true,
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: onBack,
+                                        child: ConstrainedBox(
+                                          constraints: const BoxConstraints(minHeight: 32),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(crumb!, style: tkText(size: 14, weight: 500, color: t.muted)),
+                                              const SizedBox(width: 8),
+                                              Text('/', style: tkText(size: 14, weight: 500, color: t.muted)),
+                                              const SizedBox(width: 2),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
                                 ],
                                 if (lead != null) ...[
                                   SizedBox(width: 48, height: 48, child: ExcludeSemantics(child: lead!)),
@@ -123,7 +151,7 @@ class TkSheet extends StatelessWidget {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        if (crumb != null) Text(crumb!, style: tkText(size: 13, weight: 600, color: t.muted)),
+                                        if (crumb != null && onBack == null) Text(crumb!, style: tkText(size: 13, weight: 600, color: t.muted)),
                                         Text.rich(
                                           TextSpan(
                                             text: title,
@@ -135,7 +163,10 @@ class TkSheet extends StatelessWidget {
                                               ],
                                             ],
                                           ),
-                                          style: lead != null
+                                          style: onBack != null && crumb != null
+                                              // `.tk-sheet-head.crumbed h2 { font-size: 14px; font-weight: 700; letter-spacing: 0 }`
+                                              ? tkText(size: 14, weight: 700, lineHeight: 1.35, color: t.text)
+                                              : lead != null
                                               ? tkText(size: 22, weight: 800, lineHeight: 1.2, letterSpacing: -0.44, color: t.text)
                                               : tkText(size: 26, weight: 800, lineHeight: 1.35, letterSpacing: -0.52, color: t.text),
                                         ),

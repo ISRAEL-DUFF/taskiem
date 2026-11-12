@@ -12,6 +12,7 @@ import 'package:taskiem/chat/attachments.dart' show PickedFile;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/composer.dart';
 import 'package:taskiem/chat/profile_screen.dart';
+import 'package:taskiem/kit/forms.dart' show TkSwitch;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
@@ -20,10 +21,10 @@ import 'support.dart';
 class _Picks extends Pickers {
   const _Picks();
   @override
-  Future<PickedFile?> photo() async => PickedFile(bytes: Uint8List.fromList(const [1, 2, 3]), name: 'a.jpg', type: 'image/jpeg');
+  Future<PickedFile?> photo({double? side}) async => PickedFile(bytes: Uint8List.fromList(const [1, 2, 3]), name: 'a.jpg', type: 'image/jpeg');
 
   @override
-  Future<List<PickedFile>> photos(int limit) async => [(await photo())!];
+  Future<List<PickedFile>> photos(int limit, {double? side}) async => [(await photo())!];
 }
 
 Map<String, dynamic> _photo(String id) => {
@@ -199,5 +200,5 @@ void main() {
 class _Refused extends Pickers {
   const _Refused();
   @override
-  Future<List<PickedFile>> photos(int limit) async => throw Exception('photo access denied');
+  Future<List<PickedFile>> photos(int limit, {double? side}) async => throw Exception('photo access denied');
 }

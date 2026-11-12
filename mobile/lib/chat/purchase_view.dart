@@ -15,7 +15,6 @@ import '../kit/sheet.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'cards.dart' show CardProgress;
-import 'tool_sheet.dart' show ToolDetail;
 import 'tools.dart' show purchaseState;
 import 'words.dart' show naira, orderSteps;
 
@@ -315,10 +314,3 @@ class _PickBox extends StatelessWidget {
   }
 }
 
-/// The rows opened in a tool's sheet here: an order sent to a supplier
-/// (Your orders), its Reorder only with one of ours that is linked.
-ToolDetail toolDetail(Auth auth, {void Function(Map<String, dynamic> purchase)? onReorder}) => (context, tool, row, done) {
-  final p = row.data;
-  if (p == null || tool.key != 'purchases') return null;
-  return PurchaseView(auth: auth, purchase: p, onSaved: done, onReorder: (p['link_id'] as String? ?? '').isEmpty ? null : onReorder);
-};
