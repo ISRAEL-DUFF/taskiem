@@ -293,6 +293,22 @@ final screens = <String, Screen>{
       await _loaded(t);
     },
   ),
+  'chat-sell': (
+    build: () {
+      final f = Fixture('chat-sell');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Open tools'));
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel(RegExp('^Sell')));
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel(RegExp('^One more ')).first);
+      await _loaded(t);
+    },
+  ),
   'chat-order': (build: () => _conversation('chat-order', 'Bayo Rice Mills'), drive: (t) => _shop(t)),
   'chat-order-review': (build: () => _conversation('chat-order', 'Bayo Rice Mills'), drive: (t) => _shop(t, review: true)),
   'chat-taskiem-cards': (

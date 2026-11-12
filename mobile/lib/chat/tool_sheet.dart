@@ -16,8 +16,9 @@ import 'tools.dart';
 import 'tools_panel.dart';
 
 /// The tools whose own sheet is not here yet (ChatComposer.tsx opens
-/// them in their own sheets, not a list): they say they are coming.
-const soonTools = {'sell', 'handover', 'availability'};
+/// them in their own sheets, not a list): they say they are coming
+/// (Availability with deliveries, M7).
+const soonTools = {'availability'};
 
 /// ChatTools.tsx mayEdit: whether the person may change what a tool shows.
 bool mayEdit(String key, bool Function(String) can) => switch (key) {

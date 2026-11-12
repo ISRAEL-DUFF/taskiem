@@ -26,6 +26,7 @@ import 'order_sheet.dart';
 import 'tool_forms.dart' show toolDetail;
 import '../kit/sheet.dart' show TkCta;
 import 'composer.dart';
+import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
 import 'tool_sheet.dart';
 import 'tools.dart';
 import 'tools_panel.dart';
@@ -730,6 +731,14 @@ class _ConversationScreenState extends State<ConversationScreen> {
     // Sell, the handover and availability have sheets of their own (M6):
     // not a list.
     if (soonTools.contains(tool.key)) return showComingSoon(context);
+    if (tool.key == 'sell') {
+      unawaited(showSellSheet(context, auth: widget.data.chats.auth));
+      return;
+    }
+    if (tool.key == 'handover') {
+      unawaited(showHandoverSheet(context, auth: widget.data.chats.auth));
+      return;
+    }
     final d = widget.data;
     final supplies = _supplies;
     showToolSheet(

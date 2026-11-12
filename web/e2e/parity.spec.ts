@@ -495,6 +495,25 @@ const SCREENS: {
     },
   },
   {
+    // Sell from the tools (M6): what has a price, one thing in the bag.
+    name: "chat-sell",
+    touch: true,
+    path: "/chat?with=taskiem",
+    fixture: "chat-sell",
+    ready: async (p) => {
+      await expect(p.getByTestId("taskiem-stream")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "Open tools" }).click();
+      await p.getByTestId("tools-panel").getByRole("button", { name: /^Sell/ }).click();
+      await expect(p.getByTestId("sell-sheet")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: /^One more / }).first().click();
+      await p.waitForTimeout(800);
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
     // Their shop from a business's tools (M5): their prices, one item in
     // the bag, the bag in pine at the foot.
     name: "chat-order",

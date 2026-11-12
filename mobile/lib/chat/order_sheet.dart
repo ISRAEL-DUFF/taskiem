@@ -370,7 +370,7 @@ class _OrderSheetState extends State<OrderSheet> {
       footer: widget.browse
           ? null
           : !_review
-          ? _BagBar(
+          ? BagBar(
               count: short != null ? '${short.name}: at least ${short.min} in all' : bag.count,
               total: naira(bag.total),
               onGo: bag.lines.isEmpty || short != null ? null : () => setState(() => _review = true),
@@ -652,7 +652,7 @@ class _OrderSheetState extends State<OrderSheet> {
                     ),
                   )
                 else
-                  _Qty(
+                  QtyStepper(
                     name: it.name,
                     n: n,
                     on: n > 0,
@@ -700,12 +700,15 @@ class _OrderSheetState extends State<OrderSheet> {
   }
 }
 
-/// `.tk-bag`: pine, the count and total, and Review order in lime.
-class _BagBar extends StatelessWidget {
-  const _BagBar({required this.count, required this.total, this.onGo});
+/// `.tk-bag`: pine, the count and total, and its button in lime (Review
+/// order, Next).
+class BagBar extends StatelessWidget {
+  const BagBar({super.key, required this.count, required this.total, this.onGo, this.go = 'Review order', this.goIcon = 'arrow-right'});
   final String count;
   final String total;
   final VoidCallback? onGo;
+  final String go;
+  final String goIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -724,11 +727,11 @@ class _BagBar extends StatelessWidget {
         ],
       ),
     );
-    final go = TapArea(
+    final button = TapArea(
       child: Semantics(
         button: true,
         enabled: onGo != null,
-        label: 'Review order',
+        label: go,
         excludeSemantics: true,
         child: TkPress(
           onTap: onGo,
@@ -742,9 +745,9 @@ class _BagBar extends StatelessWidget {
                 mainAxisSize: stack ? MainAxisSize.max : MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Flexible(child: Text('Review order', style: tkText(size: 15, weight: 800, color: t.brand))),
+                  Flexible(child: Text(go, style: tkText(size: 15, weight: 800, color: t.brand))),
                   const SizedBox(width: 6),
-                  TkIcon('arrow-right', size: 18, color: t.brand),
+                  TkIcon(goIcon, size: 18, color: t.brand),
                 ],
               ),
             ),
@@ -762,16 +765,16 @@ class _BagBar extends StatelessWidget {
       child: stack
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [Padding(padding: const EdgeInsets.fromLTRB(10, 0, 10, 8), child: words), go],
+              children: [Padding(padding: const EdgeInsets.fromLTRB(10, 0, 10, 8), child: words), button],
             )
-          : Row(children: [Expanded(child: words), const SizedBox(width: 12), go]),
+          : Row(children: [Expanded(child: words), const SizedBox(width: 12), button]),
     );
   }
 }
 
 /// `.tk-qty`: − n +, soft, pine once in the bag.
-class _Qty extends StatelessWidget {
-  const _Qty({required this.name, required this.n, required this.on, this.onLess, this.onMore});
+class QtyStepper extends StatelessWidget {
+  const QtyStepper({super.key, required this.name, required this.n, required this.on, this.onLess, this.onMore});
   final String name;
   final int n;
   final bool on;
