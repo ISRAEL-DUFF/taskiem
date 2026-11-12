@@ -1,62 +1,147 @@
-# Phone app: the Updates tab (draft for discussion)
+# Updates: Status and Channels, as WhatsApp's
 
-The home's bottom bar has Chats, **Updates**, Money and Orders. Chats,
-Money and Orders are built; Updates still says it is coming, with the words
-"What happened in your business, as it happens." This is the plan for it,
-written 12 November 2026 after M8, to be settled with the founder before it
-is built.
+The home's bottom bar has Chats, **Updates**, Money and Orders. Updates is
+WhatsApp's Updates tab, for businesses: **Status** at the top (what a
+business shows for 24 hours) and **Channels** below (a business's
+broadcast, followed). Settled with the founder 12 November 2026: **both**,
+seen by **linked businesses and customers**, and a post may **tag a
+product** that is ordered from it.
 
-## What exists to build it from
+This replaces the first draft, which took Updates for a feed of the
+business's own events.
 
-| Source | What it holds | Who sees it | Endpoint |
-| --- | --- | --- | --- |
-| **Notifications** (the web's bell) | Mostly the automation's: a run that failed, needs a check or finished; a connection or key problem; an alert rule's finding; an approval waiting; a few business ones (a bill, a link, a staff task, a payment reversed, a school's cash). Repeats are one item with a count; kept 90 days | Each person their own | `GET /v1/notifications` (newest first, `?unread=true`, `?before=`), `GET /v1/notifications/count` (unread, and approvals waiting), `POST /v1/notifications/read` (`ids` or `all`) |
-| **Taskiem's cards** (in Taskiem's conversation) | What needs a person now, each with its one step: money to match, an overdue invoice to remind, stock to reorder, an approval, an order to accept, a rider to assign, a customer's order draft | By permission | `GET /v1/chat-alerts`, `POST /v1/chat-alerts/later` |
-| **The briefing** (in Taskiem's conversation) | Today: sales and how they compare, owed, low stock, deliveries, staff, tasks, bookings | Owners and managers | `GET /v1/chat-briefing` |
-| **Money** | Every movement of money, by period | `invoice.read` | `GET /v1/money/summary`, the money log |
-| **The audit log** | Who did what, everything | `audit.read` | `GET /v1/audit` |
-| **The chat's live stream** | New messages, as they come | Each person | `GET /v1/chat/stream` |
+## 1. How WhatsApp does it
 
-What is **missing**: a feed of what happened in the business, in its own
-words, as it happens: "₦25,000 came in from Ada for INV-0042", "Order AK-7QX
-placed on your storefront", "Musa delivered PO-9 to Rivers Foods", "Bisi
-counted the shelf: 2 bags short", "Tunde added 20 bags of rice". The pieces
-are in the money log, the orders, the deliveries, the stock moves and the
-chat tools' diary lines, but nothing gathers them into one list.
+**Status**:
+- A person posts a photo, a short video or a line of text on a colour.
+- Each post is gone after 24 hours.
+- Their contacts see a row of rings at the top of Updates: green for unseen posts, grey for seen. "My status" comes first, with a + to post.
+- Tapped, a ring plays its posts full screen in turn:
+  - a bar at the top for each post;
+  - a tap on the right goes on, on the left goes back;
+  - holding pauses, and a swipe down closes.
+- A viewer replies (it lands in the chat with the poster) or reacts.
+- The poster sees who viewed each post.
+- The poster chooses who sees their status: all contacts, all but some, or only some.
+- A viewer can mute someone's status.
 
-## A first shape
+**Channels**:
+- A one-way broadcast: the account posts, and followers read and react with an emoji. Followers do not reply in it.
+- Posts stay; they do not expire after 24 hours.
+- Channels are found in a directory and followed or unfollowed.
+- A channel shows its followers' count and its unread posts.
 
-Updates as WhatsApp's: a few things at the top that need you, then what
-happened, newest first.
+## 2. What it is in Taskiem
 
-| # | Part | What it shows | Server |
-| --- | --- | --- | --- |
-| U1 | **Needs you** | The approvals waiting and Taskiem's cards, each with its one step (the same cards and sheets as Taskiem's conversation) | Exists |
-| U2 | **Today** | The day's figures from the briefing (sales, owed, low stock, deliveries), each leading to its screen | Exists |
-| U3 | **What happened** | The business's events, newest first, grouped by day, each opening its screen (the invoice, the order, the delivery, the count); read again live | **New**: a feed endpoint |
-| U4 | **For you** | The person's notifications (the bell), read and marked read, each opening its screen in the app or the web for the automation's | Exists |
-| U5 | **The tab's count** | Unread updates and approvals waiting, on the Updates tab as Chats has its unread count | Exists (`/count`); more with U3 |
-| U6 | **What reaches you** | The notification settings (which groups come by chat or email) | Exists |
-| U7 | **On the lock screen** | An update that needs you, pushed when the app is closed | With M4 (push) |
+**A business's status**
+- **What a post is**:
+  - What a business shows today: fresh stock, a new product, a price for the day, "open late tonight".
+  - A photo, a short video (up to 30 seconds), or a line of text on one of the brand's colours.
+  - It is gone after 24 hours.
+  - It may **tag products** from its price list or catalogue.
+- **Who posts**: the business's people who may sell (`storefront.manage`). A post is the business's, not the person's, and shows with the business's name and logo.
+- **Who sees it**:
+  - the businesses linked with it, in their Updates;
+  - its customers, through a link (§4).
+- **What a viewer can do**:
+  - **Reply.** The reply goes into the conversation with that business, quoting the post, as a WhatsApp status reply does. That is where a sale starts.
+  - **React** with an emoji.
+  - **Order** a tagged product. A linked business gets the order sheet with the product in the bag. A customer gets the storefront's order page for it.
+- **What the poster sees**:
+  - who viewed each post (each linked business by name; customers as a count);
+  - the replies, in the chats.
+- **Who can see it**: everyone, all but some, or only some, chosen from the linked businesses. Customers either see it or do not.
+- **Muting**: a business's status can be muted in Updates.
 
-## Decisions to make
+**A business's channel**
+- **What it is**: the business's broadcast. It holds its news, new products and offers, and a weekly price list.
+- **What a post is**: text, photos, a video, or tagged products. Posts stay.
+- **Who follows it**:
+  - linked businesses, from Updates or the business's profile;
+  - customers, from the business's page or by saying FOLLOW in its chat (§4).
+- **What a follower can do**:
+  - react with an emoji;
+  - **Order** a tagged product, as on a status.
+- **Finding channels**: in Explore, which becomes the channels' directory too. Followers' counts show there.
 
-1. **What happened (U3)**: build the server's business feed (new work: a
-   table of events written where each thing happens, or a view over the
-   money log, orders, deliveries and stock), or start the tab with what
-   exists (U1, U2, U4) and add the feed after?
-2. **Who sees which events**: everyone by their permissions (money for
-   `invoice.read`, orders for `order.handle`, stock for `table.read`), or
-   owners see everything and staff only what they did or were given?
-3. **Needs you (U1)**: show Taskiem's cards in Updates as well as in
-   Taskiem's conversation (one card, two places; dealt with in one is gone
-   from both), or move them to Updates and leave the conversation for
-   talking?
-4. **The automation's notices** (runs, connections, keys): in Updates for
-   those who may see runs, or left on the web, where the workflows are?
+## 3. In the app
 
-## Order of the work (once settled)
+The Updates tab:
 
-U1, U2, U4 and U5 first (no server work), then U3 with its endpoint and the
-events it carries, U6, and U7 with M4. Each with its tests, large text and
-touch targets, as every milestone; an audit after.
+| Part | What it is |
+| --- | --- |
+| **Status** | A row of rings across the top: My status first (with + to post, and how many viewed), then the linked businesses with a status, unseen ones first with a lime ring, seen ones grey. Muted ones at the end, faded |
+| **The viewer** | Full screen, a business's posts in turn: bars at the top, tap on the right or left, hold to pause, swipe down to close; its name, logo and how long ago; a tagged product as a card at the bottom with **Order**; a reply box and the reactions |
+| **Posting** | A photo or video from the camera or the phone's photos, or text on a colour; a caption; tag products (the price list's or catalogue's, searched); who sees it; Post |
+| **My status** | Each post with its viewers (businesses by name, customers as a count), its replies, and Delete |
+| **Channels** | Below the status: the channels followed, each a row with its logo, its latest post and its unread count, as a chat row. Then **Find channels** (Explore's channels). The business's own channel first, with + to post |
+| **A channel** | Its posts, newest at the bottom as a chat; reactions under each; a tagged product's card with **Order**; Follow or Unfollow; the followers' count; Mute |
+| **The tab's count** | Unseen statuses (a dot) and unread channel posts (a number), as WhatsApp's |
+
+## 4. Reaching customers
+
+Customers talk to a business through WhatsApp or Telegram, not the app, so
+they reach its status and channel in two ways.
+
+**A page for each.** Both are public, in the business's look, on the
+storefront's address:
+- The status page (`/s/<business>/status`) plays today's posts, with Order on a tagged product, and "Chat with us" opening the business's WhatsApp.
+- The channel page (`/s/<business>/channel`) holds its posts and a **Follow on WhatsApp** button.
+
+A business shares either link anywhere: its own WhatsApp status, its bio,
+its chat replies.
+
+**The chat app, for those who ask.** A customer who follows the channel gets its posts as messages from the business's number:
+- **Following.** A customer follows from the page, or by saying FOLLOW in the business's chat.
+- **Leaving.** STOP, which the reach book already keeps, ends it.
+- **Within 24 hours.** Inside the 24 hours after the customer last wrote, a post goes as a normal message.
+- **After 24 hours.** Outside them, WhatsApp takes only a template Meta has approved, paid for by the message.
+  - The post goes as a `business_update` template: the post's first line and a **See it** button to the channel page.
+  - The template is counted against the business's plan, as templates are today.
+  - A business chooses how often its followers may be messaged: every post, or one digest a day.
+
+Customers do **not** see the status in WhatsApp's own Updates: the WhatsApp
+Business Platform cannot post a status. The status page is how they see it.
+
+## 5. What the server needs
+
+| | What | Notes |
+| --- | --- | --- |
+| U-S1 | **Posts**: a status post or a channel post | The business; the kind (status or channel); text, colour, media, caption; the tagged products (price-list or catalogue items); who may see it (status); its expiry (status: 24 hours) |
+| U-S2 | **Media** | Photos and videos uploaded as chat files are, with a thumbnail; a video up to 30 seconds and 16 MB; purged with the post (a status's a day after it ends) |
+| U-S3 | **Seeing** | Statuses of the linked businesses who may see them, unseen first; seen marks; viewers for the poster; mute |
+| U-S4 | **Replies and reactions** | A reply is a message in the link's conversation with the post quoted (a new message kind, as a document card is); reactions per post and viewer |
+| U-S5 | **Channels** | One per business, made with its first post; follows (linked businesses, and customers by their chat number); followers' count; unread per follower; the directory in Explore |
+| U-S6 | **Customers** | The public status and channel pages; FOLLOW and STOP in the customer chat; posts sent to following customers inside the 24 hours, as the template outside them, or a daily digest; the `business_update` template submitted with the others |
+| U-S7 | **Ordering from a post** | A tagged product opens the order sheet (linked businesses) or the storefront's order page (customers) with it; the order notes the post it came from, so the business sees what sold from its status |
+| U-S8 | **Live** | New statuses and channel posts on the chat's live stream, so the rings and counts change as they happen |
+| U-S9 | **Limits and safety** | Posts per day per business by plan; media checked as chat files are; a post reported by a viewer; audit of posting and deleting |
+
+## 6. The web
+
+The web chat gets the same Updates: the rings above the chats list, the viewer, posting, and the channels. The rule that the app and the web chat stay the same (mobile-app.md §9) holds here too: each part is built in both, and the parity tests cover both.
+
+## 7. Order of the work
+
+| # | Part | Notes |
+| --- | --- | --- |
+| UP1 | Status between linked businesses: posting text and photos, the rings, the viewer, reply and react, viewers, who can see, mute | Server U-S1 to U-S4, U-S8; app and web |
+| UP2 | Video in a status | U-S2 for video |
+| UP3 | Tagged products and Order from a status | U-S7 |
+| UP4 | Channels for linked businesses: posting, following, the list, a channel, reactions, Explore's directory | U-S5 |
+| UP5 | Customers: the status and channel pages, FOLLOW and STOP, posts to following customers, the template and the digest | U-S6 |
+| UP6 | Limits, reporting, the plan's counts | U-S9 |
+
+Each part: the server's tests, widget tests for what each button sends,
+large text and touch targets, the web's e2e and parity, committed on its
+own; an audit after the last.
+
+## 8. Still to settle
+
+These have suggested answers; each is the founder's to change.
+
+1. **Customers' chat messages cost money**: a template outside the 24 hours is paid for. Suggested: a business chooses every post or a daily digest; the digest by default.
+2. **Who posts**: suggested `storefront.manage`, and a new permission if staff should post without managing the shop.
+3. **How long a channel's posts are kept**: suggested 90 days, as notifications.
+4. **Video**: suggested up to 30 seconds and 16 MB, after photos and text (UP2).
+5. **Status for customers by default**: suggested on, so a status is on its page from the first post; a business can turn the page off.
