@@ -10,6 +10,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/fs"
+	"log/slog"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -154,12 +156,52 @@ func InTenantTx(ctx context.Context, pool *pgxpool.Pool, tenants []uuid.UUID, fn
 	if len(tenants) == 0 {
 		return fmt.Errorf("db: empty tenant scope")
 	}
-	return pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
+	var h *hookTx
+	if err := pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, "SELECT set_config('app.tenant_scope', $1, true)", Scope(tenants...)); err != nil {
 			return err
 		}
-		return fn(tx)
-	})
+		h = &hookTx{Tx: tx}
+		return fn(h)
+	}); err != nil {
+		return err
+	}
+	for _, then := range h.after {
+		runAfterCommit(then)
+	}
+	return nil
+}
+
+// hookTx is the transaction InTenantTx hands out: a transaction that also
+// holds what to do once its commit has succeeded.
+type hookTx struct {
+	pgx.Tx
+	after []func()
+}
+
+// AfterCommit asks for fn to run once tx has committed, and says whether tx
+// can hold it. A transaction from InTenantTx can; a savepoint opened inside
+// one, or a transaction begun any other way, cannot, and the caller does
+// what it did before. The functions run in the order they were added,
+// after a successful commit only, on the goroutine that committed: they
+// must not block. One that panics is recovered and logged, since the
+// commit has happened and the caller must hear that it did.
+func AfterCommit(tx pgx.Tx, fn func()) bool {
+	h, ok := tx.(*hookTx)
+	if !ok {
+		return false
+	}
+	h.after = append(h.after, fn)
+	return true
+}
+
+func runAfterCommit(fn func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("db: a function run after commit panicked", "panic", r, "stack", string(debug.Stack()))
+		}
+	}()
+	fn()
 }
 
 // MigrationsDigest is a hash of every migration's name and text: a

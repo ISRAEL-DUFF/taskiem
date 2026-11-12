@@ -167,6 +167,8 @@ type config struct {
 	Keys KeysConfig
 	// Shutdown is how the process stops on SIGTERM (docs/reliability.md).
 	Shutdown ShutdownConfig
+	// Wake is how workers are told of a new task (docs/spec/task-wake-ups.md).
+	Wake WakeConfig
 	// Status is the public status page and its admin API; Canary the
 	// synthetic end-to-end probe (docs/reliability.md).
 	Status StatusConfig
@@ -181,6 +183,29 @@ type config struct {
 type ShutdownConfig struct {
 	Delay       time.Duration // TASKIEM_SHUTDOWN_DELAY, default 0 (the chart sets 10s)
 	WorkerDrain time.Duration // TASKIEM_WORKER_DRAIN, default 30s
+}
+
+// WakeConfig is how workers are told of a new task
+// (docs/spec/task-wake-ups.md): after the scheduling transaction's commit,
+// at most once every Interval for a queue, or, with InTx, by the task
+// trigger inside the transaction as before decision 0067.
+type WakeConfig struct {
+	Interval time.Duration // TASKIEM_WAKE_INTERVAL, default 10ms
+	InTx     bool          // TASKIEM_WAKE_IN_TX, default false
+}
+
+func wakeConfig() (WakeConfig, error) {
+	c := WakeConfig{Interval: runtime.DefaultWakeInterval}
+	if v := os.Getenv("TASKIEM_WAKE_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < time.Millisecond || d > time.Second {
+			return c, fmt.Errorf("TASKIEM_WAKE_INTERVAL must be a duration between 1ms and 1s, not %q", v)
+		}
+		c.Interval = d
+	}
+	var err error
+	c.InTx, err = envBool("TASKIEM_WAKE_IN_TX", false)
+	return c, err
 }
 
 func shutdownConfig() (ShutdownConfig, error) {
@@ -600,6 +625,9 @@ func loadConfig() (config, error) {
 	if c.Shutdown, err = shutdownConfig(); err != nil {
 		return c, err
 	}
+	if c.Wake, err = wakeConfig(); err != nil {
+		return c, err
+	}
 	if c.Status, err = statusConfig(); err != nil {
 		return c, err
 	}
@@ -814,7 +842,8 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		BYOKCacheTTL: cfg.Keys.CacheTTL, DestroyAfter: cfg.Keys.DestroyAfter,
 		Platform: secrets.PlatformClients{"iswallet": cfg.ISWallet.credentials()}}
 	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src, linkOps: linkOps,
-		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, PayoutSent: bills, HooksURL: cfg.HooksURL}}
+		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, PayoutSent: bills, HooksURL: cfg.HooksURL,
+			WakeInterval: cfg.Wake.Interval, WakeInTx: cfg.Wake.InTx}}
 	e.stock = &stock.Stock{Pool: pool, Table: &storefront.XenibaseStock{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log}},
 		MoneyLog: &moneylog.Log{Pool: pool, PII: vault}}
 	stockOps.Set(e.stock)

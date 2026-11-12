@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -13,9 +14,10 @@ import (
 // the connection drops (a database restart or failover), it reconnects
 // with backoff and signals wake once, since notifications sent meanwhile
 // were lost; callers also poll, so nothing waits on it alone. When want is
-// set, a notification wakes the caller only if want accepts its payload
-// (a worker skips tasks for other queues instead of claiming for nothing).
-func listen(ctx context.Context, s *Store, channel string, want func(payload string) bool) (<-chan struct{}, func(), error) {
+// set, a notification wakes the caller only if want accepts it (a worker
+// skips tasks for other queues, and wake-ups its own process sent and has
+// already delivered in memory, instead of claiming for nothing).
+func listen(ctx context.Context, s *Store, channel string, want func(n *pgconn.Notification) bool) (<-chan struct{}, func(), error) {
 	conn, err := subscribe(ctx, s.Pool, channel)
 	if err != nil {
 		return nil, nil, err
@@ -42,7 +44,7 @@ func listen(ctx context.Context, s *Store, channel string, want func(payload str
 			if c != nil {
 				if n, err := c.Conn().WaitForNotification(lctx); err == nil {
 					backoff = 100 * time.Millisecond
-					if want == nil || want(n.Payload) {
+					if want == nil || want(n) {
 						notify()
 					}
 					continue
@@ -99,11 +101,14 @@ func subscribe(ctx context.Context, pool *pgxpool.Pool, channel string) (*pgxpoo
 	return conn, nil
 }
 
-func waitFor(ctx context.Context, wake <-chan struct{}, d time.Duration) {
+// waitForEither waits for a wake-up from the listener or from this process
+// (Store.localWakes), for d, or for ctx to end.
+func waitForEither(ctx context.Context, wake, local <-chan struct{}, d time.Duration) {
 	t := time.NewTimer(d)
 	defer t.Stop()
 	select {
 	case <-wake:
+	case <-local:
 	case <-t.C:
 	case <-ctx.Done():
 	}

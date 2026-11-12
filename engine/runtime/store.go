@@ -69,7 +69,15 @@ type Store struct {
 	// the base of callback steps' addresses. Empty, a workflow with
 	// callback steps cannot start.
 	HooksURL string
+	// WakeInterval is the least time between two wake-ups this process
+	// sends for one queue (TASKIEM_WAKE_INTERVAL); zero is
+	// DefaultWakeInterval. WakeInTx leaves wake-ups to the task trigger,
+	// inside the transaction, as before decision 0067
+	// (TASKIEM_WAKE_IN_TX): for a comparison under load.
+	WakeInterval time.Duration
+	WakeInTx     bool
 
+	wake waker
 	defs     lru.Cache[string, *wd.Definition] // "workflow_id/version"; versions are immutable; bounded (S34)
 	folds    decideCache
 	taints   taintCache
@@ -697,9 +705,14 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			if err != nil {
 				return nil, err
 			}
-			_, err = tx.Exec(ctx, `INSERT INTO tasks (id, tenant_id, run_id, step_id, attempt, queue, available_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			// The wake-up is sent after the commit, not by the task trigger
+			// in it (wake.go): the trigger reads app.task_wake, set here in
+			// the insert's own round trip.
+			b := &pgx.Batch{}
+			b.Queue(`SELECT set_config('app.task_wake', $1, true)`, s.wakeAfterCommit(tx, p.Queue, at))
+			b.Queue(`INSERT INTO tasks (id, tenant_id, run_id, step_id, attempt, queue, available_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 				uuid.Must(uuid.NewV7()), tenant, run.ref.ID, ev.StepID, ev.Attempt, p.Queue, at)
-			return nil, err
+			return nil, tx.SendBatch(ctx, b).Close()
 		case history.KindTimer:
 			at, err := history.ParseTime(p.FireAt)
 			if err != nil {

@@ -1,6 +1,6 @@
 # Task wake-ups outside the transaction
 
-Status: **spec; not built.** Written 2026-11-12. Decision: [0067](../decisions/0067-wake-ups-leave-the-transaction.md), which amends [0002](../decisions/0002-postgres-as-queue.md). It closes the first item of "What remains" in [performance](../performance.md#what-remains).
+Status: **spec; W1 to W3 built 12 November 2026, with the review machine's measurements of W4 (§9.1). W5, the target hardware, is open.** Written 2026-11-12. Decision: [0067](../decisions/0067-wake-ups-leave-the-transaction.md), which amends [0002](../decisions/0002-postgres-as-queue.md). It closes the first item of "What remains" in [performance](../performance.md#what-remains).
 
 ## 1. Summary
 
@@ -94,15 +94,15 @@ Two facts make the change small: tasks are inserted in exactly one place in Go, 
 
 ### 5.2 The engine says it will wake
 
-Where `applyEffects` inserts a task that is due within a second:
+Where `applyEffects` inserts a task that is due within a second (`wakeAfterCommit` in `engine/runtime/wake.go`):
 
 1. It asks `db.AfterCommit(tx, …)` to tell the notifier this task's queue.
-2. If that was accepted, and only then, it sets `app.task_wake` to `engine` for this transaction (`set_config(…, true)`), before the insert and in the same round trip.
+2. If that was accepted, it sets `app.task_wake` to `engine` for this transaction (`set_config(…, true)`); if not, to the empty string. Either way the value is set just before the insert, in the insert's own round trip, so a value left by an earlier task of the same transaction never silences the trigger for a task nobody will wake for.
 3. It inserts the task.
 
-If step 1 was refused (a savepoint, an unusual caller) or `TASKIEM_WAKE_IN_TX` is set, nothing is set and the trigger notifies as today. A wake-up is never dropped by a code path nobody thought of; at worst that path keeps today's cost.
+If step 1 was refused (a savepoint, an unusual caller) or `TASKIEM_WAKE_IN_TX` is set, the trigger notifies as today. A wake-up is never dropped by a code path nobody thought of; at worst that path keeps today's cost.
 
-A task due later (a retry's backoff) wakes nobody, as today. A worker finds it at a poll once it is due.
+A task due later (a retry's backoff) is left to the trigger, which sends nothing for it, as today. A worker finds it at a poll once it is due.
 
 ### 5.3 The trigger
 
@@ -112,14 +112,14 @@ Processes on the old binary never set the value, so the migration can go out bef
 
 ### 5.4 The notifier
 
-One in each process that has a `Store`, started with it and stopped with it.
+One in each process that has a `Store`. It is not a loop that runs for the life of the process: the first task that is owed a wake-up starts it, and it ends when nothing is owed, so a `Store` needs no starting or stopping and a command-line tool that makes one pays nothing.
 
 - **State.** For each queue: whether it has a wake-up owed, and when the last was sent.
 - **Being told.** The after-commit function marks the queue as owed and nudges the notifier. It never blocks and never touches the database, so it adds nothing to the caller's request.
 - **Sending.** When a queue is owed and 10 ms have passed since its last send, the notifier sends for it at once. Otherwise it sends when the 10 ms are up. One statement carries every queue owed at that moment: `SELECT pg_notify('taskiem_tasks', q) FROM unnest($1::text[]) AS q`.
 - **One at a time.** The notifier never has two sends under way. A slow database makes it send less often, with more behind each send. It cannot pile up.
-- **Its connection.** Taken from the pool for each send, with a one-second limit. If the pool has none to give or the send fails, the queue stays owed, the notifier tries again after 100 ms, and a counter records it. Workers poll meanwhile.
-- **Stopping.** On shutdown it sends what is owed once, within a second, and ends.
+- **Its connection.** Taken from the pool for each send, with a one-second limit. If the pool has none to give or the send fails, the queue stays owed, the notifier tries again after 100 ms, and a counter records it. After ten failures in a row (about a second, or ten if no connection can be had) it drops what it owes: by then every worker has polled, and a database that was away wakes every listener when it returns. The next task starts it again.
+- **Stopping.** Nothing to stop. A process that exits within a few milliseconds of a commit may not send that task's wake-up; the task waits for a poll.
 
 The interval is `TASKIEM_WAKE_INTERVAL` (default `10ms`; from `1ms` to `1s`). Ten milliseconds is a fifth of the dispatch objective's 50 ms ([reliability](../reliability.md)), and it is paid only by a task that arrives just after another for the same queue.
 
@@ -130,11 +130,13 @@ A process sends at most 100 wake-ups a second for a queue, however many tasks it
 The `Store` keeps the wake channels of the workers running in its process, by queue. The after-commit function signals them directly, before it marks the queue for the notifier.
 
 - In a one-process install (`--role all`, the one-VM kit, `taskiem dev`) a task is claimed without waiting for the database to carry a message back.
-- The notifier still sends, because other processes may have idle workers for that queue. A worker woken twice claims once: the wake channel holds one signal.
+- The notifier still sends, because other processes may have idle workers for that queue.
+- **A worker does not wake twice for one task.** The notification its own process sends would arrive a moment after the wake in memory and cost a claim that finds nothing, and the claim is the engine's most expensive statement. The notifier records the database connection it sends on, and for a second the process's listener skips notifications from that connection (`sentHere`). A notification carries the sender's connection, so no change to the payload is needed and other processes are not affected.
+- The one thing this can skip wrongly is the trigger's own notification for a task inserted in a savepoint, if that transaction runs on a connection the notifier used within the last second. That task waits for a poll.
 
 ### 5.6 The listener and the claim loop
 
-Unchanged. The listener's reconnect, its filter by queue and the one-second poll stay exactly as they are.
+The listener's reconnect, its filter by queue and the one-second poll stay exactly as they are. Its filter now sees the whole notification, for the check above, and the claim loop waits on the wake in memory beside the listener's.
 
 The claim loop was read again for this plan and is left alone. A claim that comes back short means nothing more could be claimed, so waiting for a wake-up is right; a claim that comes back full is followed by another as soon as a slot is free. Claiming again whenever a step finishes would add a claim to every step, and the claim is the most expensive statement the engine runs ([performance](../performance.md#results-the-original-code)).
 
@@ -181,12 +183,14 @@ No alert is added. The dispatch objective already catches wake-ups that stop arr
 | `TestAfterCommitRunsOnlyOnCommit` (`engine/db`) | Functions run once after a commit, in order; none after a rollback or an error from the function body; a panic in one is recovered and the commit stands |
 | `TestAfterCommitRefusedOnSavepoint` | A savepoint's transaction refuses, so the caller falls back |
 | `TestEngineTransactionsDoNotNotify` | With `app.task_wake` set, an insert into `tasks` sends nothing from the trigger; without it, 00258's tests (`TestTaskInsertsNotifyOncePerQueue`, `TestFutureTasksDoNotNotify`) pass unchanged |
-| `TestTaskWakesAnotherProcess` | Two stores on one database: a task scheduled through the first wakes a worker of the second within the interval and a margin, with the trigger silent |
-| `TestWakeupsAreMerged` | 500 tasks for one queue in 50 ms cause no more sends than the interval allows, and every task is claimed |
-| `TestLocalWake` | A worker in the scheduling process claims with the notifier's sends held back |
-| `TestWakeSurvivesSendFailure` | With the notifier's sends failing, every task is still claimed by the poll, the failure is counted, and sends resume |
-| `TestWakeInTxSwitch` | With `TASKIEM_WAKE_IN_TX=true` the trigger notifies and the notifier sends nothing |
-| `TestMixedVersionsWake` | A store that never sets the value (the old binary) and one that does wake each other's workers |
+| `TestWakeAfterCommitChoosesWhoWakes` (`engine/runtime`) | The engine wakes for a task due now in a tenant transaction, after the commit and not before; a savepoint, a task due later and the switch are left to the trigger; a rollback sends nothing |
+| `TestTaskWakesAnotherProcess`, `TestTaskWakesItsOwnProcess` | Two stores on one database, and one: a run started while a worker waits completes well inside the worker's one-second poll, three times |
+| `TestEngineCommitsDoNotNotify` | 40 runs started one after another are announced in a handful of notifications, where the trigger sent one each; with the switch, the trigger sends 40 |
+| `TestWakeupsAreMerged` | 500 tasks for one queue cause no more sends than the interval allows, and one after the last |
+| `TestLocalWakeAndOwnNotifications` | The process's worker is woken in memory at once, another queue's is not, the process knows its own notification, another process does not, and a worker that stopped is not woken |
+| `TestWakeSurvivesSendFailure` | With no database the notifier gives up instead of trying for ever, and sends again when the next task comes |
+| `TestMixedVersionsWake` | A store that leaves wake-ups to the trigger (the old binary) and one that does not wake each other's workers |
+| `TestWakeConfig` (`cmd/taskiem`) | The two settings, their defaults, and that a bad value stops the process |
 | The existing runtime, HA and chaos tests | Unchanged behaviour: `TestListenWakesOnlyForWantedPayloads`, `TestWorkerSurvivesConnectionDrops` and the rest |
 
 ## 9. Measuring it

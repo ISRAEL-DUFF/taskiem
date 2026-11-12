@@ -18,6 +18,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
@@ -234,7 +235,14 @@ func (w *Worker) Run(ctx context.Context) error {
 		}()
 	}
 	// The notification's payload is the new task's queue (00004_execution).
-	wake, stop, err := listen(ctx, w.Store, "taskiem_tasks", func(queue string) bool { return queue == w.Queue || queue == "" })
+	// A task this process scheduled wakes the worker in memory (wake.go);
+	// the notification its notifier then sends for other processes is
+	// skipped here.
+	local, unhear := w.Store.localWakes(w.Queue)
+	defer unhear()
+	wake, stop, err := listen(ctx, w.Store, "taskiem_tasks", func(n *pgconn.Notification) bool {
+		return (n.Payload == w.Queue || n.Payload == "") && !w.Store.sentHere(n.PID)
+	})
 	if err != nil {
 		return err
 	}
@@ -316,7 +324,7 @@ func (w *Worker) Run(ctx context.Context) error {
 			free <- struct{}{}
 		}
 		if len(claims) < slots {
-			waitFor(ctx, wake, time.Second)
+			waitForEither(ctx, wake, local, time.Second)
 		}
 	}
 	return nil
