@@ -522,7 +522,7 @@ class _ReplyBox extends StatelessWidget {
     const lift = [BoxShadow(color: Color(0x140E1A14), offset: Offset(0, 1), blurRadius: 2)];
     final ready = onSend != null && text.text.trim().isNotEmpty;
     return Container(
-      color: t.tkSoft,
+      // On the chat's wallpaper, as the composer.
       padding: EdgeInsets.fromLTRB(10, 8, 10, 12 + bottom),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,

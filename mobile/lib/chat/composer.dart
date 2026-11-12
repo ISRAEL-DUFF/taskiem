@@ -354,7 +354,8 @@ class ComposerState extends State<Composer> {
         if (widget.replying != null && !recording) _Replying(line: widget.replying!, onCancel: widget.onCancelReply),
         if (file != null && !recording) _Pending(file: file, onRemove: () => setState(() => _file = null)),
         Container(
-          color: t.tkSoft,
+          // On the chat's wallpaper, as WhatsApp's (`.chat-pane .composer` on a
+          // phone): no strip of its own.
           // `.chat-pane .composer { padding: 8px 10px 12px; gap: 8px }`
           padding: EdgeInsets.fromLTRB(10, 8, 10, 12 + widget.bottom),
           child: recording ? _recordingBar(t) : _row(t, dark, file, words),

@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 import 'api/transport.dart';
 import 'app/auth.dart';
 import 'app/config.dart';
+import 'kit/keyboard.dart';
 import 'app/lock.dart';
 import 'app/prefs.dart';
 import 'app/session.dart';
@@ -72,7 +73,9 @@ class TaskiemApp extends StatelessWidget {
           builder: (context) => DefaultTextStyle(
             style: tkText(size: 14, color: TkTheme.tokens(context).text).copyWith(decoration: TextDecoration.none),
             // The lock over every screen, not only the first.
-            child: auth == null || unlocker == null || home != null
+            // Above the keyboard when it is up, every screen and sheet.
+            child: KeyboardRoom(
+              child: auth == null || unlocker == null || home != null
                 ? child!
                 : ListenableBuilder(
                     listenable: Listenable.merge([auth!, ?prefs]),
@@ -85,6 +88,7 @@ class TaskiemApp extends StatelessWidget {
                       child: child!,
                     ),
                   ),
+            ),
           ),
         ),
       ),

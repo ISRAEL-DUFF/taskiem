@@ -134,6 +134,27 @@ void main() {
     expect(ids[0], ids[1], reason: 'a retry is the same message to the server');
   });
 
+  testWidgets('the keyboard up: the message box sits just above it, as on WhatsApp', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    // A phone's gesture bar, and then its keyboard (which covers the bar).
+    t.view.padding = const FakeViewPadding(bottom: 24);
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-bayo');
+    final chats = ChatsData(f.auth(), now: () => f.at)..load();
+    final conv = ListLinkChatsResponse.fromJson(f.json('/v1/link-chats')).conversations.firstWhere((c) => c.name == 'Bayo Rice Mills');
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ConversationScreen(data: ConversationData(chats, conv, follow: false))));
+    await settle(t);
+    await t.pumpAndSettle();
+    final box = find.bySemanticsLabel(RegExp(r'^Message$'));
+    expect(t.getRect(box.first).bottom, lessThan(844 - 24), reason: 'above the gesture bar');
+    t.view.viewInsets = const FakeViewPadding(bottom: 320);
+    await t.pumpAndSettle();
+    final r = t.getRect(box.first);
+    expect(r.bottom, lessThanOrEqualTo(844 - 320), reason: 'not under the keyboard');
+    expect(r.bottom, greaterThan(844 - 320 - 40), reason: 'just above it, no gap for the gesture bar');
+  });
+
   testWidgets('cards: opened at the unread, the round button goes to the newest, Pay opens the invoice', (t) async {
     t.view.physicalSize = const Size(390, 844);
     t.view.devicePixelRatio = 1;

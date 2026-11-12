@@ -24,6 +24,9 @@
 /* The composer: the tools button, the pill with clip and camera, the round
    send or microphone. */
 .chat-mode .composer, .chat-pane .composer { background: var(--tk-soft); border-top: 0; padding: 8px 10px 12px; gap: 8px; align-items: flex-end; }
+/* On a phone, as WhatsApp's: the chat's wallpaper carries on under the
+   composer, the box and the round buttons on it (a computer keeps the strip). */
+@media (max-width: 860px) { .chat-mode .composer, .chat-pane .composer { background: transparent; } }
 .composer-pill { border-radius: 24px; min-height: 46px; align-items: center; box-shadow: 0 1px 2px var(--chat-shadow); }
 .composer > .icon-button.primary, .composer > .send-button, .composer > .mic-button, .composer > button.primary { width: 46px; height: 46px; }
 .composer-tools {
