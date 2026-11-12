@@ -20,6 +20,7 @@ import '../kit/sheet.dart' show TkKitField;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'doc_thread.dart' show DocThread;
+import 'invoice_match.dart' show CustomerMatching, InvoiceMatchPage, groupSuggestions, suggestionsPath;
 import 'money_sheets.dart' show dateLabel, invoiceActions, invoicePath, invoiceStatus;
 import 'product_form.dart' show SaveKey, formKey;
 import 'storefront_orders_page.dart' show isMasked;
@@ -216,6 +217,7 @@ class _InvoicesPageState extends State<InvoicesPage> with Polling {
   String? _error;
   String _status = '';
   int _asked = 0;
+  int _waiting = 0;
 
   @override
   void initState() {
@@ -231,6 +233,13 @@ class _InvoicesPageState extends State<InvoicesPage> with Polling {
       if (mounted && asked == _asked) setState(() => (_list = _maps(r['invoices']), _error = null));
     } on Object catch (e) {
       if (mounted && asked == _asked) setState(() => _error = errorWords(e));
+    }
+    try {
+      // How many payments wait (a refusal leaves the button without one).
+      final r = (await widget.auth.transport.send('GET', suggestionsPath) as Map).cast<String, dynamic>();
+      if (mounted) setState(() => _waiting = groupSuggestions(_maps(r['suggestions'])).length);
+    } on Object {
+      // No number, then.
     }
   }
 
@@ -260,6 +269,14 @@ class _InvoicesPageState extends State<InvoicesPage> with Polling {
                 final pick = await showTkModalChoices(context, title: 'Show', value: _status, choices: invoiceFilters);
                 if (pick == null || pick == _status) return;
                 setState(() => (_status = pick, _list = null));
+                await _load();
+              },
+            ),
+            TkSmallButton(
+              label: _waiting > 0 ? 'To match ($_waiting)' : 'To match',
+              semantics: _waiting > 0 ? 'To match: $_waiting ${_waiting == 1 ? 'payment waiting' : 'payments waiting'}' : 'To match',
+              onPressed: () async {
+                await Navigator.of(context).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => InvoiceMatchPage(auth: widget.auth)));
                 await _load();
               },
             ),
@@ -322,7 +339,7 @@ class _InvoicesPageState extends State<InvoicesPage> with Polling {
 /// One invoice: what is due, what it is for, its details, its customer and
 /// its payments; sent, voided, amended.
 class InvoicePage extends StatefulWidget {
-  const InvoicePage({super.key, required this.auth, required this.id, this.backLabel = 'Back', this.sent, this.follow = true, this.customerMatching});
+  const InvoicePage({super.key, required this.auth, required this.id, this.backLabel = 'Back', this.sent, this.follow = true});
   final Auth auth;
   final String id;
   final String backLabel;
@@ -330,9 +347,6 @@ class InvoicePage extends StatefulWidget {
   /// What Send answered, when it was sent just now (from the editor).
   final Map<String, dynamic>? sent;
   final bool follow;
-
-  /// The customer's matching (part H): a card of its own, given the invoice.
-  final Widget Function(Map<String, dynamic> invoice)? customerMatching;
 
   @override
   State<InvoicePage> createState() => _InvoicePageState();
@@ -640,7 +654,7 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
           if (_revealed == null && !may.reveal) Text('The customer’s details are hidden. Someone who may see personal data can show them.', style: tkHint(t)),
         ],
       ),
-      if (x['status'] != 'draft' && widget.customerMatching != null) widget.customerMatching!(x),
+      if (x['status'] != 'draft') CustomerMatching(key: ValueKey('money $number'), auth: _auth, invoice: x),
       TkPageCard(title: 'Payments', children: [_payments(t, x, may.undo)]),
     ];
   }

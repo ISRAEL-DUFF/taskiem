@@ -17,6 +17,7 @@ import 'package:taskiem/chat/alerts.dart';
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/give_task.dart';
 import 'package:taskiem/chat/thread.dart';
+import 'package:taskiem/chat/invoice_match.dart' show MatchSheet;
 import 'package:taskiem/chat/taskiem.dart';
 import 'package:taskiem/kit/sheet.dart' show TkSheet;
 import 'package:taskiem/main.dart';
@@ -406,6 +407,18 @@ void main() {
     expect(find.byType(TkSheet), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
     await t.pumpAndSettle();
+  });
+
+  testWidgets('M8: an unmatched payment’s Match it opens what it may pay', (t) async {
+    await screen(t);
+    final step = find.bySemanticsLabel('Match it: A payment of ₦37,500 is not matched yet');
+    await t.ensureVisible(step);
+    await t.pumpAndSettle();
+    await t.tap(step);
+    await t.pumpAndSettle();
+    expect(find.text('This is coming to the app soon.'), findsNothing);
+    expect(find.byType(MatchSheet), findsOneWidget);
+    expect(find.text('Match ₦37,500'), findsOneWidget);
   });
 
   testWidgets('Availability changed: the tile, and the diary line it leaves, read again', (t) async {

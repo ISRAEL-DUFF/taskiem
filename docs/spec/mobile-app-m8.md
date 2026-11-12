@@ -57,6 +57,7 @@ its own. After the last part, an audit as M5's to M7's.
 | W | The money rows in their sheets: an invoice (record a payment, send, remind, void), Add invoice and **Invoice them**; a bill (Pay, query, paid outside); a money entry (match it) and Add cash or expense; a table's rows |
 | T | Tables: the list and a table's rows (search, pages, add, change, remove after yes) |
 | I | Invoices: the list and its filters; an invoice (what is due, send and send again, its page opened or shared, void with a reason, amend, a payment undone, the customer shown, a query settled, its messages with a linked customer); a new invoice and a draft changed; the settings and credit terms |
+| H | Matching money: To match (each payment and what it may be for, matched or turned down, matched by hand to an invoice or order, split by hand or across the customer's invoices, held for a second person), an invoice's customer (what they owe, credit, account numbers given, payers forgotten); the alerts' **Match it**. A school family's claims are said and matched on the web |
 
 The server makes no PDF of an invoice: after Send the app shares the
 invoice's page link through the phone's share sheet instead, as the web

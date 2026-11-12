@@ -39,6 +39,7 @@ import 'tool_forms.dart' show toolDetail;
 import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
 import 'availability_sheet.dart' show showAvailabilitySheet;
 import 'bookings_page.dart' show BookingsPage;
+import 'invoice_match.dart' show showMatchSheet;
 import 'storefront_orders_page.dart' show DeliveriesPage, openStorefrontOrder, showRiderSheet;
 import 'tool_sheet.dart';
 import 'tools.dart';
@@ -765,8 +766,23 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                       } else if (tool != null && (what == 'orders' || what == 'stock')) {
                         // Review order, Record stock in: the row in its tool's sheet.
                         _openTool(tool, openId: a.id);
+                      } else if (what == 'match' && (a.id ?? '').isNotEmpty) {
+                        // Match it: what the money pays.
+                        unawaited(
+                          showMatchSheet(
+                            context,
+                            auth: d.chats.auth,
+                            entry: a.id!,
+                            amount: a.amountKobo,
+                            line: a.line,
+                            onDone: () {
+                              d.loadCards();
+                              unawaited(d.pull().catchError((Object _) {}));
+                            },
+                          ),
+                        );
                       } else {
-                        // Its sheet comes with M8 (reorder, match).
+                        // Its sheet comes with M8 (reorder).
                         showComingSoon(context);
                       }
                     },
