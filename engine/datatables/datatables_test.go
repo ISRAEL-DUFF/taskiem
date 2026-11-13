@@ -302,9 +302,16 @@ func TestTokenRenewal(t *testing.T) {
 	if creds["token"] == old || creds["secret_key"] == "" || creds["project_id"] != p.ProjectID {
 		t.Fatalf("after renewal %v", creds)
 	}
+	// The old token cannot be revoked at Xenibase, so the new one is kept
+	// short: no token is good for long after it is replaced or leaked.
 	st := w.project(t)
-	if st.TokenExpiresAt == nil || st.TokenExpiresAt.Sub(w.now) < 364*24*time.Hour {
-		t.Fatalf("expiry not moved: %+v", st)
+	if st.TokenExpiresAt == nil || st.TokenExpiresAt.Sub(w.now) < 44*24*time.Hour || st.TokenExpiresAt.Sub(w.now) > datatables.RenewedDays*24*time.Hour+time.Hour {
+		t.Fatalf("a renewed token lasts %s, want %d days: %+v", st.TokenExpiresAt.Sub(w.now), datatables.RenewedDays, st)
+	}
+	for _, x := range w.pg.Tokens() {
+		if x.Secret == old && x.ExpiresAt.Sub(w.now) > datatables.RenewBefore {
+			t.Fatalf("the replaced token is good for %s more", x.ExpiresAt.Sub(w.now))
+		}
 	}
 	// Two tokens now carry the name; the connection holds the new one.
 	var tok xenibasetest.Token
@@ -320,8 +327,13 @@ func TestTokenRenewal(t *testing.T) {
 	if err := w.svc.Apply(ctx, w.Tenant, "test", datatables.CreateTableChange("stock", []datatables.Column{{Name: "item", Type: "text"}})); err != nil {
 		t.Fatal(err)
 	}
+	// It is renewed again two weeks before it expires, a month on.
+	w.now = w.now.Add(30 * 24 * time.Hour)
+	if err := w.svc.RenewTick(ctx); err != nil || w.creds(t)["token"] != creds["token"] {
+		t.Fatalf("renewed 15 days before expiry: %v", err)
+	}
 	// A renewal that fails is logged and raised to the tenant once a day.
-	w.now = w.now.Add(352 * 24 * time.Hour)
+	w.now = w.now.Add(2 * 24 * time.Hour)
 	w.pg.Fail(xenibasetest.Failure{Method: http.MethodPost, PathPrefix: "/api/v1/tokens", Status: 503})
 	if err := w.svc.RenewTick(ctx); err == nil {
 		t.Fatal("a refused token call did not fail the tick")

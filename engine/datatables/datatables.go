@@ -58,6 +58,15 @@ const (
 	RenewBefore = 14 * 24 * time.Hour
 	// RenewEvery is how often the renewal job runs.
 	RenewEvery = 6 * time.Hour
+	// RenewedDays is how long a renewed token lasts. Xenibase documents no
+	// way to revoke an API token, so the token a renewal replaces works
+	// until its own expiry, and a token minted and then not stored (the
+	// vault write failed) cannot be withdrawn. A renewed token therefore
+	// lasts only what renewal needs: RenewBefore, in which a failing
+	// renewal is retried and its alert acted on, and a month of use. A
+	// leaked token is then good for at most this long, and a replaced one
+	// for RenewBefore.
+	RenewedDays = 45
 	// callTimeout bounds one management API call.
 	callTimeout = 20 * time.Second
 )

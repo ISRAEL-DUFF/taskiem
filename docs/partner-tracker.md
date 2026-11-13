@@ -83,6 +83,7 @@ Xenibase (formerly PGDock). Phase 1 is built from its published contracts ([plan
 | P1-G3 | Webhook management API frozen as a versioned contract | Needed | [x] `docs/webhooks.md`, with `description` and `metadata` |
 | P1-G4 | Error code list with retryability | Needed | [x] `docs/errors.md` |
 | P1-G2 | `Idempotency-Key` on writes | Wanted | [x] On every data API write, 24 hours |
+| P1-G5 | Revoke or delete an API token by token (`DELETE /api/v1/tokens/{id}` or the like), for the caller that minted it | Needed | [ ] Not in the published API. Without it Taskiem cannot revoke a data-tables token it replaces on renewal, a token it minted and failed to store, or a leaked one: renewed tokens are kept to 45 days instead ([data tables](data-tables.md#token-renewal)) |
 | C1 | Publish the V3 and V4 contracts (data API, auth, storage, billing events) | Needed for phases 2–4 | [~] Data API, auth, storage and paused projects published; no billing events yet |
 | Q7–Q28 | Thirteen questions on the request page, section 3 | Answer | [x] Answered; recorded in the plan's section 5 |
 | P2-G1, P3-G1/G2, P4 | OAuth consent, data API, project creation by token, contract tests in their CI | Later | [~] Data API and project creation by token exist; OAuth consent and the dedicated-instance role bootstrap are built on the Xenibase branch `claude/nigeria-workflow-automation-strategy-uoddh0`; contract tests in their CI once the `xenibase@1` suite is sent |
