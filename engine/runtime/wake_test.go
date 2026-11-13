@@ -11,8 +11,8 @@ import (
 	dto "github.com/prometheus/client_model/go"
 
 	"github.com/israel-duff/taskiem/engine/runtime"
-	"github.com/israel-duff/taskiem/engine/telemetry"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
+	"github.com/israel-duff/taskiem/engine/telemetry"
 )
 
 // process is a store with a pool of its own, as another process has.
