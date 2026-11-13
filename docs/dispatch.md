@@ -11,7 +11,7 @@ With areas set, the order form asks a customer who chooses delivery for their ar
 The form also asks where exactly to come:
 
 - a **landmark** ("opposite the Shoprite gate");
-- a **map pin**: a link pasted from a maps app, or **Use my location** in the browser (offered, never required).
+- a **map pin**: a link pasted from a maps app, or **Use my location** in the browser (offered, never required). Only a maps link is taken, since staff and riders open it: Google Maps' share links (`maps.app.goo.gl`, `goo.gl/maps`), `www.google.com/maps` and `maps.google.com`, Apple Maps (`maps.apple.com`), OpenStreetMap and Waze. Any other page, and any other address on those companies' hosts (a Google Sites page, a `google.com/url` redirect), is refused.
 
 Both are sealed with the customer's details. The rider sees them only while they hold the order. Taskiem never looks an address up on a map: the pin is passed on as the customer gave it.
 

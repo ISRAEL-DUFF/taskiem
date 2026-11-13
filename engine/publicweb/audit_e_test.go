@@ -133,3 +133,45 @@ func TestCodeRequestsNeedTheTokenAndAreFew(t *testing.T) {
 	must(t, e.next("/f/verify000001/code", body, url.Values{"address": {"0803 123 4569"}}), 200, "We sent a code")
 	must(t, e.next("/f/verify000001/code", body, url.Values{"address": {"0803 123 4570"}}), 429, "Too many codes have been asked for from this connection")
 }
+
+// TestMapPinTakesMapsLinksOnly (E11): a map pin is a maps link, not any
+// page or redirect on a host that also serves maps.
+func TestMapPinTakesMapsLinksOnly(t *testing.T) {
+	for _, good := range []string{
+		"https://maps.app.goo.gl/AbCdEf123456", "https://goo.gl/maps/AbCdEf123456", "https://www.google.com/maps/place/Yaba/@6.5,3.37,15z",
+		"https://www.google.com/maps?q=6.454100,3.394700", "https://google.com/maps/@6.5,3.37,15z", "https://maps.google.com/?q=6.4541,3.3947",
+		"https://maps.google.com/maps?q=Yaba", "https://maps.apple.com/?ll=6.4541,3.3947", "https://www.openstreetmap.org/#map=15/6.4541/3.3947",
+		"https://waze.com/ul?ll=6.4541,3.3947", "6.4541, 3.3947",
+	} {
+		if got, bad := mapsPin(good); bad || got == "" {
+			t.Errorf("%s was refused", good)
+		}
+	}
+	for _, evil := range []string{
+		"https://sites.google.com/view/pay-your-rider-here", "https://www.google.com/url?q=https://evil.example/login", "https://google.com/url?q=https://evil.example",
+		"https://docs.google.com/forms/d/e/x/viewform", "https://www.google.com/search?q=x&btnI=1", "https://www.google.com/mapsx/evil", "https://goo.gl/AbCdEf",
+		"https://maps.google.com/url?q=https://evil.example", "https://evil.maps.apple.com.evil.example/", "https://user@maps.google.com/?q=1,1",
+		"https://maps.google.com.evil.example/maps", "https://translate.goog/?u=evil", "https://x.waze.com/ul", "http://maps.google.com/?q=1,1",
+		"https://maps.google.com:8443/?q=1,1",
+	} {
+		if got, bad := mapsPin(evil); !bad || got != "" {
+			t.Errorf("%s was taken as a map pin: %q", evil, got)
+		}
+	}
+}
+
+// TestPreviewOnlyOnTheFormHost (E11): a member's sealed preview is a page
+// of the form host, and renders on no business's own address.
+func TestPreviewOnlyOnTheFormHost(t *testing.T) {
+	e := newFormHost(t)
+	path, err := PreviewPath(*e.s.FormKeys, Preview{Theme: "bold", Color: "#123456", Name: "First Bank Customer Care", Expires: e.now.Add(PreviewTTL)}, "storefront")
+	if err != nil {
+		t.Fatal(err)
+	}
+	must(t, e.get(path), 200, "First Bank Customer Care")
+	for _, host := range []string{"ada.shops.test", "nobody.shops.test", "shop.ada.example"} {
+		if w := get(e.h, "GET", host, path); w.Code == 200 || strings.Contains(w.Body.String(), "First Bank Customer Care") {
+			t.Errorf("the preview rendered on %s: %d", host, w.Code)
+		}
+	}
+}

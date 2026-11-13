@@ -359,11 +359,14 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		s.page(w, r, http.StatusTooManyRequests, "unavailable", pageData{Title: "Too many requests"})
 		return
 	}
-	if strings.HasPrefix(r.URL.Path, previewPrefix) {
+	host := hostOf(r)
+	// A brand preview is a page of the form host only: on a business's
+	// own address it would show another member's name and look as if it
+	// were that business's (the sealed preview is not bound to a host).
+	if strings.HasPrefix(r.URL.Path, previewPrefix) && s.FormHost != "" && host == s.FormHost {
 		s.servePreview(w, r)
 		return
 	}
-	host := hostOf(r)
 	if s.FormHost != "" && host == s.FormHost {
 		s.routeForms(w, r)
 		return
