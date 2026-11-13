@@ -160,16 +160,19 @@ func (p *Proxy) upstream(c, s net.Conn) {
 				_ = c.Close()
 				return
 			}
-			if _, werr := s.Write(chunk); werr != nil {
-				return
-			}
 			if hit && when == "after" {
-				// Close the client side before it hears the answer; the
-				// server side stays open a moment so the server reads
-				// and commits it.
+				// Close the client side first, so it can never hear the
+				// answer (written after, a fast server's reply could be
+				// copied back before the close on a loaded machine), then
+				// hand the COMMIT on; the server side stays open a moment
+				// so the server reads and commits it.
 				_ = c.Close()
 				closeServer = false
+				_, _ = s.Write(chunk)
 				time.AfterFunc(2*time.Second, func() { _ = s.Close() })
+				return
+			}
+			if _, werr := s.Write(chunk); werr != nil {
 				return
 			}
 		}

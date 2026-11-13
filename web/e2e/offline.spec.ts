@@ -58,7 +58,11 @@ test("offline, a page of the app says so in plain words, and opens again once ba
   await expect(page.getByRole("heading", { name: "You’re offline" })).toBeVisible();
   await page.evaluate(() => ((window as unknown as { marked: boolean }).marked = true));
   await page.getByRole("link", { name: "Try again" }).click();
-  await expect.poll(() => page.evaluate(() => (window as unknown as { marked?: boolean }).marked ?? false)).toBe(false);
+  // Asked while the page is being replaced, the old one is gone: not loaded
+  // yet, so ask again (a thrown error would end the poll).
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { marked?: boolean }).marked ?? false).catch(() => "loading"))
+    .toBe(false);
   await expect(page.getByRole("heading", { name: "You’re offline" })).toBeVisible();
   await expect(page).toHaveURL(/\/login$/);
   await context.setOffline(false);

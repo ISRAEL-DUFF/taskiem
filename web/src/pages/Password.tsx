@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { post } from "../api";
 import { useAuth } from "../auth";
 import { proof } from "../passkeys";
-import { ErrorBox, Field, useAction } from "../ui";
+import { ErrorBox, Field, useAction, PasswordInput } from "../ui";
 
 const minLength = 12;
 
@@ -88,10 +88,10 @@ export function ResetPassword() {
           }}
         >
           <Field label="New password">
-            <input type="password" autoComplete="new-password" minLength={minLength} value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus />
+            <PasswordInput autoComplete="new-password" minLength={minLength} value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus />
           </Field>
           <Field label="New password again">
-            <input type="password" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} required />
+            <PasswordInput autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} required />
           </Field>
           {problem && <p className="hint">{problem}</p>}
           <ErrorBox error={act.error} />
@@ -151,7 +151,7 @@ export function ChangePassword() {
         <div className="row" style={{ alignItems: "flex-end", flexWrap: "wrap" }}>
           {f.password && (
             <Field label="Current password">
-              <input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
+              <PasswordInput autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
             </Field>
           )}
           {!f.password && !f.passkey && f.totp && (
@@ -160,10 +160,10 @@ export function ChangePassword() {
             </Field>
           )}
           <Field label="New password">
-            <input type="password" autoComplete="new-password" minLength={minLength} value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <PasswordInput autoComplete="new-password" minLength={minLength} value={password} onChange={(e) => setPassword(e.target.value)} required />
           </Field>
           <Field label="New password again">
-            <input type="password" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} required />
+            <PasswordInput autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} required />
           </Field>
           <button className="primary" type="submit" disabled={act.busy || !!problem || password !== again || password === ""}>
             {f.password ? "Change password" : "Set password"}

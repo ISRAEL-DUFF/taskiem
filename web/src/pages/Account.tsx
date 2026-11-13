@@ -2,16 +2,7 @@ import { useState } from "react";
 import { ApiError, del, get, post, put, type Invitation } from "../api";
 import { useAuth } from "../auth";
 import { addPasskey, passkeysSupported, proof, stepUpAssert } from "../passkeys";
-import {
-  ErrorBox,
-  Field,
-  Items,
-  PageHeader,
-  Row,
-  fmtTime,
-  useAction,
-  useLoad,
-} from "../ui";
+import { ErrorBox, Field, Items, PageHeader, Row, fmtTime, useAction, useLoad, PasswordInput } from "../ui";
 import { ChangePassword } from "./Password";
 import { savedTheme, setTheme, type Theme } from "../theme";
 
@@ -53,8 +44,7 @@ function ProofField({
   if (f.password)
     return (
       <Field label={`Your password, to ${to}`}>
-        <input
-          type="password"
+        <PasswordInput
           autoComplete="current-password"
           value={value}
           onChange={(e) => onChange(e.target.value)}
