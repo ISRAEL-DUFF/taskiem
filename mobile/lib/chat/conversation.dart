@@ -31,6 +31,7 @@ import 'invoices_page.dart' show openInvoice;
 import 'purchases_page.dart' show openPurchase;
 import 'statement_page.dart' show openStatement;
 import 'tool_forms.dart' show toolDetail;
+import '../app/store.dart' show KeptOut;
 import '../kit/sheet.dart' show TkCta, TkSheet, showTkSheet;
 import 'composer.dart';
 import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
@@ -78,6 +79,37 @@ class Outgoing {
   final PickedFile? file;
   bool failed = false;
   String? error;
+
+  /// On its way to the server now.
+  bool sending = false;
+
+  /// As the phone keeps it until it is sent (lib/app/store.dart).
+  KeptOut kept(String conv) => (
+    id: clientId,
+    conv: conv,
+    at: at,
+    json: {
+      'text': body,
+      if (reply != null) 'reply': reply!.toJson(),
+      if (tags.isNotEmpty) 'tags': [for (final t in tags) t.toJson()],
+      if (file != null) 'file': {'name': file!.name, 'type': file!.type},
+    },
+    file: file?.bytes,
+  );
+
+  /// One kept from before (the app closed before it went).
+  static Outgoing fromKept(KeptOut k) {
+    final j = k.json;
+    final f = j['file'] is Map ? (j['file'] as Map).cast<String, dynamic>() : null;
+    return Outgoing(
+      k.id,
+      j['text'] as String? ?? '',
+      k.at,
+      reply: j['reply'] is Map ? LinkMessage.fromJson((j['reply'] as Map).cast<String, dynamic>()) : null,
+      tags: [for (final t in (j['tags'] as List? ?? const [])) SendLinkMessageRequestMentionsItem.fromJson((t as Map).cast<String, dynamic>())],
+      file: f == null || k.file == null ? null : PickedFile(bytes: k.file!, name: f['name'] as String? ?? 'file', type: f['type'] as String? ?? 'application/octet-stream'),
+    );
+  }
 }
 
 /// linkchat.ts Quote: a message as the one answering it quotes it.
@@ -242,8 +274,49 @@ class ConversationData extends ChangeNotifier {
     api.linkTyping(link: conv.link).catchError((Object _) {});
   }
 
+  /// Offline: what shows is what the phone kept.
+  bool offline = false;
+
+  /// The messages and the unsent ones the phone kept: shown at once.
+  void _restore() {
+    final local = chats.auth.local;
+    if (local == null) return;
+    try {
+      final kept = [for (final j in local.messages(conv.link)) LinkMessage.fromJson(j)];
+      if (kept.isNotEmpty && messages == null) {
+        messages = kept;
+        hasOlder = true;
+        final unseen = kept.where((m) => !m.mine && m.readAt == null).toList();
+        unread = unseen.isEmpty ? null : (id: unseen.first.id, count: unseen.length);
+        _moments();
+        epoch++;
+      }
+      for (final k in local.outbox(conv.link)) {
+        if (outbox.any((o) => o.clientId == k.id)) continue;
+        outbox.add(Outgoing.fromKept(k));
+      }
+    } on Object {
+      // Kept by an older app, or damaged: the server's answer will do.
+    }
+    _changed();
+  }
+
+  /// What shows now, kept for next time (the newest, to the limit).
+  void _keep() {
+    final local = chats.auth.local;
+    final list = messages;
+    if (local == null || list == null || detached) return;
+    try {
+      local.keepMessages(conv.link, [for (final m in list.length > 200 ? list.sublist(list.length - 200) : list) m.toJson()]);
+    } on Object {
+      // Not kept this time.
+    }
+  }
+
   /// Opens at [focus], or at the newest page; then follows it.
   Future<void> open() async {
+    if (focus == null) _restore();
+    chats.openOutboxes.add(conv.link);
     unawaited(_tagSources());
     if (focus != null) {
       try {
@@ -366,14 +439,25 @@ class ConversationData extends ChangeNotifier {
       final unseen = out.messages.where((m) => !m.mine && m.readAt == null).toList();
       unread = unseen.isEmpty ? null : (id: unseen.first.id, count: unseen.length);
       messages = out.messages;
+      offline = false;
       _moments();
+      _keep();
       _changed();
+      // Written while offline, kept: sent now.
+      for (final o in [...outbox]) {
+        if (!o.sending) unawaited(_send(o));
+      }
       await _markRead(out.messages);
     } on ApiError catch (e) {
       error = e.message;
       _changed();
     } on Offline {
-      error = 'You’re offline. The conversation shows when you’re back online.';
+      if (messages != null) {
+        // What the phone kept shows; said quietly.
+        offline = true;
+      } else {
+        error = 'You’re offline. The conversation shows when you’re back online.';
+      }
       _changed();
     }
   }
@@ -415,6 +499,7 @@ class ConversationData extends ChangeNotifier {
       }
     } else if (e is LiveGone && e.link == conv.link) {
       messages = messages?.where((x) => x.id != e.id).toList();
+      chats.auth.local?.dropMessage(conv.link, e.id);
       _changed();
     }
   }
@@ -432,8 +517,29 @@ class ConversationData extends ChangeNotifier {
   Future<void> pull() async {
     if (detached) return;
     final last = messages?.isNotEmpty == true ? messages!.last.createdAt : null;
-    final out = await api.linkMessages(link: conv.link, after: last?.toUtc().toIso8601String());
+    final List<LinkMessage> got;
+    final bool? typingNow;
+    try {
+      final out = await api.linkMessages(link: conv.link, after: last?.toUtc().toIso8601String());
+      got = out.messages;
+      typingNow = out.typing;
+    } on Offline {
+      if (!offline && !_disposed) {
+        offline = true;
+        _changed();
+      }
+      return;
+    }
     if (_disposed) return;
+    if (offline) {
+      // Back: what was written meanwhile goes, and the newest page is read.
+      offline = false;
+      for (final o in [...outbox]) {
+        if (!o.sending) unawaited(_send(o));
+      }
+      _changed();
+    }
+    final out = (messages: got, typing: typingNow);
     final was = typing;
     typing = out.typing ?? false;
     if (out.messages.isEmpty) {
@@ -474,6 +580,19 @@ class ConversationData extends ChangeNotifier {
     }
     messages = byId.values.toList()..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     _moments();
+    _keepSoon();
+  }
+
+  bool _keepQueued = false;
+
+  /// Kept once for a burst of changes (at the end of this turn of work).
+  void _keepSoon() {
+    if (_keepQueued || chats.auth.local == null) return;
+    _keepQueued = true;
+    scheduleMicrotask(() {
+      _keepQueued = false;
+      if (!_disposed) _keep();
+    });
   }
 
   /// The message the burst is round (a good moment, for 900 ms).
@@ -539,6 +658,8 @@ class ConversationData extends ChangeNotifier {
     // Sent from away from the newest page: back to it, where it shows.
     if (detached) unawaited(openNewest());
     outbox.add(o);
+    // Kept until it has gone: closed, offline, it is sent later.
+    chats.auth.local?.keepOut(o.kept(conv.link));
     _changed();
     await _send(o);
   }
@@ -552,10 +673,13 @@ class ConversationData extends ChangeNotifier {
 
   void discard(Outgoing o) {
     outbox.remove(o);
+    chats.auth.local?.dropOut(o.clientId);
     _changed();
   }
 
   Future<void> _send(Outgoing o) async {
+    if (o.sending) return;
+    o.sending = true;
     try {
       final f = o.file;
       final LinkMessage sent;
@@ -576,17 +700,21 @@ class ConversationData extends ChangeNotifier {
         )).message;
       }
       outbox.remove(o);
+      chats.auth.local?.dropOut(o.clientId);
       _merge([sent]);
       // Our own copy of what we sent: shown without fetching it back.
-      if (f != null) chats.files.keep(sent.id, f.bytes);
+      if (f != null) chats.files.keep(sent.id, f.bytes, link: conv.link);
       unawaited(chats.load());
     } on ApiError catch (e) {
       o.failed = true;
       // lib/outbox.ts sendError.
       o.error = e.status == 429 ? 'You are sending too fast. Wait a moment and tap Retry.' : (e.message.isEmpty ? 'It could not be sent.' : e.message);
     } on Offline {
-      o.failed = true;
-      o.error = 'There is no connection. Tap Retry when you are back online.';
+      // Kept with its clock: it goes by itself when the connection is back.
+      o.error = null;
+      offline = true;
+    } finally {
+      o.sending = false;
     }
     _changed();
   }
@@ -596,6 +724,7 @@ class ConversationData extends ChangeNotifier {
 
   void _swap(LinkMessage m) {
     messages = messages?.map((x) => x.id == m.id ? m : x).toList();
+    _keepSoon();
     _changed();
   }
 
@@ -647,6 +776,7 @@ class ConversationData extends ChangeNotifier {
     try {
       await api.hideLinkMessage(link: conv.link, id: m.id);
       messages = messages?.where((x) => x.id != m.id).toList();
+      chats.auth.local?.dropMessage(conv.link, m.id);
       _changed();
       unawaited(chats.load());
       return true;
@@ -663,7 +793,9 @@ class ConversationData extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (_keepQueued) _keep();
     _disposed = true;
+    chats.openOutboxes.remove(conv.link);
     _timer?.cancel();
     _ticks?.cancel();
     _cheerOff?.cancel();
@@ -1281,7 +1413,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       onBack: widget.onBack,
                       avatar: ChatAvatar(name: c.name, logo: c.logo ? d.chats.logo(c.business) : null, size: 40, letterSize: 15),
                       title: c.name,
-                      subtitle: d.headLine,
+                      subtitle: d.offline ? 'Waiting for network…' : d.headLine,
                       typing: d.typingNow,
                       actions: [ChatHeadBar.iconButton('Search this conversation', TkIcon('search', size: 18, color: t.text), _search)],
                       onAvatar: _contact,

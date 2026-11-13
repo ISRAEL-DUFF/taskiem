@@ -9118,6 +9118,58 @@ paths:
                       $ref: '#/components/schemas/LinkMessage'
         default:
           $ref: '#/components/responses/Error'
+  /v1/link-chats/changes:
+    get:
+      operationId: linkChatChanges
+      tags:
+      - Links
+      summary: What changed in the conversations since a time
+      description: For a phone that kept the conversations while it was closed or offline. The messages changed since (written, read, reacted to), those deleted for you since, and until, where the next ask goes on from (with more, a full batch, ask again at once). With no since, nothing is listed and until is where to begin.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: since
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: What changed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages, gone, until, more]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkMessage'
+                  gone:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, link]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        link:
+                          type: string
+                          format: uuid
+                  until:
+                    type: string
+                    format: date-time
+                  more:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/read:
     post:
       operationId: readLinkChat

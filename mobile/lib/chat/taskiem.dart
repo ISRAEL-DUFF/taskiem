@@ -237,6 +237,7 @@ class TaskiemData extends ChangeNotifier {
     if (!chats.chatTools) return;
     try {
       alerts = (await api.getChatAlerts()).alerts;
+      chats.auth.local?.write('taskiem_alerts', [for (final a in alerts) a.toJson()]);
       if (briefs) briefing = await api.getChatBriefing();
     } on Object {
       // The conversation stands without them.
@@ -270,7 +271,42 @@ class TaskiemData extends ChangeNotifier {
     }
   }
 
+  /// Offline: what shows is what the phone kept.
+  bool offline = false;
+
+  /// Taskiem's conversation as the phone kept it: shown at once.
+  void _restore() {
+    final local = chats.auth.local;
+    if (local == null) return;
+    try {
+      final kept = [for (final j in local.messages('taskiem')) TaskiemChatMessagesItem.fromJson(j)];
+      if (kept.isNotEmpty && messages == null) {
+        final list = mergeTaskiem(const [], kept);
+        unread = unreadAfter(list, chats.taskiemSeen);
+        messages = list;
+        hasOlder = true;
+      }
+      final cards = local.read('taskiem_alerts');
+      if (cards is List && alerts.isEmpty) alerts = [for (final c in cards) ChatAlert.fromJson((c as Map).cast<String, dynamic>())];
+      _changed();
+    } on Object {
+      // Kept by an older app, or damaged: the server's answer will do.
+    }
+  }
+
+  void _keep() {
+    final local = chats.auth.local;
+    final list = messages?.where((x) => !x.local).toList();
+    if (local == null || list == null) return;
+    try {
+      local.keepMessages('taskiem', [for (final x in list.length > 200 ? list.sublist(list.length - 200) : list) x.m.toJson()]);
+    } on Object {
+      // Not kept this time.
+    }
+  }
+
   Future<void> open() async {
+    _restore();
     unawaited(loadCards());
     unawaited(loadTags());
     try {
@@ -279,12 +315,18 @@ class TaskiemData extends ChangeNotifier {
       final list = mergeTaskiem(const [], out.messages);
       unread = unreadAfter(list, chats.taskiemSeen);
       messages = list;
+      offline = false;
+      _keep();
       _changed();
     } on ApiError catch (e) {
       error = e.message;
       _changed();
     } on Offline {
-      error = 'You’re offline. The conversation shows when you’re back online.';
+      if (messages != null) {
+        offline = true;
+      } else {
+        error = 'You’re offline. The conversation shows when you’re back online.';
+      }
       _changed();
     }
     // Closed before the history came: nothing to follow.
@@ -311,7 +353,20 @@ class TaskiemData extends ChangeNotifier {
   Future<void> pull() async {
     final kept = messages?.where((x) => !x.local).toList() ?? const [];
     final after = kept.isEmpty ? null : kept.last.m.createdAt;
-    final out = await api.taskiemHistory(after: after?.toUtc().toIso8601String());
+    final TaskiemChat out;
+    try {
+      out = await api.taskiemHistory(after: after?.toUtc().toIso8601String());
+    } on Offline {
+      if (!offline && !_disposed) {
+        offline = true;
+        _changed();
+      }
+      return;
+    }
+    if (offline && !_disposed) {
+      offline = false;
+      _changed();
+    }
     if (out.messages.isEmpty) return;
     _merge(out.messages);
   }
@@ -319,6 +374,7 @@ class TaskiemData extends ChangeNotifier {
   void _merge(List<TaskiemChatMessagesItem> add) {
     if (_disposed) return;
     messages = mergeTaskiem(messages ?? const [], add);
+    _keep();
     _changed();
   }
 
@@ -610,7 +666,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                         child: TkTaskiemMark(size: 20, color: t.brandDark),
                       ),
                       title: 'Taskiem',
-                      subtitle: d.chats.auth.me?.tenantName ?? 'Your assistant',
+                      subtitle: d.offline ? 'Waiting for network…' : (d.chats.auth.me?.tenantName ?? 'Your assistant'),
                       typing: d.busy,
                     ),
                   ),

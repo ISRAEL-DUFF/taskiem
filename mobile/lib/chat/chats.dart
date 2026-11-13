@@ -14,6 +14,7 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/prefs.dart';
 import '../app/sound.dart';
+import '../app/store.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
@@ -29,6 +30,9 @@ import 'words.dart';
 /// What the list shows, loaded as the web's page loads it.
 class ChatsData extends ChangeNotifier {
   ChatsData(this.auth, {DateTime Function()? now, this.live, this.prefs}) : now = now ?? DateTime.now {
+    // What the phone kept of the list: drawn at once, the server's answer
+    // then taking its place.
+    _restore();
     // taskiemSeen.ts: a first visit begins at now; afterwards, where it was
     // last seen, kept on the phone.
     taskiemSeen = this.now();
@@ -190,9 +194,105 @@ class ChatsData extends ChangeNotifier {
   /// The person may answer requests to link (link.manage, as the web's `can`).
   bool get manage => auth.can('link.manage') && linksOn;
 
+  /// The list as the phone kept it, last time it was read whole.
+  void _restore() {
+    final j = auth.local?.read('chats');
+    if (j is! Map) return;
+    try {
+      List<Map<String, dynamic>> maps(Object? v) => [for (final x in (v as List? ?? const [])) (x as Map).cast<String, dynamic>()];
+      conversations = maps(j['conversations']).map(LinkConversation.fromJson).toList();
+      links = maps(j['links']).map(BusinessLink.fromJson).toList();
+      sent = maps(j['sent']).map(BlindLinkRequest.fromJson).toList();
+      customers = maps(j['customers']).map(CustomerChat.fromJson).toList();
+      archivedCustomerChats = maps(j['archived_customers']).map(CustomerChat.fromJson).toList();
+      archivedCustomers = archivedCustomerChats.length;
+      chatTools = j['chat_tools'] == true;
+      waiting = (j['waiting'] as num?)?.toInt() ?? 0;
+      final ls = j['link_settings'];
+      linkSettings = ls is Map ? LinkSettings.fromJson(ls.cast<String, dynamic>()) : null;
+      loaded = true;
+      kept = true;
+    } on Object {
+      // Kept by an older app, or damaged: the server's answer will do.
+    }
+  }
+
+  void _keep() {
+    auth.local?.write('chats', {
+      'conversations': [for (final c in conversations) c.toJson()],
+      'links': [for (final l in links) l.toJson()],
+      'sent': [for (final b in sent) b.toJson()],
+      'customers': [for (final c in customers) c.toJson()],
+      'archived_customers': [for (final c in archivedCustomerChats) c.toJson()],
+      'chat_tools': chatTools,
+      'waiting': waiting,
+      'link_settings': linkSettings?.toJson(),
+    });
+  }
+
+  /// Conversations open now: they send what was written in them.
+  final openOutboxes = <String>{};
+
+  bool _flushing = false;
+
+  /// What was written offline in conversations not open now (the app
+  /// closed before it went): sent once there is a connection, each with
+  /// its own client id, so the server takes it once however often it is
+  /// tried. One the server refuses stays, to be seen in its conversation.
+  Future<void> flushOutbox() async {
+    final local = auth.local;
+    if (local == null || _flushing || !linksOn) return;
+    _flushing = true;
+    try {
+      for (final k in local.outbox()) {
+        if (openOutboxes.contains(k.conv) || _disposed) continue;
+        final j = k.json;
+        final text = j['text'] as String? ?? '';
+        final reply = j['reply'] is Map ? '${(j['reply'] as Map)['id']}' : null;
+        final f = j['file'] is Map ? (j['file'] as Map).cast<String, dynamic>() : null;
+        try {
+          if (f != null && k.file != null) {
+            await auth.transport.upload(
+              '/v1/link-chats/${Uri.encodeComponent(k.conv)}/files',
+              bytes: k.file!,
+              filename: f['name'] as String? ?? 'file',
+              type: f['type'] as String? ?? 'application/octet-stream',
+              fields: {'client_id': k.id, if (text.isNotEmpty) 'text': text, 'reply_to': ?reply},
+            );
+          } else {
+            await api.sendLinkMessage(
+              link: k.conv,
+              body: SendLinkMessageRequest(
+                text: text,
+                clientId: k.id,
+                replyTo: reply,
+                mentions: [for (final t in (j['tags'] as List? ?? const [])) SendLinkMessageRequestMentionsItem.fromJson((t as Map).cast<String, dynamic>())]
+                    .let((l) => l.isEmpty ? null : l),
+              ),
+            );
+          }
+          local.dropOut(k.id);
+        } on Offline {
+          return;
+        } on ApiError {
+          // Refused: left for its conversation to show.
+        }
+      }
+    } finally {
+      _flushing = false;
+    }
+  }
+
+  /// Drawn from what the phone kept (not yet, or not, from the server).
+  bool kept = false;
+
+  /// The last read found no connection: what shows is what was kept.
+  bool offline = false;
+
   Future<void> load() async {
     if (_disposed) return;
     error = null;
+    offline = false;
     await Future.wait([
       _try(() async {
         conversations = linksOn ? (await api.listLinkChats()).conversations : const [];
@@ -224,7 +324,18 @@ class ChatsData extends ChangeNotifier {
         linkSettings = manage ? await api.getLinkSettings() : null;
       }),
     ]);
+    if (_disposed) return;
     loaded = true;
+    // Read whole: kept for next time.
+    if (error == null) {
+      kept = false;
+      try {
+        _keep();
+      } on Object {
+        // Not kept this time.
+      }
+    }
+    if (!offline) unawaited(flushOutbox().then((_) {}, onError: (Object _) {}));
     notifyListeners();
   }
 
@@ -234,6 +345,7 @@ class ChatsData extends ChangeNotifier {
     } on ApiError catch (e) {
       error ??= e.message;
     } on Offline {
+      offline = true;
       error ??= 'You’re offline. Your chats show when you’re back online.';
     }
   }
@@ -246,12 +358,22 @@ class ChatsData extends ChangeNotifier {
     final failed = _logoFailed[business];
     if (failed != null && now().difference(failed) < const Duration(minutes: 1)) return null;
     logos[business] = null;
+    final path = '/v1/links/$business/logo';
+    // The one kept on the phone at once (offline too); the server's then
+    // takes its place, in case it changed.
+    keptMedia(path).then((b) {
+      if (b != null && logos[business] == null && !_disposed) {
+        logos[business] = b;
+        notifyListeners();
+      }
+    });
     auth.transport
-        .bytes('/v1/links/$business/logo')
+        .bytes(path)
         .then(
           (b) {
             logos[business] = Uint8List.fromList(b);
             _logoFailed.remove(business);
+            unawaited(keepMediaBytes(path, b));
             notifyListeners();
           },
           onError: (Object e) {
@@ -497,7 +619,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           if (f == ChatFilter.starred) d.loadStarred();
                         },
                       ),
-                    if (d.error != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: TkErrorBox(d.error!)),
+                    if (d.offline)
+                      const OfflineBar(words: 'You’re offline. These are your chats as they were; new ones come when you’re back.')
+                    else if (d.error != null)
+                      Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: TkErrorBox(d.error!)),
                     if (_searchError != null)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1970,7 +2095,8 @@ class _GetStartedState extends State<_GetStarted> {
       explicitChildNodes: true,
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+        // `.tk-start { padding: 24px 20px; gap: 10px }`
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
         decoration: BoxDecoration(color: t.panel, border: Border.all(color: t.border), borderRadius: BorderRadius.circular(20)),
         child: Column(
           children: [
@@ -1979,7 +2105,7 @@ class _GetStartedState extends State<_GetStarted> {
               height: 56,
               decoration: BoxDecoration(color: t.tint, borderRadius: BorderRadius.circular(16)),
               alignment: Alignment.center,
-              child: TkIcon('chat', size: 26, color: dark ? t.brandDark : t.brand),
+              child: TkIcon('chat', size: 26, color: t.tintText),
             ),
             const SizedBox(height: 14),
             Semantics(
@@ -1987,14 +2113,14 @@ class _GetStartedState extends State<_GetStarted> {
               child: Text(
                 'Link with the businesses you trade with',
                 textAlign: TextAlign.center,
-                style: tkText(size: 18, weight: 700, lineHeight: 1.3, color: t.text),
+                style: tkText(size: 18, weight: 700, lineHeight: 1.35, letterSpacing: -0.18, color: t.text),
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 10),
             Text(
               'Linked, your orders, invoices and payments reach each other by themselves, and you chat here.',
               textAlign: TextAlign.center,
-              style: tkText(size: 14, color: t.muted),
+              style: tkText(size: 13, lineHeight: 1.55, color: t.muted),
             ),
             if (_error != null) ...[const SizedBox(height: 10), TkErrorBox(_error!)],
             if (picks.isNotEmpty) ...[
@@ -2040,7 +2166,7 @@ class _GetStartedState extends State<_GetStarted> {
                 ),
               ),
             ],
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             TapArea(
               child: Semantics(
                 button: true,
@@ -2050,13 +2176,13 @@ class _GetStartedState extends State<_GetStarted> {
                 child: TkPress(
                   onTap: widget.onFind,
                   child: Container(
-                    constraints: const BoxConstraints(minHeight: 52),
+                    constraints: const BoxConstraints(minHeight: 56),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(color: dark ? t.brandDark : t.brand, borderRadius: BorderRadius.circular(999)),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        TkIcon('search', size: 18, color: dark ? t.brandDarkText : t.tkOnPine),
+                        TkIcon('search', size: 20, stroke: 2.4, color: dark ? t.brandDarkText : t.brandDark),
                         const SizedBox(width: 8),
                         Text('Find a business', style: tkText(size: 16, weight: 700, color: dark ? t.brandDarkText : t.tkOnPine)),
                       ],
@@ -2200,4 +2326,36 @@ String findableLine(LinkSettings s) {
   return s.findable == true
       ? 'On: businesses find you by your name, what you sell and your area.'
       : 'Off: only someone who has your phone number or page address can ask.';
+}
+
+/// Offline, with what was kept showing: said quietly, as WhatsApp's
+/// "Waiting for network", not as an error.
+class OfflineBar extends StatelessWidget {
+  const OfflineBar({super.key, required this.words});
+  final String words;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(color: t.tkSoft, borderRadius: BorderRadius.circular(14)),
+        child: Row(
+          children: [
+            TkIcon('info', size: 16, color: t.muted),
+            const SizedBox(width: 10),
+            Expanded(child: Text(words, style: tkText(size: 13.5, color: t.muted))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+extension _Let<T> on T {
+  R let<R>(R Function(T) f) => f(this);
 }

@@ -16,6 +16,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../api/api.g.dart';
 import '../api/transport.dart';
+import '../app/store.dart' show keepMediaBytes, keptMedia;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
@@ -125,7 +126,8 @@ class ChatFiles extends ChangeNotifier {
   static String path(LinkMessage m) => '/v1/link-chats/${Uri.encodeComponent(m.link)}/files/${Uri.encodeComponent(m.id)}';
 
   /// A file we just sent: kept as it is, a photo's size read from it.
-  Future<void> keep(String id, Uint8List bytes) async {
+  Future<void> keep(String id, Uint8List bytes, {String? link}) async {
+    if (link != null) unawaited(keepMediaBytes('/v1/link-chats/${Uri.encodeComponent(link)}/files/${Uri.encodeComponent(id)}', bytes));
     Size? size;
     try {
       final codec = await ui.instantiateImageCodec(bytes);
@@ -158,7 +160,11 @@ class ChatFiles extends ChangeNotifier {
 
   Future<ChatFile?> fetch(LinkMessage m) async {
     try {
-      final b = Uint8List.fromList(await transport.bytes(path(m)));
+      // Kept on the phone (a message's file never changes): at once, and
+      // offline too; else from the server, then kept.
+      final kept = await keptMedia(path(m));
+      final b = kept ?? Uint8List.fromList(await transport.bytes(path(m)));
+      if (kept == null) unawaited(keepMediaBytes(path(m), b));
       Size? size;
       if (m.attachment?.kind == 'photo') {
         final codec = await ui.instantiateImageCodec(b);

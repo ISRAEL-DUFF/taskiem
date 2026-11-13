@@ -13,6 +13,7 @@ import 'kit/keyboard.dart';
 import 'app/lock.dart';
 import 'app/prefs.dart';
 import 'app/session.dart';
+import 'app/store.dart' show LocalStore;
 import 'api/api.g.dart';
 import 'chat/money_page.dart' show MoneyPage;
 import 'chat/order_sheet.dart' show showOrderSheet;
@@ -41,6 +42,8 @@ void main() {
     statusBarIconBrightness: Brightness.light,
     statusBarBrightness: Brightness.dark,
   ));
+  // The chats kept on the phone, encrypted (lib/app/store.dart).
+  LocalStore.enabled = true;
   final auth = Auth(transport: Transport(base: taskiemUrl), store: SessionStore(const SecureKeyStore()), version: appVersion);
   final prefs = Prefs(const SecureKeyStore())..load();
   auth.start();

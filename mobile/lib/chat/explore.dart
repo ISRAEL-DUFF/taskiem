@@ -17,6 +17,7 @@ import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../kit/icon.dart';
 import '../app/openers.dart';
+import '../app/store.dart' show keepMediaBytes, keptMedia;
 import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/tap_area.dart';
@@ -74,13 +75,18 @@ class _Pictures extends ChangeNotifier {
   Uint8List? of(String path) {
     if (_got.containsKey(path)) return _got[path];
     _got[path] = null;
-    t.bytes(path).then((b) {
-      _got[path] = Uint8List.fromList(b);
+    // Its version is in its path: one kept on the phone is the same.
+    () async {
+      try {
+        final kept = await keptMedia(path);
+        final b = kept ?? Uint8List.fromList(await t.bytes(path));
+        if (kept == null) unawaited(keepMediaBytes(path, b));
+        _got[path] = b;
+      } on Object {
+        _bad.add(path);
+      }
       notifyListeners();
-    }, onError: (_) {
-      _bad.add(path);
-      notifyListeners();
-    });
+    }();
     return null;
   }
 

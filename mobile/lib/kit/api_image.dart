@@ -3,7 +3,10 @@
 import 'package:flutter/services.dart' show Uint8List;
 import 'package:flutter/widgets.dart';
 
+import 'dart:async';
+
 import '../api/transport.dart';
+import '../app/store.dart' show keepMediaBytes, keptMedia;
 import '../theme/theme.dart';
 
 /// A picture through the API, signed in (a profile's logo and photos, a
@@ -44,8 +47,13 @@ class _ApiImageState extends State<ApiImage> {
 
   Future<void> _get() async {
     final path = widget.path;
+    // The one kept on the phone at once (offline too); the server's then
+    // takes its place, in case it changed.
+    final kept = await keptMedia(path);
+    if (kept != null && mounted && widget.path == path && _bytes == null) setState(() => _bytes = kept);
     try {
       final b = Uint8List.fromList(await widget.transport.bytes(path));
+      unawaited(keepMediaBytes(path, b));
       _cache.remove(path);
       _cache[path] = b;
       while (_cache.length > _keep) {

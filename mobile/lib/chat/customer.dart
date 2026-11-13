@@ -113,7 +113,43 @@ class CustomerData extends ChangeNotifier {
   final _back = StreamController<String>.broadcast();
   Stream<String> get givenBack => _back.stream;
 
+  /// Offline: what shows is what the phone kept.
+  bool offline = false;
+
+  String get _key => 'customer:$id';
+
+  /// The conversation as the phone kept it: shown at once.
+  void _restore() {
+    final local = chats.auth.local;
+    if (local == null) return;
+    try {
+      final kept = [for (final j in local.messages(_key)) CustomerLine(CustomerMessage.fromJson(j))];
+      if (kept.isNotEmpty && messages == null) {
+        messages = kept;
+        hasOlder = true;
+      }
+      final c = local.read('$_key:chat');
+      if (c is Map && chat == null) chat = CustomerChat.fromJson(c.cast<String, dynamic>());
+      _changed();
+    } on Object {
+      // Kept by an older app, or damaged: the server's answer will do.
+    }
+  }
+
+  void _keep() {
+    final local = chats.auth.local;
+    final list = messages?.where((x) => !x.local).toList();
+    if (local == null || list == null) return;
+    try {
+      local.keepMessages(_key, [for (final x in list.length > 200 ? list.sublist(list.length - 200) : list) x.m.toJson()]);
+      if (chat != null) local.write('$_key:chat', chat!.toJson());
+    } on Object {
+      // Not kept this time.
+    }
+  }
+
   Future<void> open() async {
+    _restore();
     await Future.wait([_chat(), _pull(first: true)]);
     // Closed before the first page came: nothing to follow.
     if (follow && !_disposed) {
@@ -163,6 +199,9 @@ class CustomerData extends ChangeNotifier {
       final page = [for (final m in out.messages) CustomerLine(m)];
       if (first) hasOlder = out.more;
       messages = first ? page : latestPage(messages ?? const [], page, out.more);
+      offline = false;
+      error = null;
+      _keep();
       _changed();
       if (out.messages.any((m) => !m.mine && m.readAt == null)) {
         await api.readCustomerChat(id: id);
@@ -175,7 +214,12 @@ class CustomerData extends ChangeNotifier {
 
   void _fail(Object e) {
     if (_disposed) return;
-    error = e is ApiError ? e.message : (e is Offline ? 'You’re offline. The conversation shows when you’re back online.' : null);
+    if (e is Offline && messages != null) {
+      // What the phone kept shows; said quietly.
+      offline = true;
+    } else {
+      error = e is ApiError ? e.message : (e is Offline ? 'You’re offline. The conversation shows when you’re back online.' : null);
+    }
     _changed();
   }
 
@@ -332,7 +376,9 @@ class _CustomerScreenState extends State<CustomerScreen> {
                               ),
                         avatar: ChatAvatar(name: c == null ? 'Customer' : customerLetter(c), size: 42, letterSize: 15),
                         title: title,
-                        subtitle: c == null
+                        subtitle: d.offline
+                            ? 'Waiting for network…'
+                            : c == null
                             ? null
                             : [if (c.phone.isNotEmpty && c.phone != c.name) phoneWords(c.phone), owes, 'Customer on WhatsApp'].where((s) => s.isNotEmpty).join(' · '),
                       ),
