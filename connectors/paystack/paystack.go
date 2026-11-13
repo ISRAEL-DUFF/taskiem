@@ -207,7 +207,14 @@ func (c *client) transfer(ctx context.Context, req connector.Request) (connector
 	err := c.do(ctx, req, http.MethodPost, "/transfer", body, &env)
 	if err != nil && connector.StatusOf(err) == http.StatusBadRequest && strings.Contains(strings.ToLower(errBody(err)), "duplicate") {
 		// The transfer already exists under this reference: report it.
-		return c.verifyTransfer(ctx, connector.Request{Input: map[string]any{"reference": ref}, Credentials: req.Credentials, HTTP: req.HTTP})
+		out, verr := c.lookupTransfer(ctx, req, ref)
+		if errors.Is(verr, connector.ErrNotFound) {
+			return connector.Response{}, fmt.Errorf("paystack refused reference %s as a duplicate and has no transfer under it: %w", ref, effects.ErrUnknownOutcome)
+		}
+		if verr != nil {
+			return connector.Response{}, verr
+		}
+		return connector.Response{Output: out}, nil
 	}
 	if err != nil {
 		return connector.Response{}, err
@@ -218,18 +225,35 @@ func (c *client) transfer(ctx context.Context, req connector.Request) (connector
 	return connector.Response{Output: transferOutput(env.Data)}, nil
 }
 
-// verifyTransfer is also the reconcile action for transfer.
-func (c *client) verifyTransfer(ctx context.Context, req connector.Request) (connector.Response, error) {
-	ref, _ := req.Input["reference"].(string)
+// lookupTransfer reads a transfer by its reference; ErrNotFound when
+// Paystack has none.
+func (c *client) lookupTransfer(ctx context.Context, req connector.Request, ref string) (map[string]any, error) {
 	var env envelope
 	err := c.do(ctx, req, http.MethodGet, "/transfer/verify/"+url.PathEscape(ref), nil, &env)
 	if isNotFound(err) {
-		return connector.Response{}, connector.ErrNotFound
+		return nil, fmt.Errorf("paystack: no transfer with reference %s: %w", ref, connector.ErrNotFound)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return transferOutput(env.Data), nil
+}
+
+// verifyTransfer is also the reconcile action for transfer. As a
+// reconcile, a transfer Paystack does not have is ErrNotFound (send it
+// again). As a step or a payout lookup it is an answer, status not_found,
+// which get_payout reads as still pending with that reason: a lookup that
+// finds nothing does not say the payout failed.
+func (c *client) verifyTransfer(ctx context.Context, req connector.Request) (connector.Response, error) {
+	ref, _ := req.Input["reference"].(string)
+	out, err := c.lookupTransfer(ctx, req, ref)
+	if errors.Is(err, connector.ErrNotFound) && !req.Reconciling {
+		return connector.Response{Output: map[string]any{"reference": ref, "status": "not_found"}}, nil
 	}
 	if err != nil {
 		return connector.Response{}, err
 	}
-	return connector.Response{Output: transferOutput(env.Data)}, nil
+	return connector.Response{Output: out}, nil
 }
 
 // checkout creates a checkout page under the request's reference
@@ -247,7 +271,13 @@ func (c *client) checkout(ctx context.Context, req connector.Request) (connector
 		}
 	}
 	var env envelope
-	if err := c.do(ctx, req, http.MethodPost, "/transaction/initialize", body, &env); err != nil {
+	err := c.do(ctx, req, http.MethodPost, "/transaction/initialize", body, &env)
+	if err != nil && connector.StatusOf(err) == http.StatusBadRequest && strings.Contains(strings.ToLower(errBody(err)), "duplicate") {
+		// A resend after a lost answer: the checkout exists under this
+		// reference. Read it back rather than fail.
+		return c.existingCheckout(ctx, req, ref, paystackMessage(err))
+	}
+	if err != nil {
 		return connector.Response{}, err
 	}
 	if !env.Status {
@@ -258,6 +288,34 @@ func (c *client) checkout(ctx context.Context, req connector.Request) (connector
 		if v, ok := env.Data[k].(string); ok {
 			out[k] = v
 		}
+	}
+	return connector.Response{Output: out}, nil
+}
+
+// existingCheckout reports the checkout already made under ref, read
+// through the payment's verification. Its page address is given again
+// only if Paystack's answer carries one (its documentation shows none):
+// without it the step cannot hand the customer a page, and with the
+// payment made under the reference it must not make another, so a person
+// decides (a retry there makes a new checkout under a new key).
+func (c *client) existingCheckout(ctx context.Context, req connector.Request, ref, refusal string) (connector.Response, error) {
+	var env envelope
+	err := c.do(ctx, req, http.MethodGet, "/transaction/verify/"+url.PathEscape(ref), nil, &env)
+	if isNotFound(err) {
+		return connector.Response{}, fmt.Errorf("paystack refused reference %s (%s) and has no payment under it: %w", ref, refusal, effects.ErrUnknownOutcome)
+	}
+	if err != nil {
+		return connector.Response{}, err
+	}
+	out := map[string]any{"reference": ref}
+	for _, k := range []string{"authorization_url", "access_code"} {
+		if v, ok := env.Data[k].(string); ok && v != "" {
+			out[k] = v
+		}
+	}
+	if _, ok := out["authorization_url"]; !ok {
+		return connector.Response{}, fmt.Errorf("paystack: a checkout already exists under reference %s (status %v), and Paystack does not give its page address again. If the customer never got the page, retry the step to make a new one: %w",
+			ref, env.Data["status"], effects.ErrIndeterminate)
 	}
 	return connector.Response{Output: out}, nil
 }
@@ -343,7 +401,8 @@ func (c *client) verifyCharge(ctx context.Context, req connector.Request) (conne
 
 // refund refunds a payment in full (Paystack's POST /refund, no amount).
 // Paystack refuses to refund a payment twice; that refusal is reported as
-// the refund already made (status "already"), so a retry never pays twice.
+// the refund already made (status "already") or, where it says only that
+// a refund is under way, as pending, so a retry never pays twice.
 func (c *client) refund(ctx context.Context, req connector.Request) (connector.Response, error) {
 	in := req.Input
 	ref, _ := in["reference"].(string)
@@ -359,7 +418,13 @@ func (c *client) refund(ctx context.Context, req connector.Request) (connector.R
 	var env envelope
 	err := c.do(ctx, req, http.MethodPost, "/refund", body, &env)
 	if err != nil && connector.StatusOf(err) == http.StatusBadRequest && alreadyRefunded(errBody(err)) {
-		return connector.Response{Output: map[string]any{"reference": ref, "status": "already"}}, nil
+		// "already" only where Paystack says the refund is done; a refund
+		// it refuses because one is under way is pending, not refunded.
+		status := "pending"
+		if refundDone(errBody(err)) {
+			status = "already"
+		}
+		return connector.Response{Output: map[string]any{"reference": ref, "status": status}}, nil
 	}
 	if err != nil && connector.StatusOf(err) == http.StatusBadRequest {
 		// Not enough balance, a payment not refundable: retrying will not help.
@@ -411,6 +476,13 @@ func alreadyRefunded(body string) bool {
 	b := strings.ToLower(body)
 	return strings.Contains(b, "fully reversed") || strings.Contains(b, "already been refunded") || strings.Contains(b, "pending refund") ||
 		strings.Contains(b, "refund already")
+}
+
+// refundDone reports a refusal that says the payment has been refunded,
+// not merely that a refund exists.
+func refundDone(body string) bool {
+	b := strings.ToLower(body)
+	return strings.Contains(b, "fully reversed") || strings.Contains(b, "already been refunded")
 }
 
 // paystackMessage is the message of Paystack's error body.
