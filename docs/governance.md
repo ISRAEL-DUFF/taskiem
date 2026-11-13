@@ -152,6 +152,8 @@ Maker-checker would leave a business with one person unable to approve anything 
 - the vote is recorded as self-approved: `self_approved` on the decision, on the run's `ApprovalDecided` event and in the `approval.decide` audit entry;
 - the request says so: "You are the only person who can approve this" in the web inbox (`sole_approver` in `GET /v1/approvals`) and in WhatsApp and Telegram.
 
+The exception never applies to a version that Git deployed when Taskiem cannot tell who made it: its runs need two different approvers ([Git](git.md#who-made-a-git-led-version)).
+
 Once a second person can decide (a partner joins as owner, or someone is given the role), four-eyes applies again. A policy with `"constraints": {"allow_sole_approver": false}` never allows it. Someone voting under a delegation is never treated as the only approver.
 
 ## Four-eyes on change

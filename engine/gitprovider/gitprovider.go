@@ -62,7 +62,43 @@ type Snapshot struct {
 type Push struct {
 	Branch string
 	Commit string
+	// Before is the commit the branch was at before the push; empty when
+	// the host did not say (a new branch).
+	Before string
+	// People are those the host names behind the push: whoever pushed or
+	// merged, and each commit's author and committer.
+	People []Person
+	// Complete says People covers every commit of the push: it was not
+	// forced, and the host's list of commits was not cut short.
+	Complete bool
 }
+
+// Person is someone behind a push, as the Git host names them. The pusher
+// is the host's signed-in account; a commit's author and committer are
+// whatever the commit says.
+type Person struct {
+	Role  string `json:"role"` // pusher | author | committer
+	Email string `json:"email,omitempty"`
+	Login string `json:"login,omitempty"`
+}
+
+// addPerson appends p unless it is empty or already there.
+func addPerson(people []Person, role, email, login string) []Person {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" && login == "" {
+		return people
+	}
+	p := Person{Role: role, Email: email, Login: login}
+	for _, q := range people {
+		if q == p {
+			return people
+		}
+	}
+	return append(people, p)
+}
+
+// zeroCommit reports a host's "no commit" (all zeros, or nothing).
+func zeroCommit(sha string) bool { return strings.Trim(sha, "0") == "" }
 
 // Provider is one Git host.
 type Provider interface {

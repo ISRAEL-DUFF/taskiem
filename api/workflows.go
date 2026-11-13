@@ -457,13 +457,23 @@ func insertVersion(r *http.Request, tx pgx.Tx, wf uuid.UUID, v int, doc []byte, 
 // insertVersionTx stores a new immutable version; commit is the Git commit
 // it came from, if any.
 func insertVersionTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int, doc []byte, layout json.RawMessage, by, commit string) error {
+	return insertMadeVersionTx(ctx, tx, tenant, wf, v, doc, layout, by, commit, nil, false)
+}
+
+// insertMadeVersionTx writes a version that Git deployed, with the
+// members behind its commits and push (makers), or the fact that they
+// are not all known.
+func insertMadeVersionTx(ctx context.Context, tx pgx.Tx, tenant, wf uuid.UUID, v int, doc []byte, layout json.RawMessage, by, commit string, makers []uuid.UUID, unknown bool) error {
+	if makers == nil {
+		makers = []uuid.UUID{}
+	}
 	sum := sha256.Sum256(doc)
 	var lay any
 	if len(layout) > 0 {
 		lay = layout
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO workflow_versions (workflow_id, version, tenant_id, definition, layout, digest, created_by, git_commit)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''))`, wf, v, tenant, doc, lay, sum[:], by, commit); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO workflow_versions (workflow_id, version, tenant_id, definition, layout, digest, created_by, git_commit, makers, maker_unknown)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NULLIF($8, ''), $9, $10)`, wf, v, tenant, doc, lay, sum[:], by, commit, makers, unknown); err != nil {
 		return err
 	}
 	// The templates its template steps use, as the library has them now:

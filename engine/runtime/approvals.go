@@ -187,22 +187,46 @@ func (s *Store) vote(ctx context.Context, tx pgx.Tx, ref RunRef, step string, v 
 	if onBehalfOf != nil {
 		people = append(people, onBehalfOf.String())
 	}
+	// needTwo: the version came from Git and Taskiem cannot tell who made
+	// it, so no single approver can be shown not to be its maker. Two
+	// different people then approve before the step is decided.
+	needTwo := false
 	if forbidSelf {
 		var startedBy, createdBy, publishedBy *string
+		var gitMakers []string
+		var makerUnknown bool
 		// Makers are the people behind them: a run started, a version
-		// written or published with an API key is its owner's.
-		if err := tx.QueryRow(ctx, `SELECT taskiem_actor_human(r.started_by), taskiem_actor_human(wv.created_by), taskiem_actor_human(wv.published_by::text) FROM runs r
+		// written or published with an API key is its owner's; a version
+		// Git deployed is the commits' authors' and the pusher's.
+		if err := tx.QueryRow(ctx, `SELECT taskiem_actor_human(r.started_by), taskiem_actor_human(wv.created_by), taskiem_actor_human(wv.published_by::text),
+				wv.makers::text[], wv.maker_unknown FROM runs r
 			JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version WHERE r.id = $1`, ref.ID).
-			Scan(&startedBy, &createdBy, &publishedBy); err != nil {
+			Scan(&startedBy, &createdBy, &publishedBy, &gitMakers, &makerUnknown); err != nil {
 			return err
 		}
-		for _, maker := range []*string{startedBy, createdBy, publishedBy} {
+		makers := []*string{startedBy, createdBy, publishedBy}
+		for i := range gitMakers {
+			makers = append(makers, &gitMakers[i])
+		}
+		needTwo = makerUnknown
+		if needTwo && v.Decision == "approved" && onBehalfOf == nil {
+			// A second approver will never come: say so now rather than
+			// leave the approval waiting for ever.
+			sole, err := SoleApprover(ctx, tx, a.role, v.UserID)
+			if err != nil {
+				return err
+			}
+			if sole {
+				return fmt.Errorf("this workflow version came from Git and Taskiem cannot tell who made it, so two different people must approve; you are the only person who can: %w", ErrNotAllowed)
+			}
+		}
+		for _, maker := range makers {
 			if maker == nil || !slices.Contains(people, *maker) {
 				continue
 			}
 			// Nobody else could ever decide it: a one-person business
 			// approves its own, on the record.
-			if soleAllowed && onBehalfOf == nil {
+			if soleAllowed && onBehalfOf == nil && !needTwo {
 				sole, err := SoleApprover(ctx, tx, a.role, v.UserID)
 				if err != nil {
 					return err
@@ -273,6 +297,18 @@ func (s *Store) vote(ctx context.Context, tx pgx.Tx, ref RunRef, step string, v 
 	}
 	if approvals < a.required {
 		return nil
+	}
+	if needTwo && a.level+1 >= len(a.levels) {
+		// Count people, not votes: someone voting for a colleague under a
+		// delegation and again for themselves is one person.
+		var voters, voices int
+		if err := tx.QueryRow(ctx, `SELECT count(DISTINCT user_id), count(DISTINCT COALESCE(on_behalf_of, user_id)) FROM approval_decisions
+			WHERE run_id = $1 AND step_id = $2 AND decision = 'approved'`, ref.ID, step).Scan(&voters, &voices); err != nil {
+			return err
+		}
+		if min(voters, voices) < 2 {
+			return nil
+		}
 	}
 	if next := a.level + 1; next < len(a.levels) {
 		// This level is done: the next one opens for its role.
