@@ -40,7 +40,7 @@ Every request is `{paramContent, sign}` with the headers `clientAuthKey`, `versi
 
 **Never twice.** The engine's key is `out_order_no`. OPay refuses one it has seen with code 00005; the connector then looks the order up by `outOrderNo` and reports it, so a resend after a lost response returns the original order. Refused as a duplicate yet not found: the outcome stays unknown. 10000 ("system busy"), 11004 and 11005 are unknown outcomes for the create (OPay may have made the order; the engine resends under the same key) and retries for reads; A_1001 (expired) is retried; other codes refuse the step. A made order is read back for its status; when the read fails the order is reported `INITIAL` with OPay's `orderNo`.
 
-**Statuses** (API Basics): `SUCCESS` (money credited), `FAIL`, `CLOSE` (timed out), `CANCEL`, `PENDING` (only from a query); `INITIAL` appears on new terminal orders.
+**Statuses** (API Basics): `SUCCESS` (money credited), `FAIL`, `CLOSE` (timed out), `CANCEL`, `PENDING` (only from a query); `INITIAL` appears on new terminal orders. In the money log (`pos.sale`) only `FAIL`, `CLOSE` and `CANCEL` are declined; a status not listed here is pending, never declined.
 
 ## The general payment webhook
 

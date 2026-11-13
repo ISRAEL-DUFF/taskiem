@@ -300,7 +300,7 @@ What each rail's `capabilities` block will declare in R1 (✓), declare later (l
 
 - Flutterwave has no action that creates a payment; `collect_link` needs Flutterwave Standard's payment link endpoint added.
 - Remita and Interswitch send no payout events; settlement is by lookup (§4.5).
-- Paystack's `transfer` can answer `otp` when the business has OTP on transfers turned on; the capability maps it to `failed` with reason `otp_enabled` and the connection check warns: *"Turn off OTP for transfers in your Paystack dashboard so Taskiem can pay."*
+- Paystack's `transfer` can answer `otp` when the business has OTP on transfers turned on; the capability maps it to `pending` with reason `otp_enabled` (a transfer waiting for a code is not a failed one, and reporting it failed would have it paid again) and the connection check warns: *"Turn off OTP for transfers in your Paystack dashboard so Taskiem can pay."*
 
 ---
 
@@ -522,7 +522,7 @@ Sizes: S up to a week, M one to two weeks, L two to four weeks, for one engineer
 **Built** (first pull request): the capability set, rule 16 and its validation, the conformance suite (`conntest.RunCapabilities`, cases in `connectors/<rail>/testdata/capabilities/`), the SDK's capability types (`Capability<Name>Input`, `Capability<Name>Output`, `CAPABILITY_RAILS`), and the blocks for Paystack, iswallet, Moniepoint, Flutterwave and Anchor as §4.7 lists them, with these differences found on the way:
 
 - iswallet does not declare `list_banks`: its bank list's fields are not documented, so the mapping cannot be checked.
-- Paystack's OTP case is mapped (`failed`, reason `otp_enabled`), but the connection check's warning is not built: Paystack has no endpoint that says whether OTP is on.
+- Paystack's OTP case is mapped (`pending`, reason `otp_enabled`), but the connection check's warning is not built: Paystack has no endpoint that says whether OTP is on.
 - Moniepoint's two-factor transfers answer `pending` with reason `needs_otp`; Flutterwave's transfers waiting for approval in its dashboard answer `pending` with reason `needs_approval`.
 - A payout Paystack does not know is a `not_found` error from `get_payout`, not a status.
 

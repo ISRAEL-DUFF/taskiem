@@ -349,7 +349,9 @@ capabilities:
     action: get_transaction
     input: { payment_reference: "=input.payment_id" }
     output:
-      status: "=output.status in ['PAID', 'OVERPAID'] ? 'paid' : output.status in ['PENDING', 'PARTIALLY_PAID'] ? 'pending' : output.status == 'REVERSED' ? 'refunded' : 'failed'"
+      # Failed only for a status Monnify documents as ended without payment;
+      # one it does not document is pending, never failed.
+      status: "=output.status in ['PAID', 'OVERPAID'] ? 'paid' : output.status == 'REVERSED' ? 'refunded' : output.status in ['FAILED', 'ABANDONED', 'CANCELLED', 'EXPIRED'] ? 'failed' : 'pending'"
       amount_kobo: "=output.?amount_paid"
       currency: "=output.?currency"
       paid_at: "=output.?paid_on"

@@ -404,16 +404,19 @@ capabilities:
         input: { amount: "=input.amount_kobo", recipient: "=steps.recipient.output.recipient_code", reason: "=input.narration", currency: "=input.currency" }
     output:
       payout_id: =output.reference
-      status: "=output.status == 'success' ? 'settled' : output.status == 'pending' ? 'pending' : 'failed'"
+      # Failed only for a status that says no money left: failed, or
+      # reversed (it came back). Any other status, one Paystack adds
+      # later included, is pending: a payout read as failed is paid again.
+      status: "=output.status == 'success' ? 'settled' : output.status in ['failed', 'reversed'] ? 'failed' : 'pending'"
       reason: "=output.status == 'otp' ? optional.of('otp_enabled') : output.status == 'reversed' ? optional.of('reversed') : optional.none()"
     unsupported: [source]
     settles_by: { trigger: transfer_event, lookup: get_payout }
-    notes: With OTP on transfers turned on in Paystack, a transfer waits for a code Taskiem cannot give; it is reported failed with reason otp_enabled.
+    notes: With OTP on transfers turned on in Paystack, a transfer waits for a code Taskiem cannot give; it stays pending with reason otp_enabled until someone completes or cancels it in Paystack.
   get_payout:
     action: verify_transfer
     input: { reference: "=input.payout_id" }
     output:
-      status: "=output.status == 'success' ? 'settled' : output.status == 'reversed' ? 'reversed' : output.status == 'pending' ? 'pending' : 'failed'"
+      status: "=output.status == 'success' ? 'settled' : output.status == 'reversed' ? 'reversed' : output.status == 'failed' ? 'failed' : 'pending'"
       reason: "=output.status == 'otp' ? optional.of('otp_enabled') : output.status == 'not_found' ? optional.of('not_found') : optional.none()"
   collect_link:
     action: initialize_transaction
