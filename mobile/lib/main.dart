@@ -32,6 +32,7 @@ void main() {
   ));
   final auth = Auth(transport: Transport(base: taskiemUrl), store: SessionStore(const SecureKeyStore()), version: appVersion);
   final prefs = Prefs(const SecureKeyStore())..load();
+  auth.onForget = prefs.forgetPerson;
   auth.start();
   runApp(TaskiemApp(auth: auth, unlocker: PhoneUnlocker(), prefs: prefs));
 }

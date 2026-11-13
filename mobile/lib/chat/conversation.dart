@@ -1635,7 +1635,10 @@ class _PreviewCard extends StatelessWidget {
       excludeSemantics: true,
       child: GestureDetector(
         onTap: () async {
-          final ok = await openInBrowser(Uri.parse(p.url));
+          // The address came in the other party's message: one that is
+          // not an address is not opened, and says so.
+          final url = Uri.tryParse(p.url);
+          final ok = url != null && await openInBrowser(url);
           if (!ok && context.mounted) showTkToast(context, 'That link could not be opened.', error: true);
         },
         child: Container(
