@@ -32,8 +32,13 @@ type Request struct {
 	// step parks for a person.
 	Reconciling bool
 	Attempt     int
-	Logger      *slog.Logger
-	HTTP        *http.Client
+	// Secrets are the secret values this call was given (the connection's
+	// secret fields, the step's secrets): a runtime that writes what an
+	// action logs (the WebAssembly host) takes them out of each line
+	// before it is cut or written. The worker's Logger scrubs them too.
+	Secrets []string
+	Logger  *slog.Logger
+	HTTP    *http.Client
 	// Dial opens egress-guarded TCP connections for connectors that do not
 	// speak HTTP (databases, SFTP).
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)

@@ -1356,7 +1356,7 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 	if err != nil {
 		return history.Event{}, err
 	}
-	resp, err := action.Execute(rctx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, Reconciling: true, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Rotate: w.rotate(p)})
+	resp, err := action.Execute(rctx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, Reconciling: true, Attempt: p.c.attempt, Secrets: p.scrub, Logger: w.stepLogger(p), HTTP: hc, Rotate: w.rotate(p)})
 	switch {
 	case err == nil:
 		return completedEvent(p.c, resp.Output, true), nil
@@ -1393,6 +1393,77 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 		return failed(p.c, "retryable", "reconcile: "+err.Error(), "reconcile"), nil
 	}
 	return failed(p.c, "unknown_outcome", "reconcile: "+err.Error(), "park"), nil
+}
+
+// stepLogger is the logger a connector action is handed: the worker's,
+// with the step's secret values (the connection's secret fields, the
+// secrets its input used) taken out of every message and attribute. A
+// step's result is scrubbed of them before it is recorded; what a
+// connector logs goes to the platform's log and must be too.
+func (w *Worker) stepLogger(p *plan) *slog.Logger {
+	if w.Logger == nil {
+		return nil
+	}
+	return slog.New(&scrubHandler{inner: w.Logger.Handler(), secrets: func() []string { return p.scrub }})
+}
+
+// scrubHandler replaces secret values in a record's message and
+// attributes before passing it on.
+type scrubHandler struct {
+	inner   slog.Handler
+	secrets func() []string
+}
+
+func (h *scrubHandler) Enabled(ctx context.Context, l slog.Level) bool {
+	return h.inner.Enabled(ctx, l)
+}
+
+func (h *scrubHandler) Handle(ctx context.Context, r slog.Record) error {
+	secrets := h.secrets()
+	out := slog.NewRecord(r.Time, r.Level, scrubText(r.Message, secrets), r.PC)
+	r.Attrs(func(a slog.Attr) bool {
+		out.AddAttrs(scrubAttr(a, secrets))
+		return true
+	})
+	return h.inner.Handle(ctx, out)
+}
+
+func (h *scrubHandler) WithAttrs(as []slog.Attr) slog.Handler {
+	secrets := h.secrets()
+	clean := make([]slog.Attr, len(as))
+	for i, a := range as {
+		clean[i] = scrubAttr(a, secrets)
+	}
+	return &scrubHandler{inner: h.inner.WithAttrs(clean), secrets: h.secrets}
+}
+
+func (h *scrubHandler) WithGroup(name string) slog.Handler {
+	return &scrubHandler{inner: h.inner.WithGroup(name), secrets: h.secrets}
+}
+
+// scrubAttr is a with the secret values taken out of its value: a group's
+// members each, anything else as the text it would be logged as.
+func scrubAttr(a slog.Attr, secrets []string) slog.Attr {
+	v := a.Value.Resolve()
+	switch v.Kind() {
+	case slog.KindGroup:
+		g := v.Group()
+		clean := make([]slog.Attr, len(g))
+		for i, m := range g {
+			clean[i] = scrubAttr(m, secrets)
+		}
+		return slog.Attr{Key: a.Key, Value: slog.GroupValue(clean...)}
+	case slog.KindBool, slog.KindDuration, slog.KindFloat64, slog.KindInt64, slog.KindTime, slog.KindUint64:
+		return slog.Attr{Key: a.Key, Value: v}
+	}
+	s := v.String()
+	if err, ok := v.Any().(error); ok && err != nil {
+		s = err.Error()
+	}
+	if clean := scrubText(s, secrets); clean != s {
+		return slog.String(a.Key, clean)
+	}
+	return slog.Attr{Key: a.Key, Value: v}
 }
 
 // reconcileInput is what a reconcile action is given (contract:
@@ -1482,7 +1553,7 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		}
 		var resp connector.Response
 		actx := connector.WithCaller(ctx, connector.Caller{Tenant: p.c.tenant, Run: p.c.run, Step: p.c.step, Environment: p.env})
-		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial, Rotate: w.rotate(p)})
+		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Secrets: p.scrub, Logger: w.stepLogger(p), HTTP: hc, Dial: dial, Rotate: w.rotate(p)})
 		if err != nil {
 			w.expireRejected(ctx, p, err)
 			return w.classify(p, err)
