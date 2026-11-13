@@ -330,7 +330,20 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 		return err
 	}
 	if user == uuid.Nil {
-		return s.waUnbound(ctx, wa, number, in)
+		return s.waUnbound(ctx, wa, number, in, false)
+	}
+	// A business's own number: someone with a Taskiem account who is not
+	// on its team is there what anyone else is, a customer (or a rider, a
+	// supplier), with no roles; nothing of their own businesses is reached
+	// from that number.
+	if wa.Own() {
+		tenants, err := s.tenantsOf(ctx, user)
+		if err != nil {
+			return err
+		}
+		if !slices.ContainsFunc(tenants, func(t tenantRef) bool { return t.ID == wa.Tenant }) {
+			return s.waUnbound(ctx, wa, number, in, true)
+		}
 	}
 	return s.converse(ctx, &chat{ch: wa, wa: wa, addr: number, in: in}, user)
 }
@@ -393,6 +406,8 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	}
 	if wa := c.wa; wa != nil && wa.Own() {
 		// A tenant's own number speaks for that tenant only.
+		// Only its team gets this far (waHandle): anyone else is a
+		// customer there.
 		i := slices.IndexFunc(c.tenants, func(t tenantRef) bool { return t.ID == wa.Tenant })
 		if i < 0 {
 			return s.waSay(ctx, wa, number, "", c.t("wa.not_member"))
@@ -522,14 +537,16 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 
 // waUnbound answers a number bound to no one: the code it was sent, if it
 // sends that back; a tenant's public menu on its own number; or how to
-// link it.
-func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number string, in whatsapp.Inbound) error {
+// link it. guest is a number that is bound, writing to the own number of
+// a business its person is not on the team of: a customer, a rider or a
+// supplier there like any other number, never linked or signed up again.
+func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number string, in whatsapp.Inbound, guest bool) error {
 	text := ""
 	if in.Type == "text" {
 		text = in.Text
 	}
 	l := s.chooseLang(ctx, wa.Tenant, number, text).Tag
-	if m := sixDigits.FindStringSubmatch(in.Text); m != nil {
+	if m := sixDigits.FindStringSubmatch(in.Text); m != nil && !guest {
 		var user *uuid.UUID
 		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_wa_otp_user_for($1, $2)`, number, m[1]).Scan(&user); err != nil {
 			return err
@@ -585,8 +602,10 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	// Signing up from chat (chat_signup.go): a sign-up under way, a word
 	// or button that starts one.
 	sc := &signupChat{ch: wa, addr: number, lang: l}
-	if done, err := s.chatSignupMessage(ctx, sc, text, in.Reply); done || err != nil {
-		return err
+	if !guest {
+		if done, err := s.chatSignupMessage(ctx, sc, text, in.Reply); done || err != nil {
+			return err
+		}
 	}
 	if wa.Own() {
 		// The public menu answers a customer who asks for it (its word,
@@ -610,6 +629,11 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	}
 	if !s.limiter("wa-unbound:"+number, 10*time.Minute, 2).Allow() {
 		return nil
+	}
+	if guest {
+		// A rider or supplier of the business whose words were none of
+		// theirs: their account's businesses are not reached from here.
+		return s.waSay(ctx, wa, number, "", tr(l, "wa.not_member"))
 	}
 	if s.signupOn(wa) {
 		return s.signupOffer(ctx, sc, text)
