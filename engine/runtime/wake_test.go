@@ -131,6 +131,9 @@ func TestEngineCommitsDoNotNotify(t *testing.T) {
 	if most := int(time.Since(began)/time.Second) + 2; got < 1 || got > most {
 		t.Errorf("%d runs sent %d notifications, want between 1 and %d (one a second)", runs, got, most)
 	}
+	// The first store may still owe its last wake-up, up to one interval
+	// after its last run: let it go before counting the second store's.
+	time.Sleep(s.WakeInterval + 300*time.Millisecond)
 	if got := start(process(t, e, true)); got != runs {
 		t.Errorf("with wake-ups left in the transaction, %d runs sent %d notifications, want one each", runs, got)
 	}
