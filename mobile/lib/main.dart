@@ -82,6 +82,9 @@ class TaskiemApp extends StatelessWidget {
                       active: auth!.state == AuthState.signedIn && (prefs?.lock ?? true),
                       unlocker: unlocker!,
                       startLocked: auth!.restored,
+                      // Covered in the app switcher whenever signed in,
+                      // with the lock on or off.
+                      hideWhenAway: auth!.state == AuthState.signedIn,
                       now: now,
                       child: child!,
                     ),

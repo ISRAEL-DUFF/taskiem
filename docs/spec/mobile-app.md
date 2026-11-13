@@ -406,8 +406,19 @@ WebAuthn origins gain the Android app's signing-key origin.
 - No analytics or crash reporting library that sends data to a third party
   in the first release. Crashes are reported to Taskiem's own server
   (`POST /v1/app/crash`, no message content), with the person's consent.
-- Screenshots are blocked on Android (`FLAG_SECURE`) while a payout approval
-  card is open with its step-up; elsewhere the phone's own rules apply.
+- **The app switcher.** As soon as the app is not in front (the app
+  switcher, a call, the notification shade), its screens are covered with
+  the mark on pine, whether or not the app lock is on, and shown again when
+  the person comes back; the lock itself still waits its 5 minutes. This is
+  done in the app's own code on both platforms. Some Android phones take
+  the switcher's picture before the cover is drawn, so it is not a
+  guarantee there.
+- **Still to do: screenshots.** Nothing stops a screenshot or a screen
+  recording while the app is in use: there is no `FLAG_SECURE` under
+  `mobile/android` yet. The plan is to set it on Android while a payout
+  approval card is open with its step-up (which also makes the switcher's
+  picture blank there); elsewhere the phone's own rules apply. iOS has no
+  equivalent.
 - The stores' privacy forms (Google's Data safety, Apple's privacy labels)
   are filled from this section and kept in `mobile/STORE.md`; the NDPA
   review covers the app as part of the product.
