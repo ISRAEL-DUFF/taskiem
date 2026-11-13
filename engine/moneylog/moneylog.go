@@ -58,11 +58,13 @@ type Entry struct {
 	Category    string     `json:"category,omitempty"`
 	EnteredBy   string     `json:"entered_by,omitempty"`
 	Corrects    *uuid.UUID `json:"corrects,omitempty"`
-	// Credit is the rail's id for one credit to a customer's permanent
-	// account (virtual_account.credited's credit_id): Reference names the
-	// account, which takes many credits, so the credit is part of the key.
-	// It is also kept on its own (credit_id), so a refund naming the
-	// credit finds it.
+	// Credit is the rail's id for one credit to an account number that
+	// takes more than one: a customer's permanent account
+	// (virtual_account.credited's credit_id), or a one-time number whose
+	// rail refuses no second transfer (payment.received's credit_id).
+	// Reference names the account, so the credit is part of the key. It
+	// is also kept on its own (credit_id), so a refund or a return naming
+	// the credit finds it.
 	Credit string `json:"-"`
 
 	// Net says AmountKobo is what landed, the rail's fee (FeeKobo) taken
@@ -91,7 +93,8 @@ func CountableKobo(e Entry) int64 {
 }
 
 // Key is what makes an entry one movement (and status): where, what and
-// the rail's reference.
+// the rail's reference, and the rail's id for the credit where the
+// reference is an account number's that takes more than one (Credit).
 func (e Entry) Key() string {
 	if e.Kind == "statement" {
 		// A line is the same line when its channel, date, amount and
@@ -155,6 +158,46 @@ func (l *Log) Record(ctx context.Context, tenant uuid.UUID, e Entry) (id uuid.UU
 	return id, fresh, err
 }
 
+// SameCredit is how far apart, by the rail's own clock, a credit and an
+// entry written without the rail's id for it may be and still be taken as
+// one movement (samePayment).
+const SameCredit = 5 * time.Minute
+
+// samePayment finds the entry already in the log for a payment into an
+// account number (payment.received) heard another way, when its own key
+// is not there. A payment is heard with the rail's id for the credit (its
+// webhook, the look-back) or without it (asked by its reference alone; an
+// event written before credits had ids), and both are one movement:
+//
+//   - Without an id, it is the first credit recorded for the reference:
+//     the rail was asked about the payment, not about one transfer.
+//   - With an id, it is the entry written without one, unless the rail's
+//     own times say this credit came later than that entry's (more than
+//     SameCredit after): then it is another transfer into the same
+//     number, and its own entry. An entry or a credit without the rail's
+//     time is taken as the same, so no credit is ever recorded twice.
+//
+// ok is false when the payment is new.
+func samePayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry) (id uuid.UUID, ok bool, err error) {
+	if e.Credit == "" {
+		err = tx.QueryRow(ctx, `SELECT id FROM money_entries WHERE tenant_id = $1 AND channel = $2 AND reference = $3 AND kind = 'payment'
+			AND event = 'payment.received' AND credit_id IS NOT NULL ORDER BY COALESCE(occurred_at, recorded_at), recorded_at, id LIMIT 1`,
+			tenant, e.Channel, e.Reference).Scan(&id)
+	} else {
+		var at *time.Time
+		bare := e
+		bare.Credit = ""
+		err = tx.QueryRow(ctx, `SELECT id, occurred_at FROM money_entries WHERE tenant_id = $1 AND entry_key = $2`, tenant, bare.Key()).Scan(&id, &at)
+		if err == nil && at != nil && e.OccurredAt != nil && e.OccurredAt.After(at.Add(SameCredit)) {
+			return uuid.Nil, false, nil
+		}
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, false, nil
+	}
+	return id, err == nil, err
+}
+
 // RecordTx is Record in the caller's transaction.
 func (l *Log) RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry) (uuid.UUID, bool, error) {
 	if err := e.check(); err != nil {
@@ -172,6 +215,24 @@ func (l *Log) RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, false, err
 	}
+	if e.Kind == "payment" && e.Event == "payment.received" {
+		// One writer at a time per payment reference, so the same credit
+		// heard with and without its id at once is still one entry.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem money payment ' || $1::text || ' ' || $2 || ' ' || $3, 0))`,
+			tenant, e.Channel, e.Reference); err != nil {
+			return uuid.Nil, false, err
+		}
+		err := tx.QueryRow(ctx, `SELECT id FROM money_entries WHERE tenant_id = $1 AND entry_key = $2`, tenant, key).Scan(&id)
+		if err == nil {
+			return id, false, nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, false, err
+		}
+		if same, ok, err := samePayment(ctx, tx, tenant, e); err != nil || ok {
+			return same, false, err
+		}
+	}
 	var payer map[string]any
 	if e.PayerName != "" || e.PayerAccount != "" {
 		if l.PII == nil {
@@ -188,11 +249,22 @@ func (l *Log) RecordTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, e Entry
 			return uuid.Nil, false, err
 		}
 	}
-	if e.Corrects == nil && e.Credit == "" && e.Event != "" && (e.Source == "event" || e.Source == "lookup" || e.Source == "step") {
-		// A later status of a movement names the first entry for it.
+	if e.Corrects == nil && e.Event != "" && (e.Source == "event" || e.Source == "lookup" || e.Source == "step") {
+		// A later status of a movement names the first entry for it. A
+		// credit is its own movement; a later status naming the credit (a
+		// one-time number's transfer the rail took back) names that
+		// credit's entry, else the one written without an id.
 		var first uuid.UUID
-		err := tx.QueryRow(ctx, `SELECT id FROM money_entries WHERE tenant_id = $1 AND channel = $2 AND reference = $3 AND kind = $4
-			ORDER BY recorded_at, id LIMIT 1`, tenant, e.Channel, e.Reference, e.Kind).Scan(&first)
+		err := pgx.ErrNoRows
+		switch {
+		case e.Credit == "":
+			err = tx.QueryRow(ctx, `SELECT id FROM money_entries WHERE tenant_id = $1 AND channel = $2 AND reference = $3 AND kind = $4
+				ORDER BY recorded_at, id LIMIT 1`, tenant, e.Channel, e.Reference, e.Kind).Scan(&first)
+		case e.Kind == "payment" && e.Status != "settled":
+			err = tx.QueryRow(ctx, `SELECT id FROM money_entries WHERE tenant_id = $1 AND channel = $2 AND reference = $3 AND kind = $4
+				AND status = 'settled' AND (credit_id = $5 OR credit_id IS NULL) ORDER BY credit_id IS NULL, recorded_at, id LIMIT 1`,
+				tenant, e.Channel, e.Reference, e.Kind, e.Credit).Scan(&first)
+		}
 		if err == nil {
 			e.Corrects = &first
 		} else if !errors.Is(err, pgx.ErrNoRows) {
@@ -234,10 +306,17 @@ func FromEvent(channel, event string, fields map[string]any) (Entry, bool) {
 		// The rail's fee where it settles net and says so (iswallet's
 		// one-time numbers): amount_kobo stays what the payer sent.
 		e.FeeKobo = kobo(fields, "fee_kobo")
+		// The rail's id for this one transfer, where the number it was
+		// paid into takes more than one (iswallet's one-time numbers):
+		// each transfer is then its own movement, as a permanent
+		// account's credits are.
+		e.Credit = clip(str(fields, "credit_id"), 200)
 	case "payment.returned":
-		// Money that came in and was sent back to the payer by the rail.
+		// Money that came in and was sent back to the payer by the rail:
+		// the one transfer, where the rail names it.
 		e.Direction, e.Kind, e.Status, e.Reference = "in", "payment", "reversed", str(fields, "payment_id")
 		e.Note = returned[str(fields, "reason")]
+		e.Credit = clip(str(fields, "credit_id"), 200)
 	case "virtual_account.credited":
 		// Reference is the account's, which takes many credits: each is
 		// its own movement (credit_id). amount_kobo is what the payer
@@ -311,9 +390,11 @@ func FromCredit(channel string, credit map[string]any) (Entry, bool) {
 	if str(credit, "event") == "payment.received" {
 		// A payment into a one-time number (iswallet's tot_ references):
 		// the same movement, by the same key, as the webhook's
-		// payment.received, so heard both ways it is one entry.
-		e, ok := FromEvent(channel, "payment.received", map[string]any{"payment_id": credit["reference"], "amount_kobo": credit["amount_kobo"],
-			"fee_kobo": credit["fee_kobo"], "currency": credit["currency"], "paid_at": credit["occurred_at"]})
+		// payment.received (the number's reference and the credit's own
+		// id), so heard both ways it is one entry, and a second transfer
+		// into the number is a second.
+		e, ok := FromEvent(channel, "payment.received", map[string]any{"payment_id": credit["reference"], "credit_id": credit["credit_id"],
+			"amount_kobo": credit["amount_kobo"], "fee_kobo": credit["fee_kobo"], "currency": credit["currency"], "paid_at": credit["occurred_at"]})
 		if !ok {
 			return Entry{}, false
 		}

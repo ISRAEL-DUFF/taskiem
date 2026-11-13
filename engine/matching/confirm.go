@@ -305,7 +305,13 @@ func (m *Matcher) countTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c co
 				return err
 			}
 			done = append(done, k)
-			out.Parts, out.PartKobo = append(out.Parts, k.Result), append(out.PartKobo, p.AmountKobo)
+			took := p.AmountKobo
+			if k.Invoice != nil && k.paymentID != uuid.Nil {
+				// An invoice takes what is due on it and no more: the rest
+				// is left below, as credit or for a person.
+				took = k.kobo
+			}
+			out.Parts, out.PartKobo = append(out.Parts, k.Result), append(out.PartKobo, took)
 			if o := k.Order; o != nil {
 				payees = append(payees, o.CustomerID())
 				if sugOrder != nil && *sugOrder == o.ID && k.paymentID != uuid.Nil {
@@ -405,6 +411,9 @@ type counted struct {
 	paymentID uuid.UUID
 	// became: the payment made the invoice paid.
 	became bool
+	// kobo is what the invoice's row counts: the part, or what was due
+	// when that was less.
+	kobo int64
 	// order is what counting towards the order did.
 	order storefront.Counted
 }
@@ -431,7 +440,7 @@ func (m *Matcher) countPart(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, p 
 		return counted{}, err
 	}
 	x := k.Invoice
-	return counted{Result: Result{Invoice: &x}, paymentID: k.PaymentID, became: k.Became}, nil
+	return counted{Result: Result{Invoice: &x}, paymentID: k.PaymentID, became: k.Became, kobo: k.AmountKobo}, nil
 }
 
 // paid runs what the parts' targets do on being paid, after the

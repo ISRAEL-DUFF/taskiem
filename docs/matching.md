@@ -6,7 +6,18 @@ A match is a payment counted towards an invoice or an order, listed on it with h
 
 ## Exact matches
 
-A payment into an account number or payment link Taskiem gave for an invoice ([paying an invoice](invoices.md#paying-from-the-page)) is matched to that invoice at once, with no one asked. Taskiem matches it when the payment service tells it about the payment, or when its own check every 30 seconds finds it, whichever comes first. Money paid in after the invoice was voided is not counted towards it: it is left for a person in **To match**, and the account is no longer checked.
+A payment into an account number or payment link Taskiem gave for an invoice ([paying an invoice](invoices.md#paying-from-the-page)) is matched to that invoice at once, with no one asked. Taskiem matches it when the payment service tells it about the payment, or when its own check every 30 seconds finds it, whichever comes first. A second transfer into the same account number, on a payment service that takes one (iswallet's one-time numbers), is its own money log entry and is matched the same way, to the same invoice. Money paid in after the invoice was voided is not counted towards it: it is left for a person in **To match**, and the account is no longer checked.
+
+### More than is due
+
+An invoice counts no more than its total, however the money is matched: a payment of more than is due counts for what is due, and a payment for an invoice with nothing due counts nothing towards it. Taskiem reads what is due under a lock on the invoice, so two payments arriving at once cannot both count in full, and the database refuses a payment that would take an invoice past its total, whoever writes it.
+
+What the invoice did not take stays with the payment:
+
+- **Paid into the account number or link Taskiem gave for the invoice** (a customer who paid twice, paid too much, or sent a second or late transfer into a one-time number): it is the invoice's customer's [credit](#customers-own-account-numbers), shown on their invoices and counted towards the next invoice sent to them. It is also listed under [leaks](leaks.md) as overpaid while any of it is unused, so the owner sees it and can refund it at the payment service instead.
+- **Matched by hand, confirmed from a suggestion or matched automatically:** it waits in **To match** with what is left, unless the person left the rest as the customer's credit ([split payments](#split-payments)). Matching to an invoice with nothing due is refused with the reason.
+
+Invoices that counted more than their total before this rule are not changed: they are listed under leaks as overpaid, and are put right by undoing a payment.
 
 A payment through a storefront order's Paystack checkout page (its reference is the one Taskiem gave the page) is matched to that order the same way: when the Paystack event reaches the money log, or when the order's own payment check finds it, whichever comes first. Both write the same money log entry, its match, and the order's move to paid together, under the money's lock and the order's, so the order is matched and marked paid once, and its workflow is started or told once. An order cancelled or expired before its money came, or already paid by other money, is left for a person.
 
@@ -42,7 +53,7 @@ Whenever the customer has more than one open invoice, or the payment is more tha
 
 **Splitting by hand.** Under **Match to another invoice or order…**, **Split by hand across several…** lists every invoice sent and not yet fully paid and every order waiting for money: tick the ones the payment is for and give each its part; the form shows what is left to match afterwards and refuses parts adding up to more than is left of the payment, as the database does. The rest waits in To match.
 
-Over the API, `POST /v1/money/suggestions/{id}/confirm` and `POST /v1/money/entries/{id}/match` take `{"parts": [{"invoice": "INV-0101", "amount_kobo": 2000000}, {"order": "AK-7QX4KD", "amount_kobo": 300000}], "credit_rest": true}` (credit_rest only when every part is one customer's invoices, or their siblings' where the school shares family credit), and confirm takes `{"split": true}` to split as chat offers it (oldest first); each suggestion of an invoice lists its offered `split` (`parts` suggested first, each with `number`, `due_kobo`, `amount_kobo` and `sibling` where it is one's; `credit_kobo`; `over`, whether the payment is more than is due on the suggested invoice). Without parts, what is left of the payment counts towards the one invoice or order, as before.
+Over the API, `POST /v1/money/suggestions/{id}/confirm` and `POST /v1/money/entries/{id}/match` take `{"parts": [{"invoice": "INV-0101", "amount_kobo": 2000000}, {"order": "AK-7QX4KD", "amount_kobo": 300000}], "credit_rest": true}` (credit_rest only when every part is one customer's invoices, or their siblings' where the school shares family credit), and confirm takes `{"split": true}` to split as chat offers it (oldest first); each suggestion of an invoice lists its offered `split` (`parts` suggested first, each with `number`, `due_kobo`, `amount_kobo` and `sibling` where it is one's; `credit_kobo`; `over`, whether the payment is more than is due on the suggested invoice). Without parts, what is left of the payment counts towards the one invoice or order, an invoice taking no [more than is due](#more-than-is-due) on it. A part of more than is due on its invoice counts for what is due, and each answer's `parts` say what was counted.
 
 ## Payer memory
 
@@ -109,7 +120,7 @@ A payment's parts are undone one by one; to move money elsewhere, undo its part 
 
 ## Money that went back
 
-Money can go back to the payer after it counted: the rail returns or reverses a payment (`payment.returned`, a POS sale reversed), or the business refunds it (a refund that settled, `refund.processed`, naming the payment by its reference, or a credit into a customer's account by the rail's own id for it). Taskiem takes each such movement once, against the payment it takes back (decided in the [schools plan](spec/schools.md#18-risks-and-open-questions), for every business):
+Money can go back to the payer after it counted: the rail returns or reverses a payment (`payment.returned`, a POS sale reversed), or the business refunds it (a refund that settled, `refund.processed`, naming the payment by its reference, or a credit into a customer's account by the rail's own id for it; whether or not the refund was first heard as pending or failed). A transfer into a one-time number that the rail takes back is found by the rail's id for that transfer, so the right one of two is undone. Taskiem takes each such movement once, against the payment it takes back (decided in the [schools plan](spec/schools.md#18-risks-and-open-questions), for every business):
 
 - **its matches are undone**, newest first, each invoice back to sent, part-paid or overdue, with the payment and its undoing kept in the invoice's history ("system:reversal");
 - the payment now counts for what it was **less what went back**, in the database too, so nothing can count it again, and it is never anyone's credit: refunded all, it leaves To match ("the money went back to the payer"); refunded in part, what is left is matched again by the permanent-account rule when it was paid into a customer's account (oldest open invoice first), otherwise it waits in To match with the reason "part of this payment went back to the payer; match what is left";
@@ -118,6 +129,8 @@ Money can go back to the payer after it counted: the rail returns or reverses a 
 - a payment heard to have gone back before it was ever looked at is never offered for matching.
 
 Parts of the payment counted towards storefront orders are left: an order has its own [refunds](storefronts.md#refunds).
+
+Money that went back and names a payment the money log does not have (a refund heard before its payment, or of a payment made before the connection) changes nothing yet: Taskiem looks for the payment again every 15 minutes for 7 days and takes it back when it is found. After that it stops looking and tells the owners once a day per connection ("A refund of ₦1,000 could not be matched to a payment"), so that a payment counted some other way can be undone by hand.
 
 ## The money_matches table
 

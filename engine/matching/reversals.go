@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -22,7 +23,8 @@ import (
 // A payment the rail returned or reversed (an entry money in with status
 // reversed, naming the first: payment.returned, a POS sale reversed), or a
 // refund that settled (refund.processed, naming the payment it refunds,
-// by its reference or a credit's credit_id), is recorded once against the
+// by its reference or a credit's credit_id, whether or not it was first
+// heard as pending or failed), is recorded once against the
 // credit it takes back (money_reversals). What the credit counts for is
 // then less what went back (taskiem_money_entry_reversed, 00213): its
 // matches to invoices are undone, each invoice reopened; what is left of
@@ -30,6 +32,13 @@ import (
 // paid into a customer's account, else waits in To match with the reason.
 // The owners are told, and the people who match money. Parts counted
 // towards storefront orders are left: an order has its own refunds.
+//
+// A reversal whose payment the log does not have (heard before the
+// payment, or of a payment made before the connection) is recorded as
+// taking back nothing and tried again, every RetryEvery for RetryFor;
+// then it is closed and the owners told once (AlertUnmatched), so a
+// refund Taskiem could never tie to a payment is a person's to check and
+// is not looked at for ever.
 
 // Why reversed money is held.
 const (
@@ -40,6 +49,17 @@ const (
 // AlertReversed is the kind of the alert a business gets when money it had
 // counted towards invoices went back to the payer; once per reversal.
 const AlertReversed = "money_reversed"
+
+// AlertUnmatched is the kind of the alert the owners get when money that
+// went back could not be tied to a payment in the money log after
+// RetryFor; once per connection a day, however many there are.
+const AlertUnmatched = "money_reversal_unmatched"
+
+// How long a reversal without its payment is tried again, and how often.
+const (
+	RetryFor   = 7 * 24 * time.Hour
+	RetryEvery = 15 * time.Minute
+)
 
 // Reversals looks at every tenant's money that went back and has not been
 // looked at.
@@ -68,30 +88,47 @@ type reversal struct {
 	channel    string
 	reference  string
 	amountKobo *int64
+	// credit is the rail's id for the one transfer that went back, where
+	// the reversal carries it (a one-time number's).
+	credit string
+}
+
+const reversalCols = `e.id, e.corrects, e.kind, e.channel, e.reference, e.amount_kobo, COALESCE(e.credit_id, '')`
+
+func scanReversal(r pgx.CollectableRow) (reversal, error) {
+	var x reversal
+	return x, r.Scan(&x.id, &x.corrects, &x.kind, &x.channel, &x.reference, &x.amountKobo, &x.credit)
 }
 
 // TenantReversals looks at up to 100 of a tenant's reversals not yet
-// looked at, oldest first.
+// looked at, oldest first, then at up to 100 looked at before whose
+// payment was not found, the longest untried first.
 func (m *Matcher) TenantReversals(ctx context.Context, tenant uuid.UUID) error {
-	var list []reversal
+	var list, again []reversal
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT e.id, e.corrects, e.kind, e.channel, e.reference, e.amount_kobo FROM money_entries e
+		rows, err := tx.Query(ctx, `SELECT `+reversalCols+` FROM money_entries e
 			WHERE e.tenant_id = $1 AND (e.direction = 'in' AND e.status = 'reversed' OR e.kind = 'refund' AND e.status = 'settled')
 			  AND NOT EXISTS (SELECT 1 FROM money_reversals r WHERE r.by_entry = e.id)
 			ORDER BY e.recorded_at, e.id LIMIT 100`, tenant)
 		if err != nil {
 			return err
 		}
-		list, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (reversal, error) {
-			var x reversal
-			return x, r.Scan(&x.id, &x.corrects, &x.kind, &x.channel, &x.reference, &x.amountKobo)
-		})
+		if list, err = pgx.CollectRows(rows, scanReversal); err != nil {
+			return err
+		}
+		rows, err = tx.Query(ctx, `SELECT `+reversalCols+` FROM money_reversals r JOIN money_entries e ON e.id = r.by_entry
+			WHERE r.tenant_id = $1 AND r.entry_id IS NULL AND r.closed_at IS NULL AND (r.checked_at IS NULL OR r.checked_at < $2)
+			ORDER BY r.checked_at NULLS FIRST, r.created_at, r.by_entry LIMIT 100`, tenant, m.now().Add(-RetryEvery))
+		if err != nil {
+			return err
+		}
+		again, err = pgx.CollectRows(rows, scanReversal)
 		return err
 	})
 	if err != nil {
 		return err
 	}
-	for _, r := range list {
+	for _, r := range append(list, again...) {
 		if err := m.reverse(ctx, tenant, r); err != nil {
 			return err
 		}
@@ -101,11 +138,36 @@ func (m *Matcher) TenantReversals(ctx context.Context, tenant uuid.UUID) error {
 
 // original is the money-in entry a reversal takes back, or nil.
 func original(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, r reversal) (*uuid.UUID, error) {
+	// The entry it names, when that is the money that came in: a payment
+	// the rail returned names it. A refund that settled names the refund's
+	// first status instead (pending, failed), never the payment: followed
+	// back at most a few steps, then found as a refund heard alone is.
+	next := r.corrects
+	for i := 0; next != nil && i < 8; i++ {
+		var in bool
+		var id uuid.UUID
+		var corrects *uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT id, direction = 'in' AND status = 'settled', corrects FROM money_entries WHERE tenant_id = $1 AND id = $2`, tenant, *next).
+			Scan(&id, &in, &corrects)
+		if errors.Is(err, pgx.ErrNoRows) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if in {
+			return &id, nil
+		}
+		next = corrects
+	}
 	var id uuid.UUID
-	var err error
-	if r.corrects != nil {
-		err = tx.QueryRow(ctx, `SELECT id FROM money_entries WHERE tenant_id = $1 AND id = $2 AND direction = 'in' AND status = 'settled'`, tenant, *r.corrects).Scan(&id)
-	} else {
+	err := pgx.ErrNoRows
+	if r.credit != "" {
+		// The one transfer into an account number the rail names.
+		err = tx.QueryRow(ctx, `SELECT id FROM money_entries WHERE tenant_id = $1 AND channel = $2 AND direction = 'in' AND status = 'settled' AND id <> $5
+			AND reference = $3 AND credit_id = $4 ORDER BY recorded_at, id LIMIT 1`, tenant, r.channel, r.reference, r.credit, r.id).Scan(&id)
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
 		// A refund (or a reversal naming no entry) names the payment by its
 		// reference, or, for a credit to a permanent account, its credit_id.
 		err = tx.QueryRow(ctx, `SELECT id FROM money_entries WHERE tenant_id = $1 AND channel = $2 AND direction = 'in' AND status = 'settled' AND id <> $4
@@ -140,10 +202,41 @@ func (m *Matcher) reverse(ctx context.Context, tenant uuid.UUID, r reversal) err
 				return err
 			}
 		}
-		tag, err := tx.Exec(ctx, `INSERT INTO money_reversals (by_entry, tenant_id, entry_id, amount_kobo) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
-			r.id, tenant, orig, r.amountKobo)
-		if err != nil || tag.RowsAffected() == 0 || orig == nil {
-			return err // looked at meanwhile, or no credit of ours to take back
+		now := m.now()
+		tag, err := tx.Exec(ctx, `INSERT INTO money_reversals (by_entry, tenant_id, entry_id, amount_kobo, checked_at) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
+			r.id, tenant, orig, r.amountKobo, now)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			// Looked at before. Recorded without its payment (the log did
+			// not have it then, or the old code missed it), it is tied to
+			// the payment now found, once; else tried again later, and
+			// after RetryFor closed and a person told.
+			var linked, closed bool
+			var since time.Time
+			if err := tx.QueryRow(ctx, `SELECT entry_id IS NOT NULL, closed_at IS NOT NULL, created_at FROM money_reversals WHERE tenant_id = $1 AND by_entry = $2 FOR UPDATE`,
+				tenant, r.id).Scan(&linked, &closed, &since); err != nil {
+				return err
+			}
+			switch {
+			case linked || closed:
+				return nil // looked at meanwhile
+			case orig == nil && now.Sub(since) < RetryFor:
+				_, err := tx.Exec(ctx, `UPDATE money_reversals SET checked_at = $2 WHERE by_entry = $1`, r.id, now)
+				return err
+			case orig == nil:
+				if _, err := tx.Exec(ctx, `UPDATE money_reversals SET checked_at = $2, closed_at = $2 WHERE by_entry = $1`, r.id, now); err != nil {
+					return err
+				}
+				return m.tellUnmatched(ctx, tx, tenant, r)
+			}
+			if _, err := tx.Exec(ctx, `UPDATE money_reversals SET entry_id = $2, checked_at = $3 WHERE by_entry = $1 AND entry_id IS NULL`, r.id, *orig, now); err != nil {
+				return err
+			}
+		}
+		if orig == nil {
+			return nil // no credit of ours to take back yet
 		}
 		// Its parts towards invoices, newest first, each undone.
 		rows, err := tx.Query(ctx, `SELECT p.id, p.invoice_id, i.number FROM customer_invoice_payments p JOIN customer_invoices i ON i.id = p.invoice_id
@@ -238,6 +331,35 @@ func setState(ctx context.Context, tx pgx.Tx, tenant, entry uuid.UUID, state, re
 	_, err := tx.Exec(ctx, `INSERT INTO money_match_state (entry_id, tenant_id, state, held_reason) VALUES ($1, $2, $3, $4)
 		ON CONFLICT (entry_id) DO UPDATE SET state = $3, held_reason = $4, considered_at = now()`, entry, tenant, state, reason)
 	return err
+}
+
+// tellUnmatched tells the owners that money went back and Taskiem could
+// not tie it to a payment in the money log: nothing was undone, so an
+// invoice that payment paid, if any, still shows it. Once per connection
+// a day.
+func (m *Matcher) tellUnmatched(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, r reversal) error {
+	what := "Money that went back to a payer"
+	if r.kind == "refund" {
+		what = "A refund"
+	}
+	if r.amountKobo != nil {
+		what += " of " + invoicing.Naira(*r.amountKobo)
+	}
+	_, err := alerts.TellOwners(ctx, tx, tenant, alerts.Alert{Kind: AlertUnmatched, Dedup: r.channel + ":" + m.now().In(lagos).Format(time.DateOnly),
+		Title: what + " could not be matched to a payment",
+		Body: fmt.Sprintf("%s on %s (reference %s) names a payment Taskiem's money log does not have, so nothing was changed. "+
+			"If that payment was counted towards an invoice some other way, undo it on the invoice.", what, r.channel, clipRef(r.reference)),
+		Link: "/money", Detail: map[string]any{"channel": r.channel, "reference": clipRef(r.reference), "entry": r.id.String()}})
+	return err
+}
+
+var lagos = time.FixedZone("WAT", 3600)
+
+func clipRef(s string) string {
+	if len(s) > 100 {
+		return s[:100]
+	}
+	return s
 }
 
 // tellReversed tells the owners (alerts.TellOwners: their notifications,

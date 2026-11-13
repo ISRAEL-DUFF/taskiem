@@ -134,13 +134,28 @@ func (d *Detector) Tenant(ctx context.Context, tenant uuid.UUID) (int, error) {
 			{"duplicate", `SELECT e.channel || '|' || e.direction || '|' || e.movement || '|' || e.amount_kobo, min(e.id::text)::uuid, NULL::uuid,
 				e.amount_kobo * (count(*) - 1),
 				` + nairaSQL("e.amount_kobo") + ` || ' with reference ' || e.movement || ' is on ' || e.channel || ' ' || count(*) || ' times'
-				FROM (SELECT e.*, CASE WHEN e.kind = 'account_credit' THEN COALESCE(e.credit_id, e.reference) ELSE e.reference END AS movement
+				FROM (SELECT e.*, CASE WHEN e.kind = 'account_credit' THEN COALESCE(e.credit_id, e.reference)
+				             -- So is a transfer into a one-time number that takes several.
+				             WHEN e.kind = 'payment' AND e.credit_id IS NOT NULL THEN e.reference || ' (' || e.credit_id || ')' ELSE e.reference END AS movement
 				      FROM money_entries e WHERE e.tenant_id = $1 AND e.status = 'settled' AND e.amount_kobo > 0
 				        AND e.kind IN ('payment', 'account_credit', 'pos_sale', 'payout')) e
 				GROUP BY e.channel, e.direction, e.movement, e.amount_kobo HAVING count(*) > 1`},
+			// An invoice counts no more than its total now, so the first
+			// lists invoices over-counted before that (put right by undoing
+			// a payment). The second is money paid into an invoice's own
+			// account beyond what was due, kept as the customer's credit:
+			// open while any of it is unused, so the owner sees that a
+			// customer paid twice or too much.
 			{"overpaid", `SELECT i.id::text, NULL::uuid, i.id, i.paid_kobo - i.total_kobo,
 				i.number || ' was paid ' || ` + nairaSQL("(i.paid_kobo - i.total_kobo)") + ` || ' more than it asked for'
-				FROM customer_invoices i WHERE i.tenant_id = $1 AND i.paid_kobo > i.total_kobo`},
+				FROM customer_invoices i WHERE i.tenant_id = $1 AND i.paid_kobo > i.total_kobo
+				UNION ALL
+				SELECT e.id::text, e.id, i.id, taskiem_money_entry_left(e.id),
+				i.number || ' was paid ' || ` + nairaSQL("taskiem_money_entry_left(e.id)") + ` || ' more than it asked for; it is kept as the customer''s credit'
+				FROM money_entry_customers c JOIN money_entries e ON e.id = c.entry_id
+				JOIN customer_invoice_accounts a ON a.tenant_id = e.tenant_id AND a.payment_id = e.reference AND a.connector || '/' || a.connection = e.channel
+				JOIN customer_invoices i ON i.id = a.invoice_id
+				WHERE c.tenant_id = $1 AND c.how = 'invoice' AND COALESCE(taskiem_money_entry_left(e.id), 0) > 0`},
 			// Money for a void invoice: into an account Taskiem gave for it.
 			{"void_paid", `SELECT e.id::text, e.id, i.id, COALESCE(e.amount_kobo, 0),
 				` + nairaSQL("COALESCE(e.amount_kobo, 0)") + ` || ' was paid for ' || i.number || ', which was voided'

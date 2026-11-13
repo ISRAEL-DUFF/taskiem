@@ -658,6 +658,8 @@ money_match_state.state
 money_match_state.tenant_id
 money_reversals.amount_kobo
 money_reversals.by_entry
+money_reversals.checked_at
+money_reversals.closed_at
 money_reversals.entry_id
 money_reversals.tenant_id
 money_reversals.undone

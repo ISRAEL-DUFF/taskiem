@@ -251,17 +251,20 @@ func (m *Matcher) exact(ctx context.Context, tenant uuid.UUID, e entry) (bool, e
 		if e.AmountKobo <= 0 {
 			return true, m.mark(ctx, tenant, e.ID, "unmatched")
 		}
-		err := m.Invoices.Received(ctx, tenant, *invoice, invoicing.Received{PaymentID: e.Reference, AmountKobo: e.AmountKobo, Connection: e.Channel, Account: account})
+		// This entry, not the first for its reference: a second transfer
+		// into the same number is its own entry, and counts too.
+		err := m.Invoices.Received(ctx, tenant, *invoice, invoicing.Received{PaymentID: e.Reference, AmountKobo: e.AmountKobo, Connection: e.Channel, Account: account, Entry: &e.ID})
 		if errors.Is(err, invoicing.ErrState) {
-			// A void invoice, or the money already counted elsewhere: a
-			// person decides.
+			// A void invoice, one already paid that names no customer to
+			// keep the money for, or the money already counted elsewhere:
+			// a person decides.
 			m.log().Info("matching: exact match refused", "tenant", tenant, "entry", e.ID, "err", err)
 			return true, m.mark(ctx, tenant, e.ID, "unmatched")
 		}
 		if err != nil {
 			return true, err
 		}
-		return true, m.mark(ctx, tenant, e.ID, "matched")
+		return true, m.settle(ctx, tenant, e.ID)
 	case !errors.Is(err, pgx.ErrNoRows):
 		return true, err
 	}
@@ -396,6 +399,26 @@ func (m *Matcher) suggest(ctx context.Context, tenant uuid.UUID, e entry) error 
 
 func (m *Matcher) mark(ctx context.Context, tenant, entryID uuid.UUID, state string) error {
 	return m.hold(ctx, tenant, entryID, state, "")
+}
+
+// settle marks an entry an invoice took exactly: matched, when all of it
+// counts or what is left is its customer's credit; else what the invoice
+// did not take (more than was due, and no customer to keep it for) waits
+// for a person in To match.
+func (m *Matcher) settle(ctx context.Context, tenant, entryID uuid.UUID) error {
+	state := "matched"
+	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var over bool
+		err := tx.QueryRow(ctx, `SELECT COALESCE(taskiem_money_entry_left($1), 0) > 0 AND NOT EXISTS (SELECT 1 FROM money_entry_customers c WHERE c.entry_id = $1)`, entryID).Scan(&over)
+		if over {
+			state = "unmatched"
+		}
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return m.mark(ctx, tenant, entryID, state)
 }
 
 // hold marks an entry, with why it waits for a person when it does.

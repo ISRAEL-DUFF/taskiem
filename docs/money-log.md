@@ -8,7 +8,7 @@ Every event a connected payment service sends Taskiem in its prod connections, w
 
 | Event | Entry |
 | --- | --- |
-| `payment.received` | Money in, a payment, settled |
+| `payment.received` | Money in, a payment, settled. Where the account number paid into takes more than one transfer (iswallet's one-time numbers), each transfer is its own entry, known by the service's id for it (`credit_id`); the entry's reference is still the number's |
 | `payment.returned` | Money in that the service sent back to the payer (paid late, or not the amount asked), reversed |
 | `virtual_account.credited` | Money in to a customer's account number (a student's, for a school), settled: what the payer sent, the service's fee where it reports one, and the payer's name and account where given. The entry's reference is the account's; each payment into it is its own entry (known by the service's id for the credit) |
 | `payout.settled`, `payout.failed`, `payout.reversed` | Money out, a payout, with its outcome |
@@ -23,7 +23,9 @@ Sandbox and staging connections are not recorded: the log is the business's real
 
 ## How each movement is recorded once
 
-A movement is known by where it happened (the connection, such as `paystack/main`), what was heard (the event) and the service's reference. A credit to a customer's account number is known by the account's reference and the service's id for that credit, since one account takes many payments. The same event sent twice, sent and also found by polling, or found by asking, is one entry. A later status is a new entry that names the first in `corrects`: a payout that settled and was then reversed has two entries.
+A movement is known by where it happened (the connection, such as `paystack/main`), what was heard (the event) and the service's reference. A credit to a customer's account number is known by the account's reference and the service's id for that credit, since one account takes many payments; so is a transfer into a one-time number on a service that refuses no second transfer into it (iswallet), so two transfers into one number are two entries and neither is lost. The same event sent twice, sent and also found by polling, or found by asking, is one entry. A later status is a new entry that names the first in `corrects`: a payout that settled and was then reversed has two entries.
+
+A payment is also heard without the service's id for the transfer: when Taskiem asks about it by its reference alone, or in entries written before transfers into one-time numbers had ids. Such an entry and the same transfer heard later with its id are one entry: the id-less entry stands for it unless the service's own times put the transfer more than five minutes after that entry's, which makes it another transfer into the same number. A transfer with no time of its own is taken as the same, so no transfer is recorded twice; the cost is that a second transfer within five minutes of a first recorded without an id is not told apart.
 
 If Taskiem cannot record an event, it answers the payment service with an error, so the service sends it again.
 
@@ -108,6 +110,5 @@ Under the figures, **Exports** download the period as CSV files: the **money log
 
 - Refunds on services other than Paystack: Flutterwave's documentation shows a refund webhook body without an event name, and OPay's callbacks are not read yet.
 - Two partial refunds of one payment that reach the same status are one entry: Paystack's refund events name the payment, and its own refund reference is empty while a refund is pending.
-- A refund does not change what an invoice shows as paid; a refunded invoice payment stays matched.
 - Payouts made in one batch (`pay_many`) and answered settled at once, and payouts settled when a workflow looks them up with no event after.
 - Matching payments to invoices and orders (T5).
