@@ -1,6 +1,7 @@
 package expr
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -80,5 +81,24 @@ func TestResolveAtRefusesOtherPlaces(t *testing.T) {
 	}
 	if got, err := e.ResolveAt(v, nil, secrets); err != nil || !reflect.DeepEqual(got, v) {
 		t.Errorf("no places: %v %v", got, err)
+	}
+}
+
+// A body is JSON only when all of it is: text that starts like a JSON
+// value is not that value with the rest dropped.
+func TestDecodeJSONTakesOneWholeValue(t *testing.T) {
+	for _, bad := range []string{"9 bags left", "true story", `{"a":1} and more`, `"quoted" tail`, "1 2", `{"a":1}{"b":2}`, "null x"} {
+		if v, err := DecodeJSON([]byte(bad)); err == nil {
+			t.Errorf("%q decoded as %v, want an error", bad, v)
+		}
+	}
+	for in, want := range map[string]any{"9": int64(9), " 9\n": int64(9), "true": true, `"x"`: "x", "\t{\"a\":1}\r\n": map[string]any{"a": int64(1)}} {
+		v, err := DecodeJSON([]byte(in))
+		if err != nil || fmt.Sprint(v) != fmt.Sprint(want) {
+			t.Errorf("%q decoded as %v (%v), want %v", in, v, err, want)
+		}
+	}
+	if v, err := DecodeJSON([]byte("  \n")); v != nil || err != nil {
+		t.Errorf("an empty body: %v %v", v, err)
 	}
 }

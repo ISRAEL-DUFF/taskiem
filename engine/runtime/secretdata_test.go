@@ -278,3 +278,40 @@ func TestSecretExpressionOfAnOlderPayload(t *testing.T) {
 	}
 	noSecretInHistory(t, e, ref)
 }
+
+// An http step's answer is kept as text unless all of it is JSON: "9 bags
+// left" is not the number 9.
+func TestHTTPStepKeepsTextThatOnlyStartsLikeJSON(t *testing.T) {
+	e := rt.New(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/text":
+			_, _ = w.Write([]byte("9 bags left"))
+		case "/json":
+			_, _ = w.Write([]byte(`{"bags":9}` + "\n"))
+		}
+	}))
+	defer srv.Close()
+	if err := e.Store.AllowEgress(ctx, e.Tenant, "prod", "127.0.0.1", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	wf := e.Publish(t, wfDoc(`{"id":"text","type":"http","retry":{"max":0},"config":{"method":"GET","url":"`+srv.URL+`/text"}},
+	  {"id":"json","type":"http","retry":{"max":0},"config":{"method":"GET","url":"`+srv.URL+`/json"}}`, ""))
+	ref := e.Start(t, wf, map[string]any{})
+	e.Drain(t)
+	if st := e.Status(t, ref); st != "completed" {
+		t.Fatalf("run %s", st)
+	}
+	got := map[string]string{}
+	for _, ev := range events(t, e, ref) {
+		if ev.Type == history.StepCompleted {
+			got[ev.StepID] = string(ev.Payload)
+		}
+	}
+	if !strings.Contains(got["text"], `"9 bags left"`) {
+		t.Errorf("the text answer was kept as %s, want the text \"9 bags left\"", got["text"])
+	}
+	if !strings.Contains(got["json"], `"bags"`) || strings.Contains(got["json"], `\"bags\"`) {
+		t.Errorf("the JSON answer was kept as %s, want an object", got["json"])
+	}
+}

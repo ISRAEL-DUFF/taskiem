@@ -20,7 +20,9 @@ import (
 	"cel.dev/cel-go/common/types/traits"
 	"cel.dev/cel-go/ext"
 
+	"errors"
 	"github.com/israel-duff/taskiem/engine/lru"
+	"io"
 )
 
 // Roots are the variables an expression may reference (wd-v1 contract rule 10).
@@ -512,6 +514,8 @@ func native(v ref.Val) (any, error) {
 
 // DecodeJSON decodes JSON into JSON-compatible Go values with integral
 // numbers as int64 (so kobo amounts stay exact) and others as float64.
+// The input is one JSON value: anything but white space after it is an
+// error, so text that only starts like JSON is not taken for JSON.
 func DecodeJSON(b []byte) (any, error) {
 	if len(bytes.TrimSpace(b)) == 0 {
 		return nil, nil
@@ -521,6 +525,12 @@ func DecodeJSON(b []byte) (any, error) {
 	var v any
 	if err := dec.Decode(&v); err != nil {
 		return nil, err
+	}
+	// One value and nothing after it. A decoder stops at the end of the
+	// first value, so "9 bags left" would read as the number 9 and the
+	// rest be dropped without a word.
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return nil, errors.New("more than one JSON value, or text after the value")
 	}
 	return Normalise(v), nil
 }
