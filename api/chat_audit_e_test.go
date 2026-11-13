@@ -2,11 +2,17 @@ package api_test
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/telegram/telegramtest"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
 
@@ -225,5 +231,71 @@ func TestAnOldYesButtonConfirmsNothing(t *testing.T) {
 	// With nothing waiting, an old Yes says so.
 	if got := w.press(t, ownerNumber, current); len(got) != 1 || !strings.Contains(got[0].Text, "something earlier") {
 		t.Fatalf("an old Yes with nothing waiting: %+v", got)
+	}
+}
+
+// TestOutboxSlowBatchIsSentOnce (E4): a batch that takes longer than the
+// lease is not sent again by a second notifier: each sender sends only
+// what it still holds.
+func TestOutboxSlowBatchIsSentOnce(t *testing.T) {
+	w := newWAWorld(t)
+	ctx := context.Background()
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	numbers := []string{"+2348010000101", "+2348010000102", "+2348010000103", "+2348010000104"}
+	emails := []string{"owner@acme.test"}
+	w.bind(t, owner, numbers[0])
+	for i, n := range numbers[1:] {
+		email := fmt.Sprintf("m%d@acme.test", i)
+		w.bind(t, w.member(t, owner, email, "viewer"), n)
+		emails = append(emails, email)
+	}
+	tenant := tenantID(t, owner)
+	al := &alerts.Alerter{Pool: w.env.Store.Pool, Secrets: w.env.Vault, WhatsApp: w.wa, PublicURL: waPublicURL}
+	w.srv.Alerts = al
+	ch := owner.must(201, "POST", "/v1/alerts/channels", map[string]any{"kind": "whatsapp", "name": "ops", "to": emails})["id"].(string)
+	owner.must(201, "POST", "/v1/alerts/rules", map[string]any{"name": "fails", "kind": "run_failed", "channel_ids": []string{ch}})
+	wf := publishFlow(t, owner, waLoanFlow)
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO runs (id, tenant_id, workflow_id, version, environment, status, started_at, ended_at)
+		VALUES ($1, $2, $3, 1, 'prod', 'failed', now(), now() + interval '1 second')`, uuid.Must(uuid.NewV7()), tenant, wf); err != nil {
+		t.Fatal(err)
+	}
+	// The alert is queued, one message each, and none can be sent yet.
+	w.graph.SetFail(131000)
+	al.Now = func() time.Time { return time.Now().Add(2 * time.Second) }
+	if err := al.Tick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if p := w.outbox(t, owner, "pending"); len(p) != len(numbers) {
+		t.Fatalf("pending: %v", p)
+	}
+	w.graph.SetFail(0)
+	w.due(t)
+
+	// A slow Graph API and a short lease: the first notifier's batch
+	// outlasts it, and a second notifier starts meanwhile.
+	lease := whatsapp.OutboxLease
+	whatsapp.OutboxLease = time.Second
+	t.Cleanup(func() { whatsapp.OutboxLease = lease })
+	w.graph.SetDelay(700 * time.Millisecond)
+	done := make(chan error, 2)
+	go func() { done <- w.srv.WhatsAppTick(ctx) }()
+	time.Sleep(1100 * time.Millisecond)
+	go func() { done <- w.srv.WhatsAppTick(ctx) }()
+	for range 2 {
+		if err := <-done; err != nil {
+			t.Fatalf("tick: %v", err)
+		}
+	}
+	w.graph.SetDelay(0)
+	w.due(t)
+	w.tick(t)
+	for _, n := range numbers {
+		if got := countText(w.graph.Sent(n), "loan failed in prod"); got != 1 {
+			t.Errorf("%s got the alert %d times", n, got)
+		}
+	}
+	var attempts int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT max(attempts) FROM whatsapp_outbox WHERE status = 'sent'`).Scan(&attempts); err != nil || attempts > 3 {
+		t.Errorf("attempts: %d %v", attempts, err)
 	}
 }

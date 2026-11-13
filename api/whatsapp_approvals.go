@@ -244,12 +244,37 @@ func (s *Server) waQueueApproval(ctx context.Context, tenant uuid.UUID, t approv
 // message and retried with backoff (whatsapp.FinishOutbox), never
 // returned: only database errors are.
 func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
-	items, err := whatsapp.ClaimOutbox(ctx, s.Store.Pool, tenant, 50, nil)
-	if err != nil {
-		return err
+	// Small batches, so one is done well inside its lease, and a few of
+	// them a tick.
+	var errs []error
+	for range 5 {
+		items, err := whatsapp.ClaimOutbox(ctx, s.Store.Pool, tenant, whatsapp.OutboxBatch, nil)
+		if err != nil {
+			return errors.Join(append(errs, err)...)
+		}
+		errs = append(errs, s.waSendOutbox(ctx, tenant, items)...)
+		if len(items) < whatsapp.OutboxBatch {
+			break
+		}
 	}
+	return errors.Join(errs...)
+}
+
+// waSendOutbox sends claimed items one after another, each only while it
+// is still this sender's: the lease is checked and taken afresh before
+// every send, so an item another notifier claimed meanwhile (a slow batch
+// outlasting its lease) is left to it and never sent twice.
+func (s *Server) waSendOutbox(ctx context.Context, tenant uuid.UUID, items []whatsapp.OutboxItem) []error {
 	var errs []error
 	for _, it := range items {
+		held, err := whatsapp.HoldOutbox(ctx, s.Store.Pool, it)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if !held {
+			continue
+		}
 		var sendErr error
 		switch it.Kind {
 		case whatsapp.OutboxApproval:
@@ -290,7 +315,7 @@ func (s *Server) waDrainOutbox(ctx context.Context, tenant uuid.UUID) error {
 			errs = append(errs, err)
 		}
 	}
-	return errors.Join(errs...)
+	return errs
 }
 
 // waSendApprovalItem sends a queued approval request, with fresh decision
