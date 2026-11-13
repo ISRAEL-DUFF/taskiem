@@ -31,3 +31,9 @@ func (s *Server) PreviewAnyPort() { s.previewAnyPort = true }
 func (s *Server) BillsDueLine(ctx context.Context, tenant uuid.UUID) string {
 	return s.billsDueDailyLine(ctx, lang.EN, tenant)
 }
+
+// WriteLinkedOrder writes one linked order into its seller's business, as
+// the worker does for each it claims (two workers may run at once).
+func (s *Server) WriteLinkedOrder(ctx context.Context, buyer, id uuid.UUID) error {
+	return s.writeLinkedOrder(ctx, buyer, id)
+}

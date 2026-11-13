@@ -5532,6 +5532,10 @@
       "text": "E dey wait: this order pass the {limit} credit wey {business} give you (you owe {owed}). Pay your bills, or ask dem make dem accept am.",
       "reviewed": false
     },
+    "order.link.credit_unchecked_note": {
+      "text": "Waiting: {business} could not check your credit just now, so this order was not accepted by itself. Someone there will look at it.",
+      "reviewed": false
+    },
     "order.link.over_limit_title": {
       "text": "Order {reference} dey wait: e pass your credit limit",
       "reviewed": false

@@ -127,7 +127,8 @@ func (s *Server) waBillPayPress(ctx context.Context, c *chat, reference string) 
 // the seller set for the link: over it, the order is flagged (and not
 // accepted by itself), the buyer's purchase order says why, and the
 // buyer's people are told, with the bills to pay. It reports whether the
-// order is over.
+// order is over; the order is nil when the check could not be made, which
+// is never a pass: the caller accepts nothing by itself.
 func (s *Server) creditCheck(ctx context.Context, seller uuid.UUID, ref string) (links.Credit, *links.Order) {
 	var o links.Order
 	var c links.Credit
@@ -144,6 +145,57 @@ func (s *Server) creditCheck(ctx context.Context, seller uuid.UUID, ref string) 
 	}
 	s.creditTold(ctx, seller, o, c)
 	return c, &o
+}
+
+// errOverCredit is an order not accepted by itself: with what was
+// accepted since it was first checked, it takes the buyer past the limit.
+var errOverCredit = errors.New("the order takes the buyer past the credit limit")
+
+// acceptWithinCredit accepts an order by itself, as the system, when it
+// is within the buyer's credit limit: checked again in the accepting
+// transaction under the link's credit lock (links.CreditCheckTx), so the
+// balance counts every order accepted until now, and two orders arriving
+// together cannot both pass. Over the limit, or when the check fails,
+// nothing is accepted; over, the order is flagged and both sides told.
+func (s *Server) acceptWithinCredit(ctx context.Context, seller uuid.UUID, o links.Order) error {
+	_, _, err := s.sellerStep(ctx, seller, o.ID.String(), links.StepAccept, links.StepIn{}, links.Actor{Type: "system", ID: "link-orders"}, "system:link-orders",
+		func(tx pgx.Tx, o links.Order) error {
+			_, cr, err := links.CreditCheckTx(ctx, tx, seller, o.ID.String())
+			if err != nil {
+				return err
+			}
+			if cr.Over {
+				return errOverCredit
+			}
+			return nil
+		})
+	if errors.Is(err, errOverCredit) {
+		// The refused check's flag rolled back with the step: set on its
+		// own now, and both sides told.
+		if _, co := s.creditCheck(ctx, seller, o.ID.String()); co == nil {
+			s.creditUnchecked(ctx, seller, o)
+		}
+	}
+	return err
+}
+
+// creditUnchecked says on an order why it waits when its credit could
+// not be checked: it is not accepted by itself, a person looks at it.
+// The buyer's purchase order carries the note.
+func (s *Server) creditUnchecked(ctx context.Context, seller uuid.UUID, o links.Order) {
+	l := lang.EN
+	if tc, err := s.tenantChannel(ctx, seller); err == nil && lang.Valid(tc.Default) {
+		l = tc.Default
+	}
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{seller}, func(tx pgx.Tx) error {
+		var name string
+		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, seller).Scan(&name); err != nil {
+			return err
+		}
+		return links.HeldNoteTx(ctx, tx, o, tr(l, "order.link.credit_unchecked_note", "business", name))
+	}); err != nil {
+		s.Logger.Warn("links: noting an order whose credit could not be checked", "tenant", seller, "err", err)
+	}
 }
 
 // creditTold tells both sides that an order went over the limit, or is
@@ -197,8 +249,7 @@ func (s *Server) creditAgain(ctx context.Context, seller, id uuid.UUID) error {
 		return nil
 	}
 	if o.AutoAccept && o.Status == links.OrderReceived && links.SellerPriced(o.Lines) && links.AsProposed(o.Lines) {
-		if _, _, err := s.sellerStep(ctx, seller, o.ID.String(), links.StepAccept, links.StepIn{}, links.Actor{Type: "system", ID: "link-orders"},
-			"system:link-orders", nil); err != nil {
+		if err := s.acceptWithinCredit(ctx, seller, *o); err != nil {
 			s.Logger.Warn("links: accepting an order within the limit", "tenant", seller, "err", err)
 		}
 	}

@@ -5532,6 +5532,10 @@
       "text": "Ọ na-eche: iwu a gafere kredit {limit} {business} na-enye gị (ị ji {owed}). Kwụọ ụgwọ gị, ma ọ bụ rịọ ha ka ha nabata ya.",
       "reviewed": false
     },
+    "order.link.credit_unchecked_note": {
+      "text": "Waiting: {business} could not check your credit just now, so this order was not accepted by itself. Someone there will look at it.",
+      "reviewed": false
+    },
     "order.link.over_limit_title": {
       "text": "Iwu {reference} na-eche: ọ gafere oke kredit gị",
       "reviewed": false

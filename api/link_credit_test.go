@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 
+	linkconn "github.com/israel-duff/taskiem/connectors/link"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
 	"github.com/israel-duff/taskiem/engine/moneyreport"
@@ -285,4 +287,161 @@ func lagosTZ(t *testing.T) *time.Location {
 		t.Fatal(err)
 	}
 	return l
+}
+
+// creditWorld is a linked buyer and seller with rice at ₦30,000 a bag on
+// both sides and a ₦100,000 credit limit on the link.
+type creditWorld struct {
+	w                 *waTablesWorld
+	seller, buyer     *client
+	sellerID, buyerID string
+	sup, rice         string
+}
+
+func newCreditWorld(t *testing.T, autoAccept bool) *creditWorld {
+	t.Helper()
+	w := shopWorld(t)
+	withStock(w.world)
+	withPurchases(w.world)
+	withLinkedOrders(w.world)
+	c := &creditWorld{w: w}
+	c.seller, c.buyer, c.sellerID, c.buyerID = linkedPair(t, w.waWorld)
+	c.buyer.must(200, "POST", "/v1/stock/setup", nil)
+	c.rice = c.buyer.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice", "quantity": 3, "unit": "bag", "cost_kobo": 3000000},
+		"Idempotency-Key", "r")["item"].(map[string]any)["id"].(string)
+	c.seller.must(200, "POST", "/v1/stock/setup", nil)
+	c.seller.must(201, "POST", "/v1/stock/items", map[string]any{"name": "rice", "quantity": 500, "unit": "bag", "price_kobo": 3000000}, "Idempotency-Key", "sr")
+	c.sup = c.buyer.must(201, "POST", "/v1/stock/suppliers", map[string]any{"name": "Dangote", "phone": "0803 123 4711"})["supplier"].(map[string]any)["id"].(string)
+	link := c.buyer.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)["id"].(string)
+	sellerLink := c.seller.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)["id"].(string)
+	c.buyer.must(200, "PUT", "/v1/stock/suppliers/"+c.sup+"/link", map[string]any{"link_id": link})
+	c.seller.must(200, "PUT", "/v1/links/"+sellerLink+"/trade", map[string]any{"credit_limit_kobo": 10000000, "auto_accept": autoAccept})
+	return c
+}
+
+// send sends a purchase order of n bags through the link, not yet written
+// into the seller's business.
+func (c *creditWorld) send(t *testing.T, key string, n int) string {
+	t.Helper()
+	id := c.buyer.must(201, "POST", "/v1/stock/purchases", map[string]any{"supplier_id": c.sup, "lines": []any{map[string]any{"item_id": c.rice, "quantity": n}}},
+		"Idempotency-Key", key)["purchase"].(map[string]any)["id"].(string)
+	return c.buyer.must(200, "POST", "/v1/stock/purchases/"+id+"/send", nil)["purchase"].(map[string]any)["reference"].(string)
+}
+
+func (c *creditWorld) trade(t *testing.T, ref string) map[string]any {
+	t.Helper()
+	return c.seller.must(200, "GET", "/v1/trade-orders/"+ref, nil)["order"].(map[string]any)
+}
+
+// The credit limit fails closed (docs/spec/business-links.md §10): when
+// the check cannot be made, the order is not accepted by itself; it waits
+// for a person, and the buyer's order says so.
+func TestLinkCreditCheckFailingLeavesTheOrderForAPerson(t *testing.T) {
+	ctx := context.Background()
+	c := newCreditWorld(t, true)
+	ref := c.send(t, "p1", 2)
+	// The buyer's open invoices cannot be read: the balance is unknown.
+	if _, err := c.w.env.DB.Admin.Exec(ctx, `REVOKE SELECT ON customer_invoices FROM taskiem_app`); err != nil {
+		t.Fatal(err)
+	}
+	drainLinked(t, c.w.world)
+	if _, err := c.w.env.DB.Admin.Exec(ctx, `GRANT SELECT ON customer_invoices TO taskiem_app`); err != nil {
+		t.Fatal(err)
+	}
+	o := c.trade(t, ref)
+	if o["status"] != "received" {
+		t.Fatalf("an order whose credit could not be checked was accepted by itself: %v", o)
+	}
+	if note, _ := o["seller_note"].(string); !strings.Contains(note, "could not check") {
+		t.Fatalf("the order does not say why it waits: %v", o)
+	}
+	// A person accepts it.
+	if o := c.seller.must(200, "POST", "/v1/trade-orders/"+ref+"/accept", map[string]any{})["order"].(map[string]any); o["status"] != "accepted" {
+		t.Fatalf("accepted by a person: %v", o)
+	}
+}
+
+// Two orders of ₦60,000 arriving at the same moment against a ₦100,000
+// limit: one is accepted by itself, the other waits flagged.
+func TestLinkCreditTwoOrdersArrivingAtOnce(t *testing.T) {
+	ctx := context.Background()
+	for round := range 3 {
+		c := newCreditWorld(t, true)
+		refs := []string{c.send(t, "p1", 2), c.send(t, "p2", 2)}
+		rows, err := c.w.env.DB.Admin.Query(ctx, `SELECT object_id FROM link_orders_due WHERE kind = 'order' AND tenant_id = $1`, c.buyerID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var ids []uuid.UUID
+		for rows.Next() {
+			var id uuid.UUID
+			if err := rows.Scan(&id); err != nil {
+				t.Fatal(err)
+			}
+			ids = append(ids, id)
+		}
+		rows.Close()
+		if len(ids) != 2 {
+			t.Fatalf("orders due: %v", ids)
+		}
+		var wg sync.WaitGroup
+		for _, id := range ids {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if err := c.w.srv.WriteLinkedOrder(ctx, uuid.MustParse(c.buyerID), id); err != nil {
+					t.Error(err)
+				}
+			}()
+		}
+		wg.Wait()
+		drainLinked(t, c.w.world)
+		accepted, flagged := 0, 0
+		for _, ref := range refs {
+			o := c.trade(t, ref)
+			if o["status"] == "accepted" {
+				accepted++
+			} else if o["over_limit_at"] != nil {
+				flagged++
+			}
+		}
+		if accepted != 1 || flagged != 1 {
+			t.Fatalf("round %d: %d accepted and %d flagged of two ₦60,000 orders against ₦100,000", round, accepted, flagged)
+		}
+	}
+}
+
+// A run accepting two orders at the same moment (link@1 order_step)
+// meets the same limit: the second is refused and left for a person.
+func TestLinkCreditTwoRunsAcceptingAtOnce(t *testing.T) {
+	ctx := context.Background()
+	for round := range 3 {
+		c := newCreditWorld(t, false)
+		refs := []string{c.send(t, "p1", 2), c.send(t, "p2", 2)}
+		drainLinked(t, c.w.world)
+		errs := make([]error, len(refs))
+		var wg sync.WaitGroup
+		for i, ref := range refs {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, errs[i] = c.w.srv.LinkAction(ctx, linkconn.Call{Tenant: uuid.MustParse(c.sellerID), Run: uuid.New(), Step: "accept", Action: "order_step", Key: "k-" + ref,
+					Environment: "prod", Input: map[string]any{"reference": ref, "step": "accept"}})
+			}()
+		}
+		wg.Wait()
+		c.w.srv.WaitBackground()
+		accepted, refused := 0, 0
+		for i, ref := range refs {
+			if c.trade(t, ref)["status"] == "accepted" {
+				accepted++
+			}
+			if errs[i] != nil && strings.Contains(errs[i].Error(), "past the credit limit") {
+				refused++
+			}
+		}
+		if accepted != 1 || refused != 1 {
+			t.Fatalf("round %d: %d accepted, %d refused (%v)", round, accepted, refused, errs)
+		}
+	}
 }

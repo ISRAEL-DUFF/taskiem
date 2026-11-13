@@ -5532,6 +5532,10 @@
       "text": "O n duro: aṣẹ yii kọja kirẹditi {limit} ti {business} fun ọ (o jẹ {owed}). San awọn owo-ipe rẹ, tabi beere ki wọn gba a.",
       "reviewed": false
     },
+    "order.link.credit_unchecked_note": {
+      "text": "Waiting: {business} could not check your credit just now, so this order was not accepted by itself. Someone there will look at it.",
+      "reviewed": false
+    },
     "order.link.over_limit_title": {
       "text": "Aṣẹ {reference} n duro: o kọja opin kirẹditi rẹ",
       "reviewed": false
