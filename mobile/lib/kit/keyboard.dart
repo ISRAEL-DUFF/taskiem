@@ -15,18 +15,22 @@ class KeyboardRoom extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final q = MediaQuery.of(context);
-    final keys = q.viewInsets.bottom;
-    if (keys <= 0) return _Up(up: false, child: child);
+    final keys = math.max(0.0, q.viewInsets.bottom);
+    // The same widgets with the keyboard up or down: only their numbers
+    // change. A different tree would build everything under it afresh (the
+    // app lock among it, which then locked the app as the keyboard rose).
     return Padding(
       padding: EdgeInsets.only(bottom: keys),
       child: MediaQuery(
         // Below the screen now is the keyboard, not the phone's own bar: the
         // screens' bottom padding (the gesture bar) is under the keys.
-        data: q.copyWith(
-          viewInsets: q.viewInsets.copyWith(bottom: 0),
-          padding: q.padding.copyWith(bottom: math.max(0, q.padding.bottom - keys)),
-        ),
-        child: _Up(up: true, child: child),
+        data: keys <= 0
+            ? q
+            : q.copyWith(
+                viewInsets: q.viewInsets.copyWith(bottom: 0),
+                padding: q.padding.copyWith(bottom: math.max(0, q.padding.bottom - keys)),
+              ),
+        child: _Up(up: keys > 0, child: child),
       ),
     );
   }
