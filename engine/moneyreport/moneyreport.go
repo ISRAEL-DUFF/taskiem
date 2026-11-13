@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/csvsafe"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 )
 
@@ -289,16 +290,10 @@ func Naira(kobo int64) string {
 
 func day(t time.Time) string { return t.In(Lagos).Format("2006-01-02") }
 
-// text guards a text cell against formula injection (CSV injection), as
-// table exports do: a value a spreadsheet would run as a formula gets a
-// leading apostrophe. Statement lines and rails' references are not
-// Taskiem's words. Amounts are written by Naira and stay numbers.
-func text(v string) string {
-	if v != "" && strings.ContainsRune("=+-@\t\r", rune(v[0])) {
-		return "'" + v
-	}
-	return v
-}
+// text guards a text cell against formula injection with the guard every
+// export shares (engine/csvsafe). Statement lines and rails' references
+// are not Taskiem's words. Amounts are written by Naira and stay numbers.
+func text(v string) string { return csvsafe.Text(v) }
 
 // The invoices and storefront orders a movement is counted towards, each
 // as its numbers joined by spaces (matches not undone).

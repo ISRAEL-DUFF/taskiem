@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/csvsafe"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/schools"
 )
@@ -101,7 +102,7 @@ func (s *Server) listSchoolClearance(w http.ResponseWriter, r *http.Request) {
 		cw := csv.NewWriter(&buf)
 		_ = cw.Write([]string{"Class", "Admission number", "Name", "Clearance", "Why", "Balance", "Override ends"})
 		for _, x := range l.Rows {
-			row := []string{x.Class, x.AdmissionNumber, x.Name, clearanceWords[x.Status], schools.ReasonWords[x.Reason], invoicing.Naira(x.BalanceKobo), ""}
+			row := []string{csvsafe.Text(x.Class), csvsafe.Text(x.AdmissionNumber), csvsafe.Text(x.Name), clearanceWords[x.Status], schools.ReasonWords[x.Reason], invoicing.Naira(x.BalanceKobo), ""}
 			if x.Override != nil {
 				row[6] = x.Override.EndsOn
 			}

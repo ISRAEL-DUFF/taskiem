@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/audit"
+	"github.com/israel-duff/taskiem/engine/csvsafe"
 	"github.com/israel-duff/taskiem/engine/wddiff"
 )
 
@@ -109,15 +110,12 @@ func csvCell(v any) string {
 	case nil:
 		return ""
 	case string:
-		// Spreadsheet formula injection: a leading =, +, - or @ is text.
-		if t != "" && strings.ContainsRune("=+-@", rune(t[0])) {
-			return "'" + t
-		}
-		return t
+		// Spreadsheet formula injection: the shared guard.
+		return csvsafe.Text(t)
 	case time.Time:
 		return t.UTC().Format(time.RFC3339)
 	case []string:
-		return strings.Join(t, "; ")
+		return csvsafe.Text(strings.Join(t, "; "))
 	}
 	return fmt.Sprint(v)
 }
