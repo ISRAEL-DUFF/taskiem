@@ -1108,7 +1108,7 @@ func (w *Worker) postpone(ctx context.Context, p *plan, at time.Time) error {
 // already made is kept and recorded once the new primary answers, as long
 // as the lease still holds. Repeating it after an unknown COMMIT is safe:
 // a committed finish released the task, so the repeat is fenced out.
-func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) error {
+func (w *Worker) finish(ctx context.Context, p *plan, outcome *history.Event) error {
 	return db.InTenantTxRetry(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, true, func(tx pgx.Tx) error {
 		ok, err := w.finishTask(ctx, tx, p.c)
 		if err != nil {
@@ -1117,9 +1117,14 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 		if !ok {
 			return nil // fenced out: the task belongs to someone else now
 		}
-		if result == nil {
+		if outcome == nil {
 			return nil
 		}
+		// A copy: this function can run more than once (a failover), and
+		// each pass must start from what the call returned, not from what
+		// the pass before made of it.
+		ev := *outcome
+		result := &ev
 		if len(p.scrub) > 0 {
 			// A provider error or a script may repeat a secret (an API key in
 			// a URL, a token echoed back): it is replaced before it is written.
