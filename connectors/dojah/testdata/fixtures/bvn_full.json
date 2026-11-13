@@ -1,2 +1,34 @@
-{"request":{"method":"GET","path":"/api/v1/kyc/bvn/full","query":{"bvn":"22222222222"},"headers":{"AppId":"app_123","Authorization":"test_sk_abc"}},
- "response":{"status":200,"body":{"entity":{"bvn":"22222222222","first_name":"JOHN","middle_name":"ANON","last_name":"DOE","gender":"Male","date_of_birth":"01-January-1907","phone_number1":"08103817187","phone_number2":"","image":"/9j/4AAQSkZJRgABAgAAAQABAAD..."}}}}
+{
+ "request": {
+  "method": "GET",
+  "path": "/api/v1/kyc/bvn/full",
+  "query": {
+   "bvn": "22222222222"
+  },
+  "headers": {
+   "AppId": "app_123",
+   "Authorization": "test_sk_abc"
+  }
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "entity": {
+    "bvn": "22222222222",
+    "first_name": "JOHN",
+    "middle_name": "ANON",
+    "last_name": "DOE",
+    "gender": "Male",
+    "date_of_birth": "01-January-1907",
+    "phone_number1": "08103817187",
+    "phone_number2": "08039998877",
+    "image": "/9j/4AAQSkZJRgABAgAAAQABAAD...",
+    "email": "john.doe@example.com",
+    "residential_address": "12 Allen Avenue, Ikeja",
+    "lga_of_residence": "Ikeja",
+    "nin": "70123456789",
+    "marital_status": "Single"
+   }
+  }
+ }
+}
