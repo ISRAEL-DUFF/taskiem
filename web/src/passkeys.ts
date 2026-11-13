@@ -69,7 +69,7 @@ export interface Proof {
 /** Builds the proof the server asks for: an existing passkey, else the
  * authenticator code or password the member typed. A passkey is asked for
  * this change only (action: passkey.add, passkey.remove/<id>, totp.setup,
- * password.change, whatsapp.link, whatsapp.pin). */
+ * password.change, whatsapp.link, whatsapp.pin, chat.link). */
 export async function proof(factors: Me["factors"], typed: string, action: string): Promise<Proof> {
   if (factors?.passkey) return { passkey: await stepUpAssert("account.reauth", action) };
   if (factors?.totp) return { totp: typed };

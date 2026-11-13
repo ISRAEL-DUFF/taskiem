@@ -161,6 +161,14 @@ single sign-on.
 - **`password` in chat** is Part A's behaviour:
   - the email first;
   - then the link to choose a password, with the email to sign in with.
+  - It is a way in by the chat, so it follows chat sign-in: turned off (§9), the
+    reply says so and points to the sign-in page's **Forgot password?**; no link.
+  - No link for an email no one confirmed (§3): the reply says to send `email` and
+    open the confirmation link first.
+  - A link sent in chat proves the chat, not the mailbox: using it confirms no email
+    and clears no factors (`password_resets.origin`, migration 00435).
+  - A chat linked from an emailed link (chat-way-in §10.1) gets neither link, nor a
+    code, for its first 24 hours.
 - **Account > Password on the web** stays as it is. It is already offered to people
   who sign in without one, confirmed with a passkey or authenticator code when they
   have one, or now with a chat sign-in session.
@@ -183,7 +191,10 @@ single sign-on.
     not the number has an account.
 - **Guessing:** five wrong codes lock the code, and `/verify` is limited per IP and
   per number like `/login`. A six-digit code with five tries gives one chance in
-  200,000 per code.
+  200,000 per code. Wrong tries are also counted across codes, so asking for a new
+  code does not start again: every fifth locks the person's codes, for 15 minutes,
+  then twice as long each time, up to a day; a right code, or a week without a wrong
+  one, clears the count (migration 00436).
 - **Telling the owner:**
   - Every chat sign-in sends a line to the person's chat: "You signed in to Taskiem
     on the web (Chrome on Windows, Lagos). Not you? Send *sign out everywhere*."
@@ -192,10 +203,12 @@ single sign-on.
     here).
 - **Audit:** `auth.chat_signin` (with the channel and how: code or link) and
   `auth.chat_signin_refused`, in every business of theirs, with the IP and agent as a
-  password login records them.
+  password login records them. A refusal is recorded when the person is known:
+  turned off, a wrong or locked code, a newly linked chat, or a rule that asks for
+  a passkey or single sign-on (`reason`; `how` is code, link or password).
 - **A stolen SIM:** whoever holds the number can sign in, as they could already
   approve things in chat. Someone who wants more turns chat sign-in off for
-  themselves (§9).
+  themselves (§9), which closes both of the chat's doors: `sign in` and `password`.
 
 ## 8. Where it lives
 

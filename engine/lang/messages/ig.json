@@ -760,6 +760,22 @@
       "text": "Emechala: ejikọọla mkparịta ụka a na akaụntụ Taskiem gị. Zipu help ka ị hụ ihe ị nwere ike ime ebe a.",
       "reviewed": false
     },
+    "door.linked_told": {
+      "text": "A chat was linked to your Taskiem account: {chat}. Not you? Unlink it now in Account on the web.",
+      "reviewed": false
+    },
+    "door.cooling": {
+      "text": "This chat was linked to your account less than 24 hours ago, so it cannot send a sign-in or password link yet. That keeps your account safe if someone else linked it. Sign in on the web the way you usually do: {link}",
+      "reviewed": false
+    },
+    "wa.password.off": {
+      "text": "Signing in with WhatsApp or Telegram is off for you, so this chat sends no password link. Reset your password from the sign-in page, with your email: {link}",
+      "reviewed": false
+    },
+    "wa.password.unconfirmed": {
+      "text": "Your email is not confirmed yet, so this chat cannot send a password link. Send *email you@example.com* and open the link we email you. Then send *password* again.",
+      "reviewed": false
+    },
     "door.tg_joined": {
       "text": "Nọmba ahụ bụbu akaụntụ Taskiem gị, site na WhatsApp. Ejikọọla Telegram a na ya ugbu a: azụmahịa gị dị ebe a. Zipu help, ma ọ bụ new business iji malite ọzọ.",
       "reviewed": false
@@ -3425,7 +3441,7 @@
       "reviewed": false
     },
     "wa.signin.off": {
-      "text": "Ịbanye site na WhatsApp ma ọ bụ Telegram agbanyụọla maka gị (Account na weebụ). Zipu *password* ka i jiri email na okwuntughe banye kama.",
+      "text": "Signing in with WhatsApp or Telegram is off for you (Account on the web). Sign in on the web with your email and password: {link}",
       "reviewed": false
     },
     "wa.signin.passkey": {

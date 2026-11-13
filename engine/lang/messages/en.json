@@ -949,6 +949,26 @@
       "reviewed": true,
       "context": "Sent to the chat after its emailed link was opened and the chat is linked to the account"
     },
+    "door.linked_told": {
+      "text": "A chat was linked to your Taskiem account: {chat}. Not you? Unlink it now in Account on the web.",
+      "reviewed": true,
+      "context": "Told to the account's chats after a chat was linked to it from an emailed link; {chat} names the chat, e.g. WhatsApp (+234…9001)"
+    },
+    "door.cooling": {
+      "text": "This chat was linked to your account less than 24 hours ago, so it cannot send a sign-in or password link yet. That keeps your account safe if someone else linked it. Sign in on the web the way you usually do: {link}",
+      "reviewed": true,
+      "context": "\"sign in\" or \"password\" from a chat linked from an emailed link in the last 24 hours"
+    },
+    "wa.password.off": {
+      "text": "Signing in with WhatsApp or Telegram is off for you, so this chat sends no password link. Reset your password from the sign-in page, with your email: {link}",
+      "reviewed": true,
+      "context": "\"password\" from someone who turned chat sign-in off"
+    },
+    "wa.password.unconfirmed": {
+      "text": "Your email is not confirmed yet, so this chat cannot send a password link. Send *email you@example.com* and open the link we email you. Then send *password* again.",
+      "reviewed": true,
+      "context": "\"password\" from someone whose email was never confirmed"
+    },
     "door.tg_joined": {
       "text": "That number is your Taskiem account already, from WhatsApp. This Telegram is now linked to it too: your businesses are here. Send help, or new business to start another.",
       "reviewed": true,
@@ -4280,7 +4300,7 @@
       "context": "No public URL for links"
     },
     "wa.signin.off": {
-      "text": "Signing in with WhatsApp or Telegram is off for you (Account on the web). Send *password* to sign in with an email and password instead.",
+      "text": "Signing in with WhatsApp or Telegram is off for you (Account on the web). Sign in on the web with your email and password: {link}",
       "reviewed": true,
       "context": "\"sign in\" from someone who turned chat sign-in off"
     },

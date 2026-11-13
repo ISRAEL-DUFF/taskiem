@@ -360,6 +360,13 @@ func (s *Server) putSecurity(w http.ResponseWriter, r *http.Request) {
 // apps (outside WhatsApp's window, as the alert template) and, with a
 // confirmed email, by email.
 func (s *Server) tellPerson(ctx context.Context, user, tenant uuid.UUID, words func(lang.Tag) string, subject, emailBody string) {
+	s.tellPersonBut(ctx, user, tenant, "", words, subject, emailBody)
+}
+
+// tellPersonBut is tellPerson, leaving out the person's chat on one
+// channel (a chat just linked is told its own way, and is not where a
+// warning about it belongs).
+func (s *Server) tellPersonBut(ctx context.Context, user, tenant uuid.UUID, but string, words func(lang.Tag) string, subject, emailBody string) {
 	var email string
 	var verified bool
 	type to struct{ channel, addr string }
@@ -369,6 +376,9 @@ func (s *Server) tellPerson(ctx context.Context, user, tenant uuid.UUID, words f
 			return err
 		}
 		for _, channel := range []string{"whatsapp", "telegram"} {
+			if channel == but {
+				continue
+			}
 			addrs, err := chatAddrsTx(ctx, tx, channel, []uuid.UUID{user})
 			if err != nil {
 				return err

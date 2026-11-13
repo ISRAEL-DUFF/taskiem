@@ -210,7 +210,8 @@ func (s *Server) checkRoleMapping(r *http.Request, tx pgx.Tx, req ssoReq) error 
 // in as an existing member, owners included, so an administrator who could
 // point a provider they run at the owners' domain could sign in as an
 // owner. Keys hold no roles, so they are refused too. Roles on an existing
-// connection (updateSSO) stay with member.manage and checkRoleMapping.
+// connection (updateSSO) stay with member.manage and checkRoleMapping;
+// turning it on or off, requiring it and adding new people do not.
 func ssoSetupOwner(r *http.Request) error {
 	if !slices.Contains(principalFrom(r.Context()).Roles, "owner") {
 		return fmt.Errorf("%w: only an owner sets up single sign-on and its domains", errForbidden)
@@ -335,18 +336,33 @@ func (s *Server) listSSO(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateSSO changes the role mapping, JIT and enforcement, or disables.
-// An owner also approves the connection for signing in owners, or takes
-// that back, with owner_approved; left out, it stays as it is.
+// A field left out of the body stays as it is. The role mapping stays
+// with member.manage: whoever changes it must be able to grant every role
+// it gives and every role it stops giving (canGrant). Whether the
+// connection is on (disabled), required (enforce) or adds people who are
+// not members yet (jit) decides who can sign in at all, so only an owner
+// changes those, in either direction, as only an owner sets a connection
+// up; an administrator's save that leaves them as they are goes through.
+// The provider itself (issuer, client, endpoints, certificate) is not
+// changed here: a new connection is made, by an owner. An owner also
+// approves the connection for signing in owners, or takes that back, with
+// owner_approved.
 func (s *Server) updateSSO(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "not found")
 		return
 	}
+	// The outer fields win over ssoReq's of the same name: a pointer tells
+	// a field left out from one set to false or empty.
 	var req struct {
 		ssoReq
-		Disabled      bool  `json:"disabled"`
-		OwnerApproved *bool `json:"owner_approved"`
+		DefaultRoles  *[]string            `json:"default_roles"`
+		GroupRoles    *map[string][]string `json:"group_roles"`
+		JIT           *bool                `json:"jit"`
+		Enforce       *bool                `json:"enforce"`
+		Disabled      *bool                `json:"disabled"`
+		OwnerApproved *bool                `json:"owner_approved"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -358,27 +374,59 @@ func (s *Server) updateSSO(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if req.GroupRoles == nil {
-		req.GroupRoles = map[string][]string{}
-	}
-	groups, _ := json.Marshal(req.GroupRoles)
-	jit := req.JIT == nil || *req.JIT
+	p := principalFrom(r.Context())
 	err = s.tx(r, func(tx pgx.Tx) error {
-		if err := s.checkRoleMapping(r, tx, req.ssoReq); err != nil {
+		var defaults []string
+		var groupsRaw []byte
+		var jit, enforce, disabled bool
+		if err := tx.QueryRow(r.Context(), `SELECT default_roles, group_roles, jit, enforce, disabled_at IS NOT NULL FROM sso_connections WHERE id = $1 FOR UPDATE`, id).
+			Scan(&defaults, &groupsRaw, &jit, &enforce, &disabled); err != nil {
 			return err
 		}
-		tag, err := tx.Exec(r.Context(), `UPDATE sso_connections SET default_roles = $2, group_roles = $3, jit = $4, enforce = $5,
+		groupRoles := map[string][]string{}
+		_ = json.Unmarshal(groupsRaw, &groupRoles)
+		// Who can sign in at all: an owner's to change.
+		gate := false
+		for _, f := range []struct {
+			to  *bool
+			now *bool
+		}{{req.JIT, &jit}, {req.Enforce, &enforce}, {req.Disabled, &disabled}} {
+			if f.to != nil && *f.to != *f.now {
+				*f.now, gate = *f.to, true
+			}
+		}
+		if gate && !slices.Contains(p.Roles, "owner") {
+			return fmt.Errorf("%w: only an owner turns a single sign-on connection on or off, or changes whether it is required or adds new people (disabled, enforce, jit)", errForbidden)
+		}
+		// The mapping: every role it gives, and every role it stops giving.
+		before := ssoReq{DefaultRoles: defaults, GroupRoles: groupRoles}
+		after := before
+		if req.DefaultRoles != nil {
+			after.DefaultRoles = nonNil(*req.DefaultRoles)
+		}
+		if req.GroupRoles != nil {
+			after.GroupRoles = *req.GroupRoles
+			if after.GroupRoles == nil {
+				after.GroupRoles = map[string][]string{}
+			}
+		}
+		if dropped, changed := ssoMappingChange(before, after); changed {
+			if err := s.checkRoleMapping(r, tx, after); err != nil {
+				return err
+			}
+			if err := canGrant(r.Context(), tx, p, dropped); err != nil {
+				return err // taking a role away needs the same standing as giving it
+			}
+		}
+		groups, _ := json.Marshal(after.GroupRoles)
+		if _, err := tx.Exec(r.Context(), `UPDATE sso_connections SET default_roles = $2, group_roles = $3, jit = $4, enforce = $5,
 			disabled_at = CASE WHEN $6 THEN COALESCE(disabled_at, now()) END,
 			owner_approved_at = CASE WHEN $7::boolean IS NULL THEN owner_approved_at WHEN $7 THEN COALESCE(owner_approved_at, now()) END,
 			updated_at = now() WHERE id = $1`,
-			id, nonNil(req.DefaultRoles), groups, jit, req.Enforce, req.Disabled, req.OwnerApproved)
-		if err != nil {
+			id, nonNil(after.DefaultRoles), groups, jit, enforce, disabled, req.OwnerApproved); err != nil {
 			return err
 		}
-		if tag.RowsAffected() == 0 {
-			return pgx.ErrNoRows
-		}
-		detail := map[string]any{"default_roles": req.DefaultRoles, "group_roles": req.GroupRoles, "jit": jit, "enforce": req.Enforce, "disabled": req.Disabled}
+		detail := map[string]any{"default_roles": after.DefaultRoles, "group_roles": after.GroupRoles, "jit": jit, "enforce": enforce, "disabled": disabled}
 		if req.OwnerApproved != nil {
 			detail["owner_approved"] = *req.OwnerApproved
 		}
@@ -389,6 +437,35 @@ func (s *Server) updateSSO(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ssoMappingChange compares two role mappings: whether they differ, and
+// the roles the new one no longer gives somewhere the old one did.
+func ssoMappingChange(before, after ssoReq) (dropped []string, changed bool) {
+	diff := func(old, new []string) {
+		for _, role := range old {
+			if !slices.Contains(new, role) {
+				dropped, changed = append(dropped, role), true
+			}
+		}
+		for _, role := range new {
+			if !slices.Contains(old, role) {
+				changed = true
+			}
+		}
+	}
+	diff(before.DefaultRoles, after.DefaultRoles)
+	for g, roles := range before.GroupRoles {
+		diff(roles, after.GroupRoles[g])
+	}
+	for g, roles := range after.GroupRoles {
+		if _, had := before.GroupRoles[g]; !had {
+			diff(nil, roles)
+			changed = true
+		}
+	}
+	slices.Sort(dropped)
+	return slices.Compact(dropped), changed
 }
 
 // addSSODomain claims a domain for a connection; it routes nobody until
@@ -918,6 +995,13 @@ func (s *Server) finishSSO(w http.ResponseWriter, r *http.Request, c ssoConn, re
 		if groupsMapped || len(settings.DefaultRoles) > 0 {
 			for role, src := range have {
 				if src == "sso" && !slices.Contains(want, role) {
+					// The mapping was checked when it was saved; the last
+					// owner keeps theirs whatever the provider says.
+					if err := mayTakeRoles(ctx, tx, nil, user, []string{role}); errors.Is(err, errLastOwner) {
+						continue
+					} else if err != nil {
+						return err
+					}
 					if _, err := tx.Exec(ctx, `DELETE FROM memberships WHERE user_id = $1 AND role = $2 AND source = 'sso'`, user, role); err != nil {
 						return err
 					}

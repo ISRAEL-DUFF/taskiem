@@ -190,6 +190,7 @@ chat_link_requests.address
 chat_link_requests.channel
 chat_link_requests.created_at
 chat_link_requests.expires_at
+chat_link_requests.linked_at
 chat_link_requests.token_hash
 chat_link_requests.used_at
 chat_link_requests.user_id
@@ -199,8 +200,11 @@ chat_signin_codes.code_hash
 chat_signin_codes.created_at
 chat_signin_codes.expires_at
 chat_signin_codes.failures
+chat_signin_codes.locked_until
 chat_signin_codes.number
 chat_signin_codes.sends
+chat_signin_codes.strike_at
+chat_signin_codes.strikes
 chat_signin_codes.user_id
 chat_signin_codes.window_start
 chat_signin_links.channel
@@ -760,6 +764,7 @@ password_resets.created_at
 password_resets.expires_at
 password_resets.failures
 password_resets.ip
+password_resets.origin
 password_resets.secret_hash
 password_resets.selector
 password_resets.used_at

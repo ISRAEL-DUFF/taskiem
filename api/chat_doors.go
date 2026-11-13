@@ -20,6 +20,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/telegram"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -120,18 +121,17 @@ func (s *Server) chatLinkIssue(ctx context.Context, user uuid.UUID, email, chann
 	if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_chat_link_put($1, $2, $3, $4, $5, $6::interval)`, hash, user, channel, address, username, chatLinkTTL.String()); err != nil {
 		return err
 	}
-	what := map[string]string{"whatsapp": "WhatsApp (" + whatsapp.MaskNumber(address) + ")", "telegram": "Telegram", "slack": "Slack"}[channel]
-	if channel == "telegram" && username != "" {
-		what = "Telegram (@" + username + ")"
-	}
+	what := chatLinkWhat(channel, address, username)
 	link := strings.TrimRight(s.PublicURL, "/") + "/link-chat#token=" + token
 	body := fmt.Sprintf(`Someone asked, from %s, to link that chat to your Taskiem account.
 
-If it was you, open this link while signed in to Taskiem. It works once, for an hour:
+Linking lets that chat act as your account: whoever holds it can do in chat what you can do in Taskiem. Never continue unless you asked for this yourself, from your own chat, a moment ago.
+
+If it was you, open this link while signed in to Taskiem. It shows the chat and asks before anything is linked. It works once, for an hour:
 
 %s
 
-If it was not you, ignore this email: nothing changes.
+If it was not you, do not open it, or open it and choose "This is not mine". Nothing is linked unless you say so.
 `, what, link)
 	s.background(ctx, "chat link email", func(ctx context.Context) {
 		if err := s.sendMail(ctx, email, "Link your chat to Taskiem", body); err != nil {
@@ -141,23 +141,85 @@ If it was not you, ignore this email: nothing changes.
 	return nil
 }
 
-// linkChat binds the chat a link names to the signed-in person: POST
-// /v1/me/chat-link.
-func (s *Server) linkChat(w http.ResponseWriter, r *http.Request) {
+// chatLinkWhat names a chat without giving its whole address: for email
+// and for other chats.
+func chatLinkWhat(channel, address, username string) string {
+	if channel == "telegram" && username != "" {
+		return "Telegram (@" + username + ")"
+	}
+	return map[string]string{"whatsapp": "WhatsApp (" + whatsapp.MaskNumber(address) + ")", "telegram": "Telegram", "slack": "Slack"}[channel]
+}
+
+// errChatLinkBad is the one answer for a link that cannot be used.
+var errChatLinkBad = fmt.Errorf("%w: this link is unknown, already used, expired, or for another account; ask again from the chat", errBadRequest)
+
+// chatLinkReq reads a link's token for the signed-in person, paced as
+// one: previewing, linking and refusing share the limit.
+func (s *Server) chatLinkReq(w http.ResponseWriter, r *http.Request, into any, token *string) (*Principal, bool) {
 	p := principalFrom(r.Context())
 	if p.UserID == uuid.Nil || p.KeyID != uuid.Nil {
 		writeErr(w, http.StatusForbidden, "a chat belongs to a person, not an API key")
-		return
+		return nil, false
 	}
-	var req struct {
-		Token string `json:"token"`
-	}
-	if err := decodeBody(r, &req); err != nil {
+	if err := decodeBody(r, into); err != nil {
 		s.fail(w, r, err)
-		return
+		return nil, false
 	}
 	if !s.limiter("chat-link-open:"+p.UserID.String(), time.Minute, 10).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "too many attempts")
+		return nil, false
+	}
+	*token = strings.TrimSpace(*token)
+	return p, true
+}
+
+// chatLinkPending is the chat a link would bind.
+type chatLinkPending struct {
+	Channel  string `json:"channel"`
+	Address  string `json:"address"`
+	Username string `json:"username,omitempty"`
+}
+
+// chatLinkPeek reads a link without using it.
+func (s *Server) chatLinkPeek(ctx context.Context, token string, user uuid.UUID) (chatLinkPending, error) {
+	var l chatLinkPending
+	var username *string
+	err := s.Store.Pool.QueryRow(ctx, `SELECT channel, address, username FROM taskiem_chat_link_peek($1, $2)`, chatLinkHash(token), user).Scan(&l.Channel, &l.Address, &username)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return l, errChatLinkBad
+	}
+	l.Username = deref(username)
+	return l, err
+}
+
+// previewChatLink says which chat a link would bind, without using the
+// link: POST /v1/me/chat-link/preview. The page shows it, whole (the
+// account's owner may see what is about to be attached to their account),
+// before the person chooses to link it or not.
+func (s *Server) previewChatLink(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Token string `json:"token"`
+	}
+	p, ok := s.chatLinkReq(w, r, &req, &req.Token)
+	if !ok {
+		return
+	}
+	l, err := s.chatLinkPeek(r.Context(), req.Token, p.UserID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, l)
+}
+
+// refuseChatLink spends a link without linking anything ("This is not
+// mine"): POST /v1/me/chat-link/refuse.
+func (s *Server) refuseChatLink(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Token string `json:"token"`
+	}
+	p, ok := s.chatLinkReq(w, r, &req, &req.Token)
+	if !ok {
 		return
 	}
 	ctx := r.Context()
@@ -165,7 +227,48 @@ func (s *Server) linkChat(w http.ResponseWriter, r *http.Request) {
 	var username *string
 	err := s.Store.Pool.QueryRow(ctx, `SELECT channel, address, username FROM taskiem_chat_link_take($1, $2)`, chatLinkHash(req.Token), p.UserID).Scan(&channel, &address, &username)
 	if errors.Is(err, pgx.ErrNoRows) {
-		s.fail(w, r, fmt.Errorf("%w: this link is unknown, already used, expired, or for another account; ask again from the chat", errBadRequest))
+		err = errChatLinkBad
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := s.auditEverywhere(ctx, p.UserID, "auth.link_refused", map[string]any{"channel": channel, "chat": chatLinkWhat(channel, address, deref(username)), "via": "email_link", "ip": clientIP(r)}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// linkChat binds the chat a link names to the signed-in person: POST
+// /v1/me/chat-link. Anyone can ask, from their own chat, for a link to
+// be emailed to someone else's account, so the link alone binds nothing:
+// the person proves a factor, as for linking a number from Account
+// (proveFactor), having seen which chat it is (previewChatLink).
+func (s *Server) linkChat(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Token string `json:"token"`
+		factorProof
+	}
+	p, ok := s.chatLinkReq(w, r, &req, &req.Token)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	// Known and theirs before a factor is asked for; the link is not used
+	// until the factor is proven.
+	if _, err := s.chatLinkPeek(ctx, req.Token, p.UserID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !s.proveFactor(w, r, req.factorProof, "chat.link") {
+		return
+	}
+	var channel, address string
+	var username *string
+	err := s.Store.Pool.QueryRow(ctx, `SELECT channel, address, username FROM taskiem_chat_link_take($1, $2)`, chatLinkHash(req.Token), p.UserID).Scan(&channel, &address, &username)
+	if errors.Is(err, pgx.ErrNoRows) {
+		s.fail(w, r, errChatLinkBad)
 		return
 	}
 	if err != nil {
@@ -214,11 +317,17 @@ func (s *Server) linkChat(w http.ResponseWriter, r *http.Request) {
 			tell = telegram.Address(id)
 		}
 	}
+	if err == nil {
+		// The cool-off starts: for a day this chat mints no sign-in or
+		// password link (chatLinkCooling).
+		_, err = s.Store.Pool.Exec(ctx, `SELECT taskiem_chat_link_linked($1, $2)`, chatLinkHash(req.Token), p.UserID)
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.auditEverywhere(ctx, p.UserID, "auth.link", map[string]any{"channel": channel, "via": "email_link", "ip": clientIP(r)}); err != nil {
+	what := chatLinkWhat(channel, address, deref(username))
+	if err := s.auditEverywhere(ctx, p.UserID, "auth.link", map[string]any{"channel": channel, "chat": what, "via": "email_link", "ip": clientIP(r)}); err != nil {
 		s.Logger.Warn("chat link: audit", "err", err)
 	}
 	if ch := s.chatLinkedChannel(ctx, channel, tenant); ch != nil {
@@ -228,7 +337,27 @@ func (s *Server) linkChat(w http.ResponseWriter, r *http.Request) {
 			}
 		})
 	}
+	// The account's other chats and its email hear of it, so a link the owner
+	// did not mean is seen while the new chat can still open nothing.
+	user, home := p.UserID, p.TenantID
+	s.background(ctx, "chat linked told", func(ctx context.Context) {
+		body := fmt.Sprintf("A chat was just linked to your Taskiem account: %s. It can now act as you in chat. For the first 24 hours it cannot send links to sign in on the web or to choose a password.\n\nIf you did not link it, unlink it at once under Account, Linked chats.", what)
+		s.tellPersonBut(ctx, user, home, channel, func(l lang.Tag) string { return tr(l, "door.linked_told", "chat", what) }, "A chat was linked to your Taskiem account", body)
+	})
 	writeJSON(w, http.StatusOK, map[string]any{"channel": channel, "linked": true})
+}
+
+// chatLinkCooling reports whether the person's chat on this channel was
+// linked from an emailed link in the last 24 hours. Until then it mints
+// no web sign-in link, code or password link: whoever got a chat linked
+// to an account that is not theirs finds nothing to open, while the
+// account's owner is told (linkChat) and can unlink it.
+func (s *Server) chatLinkCooling(ctx context.Context, user uuid.UUID, channel string) (bool, error) {
+	var until *time.Time
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_chat_link_cooling($1, $2)`, user, channel).Scan(&until); err != nil {
+		return false, err
+	}
+	return until != nil, nil
 }
 
 func chatChannelWord(channel string) string {

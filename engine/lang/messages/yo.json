@@ -760,6 +760,22 @@
       "text": "Ó ti parí: ìjíròrò yìí ti so mọ́ àkọọ́lẹ̀ Taskiem rẹ. Fi help ránṣẹ́ láti rí ohun tí o lè ṣe níbí.",
       "reviewed": false
     },
+    "door.linked_told": {
+      "text": "A chat was linked to your Taskiem account: {chat}. Not you? Unlink it now in Account on the web.",
+      "reviewed": false
+    },
+    "door.cooling": {
+      "text": "This chat was linked to your account less than 24 hours ago, so it cannot send a sign-in or password link yet. That keeps your account safe if someone else linked it. Sign in on the web the way you usually do: {link}",
+      "reviewed": false
+    },
+    "wa.password.off": {
+      "text": "Signing in with WhatsApp or Telegram is off for you, so this chat sends no password link. Reset your password from the sign-in page, with your email: {link}",
+      "reviewed": false
+    },
+    "wa.password.unconfirmed": {
+      "text": "Your email is not confirmed yet, so this chat cannot send a password link. Send *email you@example.com* and open the link we email you. Then send *password* again.",
+      "reviewed": false
+    },
     "door.tg_joined": {
       "text": "Nọ́mbà yẹn ti jẹ́ àkọọ́lẹ̀ Taskiem rẹ tẹ́lẹ̀, láti WhatsApp. Telegram yìí náà ti so mọ́ ọn báyìí: àwọn iṣẹ́ rẹ wà níbí. Fi help ránṣẹ́, tàbí new business láti bẹ̀rẹ̀ òmíràn.",
       "reviewed": false
@@ -3425,7 +3441,7 @@
       "reviewed": false
     },
     "wa.signin.off": {
-      "text": "Wiwọle pẹlu WhatsApp tabi Telegram ti wa ni pipa fun ọ (Account lori wẹẹbu). Fi *password* ranṣẹ lati wọle pẹlu imeeli ati ọrọ igbaniwọle dipo.",
+      "text": "Signing in with WhatsApp or Telegram is off for you (Account on the web). Sign in on the web with your email and password: {link}",
       "reviewed": false
     },
     "wa.signin.passkey": {

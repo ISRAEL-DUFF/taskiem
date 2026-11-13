@@ -18513,8 +18513,13 @@ paths:
       description: |
         Binds the chat an emailed link names (a WhatsApp number, a Telegram account, or a Slack user in this business's
         workspace) to the signed-in person, who must be the account the link was sent to. The link was asked for from the
-        chat with "I already use Taskiem"; it works once, for an hour. 400 for a link that is unknown, used, expired or
-        another account's; 409 when the chat is someone else's or the person has another of its kind.
+        chat with "I already use Taskiem", which anyone can do with someone else's email, so the link alone links
+        nothing: the person sees the chat first (`POST /v1/me/chat-link/preview`) and gives the proof FactorProof
+        describes, as for linking a number from Account (a passkey assertion is for `account.reauth` and `chat.link`).
+        It works once, for an hour. For 24 hours after, the linked chat is sent no web sign-in link, sign-in code or
+        password link, and the account's other chats and its email are told. 400 for a link that is unknown, used,
+        expired or another account's; 403 with `reauth` when the proof is missing or wrong (the link is not spent); 409
+        when the chat is someone else's or the person has another of its kind.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -18531,6 +18536,13 @@ paths:
               properties:
                 token:
                   type: string
+                password:
+                  type: string
+                totp:
+                  type: string
+                passkey:
+                  $ref: '#/components/schemas/PasskeyCredential'
+              description: The link's token, with the proof FactorProof describes.
               additionalProperties: false
       responses:
         '200':
@@ -18552,6 +18564,145 @@ paths:
                   linked:
                     type: boolean
                 additionalProperties: false
+        '400':
+          description: The link is unknown, already used, expired, or another account's.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: An API key, or the proof is missing or wrong (`reauth` lists what will do).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many attempts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chat-link/preview:
+    post:
+      operationId: previewChatLink
+      tags:
+      - Account
+      summary: See which chat an emailed link would link
+      description: |
+        The channel and the whole address (the WhatsApp number, the Telegram id and username, or the Slack workspace and
+        user) of the chat an emailed link would link to the signed-in person, without using the link: the page shows it
+        before the person chooses to link it (`POST /v1/me/chat-link`) or not (`POST /v1/me/chat-link/refuse`). Only for
+        the account the link was sent to; limited as linking is.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - token
+              properties:
+                token:
+                  type: string
+              additionalProperties: false
+      responses:
+        '200':
+          description: The chat the link names.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - channel
+                - address
+                properties:
+                  channel:
+                    type: string
+                    enum:
+                    - whatsapp
+                    - telegram
+                    - slack
+                  address:
+                    type: string
+                    description: The WhatsApp number, the Telegram account's id, or the Slack workspace and user.
+                  username:
+                    type: string
+                    description: The Telegram username, when the account has one.
+                additionalProperties: false
+        '400':
+          description: The link is unknown, already used, expired, or another account's.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: An API key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many attempts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chat-link/refuse:
+    post:
+      operationId: refuseChatLink
+      tags:
+      - Account
+      summary: Refuse an emailed chat link
+      description: |
+        Spends the link without linking anything ("This is not mine"), and records it (`auth.link_refused`). Only for
+        the account the link was sent to.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - token
+              properties:
+                token:
+                  type: string
+              additionalProperties: false
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        '400':
+          description: The link is unknown, already used, expired, or another account's.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: An API key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many attempts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
   /v1/me/email/verify/resend:
@@ -25719,8 +25870,10 @@ paths:
       tags:
       - Members
       summary: Change a single sign-on connection
-      description: Roles, JIT, enforcement and disabled, held to what the caller could grant. owner_approved
-        is an owner's alone.
+      description: A field left out stays as it is. The role mapping (default_roles, group_roles) is held to
+        what the caller could grant, for roles it gives and roles it stops giving. Changing jit, enforce or
+        disabled, in either direction, and owner_approved are an owner's alone; sending them unchanged is
+        allowed. The provider's own settings are not changed here.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -25747,8 +25900,8 @@ paths:
         '204':
           $ref: '#/components/responses/NoContent'
         '403':
-          description: A role mapping the caller cannot grant, or owner_approved from someone who is not an
-            owner.
+          description: A role mapping the caller cannot grant, or a change to jit, enforce, disabled or
+            owner_approved from someone who is not an owner.
           content:
             application/json:
               schema:
