@@ -2024,6 +2024,21 @@
       "reviewed": true,
       "context": "cancel dropped what was in progress"
     },
+    "wa.yes_stale": {
+      "text": "That button was for something earlier, so nothing was done. Send *yes* to confirm what is waiting now, or *cancel* to drop it.",
+      "reviewed": true,
+      "context": "Someone tapped a Yes button shown under an earlier summary while something else waits for their answer: nothing is confirmed"
+    },
+    "wa.yes_stale_none": {
+      "text": "That button was for something earlier. Nothing is waiting for an answer now.",
+      "reviewed": true,
+      "context": "Someone tapped a Yes button shown under an earlier summary and nothing waits for an answer"
+    },
+    "wa.yes_stale_public": {
+      "text": "That button was for something earlier, so nothing was started. Send *menu* to see what you can do here.",
+      "reviewed": true,
+      "context": "A customer on a business's public menu tapped a Yes button shown under an earlier summary: nothing is started"
+    },
     "wa.cancelled_nothing_started": {
       "text": "Cancelled. Nothing was started.",
       "reviewed": true,

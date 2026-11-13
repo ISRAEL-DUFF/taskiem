@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -234,9 +236,13 @@ type chatData struct {
 	Index       int            `json:"index,omitempty"`
 	Inputs      map[string]any `json:"inputs,omitempty"` // personal fields sealed
 	Nonce       string         `json:"nonce,omitempty"`  // the start's idempotency key
-	Run         uuid.UUID      `json:"run,omitempty"`
-	Step        string         `json:"step,omitempty"`
-	Decision    string         `json:"decision,omitempty"`
+	// Ask names what is waiting for an answer, new each time the session
+	// is saved: a Yes button carries it (yesButton), so a Yes shown under
+	// an earlier summary confirms nothing.
+	Ask      string    `json:"ask,omitempty"`
+	Run      uuid.UUID `json:"run,omitempty"`
+	Step     string    `json:"step,omitempty"`
+	Decision string    `json:"decision,omitempty"`
 	// Flow is the hex SHA-256 of the flow token of the inputs Flow sent,
 	// while the inputs are collected by a WhatsApp form.
 	Flow string `json:"flow,omitempty"`
@@ -478,6 +484,17 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if err := s.loadSession(ctx, c); err != nil {
 		return err
 	}
+	// A tapped Yes names the summary it was shown under: one from under
+	// an earlier summary confirms nothing, whatever is waiting now.
+	if yes, stale := staleYes(in.Reply, c.data.Ask); yes {
+		if stale || c.state == stateIdle {
+			if c.state == stateIdle {
+				return c.say(ctx, s, c.t("wa.yes_stale_none"))
+			}
+			return c.say(ctx, s, c.t("wa.yes_stale"))
+		}
+		in.Reply, c.in.Reply = "yes", "yes"
+	}
 	// Chat tools: the switch, and "@Taskiem" taken off (chat_tools.go).
 	if err := s.chatToolsRead(ctx, c); err != nil {
 		return err
@@ -685,7 +702,39 @@ func (c *chat) say(ctx context.Context, s *Server, text string, buttons ...whats
 	if c.note != "" {
 		text, c.note = c.note+"\n\n"+text, ""
 	}
+	// A Yes is for what is waiting as it is shown, and nothing later.
+	if c.data.Ask != "" {
+		for i, b := range buttons {
+			if b.ID == "yes" {
+				buttons = slices.Clone(buttons)
+				buttons[i].ID = yesPrefix + c.data.Ask
+				break
+			}
+		}
+	}
 	return s.waSay(ctx, c.ch, c.addr, c.tenant.Name, text, buttons...)
+}
+
+// yesPrefix starts a Yes button's id; what follows names the summary it
+// was shown under (chatData.Ask, or a public session's).
+const yesPrefix = "yes:"
+
+// newAsk is a fresh name for what a session waits on.
+func newAsk() string {
+	b := make([]byte, 9)
+	_, _ = rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// staleYes reads a tapped Yes: stale when it was shown under something
+// other than what is waiting now. A typed yes, and a button from before
+// buttons carried a name, are for what is waiting.
+func staleYes(reply, ask string) (yes, stale bool) {
+	tok, ok := strings.CutPrefix(reply, yesPrefix)
+	if !ok {
+		return false, false
+	}
+	return true, ask == "" || subtle.ConstantTimeCompare([]byte(tok), []byte(ask)) != 1
 }
 
 // loadSession reads the number's session in its current tenant; an
@@ -708,6 +757,9 @@ func (s *Server) loadSession(ctx context.Context, c *chat) error {
 
 // saveSession stores the session's state; idle removes it.
 func (s *Server) saveSession(ctx context.Context, c *chat, state string, data chatData, ttl time.Duration) error {
+	if state != stateIdle {
+		data.Ask = newAsk()
+	}
 	c.state, c.data = state, data
 	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		if state == stateIdle {

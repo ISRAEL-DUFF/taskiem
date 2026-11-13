@@ -1620,6 +1620,18 @@
       "text": "Akagbuola ya.",
       "reviewed": false
     },
+    "wa.yes_stale": {
+      "text": "That button was for something earlier, so nothing was done. Send *yes* to confirm what is waiting now, or *cancel* to drop it.",
+      "reviewed": false
+    },
+    "wa.yes_stale_none": {
+      "text": "That button was for something earlier. Nothing is waiting for an answer now.",
+      "reviewed": false
+    },
+    "wa.yes_stale_public": {
+      "text": "That button was for something earlier, so nothing was started. Send *menu* to see what you can do here.",
+      "reviewed": false
+    },
     "wa.cancelled_nothing_started": {
       "text": "Akagbuola ya. Ọ dịghị ihe malitere.",
       "reviewed": false

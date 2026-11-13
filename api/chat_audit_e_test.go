@@ -186,3 +186,44 @@ func TestSomeoneOnTaskiemIsACustomerElsewhere(t *testing.T) {
 		t.Fatalf("the shared number: %q", got)
 	}
 }
+
+// TestAnOldYesButtonConfirmsNothing (E3): the Yes under a summary is for
+// that summary only.
+func TestAnOldYesButtonConfirmsNothing(t *testing.T) {
+	w := newWAWorld(t)
+	chatSignupOn(w.world, "whatsapp")
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	const ownerNumber, ada, bayo, chi = "+2348031239401", "+2348031239402", "+2348031239403", "+2348031239404"
+	w.bind(t, owner, ownerNumber)
+	yesOf := func(sent []whatsapptest.Sent) string {
+		t.Helper()
+		if len(sent) != 1 || len(sent[0].Buttons) != 2 || !strings.HasPrefix(sent[0].Buttons[0].ID, "yes") {
+			t.Fatalf("a summary with Yes: %+v", sent)
+		}
+		return sent[0].Buttons[0].ID
+	}
+	old := yesOf(w.send(t, ownerNumber, whatsapptest.Text("invite "+ada+" as viewer")))
+	w.say(t, ownerNumber, "cancel")
+	current := yesOf(w.send(t, ownerNumber, whatsapptest.Text("invite "+bayo+" as owner")))
+	// The Yes under the first summary, tapped now.
+	got := w.press(t, ownerNumber, old)
+	if len(got) != 1 || !strings.Contains(got[0].Text, "something earlier") || strings.Contains(got[0].Text, "Invitation sent") {
+		t.Fatalf("the old Yes: %+v", got)
+	}
+	if len(w.graph.Sent(bayo)) != 0 {
+		t.Fatalf("the old Yes invited someone: %+v", w.graph.Sent(bayo))
+	}
+	// The Yes under the summary that is waiting still works, and so does
+	// the word.
+	if got := w.press(t, ownerNumber, current); len(got) != 1 || !strings.Contains(got[0].Text, "Invitation sent to "+bayo) {
+		t.Fatalf("the current Yes: %+v", got)
+	}
+	yesOf(w.send(t, ownerNumber, whatsapptest.Text("invite "+chi+" as viewer")))
+	if got := w.say(t, ownerNumber, "yes"); !strings.Contains(got, "Invitation sent to "+chi) {
+		t.Fatalf("typed yes: %q", got)
+	}
+	// With nothing waiting, an old Yes says so.
+	if got := w.press(t, ownerNumber, current); len(got) != 1 || !strings.Contains(got[0].Text, "something earlier") {
+		t.Fatalf("an old Yes with nothing waiting: %+v", got)
+	}
+}
