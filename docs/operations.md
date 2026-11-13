@@ -60,6 +60,10 @@ Switches take `true` or `false`, `1` or `0`, `yes` or `no`, `on` or `off`, in an
 | `TASKIEM_MAIL_LISTEN` | `:2525` | The `mail` role's SMTP listener; publish it as port 25 |
 | `TASKIEM_MAIL_HOSTNAME` | `mx.` + the mail domain | The name the `mail` role greets with, which the MX record points at |
 | `TASKIEM_MAIL_TLS_CERT`, `TASKIEM_MAIL_TLS_KEY` | — | PEM files of the certificate offered with STARTTLS; both or neither. Unset, a self-signed one, which sending servers accept |
+| `TASKIEM_MAIL_MAX_CONNECTIONS`, `TASKIEM_MAIL_MAX_CONNECTIONS_PER_ADDRESS` | `200`, `10` | SMTP connections at once, in all and from one remote address; a connection over its address's share is answered `421` and closed, so one host cannot hold them all. Raise the second if most of your mail comes through one relay |
+| `TASKIEM_MAIL_MESSAGES_PER_MINUTE` | `60` | Messages one remote address may start a minute (and as many in a burst); more are answered `451` and sent again later by the sender |
+| `TASKIEM_MAIL_MAX_TRANSFERS` | `8` | Messages being received at once, each held in memory (up to 25 MB, and as much again while it is sealed) until it is stored: the `mail` role needs about 75 MB of memory for each. More are answered `451` |
+| `TASKIEM_MAIL_IDLE_TIMEOUT` | `30s` | How long a connection may say nothing before it starts a message (and four times this to start one); after `MAIL FROM` a command may take two minutes and a message five to arrive |
 | `TASKIEM_PUBLIC_LISTEN`, `TASKIEM_PUBLIC_ENABLED` | `:8082`, `false` | The public host's listener, and whether `--role all` runs it |
 | `TASKIEM_DATABASE_RETRY_WINDOW` | `30s` | How long a worker keeps a step's outcome through a database failover before giving up to lease expiry ([cloud](cloud.md#what-happens-during-a-failover)) |
 | `TASKIEM_WORKER_POOL` | `shared` | The worker pool this worker serves ([cloud](cloud.md#dedicated-worker-pools)) |

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,6 +45,13 @@ type mailConfig struct {
 	// (TASKIEM_MAIL_TLS_CERT, TASKIEM_MAIL_TLS_KEY); unset, a self-signed
 	// one, which sending servers accept.
 	CertFile, KeyFile string
+	// The server's limits (inmail.Server); 0 is its default.
+	// TASKIEM_MAIL_MAX_CONNECTIONS (200), TASKIEM_MAIL_MAX_CONNECTIONS_PER_ADDRESS
+	// (10), TASKIEM_MAIL_MESSAGES_PER_MINUTE (60, per address),
+	// TASKIEM_MAIL_MAX_TRANSFERS (8 messages arriving at once) and
+	// TASKIEM_MAIL_IDLE_TIMEOUT (30s before a message is started).
+	MaxConnections, MaxPerAddress, MessagesPerMinute, MaxTransfers int
+	IdleTimeout                                                    time.Duration
 }
 
 var mailDomain = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$`)
@@ -60,6 +68,28 @@ func mailConfigFromEnv() (mailConfig, error) {
 		Hostname: strings.ToLower(strings.TrimSpace(os.Getenv("TASKIEM_MAIL_HOSTNAME"))),
 		CertFile: strings.TrimSpace(os.Getenv("TASKIEM_MAIL_TLS_CERT")),
 		KeyFile:  strings.TrimSpace(os.Getenv("TASKIEM_MAIL_TLS_KEY")),
+	}
+	for _, x := range []struct {
+		name string
+		to   *int
+	}{{"TASKIEM_MAIL_MAX_CONNECTIONS", &c.MaxConnections}, {"TASKIEM_MAIL_MAX_CONNECTIONS_PER_ADDRESS", &c.MaxPerAddress},
+		{"TASKIEM_MAIL_MESSAGES_PER_MINUTE", &c.MessagesPerMinute}, {"TASKIEM_MAIL_MAX_TRANSFERS", &c.MaxTransfers}} {
+		v := strings.TrimSpace(os.Getenv(x.name))
+		if v == "" {
+			continue
+		}
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 100000 {
+			return c, fmt.Errorf("%s: %q is not a number from 1 to 100000", x.name, v)
+		}
+		*x.to = n
+	}
+	if v := strings.TrimSpace(os.Getenv("TASKIEM_MAIL_IDLE_TIMEOUT")); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < time.Second || d > 5*time.Minute {
+			return c, fmt.Errorf("TASKIEM_MAIL_IDLE_TIMEOUT: %q is not a duration from 1s to 5m", v)
+		}
+		c.IdleTimeout = d
 	}
 	if c.Domain != "" && !mailDomain.MatchString(c.Domain) {
 		return c, fmt.Errorf("TASKIEM_MAIL_DOMAIN: %q is not a domain name", c.Domain)
@@ -120,7 +150,9 @@ func mailTask(ctx context.Context, cfg config, log *slog.Logger) (func(context.C
 		return nil, nil, err
 	}
 	srv := &inmail.Server{Domain: cfg.Mail.Domain, Hostname: cfg.Mail.Hostname, Store: inmail.DBStore{Pool: pool}, Seal: keys,
-		Resolver: net.DefaultResolver, Logger: log.With("server", "mail")}
+		Resolver: net.DefaultResolver, Logger: log.With("server", "mail"),
+		MaxConnections: cfg.Mail.MaxConnections, MaxConnectionsPerAddress: cfg.Mail.MaxPerAddress, MessagesPerMinute: cfg.Mail.MessagesPerMinute,
+		MaxTransfers: cfg.Mail.MaxTransfers, IdleTimeout: cfg.Mail.IdleTimeout}
 	if cfg.Mail.CertFile != "" {
 		cert, err := tls.LoadX509KeyPair(cfg.Mail.CertFile, cfg.Mail.KeyFile)
 		if err != nil {

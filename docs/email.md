@@ -68,7 +68,8 @@ The `mail` role (`serve --role mail`, or inside `all` with `TASKIEM_MAIL_ENABLED
 
 - takes mail only for addresses of live email triggers, refusing anything else at `RCPT` (`550`), so nothing is accepted and bounced later; a connection that names five unknown addresses is closed with `421` (the sender retries later), so one connection cannot look up addresses without end;
 - checks SPF, DKIM and DMARC and records the results with the message, but filters nothing by content: most mail comes already filtered by the mailbox that forwards it;
-- offers STARTTLS and takes messages up to 25 MB, with at most 200 connections at once;
+- offers STARTTLS and takes messages up to 25 MB, with at most 200 connections at once and 10 from one remote address (the rest are answered `421`), so one host cannot keep other senders out;
+- ends a connection that says nothing for 30 seconds before it starts a message, takes at most 60 messages a minute from one address, and receives at most 8 messages at once (a message is held in memory until it is stored); a sender over a limit is answered `451` and sends again later, as mail servers do. Each limit is a [setting](operations.md#configuration) (`TASKIEM_MAIL_MAX_CONNECTIONS`, `TASKIEM_MAIL_MAX_CONNECTIONS_PER_ADDRESS`, `TASKIEM_MAIL_MESSAGES_PER_MINUTE`, `TASKIEM_MAIL_MAX_TRANSFERS`, `TASKIEM_MAIL_IDLE_TIMEOUT`);
 - like the public host, connects as `taskiem_public`, holds only the public key, and leaves messages sealed in the inbox, which the api role drains every 2 seconds. A message is acknowledged (`250`) only once it is stored.
 
 To set it up ([settings](operations.md#configuration)):
@@ -81,6 +82,6 @@ To set it up ([settings](operations.md#configuration)):
 
 On the VM kit, `taskiem-vps setup` does all of this from one answer ([one VM](vm.md#email-triggers)); the [staging runbook](runbooks/staging.md#9-email-triggers) walks through it. On Kubernetes, the chart's `mail` values do ([Kubernetes](kubernetes.md#email-triggers)).
 
-Prometheus counts SMTP outcomes as `taskiem_ingest_deliveries_total{kind="email_smtp", result="accepted|unknown_recipient|deferred"}` and what came of each message as `{kind="email", result="started|refused|confirmation"}`.
+Prometheus counts SMTP outcomes as `taskiem_ingest_deliveries_total{kind="email_smtp", result="accepted|unknown_recipient|deferred|too_many_connections|rate_limited|busy"}` and what came of each message as `{kind="email", result="started|refused|confirmation"}`.
 
 Check it from anywhere with `swaks --to <address> --server mx.in.example.com`, or by sending an ordinary email.
