@@ -132,6 +132,31 @@ func (s *Store) VoteApproval(ctx context.Context, ref RunRef, step string, v Vot
 	return res, err
 }
 
+// errDryRun rolls a checked vote back.
+var errDryRun = errors.New("dry run")
+
+// CheckVote reports whether v would be accepted if its second factor were
+// in order, and records nothing: the vote's own rules run and are rolled
+// back. Callers use it before spending a one-time proof (an authenticator
+// code, a passkey challenge) on a vote that would be refused anyway.
+func (s *Store) CheckVote(ctx context.Context, ref RunRef, step string, v Vote) error {
+	if v.Decision != "approved" && v.Decision != "rejected" {
+		return fmt.Errorf("decision must be approved or rejected, got %q: %w", v.Decision, ErrNotAllowed)
+	}
+	v.StepUp, v.Audit = StepUpPasskey, nil // the strongest factor: step-up is not what is being checked
+	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{ref.TenantID}, func(tx pgx.Tx) error {
+		var res VoteResult
+		if err := s.vote(ctx, tx, ref, step, v, &res); err != nil {
+			return err
+		}
+		return errDryRun
+	})
+	if errors.Is(err, errDryRun) {
+		return nil
+	}
+	return err
+}
+
 func (s *Store) vote(ctx context.Context, tx pgx.Tx, ref RunRef, step string, v Vote, res *VoteResult) error {
 	if _, err := lockRun(ctx, tx, ref.ID); err != nil {
 		return err

@@ -38,7 +38,7 @@ A member can hand approval roles they hold to a colleague for up to 90 days, wit
 
 ## Step-up with an authenticator app
 
-Each member enrols an authenticator under **Account** (`POST /v1/me/totp`, then `/v1/me/totp/confirm` with a code). The secret is an encrypted tenant secret. A code works once: the time step it used is recorded, so it cannot be replayed. An approval that needs step-up returns `403 {"step_up": "totp"}` without a valid code. Eligibility (role, maker-checker, levels) is checked first, so nobody is asked for a code to cast a vote that would be refused.
+Each member enrols an authenticator under **Account** (`POST /v1/me/totp`, then `/v1/me/totp/confirm` with a code). The secret is an encrypted tenant secret. A code works once: the time step it used is recorded, so it cannot be replayed. An approval that needs step-up returns `403 {"step_up": "totp"}` without a valid code. Eligibility (role, maker-checker, levels) is checked first, so nobody is asked for a code to cast a vote that would be refused. A code or passkey response sent with a vote that is refused is not used up.
 
 Five wrong codes within fifteen minutes lock a member's codes out for fifteen minutes (`429`), right or wrong; each wrong code is audited (`mfa.totp.fail`), and so is the lock (`mfa.totp.locked`). A right code resets the count.
 

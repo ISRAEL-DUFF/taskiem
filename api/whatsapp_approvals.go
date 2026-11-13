@@ -914,6 +914,14 @@ func (s *Server) completeHandoff(w http.ResponseWriter, r *http.Request) {
 	}
 	p := principalFrom(r.Context())
 	cl := row.claims
+	// Eligibility first: a refused vote does not use up the code or challenge.
+	if req.TOTP != "" || req.Passkey != nil {
+		if err := s.Store.CheckVote(r.Context(), runtime.RunRef{ID: cl.Run, TenantID: p.TenantID}, cl.Step,
+			runtime.Vote{UserID: p.UserID, Roles: s.orderVoteRoles(r.Context(), p, cl.Run, cl.Step), Decision: cl.Decision, Channel: row.channel}); err != nil {
+			s.voteRefused(w, r, err)
+			return
+		}
+	}
 	// A passkey must have been asked for this decision on this approval.
 	stepUp, ok := s.checkStepUp(w, r, stepUpProof{TOTP: req.TOTP, Passkey: req.Passkey}, approvalScope(cl.Run, cl.Step, cl.Decision))
 	if !ok {
