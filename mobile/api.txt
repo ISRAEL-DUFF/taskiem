@@ -1,0 +1,99 @@
+# The operations the app uses, by operationId (api/openapi/openapi.yaml).
+# tools/mobilegen writes lib/api/api.g.dart from them.
+
+# The app's config (S1)
+appConfig
+
+# Signing in and out, staying signed in (M2)
+login
+chatSigninStart
+chatSigninVerify
+passkeyLoginOptions
+passkeyLogin
+signupOptions
+signup
+me
+logout
+listDevices
+removeDevice
+listBusinesses
+switchBusiness
+
+# The chats list (M3)
+listLinkChats
+listCustomerChats
+customerChatsUnread
+listLinks
+getChatAlerts
+getChatTools
+getLinkSettings
+
+# A conversation (M3)
+linkMessages
+sendLinkMessage
+readLinkChat
+linkTyping
+
+# Taskiem's conversation (M3)
+taskiemHistory
+taskiemSay
+getChatBriefing
+chatRefs
+
+# Customers' conversations (M3)
+getCustomerChat
+listCustomerMessages
+readCustomerChat
+putCustomerChat
+replyCustomer
+
+# The message menu (M3)
+reactLinkMessage
+unreactLinkMessage
+starLinkMessage
+unstarLinkMessage
+hideLinkMessage
+
+# The chats list: starred messages and its search (M3)
+starredLinkMessages
+searchLinkChats
+searchLinks
+searchCustomerChats
+
+# Tags: the price list, our services and stock (M3)
+linkChatItems
+getStorefrontServices
+getStock
+
+# Find a business (M3)
+explore
+
+# "Give this to…" on a card: the people, and the task (M3)
+listStaffTasks
+giveStaffTask
+
+# Connecting a service from Taskiem's conversation (M3, docs/spec/mobile-app.md 3.5)
+getConnectLink
+connectWithKey
+
+# Reference cards, and what Taskiem's conversation may name (M3)
+chatCard
+linkChatCard
+linkChatRefs
+listSupplierPrices
+
+# Settings: your email, your linked chats and the approval PIN, chat tools (M3, S2-S5)
+addEmail
+getWhatsApp
+startWhatsAppBinding
+verifyWhatsAppBinding
+unbindWhatsApp
+setWhatsAppPin
+removeWhatsAppPin
+getTelegram
+startTelegramLink
+unlinkTelegram
+getSlack
+startSlackLink
+unlinkSlack
+putChatTools

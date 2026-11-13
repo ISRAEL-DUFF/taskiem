@@ -80,7 +80,9 @@ export function HeadMenu({
     <div className="chat-menu-wrap">
       <button
         type="button"
-        className="icon-button"
+        // With nothing of its own, the menu holds only Keyboard: on a touch
+        // phone, where that is hidden, so is the button (no empty menu).
+        className={items ? "icon-button" : "icon-button kbd-only"}
         ref={button}
         aria-label={label}
         aria-expanded={open}

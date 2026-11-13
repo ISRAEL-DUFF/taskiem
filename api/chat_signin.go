@@ -168,13 +168,18 @@ func (s *Server) chatSigninVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Phone    string    `json:"phone"`
-		Code     string    `json:"code"`
-		TenantID uuid.UUID `json:"tenant_id"`
-		Bearer   bool      `json:"bearer"`
+		Phone    string     `json:"phone"`
+		Code     string     `json:"code"`
+		TenantID uuid.UUID  `json:"tenant_id"`
+		Bearer   bool       `json:"bearer"`
+		Device   *deviceReq `json:"device"` // the phone app's (devices.go)
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	r, ok := askDevice(w, r, req.Device, req.Bearer)
+	if !ok {
 		return
 	}
 	number, err := whatsapp.Normalise(req.Phone, s.defaultCountry())
@@ -244,12 +249,17 @@ func (s *Server) chatSigninLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Token    string    `json:"token"`
-		TenantID uuid.UUID `json:"tenant_id"`
-		Bearer   bool      `json:"bearer"`
+		Token    string     `json:"token"`
+		TenantID uuid.UUID  `json:"tenant_id"`
+		Bearer   bool       `json:"bearer"`
+		Device   *deviceReq `json:"device"` // the phone app's (devices.go)
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	r, ok := askDevice(w, r, req.Device, req.Bearer)
+	if !ok {
 		return
 	}
 	var user uuid.UUID
@@ -293,6 +303,9 @@ func (s *Server) chatSigninFinish(w http.ResponseWriter, r *http.Request, user u
 	switch {
 	case errors.Is(err, errSSORequired):
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": err.Error(), "sso_required": true})
+		return
+	case errors.Is(err, errPhoneBusy):
+		writeErr(w, http.StatusConflict, err.Error())
 		return
 	case errors.Is(err, errNoMembership), errors.Is(err, errNotMember):
 		writeErr(w, http.StatusUnauthorized, err.Error())

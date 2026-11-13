@@ -186,3 +186,46 @@ func TestRepositoryVendoredCode(t *testing.T) {
 		t.Error("engine/sandbox/pywasm was not checked")
 	}
 }
+
+func TestPubPackages(t *testing.T) {
+	root := t.TempDir()
+	cache := filepath.Join(root, "cache")
+	write(t, root, "pubspec.lock", `packages:
+  args:
+    dependency: transitive
+    description:
+      name: args
+      sha256: "abc"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.7.0"
+  flutter:
+    dependency: "direct main"
+    description: flutter
+    source: sdk
+    version: "0.0.0"
+  mine:
+    dependency: transitive
+    description:
+      name: mine
+      url: "https://pub.example.com"
+    source: hosted
+    version: "1.0.0"
+`)
+	write(t, cache, "hosted/pub.dev/args-2.7.0/LICENSE", "x")
+	write(t, cache, "hosted/pub.example.com/mine-1.0.0/LICENSE", "x")
+	got, err := pubPackages(filepath.Join(root, "pubspec.lock"), cache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Hosted packages only, each found in its host's folder; the SDK's are left.
+	if len(got) != 2 || got[0].name != "args" || got[1].name != "mine" ||
+		got[0].dir != filepath.Join(cache, "hosted", "pub.dev", "args-2.7.0") ||
+		got[1].dir != filepath.Join(cache, "hosted", "pub.example.com", "mine-1.0.0") {
+		t.Fatalf("read as %+v", got)
+	}
+	// A package missing from the cache says to fetch it.
+	if _, err := pubPackages(filepath.Join(root, "pubspec.lock"), filepath.Join(root, "empty")); err == nil {
+		t.Fatal("a missing package is an error")
+	}
+}

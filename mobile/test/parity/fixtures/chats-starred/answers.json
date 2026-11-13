@@ -1,0 +1,110 @@
+{
+ "at": "2026-11-11T12:15:33.852Z",
+ "answers": {
+  "/v1/me": {
+   "file": "000.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/settings/chat-tools": {
+   "file": "001.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/billing/status": {
+   "file": "002.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats?archived=1": {
+   "file": "003.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/links": {
+   "file": "004.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats": {
+   "file": "005.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-settings": {
+   "file": "006.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/form-requests": {
+   "file": "007.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats/unread": {
+   "file": "008.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats": {
+   "file": "022.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/taskiem-chat?after=*": {
+   "file": "010.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/notifications/count": {
+   "file": "011.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/onboarding": {
+   "file": "013.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/links/01a1ca85-c0ea-702e-bc21-b92acbab6b6a/logo": {
+   "file": "014.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/links/01a1ca85-d343-7115-b717-4869a1148670/logo": {
+   "file": "016.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/links/01a1ca85-e40e-799d-8623-3110112a28d1/logo": {
+   "file": "017.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/links/01a1ca86-062d-7919-82bc-e0475ef4db3c/logo": {
+   "file": "018.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/links/01a1ca85-f561-7d84-86ab-f5efab9b9c0c/logo": {
+   "file": "019.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/links/01a1ca86-2928-7488-86d3-e8f0c637a9fe/logo": {
+   "file": "020.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/chat-alerts": {
+   "file": "021.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats/starred": {
+   "file": "900.json",
+   "status": 200,
+   "type": "application/json"
+  }
+ }
+}

@@ -96,17 +96,20 @@ test("while an answer is being made there is a clock on the message and Taskiem 
 }) => {
   const page = await person(browser);
   await page.goto("/chat?with=taskiem");
+  // The answer is held until the clock and the typing have been seen: a
+  // fixed wait ran out first on a busy machine.
+  let answer = () => {};
+  const held = new Promise<void>((r) => (answer = r));
   await page.route("**/v1/taskiem-chat", async (route) => {
     if (route.request().method() !== "POST") return route.continue();
-    // Long enough that the clock is still there when it is looked for on a
-    // cold first page (1.5 s was not, one run in four).
-    await new Promise((r) => setTimeout(r, 4000));
+    await held;
     return route.continue();
   });
   await pane(page).locator("#taskiem-text").fill("status");
   await pane(page).locator("#taskiem-text").press("Enter");
   await expect(pane(page).getByTestId("taskiem-typing")).toBeVisible();
   await expect(ours(page).getByRole("img", { name: "Sending" })).toBeVisible();
+  answer();
   await expect(theirs(page).last()).toBeVisible({ timeout: 15_000 });
   await expect(pane(page).getByTestId("taskiem-typing")).toHaveCount(0);
   await expect(ours(page)).toHaveCount(1); // not twice
@@ -346,6 +349,58 @@ test("a message the server has, when the page was away, is not put back", async 
   await expect(ours(page)).toHaveCount(1);
   await expect(pane(page).locator("#taskiem-text")).toHaveValue("");
   await expect(page.getByText(/may not have been sent/)).toHaveCount(0);
+});
+
+test("a message sent before the history has come is not taken for the last page's, nor put back", async ({
+  browser,
+}) => {
+  const page = await person(browser);
+  // The history is asked for as the page opens, and its answer (from before
+  // the message) comes while the message is still waiting for its own: the
+  // server has the message, its answer is held.
+  let release = () => {};
+  const held = new Promise<void>((r) => (release = r));
+  let answer = () => {};
+  const answered = new Promise<void>((r) => (answer = r));
+  let first = true;
+  await page.route("**/v1/taskiem-chat", async (route) => {
+    const method = route.request().method();
+    if (method === "POST") {
+      const res = await route.fetch();
+      await answered;
+      return route.fulfill({ response: res });
+    }
+    if (method !== "GET" || !first) return route.continue();
+    first = false;
+    const res = await route.fetch();
+    await held;
+    await route.fulfill({ response: res });
+  });
+  await page.goto("/chat?with=taskiem");
+  await pane(page).locator("#taskiem-text").fill("status");
+  await pane(page).locator("#taskiem-text").press("Enter");
+  await expect(pane(page).locator("#taskiem-text")).toHaveValue("");
+  await expect
+    .poll(async () => {
+      const r = await page.request.get("/v1/taskiem-chat");
+      const j = (await r.json()) as { messages?: { text?: string; inbound?: boolean }[] };
+      return (j.messages ?? []).filter((m) => m.inbound && m.text === "status").length;
+    })
+    .toBe(1);
+  const came = page.waitForResponse(
+    (r) => r.request().method() === "GET" && new URL(r.url()).pathname === "/v1/taskiem-chat",
+  );
+  release();
+  await came; // the history, from before the message, has come
+  await page.waitForTimeout(300);
+  await expect(page.getByText(/may not have been sent/)).toHaveCount(0);
+  await expect(pane(page).locator("#taskiem-text")).toHaveValue("");
+  answer();
+  await expect(ours(page)).toHaveCount(1);
+  // Nor kept as a draft for the next page.
+  await page.reload();
+  await expect(ours(page)).toHaveCount(1);
+  await expect(pane(page).locator("#taskiem-text")).toHaveValue("");
 });
 
 test("the stored copy arriving by the stream before the answer does not show the message twice", async ({

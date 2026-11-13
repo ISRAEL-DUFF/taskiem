@@ -122,7 +122,10 @@ function ChatSignIn({ onBack }: { onBack: () => void }) {
   return (
     <>
       {sent === null ? (
+        // Each step its own form (key): the code's field is new, so it takes
+        // the focus (autoFocus), rather than React reusing the phone's.
         <form
+          key="phone"
           onSubmit={(e) => {
             e.preventDefault();
             void act.run(async () => setSent((await post<{ status: string }>("/v1/auth/chat/start", { phone })).status), false);
@@ -139,6 +142,7 @@ function ChatSignIn({ onBack }: { onBack: () => void }) {
         </form>
       ) : (
         <form
+          key="code"
           onSubmit={(e) => {
             e.preventDefault();
             void act.run(async () => {

@@ -1,0 +1,48 @@
+# Every address the web chat links to, and where it is in the app
+# (docs/spec/mobile-app.md §9.3). test/web_links_test.dart reads the web
+# chat's pages and lib/tools.ts and fails for an address not listed here,
+# and for one listed here the web no longer links to. A new web link is a
+# screen in the app, a milestone that brings one, or §3.5 (a browser, for
+# the few things that need one).
+#
+# address | where: "app <file>" (a screen there now), "M4".."M8" (the
+# milestone that brings its screen; until then, what leads to it says it
+# is coming), "browser" (§3.5), or "not a page" (a "/" word typed in the
+# box, the end of an API path).
+
+/chat | app lib/chat/chats.dart
+/account | app lib/screens/settings_more.dart
+/login | app lib/screens/sign_in.dart
+/signup | app lib/screens/sign_up.dart
+/settings/links | M5
+/settings/links/profile | M5
+/staff | M5
+/tasks | M5
+/storefront/stock | M6
+/storefront/price-lists | M6
+/storefront/bookings | M6
+/storefront/orders/ | M7
+/storefront/deliveries | M7
+/trade-orders | M7
+/trade-orders/ | M7
+/links/ | M7
+/invoices | M8
+/invoices/ | M8
+/bills | M8
+/bills/ | M8
+/purchases/ | M8
+/storefront/suppliers | M8
+/storefront/suppliers/ | M8
+/money | M8
+/tables | M8
+/tables/ | M8
+/invoice | not a page
+/invoice/ | not a page
+/bill | not a page
+/order | not a page
+/purchase | not a page
+/product | not a page
+/customer | not a page
+/pro | not a page
+/send | not a page
+/void | not a page

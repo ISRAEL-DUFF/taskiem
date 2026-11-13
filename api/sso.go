@@ -23,6 +23,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/oidc"
+	"github.com/israel-duff/taskiem/engine/push"
 	"github.com/israel-duff/taskiem/engine/saml"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
@@ -921,6 +922,11 @@ func (s *Server) finishSSO(w http.ResponseWriter, r *http.Request, c ssoConn, re
 						return err
 					}
 					revoked = append(revoked, role)
+				}
+			}
+			if len(revoked) > 0 {
+				if err := push.DropOrphansTx(ctx, tx, user); err != nil {
+					return err
 				}
 			}
 		}

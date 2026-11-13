@@ -1,0 +1,11 @@
+tags:
+  # The parity test (test/parity_test.dart): compared with pictures the web
+  # half takes on Linux.
+  parity:
+  # The app's own code against the real server (test/server/): needs
+  # TASKIEM_E2E_URL, the server web/e2e/serve.sh starts, else skipped.
+  server:
+  # Every screen at 360 px with the text 1.3 and 2 times (test/sizes_test.dart),
+  # and what can be pressed, labelled and 48 px (test/targets_test.dart).
+  sizes:
+  targets:

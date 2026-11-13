@@ -18,6 +18,9 @@ if [ -z "${TASKIEM_E2E_PREBUILT:-}" ] || [ ! -x "$taskiem" ]; then
 fi
 export TASKIEM_DATABASE_URL="$dsn"
 export TASKIEM_LOCAL_KMS_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+# Chat push (docs/spec/chat-push.md): a key pair, so the notifications switch shows.
+# The browsers' own push service is not reached: the tests stand in for it.
+eval "$("$taskiem" push keys --subject mailto:e2e@taskiem.test | grep '^TASKIEM_VAPID' | sed 's/^/export /')"
 "$taskiem" migrate >/dev/null
 TASKIEM_BOOTSTRAP_PASSWORD='correct horse battery' "$taskiem" bootstrap --tenant "E2E" --email owner@e2e.test --name Owner >/dev/null
 # The E2E tenant is also a partner (embed.spec.ts embeds the builder).

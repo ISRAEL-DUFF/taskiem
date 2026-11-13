@@ -1,0 +1,270 @@
+{
+ "at": "2026-11-11T19:43:53.387Z",
+ "answers": {
+  "/v1/me": {
+   "file": "000.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/billing/status": {
+   "file": "001.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/settings/chat-tools": {
+   "file": "002.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats?archived=1": {
+   "file": "052.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats": {
+   "file": "051.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats/unread": {
+   "file": "005.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/links": {
+   "file": "006.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-settings": {
+   "file": "007.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/taskiem-chat?after=*": {
+   "file": "008.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/form-requests": {
+   "file": "009.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/onboarding": {
+   "file": "010.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats": {
+   "file": "015.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/notifications/count": {
+   "file": "012.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/chat-alerts": {
+   "file": "016.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/links/01a1cc21-ca6b-7494-9a71-aaa572bd85e4/logo": {
+   "file": "017.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/links/01a1cc21-b81d-78dc-9ad5-44b8367cc45d/logo": {
+   "file": "018.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/links/01a1cc21-db51-715c-b92d-a8e7d8257b2f/logo": {
+   "file": "019.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/links/01a1cc21-ecdb-73ff-aeea-135ad4fc1afc/logo": {
+   "file": "020.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/links/01a1cc21-fda9-7653-ac9b-0b2c5f1bd21d/logo": {
+   "file": "021.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/links/01a1cc22-209d-7bcc-86e9-0462382f949e/logo": {
+   "file": "022.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/business-profile": {
+   "file": "023.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/explore": {
+   "file": "024.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/explore/01a1cc22-8835-7982-af30-d991abf8ce92/photos/0?size=800&v=ee5f400b": {
+   "file": "025.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-6632-784e-bd40-13c302f7a3dd/photos/0?size=800&v=67b794dc": {
+   "file": "026.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-0e7c-7457-a1ff-f5ef38f3bdda/photos/0?size=800&v=6fff12b3": {
+   "file": "027.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-43cc-75c2-b358-2185b486c64e/photos/0?size=800&v=c745108d": {
+   "file": "028.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-54e7-7bf7-a3df-b0cd0bf560ad/photos/0?size=800&v=18866b0d": {
+   "file": "029.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-7780-7b06-89b2-916a97a421af/photos/0?size=800&v=99c5791c": {
+   "file": "030.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-cbfd-78b8-9be4-0f99b4095859/photos/0?size=800&v=1fbc3033": {
+   "file": "031.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-bb25-7876-a584-360bd4831470/photos/0?size=800&v=d6153255": {
+   "file": "032.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-991b-7183-872b-ed616f428fdd/photos/0?size=800&v=055d9de6": {
+   "file": "033.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-aa6a-76b2-b4f2-58b4cbac0c53/photos/0?size=800&v=54e76f8a": {
+   "file": "034.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-3233-7dd6-b2d6-7e8d29c9591a/photos/0?size=800&v=ed07b26e": {
+   "file": "035.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-8835-7982-af30-d991abf8ce92/logo?size=320&v=ee5f400b": {
+   "file": "036.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-6632-784e-bd40-13c302f7a3dd/logo?size=320&v=67b794dc": {
+   "file": "037.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-6632-784e-bd40-13c302f7a3dd/photos/1?size=800&v=67b794dc": {
+   "file": "038.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-0e7c-7457-a1ff-f5ef38f3bdda/photos/1?size=800&v=6fff12b3": {
+   "file": "039.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-0e7c-7457-a1ff-f5ef38f3bdda/logo?size=320&v=6fff12b3": {
+   "file": "040.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-0e7c-7457-a1ff-f5ef38f3bdda/photos/2?size=800&v=6fff12b3": {
+   "file": "041.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-54e7-7bf7-a3df-b0cd0bf560ad/photos/1?size=800&v=18866b0d": {
+   "file": "042.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-54e7-7bf7-a3df-b0cd0bf560ad/logo?size=320&v=18866b0d": {
+   "file": "043.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-0e7c-7457-a1ff-f5ef38f3bdda/photos/3?size=800&v=6fff12b3": {
+   "file": "044.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-43cc-75c2-b358-2185b486c64e/logo?size=320&v=c745108d": {
+   "file": "045.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-43cc-75c2-b358-2185b486c64e/photos/1?size=800&v=c745108d": {
+   "file": "046.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-bb25-7876-a584-360bd4831470/logo?size=320&v=d6153255": {
+   "file": "047.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-aa6a-76b2-b4f2-58b4cbac0c53/logo?size=320&v=54e76f8a": {
+   "file": "048.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-cbfd-78b8-9be4-0f99b4095859/logo?size=320&v=1fbc3033": {
+   "file": "049.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc22-7780-7b06-89b2-916a97a421af/logo?size=320&v=99c5791c": {
+   "file": "050.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore?q=rice": {
+   "file": "053.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/explore/01a1cc21-b81d-78dc-9ad5-44b8367cc45d/photos/0?size=800&v=4ded1acf": {
+   "file": "054.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc21-b81d-78dc-9ad5-44b8367cc45d/logo?size=320&v=4ded1acf": {
+   "file": "055.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc21-b81d-78dc-9ad5-44b8367cc45d/photos/1?size=800&v=4ded1acf": {
+   "file": "056.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/explore/01a1cc21-b81d-78dc-9ad5-44b8367cc45d/photos/2?size=800&v=4ded1acf": {
+   "file": "057.img",
+   "status": 200,
+   "type": "image/jpeg"
+  }
+ }
+}

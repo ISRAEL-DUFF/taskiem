@@ -150,6 +150,9 @@ type signupReq struct {
 	// Bearer asks for the session token in the answer instead of a cookie
 	// (API and CLI clients; S35).
 	Bearer bool `json:"bearer,omitempty"`
+	// Device names the phone the app is on: a session that stays signed in
+	// (devices.go).
+	Device *deviceReq `json:"device,omitempty"`
 	// AcceptTerms is the person agreeing to the terms and privacy notice,
 	// needed when the deployment has them (TASKIEM_TERMS_VERSION).
 	AcceptTerms bool `json:"accept_terms,omitempty"`
@@ -196,6 +199,10 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 	var req signupReq
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	r, ok := askDevice(w, r, req.Device, req.Bearer)
+	if !ok {
 		return
 	}
 	if req.Website != "" {

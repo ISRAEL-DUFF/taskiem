@@ -14914,6 +14914,8 @@ paths:
                   format: uuid
                 bearer:
                   type: boolean
+                device:
+                  $ref: '#/components/schemas/DeviceRequest'
       responses:
         '200':
           description: Signed in
@@ -14970,6 +14972,8 @@ paths:
                   format: uuid
                 bearer:
                   type: boolean
+                device:
+                  $ref: '#/components/schemas/DeviceRequest'
       responses:
         '200':
           description: Signed in
@@ -18683,6 +18687,197 @@ paths:
           $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/push/key:
+    get:
+      operationId: getPushKey
+      tags:
+      - Notifications
+      summary: The public key a browser subscribes with
+      description: Chat push (docs/spec/chat-push.md). 404 when the server has no VAPID keys (the feature is off).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The key
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [public_key]
+                properties:
+                  public_key:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/push:
+    get:
+      operationId: listPush
+      tags:
+      - Notifications
+      summary: The browsers this person allowed to be notified when the app is closed
+      description: In the business they are in. Never the browsers' addresses or keys. Only for a person (not an API key); 404 when the feature is off.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: This person's browsers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevices'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putPush
+      tags:
+      - Notifications
+      summary: Allow this browser to be notified
+      description: The address must be a push service's (https, on Google's, Mozilla's, Apple's or Microsoft's host). The same browser again is updated, not added twice; at most 10 browsers a person in a business, the oldest replaced.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [endpoint, keys]
+              properties:
+                endpoint:
+                  type: string
+                  maxLength: 2048
+                keys:
+                  type: object
+                  additionalProperties: false
+                  required: [p256dh, auth]
+                  properties:
+                    p256dh:
+                      type: string
+                      maxLength: 200
+                    auth:
+                      type: string
+                      maxLength: 100
+                label:
+                  type: string
+                  maxLength: 80
+                preview:
+                  type: [boolean, 'null']
+                  description: Whether the notification says what the message says (default on)
+      responses:
+        '200':
+          description: This person's browsers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevices'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deletePushEndpoint
+      tags:
+      - Notifications
+      summary: This browser takes itself off
+      description: By its address, which only it knows. Nothing there is not an error.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [endpoint]
+              properties:
+                endpoint:
+                  type: string
+      responses:
+        '200':
+          description: This person's browsers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevices'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/push/{id}:
+    patch:
+      operationId: patchPush
+      tags:
+      - Notifications
+      summary: Rename a browser or switch its preview
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                label:
+                  type: [string, 'null']
+                  maxLength: 80
+                preview:
+                  type: [boolean, 'null']
+      responses:
+        '200':
+          description: This person's browsers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevices'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deletePush
+      tags:
+      - Notifications
+      summary: Take a browser off
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: This person's browsers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushDevices'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/notification-settings:
     get:
       operationId: getNotificationSettings
@@ -18756,6 +18951,130 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/businesses:
+    get:
+      operationId: listBusinesses
+      tags:
+      - Authentication
+      summary: Your businesses
+      description: The businesses the person belongs to, by name, the one this session is in marked (the phone app's
+        switcher). An API key is refused (403).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The businesses
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [businesses]
+                properties:
+                  businesses:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, name]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        current:
+                          type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/switch:
+    post:
+      operationId: switchBusiness
+      tags:
+      - Authentication
+      summary: Switch business
+      description: 'Ends this session and answers one in the other business, as signing in does (the token with a bearer
+        session, the cookie with a cookie one). The new session is the same in every other way: the person, how and
+        when they signed in (which step-up reads), the phone and its expiry. Not a fresh sign-in. 401 `sso_required`
+        when that business signs in with single sign-on; 409 when this session signed in with single sign-on (it vouches
+        for one business only: sign in to the other). Audited as `auth.switch`. An API key is refused (403): it belongs
+        to one business.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenant_id]
+              properties:
+                tenant_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Switched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/devices:
+    get:
+      operationId: listDevices
+      tags:
+      - Authentication
+      summary: Your phones
+      description: The person's phones signed in to the app (device sessions), in every business they belong to, the most
+        recently used first. An API key is refused (403).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The phones
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [devices]
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Phone'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/devices/{id}:
+    delete:
+      operationId: removeDevice
+      tags:
+      - Authentication
+      summary: Sign a phone out
+      description: Ends that phone's session in every business. Audited as `auth.device_removed`.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
         default:
           $ref: '#/components/responses/Error'
   /v1/me/passkeys:
@@ -25247,6 +25566,24 @@ paths:
           description: Redirects the browser
         default:
           $ref: '#/components/responses/Error'
+  /v1/app/config:
+    get:
+      operationId: appConfig
+      tags:
+      - Authentication
+      summary: What the phone app is told about this server
+      description: Read by the phone app before anyone signs in (docs/spec/mobile-app.md §5.1). An app older than
+        `min_version` asks to be updated.
+      security: []
+      responses:
+        '200':
+          description: The app's config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppConfig'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/signup:
     get:
       operationId: signupOptions
@@ -29885,6 +30222,46 @@ components:
           items:
             $ref: '#/components/schemas/Transcript'
       additionalProperties: false
+    DeviceRequest:
+      type: object
+      description: 'The phone the app is on (docs/spec/mobile-app.md §5.2). The session stays signed in on that phone
+        30 days without use, renewed by use up to 180 days from signing in, and ends the person''s earlier sessions on
+        that phone in every business. Only with `"bearer": true`. Two sign-ins on one phone at once: the second is 409.'
+      required: [id, name, platform]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The app's install, a random UUID it keeps.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+          description: What the person will see under Your phones.
+        platform:
+          type: string
+          enum: [android, ios]
+    Phone:
+      type: object
+      required: [id, name, platform, signed_in_at, last_used_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        platform:
+          type: string
+          enum: [android, ios]
+        signed_in_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+        this:
+          type: boolean
+          description: The phone asking.
     LoginRequest:
       type: object
       required:
@@ -29903,6 +30280,8 @@ components:
           type: boolean
           description: 'Return the session token in the body instead of setting the cookie: for API clients and
             scripts. Browsers leave it out.'
+        device:
+          $ref: '#/components/schemas/DeviceRequest'
     Session:
       type: object
       properties:
@@ -32006,6 +32385,23 @@ components:
           type: array
           items:
             type: string
+    AppConfig:
+      type: object
+      required:
+      - min_version
+      - passkeys
+      - signup
+      properties:
+        min_version:
+          type: string
+          description: The lowest app version this server serves (TASKIEM_APP_MIN_VERSION; 0.1.0 when unset).
+          example: 0.1.0
+        passkeys:
+          type: boolean
+          description: Whether passkeys are on (a relying party and its origins are configured).
+        signup:
+          type: boolean
+          description: Whether self-serve signup is open (TASKIEM_ALLOW_SIGNUP).
     SignupOptions:
       type: object
       required:
@@ -32059,6 +32455,8 @@ components:
           type: boolean
           description: 'Return the session token in the body instead of setting the cookie: for API clients and
             scripts. Browsers leave it out.'
+        device:
+          $ref: '#/components/schemas/DeviceRequest'
         accept_terms:
           type: boolean
           description: The person agrees to the terms and privacy notice (`terms` on GET /v1/signup). Required
@@ -32472,6 +32870,8 @@ components:
         bearer:
           type: boolean
           description: Return the session token in the body instead of setting the cookie.
+        device:
+          $ref: '#/components/schemas/DeviceRequest'
       additionalProperties: false
     Invitation:
       type: object
@@ -36961,6 +37361,42 @@ components:
               type: string
             shown:
               type: string
+    PushDevice:
+      type: object
+      additionalProperties: false
+      required: [id, label, preview, created_at, last_sent_at, last_ok_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+        preview:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        last_sent_at:
+          type: [string, 'null']
+          format: date-time
+        last_ok_at:
+          type: [string, 'null']
+          format: date-time
+    PushDevices:
+      type: object
+      additionalProperties: false
+      required: [devices, max]
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/PushDevice'
+        max:
+          type: integer
+        added:
+          type: string
+          format: uuid
+          description: The browser a PUT just added or updated
     LinkSettings:
       type: object
       additionalProperties: false
