@@ -378,21 +378,33 @@ func (c *client) refund(ctx context.Context, req connector.Request) (connector.R
 	return connector.Response{Output: out}, nil
 }
 
-// refundStatus is refund_transaction's reconcile: a payment shown as
-// reversed was refunded; one that was not is not found, so the refund is
-// sent (again).
+// refundStatus is refund_transaction's reconcile. It is given the step's
+// own input, so reference is the payment's (refund_transaction has no
+// key field of the engine's). A payment shown as reversed was refunded.
+// One that is not may still have a refund on its way (a refund is
+// pending, then processing, for days before the payment reads reversed),
+// and the payment's status does not say: that is not "not found", which
+// would send the refund again, but an outcome a person settles in
+// Paystack. As an ordinary step, a payment not refunded is not found.
 func (c *client) refundStatus(ctx context.Context, req connector.Request) (connector.Response, error) {
 	ref, _ := req.Input["reference"].(string)
+	if ref == "" {
+		return connector.Response{}, fmt.Errorf("refund_status needs the payment's reference: %w", effects.ErrFatal)
+	}
 	var env envelope
 	err := c.do(ctx, req, http.MethodGet, "/transaction/verify/"+url.PathEscape(ref), nil, &env)
 	if err != nil {
 		return connector.Response{}, err
 	}
 	st, _ := env.Data["status"].(string)
-	if !strings.Contains(st, "reversed") {
-		return connector.Response{}, connector.ErrNotFound
+	if strings.Contains(st, "reversed") {
+		return connector.Response{Output: map[string]any{"reference": ref, "status": st}}, nil
 	}
-	return connector.Response{Output: map[string]any{"reference": ref, "status": st}}, nil
+	if req.Reconciling {
+		return connector.Response{}, fmt.Errorf("paystack: payment %s is %q, not reversed; a refund of it may still be pending, which the payment does not show. Check its refunds in Paystack, then resolve the step: %w",
+			ref, st, effects.ErrIndeterminate)
+	}
+	return connector.Response{}, connector.ErrNotFound
 }
 
 func alreadyRefunded(body string) bool {

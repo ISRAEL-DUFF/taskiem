@@ -330,7 +330,7 @@ actions:
       - { field: output.data, category: other }
   refund_status:
     title: Check whether a payment was refunded
-    description: Reads the payment; not found while it has not been refunded (reversed).
+    description: Reads the payment by its reference; found once it is reversed (refunded). As refund_transaction's reconcile it is given that step's input, and a payment not yet reversed parks the step, since a refund may still be pending.
     class: read
     input:
       type: object

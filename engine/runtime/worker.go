@@ -1339,9 +1339,9 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 		// task for after the deadline without spending a retry.
 		return history.Event{}, errPostpone
 	}
-	field := p.field
-	if field == "" || strings.HasPrefix(field, "header:") {
-		field = "reference"
+	input, err := w.reconcileInput(ctx, p, p.key)
+	if err != nil {
+		return w.secretFailure(p, err), nil
 	}
 	creds, err := w.credentials(ctx, p)
 	if err != nil {
@@ -1356,7 +1356,7 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 	if err != nil {
 		return history.Event{}, err
 	}
-	resp, err := action.Execute(rctx, connector.Request{Input: map[string]any{field: p.key}, Credentials: creds, IdempotencyKey: p.key, Reconciling: true, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Rotate: w.rotate(p)})
+	resp, err := action.Execute(rctx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, Reconciling: true, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Rotate: w.rotate(p)})
 	switch {
 	case err == nil:
 		return completedEvent(p.c, resp.Output, true), nil
@@ -1393,6 +1393,32 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 		return failed(p.c, "retryable", "reconcile: "+err.Error(), "reconcile"), nil
 	}
 	return failed(p.c, "unknown_outcome", "reconcile: "+err.Error(), "park"), nil
+}
+
+// reconcileInput is what a reconcile action is given (contract:
+// action-classes.md, "Reconcile results"). Where the action puts the
+// engine's key in its body (idempotency.field), that field with the key:
+// the provider is asked for the record under it. Where it does not (no
+// idempotency block, or a header), the key names nothing the provider
+// can be asked for, so the reconcile is given the step's own input (the
+// payment a refund was for), with the key as "reference" unless the
+// input has a reference of its own, and in Request.IdempotencyKey.
+func (w *Worker) reconcileInput(ctx context.Context, p *plan, key string) (map[string]any, error) {
+	if p.field != "" && !strings.HasPrefix(p.field, "header:") {
+		return map[string]any{p.field: key}, nil
+	}
+	in, err := w.resolveSecrets(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	input := map[string]any{}
+	if m, ok := in.(map[string]any); ok {
+		maps.Copy(input, m)
+	}
+	if _, has := input["reference"]; !has {
+		input["reference"] = key
+	}
+	return input, nil
 }
 
 // send performs the effect and classifies the result.
