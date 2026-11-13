@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -42,6 +43,19 @@ type exploreOut struct {
 	// spec/chat-riders.md), those covering our area first (section=delivery).
 	Delivery     []links.ExploreCard `json:"delivery"`
 	DeliveryMore bool                `json:"delivery_more"`
+	// The sections of migration 00427 (docs/spec/mobile-app-explore-and-
+	// offline.md §2.1): Featured (at most six, no paging), Trusted on
+	// Taskiem, Popular (each card with its rounded count of links), and the
+	// categories with their counts; section=category&category=<key> lists
+	// one category's businesses in InCategory.
+	Featured     []links.ExploreCard `json:"featured"`
+	Trusted      []links.ExploreCard `json:"trusted"`
+	TrustedMore  bool                `json:"trusted_more"`
+	Popular      []links.ExploreCard `json:"popular"`
+	PopularMore  bool                `json:"popular_more"`
+	Categories   []links.Category    `json:"categories"`
+	InCategory   []links.ExploreCard `json:"in_category"`
+	CategoryMore bool                `json:"category_more"`
 	Blind        *blindOffer         `json:"blind,omitempty"`
 	// Area is our own, as "near you" reads it ("Near you · Yaba").
 	Area string `json:"area,omitempty"`
@@ -60,9 +74,22 @@ func (s *Server) exploreSection(r *http.Request, tx pgx.Tx, section string, offs
 	return cards, false, nil
 }
 
+// moreSection is exploreSection for the sections of migration 00427.
+func (s *Server) moreSection(r *http.Request, tx pgx.Tx, section, category string, offset int) ([]links.ExploreCard, bool, error) {
+	cards, err := links.ExploreMoreTx(r.Context(), tx, section, category, explorePage+1, offset)
+	if err != nil {
+		return nil, false, err
+	}
+	if len(cards) > explorePage {
+		return cards[:explorePage], true, nil
+	}
+	return cards, false, nil
+}
+
 func (s *Server) explore(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	out := exploreOut{Results: []links.ExploreCard{}, Near: []links.ExploreCard{}, Fresh: []links.ExploreCard{}, Delivery: []links.ExploreCard{}}
+	out := exploreOut{Results: []links.ExploreCard{}, Near: []links.ExploreCard{}, Fresh: []links.ExploreCard{}, Delivery: []links.ExploreCard{},
+		Featured: []links.ExploreCard{}, Trusted: []links.ExploreCard{}, Popular: []links.ExploreCard{}, Categories: []links.Category{}, InCategory: []links.ExploreCard{}}
 	// A phone number is never searched: one row that sends a request.
 	if links.LooksLikePhone(q) {
 		if phone, err := whatsapp.Normalise(q, s.defaultCountry()); err == nil {
@@ -87,6 +114,18 @@ func (s *Server) explore(w http.ResponseWriter, r *http.Request) {
 			out.Near, out.NearMore, err = s.exploreSection(r, tx, links.SectionNear, offset)
 		case section == links.SectionDelivery:
 			out.Delivery, out.DeliveryMore, err = s.exploreSection(r, tx, links.SectionDelivery, offset)
+		case section == links.SectionTrusted:
+			out.Trusted, out.TrustedMore, err = s.moreSection(r, tx, links.SectionTrusted, "", offset)
+		case section == links.SectionPopular:
+			out.Popular, out.PopularMore, err = s.moreSection(r, tx, links.SectionPopular, "", offset)
+		case section == links.SectionFeatured:
+			out.Featured, err = links.ExploreMoreTx(r.Context(), tx, links.SectionFeatured, "", 6, 0)
+		case section == links.SectionCategory:
+			category := r.URL.Query().Get("category")
+			if !links.IsCategory(category) {
+				return fmt.Errorf("%w: no such category", links.ErrInvalid)
+			}
+			out.InCategory, out.CategoryMore, err = s.moreSection(r, tx, links.SectionCategory, category, offset)
 		default:
 			if out.Area, err = links.OwnAreaTx(r.Context(), tx, principalFrom(r.Context()).TenantID); err != nil {
 				return err
@@ -97,7 +136,19 @@ func (s *Server) explore(w http.ResponseWriter, r *http.Request) {
 			if out.Delivery, out.DeliveryMore, err = s.exploreSection(r, tx, links.SectionDelivery, 0); err != nil {
 				return err
 			}
-			out.Fresh, out.More, err = s.exploreSection(r, tx, links.SectionNew, 0)
+			if out.Fresh, out.More, err = s.exploreSection(r, tx, links.SectionNew, 0); err != nil {
+				return err
+			}
+			if out.Featured, err = links.ExploreMoreTx(r.Context(), tx, links.SectionFeatured, "", 6, 0); err != nil {
+				return err
+			}
+			if out.Trusted, out.TrustedMore, err = s.moreSection(r, tx, links.SectionTrusted, "", 0); err != nil {
+				return err
+			}
+			if out.Popular, out.PopularMore, err = s.moreSection(r, tx, links.SectionPopular, "", 0); err != nil {
+				return err
+			}
+			out.Categories, err = links.ExploreCategoriesTx(r.Context(), tx)
 		}
 		return err
 	}); err != nil {

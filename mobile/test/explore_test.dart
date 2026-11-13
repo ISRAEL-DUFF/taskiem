@@ -201,6 +201,102 @@ void main() {
     });
   });
 
+  group('the start page (X2–X4)', () {
+    setUpAll(loadFonts);
+    setUp(RecentlyViewed.clear);
+
+    Map<String, Object?> card(String id, String name, {int links = 0, List<String> cats = const []}) => {
+      'business': id,
+      'name': name,
+      'logo': false,
+      'photos': 0,
+      'captions': <Object>[],
+      'state': 'none',
+      'v': '1',
+      'tagline': 'Wholesale',
+      'categories': cats,
+      if (links > 0) 'links': links,
+    };
+
+    testWidgets('Featured, Trusted, Popular with its count, the categories, and Recently viewed', (t) async {
+      t.view.physicalSize = const Size(390, 844);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final f = Fixture('explore');
+      final asked = <Map<String, String>>[];
+      final chats = ChatsData(
+        f.auth(also: (req) async {
+          if (req.url.path != '/v1/explore' || req.method != 'GET') return req.method == 'GET' ? null : _answer(<String, Object>{});
+          asked.add(req.url.queryParameters);
+          if (req.url.queryParameters['section'] == 'category') {
+            return _answer({
+              'results': <Object>[], 'near': <Object>[], 'near_more': false, 'fresh': <Object>[], 'more': false, 'delivery': <Object>[], 'delivery_more': false,
+              'in_category': [card('c1', 'Mama Put Foods', cats: ['food']), card('c2', 'Zobo Republic', cats: ['food'])], 'category_more': false,
+            });
+          }
+          return _answer({
+            'results': <Object>[], 'near': <Object>[], 'near_more': false, 'delivery': <Object>[], 'delivery_more': false,
+            'fresh': [card('n1', 'Newcomer Ltd')], 'more': false,
+            'featured': [card('f1', 'Lagos Grains', cats: ['food', 'farm']), card('f2', 'Ade Blocks', cats: ['building'])],
+            'trusted': [card('t1', 'Trusty Traders')], 'trusted_more': false,
+            'popular': [card('p1', 'Busy Bee Supplies', links: 20)], 'popular_more': false,
+            'categories': [
+              {'key': 'food', 'name': 'Food and drinks', 'n': 2},
+              {'key': 'farm', 'name': 'Farm produce', 'n': 0},
+            ],
+          });
+        }),
+        now: () => f.at,
+      );
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ChatsScreen(data: chats, onOpen: (_) {})));
+      await _settle(t);
+      await t.tap(find.bySemanticsLabel('Find a business to link with'));
+      await t.pumpAndSettle();
+      await _settle(t);
+
+      expect(find.bySemanticsLabel('Food and drinks, 2 businesses'), findsOneWidget);
+      expect(find.text('Featured'), findsOneWidget);
+      expect(find.text('Lagos Grains'), findsOneWidget);
+      expect(find.text('Food and drinks · Farm produce'), findsOneWidget, reason: "a card's categories, by name");
+      final list = t.state<ScrollableState>(_list);
+      Future<void> down(Finder f) async {
+        list.position.jumpTo(0);
+        await t.pump();
+        while (f.evaluate().isEmpty && list.position.pixels < list.position.maxScrollExtent) {
+          list.position.jumpTo((list.position.pixels + 300).clamp(0, list.position.maxScrollExtent));
+          await t.pump();
+        }
+        expect(f, findsWidgets);
+      }
+
+      await down(find.text('Trusted on Taskiem'));
+      await down(find.text('Linked with 20+ businesses'));
+      await down(find.text('New on Taskiem'));
+      expect(find.text('Recently viewed'), findsNothing);
+
+      // Acted on: first in Recently viewed, kept for next time.
+      await down(find.bySemanticsLabel('Connect with Trusty Traders'));
+      await t.ensureVisible(find.bySemanticsLabel('Connect with Trusty Traders'));
+      await t.tap(find.bySemanticsLabel('Connect with Trusty Traders'));
+      await _settle(t);
+      await t.pump(const Duration(seconds: 5));
+      expect(RecentlyViewed.read().map((c) => c.name), ['Trusty Traders']);
+
+      // A category: its businesses in the sections' place; tapped again, back.
+      list.position.jumpTo(0);
+      await t.pump();
+      await t.tap(find.bySemanticsLabel('Food and drinks, 2 businesses'));
+      await _settle(t);
+      expect(asked.last, {'section': 'category', 'category': 'food'});
+      expect(find.text('Mama Put Foods'), findsOneWidget);
+      expect(find.text('Featured'), findsNothing);
+      await t.tap(find.bySemanticsLabel('Food and drinks, 2 businesses'));
+      await _settle(t);
+      expect(find.text('Featured'), findsOneWidget);
+      await down(find.text('Recently viewed'));
+    });
+  });
+
   group('never empty', () {
     setUpAll(loadFonts);
 

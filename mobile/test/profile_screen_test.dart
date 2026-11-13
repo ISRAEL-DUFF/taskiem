@@ -107,6 +107,20 @@ void main() {
     await t.pump(const Duration(seconds: 5));
     await t.pumpAndSettle();
 
+    // What you sell: two at most, then the rest wait; Save sends them.
+    sent.clear();
+    await t.tap(find.bySemanticsLabel('Food and drinks'));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Farm produce'));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Fashion'), warnIfMissed: false);
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Save'));
+    await settle(t);
+    expect(sent.single, contains('"categories":["food","farm"]'));
+    await t.pump(const Duration(seconds: 5));
+    await t.pumpAndSettle();
+
     // Being found.
     sent.clear();
     await t.tap(find.byType(TkSwitch));

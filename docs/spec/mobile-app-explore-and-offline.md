@@ -7,7 +7,15 @@ Asked by the founder, 13 November 2026:
 
 Settled by the founder, 13 November 2026: every suggestion in §4 is taken, and every part of §5 is to be built, the saved database for chats included; the app is to be as robust offline as WhatsApp.
 
-**Built so far:** X1 (§2.3; Explore's empty page offers to be found and to set the area).
+**Built so far:**
+- X1 (§2.3; Explore's empty page offers to be found and to set the area).
+- K1 to K5: files, the encrypted store with chats and messages, only what changed, pages kept with `ETag`, the offline outbox.
+- X2 to X4 on the server and the app (migration 00427):
+  - the sections Featured, Trusted on Taskiem and Popular, and the category chips with their counts;
+  - categories chosen in Your business in Explore (the app);
+  - Recently viewed, kept in the phone's store: a business is counted as looked at when its photos are swiped or it is acted on;
+  - the operators' console has *Featured in Explore* (add a pick until a date, end one).
+- Still to do on the web (settled: later): the new sections in Explore, and choosing categories in Your business in Explore. Saving the profile on the web keeps the categories.
 
 ## 1. Where things stand
 

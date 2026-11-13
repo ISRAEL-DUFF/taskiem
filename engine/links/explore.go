@@ -22,6 +22,13 @@ const (
 	// SectionDelivery lists the businesses that deliver for others (riders,
 	// docs/spec/chat-riders.md), those covering our area first.
 	SectionDelivery = "delivery"
+	// The sections of migration 00427 (taskiem_link_explore_more):
+	// Trusted on Taskiem, Popular (with a rounded count of links), the
+	// Featured row (no paging) and one category's businesses.
+	SectionTrusted  = "trusted"
+	SectionPopular  = "popular"
+	SectionFeatured = "featured"
+	SectionCategory = "category"
 )
 
 // ExploreCard is a business as Explore shows it: its profile (or storefront
@@ -48,6 +55,11 @@ type ExploreCard struct {
 	// Available is a delivery business's state as businesses may know it
 	// (free, busy or off); "" when no business uses it as a rider yet.
 	Available string `json:"available,omitempty"`
+	// Categories are the one or two it picked (keys of Categories).
+	Categories []string `json:"categories"`
+	// Links is Popular's count of its links in the last 90 days: never
+	// under 3, rounded down to tens from 10 (shown "10+"); 0 elsewhere.
+	Links int `json:"links,omitempty"`
 }
 
 // ExploreTx lists businesses for a section: what a search for q finds
@@ -64,6 +76,35 @@ func ExploreTx(ctx context.Context, tx pgx.Tx, section, q string, limit, offset 
 	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ExploreCard, error) {
 		var c ExploreCard
 		return c, r.Scan(&c.Business, &c.Name, &c.Slug, &c.Area, &c.Tagline, &c.About, &c.Logo, &c.Photos, &c.State, &c.Ver, &c.Delivers, &c.Vehicle, &c.DeliveryAreas)
+	})
+	if out == nil {
+		out = []ExploreCard{}
+	}
+	if err == nil && len(out) > 0 {
+		err = exploreCaptionsTx(ctx, tx, out)
+	}
+	if err == nil {
+		err = exploreAvailabilityTx(ctx, tx, out)
+	}
+	if err == nil {
+		err = exploreCategoriesOfTx(ctx, tx, out)
+	}
+	return out, pgErr(err)
+}
+
+// ExploreMoreTx lists businesses for the sections of migration 00427:
+// SectionTrusted, SectionPopular, SectionFeatured (category is ignored) or
+// SectionCategory (the businesses in category, by name).
+func ExploreMoreTx(ctx context.Context, tx pgx.Tx, section, category string, limit, offset int) ([]ExploreCard, error) {
+	rows, err := tx.Query(ctx, `SELECT business, name, COALESCE(slug, ''), COALESCE(area, ''), COALESCE(tagline, ''), COALESCE(about, ''), has_logo, photos, state, ver,
+		delivers, COALESCE(vehicle, ''), delivery_areas, categories, links FROM taskiem_link_explore_more($1, $2, $3, $4)`, section, category, limit, offset)
+	if err != nil {
+		return nil, pgErr(err)
+	}
+	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ExploreCard, error) {
+		var c ExploreCard
+		return c, r.Scan(&c.Business, &c.Name, &c.Slug, &c.Area, &c.Tagline, &c.About, &c.Logo, &c.Photos, &c.State, &c.Ver, &c.Delivers, &c.Vehicle, &c.DeliveryAreas,
+			&c.Categories, &c.Links)
 	})
 	if out == nil {
 		out = []ExploreCard{}

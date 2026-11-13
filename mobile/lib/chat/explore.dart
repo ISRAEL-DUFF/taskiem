@@ -17,7 +17,7 @@ import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../kit/icon.dart';
 import '../app/openers.dart';
-import '../app/store.dart' show keepMediaBytes, keptMedia;
+import '../app/store.dart' show LocalStore, keepMediaBytes, keptMedia;
 import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/tap_area.dart';
@@ -46,6 +46,84 @@ List<ExploreCard> firstPicks(ExploreResult r, [int n = 3]) {
     if (out.length == n) break;
   }
   return out;
+}
+
+/// The sections of the start page, empty when the server did not say them
+/// (one not yet updated).
+extension ExploreSections on ExploreResult {
+  List<ExploreCard> get featuredCards => featured ?? const [];
+  List<ExploreCard> get trustedCards => trusted ?? const [];
+  List<ExploreCard> get popularCards => popular ?? const [];
+  List<ExploreCard> get categoryCards => inCategory ?? const [];
+  List<ExploreResultCategoriesItem> get categoryList => categories ?? const [];
+  bool get moreTrusted => trustedMore ?? false;
+  bool get morePopular => popularMore ?? false;
+  bool get moreInCategory => categoryMore ?? false;
+}
+
+/// The categories a business picks in Your business in Explore (engine/
+/// links/categories.go), by key; the server's list, with its counts, is
+/// what the page shows.
+const exploreCategoryNames = {
+  'food': 'Food and drinks',
+  'building': 'Building materials',
+  'fashion': 'Fashion',
+  'phones': 'Phones and gadgets',
+  'electrical': 'Electrical and electronics',
+  'beauty': 'Beauty and personal care',
+  'farm': 'Farm produce',
+  'health': 'Health and pharmacy',
+  'home': 'Home and furniture',
+  'auto': 'Cars and spare parts',
+  'logistics': 'Delivery and logistics',
+  'wholesale': 'Wholesale and distribution',
+  'services': 'Services',
+};
+
+/// Popular's count: "Linked with 4 businesses", "Linked with 20+ businesses"
+/// (the server rounds down to tens from ten, and never sends under three).
+String? popularLine(ExploreCard c) {
+  final n = c.links ?? 0;
+  if (n < 3) return null;
+  return 'Linked with ${n >= 10 ? '$n+' : '$n'} businesses';
+}
+
+/// Recently viewed (docs/spec/mobile-app-explore-and-offline.md §2.1): the
+/// last ten businesses looked at here, newest first, kept on the phone only
+/// (in the signed-in business's store; in memory when there is none).
+class RecentlyViewed {
+  static const _key = 'explore_recent';
+  static const limit = 10;
+  static List<Map<String, dynamic>> _memory = [];
+
+  static List<ExploreCard> read() {
+    final kept = LocalStore.current?.read(_key);
+    final raw = kept is List ? kept : _memory;
+    final out = <ExploreCard>[];
+    for (final j in raw) {
+      try {
+        out.add(ExploreCard.fromJson((j as Map).cast<String, dynamic>()));
+      } on Object {
+        // One kept by an older app: left out.
+      }
+    }
+    return out;
+  }
+
+  static List<ExploreCard> add(ExploreCard c) {
+    final now = [c, ...read().where((x) => x.business != c.business)].take(limit).toList();
+    final json = [for (final x in now) x.toJson()];
+    final store = LocalStore.current;
+    if (store != null) {
+      store.write(_key, json);
+    } else {
+      _memory = json;
+    }
+    return now;
+  }
+
+  /// Forgotten (tests; a store is wiped with everything else on sign-out).
+  static void clear() => _memory = [];
 }
 
 /// explore.ts cardLine: "Cement and sand · Ikeja"; one that delivers says
@@ -143,6 +221,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
   bool _busy = false;
   String? _blindSent;
 
+  /// A category chosen from the chips: its businesses, page by page.
+  String? _category;
+  ExploreResult? _inCategory;
+  late List<ExploreCard> _recent = RecentlyViewed.read();
+
   /// Asked just now: the link the server gave back (Withdraw takes it),
   /// before the chats' list has heard.
   final _asked = <String, BusinessLink?>{};
@@ -152,6 +235,30 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   ChatsData get d => widget.chats;
   String get _typed => _q.text.trim();
+
+  /// A business looked at here (its photos swiped, or acted on): first in
+  /// Recently viewed.
+  void _seen(ExploreCard c) {
+    if (_recent.firstOrNull?.business == c.business) return;
+    _recent = RecentlyViewed.add(c);
+  }
+
+  /// A category chip: its businesses in the sections' place; again, back.
+  Future<void> _pick(String? key) async {
+    setState(() {
+      _category = key == _category ? null : key;
+      _inCategory = null;
+      _error = null;
+    });
+    final k = _category;
+    if (k == null) return;
+    try {
+      final r = await d.api.explore(section: 'category', category: k);
+      if (mounted && _category == k) setState(() => _inCategory = r);
+    } on Object catch (e) {
+      if (mounted) setState(() => _error = _say(e));
+    }
+  }
 
   @override
   void initState() {
@@ -213,6 +320,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   void _connect(ExploreCard c) => _run(() async {
+    _seen(c);
     final out = await d.auth.transport.send('POST', '/v1/links', body: {'business': c.business, 'role': 'both'});
     final link = out is Map && out['link'] is Map ? BusinessLink.fromJson((out['link'] as Map).cast<String, dynamic>()) : null;
     _asked[c.business] = link;
@@ -221,6 +329,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   });
 
   void _withdraw(ExploreCard c, BusinessLink l) => _run(() async {
+    _seen(c);
     await d.auth.transport.send('POST', '/v1/links/${Uri.encodeComponent(l.id)}/cancel', body: const {});
     _asked.remove(c.business);
     _states[c.business] = 'none';
@@ -229,6 +338,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   });
 
   void _answer(ExploreCard c, BusinessLink l, String a) => _run(() async {
+    _seen(c);
     final why = await d.answer(l, a);
     if (why != null) throw ApiError(0, {'error': why});
     _states[c.business] = a == 'accept' ? 'active' : 'none';
@@ -244,6 +354,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
   });
 
   Future<void> _message(ExploreCard c) async {
+    _seen(c);
     // The chat list may not have heard yet that they accepted.
     var conv = d.conversations.where((x) => x.business == c.business).firstOrNull;
     if (conv == null) {
@@ -256,21 +367,30 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   Future<void> _more(String section) async {
-    final s = _start;
+    final s = section == 'category' ? _inCategory : _start;
     if (s == null) return;
     final have = switch (section) {
       'near' => s.near.length,
       'delivery' => s.delivery.length,
+      'trusted' => s.trustedCards.length,
+      'popular' => s.popularCards.length,
+      'category' => s.categoryCards.length,
       _ => s.fresh.length,
     };
     setState(() => _busy = true);
     try {
-      final r = await d.api.explore(section: section, offset: '$have');
-      _start = switch (section) {
-        'near' => _with(s, near: [...s.near, ...r.near], nearMore: r.nearMore),
-        'delivery' => _with(s, delivery: [...s.delivery, ...r.delivery], deliveryMore: r.deliveryMore),
-        _ => _with(s, fresh: [...s.fresh, ...r.fresh], more: r.more),
-      };
+      final r = await d.api.explore(section: section, offset: '$have', category: section == 'category' ? _category : null);
+      if (section == 'category') {
+        _inCategory = _with(s, inCategory: [...s.categoryCards, ...r.categoryCards], categoryMore: r.moreInCategory);
+      } else {
+        _start = switch (section) {
+          'near' => _with(s, near: [...s.near, ...r.near], nearMore: r.nearMore),
+          'delivery' => _with(s, delivery: [...s.delivery, ...r.delivery], deliveryMore: r.deliveryMore),
+          'trusted' => _with(s, trusted: [...s.trustedCards, ...r.trustedCards], trustedMore: r.moreTrusted),
+          'popular' => _with(s, popular: [...s.popularCards, ...r.popularCards], popularMore: r.morePopular),
+          _ => _with(s, fresh: [...s.fresh, ...r.fresh], more: r.more),
+        };
+      }
     } on Object catch (e) {
       _error = _say(e);
     }
@@ -278,18 +398,43 @@ class _ExploreScreenState extends State<ExploreScreen> {
   }
 
   /// The start page with a section grown by Show more; the rest as it was.
-  ExploreResult _with(ExploreResult s, {List<ExploreCard>? near, bool? nearMore, List<ExploreCard>? delivery, bool? deliveryMore, List<ExploreCard>? fresh, bool? more}) =>
-      ExploreResult(
-        area: s.area,
-        blind: s.blind,
-        results: s.results,
-        near: near ?? s.near,
-        nearMore: nearMore ?? s.nearMore,
-        delivery: delivery ?? s.delivery,
-        deliveryMore: deliveryMore ?? s.deliveryMore,
-        fresh: fresh ?? s.fresh,
-        more: more ?? s.more,
-      );
+  ExploreResult _with(
+    ExploreResult s, {
+    List<ExploreCard>? near,
+    bool? nearMore,
+    List<ExploreCard>? delivery,
+    bool? deliveryMore,
+    List<ExploreCard>? fresh,
+    bool? more,
+    List<ExploreCard>? trusted,
+    bool? trustedMore,
+    List<ExploreCard>? popular,
+    bool? popularMore,
+    List<ExploreCard>? inCategory,
+    bool? categoryMore,
+  }) => ExploreResult(
+    area: s.area,
+    blind: s.blind,
+    results: s.results,
+    near: near ?? s.near,
+    nearMore: nearMore ?? s.nearMore,
+    delivery: delivery ?? s.delivery,
+    deliveryMore: deliveryMore ?? s.deliveryMore,
+    fresh: fresh ?? s.fresh,
+    more: more ?? s.more,
+    featured: s.featuredCards,
+    trusted: trusted ?? s.trustedCards,
+    trustedMore: trustedMore ?? s.moreTrusted,
+    popular: popular ?? s.popularCards,
+    popularMore: popularMore ?? s.morePopular,
+    categories: s.categoryList,
+    inCategory: inCategory ?? s.categoryCards,
+    categoryMore: categoryMore ?? s.moreInCategory,
+  );
+
+  /// The names of the categories, the server's where it said them.
+  String _categoryName(String key) =>
+      _start?.categoryList.where((c) => c.key == key).firstOrNull?.name ?? exploreCategoryNames[key] ?? key;
 
   Widget _card(ExploreCard c) {
     final state = _states[c.business] ?? c.state;
@@ -302,12 +447,147 @@ class _ExploreScreenState extends State<ExploreScreen> {
       manage: d.manage,
       busy: _busy,
       pictures: _pictures,
+      categories: [for (final k in c.categories ?? const <String>[]) _categoryName(k)],
+      onLook: () => _seen(c),
       canWithdraw: asked || pending != null,
       onConnect: () => _connect(c),
       onWithdraw: pending == null ? null : () => _withdraw(c, pending),
       onMessage: () => _message(c),
       onAnswer: incoming == null ? null : (a) => _answer(c, incoming, a),
     );
+  }
+
+  /// A section's title (with what it is about, after a dot), and Show more.
+  Widget _head(BuildContext context, String title, String? sub, bool more, String section, String moreWords) {
+    final t = TkTheme.tokens(context);
+    return Padding(
+      // `.tk-x-sec { padding: 8px 2px 12px }`
+      padding: const EdgeInsets.fromLTRB(2, 8, 2, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Expanded(
+            child: Semantics(
+              header: true,
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: title),
+                    if (sub != null) TextSpan(text: ' · $sub', style: tkText(size: 14, weight: 500, color: t.muted)),
+                  ],
+                ),
+                style: tkText(size: 18, weight: 800, letterSpacing: -0.18, color: t.text),
+              ),
+            ),
+          ),
+          if (more)
+            Semantics(
+              button: true,
+              label: 'Show more $moreWords',
+              onTap: _busy ? null : () => _more(section),
+              excludeSemantics: true,
+              child: GestureDetector(
+                onTap: _busy ? null : () => _more(section),
+                child: SizedBox(
+                  height: 36,
+                  child: Center(
+                    child: Text(
+                      'Show more',
+                      style: tkText(size: 14, weight: 600, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// The page with nothing typed and no category chosen (§2.1): Featured,
+  /// Near you, Trusted on Taskiem, Popular, Delivery, New on Taskiem and
+  /// Recently viewed, each when it has someone.
+  void _sections(BuildContext context, ExploreResult s, List<Widget> body, Widget Function(List<ExploreCard>) list, Widget Function(double) gap) {
+    final t = TkTheme.tokens(context);
+    final none = s.near.isEmpty && s.fresh.isEmpty && s.delivery.isEmpty && s.featuredCards.isEmpty && s.trustedCards.isEmpty && s.popularCards.isEmpty;
+    if (none) {
+      final ls = d.linkSettings;
+      body.add(
+        _Empty(
+          'No other business can be found yet: businesses appear here once they choose to be found. Be one of the first, so suppliers and customers find you.',
+          actions: [
+            if (d.manage && ls != null && !ls.findableNow)
+              _Pill(
+                label: 'Let other businesses find me',
+                onTap: _busy
+                    ? null
+                    : () => _run(() async {
+                        await d.auth.transport.send('PUT', '/v1/link-settings', body: {'findable': true});
+                        await d.load();
+                        return 'Other businesses can find you';
+                      }),
+              ),
+            if (Openers.businessProfile != null) TkLink(label: 'Your business in Explore', onTap: () => Openers.businessProfile!(context)),
+          ],
+        ),
+      );
+    }
+    if (s.featuredCards.isNotEmpty) {
+      body.add(_head(context, 'Featured', null, false, 'featured', ''));
+      body.add(
+        Semantics(
+          container: true,
+          label: 'Featured businesses',
+          explicitChildNodes: true,
+          child: LayoutBuilder(
+            builder: (context, box) {
+              final w = s.featuredCards.length == 1 ? box.maxWidth : (box.maxWidth * 0.86).clamp(0.0, 360.0);
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                clipBehavior: Clip.none,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var i = 0; i < s.featuredCards.length; i++) ...[if (i > 0) const SizedBox(width: 12), SizedBox(width: w, child: _card(s.featuredCards[i]))],
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      body.add(gap(24));
+    }
+    final sections = <(String title, String? sub, List<ExploreCard> cards, bool more, String section, String moreWords)>[
+      if (s.near.isNotEmpty) ('Near you', s.area, s.near, s.nearMore, 'near', 'businesses near you'),
+      if (s.trustedCards.isNotEmpty) ('Trusted on Taskiem', null, s.trustedCards, s.moreTrusted, 'trusted', 'trusted businesses'),
+      if (s.popularCards.isNotEmpty) ('Popular', null, s.popularCards, s.morePopular, 'popular', 'popular businesses'),
+      if (s.delivery.isNotEmpty) ('Delivery', null, s.delivery, s.deliveryMore, 'delivery', 'delivery businesses'),
+      if (s.fresh.isNotEmpty) ('New on Taskiem', null, s.fresh, s.more, 'new', 'new businesses'),
+      if (_recent.isNotEmpty) ('Recently viewed', null, _recent, false, 'recent', ''),
+    ];
+    if (!none && (s.area ?? '').isEmpty && s.near.isEmpty && Openers.businessProfile != null) {
+      body.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text('Add your area in ', style: tkText(size: 13.5, color: t.muted)),
+              TkLink(label: 'Your business in Explore', onTap: () => Openers.businessProfile!(context)),
+              Text(' to see the businesses near you.', style: tkText(size: 13.5, color: t.muted)),
+            ],
+          ),
+        ),
+      );
+    }
+    for (var i = 0; i < sections.length; i++) {
+      final (title, sub, cards, more, section, moreWords) = sections[i];
+      if (i > 0 || none) body.add(gap(24));
+      body.add(_head(context, title, sub, more, section, moreWords));
+      body.add(list(cards));
+    }
   }
 
   /// The page, drawn again whenever the chats change (a request to link
@@ -376,98 +656,26 @@ class _ExploreScreenState extends State<ExploreScreen> {
       }
     } else if (_start == null) {
       body.add(Semantics(label: 'Loading businesses…', child: const SizedBox(height: 120)));
-    } else if (_start!.near.isEmpty && _start!.fresh.isEmpty && _start!.delivery.isEmpty) {
-      final ls = d.linkSettings;
-      body.add(
-        _Empty(
-          'No other business can be found yet: businesses appear here once they choose to be found. Be one of the first, so suppliers and customers find you.',
-          actions: [
-            if (d.manage && ls != null && !ls.findableNow)
-              _Pill(
-                label: 'Let other businesses find me',
-                onTap: _busy
-                    ? null
-                    : () => _run(() async {
-                        await d.auth.transport.send('PUT', '/v1/link-settings', body: {'findable': true});
-                        await d.load();
-                        return 'Other businesses can find you';
-                      }),
-              ),
-            if (Openers.businessProfile != null) TkLink(label: 'Your business in Explore', onTap: () => Openers.businessProfile!(context)),
-          ],
-        ),
-      );
     } else {
       final s = _start!;
-      final sections = <(String title, String? sub, List<ExploreCard> cards, bool more, String section, String moreWords)>[
-        if (s.near.isNotEmpty) ('Near you', s.area, s.near, s.nearMore, 'near', 'businesses near you'),
-        if (s.delivery.isNotEmpty) ('Delivery', null, s.delivery, s.deliveryMore, 'delivery', 'delivery businesses'),
-        if (s.fresh.isNotEmpty) ('New on Taskiem', null, s.fresh, s.more, 'new', 'new businesses'),
-      ];
-      if ((s.area ?? '').isEmpty && s.near.isEmpty && Openers.businessProfile != null) {
-        body.add(
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text('Add your area in ', style: tkText(size: 13.5, color: TkTheme.tokens(context).muted)),
-                TkLink(label: 'Your business in Explore', onTap: () => Openers.businessProfile!(context)),
-                Text(' to see the businesses near you.', style: tkText(size: 13.5, color: TkTheme.tokens(context).muted)),
-              ],
-            ),
-          ),
-        );
+      // The categories, always: the page is never blank.
+      if (s.categoryList.isNotEmpty) {
+        body.add(_Chips(categories: s.categoryList, chosen: _category, onPick: _pick));
+        body.add(gap(16));
       }
-      for (var i = 0; i < sections.length; i++) {
-        final (title, sub, cards, more, section, moreWords) = sections[i];
-        if (i > 0) body.add(gap(24));
-        body.add(
-          Padding(
-            // `.tk-x-sec { padding: 8px 2px 12px }`
-            padding: const EdgeInsets.fromLTRB(2, 8, 2, 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Expanded(
-                  child: Semantics(
-                    header: true,
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(text: title),
-                          if (sub != null) TextSpan(text: ' · $sub', style: tkText(size: 14, weight: 500, color: t.muted)),
-                        ],
-                      ),
-                      style: tkText(size: 18, weight: 800, letterSpacing: -0.18, color: t.text),
-                    ),
-                  ),
-                ),
-                if (more)
-                  Semantics(
-                    button: true,
-                    label: 'Show more $moreWords',
-                    onTap: _busy ? null : () => _more(section),
-                    excludeSemantics: true,
-                    child: GestureDetector(
-                      onTap: _busy ? null : () => _more(section),
-                      child: SizedBox(
-                        height: 36,
-                        child: Center(
-                          child: Text(
-                            'Show more',
-                            style: tkText(size: 14, weight: 600, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-        body.add(list(cards));
+      if (_category != null) {
+        final r = _inCategory;
+        final name = _categoryName(_category!);
+        body.add(_head(context, name, null, r?.moreInCategory ?? false, 'category', 'businesses in $name'));
+        if (r == null) {
+          body.add(Semantics(label: 'Loading $name…', child: const SizedBox(height: 120)));
+        } else if (r.categoryCards.isEmpty) {
+          body.add(_Empty('No business in $name can be found yet. Businesses choose their categories in Your business in Explore.'));
+        } else {
+          body.add(Semantics(container: true, label: name, explicitChildNodes: true, child: list(r.categoryCards)));
+        }
+      } else {
+        _sections(context, s, body, list, gap);
       }
     }
     return ColoredBox(
@@ -529,6 +737,80 @@ class _ExploreScreenState extends State<ExploreScreen> {
 }
 
 /// `.tk-x-search label`: the panel pill, 50 px, the glass, the words.
+/// The categories in a row that scrolls: each with how many businesses are
+/// in it; the one chosen is filled, and tapped again goes back.
+class _Chips extends StatelessWidget {
+  const _Chips({required this.categories, required this.chosen, required this.onPick});
+  final List<ExploreResultCategoriesItem> categories;
+  final String? chosen;
+  final ValueChanged<String?> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    // The ones with businesses first, in the list's order.
+    final shown = [...categories.where((c) => c.n > 0), ...categories.where((c) => c.n == 0)];
+    return Semantics(
+      container: true,
+      label: 'Categories',
+      explicitChildNodes: true,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        child: Row(
+          children: [
+            for (var i = 0; i < shown.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              Builder(
+                builder: (context) {
+                  final c = shown[i];
+                  final on = c.key == chosen;
+                  return Semantics(
+                    button: true,
+                    selected: on,
+                    label: '${c.name}, ${c.n} ${c.n == 1 ? 'business' : 'businesses'}',
+                    excludeSemantics: true,
+                    onTap: () => onPick(c.key),
+                    child: TkPress(
+                      onTap: () => onPick(c.key),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        height: 38,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: on ? (dark ? t.brandDark : t.text) : t.panel,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: on ? const Color(0x00000000) : t.border),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(text: c.name),
+                              if (c.n > 0)
+                                TextSpan(
+                                  text: '  ${c.n}',
+                                  style: tkText(size: 12.5, weight: 700, color: on ? (dark ? t.brandDarkText : t.bg) : t.muted),
+                                ),
+                            ],
+                          ),
+                          maxLines: 1,
+                          style: tkText(size: 13.5, weight: 600, color: on ? (dark ? t.brandDarkText : t.bg) : t.text),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _SearchBox extends StatelessWidget {
   const _SearchBox({required this.controller});
   final TextEditingController controller;
@@ -652,6 +934,8 @@ class _Card extends StatelessWidget {
     required this.canWithdraw,
     required this.onConnect,
     required this.onMessage,
+    this.categories = const [],
+    this.onLook,
     this.onWithdraw,
     this.onAnswer,
   });
@@ -660,6 +944,12 @@ class _Card extends StatelessWidget {
   final bool manage;
   final bool busy;
   final _Pictures pictures;
+
+  /// Its categories' names, under its line.
+  final List<String> categories;
+
+  /// Its photos swiped: it was looked at (Recently viewed).
+  final VoidCallback? onLook;
   final bool canWithdraw;
   final VoidCallback onConnect;
   final VoidCallback onMessage;
@@ -671,6 +961,7 @@ class _Card extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final c = card;
     final line = exploreLine(c);
+    final popular = popularLine(c);
     final pill = CardPillWords;
     Widget? act;
     switch (offer) {
@@ -763,6 +1054,10 @@ class _Card extends StatelessWidget {
                       Text(c.name, style: tkText(size: 16, weight: 700, color: t.text)),
                       if (line.isNotEmpty)
                         Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false, style: tkText(size: 13, color: t.muted)),
+                      if (categories.isNotEmpty)
+                        Text(categories.join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false, style: tkText(size: 12.5, weight: 600, color: t.muted)),
+                      if (popular != null)
+                        Text(popular, maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false, style: tkText(size: 12.5, weight: 600, color: t.text)),
                     ],
                   ),
                 ),
@@ -770,7 +1065,7 @@ class _Card extends StatelessWidget {
               ],
             ),
           ),
-          if (c.photos > 0) _Carousel(card: c, pictures: pictures),
+          if (c.photos > 0) _Carousel(card: c, pictures: pictures, onLook: onLook),
           if ((c.about ?? '').isNotEmpty)
             Padding(
               // `.explore-about { margin: 6px 4px 4px; line-height: 1.5 }`, four lines at most.
@@ -806,9 +1101,10 @@ Widget CardPillWords(String word, {required bool lime, required TkTokens t}) => 
 /// Explore.tsx Carousel: the photos in a row that swipes, 210 px tall,
 /// each with its words on it, and dots under them.
 class _Carousel extends StatefulWidget {
-  const _Carousel({required this.card, required this.pictures});
+  const _Carousel({required this.card, required this.pictures, this.onLook});
   final ExploreCard card;
   final _Pictures pictures;
+  final VoidCallback? onLook;
 
   @override
   State<_Carousel> createState() => _CarouselState();
@@ -853,7 +1149,10 @@ class _CarouselState extends State<_Carousel> {
               child: PageView.builder(
                 controller: _pages,
                 itemCount: count,
-                onPageChanged: (n) => setState(() => _at = n),
+                onPageChanged: (n) {
+                  setState(() => _at = n);
+                  widget.onLook?.call();
+                },
                 itemBuilder: (context, n) {
                   final path = _photo(c, n);
                   final caption = n < c.captions.length ? c.captions[n] : '';
