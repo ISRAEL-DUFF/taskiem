@@ -389,7 +389,14 @@ events:
     fields: { payout_id: "=body.eventData.reference", reason: "=body.eventData.?transactionDescription" }
   payment.received:
     trigger: event
-    when: "=body.eventType == 'SUCCESSFUL_TRANSACTION' && !(has(body.eventData.product) && body.eventData.product.type == 'RESERVED_ACCOUNT')"
+    # Only a payment Monnify says is paid in full (PAID, OVERPAID), as
+    # get_payment reads it: SUCCESSFUL_TRANSACTION also comes for a part
+    # payment (PARTIALLY_PAID), which is still pending and is left to the
+    # lookup. A notification without paymentStatus is taken as before.
+    # amountPaid is what the payer actually sent.
+    when: >-
+      =body.eventType == 'SUCCESSFUL_TRANSACTION' && !(has(body.eventData.product) && body.eventData.product.type == 'RESERVED_ACCOUNT')
+      && (!has(body.eventData.paymentStatus) || body.eventData.paymentStatus == null || body.eventData.paymentStatus in ['PAID', 'OVERPAID'])
     fields:
       payment_id: "=body.eventData.paymentReference"
       amount_kobo: "=int(math.round(double(body.eventData.amountPaid) * 100.0))"
