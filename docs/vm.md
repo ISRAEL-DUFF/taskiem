@@ -39,6 +39,15 @@ It ends by writing a **recovery sheet** to `/root/taskiem-recovery-<date>.txt`: 
 
 Re-run `sudo taskiem-vps setup` any time to change an answer; it keeps every secret and skips what is done.
 
+**What the installer trusts.** It runs as root, so it checks what it installs:
+
+- Docker comes from Docker's own apt repository, as Docker's documentation installs it: the repository key must have Docker's fingerprint, and apt checks every package against it. (Not the `get.docker.com` script.)
+- cosign is checked against its published checksum.
+- <a id="the-installers-pins"></a>The deployment kit is the tarball of the release named in `install.sh` (`KIT_REF`, a version tag) and must match the checksum beside it (`KIT_SHA256`); a kit that does not match is not unpacked. Cutting a release fills both in: `KIT_REF=v1.2.0` and `KIT_SHA256=$(curl -fsSL https://codeload.github.com/ISRAEL-DUFF/taskiem/tar.gz/v1.2.0 | sha256sum | cut -d' ' -f1)`. **Until the first release is pinned they are empty, and the installer takes the kit from the main branch unverified, with a warning.** To install another ref, give `TASKIEM_VPS_REF` and `TASKIEM_VPS_KIT_SHA256` together.
+- `taskiem-vps setup` then replaces the kit with the one from the commit of the signed release it installs.
+
+The three timers' units have a time limit (update 45 minutes, backup 6 hours, check 4 minutes), so a hung Docker call cannot hold the update lock for ever.
+
 **Unattended install.** Every answer can come from the environment instead (`sudo -E`): `TASKIEM_VPS_DOMAIN`, `_OWNER_EMAIL`, `_ORG`, `_DATABASE_URL`, `_SMTP_URL`, `_MAIL_FROM`, `_CHANNEL`, `_WINDOW` (`any` or `01:00-05:00`), `_ALERT_EMAIL`, `_ALERT_WEBHOOK`, `_BACKUP_REPO`, `_BACKUP_KEY_ID`, `_BACKUP_SECRET`, `_TELEGRAM_BOT_TOKEN`, `_TELEGRAM_BOT_USERNAME`, `_ISWALLET_URL`, `_PAYROLLA_URL`, `_PUBLIC`, `_PREVIEW_DOMAIN`, `_MAIL_DOMAIN`, with `TASKIEM_VPS_NONINTERACTIVE=1`.
 
 With no SMTP there is no email to carry the owner's set-your-password link. At a terminal the first password is shown once; on an unattended install it is written to `/root/taskiem-owner-password-<date>.txt`, readable by root only, and only the file's path is printed, so the password is not in cloud-init or CI logs. Give it to the owner, then delete the file (`shred -u`); the health checks remind you until you do.

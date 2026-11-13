@@ -416,3 +416,79 @@ hand_over_password owner@acme.test s3cret-first-password`, script)
 		t.Error("the first password is passed on a command line")
 	}
 }
+
+// TestInstallerChecksWhatItInstalls: the installer runs as root. It takes
+// Docker from Docker's signed apt repository (not the get.docker.com
+// script), refuses a kit that does not match its checksum, and the timers'
+// oneshot units cannot hang for ever holding the update lock.
+func TestInstallerChecksWhatItInstalls(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash is not installed")
+	}
+	src, err := os.ReadFile("vm/install.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(src), "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "#") && strings.Contains(line, "get.docker.com") {
+			t.Errorf("the installer pipes the Docker convenience script into a shell: %s", line)
+		}
+	}
+	d := t.TempDir()
+	kit := filepath.Join(d, "taskiem-main", "deploy", "vm")
+	if err := os.MkdirAll(kit, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kit, "taskiem-vps"), []byte("# the kit\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tgz := filepath.Join(d, "kit.tgz")
+	if out, err := exec.Command("tar", "-czf", tgz, "-C", d, "taskiem-main").CombinedOutput(); err != nil {
+		t.Fatalf("tar: %v: %s", err, out)
+	}
+	sum, err := exec.Command("sha256sum", tgz).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	good := strings.Fields(string(sum))[0]
+	if err := os.MkdirAll(filepath.Join(d, "stubs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// curl -fsSL -o FILE URL: serves the tarball.
+	if err := os.WriteFile(filepath.Join(d, "stubs", "curl"), []byte("#!/usr/bin/env bash\nwhile [ $# -gt 0 ]; do [ \"$1\" = -o ] && { cp \"$KIT_TGZ\" \"$2\"; exit 0; }; shift; done\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script, _ := filepath.Abs("vm/install.sh")
+	fetch := func(sum string) (string, string, error) {
+		dest := t.TempDir()
+		cmd := exec.Command("bash", "-c", `set -Eeuo pipefail
+REPO_SLUG=x/y
+source <(sed -n '/^log() /p; /^die() /p; /^fetch_kit() /,/^}/p' "$0")
+fetch_kit main "$1" "$2"`, script, sum, dest)
+		cmd.Env = append(os.Environ(), "PATH="+filepath.Join(d, "stubs")+":"+os.Getenv("PATH"), "KIT_TGZ="+tgz)
+		out, err := cmd.CombinedOutput()
+		return dest, string(out), err
+	}
+	if dest, out, err := fetch(good); err != nil {
+		t.Errorf("the right checksum: %v: %s", err, out)
+	} else if _, err := os.Stat(filepath.Join(dest, "taskiem-vps")); err != nil {
+		t.Errorf("the kit was not unpacked: %v", err)
+	}
+	dest, out, err := fetch(strings.Repeat("0", 64))
+	if err == nil || !strings.Contains(out, "does not match its checksum") {
+		t.Errorf("a wrong checksum: %v: %s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "taskiem-vps")); err == nil {
+		t.Error("a kit with the wrong checksum was unpacked")
+	}
+	units, _ := filepath.Glob("vm/systemd/*.service")
+	if len(units) == 0 {
+		t.Fatal("no units")
+	}
+	for _, u := range units {
+		b, _ := os.ReadFile(u)
+		if strings.Contains(string(b), "Type=oneshot") && !strings.Contains(string(b), "\nTimeoutStartSec=") {
+			t.Errorf("%s: a oneshot with no TimeoutStartSec can hang for ever", u)
+		}
+	}
+}

@@ -632,8 +632,13 @@ jobs:
       - name: Installed, healthy, owner created
         run: |
           curl -fsk https://localhost/readyz
-          PW=$(sed -n 's/.*first password[^:]*: //p' install.log | tail -n1)
+          # No SMTP and nobody at a terminal: the owner's first password is in
+          # a root-only file, and never in the install's output.
+          PW=$(sudo sh -c "sed -n 's/^First password: //p' /root/taskiem-owner-password-*.txt" | tail -n1)
           test -n "$PW"
+          if grep -qF "$PW" install.log; then echo "the owner's first password is in the install log"; exit 1; fi
+          test "$(sudo sh -c 'stat -c %a /root/taskiem-owner-password-*.txt')" = 600
+          sudo sh -c 'shred -u /root/taskiem-owner-password-*.txt'
           sudo sh -c 'grep -q "unseal key" /root/taskiem-recovery-*.txt && shred -u /root/taskiem-recovery-*.txt'
           sudo-vps taskiem-vps backup
           sudo-vps taskiem-vps check

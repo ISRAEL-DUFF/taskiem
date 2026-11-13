@@ -7,3 +7,7 @@ Requires=docker.service
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/taskiem-vps update --auto
+# A oneshot has no start time limit of its own: a docker call that hangs
+# would hold the update lock for ever. Longer than a slow run needs
+# (pulling the image and two waits for health); systemd then stops it and the lock is released.
+TimeoutStartSec=45min
