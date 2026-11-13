@@ -8,10 +8,14 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/runtime"
 )
 
 // StepRun is how one connector step ended when the engine ran it.
 type StepRun struct {
+	// Ref is the run, for reading its history.
+	Ref runtime.RunRef
 	// Status is the run's: completed, failed or needs_reconciliation.
 	Status string
 	// Output is the step's recorded output, when it completed; Reconciled
@@ -66,7 +70,7 @@ func (e *Env) RunConnectorStep(t testing.TB, c *connector.Connector, creds map[s
 		return false
 	}
 	WaitFor(t, 30*time.Second, "the step to settle", settled)
-	out := StepRun{Status: e.Status(t, ref)}
+	out := StepRun{Ref: ref, Status: e.Status(t, ref)}
 	h, err := e.Store.RunHistory(ctx, ref)
 	if err != nil {
 		t.Fatal(err)
@@ -92,5 +96,61 @@ func (e *Env) RunConnectorStep(t testing.TB, c *connector.Connector, creds map[s
 			}
 		}
 	}
+	return out
+}
+
+// StepOutputs returns the step's output as it is stored (personal values
+// sealed) and as a reader allowed to see it gets it (opened).
+func (e *Env) StepOutputs(t testing.TB, run StepRun) (stored, opened any) {
+	t.Helper()
+	ctx := context.Background()
+	read := func(h []history.Event, err error) any {
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, ev := range h {
+			if ev.StepID == "step" && ev.Type == history.StepCompleted {
+				var p history.CompletedPayload
+				if err := json.Unmarshal(ev.Payload, &p); err != nil {
+					t.Fatal(err)
+				}
+				return p.Output
+			}
+		}
+		t.Fatalf("the step did not complete: %s, %+v", run.Status, run.Failures)
+		return nil
+	}
+	return read(e.Store.RunHistory(ctx, run.Ref)), read(e.Store.OpenedHistory(ctx, run.Ref))
+}
+
+// Readable lists the places under v (a stored value) that hold a value
+// anyone can read without a key: every string, number and boolean that is
+// not inside a sealed envelope. Empty for a value that is sealed through.
+func Readable(v any) []string {
+	var out []string
+	var walk func(v any, at string)
+	walk = func(v any, at string) {
+		switch t := v.(type) {
+		case nil:
+		case map[string]any:
+			if pii.IsEnvelope(t) {
+				return
+			}
+			for k, x := range t {
+				walk(x, at+"."+k)
+			}
+		case []any:
+			for _, x := range t {
+				walk(x, at+".*")
+			}
+		case string:
+			if t != "" {
+				out = append(out, at)
+			}
+		default:
+			out = append(out, at)
+		}
+	}
+	walk(v, "")
 	return out
 }
