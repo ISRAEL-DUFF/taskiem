@@ -23,7 +23,9 @@ var RetryWindow = 30 * time.Second
 // Transient reports whether err is the database going away rather than the
 // statement failing: a dropped or refused connection, the server shutting
 // down or starting up, or a connection that landed on a read-only server
-// (a standby, or a demoted primary) during a failover.
+// (a standby, or a demoted primary) during a failover. A transaction the
+// server ended to break a deadlock counts too: it rolled back, and running
+// it again is what the server asks for.
 func Transient(err error) bool {
 	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
@@ -33,7 +35,8 @@ func Transient(err error) bool {
 		switch pe.Code {
 		case "25006", // read_only_sql_transaction: connected to a standby
 			"57P01", "57P02", "57P03", // admin_shutdown, crash_shutdown, cannot_connect_now
-			"40001": // serialisation failure: also a standby's recovery conflict
+			"40001", // serialisation failure: also a standby's recovery conflict
+			"40P01": // deadlock_detected: the server ended this transaction to let another go on
 			return true
 		}
 		return len(pe.Code) == 5 && pe.Code[:2] == "08" // connection_exception
@@ -49,11 +52,11 @@ func Transient(err error) bool {
 
 // serverMoved reports whether err means every pooled connection may point
 // at the wrong server: the connection is gone, or the server is now a
-// standby. A serialisation failure alone does not.
+// standby. A serialisation failure or a deadlock alone does not.
 func serverMoved(err error) bool {
 	var pe *pgconn.PgError
 	if errors.As(err, &pe) {
-		return pe.Code != "40001"
+		return pe.Code != "40001" && pe.Code != "40P01"
 	}
 	return true
 }

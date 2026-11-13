@@ -1126,7 +1126,9 @@ func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event,
 		return nil, false, err
 	}
 	var woke []uuid.UUID
-	err = db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+	// Run again when the database ended it to break a deadlock (the run
+	// it wakes is ending): it rolled back, and the signal is not lost.
+	err = db.InTenantTxRetry(ctx, s.Pool, []uuid.UUID{tenant}, false, func(tx pgx.Tx) error {
 		woke, fresh = woke[:0], true
 		if dedupKey != "" {
 			// The receipt marks the delivery as seen; no run is started (uuid.Nil).
@@ -1246,7 +1248,9 @@ func (s *Store) DecideApproval(ctx context.Context, ref RunRef, step, decision, 
 // Without, it ends now: steps a worker is executing still record their
 // results, and completed steps stay as they are.
 func (s *Store) CancelRun(ctx context.Context, ref RunRef, by string, reverse bool) error {
-	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{ref.TenantID}, func(tx pgx.Tx) error {
+	// Run again when the database ended it to break a deadlock (a child
+	// run reporting to this one as it is cancelled): it rolled back.
+	return db.InTenantTxRetry(ctx, s.Pool, []uuid.UUID{ref.TenantID}, false, func(tx pgx.Tx) error {
 		return s.cancelTx(ctx, tx, ref, by, reverse, history.OriginAPI)
 	})
 }
