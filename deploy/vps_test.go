@@ -16,6 +16,8 @@ import (
 type vps struct {
 	t                         *testing.T
 	dir, kit, state, bin, log string
+	// env is added to taskiem-vps's environment.
+	env []string
 }
 
 func newVPS(t *testing.T) *vps {
@@ -58,13 +60,27 @@ case "$*" in
   *" up "*|*" up") echo "up $img $(head -1 "$TASKIEM_VPS_KIT/docker-compose.yml")" >>"$CALLS"; [ "$img" != taskiem:broken ] ;;
   *"ps -q"*) echo cid ;;
   *"config --services"*) echo taskiem ;;
-  "image inspect"*) case "${@: -1}" in taskiem:good) echo revA ;; taskiem:broken) echo revB ;; taskiem:good2) echo revC ;; esac ;;
+  "image inspect"*) case "${@: -1}" in taskiem:good) echo revA ;; taskiem:broken) echo revB ;; taskiem:good2|taskiem:other-channel|taskiem:unstated) echo revC ;; taskiem:old) echo revA ;; esac ;;
   inspect*) [ "$img" = taskiem:broken ] && echo unhealthy || echo healthy ;;
 esac
 `)
 	// curl: the kit tarballs codeload would serve; everything else answers.
 	stub("curl", `for a in "$@"; do case $a in https://codeload.github.com/*) echo "kit ${a##*/}" >>"$CALLS"; cat "$KITS/${a##*/}.tgz"; exit 0 ;; esac; done
 exit 0
+`)
+	// cosign: CI's signed statement of the channel a release was promoted
+	// to and its release number, as verify-attestation prints it (a DSSE
+	// envelope whose payload is the statement, base64).
+	stub("cosign", `[ "$1" = verify-attestation ] || exit 0
+echo "cosign $*" >>"$CALLS"
+for a in "$@"; do case $a in
+  taskiem:good) st='{"channel":"staging","release":10}' ;;
+  taskiem:good2) st='{"channel":"staging","release":12}' ;;
+  taskiem:old) st='{"channel":"staging","release":5}' ;;
+  taskiem:other-channel) st='{"channel":"production","release":99}' ;;
+esac; done
+[ -n "${st:-}" ] || { echo "Error: no matching attestations" >&2; exit 1; }
+printf '{"payloadType":"application/vnd.in-toto+json","payload":"%s"}\n' "$(printf '{"predicate":%s}' "$st" | base64 -w0)"
 `)
 	stub("id", `[ "${1:-}" = -u ] && { echo 0; exit 0; }; exec /usr/bin/id "$@"
 `)
@@ -108,6 +124,7 @@ func (v *vps) run(image string, args ...string) (string, error) {
 		"TASKIEM_VPS_KIT="+v.kit, "TASKIEM_VPS_ETC="+filepath.Join(v.dir, "etc"), "TASKIEM_VPS_STATE="+v.state,
 		"TASKIEM_VPS_BIN="+v.bin, "TASKIEM_VPS_NO_TIMERS=1", "TASKIEM_VPS_KIT_SOURCE=",
 		"TASKIEM_VPS_IMAGE_OVERRIDE="+image, "CALLS="+v.log, "KITS="+filepath.Join(v.dir, "kits"))
+	cmd.Env = append(cmd.Env, v.env...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -204,5 +221,65 @@ func TestVPSRollbackRestoresTheKit(t *testing.T) {
 	}
 	if ups := v.ups(); ups[len(ups)-1] != "taskiem:good # kit revA" {
 		t.Errorf("rollback started %q, want taskiem:good with revA's kit", ups[len(ups)-1])
+	}
+}
+
+// TestVPSTakesOnlyNewerReleasesOfItsChannel: a signature alone says CI
+// built an image, not that it was released to this server's channel or
+// that it is newer than what runs. Whoever can move the channel tag in the
+// registry could otherwise make a production server install any main build
+// or an old release. The server takes a release only with CI's signed
+// statement naming its channel and a release number above the running
+// one; a person may go back with --allow-downgrade, which is logged.
+func TestVPSTakesOnlyNewerReleasesOfItsChannel(t *testing.T) {
+	v := newVPS(t)
+	v.env = []string{"TASKIEM_VPS_TEST_RELEASES=1"}
+	v.write(filepath.Join(v.dir, "etc", "vps.conf"), "CHANNEL='staging'\n")
+	current := func() string { return v.read(filepath.Join(v.state, "current")) }
+
+	if out, err := v.run("taskiem:good2", "update", "--now"); err != nil || current() != "taskiem:good2" {
+		t.Fatalf("a newer release of the channel: %v: %s", err, out)
+	}
+	if got := v.read(filepath.Join(v.state, "current-release")); got != "12" {
+		t.Errorf("recorded release = %q, want 12", got)
+	}
+	for image, want := range map[string]string{
+		"taskiem:old":           "not newer",
+		"taskiem:other-channel": "staging channel",
+		"taskiem:unstated":      "staging channel",
+	} {
+		out, err := v.run(image, "update", "--now")
+		if err == nil || current() != "taskiem:good2" || !strings.Contains(out, want) {
+			t.Errorf("%s: err %v, now running %s, said: %s", image, err, current(), out)
+		}
+	}
+	// The timer does not try a refused release again on every tick.
+	if out, err := v.run("taskiem:old", "update", "--auto"); err == nil {
+		t.Errorf("the timer took an older release: %s", out)
+	}
+	before, _ := os.ReadFile(v.log)
+	if out, err := v.run("taskiem:old", "update", "--auto"); err != nil {
+		t.Errorf("a refused release on the timer: %v: %s", err, out)
+	}
+	if after, _ := os.ReadFile(v.log); len(after) != len(before) {
+		t.Errorf("the refused release was checked again: %s", after[len(before):])
+	}
+	// The timer may not downgrade; a person may, and it is logged.
+	if out, err := v.run("taskiem:old", "update", "--auto", "--allow-downgrade"); err == nil {
+		t.Errorf("--auto --allow-downgrade was accepted: %s", out)
+	}
+	out, err := v.run("taskiem:old", "update", "--now", "--allow-downgrade")
+	if err != nil || current() != "taskiem:old" || !strings.Contains(out, "allow-downgrade") {
+		t.Fatalf("--allow-downgrade: %v, now running %s: %s", err, current(), out)
+	}
+	if got := v.read(filepath.Join(v.state, "current-release")); got != "5" {
+		t.Errorf("recorded release after the downgrade = %q, want 5", got)
+	}
+	// Rolling back restores the release number with the release.
+	if out, err := v.run("", "rollback"); err != nil || current() != "taskiem:good2" {
+		t.Fatalf("rollback: %v: %s", err, out)
+	}
+	if got := v.read(filepath.Join(v.state, "current-release")); got != "12" {
+		t.Errorf("recorded release after rollback = %q, want 12", got)
 	}
 }
