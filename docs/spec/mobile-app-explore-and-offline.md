@@ -15,7 +15,7 @@ Settled by the founder, 13 November 2026: every suggestion in §4 is taken, and 
   - categories chosen in Your business in Explore (the app);
   - Recently viewed, kept in the phone's store: a business is counted as looked at when its photos are swiped or it is acted on;
   - the operators' console has *Featured in Explore* (add a pick until a date, end one).
-- Still to do on the web (settled: later): the new sections in Explore, and choosing categories in Your business in Explore. Saving the profile on the web keeps the categories.
+- X2 to X4 on the web: the same sections and chips in Explore, and *What you sell* in Your business in Explore. Recently viewed is kept in the browser for the business signed in, and forgotten on signing out.
 
 ## 1. Where things stand
 

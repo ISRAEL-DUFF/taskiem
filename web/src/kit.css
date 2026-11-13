@@ -555,6 +555,22 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
 :root[data-theme="dark"] .tk-x .explore-more { color: var(--brand-dark); }
 .tk-x section + section { margin-top: 24px; }
 .tk-x .explore-list { gap: 16px; }
+/* Explore's start page (docs/spec/mobile-app-explore-and-offline.md §2.1):
+   the categories as chips that scroll across, the Featured row that swipes,
+   a card's categories and Popular's count. */
+.tk-x-chips { display: flex; gap: 8px; overflow-x: auto; margin: 0 -16px 16px; padding: 2px 16px 4px; scrollbar-width: none; }
+.tk-x-chips::-webkit-scrollbar { display: none; }
+.tk-x .tk-x-chip, .tk-x .tk-x-chip:hover:not(:disabled) { flex: none; display: inline-flex; align-items: center; gap: 8px; min-height: 38px; margin: 0; padding: 0 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); box-shadow: none; color: var(--text); font-size: 13.5px; font-weight: 600; white-space: nowrap; }
+.tk-x .tk-x-chip[aria-pressed="true"] { background: var(--text); border-color: transparent; color: var(--bg); }
+:root[data-theme="dark"] .tk-x .tk-x-chip[aria-pressed="true"] { background: var(--brand-dark); color: var(--brand); }
+.tk-x-chip-n { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.tk-x-chip[aria-pressed="true"] .tk-x-chip-n { color: inherit; opacity: 0.75; }
+.tk-x .explore-list.tk-x-featured { display: flex; flex-direction: row; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px; padding: 0 16px 8px; scrollbar-width: none; }
+.tk-x-featured::-webkit-scrollbar { display: none; }
+.tk-x-featured > .tk-x-card { flex: none; width: min(86%, 360px); scroll-snap-align: start; }
+.tk-x-featured > .tk-x-card:only-child { width: 100%; }
+.tk-x-cats { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-x-links { display: block; font-size: 12.5px; font-weight: 600; color: var(--text); }
 
 .tk-x-card.explore-card { margin: 0; padding: 12px; border: 0; border-radius: 24px; overflow: visible; background: var(--panel); box-shadow: 0 1px 2px rgba(14, 26, 20, 0.06), 0 12px 28px -18px rgba(14, 26, 20, 0.25); }
 :root[data-theme="dark"] .tk-x-card.explore-card { box-shadow: 0 0 0 1px var(--border); }
@@ -603,6 +619,9 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
   .tk-x-sec h3 span { font-size: 15px; }
   .tk-x section + section { margin-top: 32px; }
   .tk-x .explore-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 20px; }
+  .tk-x .explore-list.tk-x-featured { display: flex; margin: 0 -24px; padding: 0 24px 8px; gap: 20px; }
+  .tk-x-featured > .tk-x-card { width: 360px; }
+  .tk-x-chips { margin: 0 -24px 20px; padding: 2px 24px 4px; }
   .tk-x-card .explore-head .chat-avatar, .tk-x-card .tk-x-logo { width: 46px; height: 46px; font-size: 15px; }
   .tk-x-card .carousel-slide { height: 200px; }
   .tk-x-card .carousel-track { border-radius: 16px; }
@@ -677,6 +696,15 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-p-field-top { display: flex; justify-content: space-between; gap: 8px; }
 /* A yes-or-no field: the box beside its words. */
 .tk-p-check { flex-direction: row; align-items: center; gap: 10px; color: var(--text); }
+/* What you sell: the categories as buttons that stay pressed; two at most. */
+.tk-p-cats { margin: 0; padding: 0; border: 0; min-width: 0; }
+.tk-p-cats legend { padding: 0; margin-bottom: 2px; color: var(--text); }
+.tk-p-cats .hint { font-weight: 400; }
+.tk-p-cats-ask { font-weight: 500; color: var(--text); }
+.tk-p-cat-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.tk-p-cat, .tk-p-cat:hover:not(:disabled) { margin: 0; min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); box-shadow: none; color: var(--text); font-size: 13.5px; font-weight: 600; }
+.tk-p-cat[aria-pressed="true"], .tk-p-cat[aria-pressed="true"]:hover:not(:disabled) { background: var(--brand); border-color: transparent; color: var(--brand-dark); }
+.tk-p-cat:disabled:not([aria-pressed="true"]) { opacity: 0.45; }
 /* The box keeps its own size: the field's inputs are full width otherwise (below). */
 .tk-p .tk-p-field.tk-p-check input { width: 20px; height: 20px; min-height: 0; padding: 0; margin: 0; flex: none; border-radius: 4px; }
 /* The Availability sheet: the state now, then the choice. */

@@ -20,6 +20,7 @@ import {
   type GalleryPhoto,
   type ProfileWords,
 } from "../lib/businessProfile";
+import { CATEGORY_NAMES, MAX_CATEGORIES } from "../lib/explore";
 import type { LinkSettings } from "../lib/links";
 import { ErrorBox, Skeleton, useAction, useLoad } from "../ui";
 
@@ -120,6 +121,7 @@ export function BusinessProfilePage() {
     delivers: false,
     vehicle: "",
     areasLine: "",
+    categories: [] as string[],
   });
   const [loaded, setLoaded] = useState(false);
   const [uploading, setUploading] = useState(0);
@@ -146,6 +148,7 @@ export function BusinessProfilePage() {
         delivers: data.delivers,
         vehicle: data.vehicle,
         areasLine: data.delivery_areas.join(", "),
+        categories: data.categories ?? [],
       });
       setLoaded(true);
     }
@@ -161,6 +164,7 @@ export function BusinessProfilePage() {
     delivers: form.delivers,
     vehicle: form.delivers ? form.vehicle : "",
     delivery_areas: form.delivers ? splitAreas(form.areasLine) : [],
+    categories: form.categories,
   };
   const dirty =
     !!data &&
@@ -170,7 +174,8 @@ export function BusinessProfilePage() {
       words.about !== data.about ||
       words.delivers !== data.delivers ||
       words.vehicle !== data.vehicle ||
-      !sameAreas(words.delivery_areas, data.delivery_areas));
+      !sameAreas(words.delivery_areas, data.delivery_areas) ||
+      words.categories.join(",") !== (data.categories ?? []).join(","));
 
   const apply = (next: BusinessProfile) => setData(next);
   const save = () =>
@@ -460,6 +465,39 @@ export function BusinessProfilePage() {
                 data-testid="profile-about"
               />
             </label>
+            {/* What it sells: one or two categories, which Explore's chips
+                find it by. A business already findable with none is asked. */}
+            <fieldset className="tk-p-field tk-p-cats" data-testid="profile-categories">
+              <legend>What you sell</legend>
+              <span className={form.categories.length === 0 && settings.data?.findable_now ? "tk-p-cats-ask" : "hint"}>
+                {form.categories.length === 0 && settings.data?.findable_now
+                  ? "Pick one or two, so businesses looking for them find you."
+                  : "One or two. Businesses find you by them in Explore."}
+              </span>
+              <div className="tk-p-cat-list">
+                {Object.entries(CATEGORY_NAMES).map(([key, name]) => {
+                  const on = form.categories.includes(key);
+                  const full = !on && form.categories.length >= MAX_CATEGORIES;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      className="tk-p-cat"
+                      aria-pressed={on}
+                      disabled={!manage || full}
+                      onClick={() =>
+                        setForm({
+                          ...form,
+                          categories: on ? form.categories.filter((k) => k !== key) : [...form.categories, key],
+                        })
+                      }
+                    >
+                      {name}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
             {/* A rider: a business whose service is delivery. Businesses
                 find it under Delivery in Explore. */}
             <label className="tk-p-field tk-p-check">

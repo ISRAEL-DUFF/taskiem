@@ -2,18 +2,25 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { get, post, put } from "../api";
+import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import { photoSrc, type BusinessProfile } from "../lib/businessProfile";
 import { blindRowLine, type BusinessLink, type LinkSettings } from "../lib/links";
 import {
+  CATEGORY_NAMES,
   cardLine,
   cardOffer,
+  chipOrder,
+  popularLine,
+  recentlyViewed,
+  rememberViewed,
   exploreLogo,
   explorePhoto,
   pendingTo,
   slideAt,
   slideNext,
   type ExploreCard,
+  type ExploreCategory,
   type ExploreResult,
 } from "../lib/explore";
 import type { Conversation } from "../lib/linkchat";
@@ -37,6 +44,7 @@ export function Carousel({
   count,
   v,
   captions = [],
+  onLook,
 }: {
   business: string;
   name: string;
@@ -44,6 +52,8 @@ export function Carousel({
   v?: string;
   /** Each photo's words, shown on it (the Explore design). */
   captions?: string[];
+  /** Another photo shown: the business was looked at (Recently viewed). */
+  onLook?: () => void;
 }) {
   const track = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState(0);
@@ -69,15 +79,17 @@ export function Carousel({
         role="group"
         tabIndex={0}
         aria-label={`Photos of ${name}, swipe or use the arrow keys`}
-        onScroll={(e) =>
-          setAt(
-            slideAt(
-              e.currentTarget.scrollLeft,
-              e.currentTarget.clientWidth,
-              count,
-            ),
-          )
-        }
+        onScroll={(e) => {
+          const n = slideAt(
+            e.currentTarget.scrollLeft,
+            e.currentTarget.clientWidth,
+            count,
+          );
+          if (n !== at) {
+            setAt(n);
+            onLook?.();
+          }
+        }}
         onKeyDown={(e) => {
           if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
           e.preventDefault();
@@ -140,6 +152,8 @@ export function Card({
   onMessage,
   incoming,
   onAnswer,
+  onLook,
+  categories = [],
   as = "li",
 }: {
   card: ExploreCard;
@@ -154,11 +168,16 @@ export function Card({
   /** Their ask to us (state asked_us), and how it is answered. */
   incoming?: BusinessLink;
   onAnswer?: (l: BusinessLink, answer: "accept" | "decline") => void;
+  /** Its photos swiped: it was looked at (Recently viewed). */
+  onLook?: () => void;
+  /** Its categories' names, under its line. */
+  categories?: string[];
   /** A list item in Explore; a block of its own in a sheet. */
   as?: "li" | "div";
 }) {
   const offer = asked ? "requested" : cardOffer(card.state);
   const line = cardLine(card);
+  const popular = popularLine(card);
   const Tag = as;
   return (
     <Tag
@@ -175,6 +194,10 @@ export function Card({
         <div className="explore-who">
           <strong>{card.name}</strong>
           {line && <span className="hint">{line}</span>}
+          {categories.length > 0 && (
+            <span className="tk-x-cats">{categories.join(" · ")}</span>
+          )}
+          {popular && <span className="tk-x-links">{popular}</span>}
         </div>
         <div className="explore-act">
           {offer === "connect" &&
@@ -243,6 +266,7 @@ export function Card({
           count={card.photos}
           v={card.v}
           captions={card.captions}
+          onLook={onLook}
         />
       )}
       {card.about && <p className="explore-about">{card.about}</p>}
@@ -294,6 +318,29 @@ export function Explore({
   const [blindSent, setBlindSent] = useState<string>();
   const [asked, setAsked] = useState<Record<string, BusinessLink | true>>({});
   const typed = q.trim();
+  // Recently viewed: this browser only, for the business signed in.
+  const owner = useAuth().me?.tenant_id;
+  const [recent, setRecent] = useState<ExploreCard[]>(() => recentlyViewed(owner));
+  const seen = (c: ExploreCard) =>
+    setRecent((r) => (r[0]?.business === c.business ? r : rememberViewed(owner, c)));
+  // A category chosen from the chips: its businesses in the sections' place.
+  const [chosen, setChosen] = useState<string>();
+  const [inCat, setInCat] = useState<ExploreResult>();
+  // The category last asked for: an answer for another one comes too late.
+  const wanted = useRef<string | undefined>(undefined);
+  const pick = (key: string) => {
+    const next = key === chosen ? undefined : key;
+    wanted.current = next;
+    setChosen(next);
+    setInCat(undefined);
+    if (!next) return;
+    get<ExploreResult>(`/v1/explore?section=category&category=${encodeURIComponent(next)}`).then(
+      (r) => wanted.current === next && setInCat({ ...r, in_category: r.in_category ?? [] }),
+      (e: unknown) => wanted.current === next && setError(e),
+    );
+  };
+  const nameOf = (key: string) =>
+    start?.categories?.find((c) => c.key === key)?.name ?? CATEGORY_NAMES[key] ?? key;
   // Ours, for the way to "Your business in Explore".
   const [mine, setMine] = useState<BusinessProfile>();
   useEffect(() => {
@@ -347,6 +394,7 @@ export function Explore({
 
   const connect = (card: ExploreCard) =>
     void act.run(async () => {
+      seen(card);
       const out = await post<{ link?: BusinessLink }>("/v1/links", {
         business: card.business,
         role: "both",
@@ -356,6 +404,7 @@ export function Explore({
     }, `Asked ${card.name} to link`);
   const withdraw = (card: ExploreCard, link: BusinessLink) =>
     void act.run(async () => {
+      seen(card);
       await post(`/v1/links/${link.id}/cancel`);
       setAsked((m) =>
         Object.fromEntries(
@@ -363,16 +412,10 @@ export function Explore({
         ),
       );
       onChanged();
-      // The card says Connect again.
-      setStart(
-        (s) =>
-          s && {
-            ...s,
-            near: mark(s.near, card.business),
-            fresh: mark(s.fresh, card.business),
-            delivery: mark(s.delivery ?? [], card.business),
-          },
-      );
+      // The card says Connect again, in every section.
+      const back = (cards: ExploreCard[]) => mark(cards, card.business);
+      setStart((s) => s && everyList(s, back));
+      setInCat((s) => s && everyList(s, back));
       setFound(
         (f) =>
           f && {
@@ -389,19 +432,13 @@ export function Explore({
   ) =>
     void act.run(
       async () => {
+        seen(card);
         await post(`/v1/links/${link.id}/${answer}`);
         const state: ExploreCard["state"] = answer === "accept" ? "active" : "none";
         const put = (cards: ExploreCard[]) =>
           cards.map((x) => (x.business === card.business ? { ...x, state } : x));
-        setStart(
-          (s) =>
-            s && {
-              ...s,
-              near: put(s.near),
-              fresh: put(s.fresh),
-              delivery: put(s.delivery ?? []),
-            },
-        );
+        setStart((s) => s && everyList(s, put));
+        setInCat((s) => s && everyList(s, put));
         setFound((f) => f && { ...f, r: { ...f.r, results: put(f.r.results) } });
         onChanged();
       },
@@ -413,33 +450,24 @@ export function Explore({
       setBlindSent(typed);
       onChanged();
     }, `Request sent to ${shown}`);
-  const loadMore = (section: "near" | "new" | "delivery") =>
+  const loadMore = (section: MoreSection) =>
     void act.run(async () => {
       setMore(true);
       try {
-        const have =
-          (section === "near"
-            ? start?.near
-            : section === "delivery"
-              ? start?.delivery
-              : start?.fresh
-          )?.length ?? 0;
+        const from = section === "category" ? inCat : start;
+        const [list, flag] = MORE[section];
+        const have = (from?.[list] as ExploreCard[] | undefined)?.length ?? 0;
         const r = await get<ExploreResult>(
-          `/v1/explore?section=${section}&offset=${have}`,
+          `/v1/explore?section=${section}&offset=${have}${section === "category" && chosen ? `&category=${encodeURIComponent(chosen)}` : ""}`,
         );
-        setStart(
-          (s) =>
-            s &&
-            (section === "near"
-              ? { ...s, near: [...s.near, ...r.near], near_more: r.near_more }
-              : section === "delivery"
-                ? {
-                    ...s,
-                    delivery: [...s.delivery, ...r.delivery],
-                    delivery_more: r.delivery_more,
-                  }
-                : { ...s, fresh: [...s.fresh, ...r.fresh], more: r.more }),
-        );
+        const grow = (s: ExploreResult | undefined) =>
+          s && {
+            ...s,
+            [list]: [...((s[list] as ExploreCard[] | undefined) ?? []), ...((r[list] as ExploreCard[] | undefined) ?? [])],
+            [flag]: !!r[flag],
+          };
+        if (section === "category") setInCat(grow);
+        else setStart(grow);
       } finally {
         setMore(false);
       }
@@ -467,8 +495,11 @@ export function Explore({
           (l) => l.business === c.business && l.state === "asked_us",
         )}
         onAnswer={(l, answer) => answerAsk(c, l, answer)}
+        onLook={() => seen(c)}
+        categories={(c.categories ?? []).map(nameOf)}
         onMessage={() =>
           void (async () => {
+            seen(c);
             // The chat list may not have heard yet that they accepted.
             let conv = convs.find((x) => x.business === c.business);
             if (!conv) {
@@ -584,113 +615,211 @@ export function Explore({
           )
         ) : !start ? (
           <Skeleton rows={3} label="Loading businesses…" />
-        ) : start.near.length === 0 &&
-          start.fresh.length === 0 &&
-          (start.delivery ?? []).length === 0 ? (
-          <EmptyState
-            icon="search"
-            action={
-              <div className="tk-x-empty-acts">
-                {manage && settings && !settings.findable_now && (
-                  <button
-                    type="button"
-                    className="tk-x-connect"
-                    disabled={act.busy}
-                    onClick={() =>
-                      void act.run(async () => {
-                        setSettings(await put<LinkSettings>("/v1/link-settings", { findable: true }));
-                      }, "Other businesses can find you")
-                    }
-                  >
-                    Let other businesses find me
-                  </button>
-                )}
-                <Link to="/settings/links/profile" className="link">
-                  Your business in Explore
-                </Link>
-              </div>
-            }
-          >
-            No other business can be found yet: businesses appear here once
-            they choose to be found. Be one of the first, so suppliers and
-            customers find you.
-          </EmptyState>
         ) : (
           <>
-            {!start.area && start.near.length === 0 && (
-              <p className="hint tk-x-area" data-testid="explore-no-area">
-                Add your area in{" "}
-                <Link to="/settings/links/profile" className="link">
-                  Your business in Explore
-                </Link>{" "}
-                to see the businesses near you.
-              </p>
+            {(start.categories ?? []).length > 0 && (
+              <Chips cats={start.categories ?? []} chosen={chosen} onPick={pick} />
             )}
-            {start.near.length > 0 && (
-              <section aria-labelledby="explore-near">
-                <div className="tk-x-sec">
-                  <h3 id="explore-near">
-                    Near you
-                    {start.area && <span> · {start.area}</span>}
-                  </h3>
-                  {start.near_more && (
-                    <button
-                      type="button"
-                      className="explore-more"
-                      disabled={act.busy || more}
-                      onClick={() => loadMore("near")}
-                    >
-                      Show more
-                      <span className="sr-only"> businesses near you</span>
-                    </button>
-                  )}
-                </div>
-                <ul className="explore-list">{start.near.map(cardOf)}</ul>
+            {chosen ? (
+              <section aria-labelledby="explore-category">
+                <SectionHead
+                  id="explore-category"
+                  title={nameOf(chosen)}
+                  more={!!inCat?.category_more}
+                  busy={act.busy || more}
+                  moreWords={`businesses in ${nameOf(chosen)}`}
+                  onMore={() => loadMore("category")}
+                />
+                {!inCat ? (
+                  <Skeleton rows={2} label={`Loading ${nameOf(chosen)}…`} />
+                ) : (inCat.in_category ?? []).length === 0 ? (
+                  <EmptyState icon="search">
+                    No business in {nameOf(chosen)} can be found yet. Businesses
+                    choose their categories in Your business in Explore.
+                  </EmptyState>
+                ) : (
+                  <ul className="explore-list" aria-label={nameOf(chosen)}>
+                    {(inCat.in_category ?? []).map(cardOf)}
+                  </ul>
+                )}
               </section>
-            )}
-            {(start.delivery ?? []).length > 0 && (
-              <section aria-labelledby="explore-delivery">
-                <div className="tk-x-sec">
-                  <h3 id="explore-delivery">Delivery</h3>
-                  {start.delivery_more && (
-                    <button
-                      type="button"
-                      className="explore-more"
-                      disabled={act.busy || more}
-                      onClick={() => loadMore("delivery")}
+            ) : (
+              <>
+                {nobody(start) && (
+                  <EmptyState
+                    icon="search"
+                    action={
+                      <div className="tk-x-empty-acts">
+                        {manage && settings && !settings.findable_now && (
+                          <button
+                            type="button"
+                            className="tk-x-connect"
+                            disabled={act.busy}
+                            onClick={() =>
+                              void act.run(async () => {
+                                setSettings(await put<LinkSettings>("/v1/link-settings", { findable: true }));
+                              }, "Other businesses can find you")
+                            }
+                          >
+                            Let other businesses find me
+                          </button>
+                        )}
+                        <Link to="/settings/links/profile" className="link">
+                          Your business in Explore
+                        </Link>
+                      </div>
+                    }
+                  >
+                    No other business can be found yet: businesses appear here
+                    once they choose to be found. Be one of the first, so
+                    suppliers and customers find you.
+                  </EmptyState>
+                )}
+                {!nobody(start) && !start.area && start.near.length === 0 && (
+                  <p className="hint tk-x-area" data-testid="explore-no-area">
+                    Add your area in{" "}
+                    <Link to="/settings/links/profile" className="link">
+                      Your business in Explore
+                    </Link>{" "}
+                    to see the businesses near you.
+                  </p>
+                )}
+                {(start.featured ?? []).length > 0 && (
+                  <section aria-labelledby="explore-featured">
+                    <SectionHead id="explore-featured" title="Featured" />
+                    <ul
+                      className="explore-list tk-x-featured"
+                      aria-label="Featured businesses"
+                      data-testid="explore-featured"
                     >
-                      Show more
-                      <span className="sr-only"> delivery businesses</span>
-                    </button>
-                  )}
-                </div>
-                <ul className="explore-list">{start.delivery.map(cardOf)}</ul>
-              </section>
-            )}
-            {start.fresh.length > 0 && (
-              <section aria-labelledby="explore-new">
-                <div className="tk-x-sec">
-                  <h3 id="explore-new">New on Taskiem</h3>
-                  {start.more && (
-                    <button
-                      type="button"
-                      className="explore-more"
-                      disabled={act.busy || more}
-                      onClick={() => loadMore("new")}
-                    >
-                      Show more
-                      <span className="sr-only"> new businesses</span>
-                    </button>
-                  )}
-                </div>
-                <ul className="explore-list">{start.fresh.map(cardOf)}</ul>
-              </section>
+                      {(start.featured ?? []).map(cardOf)}
+                    </ul>
+                  </section>
+                )}
+                {(
+                  [
+                    ["near", "Near you", start.area, start.near, start.near_more, "businesses near you"],
+                    ["trusted", "Trusted on Taskiem", undefined, start.trusted ?? [], !!start.trusted_more, "trusted businesses"],
+                    ["popular", "Popular", undefined, start.popular ?? [], !!start.popular_more, "popular businesses"],
+                    ["delivery", "Delivery", undefined, start.delivery ?? [], start.delivery_more, "delivery businesses"],
+                    ["new", "New on Taskiem", undefined, start.fresh, start.more, "new businesses"],
+                    ["recent", "Recently viewed", undefined, recent, false, ""],
+                  ] as const
+                )
+                  .filter(([, , , cards]) => cards.length > 0)
+                  .map(([key, title, sub, cards, hasMore, words]) => (
+                    <section key={key} aria-labelledby={`explore-${key}`} data-testid={`explore-${key}`}>
+                      <SectionHead
+                        id={`explore-${key}`}
+                        title={title}
+                        sub={sub}
+                        more={hasMore}
+                        busy={act.busy || more}
+                        moreWords={words}
+                        onMore={key === "recent" ? undefined : () => loadMore(key)}
+                      />
+                      <ul className="explore-list">{cards.map(cardOf)}</ul>
+                    </section>
+                  ))}
+              </>
             )}
           </>
         )}
       </div>
     </div>,
     document.body,
+  );
+}
+
+type MoreSection = "near" | "new" | "delivery" | "trusted" | "popular" | "category";
+
+/** Each section with more to show: its list, and whether another page waits. */
+const MORE: Record<MoreSection, [keyof ExploreResult, keyof ExploreResult]> = {
+  near: ["near", "near_more"],
+  new: ["fresh", "more"],
+  delivery: ["delivery", "delivery_more"],
+  trusted: ["trusted", "trusted_more"],
+  popular: ["popular", "popular_more"],
+  category: ["in_category", "category_more"],
+};
+
+/** Every list of cards in an answer, changed the same way. */
+function everyList(s: ExploreResult, f: (cards: ExploreCard[]) => ExploreCard[]): ExploreResult {
+  return {
+    ...s,
+    results: f(s.results),
+    near: f(s.near),
+    fresh: f(s.fresh),
+    delivery: f(s.delivery ?? []),
+    featured: s.featured && f(s.featured),
+    trusted: s.trusted && f(s.trusted),
+    popular: s.popular && f(s.popular),
+    in_category: s.in_category && f(s.in_category),
+  };
+}
+
+/** No business to show in any section (the categories are still there). */
+function nobody(s: ExploreResult): boolean {
+  return [s.near, s.fresh, s.delivery ?? [], s.featured ?? [], s.trusted ?? [], s.popular ?? []].every((l) => l.length === 0);
+}
+
+/** A section's title (what it is about after a dot), and Show more. */
+function SectionHead({
+  id,
+  title,
+  sub,
+  more = false,
+  busy = false,
+  moreWords = "",
+  onMore,
+}: {
+  id: string;
+  title: string;
+  sub?: string;
+  more?: boolean;
+  busy?: boolean;
+  moreWords?: string;
+  onMore?: () => void;
+}) {
+  return (
+    <div className="tk-x-sec">
+      <h3 id={id}>
+        {title}
+        {sub && <span> · {sub}</span>}
+      </h3>
+      {more && onMore && (
+        <button type="button" className="explore-more" disabled={busy} onClick={onMore}>
+          Show more
+          <span className="sr-only"> {moreWords}</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The categories in a row that scrolls, each with its count; the chosen one filled. */
+function Chips({ cats, chosen, onPick }: { cats: ExploreCategory[]; chosen?: string; onPick: (key: string) => void }) {
+  return (
+    <div className="tk-x-chips" role="group" aria-label="Categories" data-testid="explore-categories">
+      {chipOrder(cats).map((c) => (
+        <button
+          key={c.key}
+          type="button"
+          className="tk-x-chip"
+          aria-pressed={c.key === chosen}
+          aria-label={`${c.name} ${c.n} ${c.n === 1 ? "business" : "businesses"}`}
+          onClick={() => onPick(c.key)}
+        >
+          {c.name}
+          {c.n > 0 && " "}
+          {c.n > 0 && (
+            <span className="tk-x-chip-n">
+              {c.n}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
   );
 }
 

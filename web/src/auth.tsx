@@ -12,6 +12,7 @@ import { toast } from "./toast";
 import { claimTab, forgetTab } from "./lib/tabOwner";
 import { disablePush } from "./lib/push";
 import { setAppBadge } from "./lib/badge";
+import { forgetViewed } from "./lib/explore";
 
 interface Auth {
   me: Me | null | undefined; // undefined while loading
@@ -73,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // checks and a business session are theirs alone: they do not wait
       // for whoever signs in next in this tab.
       forgetTab();
+      forgetViewed();
       setMe(null);
     },
   };

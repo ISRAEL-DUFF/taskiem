@@ -490,7 +490,7 @@ test("with no linked business, the chats offer businesses to link with, Find a b
   const start = buyer.getByTestId("chats-start");
   await expect(start).toContainText("Link with the businesses you trade with");
   // The one near us first: Connect asks it to link.
-  await expect(start.getByText(name)).toBeVisible();
+  await expect(start.getByText(name, { exact: true })).toBeVisible();
   // Not findable yet (no storefront): said, with the switch.
   await expect(start).toContainText("Other businesses cannot find you yet.");
   await start.getByRole("button", { name: "Let them find me" }).click();
@@ -519,4 +519,81 @@ test("Explore with no one to show says why, and offers to be found", async ({ br
   await expect(page.getByRole("button", { name: "Let other businesses find me" })).toHaveCount(0);
   expect((await (await page.request.get("/v1/link-settings", { headers: H })).json()).findable_now).toBe(true);
   await axeBoth(page, "Explore with no one to show");
+});
+
+test("Explore's start page: the categories with their counts, one chosen and back; Featured, Popular with its count, Recently viewed; picking categories in Your business in Explore", async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  const { seller, buyer, name } = await twoBusinesses(browser);
+  // The seller picks its category, as Your business in Explore does.
+  expect(
+    (
+      await seller.request.put("/v1/business-profile", {
+        headers: H,
+        data: { name, tagline: "Cement and sand, delivered", area: "Ikeja", about: "Family-run since 1998.", categories: ["building"] },
+      })
+    ).ok(),
+  ).toBe(true);
+  // Featured and Popular need verified, busy businesses the test server
+  // has none of: the seller's own card is shown in them, as the server
+  // would show it.
+  await buyer.route(/\/v1\/explore$/, async (route) => {
+    const res = await route.fetch();
+    const j = (await res.json()) as { featured?: unknown[]; popular?: unknown[] };
+    // Its card as a search finds it (other tests' businesses fill the pages).
+    const found = (await (await buyer.request.get(`/v1/explore?q=${encodeURIComponent(name)}`, { headers: H })).json()) as {
+      results: Record<string, unknown>[];
+    };
+    const mine = found.results.find((c) => c.name === name);
+    if (mine) {
+      j.featured = [{ ...mine }];
+      j.popular = [{ ...mine, links: 20 }];
+    }
+    return route.fulfill({ response: res, json: j });
+  });
+  await buyer.goto("/chat");
+  await buyer.getByTestId("new-chat").click();
+  const ex = buyer.getByTestId("explore");
+  const chips = ex.getByTestId("explore-categories");
+  await expect(chips.getByRole("button", { name: /Building materials [1-9]\d* business/ })).toBeVisible();
+  await expect(chips.getByRole("button")).toHaveCount(13);
+  await expect(ex.getByTestId("explore-featured").getByText(name, { exact: true })).toBeVisible();
+  const popular = ex.getByTestId("explore-popular");
+  await expect(popular).toContainText("Linked with 20+ businesses");
+  await expect(popular).toContainText("Building materials");
+  await expect(ex.getByTestId("explore-recent")).toHaveCount(0);
+  await axeBoth(buyer, "Explore's start page");
+
+  // A category: its businesses in the sections' place; pressed again, back.
+  await chips.getByRole("button", { name: /Building materials/ }).click();
+  await expect(chips.getByRole("button", { name: /Building materials/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(ex.getByRole("heading", { name: "Building materials" })).toBeVisible();
+  // Every card listed is in it (other tests' businesses may be too).
+  const inCat = ex.getByRole("list", { name: "Building materials" }).getByTestId("explore-card");
+  await expect(inCat.first()).toContainText("Building materials");
+  expect(await inCat.count()).toBeGreaterThan(0);
+  for (const t of await inCat.allInnerTexts()) expect(t).toContain("Building materials");
+  await expect(ex.getByTestId("explore-featured")).toHaveCount(0);
+  await chips.getByRole("button", { name: /Building materials/ }).click();
+  await expect(ex.getByTestId("explore-featured")).toBeVisible();
+
+  // Acted on: first in Recently viewed, and still there when Explore opens again.
+  await ex.getByTestId("explore-featured").getByRole("button", { name: `Connect with ${name}` }).click();
+  await expect(ex.getByTestId("explore-recent").getByText(name, { exact: true })).toBeVisible();
+  await ex.getByTestId("explore-back").click();
+  await buyer.getByTestId("new-chat").click();
+  await expect(buyer.getByTestId("explore-recent").getByText(name, { exact: true })).toBeVisible();
+
+  // Your business in Explore: two at most, saved with the rest.
+  await buyer.goto("/settings/links/profile");
+  const cats = buyer.getByTestId("profile-categories");
+  await cats.getByRole("button", { name: "Food and drinks" }).click();
+  await cats.getByRole("button", { name: "Farm produce" }).click();
+  await expect(cats.getByRole("button", { name: "Fashion" })).toBeDisabled();
+  await buyer.getByTestId("profile-save").click();
+  await expect
+    .poll(async () => (await (await buyer.request.get("/v1/business-profile", { headers: H })).json()).categories)
+    .toEqual(["food", "farm"]);
+  await axeBoth(buyer, "Your business in Explore with categories");
 });
