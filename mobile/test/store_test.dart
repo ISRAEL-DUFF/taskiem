@@ -59,8 +59,10 @@ void main() {
     // A message changed (a reaction, read): replaced, not added.
     s.keepMessages('L1', [{...msg('m5', 5), 'body': 'Changed'}], keep: 3);
     expect(s.messages('L1').last['body'], 'Changed');
+    await s.keepMedia('/v1/link-chats/L1/files/m4', [1, 2, 3]);
     s.dropMessage('L1', 'm4');
     expect(s.messages('L1').map((m) => m['id']), ['old-star', 'm3', 'm5']);
+    expect(await s.media('/v1/link-chats/L1/files/m4'), isNull, reason: 'its file goes with it');
     expect(s.messages('L2'), isEmpty);
     s.close();
   });

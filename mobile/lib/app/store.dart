@@ -196,6 +196,18 @@ class LocalStore implements PageKeep {
   void dropMessage(String conv, String id) {
     if (_closed) return;
     _db.execute('DELETE FROM msg WHERE conv = ? AND id = ?', [conv, id]);
+    // Its photo, voice note or file goes with it (lib/chat/attachments.dart
+    // ChatFiles.path): a deleted message leaves nothing on the phone.
+    dropMedia('/v1/link-chats/${Uri.encodeComponent(conv)}/files/${Uri.encodeComponent(id)}');
+  }
+
+  /// Forgets one kept file, by its key.
+  void dropMedia(String key) {
+    if (_closed) return;
+    final rows = _db.select('SELECT name FROM media WHERE k = ?', [key]);
+    if (rows.isEmpty) return;
+    _db.execute('DELETE FROM media WHERE k = ?', [key]);
+    _deleteFile(rows.first['name'] as String);
   }
 
   /// Forgets a whole conversation's messages.

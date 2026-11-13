@@ -52,6 +52,8 @@ export interface ExploreResult {
   /** Across Nigeria: in Near you's place when no one in our area can be shown, or our area is not set. */
   across?: ExploreCard[];
   across_more?: boolean;
+  /** section=known: the businesses remembered in Recently viewed that may still be shown, as they are now. */
+  known?: ExploreCard[];
   /** At most six: Taskiem's picks, then businesses Trusted on Taskiem. */
   featured?: ExploreCard[];
   trusted?: ExploreCard[];
@@ -120,6 +122,18 @@ export function rememberViewed(owner: string | null | undefined, card: ExploreCa
     localStorage.setItem(RECENT, JSON.stringify({ owner, cards: now }));
   } catch {
     // Storage refused (a private window): kept for this page only.
+  }
+  return now;
+}
+
+/** The list as the server answered it (section=known): only those that may still be shown, as they are now. */
+export function replaceViewed(owner: string | null | undefined, cards: ExploreCard[]): ExploreCard[] {
+  const now = cards.slice(0, RECENT_LIMIT);
+  if (!owner) return now;
+  try {
+    localStorage.setItem(RECENT, JSON.stringify({ owner, cards: now }));
+  } catch {
+    // Storage refused: kept for this page only.
   }
   return now;
 }

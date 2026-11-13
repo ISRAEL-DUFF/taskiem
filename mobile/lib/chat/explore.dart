@@ -114,6 +114,19 @@ class RecentlyViewed {
     return out;
   }
 
+  /// The list as the server answered it (section=known): only those that
+  /// may still be shown, as they are now, in the same order.
+  static List<ExploreCard> replace(List<ExploreCard> now) {
+    final json = [for (final x in now.take(limit)) x.toJson()];
+    final store = LocalStore.current;
+    if (store != null) {
+      store.write(_key, json);
+    } else {
+      _memory = json;
+    }
+    return now;
+  }
+
   static List<ExploreCard> add(ExploreCard c) {
     final now = [c, ...read().where((x) => x.business != c.business)].take(limit).toList();
     final json = [for (final x in now) x.toJson()];
@@ -306,11 +319,29 @@ class _ExploreScreenState extends State<ExploreScreen> {
     super.initState();
     _q.addListener(_typing);
     _loadStart();
+    _checkRecent();
     // The start page drawn from what was kept: again when the server's
     // copy differs (only while no section has been grown by Show more).
     _fresh = Transport.pageChanged.stream.listen((key) {
       if (key == '/v1/explore' && mounted && !_busy && !_grown) _loadStart();
     });
+  }
+
+  /// Recently viewed checked with the server: a business that stopped
+  /// being findable (or was suspended, or reported) goes; the rest as they
+  /// are now. Offline, the list stays as it was.
+  Future<void> _checkRecent() async {
+    final was = _recent;
+    if (was.isEmpty) return;
+    try {
+      final r = await d.api.explore(section: 'known', ids: was.map((c) => c.business).join(','));
+      final known = r.known;
+      // Only what was asked about: nothing looked at meanwhile is lost.
+      if (!mounted || known == null || !identical(_recent, was)) return;
+      setState(() => _recent = RecentlyViewed.replace(known));
+    } on Object {
+      // Kept as it was.
+    }
   }
 
   void _loadStart() => d.api.explore().then((r) {

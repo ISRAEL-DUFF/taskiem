@@ -5,6 +5,7 @@ import {
   popularLine,
   recentlyViewed,
   rememberViewed,
+  replaceViewed,
   type ExploreCard,
   cardLine,
   cardOffer,
@@ -80,6 +81,9 @@ describe("explore", () => {
     expect(kept.filter((b) => b === "b5")).toHaveLength(1);
     expect(recentlyViewed("t2")).toEqual([]);
     expect(recentlyViewed(null)).toEqual([]);
+    // Checked with the server: only those still shown, as they are now.
+    replaceViewed("t1", [{ ...card(5), state: "active" }]);
+    expect(recentlyViewed("t1").map((c) => [c.business, c.state])).toEqual([["b5", "active"]]);
     forgetViewed();
     expect(recentlyViewed("t1")).toEqual([]);
     vi.unstubAllGlobals();

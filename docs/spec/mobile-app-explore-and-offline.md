@@ -32,7 +32,8 @@ Settled by the founder, 13 November 2026: every suggestion in §4 is taken, and 
   - **Popular's count** is rounded below ten too: "3+", "5+", then tens, and the section is ordered by what is shown.
   - **Trusted** counts the activity of those who run a business (owner, admin, operator).
   - **Scores kept**: whether a business is Trusted, and its count of links, are worked out every ten minutes (`explore_scores`), not for every business on every opening of Explore. What may be shown at all is still read live.
-  - **Recently viewed** shows each business's link as it is now, and is kept per person and business on the web.
+  - **Recently viewed** shows each business's link as it is now, and is kept per person and business on the web. Each time Explore opens it is checked with the server (`section=known`, migration 00431): a business that stopped being findable, or was suspended or reported, goes; the rest are shown as they are now.
+  - **Attachments** are kept by a browser for a day, not 30, so a deleted message's file does not linger there; on the phone, deleting a message deletes its kept file too. Business photos asked for by their version are still kept 30 days.
 
 ## 1. Where things stand
 

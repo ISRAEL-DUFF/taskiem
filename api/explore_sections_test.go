@@ -182,6 +182,14 @@ func TestExploreSections(t *testing.T) {
 			t.Fatalf("a suspended business counted: %v", m)
 		}
 	}
+
+	// Recently viewed checked: in the order asked, only those that may still
+	// be shown (Emeka is linked with us; Cherry is suspended; one unknown;
+	// ourselves never).
+	known := names(browse(ada, "/v1/explore?section=known&ids="+emekaID+","+cherryID+","+uuid.NewString()+","+dangoteID+","+adaID)["known"])
+	if len(known) != 2 || known[0] != "Emeka Foods" || known[1] != "Dangote Stores" {
+		t.Fatalf("known: %v", known)
+	}
 }
 
 // The operators choose the Featured row: a pick until a date, ended early;

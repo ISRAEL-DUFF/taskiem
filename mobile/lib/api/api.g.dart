@@ -284,8 +284,8 @@ class TaskiemApi {
   }
 
   /// Businesses to browse (`GET /v1/explore`)
-  Future<ExploreResult> explore({String? q, String? section, String? category, String? offset}) async {
-    final j = await _t.send('GET', '/v1/explore', query: {'q': ?q, 'section': ?section, 'category': ?category, 'offset': ?offset});
+  Future<ExploreResult> explore({String? q, String? section, String? category, String? ids, String? offset}) async {
+    final j = await _t.send('GET', '/v1/explore', query: {'q': ?q, 'section': ?section, 'category': ?category, 'ids': ?ids, 'offset': ?offset});
     return ExploreResult.fromJson(j as Map<String, dynamic>);
   }
 
@@ -3106,7 +3106,7 @@ class StockMovement {
 }
 
 class ExploreResult {
-  const ExploreResult({this.across, this.acrossMore, this.area, this.blind, this.categories, this.categoryMore, required this.delivery, required this.deliveryMore, this.featured, required this.fresh, this.inCategory, required this.more, required this.near, required this.nearMore, this.popular, this.popularMore, required this.results, this.trusted, this.trustedMore});
+  const ExploreResult({this.across, this.acrossMore, this.area, this.blind, this.categories, this.categoryMore, required this.delivery, required this.deliveryMore, this.featured, required this.fresh, this.inCategory, this.known, required this.more, required this.near, required this.nearMore, this.popular, this.popularMore, required this.results, this.trusted, this.trustedMore});
 
   /// Across Nigeria, in Near you's place when no business in our area can be
   /// shown or our area is not set (the fullest cards first)
@@ -3123,6 +3123,9 @@ class ExploreResult {
   final List<ExploreCard>? featured;
   final List<ExploreCard> fresh;
   final List<ExploreCard>? inCategory;
+  /// section=known, the businesses asked for that may still be shown, as they
+  /// are now, in the order asked
+  final List<ExploreCard>? known;
   final bool more;
   final List<ExploreCard> near;
   final bool nearMore;
@@ -3144,6 +3147,7 @@ class ExploreResult {
         featured: j['featured'] == null ? null : (j['featured'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
         fresh: (j['fresh'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
         inCategory: j['in_category'] == null ? null : (j['in_category'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        known: j['known'] == null ? null : (j['known'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
         more: j['more'] as bool,
         near: (j['near'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
         nearMore: j['near_more'] as bool,
@@ -3166,6 +3170,7 @@ class ExploreResult {
         'featured': ?featured?.map((e) => e.toJson()).toList(),
         'fresh': fresh.map((e) => e.toJson()).toList(),
         'in_category': ?inCategory?.map((e) => e.toJson()).toList(),
+        'known': ?known?.map((e) => e.toJson()).toList(),
         'more': more,
         'near': near.map((e) => e.toJson()).toList(),
         'near_more': nearMore,
@@ -3192,8 +3197,8 @@ class ExploreCard {
   /// It delivers for other businesses (a rider)
   final bool? delivers;
   final List<String>? deliveryAreas;
-  /// Popular only, its links made in the last 90 days (never under 3; from 10,
-  /// rounded down to tens and shown as "10+")
+  /// Popular only, its links made in the last 90 days, rounded down (3, 5, then
+  /// tens) and shown with a "+"; never under 3
   final int? links;
   /// Whether it has a logo, at GET /v1/explore/{business}/logo
   final bool logo;

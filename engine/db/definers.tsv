@@ -354,3 +354,4 @@ taskiem_ops_feature_add(uuid,uuid,timestamp with time zone,timestamp with time z
 taskiem_ops_feature_end(uuid,text)	@ISRAEL-DUFF (operator-console)	Operators: end a Featured pick (00427)
 taskiem_ops_featured()	@ISRAEL-DUFF (operator-console)	Operators: the Featured picks (00427)
 taskiem_link_explore_rescore()	@ISRAEL-DUFF (business links)	Works out again, for every findable business, whether it is Trusted on Taskiem and its count of links in the last 90 days, for Explore's sections; run by the server every ten minutes, answers only a count (00430)
+taskiem_link_explore_known(uuid[])	@ISRAEL-DUFF (business links)	Recently viewed, checked: at most ten businesses the caller remembers, as they are now, only those findable or linked with it, not suspended or reported; any other is left out, as in a search (00431)

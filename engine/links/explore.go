@@ -33,7 +33,14 @@ const (
 	// the fullest cards first, in Near you's place when it is empty
 	// (migration 00428).
 	SectionAcross = "across"
+	// SectionKnown answers the businesses a phone or browser remembers
+	// (Recently viewed), as they are now, those that may still be shown
+	// (migration 00431).
+	SectionKnown = "known"
 )
+
+// MaxKnown is how many remembered businesses are checked at once.
+const MaxKnown = 10
 
 // ExploreCard is a business as Explore shows it: its profile (or storefront
 // card), whether it has a logo, how many photos it shows (at most eight; each
@@ -229,4 +236,31 @@ func OwnAreaTx(ctx context.Context, tx pgx.Tx, me uuid.UUID) (string, error) {
 			WHERE s.tenant_id = $1 AND s.status = 'published' LIMIT 1), '')
 		FROM (SELECT 1) one LEFT JOIN business_profile bp ON bp.tenant_id = $1`, me).Scan(&area)
 	return strings.TrimSpace(area), pgErr(err)
+}
+
+// ExploreKnownTx answers the businesses asked for (at most MaxKnown), in
+// that order, as they are now: only those that may still be shown.
+func ExploreKnownTx(ctx context.Context, tx pgx.Tx, ids []uuid.UUID) ([]ExploreCard, error) {
+	if len(ids) > MaxKnown {
+		ids = ids[:MaxKnown]
+	}
+	rows, err := tx.Query(ctx, `SELECT business, name, COALESCE(slug, ''), COALESCE(area, ''), COALESCE(tagline, ''), COALESCE(about, ''), has_logo, photos, state, ver,
+		delivers, COALESCE(vehicle, ''), delivery_areas, categories FROM taskiem_link_explore_known($1)`, ids)
+	if err != nil {
+		return nil, pgErr(err)
+	}
+	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (ExploreCard, error) {
+		var c ExploreCard
+		return c, r.Scan(&c.Business, &c.Name, &c.Slug, &c.Area, &c.Tagline, &c.About, &c.Logo, &c.Photos, &c.State, &c.Ver, &c.Delivers, &c.Vehicle, &c.DeliveryAreas, &c.Categories)
+	})
+	if out == nil {
+		out = []ExploreCard{}
+	}
+	if err == nil && len(out) > 0 {
+		err = exploreCaptionsTx(ctx, tx, out)
+	}
+	if err == nil {
+		err = exploreAvailabilityTx(ctx, tx, out)
+	}
+	return out, pgErr(err)
 }

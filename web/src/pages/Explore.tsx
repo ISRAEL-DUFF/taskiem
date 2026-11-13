@@ -14,6 +14,7 @@ import {
   popularLine,
   recentlyViewed,
   rememberViewed,
+  replaceViewed,
   exploreLogo,
   explorePhoto,
   pendingTo,
@@ -340,6 +341,26 @@ export function Explore({
   const me = useAuth().me;
   const owner = me?.tenant_id && me.user?.id ? `${me.user.id}:${me.tenant_id}` : undefined;
   const [recent, setRecent] = useState<ExploreCard[]>(() => recentlyViewed(owner));
+  // Checked with the server once open: a business that stopped being
+  // findable (or was suspended or reported) goes; the rest as they are now.
+  // Offline, the list stays as it was.
+  useEffect(() => {
+    const was = recentlyViewed(owner);
+    if (was.length === 0) return;
+    let live = true;
+    get<ExploreResult>(`/v1/explore?section=known&ids=${was.map((c) => c.business).join(",")}`).then(
+      (r) => {
+        // Only what was asked about: nothing looked at meanwhile is lost.
+        if (!live || !r.known) return;
+        const known = r.known;
+        setRecent((now) => (now.length === was.length && now.every((c, i) => c.business === was[i]?.business) ? replaceViewed(owner, known) : now));
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [owner]);
   const seen = (c: ExploreCard) =>
     setRecent((r) => (r[0]?.business === c.business ? r : rememberViewed(owner, c)));
   // A category chosen from the chips: its businesses in the sections' place.

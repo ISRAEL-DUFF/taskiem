@@ -53,7 +53,10 @@ type exploreOut struct {
 	Featured []links.ExploreCard `json:"featured"`
 	// Across is Across Nigeria, in Near you's place when no business in our
 	// area can be shown, or our area is not set (section=across pages it).
-	Across       []links.ExploreCard `json:"across"`
+	Across []links.ExploreCard `json:"across"`
+	// Known answers section=known&ids=…: the businesses remembered in
+	// Recently viewed, as they are now, those that may still be shown.
+	Known        []links.ExploreCard `json:"known,omitempty"`
 	AcrossMore   bool                `json:"across_more"`
 	Trusted      []links.ExploreCard `json:"trusted"`
 	TrustedMore  bool                `json:"trusted_more"`
@@ -120,6 +123,14 @@ func (s *Server) explore(w http.ResponseWriter, r *http.Request) {
 			out.Near, out.NearMore, err = s.exploreSection(r, tx, links.SectionNear, offset)
 		case section == links.SectionDelivery:
 			out.Delivery, out.DeliveryMore, err = s.exploreSection(r, tx, links.SectionDelivery, offset)
+		case section == links.SectionKnown:
+			var ids []uuid.UUID
+			for _, raw := range strings.Split(r.URL.Query().Get("ids"), ",") {
+				if id, perr := uuid.Parse(strings.TrimSpace(raw)); perr == nil && len(ids) < links.MaxKnown {
+					ids = append(ids, id)
+				}
+			}
+			out.Known, err = links.ExploreKnownTx(r.Context(), tx, ids)
 		case section == links.SectionAcross:
 			out.Across, out.AcrossMore, err = s.moreSection(r, tx, links.SectionAcross, "", offset)
 		case section == links.SectionTrusted:

@@ -337,6 +337,40 @@ void main() {
     });
   });
 
+  testWidgets('Recently viewed checked when Explore opens: one no longer findable goes, the rest as they are now', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await loadFonts();
+    RecentlyViewed.clear();
+    ExploreCard kept(String id, String name, String state) =>
+        ExploreCard(business: id, name: name, logo: false, photos: 0, captions: const [], state: state, v: '1');
+    RecentlyViewed.add(kept('gone', 'Hidden Hardware', 'none'));
+    RecentlyViewed.add(kept('here', 'Ade Blocks', 'none'));
+    final f = Fixture('explore');
+    String? asked;
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (req.url.path != '/v1/explore' || req.method != 'GET') return null;
+        if (req.url.queryParameters['section'] == 'known') {
+          asked = req.url.queryParameters['ids'];
+          return _answer({'results': <Object>[], 'near': <Object>[], 'near_more': false, 'fresh': <Object>[], 'more': false, 'delivery': <Object>[], 'delivery_more': false,
+            'known': [{'business': 'here', 'name': 'Ade Blocks', 'logo': false, 'photos': 0, 'captions': <Object>[], 'state': 'active', 'v': '2'}]});
+        }
+        return null;
+      }),
+      now: () => f.at,
+    );
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ChatsScreen(data: chats, onOpen: (_) {})));
+    await _settle(t);
+    await t.tap(find.bySemanticsLabel('Find a business to link with'));
+    await t.pumpAndSettle();
+    await _settle(t);
+    expect(asked, 'here,gone');
+    expect(RecentlyViewed.read().map((c) => (c.business, c.state)), [('here', 'active')]);
+    RecentlyViewed.clear();
+  });
+
   group('the start page at large text', () {
     setUpAll(loadFonts);
     setUp(RecentlyViewed.clear);

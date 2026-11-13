@@ -9894,13 +9894,19 @@ paths:
         required: false
         schema:
           type: string
-          enum: [new, near, delivery, trusted, popular, featured, category, across]
+          enum: [new, near, delivery, trusted, popular, featured, category, across, known]
       - name: category
         in: query
         required: false
         schema:
           type: string
         description: With section=category, the category's key (one of categories)
+      - name: ids
+        in: query
+        required: false
+        schema:
+          type: string
+        description: With section=known, up to ten business ids, comma-separated (Recently viewed); answered in known as they are now, only those that may still be shown
       - name: offset
         in: query
         required: false
@@ -37414,6 +37420,12 @@ components:
             $ref: '#/components/schemas/ExploreCard'
         across_more:
           type: boolean
+        known:
+          type: array
+          description: section=known, the businesses asked for that may still be shown, as they are now, in the order asked
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+
         trusted:
           type: array
           items:

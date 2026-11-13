@@ -1082,8 +1082,10 @@ func (s *Server) linkFile(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	// An attachment's bytes never change: kept as long as the phone keeps them.
-	w.Header().Set("Cache-Control", keptLong)
+	// An attachment's bytes never change, but its message can be deleted:
+	// kept a day, so a deleted one does not linger in a browser's cache
+	// (the phone keeps its own copy, and wipes it with the message).
+	w.Header().Set("Cache-Control", "private, max-age=86400")
 	disp := "inline"
 	if a.Kind == "file" {
 		disp = "attachment"
