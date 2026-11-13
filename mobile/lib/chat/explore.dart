@@ -83,12 +83,13 @@ const exploreCategoryNames = {
   'services': 'Services',
 };
 
-/// Popular's count: "Linked with 4 businesses", "Linked with 20+ businesses"
-/// (the server rounds down to tens from ten, and never sends under three).
+/// Popular's count: "Linked with 3+ businesses", "Linked with 20+
+/// businesses" (the server sends it rounded down: 3, 5, then tens; never
+/// under three).
 String? popularLine(ExploreCard c) {
   final n = c.links ?? 0;
   if (n < 3) return null;
-  return 'Linked with ${n >= 10 ? '$n+' : '$n'} businesses';
+  return 'Linked with $n+ businesses';
 }
 
 /// Recently viewed (docs/spec/mobile-app-explore-and-offline.md §2.1): the
@@ -246,6 +247,31 @@ class _ExploreScreenState extends State<ExploreScreen> {
     _recent = RecentlyViewed.add(c);
   }
 
+  /// A card kept in Recently viewed, with our link with it as it is now
+  /// (it was kept as it was then): the page's own copy when it has one,
+  /// else what the chats know.
+  ExploreCard _current(ExploreCard c) {
+    final s = _start;
+    final shown = s == null
+        ? null
+        : [...s.near, ...s.acrossCards, ...s.featuredCards, ...s.trustedCards, ...s.popularCards, ...s.delivery, ...s.fresh]
+              .where((x) => x.business == c.business)
+              .firstOrNull;
+    final state =
+        shown?.state ??
+        (d.conversations.any((x) => x.business == c.business)
+            ? 'active'
+            : d.links.any((l) => l.business == c.business && l.state == 'requested' && l.askedByUs)
+            ? 'requested'
+            : d.links.any((l) => l.business == c.business && l.state == 'asked_us')
+            ? 'asked_us'
+            : c.state == 'active' || c.state == 'requested' || c.state == 'asked_us'
+            ? 'none'
+            : c.state);
+    if (state == c.state) return c;
+    return ExploreCard.fromJson({...c.toJson(), 'state': state});
+  }
+
   /// A category chip: its businesses in the sections' place; again, back.
   Future<void> _pick(String? key) async {
     setState(() {
@@ -259,11 +285,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
       final r = await d.api.explore(section: 'category', category: k);
       if (mounted && _category == k) setState(() => _inCategory = r);
     } on Object catch (e) {
-      if (mounted) setState(() => _error = _say(e));
+      // Failed: said, and the chip let go, so a tap tries again.
+      if (mounted && _category == k) {
+        setState(() {
+          _error = _say(e);
+          _category = null;
+        });
+      }
     }
   }
 
   StreamSubscription<String>? _fresh;
+
+  /// A section grown by Show more: the start page is no longer redrawn
+  /// from a fresh copy (the pages grown would go).
+  bool _grown = false;
 
   @override
   void initState() {
@@ -273,7 +309,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
     // The start page drawn from what was kept: again when the server's
     // copy differs (only while no section has been grown by Show more).
     _fresh = Transport.pageChanged.stream.listen((key) {
-      if (key == '/v1/explore' && mounted && !_busy) _loadStart();
+      if (key == '/v1/explore' && mounted && !_busy && !_grown) _loadStart();
     });
   }
 
@@ -391,19 +427,26 @@ class _ExploreScreenState extends State<ExploreScreen> {
       'category' => s.categoryCards.length,
       _ => s.fresh.length,
     };
+    final k = _category;
     setState(() => _busy = true);
     try {
-      final r = await d.api.explore(section: section, offset: '$have', category: section == 'category' ? _category : null);
+      final r = await d.api.explore(section: section, offset: '$have', category: section == 'category' ? k : null);
+      // Each business once: a list's order can change between pages.
+      List<ExploreCard> plus(List<ExploreCard> a, List<ExploreCard> b) => [...a, ...b.where((c) => !a.any((x) => x.business == c.business))];
       if (section == 'category') {
-        _inCategory = _with(s, inCategory: [...s.categoryCards, ...r.categoryCards], categoryMore: r.moreInCategory);
-      } else {
+        // Another category chosen meanwhile: this page is not its.
+        if (_category == k && identical(_inCategory, s)) {
+          _inCategory = _with(s, inCategory: plus(s.categoryCards, r.categoryCards), categoryMore: r.moreInCategory);
+        }
+      } else if (identical(_start, s)) {
+        _grown = true;
         _start = switch (section) {
-          'near' => _with(s, near: [...s.near, ...r.near], nearMore: r.nearMore),
-          'delivery' => _with(s, delivery: [...s.delivery, ...r.delivery], deliveryMore: r.deliveryMore),
-          'trusted' => _with(s, trusted: [...s.trustedCards, ...r.trustedCards], trustedMore: r.moreTrusted),
-          'across' => _with(s, across: [...s.acrossCards, ...r.acrossCards], acrossMore: r.moreAcross),
-          'popular' => _with(s, popular: [...s.popularCards, ...r.popularCards], popularMore: r.morePopular),
-          _ => _with(s, fresh: [...s.fresh, ...r.fresh], more: r.more),
+          'near' => _with(s, near: plus(s.near, r.near), nearMore: r.nearMore),
+          'delivery' => _with(s, delivery: plus(s.delivery, r.delivery), deliveryMore: r.deliveryMore),
+          'trusted' => _with(s, trusted: plus(s.trustedCards, r.trustedCards), trustedMore: r.moreTrusted),
+          'across' => _with(s, across: plus(s.acrossCards, r.acrossCards), acrossMore: r.moreAcross),
+          'popular' => _with(s, popular: plus(s.popularCards, r.popularCards), popularMore: r.morePopular),
+          _ => _with(s, fresh: plus(s.fresh, r.fresh), more: r.more),
         };
       }
     } on Object catch (e) {
@@ -597,7 +640,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       if (s.popularCards.isNotEmpty) ('Popular', null, s.popularCards, s.morePopular, 'popular', 'popular businesses'),
       if (s.delivery.isNotEmpty) ('Delivery', null, s.delivery, s.deliveryMore, 'delivery', 'delivery businesses'),
       if (s.fresh.isNotEmpty) ('New on Taskiem', null, s.fresh, s.more, 'new', 'new businesses'),
-      if (_recent.isNotEmpty) ('Recently viewed', null, _recent, false, 'recent', ''),
+      if (_recent.isNotEmpty) ('Recently viewed', null, _recent.map(_current).toList(), false, 'recent', ''),
     ];
     if (!none && (s.area ?? '').isEmpty && s.near.isEmpty && Openers.businessProfile != null) {
       body.add(
@@ -809,8 +852,9 @@ class _Chips extends StatelessWidget {
                       onTap: () => onPick(c.key),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 180),
-                        height: 38,
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        // Grows with large text.
+                        constraints: const BoxConstraints(minHeight: 38),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                         decoration: BoxDecoration(
                           color: on ? (dark ? t.brandDark : t.text) : t.panel,
                           borderRadius: BorderRadius.circular(999),
@@ -1574,9 +1618,10 @@ class _AskCategoriesState extends State<_AskCategories> {
       _busy = true;
       _error = null;
     });
-    final p = widget.profile;
     try {
-      // The words as they are, with the categories.
+      // The words as they are now (read again: another phone may have
+      // changed them while this was open), with the categories.
+      final p = (await widget.transport.send('GET', '/v1/business-profile') as Map).cast<String, dynamic>();
       await widget.transport.send('PUT', '/v1/business-profile', body: {
         'name': p['name'] ?? '',
         'tagline': p['tagline'] ?? '',

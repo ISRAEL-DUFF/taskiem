@@ -22,27 +22,36 @@ type Pick = {
   shown: boolean;
 };
 
-const inAWeek = () => new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+// Dates as Lagos reads them: a pick runs from the start of its first day
+// to the end of its last, there (UTC+1, no daylight saving).
+const lagosDay = (days = 0) => new Date(Date.now() + days * 864e5).toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+const lagosShown = (iso: string) =>
+  new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+const blank = () => ({ business: "", from: lagosDay(), until: lagosDay(7), note: "" });
 
 export function Featured() {
   const { data, error, reload } = useLoad(() => opsGet<{ picks: Pick[] }>("/explore/featured"), []);
-  const [f, setF] = useState({ business: "", until: inAWeek(), note: "" });
+  const [f, setF] = useState(blank);
   const act = useAction();
   const add = () =>
     act.run(async () => {
       const business = f.business.trim();
-      // The end of the chosen day, in Lagos.
-      const until = new Date(`${f.until}T23:59:00+01:00`).toISOString();
-      await withStepUp("ops.explore.feature", business, "/explore/featured", { business, until, note: f.note.trim() });
-      setF({ business: "", until: inAWeek(), note: "" });
+      // From the start of the first day to the end of the last, in Lagos;
+      // a pick starting today starts now.
+      const from = f.from > lagosDay() ? new Date(`${f.from}T00:00:00+01:00`).toISOString() : undefined;
+      const until = new Date(`${f.until}T23:59:59+01:00`).toISOString();
+      await withStepUp("ops.explore.feature", business, "/explore/featured", { business, from, until, note: f.note.trim() });
+      setF(blank());
       reload();
     }, "Business featured");
-  const end = (p: Pick) =>
-    act.run(async () => {
-      if (!confirm(`End the pick of ${p.name} now?`)) return;
+  const end = (p: Pick) => {
+    // Asked first: a pick kept says nothing ended.
+    if (!confirm(`End the pick of ${p.name} now?`)) return;
+    return act.run(async () => {
       await withStepUp("ops.explore.unfeature", p.id, `/explore/featured/${p.id}/end`, {});
       reload();
     }, "Pick ended");
+  };
   const live = (p: Pick) => !p.ended_at && new Date(p.until) > new Date();
   return (
     <>
@@ -64,8 +73,12 @@ export function Featured() {
             <input required value={f.business} onChange={(e) => setF({ ...f, business: e.target.value })} placeholder="0193…" />
           </label>
           <label>
-            Until
-            <input type="date" required value={f.until} onChange={(e) => setF({ ...f, until: e.target.value })} />
+            From
+            <input type="date" required min={lagosDay()} value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} />
+          </label>
+          <label>
+            Until (the end of that day, Lagos time)
+            <input type="date" required min={f.from || lagosDay()} value={f.until} onChange={(e) => setF({ ...f, until: e.target.value })} />
           </label>
           <label>
             Note (for the audit)
@@ -84,6 +97,7 @@ export function Featured() {
             <tr>
               <th>Business</th>
               <th>In the row</th>
+              <th>From</th>
               <th>Until</th>
               <th>Note</th>
               <th>
@@ -102,9 +116,10 @@ export function Featured() {
                   </div>
                 </td>
                 <td>
-                  <Badge value={p.shown ? "shown" : live(p) ? "hidden" : "ended"} />
+                  <Badge value={p.shown ? "shown" : !live(p) ? "ended" : new Date(p.starts_at) > new Date() ? "waiting" : "hidden"} />
                 </td>
-                <td>{fmtTime(p.until)}</td>
+                <td>{lagosShown(p.starts_at)}</td>
+                <td>{lagosShown(p.until)}</td>
                 <td>{p.note || "—"}</td>
                 <td>
                   {live(p) && (

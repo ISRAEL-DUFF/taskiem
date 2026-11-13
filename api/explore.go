@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -48,7 +50,7 @@ type exploreOut struct {
 	// Taskiem, Popular (each card with its rounded count of links), and the
 	// categories with their counts; section=category&category=<key> lists
 	// one category's businesses in InCategory.
-	Featured     []links.ExploreCard `json:"featured"`
+	Featured []links.ExploreCard `json:"featured"`
 	// Across is Across Nigeria, in Near you's place when no business in our
 	// area can be shown, or our area is not set (section=across pages it).
 	Across       []links.ExploreCard `json:"across"`
@@ -239,4 +241,35 @@ func pictureCache(r *http.Request) string {
 		return keptLong
 	}
 	return "private, max-age=3600"
+}
+
+// exploreScoresEvery is how often Explore's scores (whether each findable
+// business is Trusted, its count of links) are worked out again
+// (migration 00430): the sections read them instead of working them out
+// for every business on every opening.
+const exploreScoresEvery = 10 * time.Minute
+
+// RescoreExplore works Explore's scores out again now, answering how many
+// businesses were scored.
+func (s *Server) RescoreExplore(ctx context.Context) (int, error) {
+	var n int
+	err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_link_explore_rescore()`).Scan(&n)
+	return n, err
+}
+
+// runExploreScores keeps Explore's scores up to date: at once, then every
+// exploreScoresEvery.
+func (s *Server) runExploreScores(ctx context.Context) {
+	tick := time.NewTicker(exploreScoresEvery)
+	defer tick.Stop()
+	for {
+		if _, err := s.RescoreExplore(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Error("explore: scores", "err", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
 }

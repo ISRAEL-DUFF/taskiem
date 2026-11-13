@@ -51,6 +51,15 @@ func TestExploreSections(t *testing.T) {
 	active(dangoteID, 7*24*time.Hour, "+2348030000001")
 	active(cherryID, 40*24*time.Hour, "+2348030000002")
 
+	// Explore's scores worked out again, as the server does every ten
+	// minutes, then the page.
+	browse := func(c *client, path string) map[string]any {
+		t.Helper()
+		if _, err := w.srv.RescoreExplore(ctx); err != nil {
+			t.Fatal(err)
+		}
+		return c.must(200, "GET", path, nil)
+	}
 	names := func(cards any) []string {
 		out := []string{}
 		for _, c := range cards.([]any) {
@@ -58,7 +67,7 @@ func TestExploreSections(t *testing.T) {
 		}
 		return out
 	}
-	page := ada.must(200, "GET", "/v1/explore", nil)
+	page := browse(ada, "/v1/explore")
 	if got := names(page["trusted"]); len(got) != 1 || got[0] != "Dangote Stores" {
 		t.Fatalf("trusted: %v", got)
 	}
@@ -74,7 +83,7 @@ func TestExploreSections(t *testing.T) {
 		t.Fatalf("across Nigeria: %v", got)
 	}
 	ada.must(200, "PUT", "/v1/business-profile", map[string]any{"area": "Ikeja"})
-	if p := ada.must(200, "GET", "/v1/explore", nil); len(p["near"].([]any)) != 2 || len(p["across"].([]any)) != 0 {
+	if p := browse(ada, "/v1/explore"); len(p["near"].([]any)) != 2 || len(p["across"].([]any)) != 0 {
 		t.Fatalf("with businesses near us, no Across Nigeria: %v %v", names(p["near"]), names(p["across"]))
 	}
 	ada.must(200, "PUT", "/v1/business-profile", map[string]any{"area": ""})
@@ -93,7 +102,7 @@ func TestExploreSections(t *testing.T) {
 	// A business not findable is not counted.
 	emeka.must(200, "PUT", "/v1/business-profile", map[string]any{"categories": []string{"food"}})
 	counts := map[string]float64{}
-	page = ada.must(200, "GET", "/v1/explore", nil)
+	page = browse(ada, "/v1/explore")
 	for _, c := range page["categories"].([]any) {
 		m := c.(map[string]any)
 		counts[m["key"].(string)] = m["n"].(float64)
@@ -101,7 +110,7 @@ func TestExploreSections(t *testing.T) {
 	if len(page["categories"].([]any)) != 13 || counts["building"] != 2 || counts["food"] != 1 || counts["farm"] != 0 {
 		t.Fatalf("category counts: %v", counts)
 	}
-	if got := names(ada.must(200, "GET", "/v1/explore?section=category&category=building", nil)["in_category"]); len(got) != 2 || got[0] != "Cherry Blocks" {
+	if got := names(browse(ada, "/v1/explore?section=category&category=building")["in_category"]); len(got) != 2 || got[0] != "Cherry Blocks" {
 		t.Fatalf("a category: %v", got)
 	}
 	ada.must(400, "GET", "/v1/explore?section=category&category=rockets", nil)
@@ -126,32 +135,45 @@ func TestExploreSections(t *testing.T) {
 	for range 4 {
 		link(w.env.AddTenant(t))
 	}
-	page = ada.must(200, "GET", "/v1/explore", nil)
-	if got := page["popular"].([]any); len(got) != 1 || got[0].(map[string]any)["name"] != "Emeka Foods" || got[0].(map[string]any)["links"] != float64(4) {
+	page = browse(ada, "/v1/explore")
+	if got := page["popular"].([]any); len(got) != 1 || got[0].(map[string]any)["name"] != "Emeka Foods" || got[0].(map[string]any)["links"] != float64(3) {
 		t.Fatalf("popular: %v", got)
 	}
 	// One that links with us is in the chats, not in Popular.
 	link(uuid.MustParse(adaID))
-	if got := names(ada.must(200, "GET", "/v1/explore?section=popular", nil)["popular"]); len(got) != 0 {
+	if got := names(browse(ada, "/v1/explore?section=popular")["popular"]); len(got) != 0 {
 		t.Fatalf("a linked business in Popular: %v", got)
+	}
+
+	// Reported, not yet looked at: out of Trusted and Featured at once.
+	report := uuid.New()
+	if _, err := admin.Exec(ctx, `INSERT INTO page_reports (id, tenant_id, kind, site_id, reason, ip_hash) VALUES ($1, $2, 'storefront', $3, 'scam', $4)`,
+		report, dangoteID, uuid.New(), make([]byte, 32)); err != nil {
+		t.Fatal(err)
+	}
+	if p := browse(ada, "/v1/explore"); len(p["trusted"].([]any)) != 0 || len(p["featured"].([]any)) != 0 {
+		t.Fatalf("a reported business shown: %v %v", names(p["trusted"]), names(p["featured"]))
+	}
+	if _, err := admin.Exec(ctx, `UPDATE page_reports SET status = 'dismissed' WHERE id = $1`, report); err != nil {
+		t.Fatal(err)
 	}
 
 	// Featured: a pick comes first, before the Trusted that fill in.
 	if _, err := admin.Exec(ctx, `INSERT INTO explore_featured (id, business, until, created_by) VALUES ($1, $2, now() + interval '7 days', 'operator:test')`, uuid.New(), cherryID); err != nil {
 		t.Fatal(err)
 	}
-	if got := names(ada.must(200, "GET", "/v1/explore?section=featured", nil)["featured"]); len(got) != 2 || got[0] != "Cherry Blocks" || got[1] != "Dangote Stores" {
+	if got := names(browse(ada, "/v1/explore?section=featured")["featured"]); len(got) != 2 || got[0] != "Cherry Blocks" || got[1] != "Dangote Stores" {
 		t.Fatalf("featured, a pick: %v", got)
 	}
 	// Never ourselves.
-	if got := names(cherry.must(200, "GET", "/v1/explore?section=featured", nil)["featured"]); len(got) != 1 || got[0] != "Dangote Stores" {
+	if got := names(browse(cherry, "/v1/explore?section=featured")["featured"]); len(got) != 1 || got[0] != "Dangote Stores" {
 		t.Fatalf("featured, seen by the pick itself: %v", got)
 	}
 	// A suspended page falls out at once: of Featured and of the counts.
 	if _, err := admin.Exec(ctx, `INSERT INTO storefronts (id, tenant_id, slug, status, created_by, suspended_reason, suspended_at, suspended_by, status_before_suspension) VALUES ($1, $2, 'cherry-blocks', 'suspended', 'test', 'Checking a complaint', now(), 'operator:test', 'published')`, uuid.New(), cherryID); err != nil {
 		t.Fatal(err)
 	}
-	page = ada.must(200, "GET", "/v1/explore", nil)
+	page = browse(ada, "/v1/explore")
 	if got := names(page["featured"]); len(got) != 1 || got[0] != "Dangote Stores" {
 		t.Fatalf("featured, suspended: %v", got)
 	}
@@ -187,13 +209,22 @@ func TestOpsFeatured(t *testing.T) {
 	if got := viewer.must(200, "GET", "/v1/explore?section=featured", nil)["featured"].([]any); len(got) != 1 || got[0].(map[string]any)["business"] != bizID {
 		t.Fatalf("the row: %v", got)
 	}
+	// A pick that starts tomorrow: listed, not yet in the row.
+	later := op.must(201, "POST", "/v1/ops/explore/featured", map[string]any{"business": bizID, "from": time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339), "until": until,
+		"step_up": op.stepUp(a, "ops.explore.feature", bizID)})["id"].(string)
+	for _, p := range op.must(200, "GET", "/v1/ops/explore/featured", nil)["picks"].([]any) {
+		if m := p.(map[string]any); m["id"] == later && m["shown"] != false {
+			t.Fatalf("a pick not started shown: %v", m)
+		}
+	}
+	op.must(204, "POST", "/v1/ops/explore/featured/"+later+"/end", map[string]any{"step_up": op.stepUp(a, "ops.explore.unfeature", later)})
 	op.must(204, "POST", "/v1/ops/explore/featured/"+id+"/end", map[string]any{"step_up": op.stepUp(a, "ops.explore.unfeature", id)})
 	op.must(404, "POST", "/v1/ops/explore/featured/"+id+"/end", map[string]any{"step_up": op.stepUp(a, "ops.explore.unfeature", id)})
 	if got := viewer.must(200, "GET", "/v1/explore?section=featured", nil)["featured"].([]any); len(got) != 0 {
 		t.Fatalf("an ended pick: %v", got)
 	}
 	var n int
-	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM audit_log WHERE action IN ('ops.explore.feature', 'ops.explore.unfeature')`).Scan(&n); err != nil || n != 2 {
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT count(*) FROM audit_log WHERE action IN ('ops.explore.feature', 'ops.explore.unfeature')`).Scan(&n); err != nil || n != 4 {
 		t.Fatalf("audited: %d %v", n, err)
 	}
 }

@@ -363,4 +363,71 @@ void main() {
     await sub.cancel();
     store.close();
   });
+
+  test('only the pages named are kept: never who is signed in, the settings, a form, a section or a search', () {
+    for (final p in ['/v1/money/summary', '/v1/storefront/orders', '/v1/stock', '/v1/explore', '/v1/links/L1/statement', '/v1/dashboard']) {
+      expect(Transport.keeps(p, null), isTrue, reason: p);
+    }
+    for (final p in ['/v1/me', '/v1/app/config', '/v1/business-profile', '/v1/link-settings', '/v1/storefront', '/v1/members/u1', '/v1/link-chats', '/v1/money/exports/x/reveal']) {
+      expect(Transport.keeps(p, null), isFalse, reason: p);
+    }
+    expect(Transport.keeps('/v1/explore', {'section': 'near', 'offset': '12'}), isFalse);
+    expect(Transport.keeps('/v1/explore', {'q': 'rice'}), isFalse);
+    // The stock a sale is taken from: kept, but asked of the server first.
+    expect(Transport.atOnce('/v1/stock'), isFalse);
+    expect(Transport.atOnce('/v1/money/summary'), isTrue);
+  });
+
+  test('a slow refresh answered after a newer read is not kept over it; a write ends the answer from the phone', () async {
+    final store = await LocalStore.open('t_u', keys);
+    store.writePage('/v1/money/summary', jsonEncode({'in': 100}), 'W/"a"');
+    final slow = Completer<http.Response>();
+    var n = 0;
+    http.Response ok(int v) => http.Response(jsonEncode({'in': v}), 200, headers: {'content-type': 'application/json', 'etag': 'W/"$v"'});
+    final transport = Transport(
+      base: 'http://localhost',
+      token: 'x',
+      client: MockClient((req) async {
+        n++;
+        if (req.method != 'GET') return http.Response('{}', 200, headers: {'content-type': 'application/json'});
+        return n == 1 ? slow.future : ok(300);
+      }),
+    )..pages = store;
+    final told = <String>[];
+    final sub = Transport.pageChanged.stream.listen(told.add);
+    expect(await transport.send('GET', '/v1/money/summary'), {'in': 100}, reason: 'drawn at once');
+    // A payment recorded, the page read again: the server's newest.
+    await transport.send('POST', '/v1/money/entries', body: const {});
+    expect(await transport.send('GET', '/v1/money/summary'), {'in': 300});
+    // The first, slow answer arrives last: not kept, nobody told.
+    slow.complete(ok(200));
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(told, isEmpty);
+    expect(jsonDecode(store.readPage('/v1/money/summary')!.body), {'in': 300});
+    await sub.cancel();
+    store.close();
+  });
+
+  test('another business: what was shown and brought up to date starts afresh', () async {
+    final a = await LocalStore.open('t1_u', keys);
+    final b = await LocalStore.open('t2_u', keys);
+    b.writePage('/v1/money/summary', jsonEncode({'in': 7}), 'W/"b"');
+    var asked = 0;
+    final transport = Transport(
+      base: 'http://localhost',
+      token: 'x',
+      client: MockClient((req) async {
+        asked++;
+        return http.Response(jsonEncode({'in': 1}), 200, headers: {'content-type': 'application/json', 'etag': 'W/"1"'});
+      }),
+    )..pages = a;
+    await transport.send('GET', '/v1/money/summary');
+    expect(asked, 1);
+    transport.pages = b;
+    // B's own kept page, at once, as on a fresh start.
+    expect(await transport.send('GET', '/v1/money/summary'), {'in': 7});
+    a.close();
+    b.close();
+  });
 }

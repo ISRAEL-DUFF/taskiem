@@ -316,7 +316,8 @@ export function Explore({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  useFocusTrap(box, true, onClose);
+  // A dialog opened over it ("What do you sell?") owns the keys while open.
+  useFocusTrap(box, true, onClose, () => !box.current?.querySelector(".modal"));
   // The page behind does not scroll.
   useEffect(() => {
     document.documentElement.classList.add("no-scroll");
@@ -335,7 +336,9 @@ export function Explore({
   const [askCats, setAskCats] = useState(false);
   const doneAsking = useCallback(() => setAskCats(false), []);
   // Recently viewed: this browser only, for the business signed in.
-  const owner = useAuth().me?.tenant_id;
+  // Per person and business: someone else signing in here does not see it.
+  const me = useAuth().me;
+  const owner = me?.tenant_id && me.user?.id ? `${me.user.id}:${me.tenant_id}` : undefined;
   const [recent, setRecent] = useState<ExploreCard[]>(() => recentlyViewed(owner));
   const seen = (c: ExploreCard) =>
     setRecent((r) => (r[0]?.business === c.business ? r : rememberViewed(owner, c)));
@@ -352,8 +355,37 @@ export function Explore({
     if (!next) return;
     get<ExploreResult>(`/v1/explore?section=category&category=${encodeURIComponent(next)}`).then(
       (r) => wanted.current === next && setInCat({ ...r, in_category: r.in_category ?? [] }),
-      (e: unknown) => wanted.current === next && setError(e),
+      (e: unknown) => {
+        // Failed: said, and the chip let go, so a tap tries again.
+        if (wanted.current !== next) return;
+        setError(e);
+        wanted.current = undefined;
+        setChosen(undefined);
+      },
     );
+  };
+  // A card kept in Recently viewed, with our link with it as it is now (it
+  // was kept as it was then): the page's own copy when it has one, else
+  // what the chats know.
+  const current = (c: ExploreCard): ExploreCard => {
+    const s = start;
+    const shown = s
+      ? [...s.near, ...(s.across ?? []), ...(s.featured ?? []), ...(s.trusted ?? []), ...(s.popular ?? []), ...(s.delivery ?? []), ...s.fresh].find((x) => x.business === c.business)
+      : undefined;
+    const state: ExploreCard["state"] =
+      shown?.state ??
+      (asked[c.business]
+        ? "requested"
+        : convs.some((x) => x.business === c.business)
+          ? "active"
+          : pendingTo(links, c.business)
+            ? "requested"
+            : links.some((l) => l.business === c.business && l.state === "asked_us")
+              ? "asked_us"
+              : c.state === "active" || c.state === "requested" || c.state === "asked_us"
+                ? "none"
+                : c.state);
+    return state === c.state ? c : { ...c, state };
   };
   const nameOf = (key: string) =>
     start?.categories?.find((c) => c.key === key)?.name ?? CATEGORY_NAMES[key] ?? key;
@@ -471,19 +503,23 @@ export function Explore({
       setMore(true);
       try {
         const from = section === "category" ? inCat : start;
+        const forCategory = chosen;
         const [list, flag] = MORE[section];
         const have = (from?.[list] as ExploreCard[] | undefined)?.length ?? 0;
         const r = await get<ExploreResult>(
           `/v1/explore?section=${section}&offset=${have}${section === "category" && chosen ? `&category=${encodeURIComponent(chosen)}` : ""}`,
         );
-        const grow = (s: ExploreResult | undefined) =>
-          s && {
-            ...s,
-            [list]: [...((s[list] as ExploreCard[] | undefined) ?? []), ...((r[list] as ExploreCard[] | undefined) ?? [])],
-            [flag]: !!r[flag],
-          };
-        if (section === "category") setInCat(grow);
-        else setStart(grow);
+        // Each business once: a list's order can change between pages.
+        const grow = (s: ExploreResult | undefined) => {
+          if (!s) return s;
+          const have = (s[list] as ExploreCard[] | undefined) ?? [];
+          const fresh = ((r[list] as ExploreCard[] | undefined) ?? []).filter((c) => !have.some((x) => x.business === c.business));
+          return { ...s, [list]: [...have, ...fresh], [flag]: !!r[flag] };
+        };
+        if (section === "category") {
+          // Another category chosen meanwhile: this page is not its.
+          if (wanted.current === forCategory) setInCat(grow);
+        } else setStart(grow);
       } finally {
         setMore(false);
       }
@@ -707,10 +743,12 @@ export function Explore({
                 {(start.featured ?? []).length > 0 && (
                   <section aria-labelledby="explore-featured">
                     <SectionHead id="explore-featured" title="Featured" />
+                    {/* It scrolls sideways: reachable by the keyboard too. */}
                     <ul
                       className="explore-list tk-x-featured"
                       aria-label="Featured businesses"
                       data-testid="explore-featured"
+                      tabIndex={0}
                     >
                       {(start.featured ?? []).map((c) => cardOf(c, true))}
                     </ul>
@@ -725,7 +763,7 @@ export function Explore({
                     ["popular", "Popular", undefined, start.popular ?? [], !!start.popular_more, "popular businesses"],
                     ["delivery", "Delivery", undefined, start.delivery ?? [], start.delivery_more, "delivery businesses"],
                     ["new", "New on Taskiem", undefined, start.fresh, start.more, "new businesses"],
-                    ["recent", "Recently viewed", undefined, recent, false, ""],
+                    ["recent", "Recently viewed", undefined, recent.map(current), false, ""],
                   ] as const
                 )
                   .filter(([, , , cards]) => cards.length > 0)

@@ -55,7 +55,7 @@ describe("explore", () => {
   it("says Popular's count, never under three", () => {
     expect(popularLine({ links: 2 })).toBeUndefined();
     expect(popularLine({})).toBeUndefined();
-    expect(popularLine({ links: 4 })).toBe("Linked with 4 businesses");
+    expect(popularLine({ links: 3 })).toBe("Linked with 3+ businesses");
     expect(popularLine({ links: 20 })).toBe("Linked with 20+ businesses");
   });
 

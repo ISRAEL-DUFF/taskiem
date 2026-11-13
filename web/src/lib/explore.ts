@@ -26,7 +26,7 @@ export interface ExploreCard {
   available?: "free" | "busy" | "off";
   /** The one or two categories it picked (keys of CATEGORY_NAMES). */
   categories?: string[];
-  /** Popular only: its links made in the last 90 days (never under 3; from 10, rounded down to tens). */
+  /** Popular only: its links made in the last 90 days, rounded down (3, 5, then tens); never under 3. */
   links?: number;
 }
 
@@ -84,11 +84,11 @@ export const CATEGORY_NAMES: Record<string, string> = {
 /** How many a business picks at most. */
 export const MAX_CATEGORIES = 2;
 
-/** Popular's count: "Linked with 4 businesses", "Linked with 20+ businesses". */
+/** Popular's count: "Linked with 3+ businesses", "Linked with 20+ businesses" (sent rounded down: 3, 5, then tens). */
 export function popularLine(c: Pick<ExploreCard, "links">): string | undefined {
   const n = c.links ?? 0;
   if (n < 3) return undefined;
-  return `Linked with ${n >= 10 ? `${n}+` : n} businesses`;
+  return `Linked with ${n}+ businesses`;
 }
 
 /** The categories with businesses in them first, each group in the list's order. */

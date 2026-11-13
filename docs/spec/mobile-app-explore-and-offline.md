@@ -24,6 +24,15 @@ Settled by the founder, 13 November 2026: every suggestion in §4 is taken, and 
   - **Pages drawn at once** (§3.1): a page kept from before is shown at once and brought up to date behind it; a screen reads again when the fresh copy differs. "Updating…" shows over the tabs when that takes more than a second. The business profile and the switch to be found are never kept: they are edited and saved whole.
   - **Pictures and files kept long** (K-S4): a picture asked for by its version, and every attachment, may be kept 30 days (`private, max-age=2592000, immutable`).
   - **Tests:** the sections at twice the text on a small phone, and the start page as a parity screen (`explore-start`).
+- After review (migrations 00429, 00430):
+  - **Kept pages are named**, not every read: Today's, Money's and Orders' lists, the tools' lists and Explore's start page. Who is signed in, the app's settings, forms, a section's next page and searches are never kept. Of the kept ones, only the screens that redraw in place are drawn at once; the lists a form also reads (the stock a sale is taken from) ask the server first.
+  - **A slow answer never wins**: an answer to an earlier ask arriving after a newer one is not kept. A write ends any "just brought up to date" answer from the phone, and another business starts afresh.
+  - **"No connection"** only when there is none; a slow answer is not offline.
+  - **Reported businesses** (reports not yet looked at) leave every section and cannot be featured. A pick may start on a later date.
+  - **Popular's count** is rounded below ten too: "3+", "5+", then tens, and the section is ordered by what is shown.
+  - **Trusted** counts the activity of those who run a business (owner, admin, operator).
+  - **Scores kept**: whether a business is Trusted, and its count of links, are worked out every ten minutes (`explore_scores`), not for every business on every opening of Explore. What may be shown at all is still read live.
+  - **Recently viewed** shows each business's link as it is now, and is kept per person and business on the web.
 
 ## 1. Where things stand
 

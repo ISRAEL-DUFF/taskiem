@@ -57,10 +57,12 @@ func (s *Server) opsFeatured(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) opsFeature(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Business uuid.UUID  `json:"business"`
-		Until    time.Time  `json:"until"`
-		Note     string     `json:"note"`
-		StepUp   *opsStepUp `json:"step_up,omitempty"`
+		Business uuid.UUID `json:"business"`
+		// From is when it starts showing (now when left out).
+		From   *time.Time `json:"from,omitempty"`
+		Until  time.Time  `json:"until"`
+		Note   string     `json:"note"`
+		StepUp *opsStepUp `json:"step_up,omitempty"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -77,11 +79,11 @@ func (s *Server) opsFeature(w http.ResponseWriter, r *http.Request) {
 	o := operatorFrom(r.Context())
 	id := uuid.Must(uuid.NewV7())
 	err := s.opsTx(r, func(tx pgx.Tx, _ func(uuid.UUID) error) error {
-		if _, err := tx.Exec(r.Context(), `SELECT taskiem_ops_feature_add($1, $2, $3, $4, $5)`, id, req.Business, req.Until, req.Note, o.Actor()); err != nil {
+		if _, err := tx.Exec(r.Context(), `SELECT taskiem_ops_feature_add($1, $2, $3, $4, $5, $6)`, id, req.Business, req.From, req.Until, req.Note, o.Actor()); err != nil {
 			return err
 		}
 		return ops.AuditTx(r.Context(), tx, o.Actor(), "ops.explore.feature", req.Business.String(),
-			map[string]any{"pick": id.String(), "until": req.Until.UTC().Format(time.RFC3339), "note": req.Note})
+			map[string]any{"pick": id.String(), "from": req.From, "until": req.Until.UTC().Format(time.RFC3339), "note": req.Note})
 	})
 	if err != nil {
 		s.opsDBFail(w, r, err)

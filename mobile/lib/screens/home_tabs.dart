@@ -337,7 +337,13 @@ class _UpdatingState extends State<_Updating> {
   void initState() {
     super.initState();
     widget.updating.addListener(_changed);
+    widget.offline?.addListener(_offline);
     _changed();
+  }
+
+  // Offline now: that strip says so, this one goes.
+  void _offline() {
+    if (mounted) setState(() {});
   }
 
   void _changed() {
@@ -356,6 +362,7 @@ class _UpdatingState extends State<_Updating> {
   void dispose() {
     _wait?.cancel();
     widget.updating.removeListener(_changed);
+    widget.offline?.removeListener(_offline);
     super.dispose();
   }
 

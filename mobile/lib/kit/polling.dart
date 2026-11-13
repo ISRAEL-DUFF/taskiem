@@ -13,6 +13,7 @@ mixin Polling<T extends StatefulWidget> on State<T> {
   Timer? _poll;
   AppLifecycleListener? _life;
   StreamSubscription<String>? _fresh;
+  Timer? _soon;
   bool _awake = true;
 
   /// Calls [read] every [every] while the screen is seen; and once when the
@@ -27,8 +28,14 @@ mixin Polling<T extends StatefulWidget> on State<T> {
     });
     // A kept page drawn at once and since brought up to date: read again,
     // which now answers the fresh copy from the phone.
+    // Several pages brought up to date together are read once; a screen
+    // covered by another reads again when it is on top, as the timer does.
     _fresh ??= Transport.pageChanged.stream.listen((_) {
-      if (mounted) read();
+      _soon?.cancel();
+      _soon = Timer(const Duration(milliseconds: 300), () {
+        if (!mounted || !_awake || ModalRoute.of(context)?.isCurrent == false) return;
+        read();
+      });
     });
     _life ??= AppLifecycleListener(
       onStateChange: (s) {
@@ -43,6 +50,7 @@ mixin Polling<T extends StatefulWidget> on State<T> {
   void dispose() {
     _poll?.cancel();
     _fresh?.cancel();
+    _soon?.cancel();
     _life?.dispose();
     super.dispose();
   }

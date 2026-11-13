@@ -64,15 +64,17 @@ export function AskCategories({ onClose }: { onClose: () => void }) {
   if (!profile) return null;
   const save = () =>
     void act.run(async () => {
-      // The words as they are, with the categories.
+      // The words as they are now (read again: another tab may have
+      // changed them while this was open), with the categories.
+      const now = await get<BusinessProfile>("/v1/business-profile");
       await put("/v1/business-profile", {
-        name: profile.name,
-        tagline: profile.tagline,
-        area: profile.area,
-        about: profile.about,
-        delivers: profile.delivers,
-        vehicle: profile.vehicle,
-        delivery_areas: profile.delivery_areas,
+        name: now.name,
+        tagline: now.tagline,
+        area: now.area,
+        about: now.about,
+        delivers: now.delivers,
+        vehicle: now.vehicle,
+        delivery_areas: now.delivery_areas,
         categories: cats,
       });
       onClose();

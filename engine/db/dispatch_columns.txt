@@ -1443,3 +1443,7 @@ explore_featured.until
 link_messages.created_at
 link_messages.mine
 link_messages.tenant_id
+explore_scores.business
+explore_scores.links
+explore_scores.scored_at
+explore_scores.trusted

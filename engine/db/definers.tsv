@@ -350,6 +350,7 @@ taskiem_staff_tenants()	@ISRAEL-DUFF (staff)	The businesses the staff job has wo
 taskiem_link_explore_more(text,text,integer,integer)	@ISRAEL-DUFF (business links)	Explore's Featured, Trusted, Popular and one category: only findable businesses, never ourselves or one linked with us, never a suspended page; Popular as a rounded count only (00427)
 taskiem_link_explore_categories()	@ISRAEL-DUFF (business links)	How many findable businesses are in each category (00427)
 taskiem_link_categories_of(uuid[])	@ISRAEL-DUFF (business links)	The categories of businesses that are findable or linked with us (00427)
-taskiem_ops_feature_add(uuid,uuid,timestamp with time zone,text,text)	@ISRAEL-DUFF (operator-console)	Operators: feature a findable business in Explore until a date; called only from /v1/ops behind a passkey step-up (00427)
+taskiem_ops_feature_add(uuid,uuid,timestamp with time zone,timestamp with time zone,text,text)	@ISRAEL-DUFF (operator-console)	Operators: feature a findable, unreported business in Explore from one date until another; called only from /v1/ops behind a passkey step-up (00427, 00429)
 taskiem_ops_feature_end(uuid,text)	@ISRAEL-DUFF (operator-console)	Operators: end a Featured pick (00427)
 taskiem_ops_featured()	@ISRAEL-DUFF (operator-console)	Operators: the Featured picks (00427)
+taskiem_link_explore_rescore()	@ISRAEL-DUFF (business links)	Works out again, for every findable business, whether it is Trusted on Taskiem and its count of links in the last 90 days, for Explore's sections; run by the server every ten minutes, answers only a count (00430)
