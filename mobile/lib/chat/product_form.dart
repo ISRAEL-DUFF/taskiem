@@ -926,7 +926,11 @@ class _ProductFormState extends State<ProductForm> {
     final sizes = hasSizes(_it);
     final line = sizes && _all != null ? sizesLine(_all!, _id) : null;
     if (_sizesOpen) {
-      return SizesEditor(auth: widget.auth, item: _it, onSaved: widget.onSaved, onCancel: () => setState(() => _sizesOpen = false), pickers: widget.pickers);
+      // The sizes over the product's form: Back comes back to the form.
+      return TkSheetStep(
+        onBack: () => setState(() => _sizesOpen = false),
+        child: SizesEditor(auth: widget.auth, item: _it, onSaved: widget.onSaved, onCancel: () => setState(() => _sizesOpen = false), pickers: widget.pickers),
+      );
     }
     return TkToolForm(
       save: _save,

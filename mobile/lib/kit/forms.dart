@@ -462,7 +462,7 @@ mixin CloseSoon<T extends StatefulWidget> on State<T> {
   void closeSoon([Object? result]) {
     _closing?.cancel();
     _closing = Timer(const Duration(milliseconds: 1300), () {
-      if (mounted && (ModalRoute.of(context)?.isCurrent ?? true)) Navigator.of(context).maybePop(result);
+      if (mounted && (ModalRoute.of(context)?.isCurrent ?? true)) Navigator.of(context).pop(result);
     });
   }
 

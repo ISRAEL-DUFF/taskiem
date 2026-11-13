@@ -1,6 +1,8 @@
-// A sheet on a phone follows the finger down from its grab handle: thrown
-// down (fast) or pulled past a third of its height, it closes; let go early
-// and it springs back (docs/spec/chat-tools.md §2, the Motion artboard).
+// A sheet on a phone follows the finger from its grab handle, as a phone's
+// own sheets do: pulled up, it grows to the whole screen; pulled down from
+// there, back to its own height; thrown down (fast) or pulled past a third
+// of its height, it closes; let go early and it springs back
+// (docs/spec/chat-tools.md §2, the Motion artboard).
 
 import { useCallback, useRef, type PointerEvent, type RefObject } from "react";
 
@@ -11,17 +13,27 @@ export function throwsClosed(dy: number, ms: number, h: number): boolean {
   return speed > 0.6 || dy > h / 3;
 }
 
-export function useSheetDrag(sheet: RefObject<HTMLElement | null>, onClose: () => void) {
+/** How far a pull up (negative) or down grows or shrinks a sheet. */
+export const RESIZE_PX = 48;
+
+export function useSheetDrag(
+  sheet: RefObject<HTMLElement | null>,
+  onClose: () => void,
+  full = false,
+  setFull?: (full: boolean) => void,
+) {
   const start = useRef<{ y: number; t: number } | null>(null);
   const move = useCallback(
     (e: PointerEvent) => {
       const el = sheet.current;
       if (!start.current || !el) return;
-      const dy = Math.max(0, e.clientY - start.current.y);
+      const raw = e.clientY - start.current.y;
+      // Up only as far as a little give, unless it can still grow.
+      const dy = raw < 0 ? (setFull && !full ? raw / 2 : raw / 6) : raw;
       el.style.transition = "none";
       el.style.transform = `translateY(${dy}px)`;
     },
-    [sheet],
+    [sheet, full, setFull],
   );
   const end = useCallback(
     (e: PointerEvent) => {
@@ -30,13 +42,19 @@ export function useSheetDrag(sheet: RefObject<HTMLElement | null>, onClose: () =
       start.current = null;
       if (!el || !s) return;
       const dy = e.clientY - s.y;
-      el.style.transition = "transform var(--t-picker) var(--spring-settle)";
-      if (throwsClosed(dy, performance.now() - s.t, el.offsetHeight)) {
+      el.style.transition = "transform var(--t-picker) var(--spring-settle), top var(--t-picker) var(--spring-settle)";
+      if (setFull && !full && dy < -RESIZE_PX) {
+        el.style.transform = "";
+        setFull(true);
+      } else if (setFull && full && dy > RESIZE_PX && !throwsClosed(dy, performance.now() - s.t, el.offsetHeight * 1.6)) {
+        el.style.transform = "";
+        setFull(false);
+      } else if (throwsClosed(dy, performance.now() - s.t, el.offsetHeight)) {
         el.style.transform = "translateY(100%)";
         window.setTimeout(onClose, 200);
       } else el.style.transform = "";
     },
-    [sheet, onClose],
+    [sheet, onClose, full, setFull],
   );
   return {
     onPointerDown: (e: PointerEvent) => {

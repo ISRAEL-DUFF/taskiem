@@ -71,7 +71,8 @@ Future<void> showToolSheet(
   tools.chats.prefs?.rememberTool(tool.key);
   return showTkSheet<void>(
     context,
-    (_) => ToolSheet(tools: tools, tool: tool, chip: chip, onRow: onRow, detail: detail, footer: footer, openId: openId, onSaved: onSaved),
+    // Back from the list: the tools panel again (kit.tsx ToolSheet onTools).
+    (_) => ToolSheet(tools: tools, tool: tool, chip: chip, onRow: onRow, detail: detail, footer: footer, openId: openId, onSaved: onSaved, onTools: tools.toggle),
   );
 }
 
@@ -98,7 +99,10 @@ class ToolHost {
 bool _plain(ToolRow r) => r.data != null && ((r.data!['choices'] as List?)?.length ?? 0) == 0 && r.data!['variant_of'] == null;
 
 class ToolSheet extends StatefulWidget {
-  const ToolSheet({super.key, required this.tools, required this.tool, this.chip, this.onRow, this.detail, this.footer, this.openId, this.onSaved});
+  const ToolSheet({super.key, required this.tools, required this.tool, this.chip, this.onRow, this.detail, this.footer, this.openId, this.onSaved, this.onTools});
+
+  /// Back from the list: the sheet goes and the tools panel opens again.
+  final VoidCallback? onTools;
   final ToolsController tools;
   final Tool tool;
 
@@ -146,7 +150,7 @@ class _ToolSheetState extends State<ToolSheet> {
     // FormFrame's SavedTick: "Saved", whatever was saved.
     setState(() => _saved = true);
     Future<void>.delayed(const Duration(milliseconds: 1300), () {
-      if (mounted) Navigator.of(context).maybePop();
+      if (mounted) Navigator.of(context).pop();
     });
   }
 
@@ -222,6 +226,17 @@ class _ToolSheetState extends State<ToolSheet> {
         return TkSheet(
           title: title,
           count: list?.length,
+          onBack: _picking
+              ? () => setState(() {
+                  _picking = false;
+                  _picked.clear();
+                })
+              : widget.onTools == null
+              ? null
+              : () {
+                  Navigator.of(context).pop();
+                  widget.onTools!();
+                },
           overlay: _saved ? const TkSavedTick() : null,
           footer: _picking
               ? TkCta(

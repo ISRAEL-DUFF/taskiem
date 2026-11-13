@@ -930,11 +930,18 @@ class BubbleFrame extends StatelessWidget {
 /// button and against its right edge; its entries, then nothing more on a
 /// phone (Keyboard is a computer's). A tap elsewhere or Back closes it.
 Future<void> showHeadMenu(BuildContext context, {required Rect at, required List<(String, VoidCallback)> items}) {
+  final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
   return Navigator.of(context).push<void>(
     PageRouteBuilder<void>(
       opaque: false,
-      transitionDuration: Duration.zero,
-      reverseTransitionDuration: Duration.zero,
+      // `.chat-menu { animation: chat-menu-in 160ms var(--ease-out) }`:
+      // it grows from the button's corner as it fades in.
+      transitionDuration: still ? Duration.zero : const Duration(milliseconds: 160),
+      reverseTransitionDuration: still ? Duration.zero : const Duration(milliseconds: 110),
+      transitionsBuilder: (context, a, _, child) {
+        final e = CurvedAnimation(parent: a, curve: const Cubic(0.16, 1, 0.3, 1));
+        return FadeTransition(opacity: a, child: ScaleTransition(scale: Tween(begin: 0.92, end: 1.0).animate(e), alignment: Alignment.topRight, child: child));
+      },
       pageBuilder: (context, _, _) {
         final t = TkTheme.tokens(context);
         final width = MediaQuery.sizeOf(context).width;
@@ -948,13 +955,13 @@ Future<void> showHeadMenu(BuildContext context, {required Rect at, required List
                 container: true,
                 explicitChildNodes: true,
                 child: Container(
-                  constraints: const BoxConstraints(minWidth: 160),
-                  padding: const EdgeInsets.all(4),
+                  // `.chat-menu`: 6 px, 18 px corners, the lift, no line.
+                  constraints: BoxConstraints(minWidth: 200, maxWidth: width - 32),
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     color: t.panel,
-                    border: Border.all(color: t.border),
-                    borderRadius: BorderRadius.circular(Tk.radius),
-                    boxShadow: t.shadowMd,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: t.tkLift,
                   ),
                   child: IntrinsicWidth(
                     child: Column(
@@ -969,25 +976,12 @@ Future<void> showHeadMenu(BuildContext context, {required Rect at, required List
                                 onTap();
                               },
                             excludeSemantics: true,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
+                            child: _MenuItem(
+                              label: label,
                               onTap: () {
                                 Navigator.of(context).pop();
                                 onTap();
                               },
-                              child: Container(
-                                // `.chat-menu button`: 10 px 12 px, 40 px; the
-                                // site's button shadow under each.
-                                constraints: const BoxConstraints(minHeight: 40),
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                alignment: Alignment.centerLeft,
-                                decoration: BoxDecoration(
-                                  color: t.panel,
-                                  borderRadius: BorderRadius.circular(6),
-                                  boxShadow: const [BoxShadow(color: Color(0x0A0E0F0C), offset: Offset(0, 1), blurRadius: 2)],
-                                ),
-                                child: Text(label, style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: t.text)),
-                              ),
                             ),
                           )),
                       ],
@@ -1001,6 +995,41 @@ Future<void> showHeadMenu(BuildContext context, {required Rect at, required List
       },
     ),
   );
+}
+
+/// `.chat-menu button`: 12 px 14 px, 44 px, 12 px corners, no shadow; the
+/// selection's tint while pressed.
+class _MenuItem extends StatefulWidget {
+  const _MenuItem({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  State<_MenuItem> createState() => _MenuItemState();
+}
+
+class _MenuItemState extends State<_MenuItem> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) => setState(() => _down = true),
+      onTapCancel: () => setState(() => _down = false),
+      onTapUp: (_) => setState(() => _down = false),
+      onTap: widget.onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 90),
+        constraints: const BoxConstraints(minHeight: 44),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        alignment: Alignment.centerLeft,
+        decoration: BoxDecoration(color: _down ? t.chatSelect : null, borderRadius: BorderRadius.circular(12)),
+        child: Text(widget.label, style: tkText(size: 15, weight: 500, lineHeight: 1.33, color: t.text)),
+      ),
+    );
+  }
 }
 
 /// BubbleShell's touch: a finger held opens the menu, a swipe right replies

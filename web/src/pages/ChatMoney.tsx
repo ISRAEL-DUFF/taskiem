@@ -5,7 +5,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { get, post, postOnce } from "../api";
-import { KitField, Pill } from "../kit";
+import { KitField, Pill, useSheetStep } from "../kit";
 import { ErrorBox, useLoad } from "../ui";
 import {
   dateLabel,
@@ -54,6 +54,8 @@ export function InvoiceView({
   const { can } = useAuth();
   const acts = invoiceActions(x.status, can);
   const [mode, setMode] = useState<"" | "pay" | "void">("");
+  // A step inside the sheet: Back comes back from it.
+  useSheetStep(mode !== "", () => setMode(""));
   const [amount, setAmount] = useState(
     x.due_kobo > 0 ? String(x.due_kobo / 100) : "",
   );

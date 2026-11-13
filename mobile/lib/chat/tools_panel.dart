@@ -456,15 +456,53 @@ class ToolsAnchor extends StatefulWidget {
   State<ToolsAnchor> createState() => _ToolsAnchorState();
 }
 
-class _ToolsAnchorState extends State<ToolsAnchor> {
+class _ToolsAnchorState extends State<ToolsAnchor> with SingleTickerProviderStateMixin {
   final _portal = OverlayPortalController();
   final _link = LayerLink();
   final _at = GlobalKey();
+
+  /// chat.css: `.tk-tools { animation: tk-spring-up var(--t-picker)
+  /// var(--spring) }`, leaving `tk-leave-down 180ms var(--ease-out)`.
+  late final _motion = AnimationController(vsync: this, duration: Tk.tPicker, reverseDuration: const Duration(milliseconds: 180));
 
   @override
   void initState() {
     super.initState();
     _portal.show();
+    widget.tools.addListener(_changed);
+    if (widget.tools.shown) _motion.value = 1;
+  }
+
+  @override
+  void didUpdateWidget(ToolsAnchor old) {
+    super.didUpdateWidget(old);
+    if (old.tools == widget.tools) return;
+    old.tools.removeListener(_changed);
+    widget.tools.addListener(_changed);
+  }
+
+  @override
+  void dispose() {
+    widget.tools.removeListener(_changed);
+    _motion.dispose();
+    super.dispose();
+  }
+
+  void _changed() {
+    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (widget.tools.shown) {
+      if (still) {
+        _motion.value = 1;
+      } else if (_motion.status != AnimationStatus.forward && _motion.value < 1) {
+        _motion.forward();
+      }
+    } else {
+      if (still) {
+        _motion.value = 0;
+      } else if (_motion.value > 0) {
+        _motion.reverse();
+      }
+    }
   }
 
   /// The composer's top on the screen.
@@ -478,23 +516,33 @@ class _ToolsAnchorState extends State<ToolsAnchor> {
     return OverlayPortal(
       controller: _portal,
       overlayChildBuilder: (context) => ListenableBuilder(
-        listenable: widget.tools,
+        listenable: Listenable.merge([widget.tools, _motion]),
         builder: (context, _) {
-          if (!widget.tools.shown) return const SizedBox.shrink();
+          final shown = widget.tools.shown;
+          if (!shown && _motion.value == 0) return const SizedBox.shrink();
           final top = _top();
           final pad = MediaQuery.paddingOf(context);
           // The room above the composer, up to 12 px under the screen's top
           // (the page's, under the phone's bar), over the head too.
           final room = (top - pad.top - 12).clamp(160.0, double.infinity);
+          final v = _motion.value;
+          final leaving = _motion.status == AnimationStatus.reverse;
+          // In: up 14 px and from 98%, on the spring, seen by 70% of it.
+          // Out: down 12 px as it fades.
+          final rise = leaving ? 0.0 : Tk.spring.transform(v);
+          final dy = leaving ? 12 * (1 - Tk.easeOut.transform(v)) : 14 * (1 - rise);
+          final scale = leaving ? 1.0 : 0.98 + 0.02 * rise;
+          final opacity = leaving ? Tk.easeOut.transform(v) : (v / 0.7).clamp(0.0, 1.0);
           return Stack(
             children: [
-              Positioned(
-                left: 0,
-                right: 0,
-                top: 0,
-                height: top,
-                child: GestureDetector(behavior: HitTestBehavior.translucent, onTap: widget.tools.close, excludeFromSemantics: true),
-              ),
+              if (shown)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: top,
+                  child: GestureDetector(behavior: HitTestBehavior.translucent, onTap: widget.tools.close, excludeFromSemantics: true),
+                ),
               Positioned(
                 left: 0,
                 top: 0,
@@ -502,7 +550,24 @@ class _ToolsAnchorState extends State<ToolsAnchor> {
                   link: _link,
                   targetAnchor: Alignment.topLeft,
                   followerAnchor: Alignment.bottomLeft,
-                  child: SizedBox(width: MediaQuery.sizeOf(context).width, child: widget.panel(context, room)),
+                  child: IgnorePointer(
+                    ignoring: !shown,
+                    child: ExcludeSemantics(
+                      excluding: !shown,
+                      child: Opacity(
+                        alwaysIncludeSemantics: shown,
+                        opacity: opacity.clamp(0.0, 1.0),
+                        child: Transform.translate(
+                          offset: Offset(0, dy),
+                          child: Transform.scale(
+                            scale: scale,
+                            alignment: Alignment.bottomCenter,
+                            child: SizedBox(width: MediaQuery.sizeOf(context).width, child: widget.panel(context, room)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],

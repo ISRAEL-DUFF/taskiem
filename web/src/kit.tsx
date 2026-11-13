@@ -1,4 +1,6 @@
 import {
+  createContext,
+  useContext,
   useEffect,
   useId,
   useLayoutEffect,
@@ -226,6 +228,26 @@ export function DiaryLine({
   );
 }
 
+/** The steps open inside a sheet, deepest last: each its way back. */
+const SheetSteps = createContext<{ add: (back: () => void) => () => void } | null>(
+  null,
+);
+
+/**
+ * A step inside a sheet (a product's sizes over its form, a bill's "paid
+ * outside" over the bill): while [open], the sheet's Back (and Esc, and a
+ * phone's back) comes back from it first, however deep it is.
+ */
+export function useSheetStep(open: boolean, back: () => void) {
+  const steps = useContext(SheetSteps);
+  const latest = useRef(back);
+  latest.current = back;
+  useEffect(() => {
+    if (!open || !steps) return;
+    return steps.add(() => latest.current());
+  }, [open, steps]);
+}
+
 /**
  * The sheet a tool opens in, one frame on every screen: up from the bottom
  * on a phone (pulled down to close), a drawer on a tablet, a panel beside
@@ -274,6 +296,18 @@ export function Sheet({
   const id = useId();
   const docked = useMediaQuery("(min-width: 1200px)");
   const [leaving, setLeaving] = useState(false);
+  // Steps open inside it, each its way back (useSheetStep).
+  const [steps, setSteps] = useState<Array<() => void>>([]);
+  const [stepsCtx] = useState(() => ({
+    add: (back: () => void) => {
+      setSteps((s) => [...s, back]);
+      return () => setSteps((s) => s.filter((b) => b !== back));
+    },
+  }));
+  // Back: out of the deepest step, else the sheet's own (form to list).
+  const back = steps.length ? steps[steps.length - 1] : onBack;
+  // Pulled up, the sheet takes the whole screen; down again, its own height.
+  const [full, setFull] = useState(false);
   // Opened from a tile or a card: it grows out of it, and that is its one
   // entrance. The class is in the markup from the first render, so the CSS
   // rise is off before the sheet is measured, and stays off: removing it
@@ -296,12 +330,12 @@ export function Sheet({
       el.focus({ preventScroll: true });
   }, [title]);
   // Esc steps back from a form to its list, then closes the sheet only.
-  const escape = () => (onBack ? onBack() : close());
+  const escape = () => (back ? back() : close());
   useFocusTrap(ref, !docked, escape);
   useEffect(() => {
     if (shut) close();
   }, [shut]);
-  const drag = useSheetDrag(ref, onClose);
+  const drag = useSheetDrag(ref, onClose, full, setFull);
   // On a computer the page makes room for the panel beside it.
   useEffect(() => {
     document.documentElement.classList.add("tk-sheet-open");
@@ -344,7 +378,7 @@ export function Sheet({
       )}
       <section
         ref={ref}
-        className={`tk-sheet${docked ? " docked" : ""}${grown ? " tk-grown" : ""}${leaving ? " leaving" : ""}`}
+        className={`tk-sheet${docked ? " docked" : ""}${full ? " full" : ""}${grown ? " tk-grown" : ""}${leaving ? " leaving" : ""}`}
         role="dialog"
         aria-modal={!docked}
         aria-labelledby={id}
@@ -362,21 +396,21 @@ export function Sheet({
       >
         <div className="tk-sheet-grab" aria-hidden="true" {...drag} />
         <div ref={body} className="tk-sheet-body">
-          <div className={`tk-sheet-head${onBack && crumb ? " crumbed" : ""}`}>
-            {onBack && !crumb && (
+          <div className={`tk-sheet-head${back && crumb && !steps.length ? " crumbed" : ""}`}>
+            {back && (!crumb || steps.length > 0) && (
               <button
                 type="button"
                 className="tk-round tk-back"
                 aria-label="Back"
-                onClick={onBack}
+                onClick={back}
               >
                 <Icon name="back" />
               </button>
             )}
-            {onBack && crumb && (
+            {back && crumb && !steps.length && (
               // Where you are, as the boards draw it: "Products / Jollof
               // rice", the first word the way back.
-              <button type="button" className="tk-crumb-back" onClick={onBack}>
+              <button type="button" className="tk-crumb-back" onClick={back}>
                 {crumb}
                 <span className="sr-only">: back to the list</span>
               </button>
@@ -401,8 +435,10 @@ export function Sheet({
               <Icon name="close" />
             </button>
           </div>
-          {children}
-          {footer && <div className="tk-sheet-foot">{footer}</div>}
+          <SheetSteps.Provider value={stepsCtx}>
+            {children}
+            {footer && <div className="tk-sheet-foot">{footer}</div>}
+          </SheetSteps.Provider>
         </div>
       </section>
     </>

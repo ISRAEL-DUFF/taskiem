@@ -792,7 +792,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         // Reorder: the sheet closes; their shop opens with its lines.
         onReorder: supplies
             ? (p) {
-                Navigator.of(context).maybePop();
+                Navigator.of(context).pop();
                 _order(OrderStart(last: p));
               }
             : null,
@@ -802,7 +802,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
               builder: (sheet) => TkCta(
                 label: 'New order',
                 onTap: () {
-                  Navigator.of(sheet).maybePop();
+                  Navigator.of(sheet).pop();
                   _order();
                 },
               ),

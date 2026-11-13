@@ -362,7 +362,10 @@ class _InvoiceViewState extends State<InvoiceView> {
                 ),
         ),
     ];
-    return Column(
+    return TkSheetStep(
+      open: _mode.isNotEmpty,
+      onBack: () => setState(() => (_mode = '', _error = null)),
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
@@ -417,6 +420,7 @@ class _InvoiceViewState extends State<InvoiceView> {
         ),
         if (widget.canEdit && buttons.isNotEmpty) sheetFoot(context, buttons),
       ],
+    ),
     );
   }
 }
@@ -612,7 +616,10 @@ class _BillViewState extends State<BillView> {
       ] else
         TkCta(label: 'Open the bill', onTap: _open),
     ];
-    return Column(
+    return TkSheetStep(
+      open: _mode.isNotEmpty,
+      onBack: () => setState(() => (_mode = '', _error = null)),
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
@@ -670,6 +677,7 @@ class _BillViewState extends State<BillView> {
         ),
         sheetFoot(context, buttons),
       ],
+    ),
     );
   }
 }

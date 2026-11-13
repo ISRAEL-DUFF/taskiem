@@ -62,8 +62,81 @@ class _SheetFrame extends InheritedWidget {
   bool updateShouldNotify(_SheetFrame old) => old.rise != rise || old.dim != dim;
 }
 
-/// kit.tsx Sheet.
-class TkSheet extends StatelessWidget {
+/// kit.tsx useSheetStep: a step open inside a sheet (a product's sizes over
+/// its form, a bill's "paid outside" over the bill). While it is there the
+/// sheet's Back, and the phone's own back, come back from it first, however
+/// deep it is.
+class TkSheetStep extends StatefulWidget {
+  const TkSheetStep({super.key, this.open = true, required this.onBack, required this.child});
+
+  /// Whether the step is open now (kept in place either way, so what is
+  /// typed under it stays).
+  final bool open;
+  final VoidCallback onBack;
+  final Widget child;
+
+  @override
+  State<TkSheetStep> createState() => _TkSheetStepState();
+}
+
+class _TkSheetStepState extends State<TkSheetStep> {
+  _TkSheetState? _sheet;
+  bool _in = false;
+
+  void _back() => widget.onBack();
+
+  /// Into the sheet's steps while open, out when not; after the frame (the
+  /// sheet is being built when its steps are).
+  void _sync() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final want = widget.open && _sheet != null;
+      if (want == _in) return;
+      _in = want;
+      want ? _sheet!._add(_back) : _sheet?._remove(_back);
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final sheet = context.dependOnInheritedWidgetOfExactType<_SheetSteps>()?.sheet;
+    if (sheet == _sheet) return _sync();
+    if (_in) _sheet?._remove(_back);
+    _in = false;
+    _sheet = sheet;
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(TkSheetStep old) {
+    super.didUpdateWidget(old);
+    if (old.open != widget.open) _sync();
+  }
+
+  @override
+  void dispose() {
+    final sheet = _sheet;
+    if (_in) WidgetsBinding.instance.addPostFrameCallback((_) => sheet?._remove(_back));
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+class _SheetSteps extends InheritedWidget {
+  const _SheetSteps({required this.sheet, required super.child});
+  final _TkSheetState sheet;
+
+  @override
+  bool updateShouldNotify(_SheetSteps old) => old.sheet != sheet;
+}
+
+/// kit.tsx Sheet. Pulled up by its grab bar or head it takes the whole
+/// screen; down again, its own height; thrown down, or pulled past a third
+/// of its height, it closes; let go early, it springs back.
+class TkSheet extends StatefulWidget {
   const TkSheet({super.key, required this.title, required this.body, this.footer, this.onBack, this.overlay, this.semanticsLabel, this.count, this.crumb, this.lead, this.sub, this.bareFooter = false});
 
   final String title;
@@ -96,20 +169,89 @@ class TkSheet extends StatelessWidget {
   final bool bareFooter;
 
   @override
+  State<TkSheet> createState() => _TkSheetState();
+}
+
+class _TkSheetState extends State<TkSheet> with SingleTickerProviderStateMixin {
+  final _steps = <VoidCallback>[];
+  bool _full = false;
+
+  /// How far the finger has it moved (down is positive).
+  double _drag = 0;
+  bool _dragging = false;
+
+  /// The way back from where it was let go.
+  late final AnimationController _settle = AnimationController(vsync: this, duration: Tk.tPicker)..addListener(() => setState(() => _drag = _from * (1 - Tk.springSettle.transform(_settle.value))));
+  double _from = 0;
+
+  void _add(VoidCallback back) => setState(() => _steps.add(back));
+  void _remove(VoidCallback back) {
+    if (!mounted) return;
+    setState(() => _steps.remove(back));
+  }
+
+  @override
+  void dispose() {
+    _settle.dispose();
+    super.dispose();
+  }
+
+  void _pull(DragUpdateDetails d) {
+    _settle.stop();
+    setState(() {
+      _dragging = true;
+      _drag += d.delta.dy;
+    });
+  }
+
+  void _letGo(DragEndDetails d, double height, VoidCallback close) {
+    final v = d.primaryVelocity ?? 0;
+    final dy = _drag;
+    setState(() => _dragging = false);
+    if (!_full && dy < -48) {
+      _full = true;
+    } else if (_full && dy > 48 && v < 700 && dy < height / 2) {
+      _full = false;
+    } else if (v > 700 || dy > height / 3) {
+      close();
+      return;
+    }
+    _from = dy;
+    if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) {
+      setState(() => _drag = 0);
+    } else {
+      _settle.forward(from: 0);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final title = widget.title;
+    final body = widget.body;
+    final footer = widget.footer;
+    final overlay = widget.overlay;
+    final semanticsLabel = widget.semanticsLabel;
+    final count = widget.count;
+    final lead = widget.lead;
+    final sub = widget.sub;
+    final bareFooter = widget.bareFooter;
+    // Back: out of the deepest step open inside, else the sheet's own.
+    final onBack = _steps.isNotEmpty ? _steps.last : widget.onBack;
+    // "Products / Jollof rice" names the list's row, not a step inside it.
+    final crumb = _steps.isNotEmpty && widget.onBack != null ? null : widget.crumb;
     final t = TkTheme.tokens(context);
     final frame = context.dependOnInheritedWidgetOfExactType<_SheetFrame>();
     final rise = frame?.rise ?? 1;
     final dim = frame?.dim ?? 1;
     final pad = MediaQuery.paddingOf(context);
-    void close() => Navigator.of(context).maybePop();
+    void close() => Navigator.of(context).pop();
     final big = MediaQuery.textScalerOf(context).scale(10) > 15;
-    final Widget head = Padding(
+    final Widget headRow = Padding(
                             padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
                             child: Row(
                               children: [
                                 if (onBack != null && crumb == null) ...[
-                                  _Round(icon: 'back', label: 'Back', onTap: onBack!),
+                                  _Round(icon: 'back', label: 'Back', onTap: onBack),
                                   // `.tk-back { margin-right: 4px }` with the head's 12 px gap.
                                   const SizedBox(width: 16),
                                 ],
@@ -130,7 +272,7 @@ class TkSheet extends StatelessWidget {
                                           child: Row(
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              Text(crumb!, style: tkText(size: 14, weight: 500, color: t.muted)),
+                                              Text(crumb, style: tkText(size: 14, weight: 500, color: t.muted)),
                                               const SizedBox(width: 8),
                                               Text('/', style: tkText(size: 14, weight: 500, color: t.muted)),
                                               const SizedBox(width: 2),
@@ -143,7 +285,7 @@ class TkSheet extends StatelessWidget {
                                   const SizedBox(width: 6),
                                 ],
                                 if (lead != null) ...[
-                                  SizedBox(width: 48, height: 48, child: ExcludeSemantics(child: lead!)),
+                                  SizedBox(width: 48, height: 48, child: ExcludeSemantics(child: lead)),
                                   const SizedBox(width: 12),
                                 ],
                                 Expanded(
@@ -152,7 +294,7 @@ class TkSheet extends StatelessWidget {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        if (crumb != null && onBack == null) Text(crumb!, style: tkText(size: 13, weight: 600, color: t.muted)),
+                                        if (crumb != null && onBack == null) Text(crumb, style: tkText(size: 13, weight: 600, color: t.muted)),
                                         Text.rich(
                                           TextSpan(
                                             text: title,
@@ -173,7 +315,7 @@ class TkSheet extends StatelessWidget {
                                         ),
                                         if (sub != null) ...[
                                           const SizedBox(height: 2),
-                                          Text(sub!, style: tkText(size: 13, color: t.muted)),
+                                          Text(sub, style: tkText(size: 13, color: t.muted)),
                                         ],
                                       ],
                                     ),
@@ -184,6 +326,72 @@ class TkSheet extends StatelessWidget {
                               ],
                             ),
                           );
+    return PopScope(
+      // The phone's back steps back inside the sheet first.
+      canPop: onBack == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) onBack?.call();
+      },
+      child: _SheetSteps(
+        sheet: this,
+        child: LayoutBuilder(
+          builder: (context, screen) {
+            final top = _full ? pad.top : 84 + pad.top;
+            final height = screen.maxHeight - top;
+            // Up only a little past where it can go (it gives, then stops).
+            final room = _full ? 0.0 : 84.0;
+            final lift = _drag >= 0 ? _drag : -((-_drag).clamp(0.0, room) + ((-_drag - room).clamp(0.0, 120.0) / 6));
+            final pulled = GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onVerticalDragUpdate: _pull,
+              onVerticalDragEnd: (d) => _letGo(d, height, close),
+              onVerticalDragCancel: () => _letGo(DragEndDetails(primaryVelocity: 0), height, close),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // `.tk-sheet-grab`.
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10, bottom: 4),
+                    child: Center(
+                      child: Container(
+                        width: 40,
+                        height: 5,
+                        decoration: BoxDecoration(color: t.borderStrong, borderRadius: BorderRadius.circular(3)),
+                      ),
+                    ),
+                  ),
+                  if (!big) headRow,
+                ],
+              ),
+            );
+            return _sheet(context, t, top: top, lift: lift, pulled: pulled, headRow: headRow, big: big, close: close, rise: rise, dim: dim,
+                title: title, body: body, footer: footer, overlay: overlay, semanticsLabel: semanticsLabel, bareFooter: bareFooter);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _sheet(
+    BuildContext context,
+    TkTokens t, {
+    required double top,
+    required double lift,
+    required Widget pulled,
+    required Widget headRow,
+    required bool big,
+    required VoidCallback close,
+    required double rise,
+    required double dim,
+    required String title,
+    required Widget body,
+    required Widget? footer,
+    required Widget? overlay,
+    required String? semanticsLabel,
+    required bool bareFooter,
+  }) {
+    final head = headRow;
     return Stack(
       children: [
         // `.tk-veil { background: var(--tk-veil); backdrop-filter: blur(2px) }`
@@ -200,15 +408,17 @@ class TkSheet extends StatelessWidget {
             ),
           ),
         ),
-        Positioned(
+        AnimatedPositioned(
+          duration: _dragging || (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ? Duration.zero : Tk.tPicker,
+          curve: Tk.springSettle,
           left: 0,
           right: 0,
           bottom: 0,
-          // `top: 84px`
-          top: 84 + pad.top,
+          // `top: 84px`; pulled up, the whole screen.
+          top: top,
           child: LayoutBuilder(
             builder: (context, box) => Transform.translate(
-              offset: Offset(0, (1 - rise) * box.maxHeight),
+              offset: Offset(0, (1 - rise) * box.maxHeight + lift),
               child: Semantics(
                 scopesRoute: true,
                 namesRoute: true,
@@ -218,7 +428,7 @@ class TkSheet extends StatelessWidget {
                   clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
                     color: t.panel,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(_full ? 0 : 28)),
                     boxShadow: const [BoxShadow(color: Color(0x660E0F0C), offset: Offset(0, -20), blurRadius: 50, spreadRadius: -20)],
                   ),
                   child: Stack(
@@ -226,24 +436,8 @@ class TkSheet extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // `.tk-sheet-grab`: pulled down, it closes.
-                          GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onVerticalDragEnd: (d) {
-                              if ((d.primaryVelocity ?? 0) > 200) close();
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 10, bottom: 4),
-                              child: Center(
-                                child: Container(
-                                  width: 40,
-                                  height: 5,
-                                  decoration: BoxDecoration(color: t.borderStrong, borderRadius: BorderRadius.circular(3)),
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (!big) head,
+                          // `.tk-sheet-grab` and the head: pulled, it grows, shrinks or closes.
+                          pulled,
                           // With large text the head scrolls away with the body, which
                           // keeps room for itself (its own list scrolls in it).
                           Expanded(
@@ -256,7 +450,7 @@ class TkSheet extends StatelessWidget {
                                   )
                                 : body,
                           ),
-                          if (footer != null) TkSheetFoot(bare: bareFooter, child: footer!),
+                          if (footer != null) TkSheetFoot(bare: bareFooter, child: footer),
                         ],
                       ),
                       ?overlay,

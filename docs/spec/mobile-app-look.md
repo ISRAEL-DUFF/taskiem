@@ -33,7 +33,16 @@ All of it stands still when the phone asks for less motion.
   - a reaction pops in (`PopIn`);
   - a swiped bubble shows the reply arrow and springs back, with a tick of the phone at the point it replies;
   - the round jump button fades and grows in;
-  - the recording dot breathes.
+  - the recording dot breathes;
+  - the tools panel springs up from the box and drops away as it closes, as the web chat's does;
+  - the head's ⋯ menu grows from its button as it fades in.
+
+## Sheets
+
+In the app and the web chat alike (13 November 2026, the founder):
+
+- **Pulled.** By its grab bar or head, a sheet pulled up takes the whole screen; pulled down from there, its own height; thrown down, or pulled past a third of its height, it closes; let go early, it springs back.
+- **Back, one level at a time.** Back (and Esc on the web, the phone's own back in the app) comes back from the deepest step open inside first (a product's sizes to the product, a bill's "paid outside" to the bill: `TkSheetStep`, `useSheetStep`), then a row to its list, then from a tool's list to the tools panel. Close still closes the whole sheet.
 
 ## Order
 

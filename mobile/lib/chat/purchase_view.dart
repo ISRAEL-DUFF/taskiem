@@ -208,7 +208,10 @@ class _PurchaseViewState extends State<PurchaseView> {
       ],
     ];
 
-    return Column(
+    return TkSheetStep(
+      open: _mode != _Mode.none,
+      onBack: () => setState(() => (_mode = _Mode.none, _error = null)),
+      child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
@@ -283,6 +286,7 @@ class _PurchaseViewState extends State<PurchaseView> {
                   ),
           ),
       ],
+    ),
     );
   }
 }

@@ -111,6 +111,41 @@ void main() {
     expect(find.text('Recent'), findsOneWidget);
   });
 
+  testWidgets('Back goes up one level at a time, the phone\'s back too: a row to the list, the list to the tools; pulled, the sheet grows, shrinks and closes', (t) async {
+    await taskiem(t);
+    await t.tap(find.bySemanticsLabel('Open tools'));
+    await settle(t);
+    await t.tap(tile('Products'));
+    await settle(t);
+    await t.tap(find.text('Asun'));
+    await settle(t);
+    expect(find.bySemanticsLabel('Save changes'), findsOneWidget);
+    // The phone's back: the list again, the sheet still open.
+    await t.binding.handlePopRoute();
+    await settle(t);
+    expect(find.bySemanticsLabel('Search products'), findsOneWidget);
+    // Back from the list: the tools panel again.
+    await t.tap(find.bySemanticsLabel('Back'));
+    await settle(t);
+    expect(find.bySemanticsLabel('Search products'), findsNothing);
+    expect(find.text('Tools'), findsOneWidget);
+    // Pulled up by its head: the whole screen; down a little: its height.
+    await t.tap(tile('Products'));
+    await settle(t);
+    final close = find.bySemanticsLabel('Close');
+    final was = t.getTopLeft(close).dy;
+    await t.drag(find.textContaining(RegExp(r'^Products'), findRichText: true).first, const Offset(0, -150));
+    await settle(t);
+    expect(t.getTopLeft(close).dy, lessThan(was - 60), reason: 'grown to the top');
+    await t.drag(find.textContaining(RegExp(r'^Products'), findRichText: true).first, const Offset(0, 100));
+    await settle(t);
+    expect(t.getTopLeft(close).dy, closeTo(was, 2), reason: 'its own height again');
+    // Thrown down: closed.
+    await t.fling(find.textContaining(RegExp(r'^Products'), findRichText: true).first, const Offset(0, 300), 1500);
+    await settle(t);
+    expect(find.bySemanticsLabel('Search products'), findsNothing);
+  });
+
   testWidgets("in a business's conversation: Their shop first, then only what is between us", (t) async {
     t.view.physicalSize = const Size(390, 844);
     t.view.devicePixelRatio = 1;

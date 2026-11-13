@@ -248,7 +248,7 @@ class _OrderSheetState extends State<OrderSheet> {
     if (!mounted) return;
     setState(() => _done = words);
     Timer(const Duration(milliseconds: 1300), () {
-      if (mounted) Navigator.of(context).maybePop(words);
+      if (mounted) Navigator.of(context).pop(words);
     });
   }
 
