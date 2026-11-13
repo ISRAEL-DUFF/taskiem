@@ -453,19 +453,21 @@ func takeRate(ctx context.Context, tx pgx.Tx, p *plan) error {
 	return err
 }
 
-// errCancelled: the step was cancelled (a losing parallel branch) before its
-// write could start; the task is dropped without an outcome.
+// errCancelled: the step was cancelled (a losing parallel branch, a
+// cancelled run), or its run ended, before its write could start. Nothing
+// is sent. The task is dropped without an outcome, unless decide is
+// waiting to hear from this attempt (plan.owes).
 var errCancelled = errors.New("cancelled")
 
-// openIntent reports whether some attempt recorded EffectIntent and never
-// reported an outcome: its write may be under way or may have happened.
-func openIntent(attempts []int, failures map[int]history.Error) bool {
-	for _, a := range attempts {
-		if _, ok := failures[a]; !ok {
-			return true
-		}
-	}
-	return false
+// ended reports whether a run's status is one it never leaves.
+func ended(status string) bool {
+	return status == "completed" || status == "failed" || status == "cancelled"
+}
+
+// notApplied is the outcome of an attempt that found no earlier attempt
+// took effect and may not send: the step failed, and nothing is owed.
+func notApplied(c claim, msg string) history.Event {
+	return failed(c, history.KindNotApplied, msg, "fail")
 }
 
 type mode int
@@ -500,6 +502,17 @@ type plan struct {
 	scrub    []string          // secret values used by this attempt; never written to history
 	secrets  map[string]string // secrets read by this attempt, by name
 	creds    map[string]string // the connection's credentials, once read
+
+	// settle: the step starts nothing new (it was cancelled, its run has
+	// ended, or decide scheduled the attempt only to settle an earlier
+	// one). The attempt finds out what earlier attempts did and no more.
+	settle bool
+	// owes: decide is waiting to hear from this attempt, because it
+	// recorded an intent or was scheduled to settle. It is never dropped
+	// without an outcome.
+	owes bool
+	// resend: the key in force was already sent by an earlier attempt.
+	resend bool
 }
 
 // execute runs one claimed task: prepare (and record intent), call, record
@@ -541,7 +554,7 @@ func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) erro
 		}
 		if errors.Is(err, errCancelled) {
 			*outcome = "cancelled"
-			return w.finish(ctx, p, nil)
+			return w.finish(ctx, p, stopped(p))
 		}
 		return err
 	}
@@ -572,6 +585,10 @@ func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) erro
 		if errors.Is(err, errAbandoned) || errors.Is(err, errFenced) {
 			return nil
 		}
+		if errors.Is(err, errCancelled) {
+			*outcome = "cancelled"
+			return w.finish(ctx, p, stopped(p))
+		}
 		if err != nil {
 			return err
 		}
@@ -592,6 +609,20 @@ func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) erro
 		*outcome = "failed_" + fp.Error.Next
 	}
 	return w.finish(ctx, p, &result)
+}
+
+// stopped is what an attempt records when it was refused leave to send
+// (errCancelled). Most record nothing: the step never started, and the
+// task is dropped. An attempt decide is waiting to hear from had a write
+// whose outcome is unknown and can no longer be found out by sending
+// again, so it parks for an operator rather than be forgotten.
+func stopped(p *plan) *history.Event {
+	if !p.owes {
+		return nil
+	}
+	raw, _ := json.Marshal(history.FailedPayload{Error: history.Error{Kind: "unknown_outcome", Next: "park", MaybeApplied: true,
+		Message: "an earlier attempt may have reached the provider, and the step was stopped before it could be sent again to find out: check with the provider"}})
+	return &history.Event{Type: history.StepFailed, StepID: p.c.step, Attempt: p.c.attempt, Payload: raw}
 }
 
 // observeRunStart reports how long the run waited for its first worker
@@ -672,7 +703,8 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		var runSeed string // a fork's inherited seed (fork.go)
 		var dbNow time.Time
 		var digest []byte
-		if err := tx.QueryRow(ctx, `SELECT workflow_id, version, environment, COALESCE(idempotency_seed, ''), clock_timestamp(), expansion FROM runs WHERE id = $1`, c.run).Scan(&wfID, &version, &p.env, &runSeed, &dbNow, &digest); err != nil {
+		var status string
+		if err := tx.QueryRow(ctx, `SELECT workflow_id, version, environment, COALESCE(idempotency_seed, ''), clock_timestamp(), expansion, status FROM runs WHERE id = $1`, c.run).Scan(&wfID, &version, &p.env, &runSeed, &dbNow, &digest, &status); err != nil {
 			return err
 		}
 		def, err := w.Store.runDefinition(ctx, tx, wfID, version, digest)
@@ -741,13 +773,21 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 				reissued = false // an operator's re-issue moves only the key sent after it
 				intentAttempts = append(intentAttempts, e.Attempt)
 				intentTimes = append(intentTimes, e.RecordedAt)
+				p.owes = p.owes || e.Attempt == c.attempt
 			}
 		}
 		if !found {
 			return fmt.Errorf("no StepScheduled for %s attempt %d", c.step, c.attempt)
 		}
-		if cancelled && !openIntent(intentAttempts, outcomes) {
-			p.mode = modeDone // nothing of it reached a provider; never start it now
+		// A step that was cancelled, or whose run has ended (a cancel that
+		// reverses nothing, a plan limit), starts nothing: a task a worker
+		// held, or claims late, is dropped. Only an attempt decide is
+		// waiting to hear from carries on, to settle what was sent.
+		p.owes = p.owes || p.sched.Settle
+		halted := cancelled || ended(status)
+		p.settle = halted || p.sched.Settle
+		if halted && !p.owes {
+			p.mode = modeDone // nothing of this attempt reached a provider; never start it now
 		}
 		if p.mode == modeDone {
 			return nil
@@ -825,11 +865,34 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 				p.keyFirst = intentTimes[i]
 			}
 		}
+		p.resend = !p.keyFirst.IsZero()
 		if p.keyFirst.IsZero() {
 			p.keyFirst = time.Now()
 		}
 		if p.key, err = p.spec.Key(p.keyIn); err != nil {
 			return err
+		}
+		if p.settle {
+			// The attempt only settles what was sent under the key in force.
+			// Was any send of it left open, or did one fail in a way that may
+			// have taken effect? If not there is nothing to find out, and
+			// nothing new is sent: the step failed. If so the class decides
+			// as usual (reconcile, park, or the same key again), except that
+			// a reconcile that finds nothing is the end of it (reconcile).
+			exposed := false
+			for i, ip := range intents {
+				if ip.AttemptGroup != p.group {
+					continue
+				}
+				prev, reported := outcomes[intentAttempts[i]]
+				if !reported || prev.MaybeApplied || p.class.MayHaveApplied(kindOf(prev.Kind)) {
+					exposed = true
+				}
+			}
+			if !exposed {
+				p.mode = modeDone
+				return w.recordFailure(ctx, tx, p, history.KindNotApplied, "no attempt reached the provider under the key in force, and the step is not sent again: it was stopped")
+			}
 		}
 		if p.mode != modeSend {
 			return nil
@@ -952,16 +1015,27 @@ func (w *Worker) recordIntent(ctx context.Context, tx pgx.Tx, p *plan) error {
 		return err
 	}
 	// Under the run lock, so a cancellation decided since prepare read the
-	// history cannot slip in between the check and the intent.
-	if _, err := lockRun(ctx, tx, p.c.run); err != nil {
+	// history, or the end of the run, cannot slip in between the check and
+	// the intent.
+	run, err := lockRun(ctx, tx, p.c.run)
+	if err != nil {
 		return err
+	}
+	// Once a run has ended nothing is sent for it: nothing would reverse
+	// what the send did.
+	if ended(run.status) {
+		return errCancelled
 	}
 	var cancelled bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM run_events WHERE run_id = $1 AND step_id = $2 AND type = $3)`,
 		p.c.run, p.c.step, history.StepCancelled).Scan(&cancelled); err != nil {
 		return err
 	}
-	if cancelled {
+	// A cancelled step sends nothing new. The attempt decide is waiting for
+	// may send again under a key already sent, which is how an idempotent
+	// write's outcome is found out (contract: action-classes.md); what it
+	// completes, the run then reverses.
+	if cancelled && !(p.owes && p.resend) {
 		return errCancelled
 	}
 	digest := sha256.New()
@@ -1168,16 +1242,25 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 	case err == nil:
 		return completedEvent(p.c, resp.Output, true), nil
 	case errors.Is(err, connector.ErrNotFound):
+		const gone = "the provider has no record of it, and it is not sent again: the step was stopped"
+		if p.settle {
+			return notApplied(p.c, gone), nil
+		}
 		// Safe to send again, under a new key (contract: idempotency.md).
 		p.group++
 		p.keyIn.AttemptGroup = p.group
-		p.keyFirst = time.Now() // a new key
+		p.keyFirst, p.resend = time.Now(), false // a new key
 		if p.key, err = p.spec.Key(p.keyIn); err != nil {
 			return history.Event{}, err
 		}
 		// Retried only when it certainly did not commit: a second
 		// EffectIntent must never be appended.
-		if err := db.InTenantTxRetry(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, false, func(tx pgx.Tx) error { return w.recordIntent(ctx, tx, p) }); err != nil {
+		err := db.InTenantTxRetry(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, false, func(tx pgx.Tx) error { return w.recordIntent(ctx, tx, p) })
+		if errors.Is(err, errCancelled) && p.owes {
+			// Stopped while it was asking: the answer still stands.
+			return notApplied(p.c, gone), nil
+		}
+		if err != nil {
 			return history.Event{}, err
 		}
 		if w.Hooks != nil && w.Hooks.AfterIntent != nil {

@@ -825,7 +825,7 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 		// cancellation before recording intent, and decide waits for a write
 		// already under way.
 		for _, q := range []string{
-			`DELETE FROM tasks WHERE run_id = $1 AND step_id = $2 AND lease_owner IS NULL`,
+			`DELETE FROM tasks WHERE run_id = $1 AND step_id = $2 AND ` + unstartedTask,
 			`DELETE FROM timers WHERE run_id = $1 AND step_id = $2 AND fired_at IS NULL`,
 			`UPDATE approvals SET status = 'cancelled', closed_at = now() WHERE run_id = $1 AND step_id = $2 AND status = 'open'`,
 			`UPDATE form_requests SET status = 'cancelled' WHERE run_id = $1 AND step_id = $2 AND status = 'pending'`,
@@ -944,9 +944,17 @@ func (s *Store) Retention(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def 
 	return retention, nil
 }
 
+// unstartedTask picks, in a DELETE FROM tasks, the tasks that can be
+// withdrawn: no worker holds them and their attempt recorded no intent. A
+// task between leases whose attempt did record one (its worker died, or it
+// is waiting to reconcile) is kept: a worker must still settle that write.
+const unstartedTask = `lease_owner IS NULL AND NOT EXISTS (SELECT 1 FROM run_events e
+	WHERE e.run_id = tasks.run_id AND e.step_id = tasks.step_id AND e.attempt = tasks.attempt AND e.type = 'EffectIntent')`
+
 // endRun marks a run terminal, starts its retention clock (spec 9.4), clears
 // what it no longer needs, and admits queued runs its slot was holding back.
-// Tasks a worker holds are left alone: its result is still recorded.
+// Tasks a worker holds are left alone: its result is still recorded, but
+// one that has sent nothing yet sends nothing now (Worker.recordIntent).
 func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definition, status string) error {
 	run := r.ref.ID
 	retention, err := s.Retention(ctx, tx, r.ref.TenantID, def)
@@ -972,7 +980,7 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 		return err
 	}
 
-	if _, err := tx.Exec(ctx, `DELETE FROM tasks WHERE run_id = $1 AND lease_owner IS NULL`, run); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM tasks WHERE run_id = $1 AND `+unstartedTask, run); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM timers WHERE run_id = $1 AND fired_at IS NULL`, run); err != nil {
@@ -1255,9 +1263,17 @@ func (s *Store) cancelTx(ctx context.Context, tx pgx.Tx, ref RunRef, by string, 
 	if reverse && run.status != "queued" {
 		// Decide ends the run once its writes under way have settled and
 		// its compensations have run (decision 0054); asked twice, the
-		// first request stands.
-		if asked, err := cancelRequested(ctx, tx, ref.ID); err != nil || asked {
+		// first request stands. Asking again does look at the run again,
+		// which moves on one an older engine left waiting (requeueOpenIntents).
+		asked, err := cancelRequested(ctx, tx, ref.ID)
+		if err != nil {
 			return err
+		}
+		if asked {
+			if err := requeueOpenIntents(ctx, tx, run); err != nil {
+				return err
+			}
+			return s.decideInline(ctx, tx, ref)
 		}
 		if _, err := appendEvent(ctx, tx, ref.ID, history.CancelRequested, "", 0, history.CancelPayload{By: by}, origin); err != nil {
 			return err
@@ -1272,6 +1288,69 @@ func (s *Store) cancelTx(ctx context.Context, tx pgx.Tx, ref RunRef, by string, 
 		return err
 	}
 	return s.endRun(ctx, tx, run, def, "cancelled")
+}
+
+// requeueOpenIntents gives back its task to a write whose last attempt
+// recorded an intent and no outcome, and has no task. Every such attempt
+// should have one: a worker must settle it. Before a cancelled step with
+// an open intent was settled, its task was dropped instead, and the run
+// waited for ever for an outcome; this lets a second cancel request move
+// such a run on. The worker that claims the task only settles the write.
+func requeueOpenIntents(ctx context.Context, tx pgx.Tx, run runRow) error {
+	hist, err := History(ctx, tx, run.ref.ID)
+	if err != nil {
+		return err
+	}
+	type last struct {
+		attempt      int
+		queue        string
+		intent, done bool
+	}
+	steps := map[string]*last{}
+	var order []string
+	for _, e := range hist {
+		st := steps[e.StepID]
+		switch e.Type {
+		case history.StepScheduled:
+			var p struct {
+				Kind  string `json:"kind"`
+				Queue string `json:"queue"`
+			}
+			if err := json.Unmarshal(e.Payload, &p); err != nil {
+				return err
+			}
+			if p.Kind != history.KindTask {
+				continue
+			}
+			if st == nil {
+				order = append(order, e.StepID)
+			}
+			steps[e.StepID] = &last{attempt: e.Attempt, queue: p.Queue}
+		case history.EffectIntent:
+			if st != nil && e.Attempt == st.attempt {
+				st.intent = true
+			}
+		case history.StepCompleted:
+			if st != nil {
+				st.done = true
+			}
+		case history.StepFailed:
+			if st != nil && e.Attempt == st.attempt {
+				st.done = true
+			}
+		}
+	}
+	for _, step := range order {
+		st := steps[step]
+		if !st.intent || st.done {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO tasks (id, tenant_id, run_id, step_id, attempt, queue) VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (run_id, step_id, attempt) DO NOTHING`, uuid.Must(uuid.NewV7()), run.ref.TenantID, run.ref.ID, step, st.attempt, st.queue); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func cancelRequested(ctx context.Context, tx pgx.Tx, run uuid.UUID) (bool, error) {

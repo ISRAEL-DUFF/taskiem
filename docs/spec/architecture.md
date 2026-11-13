@@ -285,9 +285,10 @@ Automatic retries keep the same `attempt_group`, so every retry of one logical e
 
 ### 4.5 Retries and errors
 
-- Errors are classified as `retryable` (timeouts before send, 429 and 503 honouring `Retry-After`), `fatal` (validation, 4xx auth), or `unknown_outcome` (connection dropped after send, and 500/502/504, after which the provider may have acted). A write that failed with an unknown outcome parks for an operator, rather than failing, if its retries run out.
+- Errors are classified as `retryable` (timeouts before send, 429 and 503 honouring `Retry-After`), `fatal` (validation, 4xx auth), or `unknown_outcome` (connection dropped after send, and 500/502/504, after which the provider may have acted). A write that failed with an unknown outcome parks for an operator, rather than failing, if its retries run out or a later attempt is refused for good.
 - Per-step policy: max attempts, backoff (fixed or exponential with jitter computed from the run id, keeping replay deterministic), and a max total duration.
 - Exhausted retries route to the step's `on_error` path if declared, else fail the run and start compensation.
+- Once a step has failed for good, the steps beside it are not retried: one that never reached a provider is given up. One whose write has an unknown outcome is settled first (reconciled, or sent again under the same key, never under a new one) and then reversed with the rest, or parked. A failing run does not end while a step is parked.
 
 ### 4.6 Timers, signals, and approvals
 
@@ -317,7 +318,7 @@ PII values are never stored in plaintext in either place. Before an event is wri
 
 - **Replay** re-runs the orchestrator over the history to reconstruct state; it executes no effects.
 - **Fork from step** creates a new run that copies history up to a chosen step and continues from there on a newer WD version. This is the repair path for failed runs.
-- **Cancel** appends `RunCancelled`, revokes pending tasks, and runs compensation if configured. *As built* ([decision 0054](../decisions/0054-cancel-reverses-the-run.md)): cancel records `CancelRequested`; the orchestrator withdraws unfinished steps, waits for writes already under way, runs the completed steps' compensations newest first, then appends `RunCancelled`. Cancelling with `reverse: false` appends `RunCancelled` at once and compensates nothing.
+- **Cancel** appends `RunCancelled`, revokes pending tasks, and runs compensation if configured. *As built* ([decision 0054](../decisions/0054-cancel-reverses-the-run.md)): cancel records `CancelRequested`; the orchestrator withdraws unfinished steps, waits for writes already under way, runs the completed steps' compensations newest first, then appends `RunCancelled`. A cancelled step whose write has an unknown outcome is settled before the run ends, as in a failing run (4.5). Cancelling with `reverse: false` appends `RunCancelled` at once and compensates nothing; a task that has sent nothing by then sends nothing after.
 
 ### 4.11 Initial performance targets
 
