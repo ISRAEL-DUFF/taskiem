@@ -271,7 +271,16 @@ func (e *hostEnv) post(path string, v url.Values, files ...upload) *httptest.Res
 	if len(files) > 0 {
 		var buf bytes.Buffer
 		mw := multipart.NewWriter(&buf)
+		// As the page's form does: the token and the honeypot first.
+		for _, k := range []string{"token", "website"} {
+			for _, x := range v[k] {
+				_ = mw.WriteField(k, x)
+			}
+		}
 		for k, xs := range v {
+			if k == "token" || k == "website" {
+				continue
+			}
 			for _, x := range xs {
 				_ = mw.WriteField(k, x)
 			}

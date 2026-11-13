@@ -1,6 +1,7 @@
 package publicweb
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
@@ -13,12 +14,14 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -544,10 +547,34 @@ func (s *Server) serveHosted(w http.ResponseWriter, r *http.Request, hf *hform, 
 		s.showHosted(w, r, http.StatusOK, hf, st, "", "", "")
 		return
 	}
+	multi := strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data")
+	if multi && hf.hasFiles() {
+		// Files are large, and anyone can post to a public form: how
+		// often an address may send them, and how many at once, is
+		// checked before a byte of the body is read.
+		leave, ok := s.uploadEnter(r, hf)
+		if !ok {
+			st := &hstate{}
+			hf.seed(st, prefill)
+			if hf.verify == "" {
+				st.Path = []int{0}
+			}
+			w.Header().Set("Retry-After", "60")
+			w.Header().Set("Connection", "close")
+			s.showHosted(w, r, http.StatusTooManyRequests, hf, st, "", "Too many files are being sent from this connection, or to this form. Please wait a minute and send again.", "")
+			return
+		}
+		defer leave()
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, hf.bodyLimit())
 	var perr error
-	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
-		perr = r.ParseMultipartForm(32 << 20) //nolint:gosec // G120: bounded by http.MaxBytesReader just above; gosec's rule knows no sanitiser
+	if multi {
+		// The token and the honeypot come first in the page's form: they
+		// are checked from the start of the body, before any file in it
+		// is read.
+		if perr = s.uploadStart(r, hf); perr == nil {
+			perr = r.ParseMultipartForm(32 << 20) //nolint:gosec // G120: bounded by http.MaxBytesReader just above; gosec's rule knows no sanitiser
+		}
 	} else {
 		perr = r.ParseForm()
 	}
@@ -557,12 +584,22 @@ func (s *Server) serveHosted(w http.ResponseWriter, r *http.Request, hf *hform, 
 		if hf.verify == "" {
 			st.Path = []int{0}
 		}
+		status := http.StatusBadRequest
 		msg := "This form could not be read. Please check your answers and send again."
 		var mbe *http.MaxBytesError
-		if errors.As(err, &mbe) {
+		switch {
+		case errors.As(err, &mbe):
 			msg = "What you sent is too large. Please send smaller files."
+		case errors.Is(err, formguard.ErrExpired):
+			status, msg = http.StatusUnprocessableEntity, "This page was open for a long time. Please fill it in again."
+		case errors.Is(err, errUploadStart):
+			status, msg = http.StatusUnprocessableEntity, "This form could not be read. Please fill it in again."
 		}
-		s.showHosted(w, r, http.StatusBadRequest, hf, st, "", msg, "")
+		if errors.Is(err, errUploadStart) || errors.Is(err, formguard.ErrExpired) {
+			// The rest of the body is not read: the connection ends.
+			w.Header().Set("Connection", "close")
+		}
+		s.showHosted(w, r, status, hf, st, "", msg, "")
 		return
 	}
 	v := r.PostForm
@@ -621,6 +658,126 @@ func (s *Server) serveHosted(w http.ResponseWriter, r *http.Request, hf *hform, 
 	default:
 		s.formNext(w, r, hf, st, token, v)
 	}
+}
+
+// errUploadStart: a multipart body did not start with a good token and an
+// empty honeypot.
+var errUploadStart = errors.New("form host: a file form's body did not start with its token")
+
+// uploadStartMax is the most a multipart body may hold before its token
+// and honeypot have both arrived.
+const uploadStartMax = 16 << 10
+
+// uploadStart reads the start of a multipart body, as far as the token
+// and the honeypot, which the page's form sends first, and checks them:
+// a file, or anything large, arriving before them, a filled honeypot or
+// a token that does not verify is refused there, with the rest of the
+// body unread. When they are good, the body is put back whole for
+// ParseMultipartForm.
+func (s *Server) uploadStart(r *http.Request, hf *hform) error {
+	_, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || params["boundary"] == "" {
+		return fmt.Errorf("%w: no boundary", errUploadStart)
+	}
+	body := r.Body
+	var seen bytes.Buffer
+	mr := multipart.NewReader(io.TeeReader(body, &seen), params["boundary"])
+	vals := url.Values{}
+	left := uploadStartMax
+	for !vals.Has(tokenField) || !vals.Has(formguard.HoneypotField) {
+		p, err := mr.NextPart()
+		if errors.Is(err, io.EOF) {
+			return fmt.Errorf("%w: no token", errUploadStart)
+		}
+		if err != nil {
+			return err
+		}
+		if p.FileName() != "" || p.FormName() == "" {
+			return fmt.Errorf("%w: a file before the token", errUploadStart)
+		}
+		b, err := io.ReadAll(io.LimitReader(p, int64(left)+1))
+		if err != nil {
+			return err
+		}
+		if left -= len(b); left < 0 {
+			return fmt.Errorf("%w: too much before the token", errUploadStart)
+		}
+		vals.Add(p.FormName(), string(b))
+	}
+	if formguard.HoneypotTripped(vals) {
+		return fmt.Errorf("%w: the honeypot", errUploadStart)
+	}
+	if _, err := s.fstep.Verify(vals.Get(tokenField), hf.guardID, s.now()); err != nil {
+		return fmt.Errorf("%w: %w", errUploadStart, err)
+	}
+	// What was read (and read ahead), then the rest.
+	r.Body = struct {
+		io.Reader
+		io.Closer
+	}{io.MultiReader(bytes.NewReader(seen.Bytes()), body), body}
+	return nil
+}
+
+// Defaults for bodies with files (multipart) to forms that take files:
+// how often one address may send them, and how many may be arriving at
+// once from one address and to one form, per public host process.
+var (
+	FormUploadsPerIP         = formguard.Bucket{Rate: rate.Every(time.Hour / 120), Burst: 30}
+	FormUploadsAtOncePerIP   = 3
+	FormUploadsAtOncePerForm = 12
+)
+
+// uploadGauge counts the uploads arriving now, by key.
+type uploadGauge struct {
+	mu sync.Mutex
+	n  map[string]int
+}
+
+func (g *uploadGauge) enter(key string, max int) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.n == nil {
+		g.n = map[string]int{}
+	}
+	if g.n[key] >= max {
+		return false
+	}
+	g.n[key]++
+	return true
+}
+
+func (g *uploadGauge) leave(key string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.n[key]--; g.n[key] <= 0 {
+		delete(g.n, key)
+	}
+}
+
+// uploadEnter lets a body with files in, or not: the address's rate, then
+// the uploads arriving now from the address and to the form. leave is
+// called when the request is done.
+func (s *Server) uploadEnter(r *http.Request, hf *hform) (leave func(), ok bool) {
+	ip := s.ipKey(r)
+	if !s.FormUploads.Allow(ip) {
+		return nil, false
+	}
+	perIP, perForm := s.UploadsAtOncePerIP, s.UploadsAtOncePerForm
+	if perIP <= 0 {
+		perIP = FormUploadsAtOncePerIP
+	}
+	if perForm <= 0 {
+		perForm = FormUploadsAtOncePerForm
+	}
+	a, f := "a:"+ip, "f:"+hf.guardID
+	if !s.uploads.enter(a, perIP) {
+		return nil, false
+	}
+	if !s.uploads.enter(f, perForm) {
+		s.uploads.leave(a)
+		return nil, false
+	}
+	return func() { s.uploads.leave(f); s.uploads.leave(a) }, true
 }
 
 func channelWord(c string) string {
