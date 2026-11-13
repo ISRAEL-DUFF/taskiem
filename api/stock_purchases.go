@@ -92,15 +92,18 @@ func (s *Server) listSuppliers(w http.ResponseWriter, r *http.Request) {
 }
 
 // addSupplier is POST /v1/stock/suppliers: a name and phone, and the
-// items they supply (their catalogue rows' supplier set to the name).
+// items they supply (their catalogue rows' supplier set to the name); or a
+// name and link_id, a linked business made a supplier from the link alone
+// (no number: its orders go through the link).
 func (s *Server) addSupplier(w http.ResponseWriter, r *http.Request) {
 	if !s.purchasesReady(w) {
 		return
 	}
 	var in struct {
-		Name  string   `json:"name"`
-		Phone string   `json:"phone"`
-		Items []string `json:"items"`
+		Name   string     `json:"name"`
+		Phone  string     `json:"phone"`
+		LinkID *uuid.UUID `json:"link_id"`
+		Items  []string   `json:"items"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -110,7 +113,15 @@ func (s *Server) addSupplier(w http.ResponseWriter, r *http.Request) {
 	var x stock.Supplier
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		if x, err = s.Purchases.AddSupplierTx(r.Context(), tx, p.TenantID, in.Name, in.Phone, p.Actor()); err != nil {
+		if in.LinkID != nil && strings.TrimSpace(in.Phone) == "" {
+			x, err = s.Purchases.AddLinkedSupplierTx(r.Context(), tx, p.TenantID, in.Name, *in.LinkID, p.Actor())
+		} else {
+			x, err = s.Purchases.AddSupplierTx(r.Context(), tx, p.TenantID, in.Name, in.Phone, p.Actor())
+			if err == nil && in.LinkID != nil {
+				x, err = s.Purchases.LinkSupplierTx(r.Context(), tx, p.TenantID, x.ID, in.LinkID, p.Actor())
+			}
+		}
+		if err != nil {
 			return err
 		}
 		return auditTx(r, tx, "supplier.add", x.Name, map[string]any{"supplier_id": x.ID})

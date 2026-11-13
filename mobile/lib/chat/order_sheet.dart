@@ -102,7 +102,6 @@ class _OrderSheetState extends State<OrderSheet> {
   final _note = TextEditingController();
   late bool _offering = widget.start?.offer ?? false;
   final _offer = TextEditingController();
-  final _phone = TextEditingController();
   String? _who;
   final Map<String, String> _mine = {};
   String? _grid;
@@ -126,7 +125,7 @@ class _OrderSheetState extends State<OrderSheet> {
     super.initState();
     _chip = widget.start?.category == null ? null : categoryTag(widget.start!.category!);
     _grid = widget.start?.itemId;
-    for (final c in [_search, _offer, _phone]) {
+    for (final c in [_search, _offer]) {
       c.addListener(() => setState(() {}));
     }
     _load();
@@ -134,7 +133,7 @@ class _OrderSheetState extends State<OrderSheet> {
 
   @override
   void dispose() {
-    for (final c in [_search, _note, _offer, _phone]) {
+    for (final c in [_search, _note, _offer]) {
       c.dispose();
     }
     super.dispose();
@@ -259,12 +258,16 @@ class _OrderSheetState extends State<OrderSheet> {
     });
     try {
       if (_theirs == null && !_linked) {
-        var id = _supplierFor == 'new' ? _madeSupplier : _supplierFor;
-        if (id == null) {
-          final out = await _postOnce('/v1/stock/suppliers', 'supplier', {'name': _biz, 'phone': _phone.text.trim()}) as Map<String, dynamic>;
-          id = _madeSupplier = (out['supplier'] as Map)['id'] as String;
+        if (_supplierFor == 'new') {
+          // A new supplier made from the link alone: no number asked, their
+          // orders reach them through the link.
+          if (_madeSupplier == null) {
+            final out = await _postOnce('/v1/stock/suppliers', 'supplier', {'name': _biz, 'link_id': widget.link}) as Map<String, dynamic>;
+            _madeSupplier = (out['supplier'] as Map)['id'] as String;
+          }
+        } else {
+          await _t.send('PUT', '/v1/stock/suppliers/${Uri.encodeComponent(_supplierFor)}/link', body: {'link_id': widget.link});
         }
-        await _t.send('PUT', '/v1/stock/suppliers/${Uri.encodeComponent(id)}/link', body: {'link_id': widget.link});
         _linked = true;
       }
       final lines = <Map<String, Object?>>[];
@@ -353,16 +356,13 @@ class _OrderSheetState extends State<OrderSheet> {
     final updated = updatedAt != null && updatedAt.year == now.year && updatedAt.month == now.month && updatedAt.day == now.day ? 'updated today' : 'as they share them';
     final storefront = list?['name'] == storefrontPrices;
     final loaded = _suppliers != null && _own != null && _links != null;
-    final needPhone = _suppliers != null && _theirs == null && _supplierFor == 'new' && _phone.text.trim().isEmpty;
     final stops = !loaded
         ? null
         : _stockOff
         ? 'Start keeping your stock on Taskiem to place the order.'
-        : needPhone
-        ? 'Add $_biz\'s phone number to place the order.'
         : null;
     final canTrade = widget.chats.auth.can('chat.trade');
-    final stopped = _busy || !loaded || _stockOff || needPhone || offerProblem.isNotEmpty;
+    final stopped = _busy || !loaded || _stockOff || offerProblem.isNotEmpty;
     final place = TkCta(label: _busy ? 'Sending…' : (_offering ? 'Send offer' : 'Place order'), onTap: stopped ? null : () => _place(bag, offerKobo));
 
     return TkSheet(
@@ -508,7 +508,7 @@ class _OrderSheetState extends State<OrderSheet> {
       children: [
         ?stockSection,
         if (_suppliers != null && theirs == null) ...[
-          Text('$_biz is not one of your suppliers yet. Orders and bills from them are kept with your other suppliers.', style: tkText(size: 14, color: t.muted)),
+          Text('$_biz becomes one of your suppliers: orders and bills from them are kept with your other suppliers.', style: tkText(size: 14, color: t.muted)),
           if (_unlinkedSuppliers.isNotEmpty)
             TkKitField(
               field: false,
@@ -519,12 +519,6 @@ class _OrderSheetState extends State<OrderSheet> {
                 choices: [('new', 'A new supplier: $_biz'), for (final x in _unlinkedSuppliers) (x['id'] as String, x['name'] as String? ?? '')],
                 onPick: (v) => setState(() => _who = v),
               ),
-            ),
-          if (_supplierFor == 'new')
-            TkKitField(
-              label: '$_biz\'s phone number',
-              hint: 'For their record with you; the order reaches them on Taskiem.',
-              child: TkTextBox(controller: _phone, phone: true, hint: '0803 123 4567'),
             ),
         ],
         Column(

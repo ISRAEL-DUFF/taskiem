@@ -171,7 +171,6 @@ export function OrderSheet({
   );
   const theirs = suppliers.data?.find((x) => x.link_id === link);
   const [who, setWho] = useState<string>();
-  const [phone, setPhone] = useState("");
   // Our own stock: an order is kept in it, so it must be on (Keep my stock).
   const stock = useLoad(
     () =>
@@ -289,18 +288,23 @@ export function OrderSheet({
     const m = made.current;
     try {
       if (!theirs && !m.linked) {
-        let id = supplierFor === "new" ? m.supplier : supplierFor;
-        if (!id) {
-          const out = await postOnce<{ supplier: { id: string } }>(
-            "/v1/stock/suppliers",
-            keyOf("supplier"),
-            { name: business, phone: phone.trim() },
+        if (supplierFor === "new") {
+          // A new supplier made from the link alone: no number asked, their
+          // orders reach them through the link.
+          if (!m.supplier) {
+            const out = await postOnce<{ supplier: { id: string } }>(
+              "/v1/stock/suppliers",
+              keyOf("supplier"),
+              { name: business, link_id: link },
+            );
+            m.supplier = out.supplier.id;
+          }
+        } else {
+          await put(
+            `/v1/stock/suppliers/${encodeURIComponent(supplierFor)}/link`,
+            { link_id: link },
           );
-          id = m.supplier = out.supplier.id;
         }
-        await put(`/v1/stock/suppliers/${encodeURIComponent(id)}/link`, {
-          link_id: link,
-        });
         m.linked = true;
       }
       const lines = [];
@@ -380,15 +384,11 @@ export function OrderSheet({
   const storefront = list?.name === STOREFRONT_PRICES;
   // Everything placing reads is here; what still stops it, said.
   const loaded = !!suppliers.data && !!own.data && !!links.data;
-  const needPhone =
-    !!suppliers.data && !theirs && supplierFor === "new" && phone.trim() === "";
   const stops = !loaded
     ? undefined
     : stockOff
       ? "Start keeping your stock on Taskiem to place the order."
-      : needPhone
-        ? `Add ${business}'s phone number to place the order.`
-        : undefined;
+      : undefined;
   return (
     <Sheet
       title={
@@ -471,7 +471,7 @@ export function OrderSheet({
                 type="button"
                 className="tk-cta"
                 disabled={
-                  busy || !loaded || stockOff || needPhone || !!offerProblem
+                  busy || !loaded || stockOff || !!offerProblem
                 }
                 onClick={() => void place()}
               >
@@ -711,7 +711,7 @@ export function OrderSheet({
           {suppliers.data && !theirs && (
             <>
               <p className="tk-form-now">
-                {business} is not one of your suppliers yet. Orders and bills
+                {business} becomes one of your suppliers: orders and bills
                 from them are kept with your other suppliers.
               </p>
               {unlinkedSuppliers.length > 0 && (
@@ -727,21 +727,6 @@ export function OrderSheet({
                       </option>
                     ))}
                   </select>
-                </KitField>
-              )}
-              {supplierFor === "new" && (
-                <KitField
-                  label={`${business}'s phone number`}
-                  hint="For their record with you; the order reaches them on Taskiem."
-                >
-                  <input
-                    type="tel"
-                    inputMode="tel"
-                    autoComplete="off"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="0803 123 4567"
-                  />
                 </KitField>
               )}
             </>

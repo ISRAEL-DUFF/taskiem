@@ -147,7 +147,11 @@ void main() {
         }
         final key = req.headers['Idempotency-Key'] ?? req.headers['idempotency-key'];
         sent.add('${req.method} $p${key != null ? ' (once)' : ''}');
-        if (p == '/v1/stock/suppliers') return ok({'supplier': {'id': 'S1'}});
+        if (p == '/v1/stock/suppliers') {
+          // Made from the link alone: no number.
+          expect(jsonDecode(req.body), {'name': 'Bayo Rice Mills', 'link_id': 'L1'});
+          return ok({'supplier': {'id': 'S1'}});
+        }
         if (p == '/v1/stock/items') return ok({'item': {'id': 'I1'}});
         if (p == '/v1/supplier-prices/L1/order') return ok({'purchase': {'id': 'P1', 'reference': 'PO-1'}});
         if (p == '/v1/stock/purchases/P1/send') await Future<void>.delayed(sendTakes);
@@ -187,10 +191,8 @@ void main() {
     await t.tap(find.bySemanticsLabel('Review order'));
     await settle(t);
     expect(find.text('Review your order'), findsOneWidget);
-    expect(find.text('Bayo Rice Mills is not one of your suppliers yet. Orders and bills from them are kept with your other suppliers.'), findsOneWidget);
-    expect(find.text("Add Bayo Rice Mills's phone number to place the order."), findsOneWidget);
-    await t.enterText(find.bySemanticsLabel(RegExp("phone number")), '08031234567');
-    await t.pump();
+    expect(find.text('Bayo Rice Mills becomes one of your suppliers: orders and bills from them are kept with your other suppliers.'), findsOneWidget);
+    expect(find.textContaining('phone number'), findsNothing, reason: 'a linked business needs no number');
     await t.tap(find.bySemanticsLabel('Place order'));
     await settle(t);
     // The send failed: tried again, the supplier, item and order are not made twice.
@@ -199,7 +201,6 @@ void main() {
     await settle(t);
     expect(sent, [
       'POST /v1/stock/suppliers (once)',
-      'PUT /v1/stock/suppliers/S1/link',
       'POST /v1/stock/items (once)',
       'POST /v1/supplier-prices/L1/order (once)',
       'POST /v1/stock/purchases/P1/send',
@@ -295,8 +296,6 @@ void main() {
     await open(t, start: const OrderStart(itemId: 'beans'), onSent: said.add, sendTakes: const Duration(milliseconds: 300));
     await t.tap(find.bySemanticsLabel('Review order'));
     await settle(t);
-    await t.enterText(find.bySemanticsLabel(RegExp('phone number')), '08031234567');
-    await t.pump();
     await t.tap(find.bySemanticsLabel('Place order'));
     await t.pump();
     // The sheet goes before the answer.
