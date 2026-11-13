@@ -508,7 +508,7 @@ class _OrderSheetState extends State<OrderSheet> {
       children: [
         ?stockSection,
         if (_suppliers != null && theirs == null) ...[
-          Text('$_biz becomes one of your suppliers: orders and bills from them are kept with your other suppliers.', style: tkText(size: 14, color: t.muted)),
+          Text('$_biz becomes one of your suppliers with this order. Orders and bills from them are kept with your other suppliers.', style: tkText(size: 14, color: t.muted)),
           if (_unlinkedSuppliers.isNotEmpty)
             TkKitField(
               field: false,

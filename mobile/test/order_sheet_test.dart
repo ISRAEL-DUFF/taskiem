@@ -191,7 +191,7 @@ void main() {
     await t.tap(find.bySemanticsLabel('Review order'));
     await settle(t);
     expect(find.text('Review your order'), findsOneWidget);
-    expect(find.text('Bayo Rice Mills becomes one of your suppliers: orders and bills from them are kept with your other suppliers.'), findsOneWidget);
+    expect(find.text('Bayo Rice Mills becomes one of your suppliers with this order. Orders and bills from them are kept with your other suppliers.'), findsOneWidget);
     expect(find.textContaining('phone number'), findsNothing, reason: 'a linked business needs no number');
     await t.tap(find.bySemanticsLabel('Place order'));
     await settle(t);
