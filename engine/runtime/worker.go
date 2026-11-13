@@ -679,13 +679,18 @@ func capOutput(p *plan, ev history.Event) history.Event {
 	if err := json.Unmarshal(ev.Payload, &cp); err != nil || len(cp.Output) <= maxStepOutput {
 		return ev
 	}
-	msg := fmt.Sprintf("step output is %d KB, over the %d KB limit; return only the fields later steps need", (len(cp.Output)+1023)>>10, maxStepOutput>>10)
+	return tooLarge(p, fmt.Sprintf("step output is %d KB, over the %d KB limit; return only the fields later steps need", (len(cp.Output)+1023)>>10, maxStepOutput>>10))
+}
+
+// tooLarge is the failure of a step whose output cannot be kept: a read
+// fails, a write parks (capOutput).
+func tooLarge(p *plan, msg string) history.Event {
 	if !p.class.IsWrite() {
 		return failed(p.c, "output_too_large", msg, "fail")
 	}
 	raw, _ := json.Marshal(history.FailedPayload{Error: history.Error{Kind: "output_too_large", Next: "park", MaybeApplied: true,
 		Message: msg + ". The provider accepted the call: record the step as completed with the output later steps need"}})
-	return history.Event{Type: history.StepFailed, StepID: ev.StepID, Attempt: ev.Attempt, Payload: raw}
+	return history.Event{Type: history.StepFailed, StepID: p.c.step, Attempt: p.c.attempt, Payload: raw}
 }
 
 func completedEvent(c claim, out any, reconciled bool) history.Event {
@@ -1109,6 +1114,108 @@ func (w *Worker) postpone(ctx context.Context, p *plan, at time.Time) error {
 // as the lease still holds. Repeating it after an unknown COMMIT is safe:
 // a committed finish released the task, so the repeat is fenced out.
 func (w *Worker) finish(ctx context.Context, p *plan, outcome *history.Event) error {
+	err := w.record(ctx, p, outcome)
+	if err == nil || outcome == nil || !refused(err) {
+		return err
+	}
+	// The database refused the outcome itself, and would refuse it again
+	// however often the task were delivered. An output too large for the
+	// history is said so at once, as capOutput says it.
+	if outcome.Type == history.StepCompleted && payloadTooLarge(err) {
+		ev := tooLarge(p, fmt.Sprintf("step output is too large to keep (over %d MB as stored); return only the fields later steps need", maxStoredPayload>>20))
+		if w.record(ctx, p, &ev) == nil {
+			return nil
+		}
+	}
+	// Anything else is counted on the task. The lease expires and the task
+	// comes back; at the last try the step is settled with a failure that
+	// can be recorded, so the task is not delivered for ever: a read fails,
+	// and a write, which may have been applied, parks for an operator.
+	n, cerr := w.countUnrecorded(ctx, p.c)
+	if cerr != nil || n < maxUnrecorded {
+		return err
+	}
+	ev := unrecordable(p, err)
+	if rerr := w.record(ctx, p, &ev); rerr != nil {
+		return errors.Join(err, rerr)
+	}
+	w.Logger.Error("a step's outcome could not be recorded; the step was settled with a failure instead", "run", p.c.run, "step", p.c.step,
+		"attempt", p.c.attempt, "deliveries", n, "err", err)
+	return nil
+}
+
+// maxUnrecorded is how many deliveries of a task may fail to record its
+// outcome before the step is settled with a failure (tasks.unrecorded).
+const maxUnrecorded = 3
+
+// maxStoredPayload is what run_events.payload takes, as stored (migration
+// 00437): room for a container step's 1 MB and for what storing adds.
+const maxStoredPayload = 4 << 20
+
+// refused reports whether err is the database refusing the data it was
+// given (a value it cannot store, a constraint, a size limit) rather than
+// being away or busy: the same data would be refused again.
+func refused(err error) bool {
+	var pe *pgconn.PgError
+	if !errors.As(err, &pe) || len(pe.Code) != 5 {
+		return false
+	}
+	switch pe.Code[:2] {
+	case "22", "23", "54": // data exception, integrity constraint violation, program limit exceeded
+		return true
+	}
+	return false
+}
+
+// payloadTooLarge reports whether err is the history refusing a payload
+// for its size.
+func payloadTooLarge(err error) bool {
+	var pe *pgconn.PgError
+	return errors.As(err, &pe) && ((pe.Code == "23514" && pe.ConstraintName == "run_events_payload_check") || pe.Code == "54000")
+}
+
+// countUnrecorded notes on the task that a delivery could not record its
+// outcome, and returns how many have not. Fenced: 0 once the lease is lost.
+func (w *Worker) countUnrecorded(ctx context.Context, c claim) (int, error) {
+	n := 0
+	err := db.InTenantTxRetry(ctx, w.Store.Pool, []uuid.UUID{c.tenant}, false, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `UPDATE tasks SET unrecorded = unrecorded + 1 WHERE id = $1 AND lease_owner = $2 AND lease_epoch = $3 RETURNING unrecorded`,
+			c.task, w.ID, c.epoch).Scan(&n)
+		if errors.Is(err, pgx.ErrNoRows) {
+			n, err = 0, nil
+		}
+		return err
+	})
+	return n, err
+}
+
+// unrecordable is the failure recorded for a step whose own outcome the
+// database refused maxUnrecorded times. It carries nothing of that
+// outcome but the database's short reason.
+func unrecordable(p *plan, cause error) history.Event {
+	why := cause.Error()
+	var pe *pgconn.PgError
+	if errors.As(cause, &pe) {
+		why = pe.Message + " (" + pe.Code + ")"
+	}
+	if len(why) > 300 {
+		why = why[:300]
+	}
+	msg := fmt.Sprintf("the step ran, but its outcome could not be recorded after %d tries: %s", maxUnrecorded, strings.ToValidUTF8(why, ""))
+	if !p.class.IsWrite() {
+		return failed(p.c, KindUnrecordable, msg, "fail")
+	}
+	raw, _ := json.Marshal(history.FailedPayload{Error: history.Error{Kind: KindUnrecordable, Next: "park", MaybeApplied: true,
+		Message: msg + ". The write may have been applied: check with the provider"}})
+	return history.Event{Type: history.StepFailed, StepID: p.c.step, Attempt: p.c.attempt, Payload: raw}
+}
+
+// KindUnrecordable is the error kind of a step settled because its own
+// outcome could not be recorded.
+const KindUnrecordable = "unrecordable"
+
+// record is finish's transaction.
+func (w *Worker) record(ctx context.Context, p *plan, outcome *history.Event) error {
 	return db.InTenantTxRetry(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, true, func(tx pgx.Tx) error {
 		ok, err := w.finishTask(ctx, tx, p.c)
 		if err != nil {
@@ -1125,6 +1232,13 @@ func (w *Worker) finish(ctx context.Context, p *plan, outcome *history.Event) er
 		// the pass before made of it.
 		ev := *outcome
 		result := &ev
+		// The history cannot hold a NUL character (jsonb refuses it): one
+		// in what a provider or a script returned is replaced.
+		raw, err := dropNUL(result.Payload)
+		if err != nil {
+			return err
+		}
+		result.Payload = raw
 		if len(p.scrub) > 0 {
 			// A provider error or a script may repeat a secret (an API key in
 			// a URL, a token echoed back): it is replaced before it is written.
