@@ -709,8 +709,11 @@ cmd_update() {
   local auto="" now="" downgrade=""
   for a in "$@"; do case $a in --auto) auto=1 ;; --now) now=1 ;; --allow-downgrade) downgrade=1 ;; *) die "unknown option $a" ;; esac; done
   [ -z "$downgrade" ] || [ -z "$auto" ] || die "--allow-downgrade is for a person, not the timer"
+  # One lock for everything that stops or restarts the stack: updates,
+  # rollbacks and the backup (which copies OpenBao's storage while it is
+  # stopped).
   exec 9>"$STATE/update.lock"
-  flock -n 9 || { log "another update is running"; return 0; }
+  flock -n 9 || { log "another update, or the backup, is running"; return 0; }
 
   local current target
   current=$(cat "$STATE/current" 2>/dev/null || true)
@@ -766,6 +769,8 @@ cmd_rollback() {
   local previous
   previous=$(cat "$STATE/previous" 2>/dev/null || true)
   [ -n "$previous" ] || die "no previous release recorded"
+  exec 9>"$STATE/update.lock"
+  flock -n 9 || die "an update or the backup is running: try again when it has finished"
   log "rolling back to $previous"
   sync_kit "$(image_revision "$previous")" # its own kit, before anything changes
   printf '%s\n' "$(cat "$STATE/current")" >"$STATE/previous"
@@ -814,14 +819,34 @@ cmd_backup() {
   # OpenBao's Raft database must not be copied while it is open: stop it for
   # the seconds a local copy takes, start it again, and back up the copy.
   # The unseal key is left out on purpose: it is on the recovery sheet.
-  local copy="$STATE/openbao-copy"
+  # An update's "compose up" would start OpenBao again in the middle of the
+  # copy, and the torn copy would be stored as a good backup. So the backup
+  # holds the lock updates take (the upgrade window covers the backup's
+  # hour), waiting for a running update to finish.
+  exec 9>"$STATE/update.lock"
+  flock -w "${TASKIEM_VPS_LOCK_WAIT:-1800}" 9 || {
+    notify "backup failed" "The backup did not run: an update held the server for more than $(( ${TASKIEM_VPS_LOCK_WAIT:-1800} / 60 )) minutes. Run taskiem-vps status, then taskiem-vps backup."
+    die "an update is still running: the backup did not start"
+  }
+  local copy="$STATE/openbao-copy" copied=yes
   mkdir -p "$copy" && chmod 700 "$copy"
   trap 'compose start openbao >/dev/null 2>&1 || true' EXIT
   compose stop openbao >/dev/null
+  # Copy, then check the copy against the source file by file while
+  # OpenBao is still stopped: a copy that differs is not a backup.
   docker run --rm --user 0 --entrypoint sh -v taskiem_openbao_data:/src:ro -v "$copy:/dst" "$OPENBAO_IMAGE" \
-    -c 'find /dst -mindepth 1 -delete && cp -a /src/. /dst/'
+    -c 'find /dst -mindepth 1 -delete && cp -a /src/. /dst/ &&
+        (cd /src && find . -type f -exec sha256sum {} + | sort -k2) >/tmp/src.sums &&
+        (cd /dst && find . -type f -exec sha256sum {} + | sort -k2) >/tmp/dst.sums &&
+        [ -s /tmp/src.sums ] && cmp -s /tmp/src.sums /tmp/dst.sums' || copied=no
+  # Something started OpenBao during the copy: its files may have moved on.
+  if ! test_mode && [ -n "$(compose ps -q --status running openbao 2>/dev/null || true)" ]; then copied=no; fi
   compose start openbao >/dev/null
   trap - EXIT
+  if [ "$copied" = no ]; then
+    notify "backup failed" "The copy of OpenBao's storage did not match the original, so nothing was stored. Run taskiem-vps backup to try again."
+    return 1
+  fi
   if OPENBAO_SOURCE=$copy restic_run backup /backup --tag taskiem --exclude /backup/kit/openbao-unseal.env --exclude /backup/etc/backup.env &&
     restic_run forget --tag taskiem --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --prune >/dev/null; then
     date -u +%FT%TZ >"$STATE/last-backup"

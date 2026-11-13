@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -58,6 +59,7 @@ func newVPS(t *testing.T) *vps {
 	stub("docker", `img=$(sed -n "s/^TASKIEM_IMAGE='\(.*\)'$/\1/p" "$TASKIEM_VPS_KIT/.env" 2>/dev/null)
 case "$*" in
   *" up "*|*" up") echo "up $img $(head -1 "$TASKIEM_VPS_KIT/docker-compose.yml")" >>"$CALLS"; [ "$img" != taskiem:broken ] ;;
+  *" stop openbao"*) echo "stop openbao" >>"$CALLS" ;;
   *"ps -q"*) echo cid ;;
   *"config --services"*) echo taskiem ;;
   "image inspect"*) case "${@: -1}" in taskiem:good) echo revA ;; taskiem:broken) echo revB ;; taskiem:good2|taskiem:other-channel|taskiem:unstated) echo revC ;; taskiem:old) echo revA ;; esac ;;
@@ -327,5 +329,44 @@ func TestVPSResendsAnAlertThatDidNotGoOut(t *testing.T) {
 	_, _ = v.run("", "check")
 	if got := v.alerts(); len(got) != 1 {
 		t.Errorf("the same problems alerted again: %q", got)
+	}
+}
+
+// TestVPSBackupWaitsForAnUpdate: the backup stops OpenBao and copies its
+// storage; an update restarts the stack. The production upgrade window
+// (01:00-05:00) covers the 02:30 backup, so they share one lock: a backup
+// does not touch OpenBao while an update holds it, and an update does not
+// start while a backup runs.
+func TestVPSBackupWaitsForAnUpdate(t *testing.T) {
+	v := newVPS(t)
+	v.write(filepath.Join(v.dir, "etc", "backup.env"), "RESTIC_REPOSITORY='/tmp/none'\n")
+	// Something holds the lock, as a running update does.
+	lock, err := os.OpenFile(filepath.Join(v.state, "update.lock"), os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lock.Close() }()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		t.Fatal(err)
+	}
+	v.env = []string{"TASKIEM_VPS_LOCK_WAIT=1"}
+	out, err := v.run("taskiem:good", "backup")
+	if err == nil || !strings.Contains(out, "update") {
+		t.Errorf("backup during an update: %v: %s", err, out)
+	}
+	if b, _ := os.ReadFile(v.log); strings.Contains(string(b), "stop openbao") {
+		t.Errorf("the backup stopped OpenBao while an update held the lock: %s", b)
+	}
+	// And the other way: an update does not start while the lock is held.
+	if out, err := v.run("taskiem:good2", "update", "--now"); err != nil || len(v.ups()) != 0 {
+		t.Errorf("update while the lock is held: %v, restarts %q: %s", err, v.ups(), out)
+	}
+	_ = lock.Close()
+	// Released: the backup runs, and releases the lock when done.
+	if out, err := v.run("taskiem:good", "backup"); err != nil {
+		t.Fatalf("backup with the lock free: %v: %s", err, out)
+	}
+	if b, _ := os.ReadFile(v.log); !strings.Contains(string(b), "stop openbao") {
+		t.Errorf("the backup did not copy OpenBao: %s", b)
 	}
 }

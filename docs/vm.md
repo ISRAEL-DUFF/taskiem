@@ -67,6 +67,8 @@ An upgrade stops Taskiem for about 30 seconds while workers drain, so keep payro
 | `sudo taskiem-vps owner-reset` | Email the owner a new set-your-password link |
 
 
+The backup and updates never run at the same time. The backup stops OpenBao for the few seconds it takes to copy its storage, and an update restarts everything, so both take one lock (`/var/lib/taskiem-vps/update.lock`): the backup waits up to 30 minutes for a running update, and an update that finds the backup running tries again at the next tick. The copy is compared with the original, file by file, before OpenBao starts again; a copy that differs is not stored and alerts as a failed backup.
+
 ## Alerts
 
 `taskiem-vps check` runs every 5 minutes and sends an email (through Taskiem's SMTP) and a Slack-compatible webhook when the set of problems changes, and again when it clears. An alert that neither channel took is sent again by every check until one does, and is written to the journal as an error (`journalctl -t taskiem-vps -p err`); the problems are:
