@@ -718,8 +718,9 @@ export function ToolSheet({
             ? () => setGrouping(false)
             : picking
               ? stopPicking
-              : onTools
+              : undefined
       }
+      onOut={onTools}
       shut={shut}
       testid="tool-sheet"
       footer={

@@ -67,7 +67,8 @@ func (e *etagWriter) Write(b []byte) (int, error) {
 		// Too large to hold: written as it is, with no ETag.
 		e.holding = false
 		e.ResponseWriter.WriteHeader(e.status)
-		if _, err := e.ResponseWriter.Write(e.buf.Bytes()); err != nil {
+		// The handler's own answer, held only to hash it: written as it wrote it.
+		if _, err := e.ResponseWriter.Write(e.buf.Bytes()); err != nil { //nolint:gosec // G705: not input, the handler's JSON answer passed through unchanged
 			return 0, err
 		}
 		e.buf.Reset()
@@ -103,7 +104,7 @@ func (e *etagWriter) finish(r *http.Request) {
 		return
 	}
 	e.ResponseWriter.WriteHeader(e.status)
-	_, _ = e.ResponseWriter.Write(e.buf.Bytes())
+	_, _ = e.ResponseWriter.Write(e.buf.Bytes()) //nolint:gosec // G705: not input, the handler's JSON answer passed through unchanged
 }
 
 // matches reads If-None-Match: a list of tags, or *.

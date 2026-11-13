@@ -266,6 +266,7 @@ export function Sheet({
   footer,
   testid,
   onBack,
+  onOut,
   shut = false,
   headExtra,
   lead,
@@ -282,6 +283,10 @@ export function Sheet({
   testid?: string;
   /** A step back inside the sheet (from a form to its list). */
   onBack?: () => void;
+  /** At its top level, the back arrow out to what opened it (a tool's
+   * sheet, back to the tools panel). Esc does not take it: Esc closes the
+   * sheet and only it. */
+  onOut?: () => void;
   /** Closes it, with its motion (after a save). */
   shut?: boolean;
   /** Beside the title: a link to the full page. */
@@ -308,7 +313,8 @@ export function Sheet({
     },
   }));
   // Back: out of the deepest step, else the sheet's own (form to list).
-  const back = steps.length ? steps[steps.length - 1] : onBack;
+  const inner = steps.length ? steps[steps.length - 1] : onBack;
+  const back = inner ?? onOut;
   // Pulled up, the sheet takes the whole screen; down again, its own height.
   const [full, setFull] = useState(false);
   // Opened from a tile or a card: it grows out of it, and that is its one
@@ -333,7 +339,7 @@ export function Sheet({
       el.focus({ preventScroll: true });
   }, [title]);
   // Esc steps back from a form to its list, then closes the sheet only.
-  const escape = () => (back ? back() : close());
+  const escape = () => (inner ? inner() : close());
   useFocusTrap(ref, !docked, escape);
   useEffect(() => {
     if (shut) close();
