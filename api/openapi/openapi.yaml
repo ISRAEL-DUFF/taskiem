@@ -30789,6 +30789,10 @@ components:
           $ref: '#/components/schemas/SchoolCloseSum'
         at_the_desk:
           $ref: '#/components/schemas/SchoolCloseSum'
+        recorded_late:
+          description: 'Of money_in, what was recorded that day for earlier days; no other close carries it. Absent from closes taken before it was kept.'
+          allOf:
+            - $ref: '#/components/schemas/SchoolCloseSum'
         matched_auto:
           $ref: '#/components/schemas/SchoolCloseSum'
         matched_person:

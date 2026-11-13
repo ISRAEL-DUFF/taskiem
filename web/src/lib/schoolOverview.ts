@@ -50,6 +50,8 @@ export interface SchoolClose extends CloseBrief {
   money_in: CloseSum;
   into_accounts: CloseSum;
   at_the_desk: CloseSum;
+  /** Of money_in, what was recorded that day for earlier days (absent from older closes). */
+  recorded_late?: CloseSum;
   matched_auto: CloseSum;
   matched_person: CloseSum;
   unmatched: CloseSum;
@@ -163,9 +165,11 @@ export function closeStatus(c: Pick<CloseBrief, "reconciles" | "problems">): { l
   return { label: `Does not reconcile: ${c.problems} problem${c.problems === 1 ? "" : "s"}`, tone: "warn" };
 }
 
-/** "₦150,000 in on students (2 payments): ₦100,000 into account numbers, ₦50,000 at the desk". */
-export function closeMoneyLine(c: Pick<SchoolClose, "money_in" | "into_accounts" | "at_the_desk">): string {
-  return `${naira(c.money_in.kobo)} in on students (${c.money_in.count} payment${c.money_in.count === 1 ? "" : "s"}): ${naira(c.into_accounts.kobo)} into account numbers, ${naira(c.at_the_desk.kobo)} at the desk`;
+/** "₦150,000 in on students (2 payments): ₦100,000 into account numbers, ₦50,000 at the desk", then what of it was recorded for earlier days. */
+export function closeMoneyLine(c: Pick<SchoolClose, "money_in" | "into_accounts" | "at_the_desk" | "recorded_late">): string {
+  const line = `${naira(c.money_in.kobo)} in on students (${c.money_in.count} payment${c.money_in.count === 1 ? "" : "s"}): ${naira(c.into_accounts.kobo)} into account numbers, ${naira(c.at_the_desk.kobo)} at the desk`;
+  if (!c.recorded_late || c.recorded_late.count === 0) return line;
+  return `${line}; of it ${naira(c.recorded_late.kobo)} recorded for earlier days`;
 }
 
 /** "₦100,000 matched by itself, ₦50,000 by a person; ₦0 not matched". */
