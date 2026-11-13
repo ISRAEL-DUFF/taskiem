@@ -571,6 +571,12 @@ class ConversationData extends ChangeNotifier {
     } on Offline {
       o.failed = true;
       o.error = 'There is no connection. Tap Retry when you are back online.';
+    } on Object {
+      // Anything else (an answer that could not be read, say): the message
+      // must not stay "sending" for ever. Retry sends the same client id,
+      // so a message the server did keep is not sent twice.
+      o.failed = true;
+      o.error = 'It could not be sent.';
     }
     _changed();
   }
