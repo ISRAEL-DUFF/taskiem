@@ -348,6 +348,25 @@ notify() { # SUBJECT BODY
   return 0
 }
 
+# The owner's first password, when no email could carry a set-your-password
+# link: shown on the terminal when a person is at one; otherwise written to
+# a file only root can read, and its path logged. Never to standard output:
+# an unattended install's output is kept by cloud-init and CI logs.
+hand_over_password() { # EMAIL PASSWORD
+  local f
+  if { true >/dev/tty; } 2>/dev/null; then
+    printf '\nOwner %s, first password (shown once, change it at first sign-in): %s\n\n' "$1" "$2" >/dev/tty
+    return 0
+  fi
+  f="${TASKIEM_VPS_ROOT_HOME:-/root}/taskiem-owner-password-$(date +%F).txt"
+  (
+    umask 077
+    printf 'Taskiem owner: %s\nFirst password: %s\n\nSign in, change it, then delete this file (shred -u).\n' "$1" "$2" >"$f"
+  )
+  chmod 600 "$f"
+  log "the owner's first password is in $f (readable by root only): give it to $1, then delete the file (shred -u)"
+}
+
 # --- commands ----------------------------------------------------------------
 
 cmd_setup() {
@@ -641,16 +660,14 @@ SQL
     log "creating the organisation and its owner"
     local pw
     pw=$(hex 16)
-    compose run --rm --no-deps -e TASKIEM_BOOTSTRAP_PASSWORD="$pw" taskiem bootstrap --tenant "$ORG" --email "$OWNER_EMAIL" >/dev/null
+    # By name only: the value travels in the environment, not on a command
+    # line that every process on the server can read.
+    TASKIEM_BOOTSTRAP_PASSWORD="$pw" compose run --rm --no-deps -e TASKIEM_BOOTSTRAP_PASSWORD taskiem bootstrap --tenant "$ORG" --email "$OWNER_EMAIL" >/dev/null
     touch "$STATE/bootstrapped"
     if [ -n "$SMTP_URL" ] && owner_reset_email; then
       log "$OWNER_EMAIL has been sent a link to set their password"
     else
-      if { true >/dev/tty; } 2>/dev/null; then
-        printf '\nOwner %s, first password (shown once, change it at first sign-in): %s\n\n' "$OWNER_EMAIL" "$pw" >/dev/tty
-      else
-        printf 'Owner first password: %s\n' "$pw"
-      fi
+      hand_over_password "$OWNER_EMAIL" "$pw"
     fi
   fi
 
@@ -928,6 +945,7 @@ run_checks() {
   [ ! -s "$STATE/update-failed" ] || echo "release $(cat "$STATE/update-failed") failed to upgrade and was rolled back"
   staging_behind
   ! ls /root/taskiem-recovery-*.txt >/dev/null 2>&1 || echo "the recovery sheet is still on the server (/root/taskiem-recovery-*.txt)"
+  ! ls /root/taskiem-owner-password-*.txt >/dev/null 2>&1 || echo "the owner's first password is still on the server (/root/taskiem-owner-password-*.txt)"
 }
 
 # A staging server runs every merge to main, so main ahead of the running

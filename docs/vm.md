@@ -41,6 +41,8 @@ Re-run `sudo taskiem-vps setup` any time to change an answer; it keeps every sec
 
 **Unattended install.** Every answer can come from the environment instead (`sudo -E`): `TASKIEM_VPS_DOMAIN`, `_OWNER_EMAIL`, `_ORG`, `_DATABASE_URL`, `_SMTP_URL`, `_MAIL_FROM`, `_CHANNEL`, `_WINDOW` (`any` or `01:00-05:00`), `_ALERT_EMAIL`, `_ALERT_WEBHOOK`, `_BACKUP_REPO`, `_BACKUP_KEY_ID`, `_BACKUP_SECRET`, `_TELEGRAM_BOT_TOKEN`, `_TELEGRAM_BOT_USERNAME`, `_ISWALLET_URL`, `_PAYROLLA_URL`, `_PUBLIC`, `_PREVIEW_DOMAIN`, `_MAIL_DOMAIN`, with `TASKIEM_VPS_NONINTERACTIVE=1`.
 
+With no SMTP there is no email to carry the owner's set-your-password link. At a terminal the first password is shown once; on an unattended install it is written to `/root/taskiem-owner-password-<date>.txt`, readable by root only, and only the file's path is printed, so the password is not in cloud-init or CI logs. Give it to the owner, then delete the file (`shred -u`); the health checks remind you until you do.
+
 ## Releases
 
 CI publishes a signed image for every merge to main and every version tag. Servers follow a channel:

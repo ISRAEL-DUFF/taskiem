@@ -370,3 +370,49 @@ func TestVPSBackupWaitsForAnUpdate(t *testing.T) {
 		t.Errorf("the backup did not copy OpenBao: %s", b)
 	}
 }
+
+// TestVPSFirstPasswordGoesToARootOnlyFile: on an unattended install with no
+// SMTP there is nobody at a terminal and no email to carry a link. The
+// owner's first password used to be printed to standard output, which
+// cloud-init and CI keep in their logs; it is written to a file only root
+// can read, and only the file's path is said.
+func TestVPSFirstPasswordGoesToARootOnlyFile(t *testing.T) {
+	for _, tool := range []string{"bash", "setsid"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("%s is not installed", tool)
+		}
+	}
+	script, err := filepath.Abs("vm/taskiem-vps")
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	// The function alone, with the script's log: no terminal (setsid).
+	cmd := exec.Command("setsid", "bash", "-c", `set -Eeuo pipefail
+source <(sed -n '/^log() /p; /^hand_over_password() /,/^}/p' "$0")
+hand_over_password owner@acme.test s3cret-first-password`, script)
+	cmd.Env = append(os.Environ(), "TASKIEM_VPS_ROOT_HOME="+home)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if strings.Contains(string(out), "s3cret-first-password") {
+		t.Errorf("the password is in the output: %s", out)
+	}
+	files, _ := filepath.Glob(filepath.Join(home, "taskiem-owner-password-*.txt"))
+	if len(files) != 1 || !strings.Contains(string(out), files[0]) {
+		t.Fatalf("files %q; output does not name the file: %s", files, out)
+	}
+	info, err := os.Stat(files[0])
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("mode %v, want 0600 (%v)", info.Mode().Perm(), err)
+	}
+	if b, _ := os.ReadFile(files[0]); !strings.Contains(string(b), "s3cret-first-password") || !strings.Contains(string(b), "owner@acme.test") {
+		t.Errorf("file: %s", b)
+	}
+	// And the password is never an argument of a command.
+	src, _ := os.ReadFile(script)
+	if strings.Contains(string(src), `TASKIEM_BOOTSTRAP_PASSWORD="$pw" taskiem`) || strings.Contains(string(src), `-e TASKIEM_BOOTSTRAP_PASSWORD="$pw"`) {
+		t.Error("the first password is passed on a command line")
+	}
+}
