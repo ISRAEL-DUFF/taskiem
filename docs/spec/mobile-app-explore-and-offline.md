@@ -5,7 +5,9 @@ Asked by the founder, 13 November 2026:
 1. **Explore** should show something before anyone types: featured businesses, new ones, and so on, not a blank screen.
 2. **The app should keep what it loaded on the phone**: chats, photos, voice notes and the rest. Then it opens at once on what was there last, instead of loading everything afresh each time.
 
-This is a plan to discuss. Nothing is built yet. §4 lists what is the founder's to decide.
+Settled by the founder, 13 November 2026: every suggestion in §4 is taken, and every part of §5 is to be built, the saved database for chats included; the app is to be as robust offline as WhatsApp.
+
+**Built so far:** X1 (§2.3; Explore's empty page offers to be found and to set the area).
 
 ## 1. Where things stand
 
@@ -157,7 +159,7 @@ What is kept holds a business's conversations, customers' names and amounts of m
 
 Messages already page by `before`/`after`, and the stream already tells of changes live.
 
-## 4. To settle (the founder's)
+## 4. Settled (13 November 2026: each as suggested)
 
 1. **The categories:** the list of business categories, and whether a business picks one or two (suggested: two). Businesses already findable are asked to choose the next time they open Your business in Explore.
 2. **Featured:**

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
-import { get, post } from "../api";
+import { get, post, put } from "../api";
 import { Icon } from "../icons";
 import { photoSrc, type BusinessProfile } from "../lib/businessProfile";
-import { blindRowLine, type BusinessLink } from "../lib/links";
+import { blindRowLine, type BusinessLink, type LinkSettings } from "../lib/links";
 import {
   cardLine,
   cardOffer,
@@ -307,6 +307,19 @@ export function Explore({
     };
   }, []);
 
+  // Whether other businesses can find us: said, with the switch, when
+  // there is no one to show.
+  const [settings, setSettings] = useState<LinkSettings>();
+  useEffect(() => {
+    let live = true;
+    get<LinkSettings>("/v1/link-settings").then(
+      (r) => live && setSettings(r),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
   useEffect(() => {
     let live = true;
     get<ExploreResult>("/v1/explore").then(
@@ -574,12 +587,45 @@ export function Explore({
         ) : start.near.length === 0 &&
           start.fresh.length === 0 &&
           (start.delivery ?? []).length === 0 ? (
-          <EmptyState icon="search">
-            No businesses to show yet. Businesses appear here when they choose
-            to be found.
+          <EmptyState
+            icon="search"
+            action={
+              <div className="tk-x-empty-acts">
+                {manage && settings && !settings.findable_now && (
+                  <button
+                    type="button"
+                    className="tk-x-connect"
+                    disabled={act.busy}
+                    onClick={() =>
+                      void act.run(async () => {
+                        setSettings(await put<LinkSettings>("/v1/link-settings", { findable: true }));
+                      }, "Other businesses can find you")
+                    }
+                  >
+                    Let other businesses find me
+                  </button>
+                )}
+                <Link to="/settings/links/profile" className="link">
+                  Your business in Explore
+                </Link>
+              </div>
+            }
+          >
+            No other business can be found yet: businesses appear here once
+            they choose to be found. Be one of the first, so suppliers and
+            customers find you.
           </EmptyState>
         ) : (
           <>
+            {!start.area && start.near.length === 0 && (
+              <p className="hint tk-x-area" data-testid="explore-no-area">
+                Add your area in{" "}
+                <Link to="/settings/links/profile" className="link">
+                  Your business in Explore
+                </Link>{" "}
+                to see the businesses near you.
+              </p>
+            )}
             {start.near.length > 0 && (
               <section aria-labelledby="explore-near">
                 <div className="tk-x-sec">
@@ -652,5 +698,121 @@ export function Explore({
 function mark(cards: ExploreCard[], business: string): ExploreCard[] {
   return cards.map((c) =>
     c.business === business ? { ...c, state: "none" } : c,
+  );
+}
+
+/** The first few businesses worth showing someone with no links yet: near
+ * them first, then those that deliver, then the newest, each once. */
+export function firstPicks(r: ExploreResult, n = 3): ExploreCard[] {
+  const seen = new Set<string>();
+  const out: ExploreCard[] = [];
+  for (const c of [...r.near, ...(r.delivery ?? []), ...r.fresh]) {
+    if (seen.has(c.business) || cardOffer(c.state) !== "connect") continue;
+    seen.add(c.business);
+    out.push(c);
+    if (out.length === n) break;
+  }
+  return out;
+}
+
+/**
+ * The chats with no linked business yet (docs/spec/mobile-app-explore-and-
+ * offline.md §2.3): never a bare line. A few businesses to link with, each
+ * with Connect; Find a business; and, when other businesses cannot find
+ * this one, the switch that lets them.
+ */
+export function GetStarted({
+  manage,
+  onExplore,
+  onChanged,
+}: {
+  manage: boolean;
+  onExplore: () => void;
+  onChanged: () => void;
+}) {
+  const [start, setStart] = useState<ExploreResult>();
+  const [settings, setSettings] = useState<LinkSettings>();
+  const [asked, setAsked] = useState<Record<string, true>>({});
+  const act = useAction();
+  useEffect(() => {
+    let live = true;
+    get<ExploreResult>("/v1/explore").then(
+      (r) => live && setStart(r),
+      () => undefined,
+    );
+    get<LinkSettings>("/v1/link-settings").then(
+      (r) => live && setSettings(r),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  const picks = start ? firstPicks(start) : [];
+  const connect = (c: ExploreCard) =>
+    void act.run(async () => {
+      await post("/v1/links", { business: c.business, role: "both" });
+      setAsked((a) => ({ ...a, [c.business]: true }));
+      onChanged();
+    }, `Request sent to ${c.name}`);
+  return (
+    <section className="tk-start" data-testid="chats-start" aria-labelledby="chats-start-title">
+      <span className="empty-icon" aria-hidden="true">
+        <Icon name="chat" />
+      </span>
+      <h2 id="chats-start-title">Link with the businesses you trade with</h2>
+      <p className="hint">
+        Linked, your orders, invoices and payments reach each other by
+        themselves, and you chat here.
+      </p>
+      <ErrorBox error={act.error} />
+      {picks.length > 0 && (
+        <ul className="tk-start-picks" aria-label="Businesses you could link with">
+          {picks.map((c) => (
+            <li key={c.business}>
+              <ChatAvatar name={c.name} logo={c.logo ? exploreLogo(c.business, c.v) : undefined} />
+              <span className="tk-start-who">
+                <strong>{c.name}</strong>
+                {cardLine(c) && <span className="hint">{cardLine(c)}</span>}
+              </span>
+              {asked[c.business] ? (
+                <span className="tk-pill">Requested</span>
+              ) : manage ? (
+                <button
+                  type="button"
+                  className="tk-x-connect"
+                  disabled={act.busy}
+                  onClick={() => connect(c)}
+                  aria-label={`Connect with ${c.name}`}
+                >
+                  Connect
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+      <button type="button" className="tk-cta" onClick={onExplore}>
+        <Icon name="search" />
+        Find a business
+      </button>
+      {settings && !settings.findable_now && !!settings.asked_at && manage && (
+        <p className="tk-start-findable">
+          Other businesses cannot find you yet.{" "}
+          <button
+            type="button"
+            className="link"
+            disabled={act.busy}
+            onClick={() =>
+              void act.run(async () => {
+                setSettings(await put<LinkSettings>("/v1/link-settings", { findable: true }));
+              }, "Other businesses can find you")
+            }
+          >
+            Let them find me
+          </button>
+        </p>
+      )}
+    </section>
   );
 }

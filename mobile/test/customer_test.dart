@@ -64,7 +64,8 @@ void main() {
     ));
     await settle(t);
     expect(find.text('Customers · 2 waiting'), findsOneWidget);
-    expect(find.text('No linked businesses yet. Search for a supplier or a customer that is on Taskiem, and ask to link.'), findsOneWidget);
+    expect(find.text('Link with the businesses you trade with'), findsOneWidget);
+    expect(find.bySemanticsLabel('Find a business'), findsWidgets);
     expect(find.text('Let other businesses on Taskiem find you?'), findsOneWidget);
     await t.tap(find.text('Chidi'));
     await settle(t);

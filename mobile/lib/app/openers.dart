@@ -18,4 +18,7 @@ class Openers {
 
   /// Find a business (Explore).
   static void Function(BuildContext context)? findBusiness;
+
+  /// Your business in Explore (the business profile).
+  static void Function(BuildContext context)? businessProfile;
 }

@@ -278,6 +278,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     // What a tool's screen leads to: the shell's own screens.
     Openers.linkedBusinesses = _links;
     Openers.findBusiness = (context) => showExplore(context, chats: _chats, onOpen: (c) => _openConv(context, c));
+    Openers.businessProfile = (context) => _profile(context, back: 'Back to Explore');
     // Drafting an order needs table.edit; else their shop to look around.
     Openers.conversation = (context, link) {
       final c = _chats.conversations.where((x) => x.link == link).firstOrNull;
@@ -304,6 +305,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     Openers.linkedBusinesses = null;
+    Openers.businessProfile = null;
     Openers.findBusiness = null;
     Openers.orderFrom = null;
     Openers.conversation = null;

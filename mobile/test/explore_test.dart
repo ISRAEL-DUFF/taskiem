@@ -13,6 +13,7 @@ import 'package:taskiem/chat/explore.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
+import 'guidelines.dart';
 import 'support.dart';
 
 http.Response _answer(Object body) => http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
@@ -197,6 +198,91 @@ void main() {
       expect(sent.single.$3, {'phone': '08035550101', 'role': 'both'});
       expect(find.text('Request sent'), findsOneWidget);
       await t.pump(const Duration(seconds: 5));
+    });
+  });
+
+  group('never empty', () {
+    setUpAll(loadFonts);
+
+    // A business with no links yet, asked once whether others may find it,
+    // that said no.
+    Future<List<(String, String, Object?)>> chatsWithNoLinks(WidgetTester t, {Object? explore}) async {
+      t.view.physicalSize = const Size(390, 1200);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final f = Fixture('explore');
+      final sent = <(String, String, Object?)>[];
+      var findable = false;
+      final chats = ChatsData(
+        f.auth(also: (req) async {
+          final p = req.url.path;
+          if (req.method == 'GET') {
+            return switch (p) {
+              '/v1/link-chats' => _answer({'conversations': <Object>[]}),
+              '/v1/links' => _answer({'links': <Object>[], 'sent': <Object>[]}),
+              '/v1/link-settings' => _answer({'findable': findable, 'findable_now': findable, 'asked_at': '2026-11-01T09:00:00Z'}),
+              '/v1/explore' when explore != null && !req.url.queryParameters.containsKey('q') => _answer(explore),
+              _ => null,
+            };
+          }
+          sent.add((req.method, p, req.body.isEmpty ? null : jsonDecode(req.body)));
+          if (p == '/v1/link-settings') findable = true;
+          return _answer(<String, Object>{});
+        }),
+        now: () => f.at,
+      );
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ChatsScreen(data: chats)));
+      await _settle(t);
+      return sent;
+    }
+
+    testWidgets('no links: businesses to link with, Connect, the switch to be found, Find a business', (t) async {
+      final sent = await chatsWithNoLinks(t);
+      expect(find.text('Link with the businesses you trade with'), findsOneWidget);
+      expect(find.bySemanticsLabel('Connect with Akoka Print Hub'), findsOneWidget, reason: 'near us first');
+      expect(find.text('Other businesses cannot find you yet.'), findsOneWidget);
+      await t.tap(find.bySemanticsLabel('Let them find me'));
+      await _settle(t);
+      expect((sent.last.$1, sent.last.$2), ('PUT', '/v1/link-settings'));
+      expect(sent.last.$3, {'findable': true});
+      expect(find.text('Other businesses cannot find you yet.'), findsNothing);
+      await t.tap(find.bySemanticsLabel('Connect with Akoka Print Hub'));
+      await _settle(t);
+      expect((sent.last.$1, sent.last.$2), ('POST', '/v1/links'));
+      await t.tap(find.bySemanticsLabel('Find a business').last);
+      await t.pumpAndSettle();
+      expect(find.byType(ExploreScreen), findsOneWidget);
+      await t.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('Explore with no one to show says why, and offers to be found', (t) async {
+      final sent = await chatsWithNoLinks(t, explore: {
+        'results': <Object>[], 'near': <Object>[], 'near_more': false, 'fresh': <Object>[], 'more': false, 'delivery': <Object>[], 'delivery_more': false,
+      });
+      expect(find.bySemanticsLabel(RegExp('^Connect with')), findsNothing);
+      await t.tap(find.bySemanticsLabel('Find a business').last);
+      await t.pumpAndSettle();
+      await _settle(t);
+      expect(find.textContaining('No other business can be found yet'), findsOneWidget);
+      await t.tap(find.bySemanticsLabel('Let other businesses find me'));
+      await _settle(t);
+      expect((sent.last.$1, sent.last.$2), ('PUT', '/v1/link-settings'));
+      expect(sent.last.$3, {'findable': true});
+      await t.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('at large text on a small phone: nothing cut off, all pressable', (t) async {
+      final f = Fixture('explore');
+      final chats = ChatsData(
+        f.auth(also: (req) async => switch (req.url.path) {
+          '/v1/link-chats' when req.method == 'GET' => _answer({'conversations': <Object>[]}),
+          '/v1/links' when req.method == 'GET' => _answer({'links': <Object>[], 'sent': <Object>[]}),
+          '/v1/link-settings' when req.method == 'GET' => _answer({'findable': false, 'findable_now': false, 'asked_at': '2026-11-01T09:00:00Z'}),
+          _ => null,
+        }),
+        now: () => f.at,
+      );
+      await expectLargeText(t, TaskiemApp(mode: TkMode.dark, home: ChatsScreen(data: chats)), drive: _settle);
     });
   });
 }

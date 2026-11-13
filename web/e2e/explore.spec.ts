@@ -473,3 +473,50 @@ test("a business that asked you to link is answered from its card; the keys stay
     `Linked with Dangote Depot ${stamp}`,
   );
 });
+
+test("with no linked business, the chats offer businesses to link with, Find a business, and the way to be found", async ({ browser }) => {
+  const { buyer, name } = await twoBusinesses(browser, { viewport: { width: 390, height: 844 } });
+  // Other tests' businesses share the server: only this one's.
+  await buyer.route(/\/v1\/explore(\?.*)?$/, async (route) => {
+    const res = await route.fetch();
+    const j = (await res.json()) as Record<string, unknown>;
+    for (const k of ["near", "fresh", "delivery"])
+      j[k] = ((j[k] as { name: string }[]) ?? []).filter((c) => c.name === name);
+    return route.fulfill({ response: res, json: j });
+  });
+  // Asked once already, and said no: the panel offers the switch again.
+  await buyer.request.put("/v1/link-settings", { headers: H, data: { findable: false } });
+  await buyer.goto("/chat");
+  const start = buyer.getByTestId("chats-start");
+  await expect(start).toContainText("Link with the businesses you trade with");
+  // The one near us first: Connect asks it to link.
+  await expect(start.getByText(name)).toBeVisible();
+  // Not findable yet (no storefront): said, with the switch.
+  await expect(start).toContainText("Other businesses cannot find you yet.");
+  await start.getByRole("button", { name: "Let them find me" }).click();
+  await expect(start).not.toContainText("Other businesses cannot find you yet.");
+  await axeBoth(buyer, "the chats with no linked business");
+  // Find a business opens Explore; closed, the chats again.
+  await start.getByRole("button", { name: "Find a business" }).click();
+  await expect(buyer.getByTestId("explore-search")).toBeVisible();
+  await buyer.goBack();
+  // Connect asks it to link: the request is then among the chats.
+  await start.getByRole("button", { name: `Connect with ${name}` }).click();
+  await expect(start).toHaveCount(0);
+  await expect(buyer.getByText(name).first()).toBeVisible();
+});
+
+test("Explore with no one to show says why, and offers to be found", async ({ browser }) => {
+  const page = await (await browser.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+  await signUp(page, `Lonely Shop ${letters()}`);
+  await page.route(/\/v1\/explore(\?.*)?$/, (r) =>
+    r.fulfill({ json: { results: [], near: [], near_more: false, fresh: [], more: false, delivery: [], delivery_more: false } }),
+  );
+  await page.goto("/chat");
+  await page.getByTestId("chats-start").getByRole("button", { name: "Find a business" }).click();
+  await expect(page.getByText("No other business can be found yet")).toBeVisible();
+  await page.getByRole("button", { name: "Let other businesses find me" }).click();
+  await expect(page.getByRole("button", { name: "Let other businesses find me" })).toHaveCount(0);
+  expect((await (await page.request.get("/v1/link-settings", { headers: H })).json()).findable_now).toBe(true);
+  await axeBoth(page, "Explore with no one to show");
+});

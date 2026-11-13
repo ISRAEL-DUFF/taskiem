@@ -16,6 +16,7 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../kit/icon.dart';
+import '../app/openers.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/tap_area.dart';
@@ -31,6 +32,20 @@ String? cardOffer(String state) => switch (state) {
   'asked_us' => 'asked',
   _ => null,
 };
+
+/// Explore.tsx firstPicks: the first few businesses worth showing someone
+/// with no links yet, near them first, then those that deliver, then the
+/// newest, each once, only those that can be asked.
+List<ExploreCard> firstPicks(ExploreResult r, [int n = 3]) {
+  final seen = <String>{};
+  final out = <ExploreCard>[];
+  for (final c in [...r.near, ...r.delivery, ...r.fresh]) {
+    if (!seen.add(c.business) || cardOffer(c.state) != 'connect') continue;
+    out.add(c);
+    if (out.length == n) break;
+  }
+  return out;
+}
 
 /// explore.ts cardLine: "Cement and sand · Ikeja"; one that delivers says
 /// so, with what and where.
@@ -356,7 +371,26 @@ class _ExploreScreenState extends State<ExploreScreen> {
     } else if (_start == null) {
       body.add(Semantics(label: 'Loading businesses…', child: const SizedBox(height: 120)));
     } else if (_start!.near.isEmpty && _start!.fresh.isEmpty && _start!.delivery.isEmpty) {
-      body.add(_Empty('No businesses to show yet. Businesses appear here when they choose to be found.'));
+      final ls = d.linkSettings;
+      body.add(
+        _Empty(
+          'No other business can be found yet: businesses appear here once they choose to be found. Be one of the first, so suppliers and customers find you.',
+          actions: [
+            if (d.manage && ls != null && !ls.findableNow)
+              _Pill(
+                label: 'Let other businesses find me',
+                onTap: _busy
+                    ? null
+                    : () => _run(() async {
+                        await d.auth.transport.send('PUT', '/v1/link-settings', body: {'findable': true});
+                        await d.load();
+                        return 'Other businesses can find you';
+                      }),
+              ),
+            if (Openers.businessProfile != null) TkLink(label: 'Your business in Explore', onTap: () => Openers.businessProfile!(context)),
+          ],
+        ),
+      );
     } else {
       final s = _start!;
       final sections = <(String title, String? sub, List<ExploreCard> cards, bool more, String section, String moreWords)>[
@@ -364,6 +398,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
         if (s.delivery.isNotEmpty) ('Delivery', null, s.delivery, s.deliveryMore, 'delivery', 'delivery businesses'),
         if (s.fresh.isNotEmpty) ('New on Taskiem', null, s.fresh, s.more, 'new', 'new businesses'),
       ];
+      if ((s.area ?? '').isEmpty && s.near.isEmpty && Openers.businessProfile != null) {
+        body.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text('Add your area in ', style: tkText(size: 13.5, color: TkTheme.tokens(context).muted)),
+                TkLink(label: 'Your business in Explore', onTap: () => Openers.businessProfile!(context)),
+                Text(' to see the businesses near you.', style: tkText(size: 13.5, color: TkTheme.tokens(context).muted)),
+              ],
+            ),
+          ),
+        );
+      }
       for (var i = 0; i < sections.length; i++) {
         final (title, sub, cards, more, section, moreWords) = sections[i];
         if (i > 0) body.add(gap(24));
@@ -897,8 +946,11 @@ class _CarouselState extends State<_Carousel> {
 
 /// ui.tsx EmptyState: the glass on its tint, then the words.
 class _Empty extends StatelessWidget {
-  const _Empty(this.words);
+  const _Empty(this.words, {this.actions = const []});
   final String words;
+
+  /// What can be done about it (the way to be found).
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
@@ -917,6 +969,7 @@ class _Empty extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(words, textAlign: TextAlign.center, style: tkText(size: 14, color: t.muted)),
+          for (final a in actions) ...[const SizedBox(height: 12), a],
         ],
       ),
     );

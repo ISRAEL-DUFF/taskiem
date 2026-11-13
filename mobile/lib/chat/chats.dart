@@ -557,7 +557,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         ),
                       )
                     else if (d.linksOn && d.loaded && d.noLinks && _filter != ChatFilter.starred)
-                      const _NoLinks()
+                      _GetStarted(
+                        data: d,
+                        onFind: widget.onFind ?? () => showExplore(context, chats: d, onOpen: (c) => widget.onOpen?.call(c)),
+                      )
                     else if (d.asked.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1884,37 +1887,203 @@ class _Customers extends StatelessWidget {
   }
 }
 
-/// ui.tsx EmptyState (`.empty-state`): no linked businesses yet.
-class _NoLinks extends StatelessWidget {
-  const _NoLinks();
+/// Explore.tsx GetStarted (docs/spec/mobile-app-explore-and-offline.md
+/// §2.3): the chats with no linked business yet. Never a bare line: a few
+/// businesses to link with, each with Connect; Find a business; and, once
+/// asked whether others may find this one and it said no, the switch again.
+class _GetStarted extends StatefulWidget {
+  const _GetStarted({required this.data, required this.onFind});
+  final ChatsData data;
+  final VoidCallback onFind;
+
+  @override
+  State<_GetStarted> createState() => _GetStartedState();
+}
+
+class _GetStartedState extends State<_GetStarted> {
+  List<ExploreCard>? _picks;
+  final _logos = <String, Uint8List>{};
+  bool _busy = false;
+  String? _error;
+
+  ChatsData get d => widget.data;
+
+  @override
+  void initState() {
+    super.initState();
+    d.api.explore().then((r) {
+      if (!mounted) return;
+      final picks = firstPicks(r);
+      setState(() => _picks = picks);
+      for (final c in picks.where((c) => c.logo)) {
+        d.auth.transport.bytes('/v1/explore/${c.business}/logo?size=320&v=${c.v}').then((b) {
+          if (mounted) setState(() => _logos[c.business] = Uint8List.fromList(b));
+        }, onError: (_) {});
+      }
+    }, onError: (_) {
+      if (mounted) setState(() => _picks = const []);
+    });
+  }
+
+  Future<void> _run(Future<String> Function() f) async {
+    setState(() => (_busy = true, _error = null));
+    try {
+      final said = await f();
+      if (mounted) showTkToast(context, said);
+    } on ApiError catch (e) {
+      _error = e.message;
+    } on Object {
+      _error = 'You’re offline. Try again when you’re back online.';
+    }
+    if (mounted) setState(() => _busy = false);
+  }
 
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 56),
-      decoration: BoxDecoration(
-        color: t.panel,
-        border: Border.all(color: t.border),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(color: t.tint, borderRadius: BorderRadius.circular(16)),
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final s = d.linkSettings;
+    final picks = _picks ?? const <ExploreCard>[];
+    Widget pill(String label, String semantics, bool primary, VoidCallback onTap) => TapArea(
+      child: Semantics(
+        button: true,
+        label: semantics,
+        onTap: _busy ? null : onTap,
+        excludeSemantics: true,
+        child: TkPress(
+          onTap: _busy ? null : onTap,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 40),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             alignment: Alignment.center,
-            child: TkIcon('chat', size: 26, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand),
+            decoration: BoxDecoration(color: primary ? (dark ? t.brandDark : t.brand) : t.tkSoft, borderRadius: BorderRadius.circular(999)),
+            child: Text(
+              label,
+              style: tkText(size: 14, weight: 700, color: primary ? (dark ? t.brandDarkText : t.tkOnPine) : t.text),
+            ),
           ),
-          const SizedBox(height: 14),
-          Text(
-            'No linked businesses yet. Search for a supplier or a customer that is on Taskiem, and ask to link.',
-            textAlign: TextAlign.center,
-            style: tkText(size: 14, color: t.muted),
-          ),
-        ],
+        ),
+      ),
+    );
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+        decoration: BoxDecoration(color: t.panel, border: Border.all(color: t.border), borderRadius: BorderRadius.circular(20)),
+        child: Column(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(color: t.tint, borderRadius: BorderRadius.circular(16)),
+              alignment: Alignment.center,
+              child: TkIcon('chat', size: 26, color: dark ? t.brandDark : t.brand),
+            ),
+            const SizedBox(height: 14),
+            Semantics(
+              header: true,
+              child: Text(
+                'Link with the businesses you trade with',
+                textAlign: TextAlign.center,
+                style: tkText(size: 18, weight: 700, lineHeight: 1.3, color: t.text),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Linked, your orders, invoices and payments reach each other by themselves, and you chat here.',
+              textAlign: TextAlign.center,
+              style: tkText(size: 14, color: t.muted),
+            ),
+            if (_error != null) ...[const SizedBox(height: 10), TkErrorBox(_error!)],
+            if (picks.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Semantics(
+                container: true,
+                label: 'Businesses you could link with',
+                explicitChildNodes: true,
+                child: Column(
+                  children: [
+                    for (final c in picks)
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          border: identical(c, picks.first) ? null : Border(top: BorderSide(color: t.border)),
+                        ),
+                        child: Row(
+                          children: [
+                            ChatAvatar(name: c.name, logo: _logos[c.business], size: 44),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 15, weight: 600, color: t.text)),
+                                  if (exploreLine(c).isNotEmpty)
+                                    Text(exploreLine(c), maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 13, color: t.muted)),
+                                ],
+                              ),
+                            ),
+                            if (d.manage) ...[
+                              const SizedBox(width: 8),
+                              pill('Connect', 'Connect with ${c.name}', true, () => _run(() async {
+                                await d.auth.transport.send('POST', '/v1/links', body: {'business': c.business, 'role': 'both'});
+                                unawaited(d.load());
+                                return 'Request sent to ${c.name}';
+                              })),
+                            ],
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 14),
+            TapArea(
+              child: Semantics(
+                button: true,
+                label: 'Find a business',
+                onTap: widget.onFind,
+                excludeSemantics: true,
+                child: TkPress(
+                  onTap: widget.onFind,
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 52),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: dark ? t.brandDark : t.brand, borderRadius: BorderRadius.circular(999)),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TkIcon('search', size: 18, color: dark ? t.brandDarkText : t.tkOnPine),
+                        const SizedBox(width: 8),
+                        Text('Find a business', style: tkText(size: 16, weight: 700, color: dark ? t.brandDarkText : t.tkOnPine)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (d.manage && s != null && !s.findableNow && s.askedAt != null) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  Text('Other businesses cannot find you yet.', style: tkText(size: 14, color: t.muted)),
+                  pill('Let them find me', 'Let them find me', false, () => _run(() async {
+                    await d.auth.transport.send('PUT', '/v1/link-settings', body: {'findable': true});
+                    await d.load();
+                    return 'Other businesses can find you';
+                  })),
+                ],
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

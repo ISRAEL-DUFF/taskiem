@@ -843,3 +843,18 @@ input.tk-switch:disabled { cursor: default; opacity: 0.7; }
 .tk-book-head { margin: 8px; font-size: 14px; font-weight: 700; color: var(--muted); }
 .tk-book-closed { padding: 4px 8px 12px; }
 .tk-book-times .tk-row-warn { padding: 0 8px 8px; }
+
+/* The chats with no linked business yet (Explore.tsx GetStarted): a few
+   businesses to link with, Find a business, and the way to be found. */
+.tk-start { margin: 0 16px 16px; padding: 24px 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.tk-start h2 { margin: 4px 0 0; font-size: 18px; font-weight: 700; }
+.tk-start > .hint { margin: 0; max-width: 40ch; }
+.tk-start-picks { list-style: none; margin: 6px 0 4px; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 4px; text-align: left; }
+.tk-start-picks li { display: flex; align-items: center; gap: 12px; padding: 8px 4px; border-top: 1px solid var(--border); }
+.tk-start-picks li:first-child { border-top: 0; }
+.tk-start-who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tk-start-who strong, .tk-start-who .hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tk-start .tk-cta { margin-top: 6px; }
+.tk-start-findable { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
+.tk-x-empty-acts { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.tk-x-area { margin: 0 16px 12px; }
