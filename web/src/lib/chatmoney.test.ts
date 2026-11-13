@@ -66,6 +66,9 @@ describe("the money log in the chat", () => {
   });
   it("says what it counts towards and what waits", () => {
     expect(entryPill(entry({ to_match: true }))).toEqual({ text: "To match", tone: "warn" });
+    // Money that is not naira is shown under its own currency, never with ₦.
+    expect(entryAmount(entry({ amount_kobo: 5000, currency: "USD" }))).toBe("+USD 50.00");
+    expect(matchable(entry({ direction: "in", status: "settled", left_kobo: 5000, currency: "USD" }))).toBe(false);
     expect(entryPill(entry({ towards: "invoice INV-0001" }))).toEqual({ text: "Counted", tone: "lime" });
     expect(entryPill(entry({ status: "pending" }))?.text).toBe("Pending");
     expect(entryPill(entry())).toBeUndefined();

@@ -38,10 +38,10 @@
 {{with .Notice}}<p class="notice" role="status">{{.}}</p>{{end}}
 <form method="post" action="{{.Action}}" class="form"{{if .Multipart}} enctype="multipart/form-data"{{end}}>
 <input type="hidden" name="token" value="{{.Token}}">
+<div class="hp" aria-hidden="true"><label>Leave this empty <input type="text" name="{{.Honeypot}}" value="" autocomplete="off" tabindex="-1"></label></div>
 <input type="hidden" name="state" value="{{.State}}">
 {{if .Embed}}<input type="hidden" name="site" value="" data-site>
-{{end}}<div class="hp" aria-hidden="true"><label>Leave this empty <input type="text" name="{{.Honeypot}}" value="" autocomplete="off" tabindex="-1"></label></div>
-{{if eq .Step "verify"}}
+{{end}}{{if eq .Step "verify"}}
 <div class="lines">
 {{if .Fixed}}<p>First, we will send a 6-digit code to {{.Hint}} to check this is you.</p>
 {{else}}<div class="ln"><label for="f-address">{{if eq .Channel "email"}}Your email address{{else}}Your phone number{{end}}</label>

@@ -90,10 +90,59 @@ func TestErrorClassification(t *testing.T) {
 	}
 }
 
-func TestVerifyTransferNotFoundForReconcile(t *testing.T) {
-	_, err := call(t, "verify_transfer", map[string]any{"reference": ref}, "verify_transfer_not_found")
+// As transfer's reconcile, a transfer Paystack does not have is ErrNotFound;
+// as a step or a payout lookup it is the answer not_found, which the
+// manifest's get_payout mapping reads (it was dead: the action only ever
+// returned the bare error).
+func TestVerifyTransferNotFound(t *testing.T) {
+	srv := fixture.Serve(t, fixture.Load(t, "verify_transfer_not_found"))
+	_, err := New(Options{BaseURL: srv.URL}).Actions["verify_transfer"].Execute(context.Background(), connector.Request{
+		Input: map[string]any{"reference": ref}, Credentials: map[string]string{"secret_key": "sk_test_xyz"}, HTTP: srv.Client(), IdempotencyKey: ref, Reconciling: true})
 	if !errors.Is(err, connector.ErrNotFound) {
-		t.Errorf("want ErrNotFound, got %v", err)
+		t.Errorf("reconcile: want ErrNotFound, got %v", err)
+	}
+	r, err := call(t, "verify_transfer", map[string]any{"reference": ref}, "verify_transfer_not_found")
+	if err != nil || r.Output.(map[string]any)["status"] != "not_found" || r.Output.(map[string]any)["reference"] != ref {
+		t.Errorf("as a step: %v %v", r.Output, err)
+	}
+	// Refused as a duplicate yet not there: not the answer of the transfer.
+	_, err = call(t, "transfer", map[string]any{"amount": 100000, "recipient": "RCP_t6wnmj2a9mp4m8k", "reference": ref}, "transfer_duplicate", "verify_transfer_not_found")
+	if effects.Classify(err) != effects.KindUnknownOutcome {
+		t.Errorf("duplicate and absent: %v", err)
+	}
+}
+
+// A retry of initialize_transaction after a lost answer is refused as a
+// duplicate reference. The checkout exists: it is read back, not failed
+// for good.
+func TestInitializeTransactionReadsBackADuplicate(t *testing.T) {
+	in := map[string]any{"reference": ref, "amount": 300000, "email": "bola@example.com"}
+	r, err := call(t, "initialize_transaction", in, "initialize_duplicate", "verify_charge_with_page")
+	if err != nil || r.Output.(map[string]any)["authorization_url"] != "https://checkout.paystack.com/0peioxfhpn" || r.Output.(map[string]any)["reference"] != ref {
+		t.Fatalf("read back: %v %v", r.Output, err)
+	}
+	// It exists, but Paystack gives no page address again: a person
+	// decides, never a fatal failure.
+	_, err = call(t, "initialize_transaction", in, "initialize_duplicate", "verify_charge_abandoned")
+	if effects.Classify(err) != effects.KindIndeterminate || !strings.Contains(err.Error(), "already exists") {
+		t.Errorf("exists without a page: %v", err)
+	}
+	_, err = call(t, "initialize_transaction", in, "initialize_duplicate", "verify_charge_not_found")
+	if effects.Classify(err) != effects.KindUnknownOutcome {
+		t.Errorf("refused and absent: %v", err)
+	}
+}
+
+// "Pending refund" is not a refund made: pending, where "fully reversed"
+// is already.
+func TestRefundRefusedAsPendingIsPending(t *testing.T) {
+	r, err := call(t, "refund_transaction", map[string]any{"reference": ref}, "refund_pending_refund")
+	if err != nil || r.Output.(map[string]any)["status"] != "pending" {
+		t.Errorf("pending refund: %v %v", r.Output, err)
+	}
+	r, err = call(t, "refund_transaction", map[string]any{"reference": ref}, "refund_already")
+	if err != nil || r.Output.(map[string]any)["status"] != "already" {
+		t.Errorf("fully reversed: %v %v", r.Output, err)
 	}
 }
 

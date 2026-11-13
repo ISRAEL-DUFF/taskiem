@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
@@ -52,6 +53,8 @@ type Graph struct {
 	sent    []Sent
 	// Fail, when set, answers a send with this Graph error code.
 	Fail int
+	// delay is how long a send takes to be answered.
+	delay time.Duration
 	// failTo answers sends to one number with a Graph error code.
 	failTo map[string]int
 	// media are uploaded recordings people "sent", by media id.
@@ -446,8 +449,11 @@ func (g *Graph) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	g.mu.Lock()
-	fail, failTo := g.Fail, g.failTo[m.To]
+	fail, failTo, delay := g.Fail, g.failTo[m.To], g.delay
 	g.mu.Unlock()
+	if delay > 0 {
+		time.Sleep(delay) // a slow Graph API
+	}
 	if failTo != 0 {
 		refuse(w, http.StatusBadRequest, failTo, "refused by the fake")
 		return
@@ -532,6 +538,13 @@ func (g *Graph) SetFail(code int) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.Fail = code
+}
+
+// SetDelay makes every send take d to be answered, as a slow Graph API.
+func (g *Graph) SetDelay(d time.Duration) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.delay = d
 }
 
 // Sent lists the messages to a number (all with "").

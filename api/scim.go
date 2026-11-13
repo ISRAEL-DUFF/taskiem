@@ -840,6 +840,15 @@ func (s *Server) scimSync(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID
 		if err := may(role); err != nil {
 			return ch, err // taking a role away needs the same standing as giving it
 		}
+		// Standing was checked above, in SCIM's words; this is the owner
+		// lock every removal shares. SCIM never grants owner and an
+		// owner is kept above, so it is a second guard.
+		if err := mayTakeRoles(ctx, tx, nil, user, []string{role}); errors.Is(err, errLastOwner) {
+			ch.ownerKept = true
+			continue
+		} else if err != nil {
+			return ch, err
+		}
 		if _, err := tx.Exec(ctx, `DELETE FROM memberships WHERE user_id = $1 AND role = $2`, user, role); err != nil {
 			return ch, err
 		}
@@ -1401,6 +1410,12 @@ func (s *Server) putSCIM(w http.ResponseWriter, r *http.Request) {
 		}
 		before, err := loadSCIMMapping(ctx, tx)
 		if err != nil {
+			return err
+		}
+		// A role the mapping stops giving is taken from the people it
+		// gave it to: that needs the same standing as giving it.
+		dropped, _ := ssoMappingChange(ssoReq{DefaultRoles: before.DefaultRoles, GroupRoles: before.GroupRoles}, ssoReq{DefaultRoles: req.DefaultRoles, GroupRoles: req.GroupRoles})
+		if err := canGrant(ctx, tx, p, dropped); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO scim_config (tenant_id, default_roles, group_roles, updated_by) VALUES ($1, $2, $3, $4)

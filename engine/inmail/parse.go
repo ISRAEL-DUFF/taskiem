@@ -87,6 +87,10 @@ func Parse(raw []byte) (*Message, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrMalformed, err)
 	}
+	if name := RepeatedHeader(raw); name != "" {
+		// The mail role refuses these; one that got here is not trusted.
+		return nil, fmt.Errorf("%w: more than one %s header", ErrMalformed, name)
+	}
 	h := textproto.MIMEHeader(m.Header)
 	out := &Message{Header: h}
 	out.MessageID = strings.Trim(strings.TrimSpace(h.Get("Message-Id")), "<>")

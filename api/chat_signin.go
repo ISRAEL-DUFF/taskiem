@@ -74,9 +74,9 @@ func (s *Server) chatSigninStart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusTooManyRequests, "too many codes asked for; try again later")
 		return
 	}
-	ip := clientIP(r)
+	ip, agent := clientIP(r), r.UserAgent()
 	s.background(r.Context(), "chat sign-in code", func(ctx context.Context) {
-		if err := s.chatSigninSend(ctx, number, ip); err != nil {
+		if err := s.chatSigninSend(ctx, number, ip, agent); err != nil {
 			s.Logger.Warn("chat sign-in: a code not sent", "err", err)
 		}
 	})
@@ -85,7 +85,7 @@ func (s *Server) chatSigninStart(w http.ResponseWriter, r *http.Request) {
 
 // chatSigninSend issues and sends the code, for a number on an account
 // that may sign in with its chat; nothing for any other.
-func (s *Server) chatSigninSend(ctx context.Context, number, ip string) error {
+func (s *Server) chatSigninSend(ctx context.Context, number, ip, agent string) error {
 	var user uuid.UUID
 	var status string
 	var on, wa bool
@@ -98,6 +98,7 @@ func (s *Server) chatSigninSend(ctx context.Context, number, ip string) error {
 		return err
 	}
 	if status != "active" || !on {
+		s.chatSigninRefused(ctx, user, "", "code", "off", ip, agent)
 		return nil
 	}
 	tenants, err := s.userTenants(ctx, user)
@@ -122,6 +123,14 @@ func (s *Server) chatSigninSend(ctx context.Context, number, ip string) error {
 	default:
 		return nil
 	}
+	// A chat linked from an emailed link signs no one in for its first day
+	// (chatLinkCooling).
+	if cooling, err := s.chatLinkCooling(ctx, user, channel); err != nil || cooling {
+		if cooling {
+			s.chatSigninRefused(ctx, user, channel, "code", "newly_linked", ip, agent)
+		}
+		return err
+	}
 	code := otpCode()
 	var outcome string
 	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_chat_code_issue($1, $2, $3, $4, $5::interval, $6)`,
@@ -129,6 +138,9 @@ func (s *Server) chatSigninSend(ctx context.Context, number, ip string) error {
 		return err
 	}
 	if outcome != "ok" {
+		if outcome == "locked" {
+			s.chatSigninRefused(ctx, user, channel, "code", "locked", ip, agent)
+		}
 		return nil
 	}
 	// From Taskiem's own number: the code is for the person's account, not a
@@ -200,6 +212,11 @@ func (s *Server) chatSigninVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if outcome != "ok" || user == nil {
+		// A wrong try, or one while locked, is the person's to know of;
+		// the answer is the same for all of them.
+		if user != nil {
+			s.chatSigninRefused(r.Context(), *user, deref(channel), "code", outcome, clientIP(r), r.UserAgent())
+		}
 		writeErr(w, http.StatusUnauthorized, chatCodeWrong)
 		return
 	}
@@ -286,12 +303,23 @@ func (s *Server) chatSigninFinish(w http.ResponseWriter, r *http.Request, user u
 		s.fail(w, r, err)
 		return
 	}
+	refused := func(reason string) { s.chatSigninRefused(ctx, user, channel, how, reason, clientIP(r), r.UserAgent()) }
 	if status != "active" || !on {
+		refused("off")
 		writeErr(w, http.StatusUnauthorized, errChatSigninOff.Error())
+		return
+	}
+	if cooling, err := s.chatLinkCooling(ctx, user, channel); err != nil {
+		s.fail(w, r, err)
+		return
+	} else if cooling {
+		refused("newly_linked")
+		writeErr(w, http.StatusUnauthorized, "this chat was linked to the account less than 24 hours ago, so it cannot sign in yet; sign in the way you usually do")
 		return
 	}
 	want, err := s.passwordSigninTenant(ctx, user, want)
 	if errors.Is(err, errPasskeyRequired) {
+		refused("passkey_required")
 		passkeyRequiredOut(w)
 		return
 	}
@@ -302,6 +330,7 @@ func (s *Server) chatSigninFinish(w http.ResponseWriter, r *http.Request, user u
 	sess, err := s.createSession(r, user, want, "chat")
 	switch {
 	case errors.Is(err, errSSORequired):
+		refused("sso_required")
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": err.Error(), "sso_required": true})
 		return
 	case errors.Is(err, errPhoneBusy):
@@ -328,6 +357,23 @@ func (s *Server) chatSigninFinish(w http.ResponseWriter, r *http.Request, user u
 	out := map[string]any{"tenant_id": sess.tenant, "tenants": sess.tenants, "user_id": user}
 	s.deliverSession(w, bearer, sess.token, out)
 	writeJSON(w, http.StatusOK, out)
+}
+
+// chatSigninRefused records a chat sign-in that was refused for a known
+// person (auth.chat_signin_refused), in every business of theirs, with
+// the address and browser as a password login records them: turned off,
+// a wrong or locked code, a chat linked less than a day ago, or a rule
+// that asks for another way in. how is "code", "link" or "password".
+func (s *Server) chatSigninRefused(ctx context.Context, user uuid.UUID, channel, how, reason, ip, agent string) {
+	detail := map[string]any{"how": how, "reason": reason}
+	for k, v := range map[string]string{"channel": channel, "ip": ip, "agent": agent} {
+		if v != "" {
+			detail[k] = v
+		}
+	}
+	if err := s.auditEverywhere(ctx, user, "auth.chat_signin_refused", detail); err != nil {
+		s.Logger.Warn("chat sign-in: audit of a refusal", "err", err)
+	}
 }
 
 // tellChatSignin tells the person a chat sign-in happened, on their chat
@@ -408,8 +454,9 @@ func (s *Server) setChatSignin(w http.ResponseWriter, r *http.Request) {
 // waSignInLink answers "sign in" in chat: a one-time link, good for ten
 // minutes, that opens the web app signed in. The chat is already bound to
 // the person, so the link goes only where they are. Who signs in another
-// way is told that way: single sign-on, an administrator's passkey, or a
-// password when they turned chat sign-in off.
+// way is told that way: single sign-on, an administrator's passkey, or the
+// web's own sign-in when they turned chat sign-in off or the chat was
+// linked from an emailed link less than a day ago.
 func (s *Server) waSignInLink(ctx context.Context, c *chat) error {
 	if s.PublicURL == "" {
 		return c.say(ctx, s, c.t("wa.signin.unavailable"))
@@ -425,8 +472,16 @@ func (s *Server) waSignInLink(ctx context.Context, c *chat) error {
 	if err := s.Store.Pool.QueryRow(ctx, `SELECT status, chat_signin FROM taskiem_auth_chat_state($1)`, c.p.UserID).Scan(&status, &on); err != nil {
 		return err
 	}
+	login := strings.TrimRight(s.PublicURL, "/") + "/login"
 	if !on {
-		return c.say(ctx, s, c.t("wa.signin.off"))
+		s.chatSigninRefused(ctx, c.p.UserID, c.ch.Name(), "link", "off", "", "")
+		return c.say(ctx, s, c.t("wa.signin.off", "link", login))
+	}
+	if cooling, err := s.chatLinkCooling(ctx, c.p.UserID, c.ch.Name()); err != nil {
+		return err
+	} else if cooling {
+		s.chatSigninRefused(ctx, c.p.UserID, c.ch.Name(), "link", "newly_linked", "", "")
+		return c.say(ctx, s, c.t("door.cooling", "link", login))
 	}
 	if _, err := s.passwordSigninTenant(ctx, c.p.UserID, uuid.Nil); errors.Is(err, errPasskeyRequired) {
 		return c.say(ctx, s, c.t("wa.signin.passkey", "link", strings.TrimRight(s.PublicURL, "/")+"/login"))
@@ -456,6 +511,13 @@ func (s *Server) waSignInLink(ctx context.Context, c *chat) error {
 // waPasswordLink answers "password" in chat: a one-time link, good for an
 // hour, to choose a password, naming the email to sign in with. Without
 // an email there is nothing to sign in with, so it asks for one first.
+// It is a way in by the chat, so it is refused where "sign in" is: when
+// the person turned chat sign-in off (which closes both doors against a
+// number someone else now holds), and for a chat linked from an emailed
+// link in the last day. An email no one confirmed gets no link either
+// (docs/spec/chat-sign-in.md 3): it is confirmed first, where email can
+// be sent. The link is kept as one delivered in chat, so using it proves
+// the chat and not the mailbox (resetPassword).
 func (s *Server) waPasswordLink(ctx context.Context, c *chat) error {
 	if s.PublicURL == "" {
 		return c.say(ctx, s, c.t("wa.signin.unavailable"))
@@ -466,20 +528,41 @@ func (s *Server) waPasswordLink(ctx context.Context, c *chat) error {
 		}
 		return c.say(ctx, s, c.t("wa.signin.sso", "link", strings.TrimRight(s.PublicURL, "/")+"/login"))
 	}
+	login := strings.TrimRight(s.PublicURL, "/") + "/login"
+	var status string
+	var on bool
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT status, chat_signin FROM taskiem_auth_chat_state($1)`, c.p.UserID).Scan(&status, &on); err != nil {
+		return err
+	}
+	if !on {
+		s.chatSigninRefused(ctx, c.p.UserID, c.ch.Name(), "password", "off", "", "")
+		return c.say(ctx, s, c.t("wa.password.off", "link", login))
+	}
+	if cooling, err := s.chatLinkCooling(ctx, c.p.UserID, c.ch.Name()); err != nil {
+		return err
+	} else if cooling {
+		s.chatSigninRefused(ctx, c.p.UserID, c.ch.Name(), "password", "newly_linked", "", "")
+		return c.say(ctx, s, c.t("door.cooling", "link", login))
+	}
 	var email string
+	var verified bool
 	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, c.p.UserID).Scan(&email)
+		return tx.QueryRow(ctx, `SELECT email, email_verified_at IS NOT NULL FROM users WHERE id = $1`, c.p.UserID).Scan(&email, &verified)
 	}); err != nil {
 		return err
 	}
 	if emailPlaceholder(email) {
 		return c.say(ctx, s, c.t("door.signin_email"))
 	}
+	// As proveFactor: where email cannot be sent, none can be confirmed.
+	if !verified && s.mailOn() {
+		return c.say(ctx, s, c.t("wa.password.unconfirmed"))
+	}
 	if !s.limiter("wa-password:"+c.p.UserID.String(), 10*time.Minute, 3).Allow() {
 		return c.say(ctx, s, c.t("wa.too_fast"))
 	}
 	token, selector, secretHash := newResetToken()
-	if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_auth_password_reset_issue($1, $2, $3, $4::interval, $5)`, c.p.UserID, selector, secretHash, time.Hour.String(), c.ch.Name()); err != nil {
+	if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_auth_password_reset_issue($1, $2, $3, $4::interval, $5, 'chat')`, c.p.UserID, selector, secretHash, time.Hour.String(), c.ch.Name()); err != nil {
 		return err
 	}
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {

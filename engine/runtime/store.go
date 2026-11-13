@@ -69,7 +69,15 @@ type Store struct {
 	// the base of callback steps' addresses. Empty, a workflow with
 	// callback steps cannot start.
 	HooksURL string
+	// WakeInterval is the least time between two wake-ups this process
+	// sends for one queue (TASKIEM_WAKE_INTERVAL); zero is
+	// DefaultWakeInterval. WakeInTx leaves wake-ups to the task trigger,
+	// inside the transaction, as before decision 0067
+	// (TASKIEM_WAKE_IN_TX): for a comparison under load.
+	WakeInterval time.Duration
+	WakeInTx     bool
 
+	wake     waker
 	defs     lru.Cache[string, *wd.Definition] // "workflow_id/version"; versions are immutable; bounded (S34)
 	folds    decideCache
 	taints   taintCache
@@ -697,9 +705,14 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			if err != nil {
 				return nil, err
 			}
-			_, err = tx.Exec(ctx, `INSERT INTO tasks (id, tenant_id, run_id, step_id, attempt, queue, available_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			// The wake-up is sent after the commit, not by the task trigger
+			// in it (wake.go): the trigger reads app.task_wake, set here in
+			// the insert's own round trip.
+			b := &pgx.Batch{}
+			b.Queue(`SELECT set_config('app.task_wake', $1, true)`, s.wakeAfterCommit(tx, p.Queue, at))
+			b.Queue(`INSERT INTO tasks (id, tenant_id, run_id, step_id, attempt, queue, available_at) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 				uuid.Must(uuid.NewV7()), tenant, run.ref.ID, ev.StepID, ev.Attempt, p.Queue, at)
-			return nil, err
+			return nil, tx.SendBatch(ctx, b).Close()
 		case history.KindTimer:
 			at, err := history.ParseTime(p.FireAt)
 			if err != nil {
@@ -786,6 +799,9 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			return nil, insertTimer(ctx, tx, tenant, run.ref.ID, ev.StepID, "approval_timeout", at)
 		}
 	case history.StepCompleted:
+		if err := dropWait(ctx, tx, run.ref.ID, def, ev.StepID); err != nil {
+			return nil, err
+		}
 		// Closes an approval, if this step was one (decision or timeout).
 		if out, ok := ev.Payload.(history.CompletedPayload).Output.(map[string]any); ok {
 			if d, _ := out["decision"].(string); d != "" {
@@ -800,6 +816,11 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			}
 		}
 	case history.StepFailed:
+		// A step that timed out waits no longer: a signal that comes now
+		// is buffered for whoever waits next, not handed to this step.
+		if err := dropWait(ctx, tx, run.ref.ID, def, ev.StepID); err != nil {
+			return nil, err
+		}
 		p := ev.Payload.(history.FailedPayload)
 		if p.Error.Next == "park" || (p.Error.Next == "fail" && isCompensation(ev.StepID)) {
 			if _, err := tx.Exec(ctx, `UPDATE runs SET status = 'needs_reconciliation' WHERE id = $1`, run.ref.ID); err != nil {
@@ -812,7 +833,7 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 		// cancellation before recording intent, and decide waits for a write
 		// already under way.
 		for _, q := range []string{
-			`DELETE FROM tasks WHERE run_id = $1 AND step_id = $2 AND lease_owner IS NULL`,
+			`DELETE FROM tasks WHERE run_id = $1 AND step_id = $2 AND ` + unstartedTask,
 			`DELETE FROM timers WHERE run_id = $1 AND step_id = $2 AND fired_at IS NULL`,
 			`UPDATE approvals SET status = 'cancelled', closed_at = now() WHERE run_id = $1 AND step_id = $2 AND status = 'open'`,
 			`UPDATE form_requests SET status = 'cancelled' WHERE run_id = $1 AND step_id = $2 AND status = 'pending'`,
@@ -821,18 +842,29 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 				return nil, err
 			}
 		}
-		// A run cancelled with reversing reverses the child runs its subflow
-		// steps wait for first (decision 0054): the step keeps its wait, so
-		// it hears when each child has ended, and decide waits for that.
-		children, err := s.childrenToReverse(ctx, tx, run, ev.StepID)
+		// A withdrawn subflow step's child run is cancelled with reversing
+		// (decision 0054), whatever withdrew the step. In a run cancelled
+		// with reversing the step keeps its wait, so it hears when each
+		// child has ended, and decide waits for that. A step withdrawn for
+		// another reason (a branch that lost, a scope that failed) is not
+		// waited for: its wait goes, and the child reverses on its own.
+		children, waited, err := s.childrenToReverse(ctx, tx, run, ev.StepID)
 		if err != nil {
 			return nil, err
 		}
-		if len(children) == 0 {
+		if len(children) == 0 || !waited {
 			if _, err := tx.Exec(ctx, `DELETE FROM signal_waits WHERE run_id = $1 AND step_id = $2`, run.ref.ID, ev.StepID); err != nil {
 				return nil, err
 			}
+		}
+		if len(children) == 0 {
 			break
+		}
+		if !waited {
+			// Now, before a later event of this batch ends the run and
+			// cancels the children it finds outright (cancelChildren).
+			// Nothing comes back to this run: the step's wait is gone.
+			return nil, s.reverseChildren(ctx, tx, run.ref.TenantID, children)
 		}
 		// After decide's batch: a child with nothing to reverse ends at
 		// once and tells this step so, and that event must follow the
@@ -846,6 +878,37 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 		return nil, s.endRun(ctx, tx, run, def, "cancelled") // a reversed cancel, once its compensations ran
 	}
 	return nil, nil
+}
+
+// dropWait removes the signal wait of a step that has completed or failed.
+// Only steps that wait have one (a signal, form, callback or subflow step,
+// whatever a capability step expanded to); other steps cost no statement.
+func dropWait(ctx context.Context, tx pgx.Tx, run uuid.UUID, def *wd.Definition, inst string) error {
+	if _, id := history.SplitInstance(inst); def != nil {
+		if st := def.Step(id); st != nil {
+			switch st.Type {
+			case "signal", "form", "callback", "subflow":
+			default:
+				return nil
+			}
+		}
+	}
+	_, err := tx.Exec(ctx, `DELETE FROM signal_waits WHERE run_id = $1 AND step_id = $2`, run, inst)
+	return err
+}
+
+// waitSettled reports whether the step a wait row belongs to has already
+// completed or failed, so that the row is stale (an older engine left a
+// timed-out step's wait behind). A cancelled step is not settled here: a
+// subflow step withdrawn by a cancel keeps its wait to hear from its child.
+func waitSettled(ctx context.Context, tx pgx.Tx, run uuid.UUID, step string) (bool, error) {
+	var last string
+	err := tx.QueryRow(ctx, `SELECT type FROM run_events WHERE run_id = $1 AND step_id = $2 AND type IN ($3, $4, $5) ORDER BY seq DESC LIMIT 1`,
+		run, step, history.StepScheduled, history.StepCompleted, history.StepFailed).Scan(&last)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return last != history.StepScheduled, err
 }
 
 func isCompensation(inst string) bool {
@@ -931,9 +994,17 @@ func (s *Store) Retention(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, def 
 	return retention, nil
 }
 
+// unstartedTask picks, in a DELETE FROM tasks, the tasks that can be
+// withdrawn: no worker holds them and their attempt recorded no intent. A
+// task between leases whose attempt did record one (its worker died, or it
+// is waiting to reconcile) is kept: a worker must still settle that write.
+const unstartedTask = `lease_owner IS NULL AND NOT EXISTS (SELECT 1 FROM run_events e
+	WHERE e.run_id = tasks.run_id AND e.step_id = tasks.step_id AND e.attempt = tasks.attempt AND e.type = 'EffectIntent')`
+
 // endRun marks a run terminal, starts its retention clock (spec 9.4), clears
 // what it no longer needs, and admits queued runs its slot was holding back.
-// Tasks a worker holds are left alone: its result is still recorded.
+// Tasks a worker holds are left alone: its result is still recorded, but
+// one that has sent nothing yet sends nothing now (Worker.recordIntent).
 func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definition, status string) error {
 	run := r.ref.ID
 	retention, err := s.Retention(ctx, tx, r.ref.TenantID, def)
@@ -959,7 +1030,7 @@ func (s *Store) endRun(ctx context.Context, tx pgx.Tx, r runRow, def *wd.Definit
 		return err
 	}
 
-	if _, err := tx.Exec(ctx, `DELETE FROM tasks WHERE run_id = $1 AND lease_owner IS NULL`, run); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM tasks WHERE run_id = $1 AND `+unstartedTask, run); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM timers WHERE run_id = $1 AND fired_at IS NULL`, run); err != nil {
@@ -1105,7 +1176,9 @@ func (s *Store) deliverSignal(ctx context.Context, tenant uuid.UUID, env, event,
 		return nil, false, err
 	}
 	var woke []uuid.UUID
-	err = db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+	// Run again when the database ended it to break a deadlock (the run
+	// it wakes is ending): it rolled back, and the signal is not lost.
+	err = db.InTenantTxRetry(ctx, s.Pool, []uuid.UUID{tenant}, false, func(tx pgx.Tx) error {
 		woke, fresh = woke[:0], true
 		if dedupKey != "" {
 			// The receipt marks the delivery as seen; no run is started (uuid.Nil).
@@ -1155,18 +1228,19 @@ func (s *Store) deliverSignalTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	if len(waits) == 0 {
-		if !buffer {
-			return nil, nil
-		}
-		_, err := tx.Exec(ctx, `INSERT INTO signals (id, tenant_id, environment, event, correlation, payload, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + $7::interval)`,
-			uuid.Must(uuid.NewV7()), tenant, env, event, correlation, raw, SignalTTL.String())
-		return nil, err
-	}
 	var woke []uuid.UUID
 	for _, w := range waits {
 		if _, err := lockRun(ctx, tx, w.run); err != nil {
 			return nil, err
+		}
+		// Under the run's lock: a step that settled since its wait was
+		// written (or whose wait an older engine left) is passed over.
+		stale, err := waitSettled(ctx, tx, w.run, w.step)
+		if err != nil {
+			return nil, err
+		}
+		if stale {
+			continue
 		}
 		if _, err := appendEvent(ctx, tx, w.run, history.SignalReceived, w.step, 0, signalPayload(event, raw), history.OriginSignal); err != nil {
 			return nil, err
@@ -1177,6 +1251,11 @@ func (s *Store) deliverSignalTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 			}
 		}
 		woke = append(woke, w.run)
+	}
+	if len(woke) == 0 && buffer {
+		_, err := tx.Exec(ctx, `INSERT INTO signals (id, tenant_id, environment, event, correlation, payload, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + $7::interval)`,
+			uuid.Must(uuid.NewV7()), tenant, env, event, correlation, raw, SignalTTL.String())
+		return nil, err
 	}
 	return woke, nil
 }
@@ -1225,7 +1304,9 @@ func (s *Store) DecideApproval(ctx context.Context, ref RunRef, step, decision, 
 // Without, it ends now: steps a worker is executing still record their
 // results, and completed steps stay as they are.
 func (s *Store) CancelRun(ctx context.Context, ref RunRef, by string, reverse bool) error {
-	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{ref.TenantID}, func(tx pgx.Tx) error {
+	// Run again when the database ended it to break a deadlock (a child
+	// run reporting to this one as it is cancelled): it rolled back.
+	return db.InTenantTxRetry(ctx, s.Pool, []uuid.UUID{ref.TenantID}, false, func(tx pgx.Tx) error {
 		return s.cancelTx(ctx, tx, ref, by, reverse, history.OriginAPI)
 	})
 }
@@ -1242,9 +1323,17 @@ func (s *Store) cancelTx(ctx context.Context, tx pgx.Tx, ref RunRef, by string, 
 	if reverse && run.status != "queued" {
 		// Decide ends the run once its writes under way have settled and
 		// its compensations have run (decision 0054); asked twice, the
-		// first request stands.
-		if asked, err := cancelRequested(ctx, tx, ref.ID); err != nil || asked {
+		// first request stands. Asking again does look at the run again,
+		// which moves on one an older engine left waiting (requeueOpenIntents).
+		asked, err := cancelRequested(ctx, tx, ref.ID)
+		if err != nil {
 			return err
+		}
+		if asked {
+			if err := requeueOpenIntents(ctx, tx, run); err != nil {
+				return err
+			}
+			return s.decideInline(ctx, tx, ref)
 		}
 		if _, err := appendEvent(ctx, tx, ref.ID, history.CancelRequested, "", 0, history.CancelPayload{By: by}, origin); err != nil {
 			return err
@@ -1259,6 +1348,69 @@ func (s *Store) cancelTx(ctx context.Context, tx pgx.Tx, ref RunRef, by string, 
 		return err
 	}
 	return s.endRun(ctx, tx, run, def, "cancelled")
+}
+
+// requeueOpenIntents gives back its task to a write whose last attempt
+// recorded an intent and no outcome, and has no task. Every such attempt
+// should have one: a worker must settle it. Before a cancelled step with
+// an open intent was settled, its task was dropped instead, and the run
+// waited for ever for an outcome; this lets a second cancel request move
+// such a run on. The worker that claims the task only settles the write.
+func requeueOpenIntents(ctx context.Context, tx pgx.Tx, run runRow) error {
+	hist, err := History(ctx, tx, run.ref.ID)
+	if err != nil {
+		return err
+	}
+	type last struct {
+		attempt      int
+		queue        string
+		intent, done bool
+	}
+	steps := map[string]*last{}
+	var order []string
+	for _, e := range hist {
+		st := steps[e.StepID]
+		switch e.Type {
+		case history.StepScheduled:
+			var p struct {
+				Kind  string `json:"kind"`
+				Queue string `json:"queue"`
+			}
+			if err := json.Unmarshal(e.Payload, &p); err != nil {
+				return err
+			}
+			if p.Kind != history.KindTask {
+				continue
+			}
+			if st == nil {
+				order = append(order, e.StepID)
+			}
+			steps[e.StepID] = &last{attempt: e.Attempt, queue: p.Queue}
+		case history.EffectIntent:
+			if st != nil && e.Attempt == st.attempt {
+				st.intent = true
+			}
+		case history.StepCompleted:
+			if st != nil {
+				st.done = true
+			}
+		case history.StepFailed:
+			if st != nil && e.Attempt == st.attempt {
+				st.done = true
+			}
+		}
+	}
+	for _, step := range order {
+		st := steps[step]
+		if !st.intent || st.done {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO tasks (id, tenant_id, run_id, step_id, attempt, queue) VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (run_id, step_id, attempt) DO NOTHING`, uuid.Must(uuid.NewV7()), run.ref.TenantID, run.ref.ID, step, st.attempt, st.queue); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func cancelRequested(ctx context.Context, tx pgx.Tx, run uuid.UUID) (bool, error) {

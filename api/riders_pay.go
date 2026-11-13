@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -228,39 +229,105 @@ func (s *Server) setupRidersPay(w http.ResponseWriter, r *http.Request) {
 }
 
 // payRiders is POST /v1/riders/pay: the payout now, as the weekly one
-// runs; the approver approves it in Approvals or chat.
+// runs; the approver approves it in Approvals or chat. One payout is open
+// at a time: while a payout's run has not ended (waiting to be approved,
+// being paid), a second is refused, and the same request sent again (its
+// Idempotency-Key, after a timeout) answers the payout it started. Two
+// requests at the same moment start one run: the run is keyed by the
+// payout before it.
 func (s *Server) payRiders(w http.ResponseWriter, r *http.Request) {
 	if !s.dispatchReady(w, r) {
 		return
 	}
 	p := principalFrom(r.Context())
+	key, err := optionalKey(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	const trigger = "riders/pay"
 	var wf *uuid.UUID
 	var version int
-	err := s.tx(r, func(tx pgx.Tx) error {
-		err := tx.QueryRow(r.Context(), `SELECT payout_workflow_id FROM dispatch_settings WHERE tenant_id = $1`, p.TenantID).Scan(&wf)
+	var batch uuid.UUID
+	var again *uuid.UUID
+	err = s.tx(r, func(tx pgx.Tx) error {
+		ctx := r.Context()
+		err := tx.QueryRow(ctx, `SELECT payout_workflow_id FROM dispatch_settings WHERE tenant_id = $1`, p.TenantID).Scan(&wf)
 		if errors.Is(err, pgx.ErrNoRows) || err == nil && wf == nil {
 			return fmt.Errorf("%w: set up paying riders first", errConflict)
 		}
 		if err != nil {
 			return err
 		}
-		version, err = deployedVersion(r.Context(), tx, *wf, "prod")
+		if key != "" {
+			// The same request again: the payout it started.
+			var run uuid.UUID
+			var dedup string
+			err := tx.QueryRow(ctx, `SELECT b.run_id, b.dedup_key FROM trigger_receipts k JOIN trigger_receipts b
+				ON b.tenant_id = k.tenant_id AND b.trigger_id = k.trigger_id AND b.run_id = k.run_id AND b.dedup_key LIKE 'riders-pay:%'
+				WHERE k.tenant_id = $1 AND k.trigger_id = $2 AND k.dedup_key = $3`, p.TenantID, trigger, "riders-pay-key:"+key).Scan(&run, &dedup)
+			if err == nil {
+				if batch, err = uuid.Parse(strings.TrimPrefix(dedup, "riders-pay:")); err != nil {
+					return err
+				}
+				again = &run
+				return nil
+			}
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+		}
+		version, err = deployedVersion(ctx, tx, *wf, "prod")
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("%w: paying riders waits to be published", errConflict)
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		// The payout before this one, and whether it is still open.
+		var last *uuid.UUID
+		var open bool
+		err = tx.QueryRow(ctx, `SELECT id, ended_at IS NULL FROM runs WHERE tenant_id = $1 AND workflow_id = $2 AND environment = 'prod'
+			ORDER BY ended_at IS NULL DESC, started_at DESC, id DESC LIMIT 1`, p.TenantID, *wf).Scan(&last, &open)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if open {
+			return fmt.Errorf("%w: your riders are already being paid: approve or decline that payout first, in Approvals or in chat", errConflict)
+		}
+		after := "none"
+		if last != nil {
+			after = last.String()
+		}
+		batch = uuid.NewSHA1(*wf, []byte("riders-pay after "+after))
+		return nil
 	})
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	batch := uuid.Must(uuid.NewV7())
+	if again != nil {
+		writeJSON(w, http.StatusAccepted, map[string]any{"run_id": *again, "batch_id": batch})
+		return
+	}
 	ref, _, err := s.Store.StartRun(r.Context(), runtime.StartRequest{TenantID: p.TenantID, WorkflowID: *wf, Version: version, Environment: "prod",
-		Trigger: map[string]any{"type": "manual", "body": map[string]any{"batch_id": batch.String()}}, StartedBy: p.Actor(), TriggerID: "riders/pay",
+		Trigger: map[string]any{"type": "manual", "body": map[string]any{"batch_id": batch.String()}}, StartedBy: p.Actor(), TriggerID: trigger,
 		DedupKey: "riders-pay:" + batch.String()})
 	if err != nil {
 		s.fail(w, r, err)
 		return
+	}
+	if key != "" {
+		// The request's key names the run, so the same request again finds
+		// it. Should this not be kept, the request again is refused while
+		// the payout is open: never a second payout.
+		if err := s.tx(r, func(tx pgx.Tx) error {
+			_, err := tx.Exec(r.Context(), `INSERT INTO trigger_receipts (tenant_id, trigger_id, dedup_key, run_id) VALUES ($1, $2, $3, $4)
+				ON CONFLICT DO NOTHING`, p.TenantID, trigger, "riders-pay-key:"+key, ref.ID)
+			return err
+		}); err != nil {
+			s.Logger.Warn("riders: keeping a payout request's key", "tenant", p.TenantID, "err", err)
+		}
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"run_id": ref.ID, "batch_id": batch})
 }

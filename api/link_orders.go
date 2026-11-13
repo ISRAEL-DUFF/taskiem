@@ -244,6 +244,14 @@ func (s *Server) sellerStep(ctx context.Context, tenant uuid.UUID, ref, step str
 		if err != nil {
 			return err
 		}
+		if step == links.StepAccept {
+			// One order of a link is accepted at a time: a credit check
+			// made for another of its orders counts this one, or waits
+			// for it (links.LockCreditTx).
+			if err := links.LockCreditTx(ctx, tx, tenant, cur.LinkID); err != nil {
+				return err
+			}
+		}
 		if audit != nil {
 			if err := audit(tx, cur); err != nil {
 				return err
@@ -749,19 +757,26 @@ func (s *Server) writeLinkedOrder(ctx context.Context, buyer, id uuid.UUID) erro
 	seller := told.Tenant
 	o := s.matchTradeItems(ctx, seller, told.Order)
 	// Over the buyer's credit limit (L5), it waits: flagged, not accepted
-	// by itself.
+	// by itself. A check that could not be made is not a pass: the order
+	// waits for a person, and says so.
 	var credit links.Credit
+	checked := false
 	if o != nil {
-		credit, _ = s.creditCheck(ctx, seller, o.OrderReference)
+		var co *links.Order
+		if credit, co = s.creditCheck(ctx, seller, o.OrderReference); co != nil {
+			checked = true
+		} else {
+			s.creditUnchecked(ctx, seller, *o)
+		}
 	}
 	// Accepted by itself only when the seller's side priced every line
 	// (its list, its catalogue), never a line priced by the buyer alone;
 	// at another price than the buyer proposed, it is the seller's change
 	// instead, for the buyer to accept.
-	if o != nil && !credit.Over && o.AutoAccept && o.Status == links.OrderReceived && links.SellerPriced(o.Lines) {
+	if o != nil && checked && !credit.Over && o.AutoAccept && o.Status == links.OrderReceived && links.SellerPriced(o.Lines) {
 		by := links.Actor{Type: "system", ID: "link-orders"}
 		if links.AsProposed(o.Lines) {
-			if _, _, err := s.sellerStep(ctx, seller, o.ID.String(), links.StepAccept, links.StepIn{}, by, "system:link-orders", nil); err == nil {
+			if err := s.acceptWithinCredit(ctx, seller, *o); err == nil {
 				told.Event = "auto_accepted"
 			} else {
 				s.Logger.Warn("links: accepting an order by itself", "tenant", seller, "err", err)
@@ -1356,8 +1371,14 @@ func (s *Server) setTradeLineItem(w http.ResponseWriter, r *http.Request) {
 // linked business that buys from us (a phone order, §7). It reaches the
 // buyer as a purchase order to us waiting for its Confirm. Each line is
 // one of our items (item_id, at its price unless one is given) or named
-// with its price.
+// with its price. With an Idempotency-Key, the same request again answers
+// the order it made, and the buyer is not told twice.
 func (s *Server) placeTradeOrder(w http.ResponseWriter, r *http.Request) {
+	key, err := optionalKey(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var in struct {
 		Link  uuid.UUID `json:"link"`
 		Lines []struct {
@@ -1404,17 +1425,25 @@ func (s *Server) placeTradeOrder(w http.ResponseWriter, r *http.Request) {
 	var out tradeOrderOut
 	var told *links.Told
 	if err := s.tx(r, func(tx pgx.Tx) error {
+		if key != "" {
+			if o, ok, err := links.PlacedOrderTx(r.Context(), tx, p.TenantID, in.Link, key); err != nil || ok {
+				out.Order = o
+				return err
+			}
+		}
 		if err := auditTx(r, tx, "trade_order.place", in.Link.String(), map[string]any{"lines": len(lines)}); err != nil {
 			return err
 		}
 		var err error
-		out.Order, told, err = links.PlaceOrderTx(r.Context(), tx, s.Vault, p.TenantID, in.Link, lines, in.Note, actorOf(p))
+		out.Order, told, err = links.PlaceOrderTx(r.Context(), tx, s.Vault, p.TenantID, in.Link, lines, in.Note, actorOf(p), key)
 		return err
 	}); err != nil {
 		s.fail(w, r, orderErr(err))
 		return
 	}
-	s.tellOrder(r.Context(), told, links.StepIn{Note: linesWords(out.Order.Lines, s.sizeParents(r.Context(), p.TenantID)) + ", " + storefront.FormatNaira(out.Order.TotalKobo)})
+	if told != nil {
+		s.tellOrder(r.Context(), told, links.StepIn{Note: linesWords(out.Order.Lines, s.sizeParents(r.Context(), p.TenantID)) + ", " + storefront.FormatNaira(out.Order.TotalKobo)})
+	}
 	writeJSON(w, http.StatusCreated, out)
 }
 

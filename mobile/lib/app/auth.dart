@@ -39,6 +39,10 @@ class Auth extends ChangeNotifier {
   final SessionStore store;
   final TaskiemApi api;
 
+  /// Called when the person is signed out, to forget what was theirs on
+  /// this phone (Prefs.forgetPerson).
+  Future<void> Function()? onForget;
+
   /// This app's version, checked against the lowest the server serves.
   final String version;
 
@@ -268,6 +272,11 @@ class Auth extends ChangeNotifier {
     me = null;
     session++;
     await store.keep(null);
+    try {
+      await onForget?.call();
+    } on Object {
+      // Signing out goes on whatever happens here.
+    }
     // Nothing of any business stays on the phone once signed out.
     final open = local;
     local = null;

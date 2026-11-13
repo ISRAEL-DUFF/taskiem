@@ -713,6 +713,12 @@ class ConversationData extends ChangeNotifier {
       // Kept with its clock: it goes by itself when the connection is back.
       o.error = null;
       offline = true;
+    } on Object {
+      // Anything else (an answer that could not be read, say): the message
+      // must not stay "sending" for ever. Retry sends the same client id,
+      // so a message the server did keep is not sent twice.
+      o.failed = true;
+      o.error = 'It could not be sent.';
     } finally {
       o.sending = false;
     }
@@ -2021,13 +2027,17 @@ class _PreviewCard extends StatelessWidget {
       button: true,
       label: '${p.title}, ${p.host}',
       onTap: () async {
-        final ok = await openInBrowser(Uri.parse(p.url));
+        final url = Uri.tryParse(p.url);
+        final ok = url != null && await openInBrowser(url);
         if (!ok && context.mounted) showTkToast(context, 'That link could not be opened.', error: true);
       },
       excludeSemantics: true,
       child: GestureDetector(
         onTap: () async {
-          final ok = await openInBrowser(Uri.parse(p.url));
+          // The address came in the other party's message: one that is
+          // not an address is not opened, and says so.
+          final url = Uri.tryParse(p.url);
+          final ok = url != null && await openInBrowser(url);
           if (!ok && context.mounted) showTkToast(context, 'That link could not be opened.', error: true);
         },
         child: Container(

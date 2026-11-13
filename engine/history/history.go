@@ -167,6 +167,12 @@ type ScheduledPayload struct {
 	KeyStep     string `json:"key_step,omitempty"` // step part of the idempotency key
 	Compensates string `json:"compensates,omitempty"`
 	AvailableAt string `json:"available_at,omitempty"`
+	// Settle marks an attempt scheduled only to find out what an earlier
+	// attempt of a write did, in a step that starts nothing new (its scope
+	// is failing, or it was cancelled). The worker reconciles, or sends
+	// again under the key already sent; it never sends under a new key.
+	// Histories written before it existed do not carry it.
+	Settle      bool   `json:"settle,omitempty"`
 	FireAt      string `json:"fire_at,omitempty"`
 	Event       string `json:"event,omitempty"`
 	Correlation string `json:"correlation,omitempty"`
@@ -180,6 +186,14 @@ type ScheduledPayload struct {
 	// capability's input and the earlier steps' outputs the rail's mapping
 	// read, kept so the worker maps the action's output back the same way.
 	Capability *CapabilityScheduled `json:"capability,omitempty"`
+	// SecretPaths lists where Input holds an expression its author wrote
+	// that reads secrets, as JSON pointers into Input. The worker evaluates
+	// those places and no others: every other string in Input is data,
+	// whatever it starts with. Decide writes the list from the definition
+	// alone, so no value of a run can add to it. A payload written before
+	// the field existed has none: the worker then finds the places in the
+	// step as authored (decide.AuthoredSecretPaths).
+	SecretPaths []string `json:"secret_paths,omitempty"`
 }
 
 // CapabilityScheduled is what an expanded step's output mapping reads
@@ -236,6 +250,22 @@ const (
 	KindKeyRestored          = "key_restored"
 	KindKeyRestoredReconcile = "key_restored_reconcile"
 )
+
+// Final failures that also say no attempt took effect. KindNotApplied: a
+// reconcile found nothing at the provider, or nothing was sent under the
+// key in force, and the step may not send again. KindResolved: an operator
+// checked and said so. Any other final failure leaves an earlier attempt
+// whose outcome is unknown open, and the step parks.
+const (
+	KindNotApplied = "not_applied"
+	KindResolved   = "resolved"
+)
+
+// Settles reports whether a final failure of this kind also settles the
+// step's earlier attempts that may have taken effect.
+func (e Error) Settles() bool {
+	return e.Kind == KindNotApplied || e.Kind == KindResolved
+}
 
 // Resumed reports whether a failure resumes a parked step, after a parked
 // key failure or on an operator's retry, which does not count against the

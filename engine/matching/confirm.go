@@ -214,15 +214,18 @@ func (m *Matcher) countTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c co
 				parts = []Part{p}
 			}
 		}
-		var direction, status, channel, reference, source string
+		var direction, status, channel, reference, source, currency string
 		var amount *int64
-		err := tx.QueryRow(ctx, `SELECT direction, status, amount_kobo, channel, reference, source FROM money_entries WHERE tenant_id = $1 AND id = $2`, tenant, c.entry).
-			Scan(&direction, &status, &amount, &channel, &reference, &source)
+		err := tx.QueryRow(ctx, `SELECT direction, status, amount_kobo, channel, reference, source, currency FROM money_entries WHERE tenant_id = $1 AND id = $2`, tenant, c.entry).
+			Scan(&direction, &status, &amount, &channel, &reference, &source, &currency)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("%w: no such payment", invoicing.ErrNotFound)
 		}
 		if err != nil {
 			return err
+		}
+		if currency != moneylog.Naira {
+			return fmt.Errorf("%w: this money was paid in %s, not naira, and Taskiem counts naira only: it cannot be matched to an invoice or order", invoicing.ErrState, currency)
 		}
 		if direction != "in" || status != "settled" || amount == nil || *amount <= 0 {
 			return fmt.Errorf("%w: only money received and settled, with its amount, can be matched to an invoice or order", invoicing.ErrState)
@@ -247,7 +250,7 @@ func (m *Matcher) countTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c co
 			// Money a person entered, towards a school's invoice at or
 			// above its cash threshold: recorded for a second person, and
 			// nothing counted (approval.go).
-			if held, err = m.holdMatch(ctx, tx, tenant, c, source, *amount, parts); err != nil || held != nil {
+			if held, err = m.holdMatch(ctx, tx, tenant, c, source, *amount, left, parts); err != nil || held != nil {
 				return err
 			}
 		}
@@ -305,7 +308,13 @@ func (m *Matcher) countTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c co
 				return err
 			}
 			done = append(done, k)
-			out.Parts, out.PartKobo = append(out.Parts, k.Result), append(out.PartKobo, p.AmountKobo)
+			took := p.AmountKobo
+			if k.Invoice != nil && k.paymentID != uuid.Nil {
+				// An invoice takes what is due on it and no more: the rest
+				// is left below, as credit or for a person.
+				took = k.kobo
+			}
+			out.Parts, out.PartKobo = append(out.Parts, k.Result), append(out.PartKobo, took)
 			if o := k.Order; o != nil {
 				payees = append(payees, o.CustomerID())
 				if sugOrder != nil && *sugOrder == o.ID && k.paymentID != uuid.Nil {
@@ -405,6 +414,9 @@ type counted struct {
 	paymentID uuid.UUID
 	// became: the payment made the invoice paid.
 	became bool
+	// kobo is what the invoice's row counts: the part, or what was due
+	// when that was less.
+	kobo int64
 	// order is what counting towards the order did.
 	order storefront.Counted
 }
@@ -431,7 +443,7 @@ func (m *Matcher) countPart(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, p 
 		return counted{}, err
 	}
 	x := k.Invoice
-	return counted{Result: Result{Invoice: &x}, paymentID: k.PaymentID, became: k.Became}, nil
+	return counted{Result: Result{Invoice: &x}, paymentID: k.PaymentID, became: k.Became, kobo: k.AmountKobo}, nil
 }
 
 // paid runs what the parts' targets do on being paid, after the

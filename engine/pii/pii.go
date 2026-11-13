@@ -253,7 +253,12 @@ func sealAt(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, s
 			return v, nil
 		}
 		if list, ok := v.([]any); ok {
-			// A declared list of values (recipients' numbers): each is sealed.
+			// A declared list of values (recipients' numbers): each is
+			// sealed; an object in it, every value under it. A list too
+			// large to seal value by value is sealed whole (sealObject).
+			if leaves(list, MaxSealedLeaves+1) > MaxSealedLeaves {
+				return sealWhole(ctx, c, tx, tenant, list, cat, taint)
+			}
 			for i := range list {
 				s, err := sealAt(ctx, c, tx, tenant, list[i], nil, cat, own, taint)
 				if err != nil {
@@ -263,8 +268,14 @@ func sealAt(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, s
 			}
 			return list, nil
 		}
+		if m, ok := v.(map[string]any); ok {
+			// A declared object (a provider's identity record): every
+			// value under it is sealed. Declaring the place used to seal
+			// nothing, and the whole record was stored in the clear.
+			return sealObject(ctx, c, tx, tenant, m, cat, own, taint)
+		}
 		if _, ok := scalarKey(v); !ok {
-			return v, nil // only scalars are sealed; objects keep their shape
+			return v, nil
 		}
 		return sealScalar(ctx, c, tx, tenant, v, cat, own, taint)
 	}
@@ -292,6 +303,158 @@ func sealAt(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, s
 		}
 	}
 	return v, nil
+}
+
+// maxSealDepth bounds how deep a declared object is walked.
+const maxSealDepth = 64
+
+// MaxSealedLeaves is how many values under one declared object or list
+// are sealed each on their own. Every envelope is a key lookup and some
+// 150 bytes that do not compress, so a listing of hundreds of records
+// sealed value by value would be thousands of lookups in the event's
+// transaction and an event several times its size. Beyond it the place
+// is sealed whole, as one envelope: as unreadable, opened to the same
+// value, without the shape.
+const MaxSealedLeaves = 512
+
+// leaves counts the scalar values under v, stopping once past limit.
+func leaves(v any, limit int) int {
+	switch t := v.(type) {
+	case nil:
+		return 0
+	case map[string]any:
+		if IsEnvelope(t) {
+			return 0
+		}
+		n := 0
+		for _, x := range t {
+			if n += leaves(x, limit-n); n > limit {
+				break
+			}
+		}
+		return n
+	case []any:
+		n := 0
+		for _, x := range t {
+			if n += leaves(x, limit-n); n > limit {
+				break
+			}
+		}
+		return n
+	case string:
+		if t == "" {
+			return 0
+		}
+	}
+	return 1
+}
+
+// sealObject seals a declared object: every value under it on its own
+// (sealUnder), or, past MaxSealedLeaves, the object whole.
+func sealObject(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, m map[string]any, cat string, own *owner, taint Taint) (any, error) {
+	if leaves(m, MaxSealedLeaves+1) > MaxSealedLeaves {
+		return sealWhole(ctx, c, tx, tenant, m, cat, taint)
+	}
+	return sealUnder(ctx, c, tx, tenant, m, cat, own, taint, 0)
+}
+
+// sealWhole seals a large declared object or list as one envelope under
+// the category's subject (for free text, the organisation's). Its text
+// values are remembered, here and whenever it is opened, so copies of them
+// elsewhere in the run are sealed as for a place sealed value by value.
+func sealWhole(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, cat string, taint Taint) (any, error) {
+	if cat != "other" {
+		// A subject is one person's value; a whole object has none.
+		cat = "other"
+	}
+	env, err := c.SealTx(ctx, tx, tenant, cat, v)
+	if errors.Is(err, ErrErased) {
+		return Erased, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	followStrings(v, cat, taint)
+	return env, nil
+}
+
+// sealUnder seals every scalar leaf under a declared object or a list in
+// one, each as the declared category (so each under the subject a value
+// of that category has: its own, or, for free text, its owner's, the
+// people it names or the organisation's). The object keeps its shape and
+// its keys, so what reads a field of it finds an envelope there, opens it
+// like any other, and erasure and replay work leaf by leaf as they do for
+// a declared scalar. Strings are remembered (taint), so copies elsewhere
+// in the run are sealed too; numbers and booleans are sealed but not
+// remembered, since a record's 1, 34 or true would seal every equal
+// value in the run.
+func sealUnder(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, cat string, own *owner, taint Taint, depth int) (any, error) {
+	if depth > maxSealDepth {
+		return nil, errors.New("pii: a declared object is nested too deeply to seal")
+	}
+	switch t := v.(type) {
+	case nil:
+		return v, nil
+	case map[string]any:
+		if IsEnvelope(t) {
+			return t, nil
+		}
+		for k, x := range t {
+			s, err := sealUnder(ctx, c, tx, tenant, x, cat, own, taint, depth+1)
+			if err != nil {
+				return nil, err
+			}
+			t[k] = s
+		}
+		return t, nil
+	case []any:
+		for i, x := range t {
+			s, err := sealUnder(ctx, c, tx, tenant, x, cat, own, taint, depth+1)
+			if err != nil {
+				return nil, err
+			}
+			t[i] = s
+		}
+		return t, nil
+	case string:
+		if t == "" {
+			return v, nil
+		}
+		return sealScalar(ctx, c, tx, tenant, v, cat, own, taint)
+	}
+	// A number, a boolean: sealed, not remembered. The envelope says so
+	// (NoFollow), so opening it later does not remember the value either:
+	// what is followed is the same whenever the history is read.
+	env, err := c.SealTx(ctx, tx, tenant, cat, v)
+	if errors.Is(err, ErrErased) {
+		return Erased, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	env[NoFollow] = true
+	return env, nil
+}
+
+// NoFollow marks an envelope whose value is not remembered when it is
+// opened: a number or boolean under a declared object.
+const NoFollow = "nofollow"
+
+// followStrings remembers every text value under v (the content of a
+// place sealed whole), as sealing them one by one would have.
+func followStrings(v any, cat string, taint Taint) {
+	switch t := v.(type) {
+	case map[string]any:
+		for _, x := range t {
+			followStrings(x, cat, taint)
+		}
+	case []any:
+		for _, x := range t {
+			followStrings(x, cat, taint)
+		}
+	case string:
+		taint.Add(t, cat)
+	}
 }
 
 func sealTainted(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, taint Taint) (any, error) {
@@ -519,7 +682,15 @@ func Open(ctx context.Context, c Cipher, tx pgx.Tx, tenant uuid.UUID, v any, tai
 				return Open(ctx, c, tx, tenant, pt, taint)
 			}
 			cat, _ := t["$pii"].(string)
-			taint.Add(pt, cat)
+			switch pt.(type) {
+			case map[string]any, []any:
+				// A place sealed whole: its text values are personal.
+				followStrings(pt, cat, taint)
+			default:
+				if nf, _ := t[NoFollow].(bool); !nf {
+					taint.Add(pt, cat)
+				}
+			}
 			return pt, nil
 		}
 		out := make(map[string]any, len(t))

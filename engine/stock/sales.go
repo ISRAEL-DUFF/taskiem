@@ -199,7 +199,7 @@ func (s *Stock) RecordSale(ctx context.Context, tenant uuid.UUID, in SaleIn, log
 	var x CounterSale
 	var moves []uuid.UUID
 	fresh := false
-	err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
+	record := func(tx pgx.Tx) error {
 		moves, fresh = nil, false
 		var err error
 		x, err = scanSale(tx.QueryRow(ctx, `SELECT `+saleCols+` FROM stock_sales WHERE tenant_id = $1 AND key = $2`, tenant, in.Key))
@@ -293,7 +293,16 @@ func (s *Stock) RecordSale(ctx context.Context, tenant uuid.UUID, in SaleIn, log
 			moves = append(moves, m.ID)
 		}
 		return nil
-	})
+	}
+	err := s.inTx(ctx, tenant, record)
+	// The same key at the same moment: the other request's sale was not
+	// there to read, and its key (or its takings' reference) refused this
+	// one's. It is there now: read again and answer it, as a later retry
+	// would be answered.
+	var clash *pgconn.PgError
+	if errors.As(err, &clash) && clash.Code == "23505" {
+		err = s.inTx(ctx, tenant, record)
+	}
 	if err != nil {
 		return CounterSale{}, err
 	}

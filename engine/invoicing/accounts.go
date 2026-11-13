@@ -570,19 +570,35 @@ type Received struct {
 	AmountKobo int64
 	Connection string
 	Account    uuid.UUID
+	// Entry is the money log entry of the payment, when the caller holds
+	// it (matching, of an entry it is looking at): two transfers into one
+	// account number are two entries with one PaymentID. Nil: the entry is
+	// found, or written, by the payment's id.
+	Entry *uuid.UUID
 }
+
+// overpaid is how money is a customer's (money_entry_customers.how) with
+// no one asked: it was paid into the account Taskiem gave for an invoice
+// of theirs, and the invoice did not take all of it.
+const overpaid = "invoice"
 
 // Received counts a payment into an invoice's account or link towards
 // it, exactly (the reference is the one Taskiem gave), once, and tells a
-// run waiting on the invoice when it becomes paid. An invoice that takes
-// no payment (void) is ErrState, with the money recorded all the same.
+// run waiting on the invoice when it becomes paid. The invoice takes what
+// is due on it and no more (CountPayment): what is left of the money, or
+// all of it when the invoice is already paid, is the customer's credit
+// (docs/matching.md#more-than-is-due), counted towards the next invoice
+// sent to them; where the invoice names no customer it is ErrState and
+// left for a person. An invoice that takes no payment (void) is ErrState
+// too, with the money recorded all the same.
 func (s *Invoices) Received(ctx context.Context, tenant, invoice uuid.UUID, r Received) error {
 	var x Invoice
 	var became bool
 	var refused error
 	err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		var entry *uuid.UUID
-		if s.MoneyLog != nil {
+		refused = nil
+		entry := r.Entry
+		if entry == nil && s.MoneyLog != nil {
 			// The same movement the rail's payment.received event is: one
 			// entry whichever is heard first, and the match names it.
 			amount := r.AmountKobo
@@ -615,9 +631,21 @@ func (s *Invoices) Received(ctx context.Context, tenant, invoice uuid.UUID, r Re
 				return err
 			}
 		}
-		if r.Account != uuid.Nil {
-			_, err = tx.Exec(ctx, `UPDATE customer_invoice_accounts SET status = 'paid', updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, r.Account)
+		// What the invoice did not take is its customer's money: all of it
+		// when the invoice was already paid, else what was over.
+		if entry != nil && (refused == nil || errors.Is(refused, ErrNothingDue)) {
+			kept, err := s.keepOver(ctx, tx, tenant, invoice, *entry, r.Connection)
+			if err != nil {
+				return err
+			}
+			if kept {
+				refused = nil
+			}
 		}
+		if r.Account == uuid.Nil {
+			return nil // a refusal is answered below, with the money recorded
+		}
+		_, err = tx.Exec(ctx, `UPDATE customer_invoice_accounts SET status = 'paid', updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, r.Account)
 		return err
 	})
 	if err == nil {
@@ -627,6 +655,30 @@ func (s *Invoices) Received(ctx context.Context, tenant, invoice uuid.UUID, r Re
 		return err
 	}
 	return s.Paid(ctx, tenant, x)
+}
+
+// keepOver makes what is left of an entry, paid into the account Taskiem
+// gave for an invoice, the invoice's customer's credit; kept is false
+// when nothing is left, or the invoice names no customer (the money is
+// then a person's to match). Money that is someone's already stays theirs.
+func (s *Invoices) keepOver(ctx context.Context, tx pgx.Tx, tenant, invoice, entry uuid.UUID, connection string) (bool, error) {
+	left, ok, err := moneylog.LockLeft(ctx, tx, entry)
+	if err != nil || !ok || left <= 0 {
+		return false, err
+	}
+	var customer *string
+	if err := tx.QueryRow(ctx, `SELECT customer_id FROM customer_invoices WHERE tenant_id = $1 AND id = $2`, tenant, invoice).Scan(&customer); err != nil {
+		return false, err
+	}
+	if customer == nil || *customer == "" {
+		return false, nil
+	}
+	if err := MarkCustomers(ctx, tx, tenant, entry, *customer, nil, overpaid, "system:"+connection); err != nil {
+		return false, err
+	}
+	var whose string
+	err = tx.QueryRow(ctx, `SELECT customer_id FROM money_entry_customers WHERE tenant_id = $1 AND entry_id = $2`, tenant, entry).Scan(&whose)
+	return err == nil && whose == *customer, err
 }
 
 // noteUnavailable records that a request found no payments connection able

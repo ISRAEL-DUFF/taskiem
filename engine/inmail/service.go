@@ -210,6 +210,10 @@ func (s *Service) handle(ctx context.Context, x inboxRow, meta Meta, raw []byte)
 		return err
 	}
 	msg, perr := Parse(raw)
+	if msg != nil {
+		// What was proven was proven of one From: the one read here.
+		meta.Auth = meta.Auth.For(msg.From.Address)
+	}
 	rec := record{status: "refused"}
 	var files []keptFile
 	var conf Confirmation

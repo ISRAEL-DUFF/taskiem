@@ -1186,6 +1186,10 @@
             "event": {
               "$ref": "#/$defs/expr"
             },
+            "through": {
+              "description": "When the action could not list everything since the time asked: the time (RFC 3339) up to which it did, read from its output; absent or null when it listed it all. The next poll carries on from there.",
+              "$ref": "#/$defs/expr"
+            },
             "every": {
               "type": "string",
               "pattern": "^[0-9]+(m|h)$"

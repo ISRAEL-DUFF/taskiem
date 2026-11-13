@@ -45,7 +45,7 @@ actions:
               balance: { type: integer, description: Minor units }
   list_transactions:
     title: List successful payments
-    description: Payments received since a time, newest first (Paystack's GET /transaction). Taskiem uses it to notice payments without a webhook set up in Paystack.
+    description: Successful payments since a time, every page (Paystack's GET /transaction). Taskiem uses it to notice payments without a webhook set up in Paystack. Beyond 1,000 it lists the first part of the time whole and says how far it got in through.
     class: read
     input:
       type: object
@@ -56,11 +56,12 @@ actions:
       type: object
       properties:
         data: { type: array, items: { type: object }, description: "Paystack transaction objects, as its charge.success webhook carries them" }
+        through: { type: string, format: date-time, description: "Only when there was more than one call may read: the time up to which data is complete. Ask again from it" }
     pii:
       - { field: output.data, category: other }
   list_transfers:
     title: List transfers
-    description: Transfers made since a time (Paystack's GET /transfer). Taskiem uses it to notice transfer results without a webhook set up in Paystack.
+    description: Transfers made since a time, every page (Paystack's GET /transfer). Taskiem uses it to notice transfer results without a webhook set up in Paystack. Beyond 1,000 it lists the first part of the time whole and says how far it got in through.
     class: read
     input:
       type: object
@@ -71,6 +72,7 @@ actions:
       type: object
       properties:
         data: { type: array, items: { type: object }, description: "Paystack transfer objects, as its transfer webhooks carry them" }
+        through: { type: string, format: date-time, description: "Only when there was more than one call may read: the time up to which data is complete. Ask again from it" }
     pii:
       - { field: output.data, category: other }
   list_banks:
@@ -169,7 +171,7 @@ actions:
         status:        { type: string, enum: [pending, success, failed, reversed, otp, not_found] }
   initialize_transaction:
     title: Create a payment page
-    description: A Paystack checkout page for a customer to pay an amount; verify_charge reports when it is paid.
+    description: A Paystack checkout page for a customer to pay an amount; verify_charge reports when it is paid. A reference Paystack has seen is read back, not made again; where Paystack does not give the page's address again the step parks.
     class: idempotent_write
     idempotency:
       field: reference
@@ -266,7 +268,7 @@ actions:
         reference: { type: string }
         refund_id: { type: integer }
         amount:    { type: integer, description: Kobo }
-        status:    { type: string, description: "pending, processing, processed or failed; already when it had been refunded" }
+        status:    { type: string, description: "pending, processing, processed or failed; already when Paystack says it had been refunded in full (a refund it says is still under way is pending)" }
   # Dedicated virtual accounts, from Paystack's public documentation, read
   # 23 October 2026 (docs/spec/schools-rail-facts.md):
   #   https://docs-v2.paystack.com/docs/payments/dedicated-virtual-accounts/
@@ -328,7 +330,7 @@ actions:
       - { field: output.data, category: other }
   refund_status:
     title: Check whether a payment was refunded
-    description: Reads the payment; not found while it has not been refunded (reversed).
+    description: Reads the payment by its reference; found once it is reversed (refunded). As refund_transaction's reconcile it is given that step's input, and a payment not yet reversed parks the step, since a refund may still be pending.
     class: read
     input:
       type: object
@@ -352,7 +354,7 @@ triggers:
     # Without the webhook in Paystack's dashboard, Taskiem asks Paystack
     # itself every few minutes (no-technical-steps N4); with it, events
     # arrive at once, and each is taken once either way.
-    poll: { action: list_transfers, since: from, items: =output.data, event: "='transfer.' + item.status", every: 5m }
+    poll: { action: list_transfers, since: from, items: =output.data, event: "='transfer.' + item.status", through: "=output.?through", every: 5m }
   charge_event:
     type: webhook
     title: Payments you receive
@@ -374,7 +376,7 @@ triggers:
       && has(body.data.authorization.channel) && body.data.authorization.channel == 'dedicated_nuban'
       && has(body.data.customer) && type(body.data.customer) == map && has(body.data.customer.customer_code) ? body.data.customer.customer_code
       : body.data.reference
-    poll: { action: list_transactions, since: from, items: =output.data, event: "='charge.success'", every: 5m }
+    poll: { action: list_transactions, since: from, items: =output.data, event: "='charge.success'", through: "=output.?through", every: 5m }
 # What Paystack can do in Taskiem's words (rule 16, schemas/capabilities-v1.json).
 capabilities:
   balance:
@@ -404,16 +406,19 @@ capabilities:
         input: { amount: "=input.amount_kobo", recipient: "=steps.recipient.output.recipient_code", reason: "=input.narration", currency: "=input.currency" }
     output:
       payout_id: =output.reference
-      status: "=output.status == 'success' ? 'settled' : output.status == 'pending' ? 'pending' : 'failed'"
+      # Failed only for a status that says no money left: failed, or
+      # reversed (it came back). Any other status, one Paystack adds
+      # later included, is pending: a payout read as failed is paid again.
+      status: "=output.status == 'success' ? 'settled' : output.status in ['failed', 'reversed'] ? 'failed' : 'pending'"
       reason: "=output.status == 'otp' ? optional.of('otp_enabled') : output.status == 'reversed' ? optional.of('reversed') : optional.none()"
     unsupported: [source]
     settles_by: { trigger: transfer_event, lookup: get_payout }
-    notes: With OTP on transfers turned on in Paystack, a transfer waits for a code Taskiem cannot give; it is reported failed with reason otp_enabled.
+    notes: With OTP on transfers turned on in Paystack, a transfer waits for a code Taskiem cannot give; it stays pending with reason otp_enabled until someone completes or cancels it in Paystack.
   get_payout:
     action: verify_transfer
     input: { reference: "=input.payout_id" }
     output:
-      status: "=output.status == 'success' ? 'settled' : output.status == 'reversed' ? 'reversed' : output.status == 'pending' ? 'pending' : 'failed'"
+      status: "=output.status == 'success' ? 'settled' : output.status == 'reversed' ? 'reversed' : output.status == 'failed' ? 'failed' : 'pending'"
       reason: "=output.status == 'otp' ? optional.of('otp_enabled') : output.status == 'not_found' ? optional.of('not_found') : optional.none()"
   collect_link:
     action: initialize_transaction
@@ -461,6 +466,7 @@ capabilities:
     output:
       # A payment refunded before answers no refund id: the payment's reference stands for it.
       refund_id: "=has(output.refund_id) ? string(output.refund_id) : input.payment_id"
+      # already: Paystack said the payment had been refunded in full.
       status: "=output.status in ['processed', 'already'] ? 'refunded' : output.status == 'failed' ? 'failed' : 'pending'"
       amount_kobo: =output.?amount
     unsupported: [amount_kobo]

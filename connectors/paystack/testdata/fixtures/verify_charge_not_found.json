@@ -1,0 +1,13 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/transaction/verify/tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+ },
+ "response": {
+  "status": 400,
+  "body": {
+   "status": false,
+   "message": "Transaction reference not found"
+  }
+ }
+}

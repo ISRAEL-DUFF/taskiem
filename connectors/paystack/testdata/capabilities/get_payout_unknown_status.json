@@ -1,0 +1,35 @@
+{
+  "capability": "get_payout",
+  "credentials": {
+    "secret_key": "sk_test_xyz"
+  },
+  "input": {
+    "payout_id": "tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+  },
+  "exchanges": [
+    {
+      "name": "verify_transfer_processing",
+      "request": {
+        "method": "GET",
+        "path": "/transfer/verify/tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "status": true,
+          "message": "Transfer retrieved",
+          "data": {
+            "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+            "amount": 100000,
+            "currency": "NGN",
+            "status": "processing",
+            "transfer_code": "TRF_1"
+          }
+        }
+      }
+    }
+  ],
+  "expect": {
+    "status": "pending"
+  }
+}

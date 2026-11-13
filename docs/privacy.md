@@ -21,6 +21,8 @@ Detection is conservative, because a step's data is full of digit strings that a
 
 Names and addresses cannot be recognised reliably; declare them.
 
+A declared place may hold an object or a list (a provider's whole identity record, `output.record`): every value under it is sealed, each as the declared category, and the object keeps its shape and keys, so nothing of the record is stored readable while a step still reads its fields where they were. Text values are followed as copies like any declared value; numbers and yes/no values under an object are sealed but not followed (a record's `1` would seal every `1` in the run). An object or list of more than 512 values (a long listing) is sealed whole, as one envelope under the organisation's free-text subject. Until this was so, declaring an object sealed nothing; run histories written before it hold such records as they were stored then.
+
 ## Where it is redacted
 
 - **Run history and the web app**: sealed values show as `🔒 <category>`. Members with `pii.reveal` can open a run's history; every reveal is audited.

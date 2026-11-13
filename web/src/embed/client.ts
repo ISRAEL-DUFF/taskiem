@@ -179,11 +179,15 @@ export class EmbedClient extends EventTarget {
   /**
    * Streams a run's events until it ends (or signal aborts), calling
    * onEvent for each. It reconnects after a dropped connection, resuming
-   * after the last event seen (Last-Event-ID), up to `retries` times.
+   * after the last event seen (Last-Event-ID), up to `retries` times in a
+   * row: any event received starts the count again, so a long run behind
+   * a proxy that drops idle connections is followed to its end.
    */
   async streamRun(run: string, onEvent: (e: RunEvent) => void, signal?: AbortSignal, retries = 5): Promise<void> {
     let last = "";
     for (let attempt = 0; ; attempt++) {
+      // The count is of failures in a row.
+      let received = false;
       const headers = this.headers(false);
       if (last) headers["Last-Event-ID"] = last;
       try {
@@ -200,6 +204,7 @@ export class EmbedClient extends EventTarget {
           if (done) break;
           for (const m of parser.push(dec.decode(value, { stream: true }))) {
             if (m.id) last = m.id;
+            received = true;
             if (m.event === "end") {
               await reader.cancel().catch(() => undefined);
               return;
@@ -208,8 +213,10 @@ export class EmbedClient extends EventTarget {
           }
         }
       } catch (e) {
+        if (received) attempt = 0;
         if (signal?.aborted || (e instanceof ApiError && e.status >= 400 && e.status < 500) || attempt >= retries) throw e;
       }
+      if (received) attempt = 0;
       if (signal?.aborted) return;
       const step = this.opts.retryDelay ?? 2000;
       await new Promise((r) => setTimeout(r, Math.min(step * (attempt + 1), 5 * step)));

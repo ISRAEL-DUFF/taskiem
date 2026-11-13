@@ -34,6 +34,9 @@ type moneyEntry struct {
 	Towards  string `json:"towards,omitempty"`
 	// ToMatch: money matching left for a person (as /v1/money/unmatched).
 	ToMatch bool `json:"to_match"`
+	// Currency is the money's when it is not naira ("USD"): its amounts
+	// are in that currency's smallest unit, and it is in no naira total.
+	Currency string `json:"currency,omitempty"`
 }
 
 // listMoneyEntries serves GET /v1/money/entries: the newest entries, at
@@ -71,7 +74,8 @@ func (s *Server) listMoneyEntries(w http.ResponseWriter, r *http.Request) {
 					SELECT 'sale ' || x.reference FROM stock_sales x WHERE x.tenant_id = e.tenant_id AND x.entry_id = e.id) t), ''),
 				EXISTS (SELECT 1 FROM money_match_state m WHERE m.entry_id = e.id AND m.state = 'unmatched')
 				  AND (taskiem_money_entry_left(e.id) > 0 OR e.amount_kobo IS NULL AND taskiem_money_entry_counted(e.id) = 0)
-				  AND NOT EXISTS (SELECT 1 FROM money_entry_customers c WHERE c.entry_id = e.id)
+				  AND NOT EXISTS (SELECT 1 FROM money_entry_customers c WHERE c.entry_id = e.id),
+				CASE WHEN e.currency <> 'NGN' THEN e.currency ELSE '' END
 			FROM money_entries e
 			WHERE e.tenant_id = $1 AND e.recorded_at < $2
 			ORDER BY e.recorded_at DESC, e.id DESC LIMIT $3`, tenant, before, limit)
@@ -81,7 +85,7 @@ func (s *Server) listMoneyEntries(w http.ResponseWriter, r *http.Request) {
 		list, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (moneyEntry, error) {
 			var e moneyEntry
 			return e, row.Scan(&e.ID, &e.Kind, &e.Direction, &e.AmountKobo, &e.FeeKobo, &e.Status, &e.Channel, &e.Reference, &e.When,
-				&e.Description, &e.Vendor, &e.Category, &e.LeftKobo, &e.Towards, &e.ToMatch)
+				&e.Description, &e.Vendor, &e.Category, &e.LeftKobo, &e.Towards, &e.ToMatch, &e.Currency)
 		})
 		return err
 	}); err != nil {

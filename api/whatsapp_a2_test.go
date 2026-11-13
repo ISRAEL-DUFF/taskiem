@@ -437,8 +437,10 @@ func TestWhatsAppOwnNumbers(t *testing.T) {
 	if len(got) != 1 || got[0].From != pnB || strings.HasPrefix(got[0].Text, "[") {
 		t.Fatalf("beta's number: %+v", got)
 	}
-	// Someone not in Alpha writing to Alpha's number.
-	if got := w.sendTo(t, "/channels/whatsapp/n/"+pnA, pnA, secA, nc, whatsapptest.Text("status")); len(got) != 1 || !strings.Contains(got[0].Text, "not a member") {
+	// Someone not in Alpha writing to Alpha's number is its customer
+	// there, like any other number: no answer from Taskiem, and nothing
+	// of their own business (TestSomeoneOnTaskiemIsACustomerElsewhere).
+	if got := w.sendTo(t, "/channels/whatsapp/n/"+pnA, pnA, secA, nc, whatsapptest.Text("status")); len(got) != 0 {
 		t.Errorf("gamma on alpha's number: %+v", got)
 	}
 	// The shared number still works, with the prefix.

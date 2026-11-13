@@ -234,6 +234,19 @@ func GitHubPush(branch, commit, secret string) (http.Header, []byte) {
 	return http.Header{"X-Github-Event": {"push"}, "X-Hub-Signature-256": {"sha256=" + hex.EncodeToString(mac.Sum(nil))}, "Content-Type": {"application/json"}}, body
 }
 
+// GitHubPushBy is a signed push delivery for branch moving from before to
+// commit, pushed by the account with pusher's email, its one commit
+// written by author and committed by GitHub (a merge on github.com).
+func GitHubPushBy(branch, before, commit, secret, pusher, author string) (http.Header, []byte) {
+	body, _ := json.Marshal(map[string]any{"ref": "refs/heads/" + branch, "before": before, "after": commit, "deleted": false,
+		"pusher": map[string]string{"name": pusher, "email": pusher},
+		"commits": []any{map[string]any{"id": commit, "author": map[string]string{"email": author},
+			"committer": map[string]string{"email": "noreply@github.com", "username": "web-flow"}}}})
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	return http.Header{"X-Github-Event": {"push"}, "X-Hub-Signature-256": {"sha256=" + hex.EncodeToString(mac.Sum(nil))}, "Content-Type": {"application/json"}}, body
+}
+
 // GitLab starts a fake GitLab API for project path.
 func GitLab(t testing.TB, project, token string) *Server {
 	s := &Server{Repo: newRepo(token)}

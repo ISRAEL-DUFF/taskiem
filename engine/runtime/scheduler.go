@@ -191,12 +191,15 @@ func (s *Scheduler) fireTimers(ctx context.Context) (int, error) {
 	for _, d := range timers {
 		done := false
 		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{d.tenant}, func(tx pgx.Tx) error {
-			tag, err := tx.Exec(ctx, `UPDATE timers SET fired_at = now() WHERE id = $1 AND fired_at IS NULL`, d.id)
-			if err != nil || tag.RowsAffected() == 0 {
-				return err
-			}
+			// The run first, then its timer: the order everything that ends
+			// a run or withdraws a step takes them in (endRun, StepCancelled).
+			// Taken the other way round, the two wait on each other.
 			run, err := lockRun(ctx, tx, d.run)
 			if err != nil {
+				return err
+			}
+			tag, err := tx.Exec(ctx, `UPDATE timers SET fired_at = now() WHERE id = $1 AND fired_at IS NULL`, d.id)
+			if err != nil || tag.RowsAffected() == 0 {
 				return err
 			}
 			switch run.status {

@@ -56,10 +56,15 @@ class PhoneUnlocker implements Unlocker {
 /// is whether there is anything to lock (signed in); [now] is the clock,
 /// replaceable in tests.
 class AppLock extends StatefulWidget {
-  const AppLock({super.key, required this.child, required this.active, required this.unlocker, this.startLocked = true, this.now = DateTime.now});
+  const AppLock({super.key, required this.child, required this.active, required this.unlocker, this.startLocked = true, this.hideWhenAway, this.now = DateTime.now});
 
   final Widget child;
   final bool active;
+
+  /// Whether to cover the screens while the app is not in front (the app
+  /// switcher's picture of it): whenever someone is signed in, with the
+  /// lock on or off. Null: as [active].
+  final bool? hideWhenAway;
 
   /// Whether to ask at once: a session kept from before is opened with the
   /// phone's lock; one the person signed in to just now is not.
@@ -75,6 +80,10 @@ class AppLockState extends State<AppLock> with WidgetsBindingObserver {
   late bool locked = widget.startLocked;
   DateTime? _away;
   bool _asking = false;
+
+  /// The app is not in front: its screens are covered, so the phone's app
+  /// switcher shows the brand and not a conversation or an amount.
+  bool _behind = false;
 
   @override
   void initState() {
@@ -101,6 +110,8 @@ class AppLockState extends State<AppLock> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    final behind = state != AppLifecycleState.resumed;
+    if (behind != _behind) setState(() => _behind = behind);
     switch (state) {
       case AppLifecycleState.hidden:
       case AppLifecycleState.paused:
@@ -134,14 +145,29 @@ class AppLockState extends State<AppLock> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final covered = widget.active && locked;
+    final asked = widget.active && locked;
+    final covered = asked || (_behind && (widget.hideWhenAway ?? widget.active));
     // Offstage: not drawn, not pressed, not read out, but kept.
     return Stack(
       fit: StackFit.expand,
       children: [
         Offstage(offstage: covered, child: TickerMode(enabled: !covered, child: widget.child)),
-        if (covered) _LockScreen(onUnlock: _ask),
+        if (asked) _LockScreen(onUnlock: _ask) else if (covered) const _AwayCover(),
       ],
+    );
+  }
+}
+
+/// What the app switcher shows: the mark on pine, and nothing of the person's.
+class _AwayCover extends StatelessWidget {
+  const _AwayCover();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return ColoredBox(
+      color: t.brand,
+      child: Center(child: SvgPicture.asset('assets/brand/mark.svg', width: 64, height: 64)),
     );
   }
 }

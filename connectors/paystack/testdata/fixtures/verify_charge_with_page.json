@@ -1,0 +1,20 @@
+{
+ "request": {
+  "method": "GET",
+  "path": "/transaction/verify/tsk_ab12cd34ef56gh78ij90kl12mn34op56"
+ },
+ "response": {
+  "status": 200,
+  "body": {
+   "status": true,
+   "message": "Verification successful",
+   "data": {
+    "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+    "status": "abandoned",
+    "amount": 300000,
+    "authorization_url": "https://checkout.paystack.com/0peioxfhpn",
+    "access_code": "0peioxfhpn"
+   }
+  }
+ }
+}

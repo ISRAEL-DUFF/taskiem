@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"runtime/debug"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
@@ -26,6 +28,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/container"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/drift"
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/egress"
@@ -234,7 +237,14 @@ func (w *Worker) Run(ctx context.Context) error {
 		}()
 	}
 	// The notification's payload is the new task's queue (00004_execution).
-	wake, stop, err := listen(ctx, w.Store, "taskiem_tasks", func(queue string) bool { return queue == w.Queue || queue == "" })
+	// A task this process scheduled wakes the worker in memory (wake.go);
+	// the notification its notifier then sends for other processes is
+	// skipped here.
+	local, unhear := w.Store.localWakes(w.Queue)
+	defer unhear()
+	wake, stop, err := listen(ctx, w.Store, "taskiem_tasks", func(n *pgconn.Notification) bool {
+		return (n.Payload == w.Queue || n.Payload == "") && !w.Store.sentHere(n.PID)
+	})
 	if err != nil {
 		return err
 	}
@@ -316,7 +326,7 @@ func (w *Worker) Run(ctx context.Context) error {
 			free <- struct{}{}
 		}
 		if len(claims) < slots {
-			waitFor(ctx, wake, time.Second)
+			waitForEither(ctx, wake, local, time.Second)
 		}
 	}
 	return nil
@@ -443,19 +453,21 @@ func takeRate(ctx context.Context, tx pgx.Tx, p *plan) error {
 	return err
 }
 
-// errCancelled: the step was cancelled (a losing parallel branch) before its
-// write could start; the task is dropped without an outcome.
+// errCancelled: the step was cancelled (a losing parallel branch, a
+// cancelled run), or its run ended, before its write could start. Nothing
+// is sent. The task is dropped without an outcome, unless decide is
+// waiting to hear from this attempt (plan.owes).
 var errCancelled = errors.New("cancelled")
 
-// openIntent reports whether some attempt recorded EffectIntent and never
-// reported an outcome: its write may be under way or may have happened.
-func openIntent(attempts []int, failures map[int]history.Error) bool {
-	for _, a := range attempts {
-		if _, ok := failures[a]; !ok {
-			return true
-		}
-	}
-	return false
+// ended reports whether a run's status is one it never leaves.
+func ended(status string) bool {
+	return status == "completed" || status == "failed" || status == "cancelled"
+}
+
+// notApplied is the outcome of an attempt that found no earlier attempt
+// took effect and may not send: the step failed, and nothing is owed.
+func notApplied(c claim, msg string) history.Event {
+	return failed(c, history.KindNotApplied, msg, "fail")
 }
 
 type mode int
@@ -490,6 +502,17 @@ type plan struct {
 	scrub    []string          // secret values used by this attempt; never written to history
 	secrets  map[string]string // secrets read by this attempt, by name
 	creds    map[string]string // the connection's credentials, once read
+
+	// settle: the step starts nothing new (it was cancelled, its run has
+	// ended, or decide scheduled the attempt only to settle an earlier
+	// one). The attempt finds out what earlier attempts did and no more.
+	settle bool
+	// owes: decide is waiting to hear from this attempt, because it
+	// recorded an intent or was scheduled to settle. It is never dropped
+	// without an outcome.
+	owes bool
+	// resend: the key in force was already sent by an earlier attempt.
+	resend bool
 }
 
 // execute runs one claimed task: prepare (and record intent), call, record
@@ -531,7 +554,7 @@ func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) erro
 		}
 		if errors.Is(err, errCancelled) {
 			*outcome = "cancelled"
-			return w.finish(ctx, p, nil)
+			return w.finish(ctx, p, stopped(p))
 		}
 		return err
 	}
@@ -562,6 +585,10 @@ func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) erro
 		if errors.Is(err, errAbandoned) || errors.Is(err, errFenced) {
 			return nil
 		}
+		if errors.Is(err, errCancelled) {
+			*outcome = "cancelled"
+			return w.finish(ctx, p, stopped(p))
+		}
 		if err != nil {
 			return err
 		}
@@ -582,6 +609,20 @@ func (w *Worker) run(ctx context.Context, c claim, target, outcome *string) erro
 		*outcome = "failed_" + fp.Error.Next
 	}
 	return w.finish(ctx, p, &result)
+}
+
+// stopped is what an attempt records when it was refused leave to send
+// (errCancelled). Most record nothing: the step never started, and the
+// task is dropped. An attempt decide is waiting to hear from had a write
+// whose outcome is unknown and can no longer be found out by sending
+// again, so it parks for an operator rather than be forgotten.
+func stopped(p *plan) *history.Event {
+	if !p.owes {
+		return nil
+	}
+	raw, _ := json.Marshal(history.FailedPayload{Error: history.Error{Kind: "unknown_outcome", Next: "park", MaybeApplied: true,
+		Message: "an earlier attempt may have reached the provider, and the step was stopped before it could be sent again to find out: check with the provider"}})
+	return &history.Event{Type: history.StepFailed, StepID: p.c.step, Attempt: p.c.attempt, Payload: raw}
 }
 
 // observeRunStart reports how long the run waited for its first worker
@@ -638,13 +679,18 @@ func capOutput(p *plan, ev history.Event) history.Event {
 	if err := json.Unmarshal(ev.Payload, &cp); err != nil || len(cp.Output) <= maxStepOutput {
 		return ev
 	}
-	msg := fmt.Sprintf("step output is %d KB, over the %d KB limit; return only the fields later steps need", (len(cp.Output)+1023)>>10, maxStepOutput>>10)
+	return tooLarge(p, fmt.Sprintf("step output is %d KB, over the %d KB limit; return only the fields later steps need", (len(cp.Output)+1023)>>10, maxStepOutput>>10))
+}
+
+// tooLarge is the failure of a step whose output cannot be kept: a read
+// fails, a write parks (capOutput).
+func tooLarge(p *plan, msg string) history.Event {
 	if !p.class.IsWrite() {
 		return failed(p.c, "output_too_large", msg, "fail")
 	}
 	raw, _ := json.Marshal(history.FailedPayload{Error: history.Error{Kind: "output_too_large", Next: "park", MaybeApplied: true,
 		Message: msg + ". The provider accepted the call: record the step as completed with the output later steps need"}})
-	return history.Event{Type: history.StepFailed, StepID: ev.StepID, Attempt: ev.Attempt, Payload: raw}
+	return history.Event{Type: history.StepFailed, StepID: p.c.step, Attempt: p.c.attempt, Payload: raw}
 }
 
 func completedEvent(c claim, out any, reconciled bool) history.Event {
@@ -662,7 +708,8 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 		var runSeed string // a fork's inherited seed (fork.go)
 		var dbNow time.Time
 		var digest []byte
-		if err := tx.QueryRow(ctx, `SELECT workflow_id, version, environment, COALESCE(idempotency_seed, ''), clock_timestamp(), expansion FROM runs WHERE id = $1`, c.run).Scan(&wfID, &version, &p.env, &runSeed, &dbNow, &digest); err != nil {
+		var status string
+		if err := tx.QueryRow(ctx, `SELECT workflow_id, version, environment, COALESCE(idempotency_seed, ''), clock_timestamp(), expansion, status FROM runs WHERE id = $1`, c.run).Scan(&wfID, &version, &p.env, &runSeed, &dbNow, &digest, &status); err != nil {
 			return err
 		}
 		def, err := w.Store.runDefinition(ctx, tx, wfID, version, digest)
@@ -731,13 +778,21 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 				reissued = false // an operator's re-issue moves only the key sent after it
 				intentAttempts = append(intentAttempts, e.Attempt)
 				intentTimes = append(intentTimes, e.RecordedAt)
+				p.owes = p.owes || e.Attempt == c.attempt
 			}
 		}
 		if !found {
 			return fmt.Errorf("no StepScheduled for %s attempt %d", c.step, c.attempt)
 		}
-		if cancelled && !openIntent(intentAttempts, outcomes) {
-			p.mode = modeDone // nothing of it reached a provider; never start it now
+		// A step that was cancelled, or whose run has ended (a cancel that
+		// reverses nothing, a plan limit), starts nothing: a task a worker
+		// held, or claims late, is dropped. Only an attempt decide is
+		// waiting to hear from carries on, to settle what was sent.
+		p.owes = p.owes || p.sched.Settle
+		halted := cancelled || ended(status)
+		p.settle = halted || p.sched.Settle
+		if halted && !p.owes {
+			p.mode = modeDone // nothing of this attempt reached a provider; never start it now
 		}
 		if p.mode == modeDone {
 			return nil
@@ -815,11 +870,34 @@ func (w *Worker) prepare(ctx context.Context, c claim) (*plan, error) {
 				p.keyFirst = intentTimes[i]
 			}
 		}
+		p.resend = !p.keyFirst.IsZero()
 		if p.keyFirst.IsZero() {
 			p.keyFirst = time.Now()
 		}
 		if p.key, err = p.spec.Key(p.keyIn); err != nil {
 			return err
+		}
+		if p.settle {
+			// The attempt only settles what was sent under the key in force.
+			// Was any send of it left open, or did one fail in a way that may
+			// have taken effect? If not there is nothing to find out, and
+			// nothing new is sent: the step failed. If so the class decides
+			// as usual (reconcile, park, or the same key again), except that
+			// a reconcile that finds nothing is the end of it (reconcile).
+			exposed := false
+			for i, ip := range intents {
+				if ip.AttemptGroup != p.group {
+					continue
+				}
+				prev, reported := outcomes[intentAttempts[i]]
+				if !reported || prev.MaybeApplied || p.class.MayHaveApplied(kindOf(prev.Kind)) {
+					exposed = true
+				}
+			}
+			if !exposed {
+				p.mode = modeDone
+				return w.recordFailure(ctx, tx, p, history.KindNotApplied, "no attempt reached the provider under the key in force, and the step is not sent again: it was stopped")
+			}
 		}
 		if p.mode != modeSend {
 			return nil
@@ -942,16 +1020,27 @@ func (w *Worker) recordIntent(ctx context.Context, tx pgx.Tx, p *plan) error {
 		return err
 	}
 	// Under the run lock, so a cancellation decided since prepare read the
-	// history cannot slip in between the check and the intent.
-	if _, err := lockRun(ctx, tx, p.c.run); err != nil {
+	// history, or the end of the run, cannot slip in between the check and
+	// the intent.
+	run, err := lockRun(ctx, tx, p.c.run)
+	if err != nil {
 		return err
+	}
+	// Once a run has ended nothing is sent for it: nothing would reverse
+	// what the send did.
+	if ended(run.status) {
+		return errCancelled
 	}
 	var cancelled bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM run_events WHERE run_id = $1 AND step_id = $2 AND type = $3)`,
 		p.c.run, p.c.step, history.StepCancelled).Scan(&cancelled); err != nil {
 		return err
 	}
-	if cancelled {
+	// A cancelled step sends nothing new. The attempt decide is waiting for
+	// may send again under a key already sent, which is how an idempotent
+	// write's outcome is found out (contract: action-classes.md); what it
+	// completes, the run then reverses.
+	if cancelled && (!p.owes || !p.resend) {
 		return errCancelled
 	}
 	digest := sha256.New()
@@ -1024,7 +1113,109 @@ func (w *Worker) postpone(ctx context.Context, p *plan, at time.Time) error {
 // already made is kept and recorded once the new primary answers, as long
 // as the lease still holds. Repeating it after an unknown COMMIT is safe:
 // a committed finish released the task, so the repeat is fenced out.
-func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) error {
+func (w *Worker) finish(ctx context.Context, p *plan, outcome *history.Event) error {
+	err := w.record(ctx, p, outcome)
+	if err == nil || outcome == nil || !refused(err) {
+		return err
+	}
+	// The database refused the outcome itself, and would refuse it again
+	// however often the task were delivered. An output too large for the
+	// history is said so at once, as capOutput says it.
+	if outcome.Type == history.StepCompleted && payloadTooLarge(err) {
+		ev := tooLarge(p, fmt.Sprintf("step output is too large to keep (over %d MB as stored); return only the fields later steps need", maxStoredPayload>>20))
+		if w.record(ctx, p, &ev) == nil {
+			return nil
+		}
+	}
+	// Anything else is counted on the task. The lease expires and the task
+	// comes back; at the last try the step is settled with a failure that
+	// can be recorded, so the task is not delivered for ever: a read fails,
+	// and a write, which may have been applied, parks for an operator.
+	n, cerr := w.countUnrecorded(ctx, p.c)
+	if cerr != nil || n < maxUnrecorded {
+		return err
+	}
+	ev := unrecordable(p, err)
+	if rerr := w.record(ctx, p, &ev); rerr != nil {
+		return errors.Join(err, rerr)
+	}
+	w.Logger.Error("a step's outcome could not be recorded; the step was settled with a failure instead", "run", p.c.run, "step", p.c.step,
+		"attempt", p.c.attempt, "deliveries", n, "err", err)
+	return nil
+}
+
+// maxUnrecorded is how many deliveries of a task may fail to record its
+// outcome before the step is settled with a failure (tasks.unrecorded).
+const maxUnrecorded = 3
+
+// maxStoredPayload is what run_events.payload takes, as stored (migration
+// 00438): room for a container step's 1 MB and for what storing adds.
+const maxStoredPayload = 4 << 20
+
+// refused reports whether err is the database refusing the data it was
+// given (a value it cannot store, a constraint, a size limit) rather than
+// being away or busy: the same data would be refused again.
+func refused(err error) bool {
+	var pe *pgconn.PgError
+	if !errors.As(err, &pe) || len(pe.Code) != 5 {
+		return false
+	}
+	switch pe.Code[:2] {
+	case "22", "23", "54": // data exception, integrity constraint violation, program limit exceeded
+		return true
+	}
+	return false
+}
+
+// payloadTooLarge reports whether err is the history refusing a payload
+// for its size.
+func payloadTooLarge(err error) bool {
+	var pe *pgconn.PgError
+	return errors.As(err, &pe) && ((pe.Code == "23514" && pe.ConstraintName == "run_events_payload_check") || pe.Code == "54000")
+}
+
+// countUnrecorded notes on the task that a delivery could not record its
+// outcome, and returns how many have not. Fenced: 0 once the lease is lost.
+func (w *Worker) countUnrecorded(ctx context.Context, c claim) (int, error) {
+	n := 0
+	err := db.InTenantTxRetry(ctx, w.Store.Pool, []uuid.UUID{c.tenant}, false, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `UPDATE tasks SET unrecorded = unrecorded + 1 WHERE id = $1 AND lease_owner = $2 AND lease_epoch = $3 RETURNING unrecorded`,
+			c.task, w.ID, c.epoch).Scan(&n)
+		if errors.Is(err, pgx.ErrNoRows) {
+			n, err = 0, nil
+		}
+		return err
+	})
+	return n, err
+}
+
+// unrecordable is the failure recorded for a step whose own outcome the
+// database refused maxUnrecorded times. It carries nothing of that
+// outcome but the database's short reason.
+func unrecordable(p *plan, cause error) history.Event {
+	why := cause.Error()
+	var pe *pgconn.PgError
+	if errors.As(cause, &pe) {
+		why = pe.Message + " (" + pe.Code + ")"
+	}
+	if len(why) > 300 {
+		why = why[:300]
+	}
+	msg := fmt.Sprintf("the step ran, but its outcome could not be recorded after %d tries: %s", maxUnrecorded, strings.ToValidUTF8(why, ""))
+	if !p.class.IsWrite() {
+		return failed(p.c, KindUnrecordable, msg, "fail")
+	}
+	raw, _ := json.Marshal(history.FailedPayload{Error: history.Error{Kind: KindUnrecordable, Next: "park", MaybeApplied: true,
+		Message: msg + ". The write may have been applied: check with the provider"}})
+	return history.Event{Type: history.StepFailed, StepID: p.c.step, Attempt: p.c.attempt, Payload: raw}
+}
+
+// KindUnrecordable is the error kind of a step settled because its own
+// outcome could not be recorded.
+const KindUnrecordable = "unrecordable"
+
+// record is finish's transaction.
+func (w *Worker) record(ctx context.Context, p *plan, outcome *history.Event) error {
 	return db.InTenantTxRetry(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, true, func(tx pgx.Tx) error {
 		ok, err := w.finishTask(ctx, tx, p.c)
 		if err != nil {
@@ -1033,9 +1224,21 @@ func (w *Worker) finish(ctx context.Context, p *plan, result *history.Event) err
 		if !ok {
 			return nil // fenced out: the task belongs to someone else now
 		}
-		if result == nil {
+		if outcome == nil {
 			return nil
 		}
+		// A copy: this function can run more than once (a failover), and
+		// each pass must start from what the call returned, not from what
+		// the pass before made of it.
+		ev := *outcome
+		result := &ev
+		// The history cannot hold a NUL character (jsonb refuses it): one
+		// in what a provider or a script returned is replaced.
+		raw, err := dropNUL(result.Payload)
+		if err != nil {
+			return err
+		}
+		result.Payload = raw
 		if len(p.scrub) > 0 {
 			// A provider error or a script may repeat a secret (an API key in
 			// a URL, a token echoed back): it is replaced before it is written.
@@ -1136,9 +1339,9 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 		// task for after the deadline without spending a retry.
 		return history.Event{}, errPostpone
 	}
-	field := p.field
-	if field == "" || strings.HasPrefix(field, "header:") {
-		field = "reference"
+	input, err := w.reconcileInput(ctx, p, p.key)
+	if err != nil {
+		return w.secretFailure(p, err), nil
 	}
 	creds, err := w.credentials(ctx, p)
 	if err != nil {
@@ -1153,21 +1356,30 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 	if err != nil {
 		return history.Event{}, err
 	}
-	resp, err := action.Execute(rctx, connector.Request{Input: map[string]any{field: p.key}, Credentials: creds, IdempotencyKey: p.key, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Rotate: w.rotate(p)})
+	resp, err := action.Execute(rctx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, Reconciling: true, Attempt: p.c.attempt, Secrets: p.scrub, Logger: w.stepLogger(p), HTTP: hc, Rotate: w.rotate(p)})
 	switch {
 	case err == nil:
 		return completedEvent(p.c, resp.Output, true), nil
 	case errors.Is(err, connector.ErrNotFound):
+		const gone = "the provider has no record of it, and it is not sent again: the step was stopped"
+		if p.settle {
+			return notApplied(p.c, gone), nil
+		}
 		// Safe to send again, under a new key (contract: idempotency.md).
 		p.group++
 		p.keyIn.AttemptGroup = p.group
-		p.keyFirst = time.Now() // a new key
+		p.keyFirst, p.resend = time.Now(), false // a new key
 		if p.key, err = p.spec.Key(p.keyIn); err != nil {
 			return history.Event{}, err
 		}
 		// Retried only when it certainly did not commit: a second
 		// EffectIntent must never be appended.
-		if err := db.InTenantTxRetry(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, false, func(tx pgx.Tx) error { return w.recordIntent(ctx, tx, p) }); err != nil {
+		err := db.InTenantTxRetry(ctx, w.Store.Pool, []uuid.UUID{p.c.tenant}, false, func(tx pgx.Tx) error { return w.recordIntent(ctx, tx, p) })
+		if errors.Is(err, errCancelled) && p.owes {
+			// Stopped while it was asking: the answer still stands.
+			return notApplied(p.c, gone), nil
+		}
+		if err != nil {
 			return history.Event{}, err
 		}
 		if w.Hooks != nil && w.Hooks.AfterIntent != nil {
@@ -1181,6 +1393,103 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 		return failed(p.c, "retryable", "reconcile: "+err.Error(), "reconcile"), nil
 	}
 	return failed(p.c, "unknown_outcome", "reconcile: "+err.Error(), "park"), nil
+}
+
+// stepLogger is the logger a connector action is handed: the worker's,
+// with the step's secret values (the connection's secret fields, the
+// secrets its input used) taken out of every message and attribute. A
+// step's result is scrubbed of them before it is recorded; what a
+// connector logs goes to the platform's log and must be too.
+func (w *Worker) stepLogger(p *plan) *slog.Logger {
+	if w.Logger == nil {
+		return nil
+	}
+	return slog.New(&scrubHandler{inner: w.Logger.Handler(), secrets: func() []string { return p.scrub }})
+}
+
+// scrubHandler replaces secret values in a record's message and
+// attributes before passing it on.
+type scrubHandler struct {
+	inner   slog.Handler
+	secrets func() []string
+}
+
+func (h *scrubHandler) Enabled(ctx context.Context, l slog.Level) bool {
+	return h.inner.Enabled(ctx, l)
+}
+
+func (h *scrubHandler) Handle(ctx context.Context, r slog.Record) error {
+	secrets := h.secrets()
+	out := slog.NewRecord(r.Time, r.Level, scrubText(r.Message, secrets), r.PC)
+	r.Attrs(func(a slog.Attr) bool {
+		out.AddAttrs(scrubAttr(a, secrets))
+		return true
+	})
+	return h.inner.Handle(ctx, out)
+}
+
+func (h *scrubHandler) WithAttrs(as []slog.Attr) slog.Handler {
+	secrets := h.secrets()
+	clean := make([]slog.Attr, len(as))
+	for i, a := range as {
+		clean[i] = scrubAttr(a, secrets)
+	}
+	return &scrubHandler{inner: h.inner.WithAttrs(clean), secrets: h.secrets}
+}
+
+func (h *scrubHandler) WithGroup(name string) slog.Handler {
+	return &scrubHandler{inner: h.inner.WithGroup(name), secrets: h.secrets}
+}
+
+// scrubAttr is a with the secret values taken out of its value: a group's
+// members each, anything else as the text it would be logged as.
+func scrubAttr(a slog.Attr, secrets []string) slog.Attr {
+	v := a.Value.Resolve()
+	switch v.Kind() {
+	case slog.KindGroup:
+		g := v.Group()
+		clean := make([]slog.Attr, len(g))
+		for i, m := range g {
+			clean[i] = scrubAttr(m, secrets)
+		}
+		return slog.Attr{Key: a.Key, Value: slog.GroupValue(clean...)}
+	case slog.KindBool, slog.KindDuration, slog.KindFloat64, slog.KindInt64, slog.KindTime, slog.KindUint64:
+		return slog.Attr{Key: a.Key, Value: v}
+	}
+	s := v.String()
+	if err, ok := v.Any().(error); ok && err != nil {
+		s = err.Error()
+	}
+	if clean := scrubText(s, secrets); clean != s {
+		return slog.String(a.Key, clean)
+	}
+	return slog.Attr{Key: a.Key, Value: v}
+}
+
+// reconcileInput is what a reconcile action is given (contract:
+// action-classes.md, "Reconcile results"). Where the action puts the
+// engine's key in its body (idempotency.field), that field with the key:
+// the provider is asked for the record under it. Where it does not (no
+// idempotency block, or a header), the key names nothing the provider
+// can be asked for, so the reconcile is given the step's own input (the
+// payment a refund was for), with the key as "reference" unless the
+// input has a reference of its own, and in Request.IdempotencyKey.
+func (w *Worker) reconcileInput(ctx context.Context, p *plan, key string) (map[string]any, error) {
+	if p.field != "" && !strings.HasPrefix(p.field, "header:") {
+		return map[string]any{p.field: key}, nil
+	}
+	in, err := w.resolveSecrets(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	input := map[string]any{}
+	if m, ok := in.(map[string]any); ok {
+		maps.Copy(input, m)
+	}
+	if _, has := input["reference"]; !has {
+		input["reference"] = key
+	}
+	return input, nil
 }
 
 // send performs the effect and classifies the result.
@@ -1244,7 +1553,7 @@ func (w *Worker) send(ctx context.Context, p *plan) history.Event {
 		}
 		var resp connector.Response
 		actx := connector.WithCaller(ctx, connector.Caller{Tenant: p.c.tenant, Run: p.c.run, Step: p.c.step, Environment: p.env})
-		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Dial: dial, Rotate: w.rotate(p)})
+		resp, err = p.conn.Actions[p.action].Execute(actx, connector.Request{Input: input, Credentials: creds, IdempotencyKey: p.key, KeyFirstSent: p.keyFirst, Attempt: p.c.attempt, Secrets: p.scrub, Logger: w.stepLogger(p), HTTP: hc, Dial: dial, Rotate: w.rotate(p)})
 		if err != nil {
 			w.expireRejected(ctx, p, err)
 			return w.classify(p, err)
@@ -1333,15 +1642,30 @@ func (w *Worker) classify(p *plan, err error) history.Event {
 	return history.Event{Type: history.StepFailed, StepID: p.c.step, Attempt: p.c.attempt, Payload: raw}
 }
 
-// resolveSecrets evaluates the secret-only expressions decide left in the input.
+// resolveSecrets evaluates the secret-only expressions decide left in the
+// input, at the places decide recorded and nowhere else. Every other
+// string is data and is sent as it is, whatever it starts with: a value
+// from a trigger or an earlier step may read "=secrets.name", and it must
+// never be looked up.
 func (w *Worker) resolveSecrets(ctx context.Context, p *plan) (any, error) {
-	names := map[string]bool{}
-	collectSecrets(p.sched.Input, names)
-	if len(names) == 0 {
+	places := secretPlaces(p)
+	if len(places) == 0 {
 		return p.sched.Input, nil
 	}
+	names := map[string]bool{}
+	for _, at := range places {
+		v, _ := expr.At(p.sched.Input, at)
+		s, _ := v.(string)
+		r, err := exprEngine.References(s)
+		if !expr.IsExpr(s) || err != nil || !r.Roots["secrets"] {
+			return nil, fmt.Errorf("the step's input has no secret expression at %q", at)
+		}
+		for n := range r.Secrets {
+			names[n] = true
+		}
+	}
 	vals := map[string]any{}
-	for n := range names {
+	for _, n := range slices.Sorted(maps.Keys(names)) {
 		v, err := w.secret(ctx, p, n)
 		if err != nil {
 			return nil, err
@@ -1349,28 +1673,18 @@ func (w *Worker) resolveSecrets(ctx context.Context, p *plan) (any, error) {
 		vals[n] = v
 		p.scrub = append(p.scrub, v)
 	}
-	return exprEngine.Resolve(p.sched.Input, map[string]any{"secrets": vals}, false)
+	return exprEngine.ResolveAt(p.sched.Input, places, map[string]any{"secrets": vals})
 }
 
-func collectSecrets(v any, into map[string]bool) {
-	switch t := v.(type) {
-	case string:
-		if expr.IsExpr(t) {
-			if r, err := exprEngine.References(t); err == nil {
-				for n := range r.Secrets {
-					into[n] = true
-				}
-			}
-		}
-	case map[string]any:
-		for _, c := range t {
-			collectSecrets(c, into)
-		}
-	case []any:
-		for _, c := range t {
-			collectSecrets(c, into)
-		}
+// secretPlaces is where the scheduled input holds its author's secret
+// expressions: the list decide recorded, or, for a task scheduled before
+// decide recorded one, the places of the step as authored that the input
+// still holds unchanged. The input is never searched for expressions.
+func secretPlaces(p *plan) []string {
+	if p.sched.SecretPaths != nil {
+		return p.sched.SecretPaths
 	}
+	return decide.AuthoredSecretPaths(p.step, p.sched)
 }
 
 // ConnectionExpirer marks a connection expired when its provider refused

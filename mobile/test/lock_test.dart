@@ -89,6 +89,37 @@ void main() {
     expect(find.text('The chats'), findsNothing);
   });
 
+  testWidgets('not in front: the screens are covered at once, and shown again on coming back', (t) async {
+    final u = FakeUnlocker();
+    await t.pumpWidget(app(u, DateTime.now));
+    await t.pumpAndSettle();
+    expect(find.text('The chats'), findsOneWidget);
+
+    // The app switcher, a call coming in: before any time has passed.
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await t.pump();
+    expect(find.text('The chats'), findsNothing);
+    expect(find.text('Taskiem is locked'), findsNothing);
+
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await t.pumpAndSettle();
+    expect(find.text('The chats'), findsOneWidget);
+    expect(u.asked, 1, reason: 'a moment away does not ask for the lock');
+  });
+
+  testWidgets('with the lock turned off, the screens are still covered when not in front', (t) async {
+    final u = FakeUnlocker();
+    await t.pumpWidget(TaskiemApp(home: AppLock(active: false, hideWhenAway: true, unlocker: u, child: const Text('The chats'))));
+    await t.pumpAndSettle();
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await t.pump();
+    expect(find.text('The chats'), findsNothing);
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await t.pumpAndSettle();
+    expect(find.text('The chats'), findsOneWidget);
+    expect(u.asked, 0);
+  });
+
   testWidgets('the keyboard coming up does not build the app afresh (typing in a search box locked it)', (t) async {
     var made = 0;
     Widget at(double keys) => MediaQuery(

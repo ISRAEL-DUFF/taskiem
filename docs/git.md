@@ -26,6 +26,22 @@ Both directories are configurable. Definitions are what deploy; keep each `.flow
 
 A workflow removed from the repository is left as it is: Taskiem never deletes on a sync.
 
+## Who made a Git-led version
+
+The maker of a workflow cannot approve its runs ([governance](governance.md)). For a version that Git deployed, the makers are the people behind the commits:
+
+- **whoever pushed or merged**, as the Git host's signed-in account (GitHub's `pusher`, GitLab's `user_email`);
+- **each commit's author and committer** in the push. A merge made on github.com is committed by GitHub itself, so its committer is left out and the person who merged counts as the pusher;
+- **whoever pressed "Deploy now"**, for a sync started by hand.
+
+Every verified push to the connected branch is kept (`git_pushes`), deployed or not, and a sync counts everyone behind every push since the commit Taskiem last deployed from that connection. Each is matched to a member by email. Neither the author of a commit nor whoever merged it can approve a run of the versions it deployed, however the run started.
+
+When someone cannot be matched, the version has an **unknown maker**: a name that is no member's email, a push Taskiem never received, a forced push, a push with more commits than the host lists, the first sync of a connection, or a sync by hand of commits whose pushes were not received. Bitbucket does not send the pusher's email, so its versions always have one. Taskiem then cannot show that an approver is not the maker, so for runs of that version **one approval is not enough: two different people must approve** before the step is decided, whatever count the step or policy asks for, and a person who is the only one able to decide is refused with the reason (the [one-person exception](governance.md#one-person-businesses) does not apply). Versions Git deployed before this rule are treated the same way.
+
+A commit's author is whatever the commit says, so someone could write a colleague's email there. The pusher cannot be faked that way. Protect the branch (pull requests with review, signed commits) if that matters to you.
+
+Approval policies (`policies/<name>.policy.json`) apply to every environment. A repository deploys them only through the connection of `prod` or of an environment with a promotion gate; from any other connection, a policy file that differs from the active policy fails the sync and nothing is deployed.
+
 ## Second person for Git-led connections
 
 A Git-led connection deploys and activates approval policies on its own, with Git review as the second pair of eyes. So when the tenant has four-eyes on (publishing or policies) or the environment is gated, creating a Git-led connection, switching one to Git-led, or changing its provider, `api_url`, repository, branch or paths does not take effect at once: `PUT /v1/git/{env}` answers `202 pending_approval` and the change waits, listed under `requests` in `GET /v1/git`. Another person with `git.manage` (not whoever asked, and not an API key) approves it (`POST /v1/git/{env}/approve`) or rejects it (`POST /v1/git/{env}/reject`), with an optional `comment`. Until then the connection keeps its old settings and credentials; new credentials wait encrypted and are dropped on rejection. API keys cannot ask for such a change. Platform-led connections, new credentials for the same repository and webhook-secret rotation apply at once; a direct change withdraws a waiting one. Every request and decision is audited.

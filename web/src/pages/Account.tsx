@@ -17,7 +17,7 @@ interface Passkey {
 /** What the member types to prove it is them before changing a factor:
  * nothing when they have a passkey (the browser asks for it), else their
  * authenticator code or password. */
-function ProofField({
+export function ProofField({
   to,
   value,
   onChange,

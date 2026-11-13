@@ -160,12 +160,8 @@ func (s *Server) reachStopStart(ctx context.Context, ch chatChannel, channel, ad
 	if !s.Reach.Ready() {
 		return false, nil
 	}
-	word := strings.Trim(strings.ToLower(strings.TrimSpace(text)), "/ .!")
-	if i := strings.IndexByte(word, '@'); i > 0 {
-		word = word[:i] // /stop@bot
-	}
 	l := s.chooseLang(ctx, ch.OwnTenant(), addr, "").Tag
-	switch word {
+	switch reachWord(text) {
 	case "stop", "unsubscribe":
 		name, err := s.Reach.Stop(ctx, channel, addr)
 		if err != nil {
@@ -183,6 +179,86 @@ func (s *Server) reachStopStart(ctx context.Context, ch chatChannel, channel, ad
 		return true, s.waSay(ctx, ch, addr, "", tr(l, "reach.resumed", "business", name))
 	}
 	return false, nil
+}
+
+// reachWord reads a message as the opt-out's words: "stop", "unsubscribe"
+// or "start" ("/stop", "/stop@bot", "STOP."), or "" for anything else.
+func reachWord(text string) string {
+	word := strings.Trim(strings.ToLower(strings.TrimSpace(text)), "/ .!")
+	if i := strings.IndexByte(word, '@'); i > 0 {
+		word = word[:i] // /stop@bot
+	}
+	switch word {
+	case "stop", "unsubscribe", "start":
+		return word
+	}
+	return ""
+}
+
+// memberStopStart is STOP and START from someone with a Taskiem account
+// of their own, who may take another business's updates like anyone
+// else: the opt-out is theirs too. It comes before the conversation,
+// whatever state that is in. STOP stops the business that reached them
+// most recently, as it does for everyone, and drops what they were in the
+// middle of (the conversation's own "stop"); START undoes the latest
+// stop. false when no business reaches them (STOP) or none was stopped
+// (START): the words are then the conversation's.
+func (s *Server) memberStopStart(ctx context.Context, c *chat, user uuid.UUID) (bool, error) {
+	channel := c.ch.Name()
+	if !s.Reach.Ready() || c.in.Type != "text" || (channel != reach.WhatsApp && channel != reach.Telegram) {
+		return false, nil
+	}
+	// A business's own number speaks to its team about its work; those
+	// outside it are its customers there (waUnbound).
+	if c.wa != nil && c.wa.Own() {
+		return false, nil
+	}
+	word := reachWord(c.in.Text)
+	if c.start {
+		word = "start"
+	}
+	switch word {
+	case "stop", "unsubscribe":
+		name, err := s.Reach.Stop(ctx, channel, c.addr)
+		if err != nil || name == "" {
+			return false, err
+		}
+		dropped, err := s.dropSessions(ctx, c, user)
+		if err != nil {
+			return true, err
+		}
+		key := "reach.stopped"
+		if dropped {
+			key = "reach.stopped_dropped"
+		}
+		return true, s.waSay(ctx, c.ch, c.addr, "", c.t(key, "business", name))
+	case "start":
+		name, err := s.Reach.Resume(ctx, channel, c.addr)
+		if err != nil || name == "" {
+			return false, err
+		}
+		return true, s.waSay(ctx, c.ch, c.addr, "", c.t("reach.resumed", "business", name))
+	}
+	return false, nil
+}
+
+// dropSessions drops what the person was in the middle of in this chat,
+// in each of their businesses; true when something was.
+func (s *Server) dropSessions(ctx context.Context, c *chat, user uuid.UUID) (bool, error) {
+	if len(c.tenants) == 0 {
+		return false, nil
+	}
+	ids := make([]uuid.UUID, len(c.tenants))
+	for i, t := range c.tenants {
+		ids[i] = t.ID
+	}
+	dropped := false
+	err := db.InTenantTx(ctx, s.Store.Pool, ids, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `DELETE FROM chat_sessions WHERE tenant_id = ANY ($1) AND number = $2 AND user_id = $3`, ids, c.addr, user)
+		dropped = tag.RowsAffected() > 0
+		return err
+	})
+	return dropped, err
 }
 
 // reachAbout answers anything else from an address that businesses

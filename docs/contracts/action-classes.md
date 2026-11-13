@@ -22,7 +22,7 @@ An unclassified error is treated as `unknown_outcome`, the safe default.
 
 ## Reconcile results
 
-A reconcile action returns `found` (with the provider's record, which becomes the step's output), `not_found` (safe to re-send; `attempt_group` is incremented), or `indeterminate` (park in `needs_reconciliation`).
+A reconcile action is given the engine's key in the action's `idempotency.field`, the reference the provider was sent. Where the action has no such field in its body (no `idempotency` block, or a header), the key names nothing the provider can be asked about, so the reconcile is given the step's own input instead (for a refund, the payment it was for), with the key as `reference` unless the input has a `reference` of its own. A reconcile action returns `found` (with the provider's record, which becomes the step's output), `not_found` (safe to re-send; `attempt_group` is incremented), or `indeterminate` (park in `needs_reconciliation`). A handler is told it runs as a reconcile (`Request.Reconciling`), because the same read may also be an ordinary step: `not_found` is an instruction to send again, so a reconcile whose lookup by the key is not confirmed with the provider answers `indeterminate` when it finds nothing.
 
 ## Call deadlines
 

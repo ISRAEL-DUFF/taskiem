@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { DocThread } from "./Conversation";
 import { Link, useParams } from "react-router-dom";
-import { get, post, put, whenOff } from "../api";
+import { get, post, postOnce, put, whenOff } from "../api";
 import { useAuth } from "../auth";
 import { naira, toKobo } from "../lib/invoices";
 import { daysValue } from "../lib/statements";
@@ -839,6 +839,15 @@ function DraftOrder({
     ),
     note: note.trim(),
   };
+  // One key for each draft as it stands: sent again after a request that
+  // never came back, it is the same order; changed, it is another.
+  const keys = useRef<Record<string, string>>({});
+  const send = async () => {
+    const what = JSON.stringify(body);
+    keys.current[what] ??= `order-${crypto.randomUUID()}`;
+    await postOnce("/v1/trade-orders", keys.current[what], body);
+    onDone();
+  };
   return (
     <Modal title="Draft an order for them" onClose={onClose}>
       <ErrorBox error={links.error ?? act.error} />
@@ -941,10 +950,7 @@ function DraftOrder({
               lines.some((l) => Number.isNaN(whole(l.quantity)))
             }
             onClick={() =>
-              void act.run(
-                async () => (await post("/v1/trade-orders", body), onDone()),
-                "Sent for them to confirm",
-              )
+              void act.run(send, "Sent for them to confirm")
             }
           >
             Send for them to confirm

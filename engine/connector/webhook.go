@@ -101,7 +101,13 @@ type PollSpec struct {
 	Since  string `json:"since"`
 	Items  string `json:"items"`
 	Event  string `json:"event"`
-	Every  string `json:"every"`
+	// Through, optional, is an expression over the action's output: when
+	// the action could not list everything since the time asked, the time
+	// (RFC 3339) up to which it did; absent or null when it listed it all.
+	// The poller then carries on from there on its next tick instead of
+	// moving on to now, so a backlog is read in parts and none is skipped.
+	Through string `json:"through,omitempty"`
+	Every   string `json:"every"`
 }
 
 // Interval is how often to poll (default five minutes).

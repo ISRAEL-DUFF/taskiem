@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/csvsafe"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -59,6 +60,16 @@ func idempotencyKey(r *http.Request) (string, error) {
 		return "api-" + uuid.Must(uuid.NewV7()).String(), nil
 	}
 	if !keyCharset.MatchString(k) {
+		return "", fmt.Errorf("%w: Idempotency-Key is 1 to 255 letters, digits, dashes and underscores", errBadRequest)
+	}
+	return k, nil
+}
+
+// optionalKey is the request's Idempotency-Key when it sent one, "" when
+// it sent none.
+func optionalKey(r *http.Request) (string, error) {
+	k := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if k != "" && !keyCharset.MatchString(k) {
 		return "", fmt.Errorf("%w: Idempotency-Key is 1 to 255 letters, digits, dashes and underscores", errBadRequest)
 	}
 	return k, nil
@@ -796,20 +807,14 @@ func (s *Server) auditRows(r *http.Request, tr tableRows, action string, detail 
 	}
 }
 
-// csvFormulaStart are the first characters spreadsheets read as a formula.
-const csvFormulaStart = "=+-@\t\r"
-
-// csvSafe guards an exported text cell against formula injection (CSV
-// injection): a value a spreadsheet would run as a formula gets a leading
-// apostrophe, which spreadsheets show as text and hide. Only text-like
-// columns: a number stays a number. Import takes the apostrophe off again
+// csvSafe guards an exported text cell against formula injection with the
+// guard every export shares (engine/csvsafe). Only text-like columns: a
+// number stays a number. Import takes the apostrophe off again
 // (csvUnescape), so an export imports back unchanged.
 func csvSafe(colType, v string) string {
 	switch colType {
 	case "text", "phone", "email", "json":
-		if v != "" && strings.ContainsRune(csvFormulaStart, rune(v[0])) {
-			return "'" + v
-		}
+		return csvsafe.Text(v)
 	}
 	return v
 }
@@ -818,9 +823,7 @@ func csvSafe(colType, v string) string {
 func csvUnescape(colType, v string) string {
 	switch colType {
 	case "text", "phone", "email", "json":
-		if len(v) > 1 && v[0] == '\'' && strings.ContainsRune(csvFormulaStart, rune(v[1])) {
-			return v[1:]
-		}
+		return csvsafe.Unguard(v)
 	}
 	return v
 }

@@ -25,6 +25,9 @@ type Payment struct {
 	// credit to a customer's account whose account number or reference
 	// disagrees with what Taskiem registered.
 	HeldReason string `json:"held_reason,omitempty"`
+	// Currency is the money's when it is not naira ("USD"): the amounts
+	// are then in that currency's smallest unit, and nothing counts it.
+	Currency string `json:"currency,omitempty"`
 }
 
 // Unmatched lists the money-in entries matching looked at and left for a
@@ -38,7 +41,7 @@ func Unmatched(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, limit int) ([]P
 	// match, held, or a person matched only part of; never a customer's
 	// credit (money_entry_customers), which counts towards their invoices.
 	rows, err := tx.Query(ctx, `SELECT e.id, e.amount_kobo, taskiem_money_entry_left(e.id), e.channel, e.reference, COALESCE(e.occurred_at, e.recorded_at), e.kind,
-			COALESCE(s.held_reason, '')
+			COALESCE(s.held_reason, ''), CASE WHEN e.currency <> 'NGN' THEN e.currency ELSE '' END
 		FROM money_match_state s JOIN money_entries e ON e.id = s.entry_id
 		WHERE s.tenant_id = $1 AND s.state = 'unmatched'
 		  AND (taskiem_money_entry_left(e.id) > 0 OR e.amount_kobo IS NULL AND taskiem_money_entry_counted(e.id) = 0)
@@ -49,7 +52,7 @@ func Unmatched(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, limit int) ([]P
 	}
 	out, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Payment, error) {
 		var p Payment
-		return p, r.Scan(&p.EntryID, &p.AmountKobo, &p.LeftKobo, &p.Channel, &p.Reference, &p.When, &p.Kind, &p.HeldReason)
+		return p, r.Scan(&p.EntryID, &p.AmountKobo, &p.LeftKobo, &p.Channel, &p.Reference, &p.When, &p.Kind, &p.HeldReason, &p.Currency)
 	})
 	if out == nil {
 		out = []Payment{}

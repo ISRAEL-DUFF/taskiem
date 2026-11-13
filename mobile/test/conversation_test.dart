@@ -138,6 +138,44 @@ void main() {
     expect(ids[0], ids[1], reason: 'a retry is the same message to the server');
   });
 
+  testWidgets('an answer that cannot be read marks the message not sent, with Retry', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final f = Fixture('chat-tunde');
+    var fail = true;
+    final chats = ChatsData(
+      f.auth(also: (req) async {
+        if (req.method == 'POST' && req.url.path.endsWith('/messages')) {
+          final body = jsonDecode(req.body) as Map<String, dynamic>;
+          // A 201 whose body is not the message: reading it throws
+          // something that is neither an ApiError nor Offline.
+          if (fail) return http.Response(jsonEncode({'message': 'not a message'}), 201);
+          return http.Response(
+              jsonEncode({
+                'message': {'id': 'm-new', 'link': _link, 'mine': true, 'kind': 'text', 'body': body['text'], 'created_at': f.at.toIso8601String()},
+              }),
+              201);
+        }
+        return null;
+      }),
+      now: () => f.at,
+    );
+    await t.pumpWidget(app(chats));
+    await settle(t);
+    await t.tap(find.text("Mama Tunde's Market"));
+    await settle(t);
+    await t.enterText(find.byType(EditableText), 'Are you coming?');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Send'));
+    await settle(t);
+    expect(find.bySemanticsLabel(RegExp('^Not sent. It could not be sent')), findsOneWidget);
+    fail = false;
+    await t.tap(find.bySemanticsLabel('Retry'));
+    await settle(t);
+    expect(find.bySemanticsLabel(RegExp('^Not sent')), findsNothing);
+  });
+
   testWidgets('the keyboard up: the message box sits just above it, as on WhatsApp', (t) async {
     t.view.physicalSize = const Size(390, 844);
     t.view.devicePixelRatio = 1;

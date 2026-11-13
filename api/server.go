@@ -217,6 +217,9 @@ type Server struct {
 	// AnchorKey is the public key audit anchors are signed with, published
 	// to tenants so they can check anchors themselves.
 	AnchorKey ed25519.PublicKey
+	// RetiredAnchorKeys are earlier anchor keys' public halves: anchors
+	// made before the key was changed verify with them.
+	RetiredAnchorKeys []ed25519.PublicKey
 	// WhatsApp is the platform number (spec 11); nil turns the channel off.
 	WhatsApp *whatsapp.Platform
 	// WhatsAppPublic answers numbers bound to no one; nil sends how to link.
@@ -390,8 +393,10 @@ func (s *Server) Handler() http.Handler {
 			r.Put("/me/passkey-only", s.setPasskeyOnly) // only sign in with my passkey (passkey_rule.go)
 			r.Post("/me/email/verify", s.verifyEmail)
 			r.Post("/me/email/verify/resend", s.resendVerification)
-			r.Post("/me/email", s.addEmail)       // Add your email (chat_doors.go)
-			r.Post("/me/chat-link", s.linkChat)   // a chat linked by an emailed link (chat_doors.go)
+			r.Post("/me/email", s.addEmail)     // Add your email (chat_doors.go)
+			r.Post("/me/chat-link", s.linkChat) // a chat linked by an emailed link (chat_doors.go)
+			r.Post("/me/chat-link/preview", s.previewChatLink)
+			r.Post("/me/chat-link/refuse", s.refuseChatLink)
 			r.Get("/onboarding", s.getOnboarding) // the getting-started checklist (onboarding.go)
 			r.With(s.need(PermWorkflowEdit)).Post("/onboarding/dismiss", s.dismissOnboarding)
 			r.Route("/agent", s.agentRoutes) // field agents' own work (agents.go)

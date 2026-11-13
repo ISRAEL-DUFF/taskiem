@@ -24,7 +24,7 @@ Lenco is a Nigerian business bank. The connector is `connectors/lenco` (`lenco@1
 
 **Amounts.** Taskiem amounts are kobo. Lenco takes and returns naira as decimal strings (`"2000.00"`); the connector converts exactly, and an amount it cannot read exactly is an error, never a zero. Fees round up to the kobo. Virtual-account `amount`/`min_amount` are sent as naira numbers: Lenco's reference types them as numbers and does not state the unit, so check them in the sandbox before relying on them.
 
-**Never twice.** The engine's key is the transfer `reference`. Lenco refuses a reference it has seen ("Duplicate client reference", code 04); the connector then fetches the transfer by reference and reports it, so a resend after a lost response returns the original transfer. A transfer Lenco reports `failed` fails the step with Lenco's `reasonForFailure` (nothing moved). `declined` is not explained in Lenco's documentation, so it parks the step for a person.
+**Never twice.** The engine's key is the transfer `reference`. Lenco refuses a reference it has seen ("Duplicate client reference", code 04); the connector then fetches the transfer by reference and reports it, so a resend after a lost response returns the original transfer. Refused as a duplicate yet not found by reference: the outcome stays unknown (the engine tries the same reference again, and parks the step if that never settles it); it is not reported as failed. A transfer Lenco reports `failed` fails the step with Lenco's `reasonForFailure` (nothing moved). `declined` is not explained in Lenco's documentation, so it parks the step for a person.
 
 ## Webhooks
 

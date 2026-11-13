@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -201,6 +203,9 @@ type chat struct {
 	lang langChoice
 	// note goes before the next reply (a voice note's transcript).
 	note string
+	// start is Telegram's "/start" with nothing after it, read as "help"
+	// unless it resumes a business's updates (memberStopStart).
+	start bool
 	// areaState is which parts of Taskiem the business uses, read once for
 	// a message (chatAreas).
 	areaState areas.State
@@ -231,9 +236,13 @@ type chatData struct {
 	Index       int            `json:"index,omitempty"`
 	Inputs      map[string]any `json:"inputs,omitempty"` // personal fields sealed
 	Nonce       string         `json:"nonce,omitempty"`  // the start's idempotency key
-	Run         uuid.UUID      `json:"run,omitempty"`
-	Step        string         `json:"step,omitempty"`
-	Decision    string         `json:"decision,omitempty"`
+	// Ask names what is waiting for an answer, new each time the session
+	// is saved: a Yes button carries it (yesButton), so a Yes shown under
+	// an earlier summary confirms nothing.
+	Ask      string    `json:"ask,omitempty"`
+	Run      uuid.UUID `json:"run,omitempty"`
+	Step     string    `json:"step,omitempty"`
+	Decision string    `json:"decision,omitempty"`
 	// Flow is the hex SHA-256 of the flow token of the inputs Flow sent,
 	// while the inputs are collected by a WhatsApp form.
 	Flow string `json:"flow,omitempty"`
@@ -330,7 +339,20 @@ func (s *Server) waHandle(ctx context.Context, wa *whatsapp.Platform, in whatsap
 		return err
 	}
 	if user == uuid.Nil {
-		return s.waUnbound(ctx, wa, number, in)
+		return s.waUnbound(ctx, wa, number, in, false)
+	}
+	// A business's own number: someone with a Taskiem account who is not
+	// on its team is there what anyone else is, a customer (or a rider, a
+	// supplier), with no roles; nothing of their own businesses is reached
+	// from that number.
+	if wa.Own() {
+		tenants, err := s.tenantsOf(ctx, user)
+		if err != nil {
+			return err
+		}
+		if !slices.ContainsFunc(tenants, func(t tenantRef) bool { return t.ID == wa.Tenant }) {
+			return s.waUnbound(ctx, wa, number, in, true)
+		}
 	}
 	return s.converse(ctx, &chat{ch: wa, wa: wa, addr: number, in: in}, user)
 }
@@ -350,6 +372,12 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if l, ok := ch.(interface{ linkedTenants() []uuid.UUID }); ok {
 		linked := l.linkedTenants()
 		c.tenants = slices.DeleteFunc(c.tenants, func(t tenantRef) bool { return !slices.Contains(linked, t.ID) })
+	}
+	// STOP and START to the businesses whose updates the person takes
+	// (reach.go): theirs to say whatever else is going on, before
+	// anything of their own businesses.
+	if done, err := s.memberStopStart(ctx, c, user); done || err != nil {
+		return err
 	}
 	// A dormant binding acts on nothing until it is proven again
 	// (chat_dormant.go).
@@ -393,6 +421,8 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	}
 	if wa := c.wa; wa != nil && wa.Own() {
 		// A tenant's own number speaks for that tenant only.
+		// Only its team gets this far (waHandle): anyone else is a
+		// customer there.
 		i := slices.IndexFunc(c.tenants, func(t tenantRef) bool { return t.ID == wa.Tenant })
 		if i < 0 {
 			return s.waSay(ctx, wa, number, "", c.t("wa.not_member"))
@@ -453,6 +483,17 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	}
 	if err := s.loadSession(ctx, c); err != nil {
 		return err
+	}
+	// A tapped Yes names the summary it was shown under: one from under
+	// an earlier summary confirms nothing, whatever is waiting now.
+	if yes, stale := staleYes(in.Reply, c.data.Ask); yes {
+		if stale || c.state == stateIdle {
+			if c.state == stateIdle {
+				return c.say(ctx, s, c.t("wa.yes_stale_none"))
+			}
+			return c.say(ctx, s, c.t("wa.yes_stale"))
+		}
+		in.Reply, c.in.Reply = "yes", "yes"
 	}
 	// Chat tools: the switch, and "@Taskiem" taken off (chat_tools.go).
 	if err := s.chatToolsRead(ctx, c); err != nil {
@@ -522,14 +563,16 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 
 // waUnbound answers a number bound to no one: the code it was sent, if it
 // sends that back; a tenant's public menu on its own number; or how to
-// link it.
-func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number string, in whatsapp.Inbound) error {
+// link it. guest is a number that is bound, writing to the own number of
+// a business its person is not on the team of: a customer, a rider or a
+// supplier there like any other number, never linked or signed up again.
+func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number string, in whatsapp.Inbound, guest bool) error {
 	text := ""
 	if in.Type == "text" {
 		text = in.Text
 	}
 	l := s.chooseLang(ctx, wa.Tenant, number, text).Tag
-	if m := sixDigits.FindStringSubmatch(in.Text); m != nil {
+	if m := sixDigits.FindStringSubmatch(in.Text); m != nil && !guest {
 		var user *uuid.UUID
 		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_wa_otp_user_for($1, $2)`, number, m[1]).Scan(&user); err != nil {
 			return err
@@ -544,6 +587,26 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	// A rider's photo or location at the door (dispatch.go).
 	if done, err := s.riderMedia(ctx, &chat{ch: wa, wa: wa, addr: number, in: in}, reach.WhatsApp); done || err != nil {
 		return err
+	}
+	// "Stop" typed to an invitation declines it, as its button does
+	// (chat_invites.go); the reach book's STOP would otherwise answer
+	// first and leave it waiting. The latest business's updates stop too,
+	// when there are any: STOP is never less than the opt-out.
+	if !wa.Own() && !guest && normalizeCommand(text) == "stop" {
+		declined, err := s.chatInviteMessage(ctx, &inviteChat{ch: wa, addr: number, lang: l}, text, "")
+		if err != nil {
+			return err
+		}
+		if declined {
+			if !s.Reach.Ready() {
+				return nil
+			}
+			name, err := s.Reach.Stop(ctx, reach.WhatsApp, number)
+			if err != nil || name == "" {
+				return err
+			}
+			return s.waSay(ctx, wa, number, "", tr(l, "reach.stopped", "business", name))
+		}
 	}
 	// A customer's STOP or START on the business's own number
 	// (customer_chat.go), before the reach book's.
@@ -585,8 +648,10 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	// Signing up from chat (chat_signup.go): a sign-up under way, a word
 	// or button that starts one.
 	sc := &signupChat{ch: wa, addr: number, lang: l}
-	if done, err := s.chatSignupMessage(ctx, sc, text, in.Reply); done || err != nil {
-		return err
+	if !guest {
+		if done, err := s.chatSignupMessage(ctx, sc, text, in.Reply); done || err != nil {
+			return err
+		}
 	}
 	if wa.Own() {
 		// The public menu answers a customer who asks for it (its word,
@@ -611,6 +676,11 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	if !s.limiter("wa-unbound:"+number, 10*time.Minute, 2).Allow() {
 		return nil
 	}
+	if guest {
+		// A rider or supplier of the business whose words were none of
+		// theirs: their account's businesses are not reached from here.
+		return s.waSay(ctx, wa, number, "", tr(l, "wa.not_member"))
+	}
 	if s.signupOn(wa) {
 		return s.signupOffer(ctx, sc, text)
 	}
@@ -632,7 +702,39 @@ func (c *chat) say(ctx context.Context, s *Server, text string, buttons ...whats
 	if c.note != "" {
 		text, c.note = c.note+"\n\n"+text, ""
 	}
+	// A Yes is for what is waiting as it is shown, and nothing later.
+	if c.data.Ask != "" {
+		for i, b := range buttons {
+			if b.ID == "yes" {
+				buttons = slices.Clone(buttons)
+				buttons[i].ID = yesPrefix + c.data.Ask
+				break
+			}
+		}
+	}
 	return s.waSay(ctx, c.ch, c.addr, c.tenant.Name, text, buttons...)
+}
+
+// yesPrefix starts a Yes button's id; what follows names the summary it
+// was shown under (chatData.Ask, or a public session's).
+const yesPrefix = "yes:"
+
+// newAsk is a fresh name for what a session waits on.
+func newAsk() string {
+	b := make([]byte, 9)
+	_, _ = rand.Read(b)
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// staleYes reads a tapped Yes: stale when it was shown under something
+// other than what is waiting now. A typed yes, and a button from before
+// buttons carried a name, are for what is waiting.
+func staleYes(reply, ask string) (yes, stale bool) {
+	tok, ok := strings.CutPrefix(reply, yesPrefix)
+	if !ok {
+		return false, false
+	}
+	return true, ask == "" || subtle.ConstantTimeCompare([]byte(tok), []byte(ask)) != 1
 }
 
 // loadSession reads the number's session in its current tenant; an
@@ -655,6 +757,9 @@ func (s *Server) loadSession(ctx context.Context, c *chat) error {
 
 // saveSession stores the session's state; idle removes it.
 func (s *Server) saveSession(ctx context.Context, c *chat, state string, data chatData, ttl time.Duration) error {
+	if state != stateIdle {
+		data.Ask = newAsk()
+	}
 	c.state, c.data = state, data
 	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) error {
 		if state == stateIdle {

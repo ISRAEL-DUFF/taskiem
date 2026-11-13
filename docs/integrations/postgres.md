@@ -11,6 +11,8 @@ The connector is `connectors/postgres` (`postgres@1`).
 
 Both take `sql` and an optional `params` array (`$1`, `$2`, ...). Values travel separately from the SQL text. Every statement has a 30-second `statement_timeout`. Each step opens its own connection and closes it when the step ends.
 
+**Numbers.** Integer columns are integers. A `NUMERIC` / `DECIMAL` value with no fraction is an integer (a decimal string when it does not fit 64 bits); one with a fraction is a **string**, exactly as stored (`"12.50"`), as the MySQL connector gives it: money is never rounded through a float. Turn it into a number in the workflow only where rounding does not matter. `NaN` is the string `"NaN"`. `REAL` and `DOUBLE PRECISION` are numbers.
+
 ## Creating the connection
 
 | Field | Required | Notes |

@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -529,6 +531,12 @@ func (s *Server) gitHook(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusAccepted, map[string]any{"ignored": "platform-led: pushes do not deploy"})
 		return
 	}
+	// Who is behind the push, kept whether or not it deploys: a later push
+	// deploys this one's commits too.
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error { return recordPush(ctx, tx, tenant, env, push) }); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	// A push deploys only while it is the branch head, so an old delivery
 	// sent again cannot roll the environment back; and each delivery is
 	// taken once.
@@ -583,6 +591,98 @@ func deliveryID(h http.Header) string {
 		}
 	}
 	return ""
+}
+
+// recordPush keeps the people behind a verified push. A commit delivered
+// again keeps the fuller account: more people, and complete only if every
+// delivery was.
+func recordPush(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, env string, push *gitprovider.Push) error {
+	people := push.People
+	if people == nil {
+		people = []gitprovider.Person{}
+	}
+	raw, err := json.Marshal(people)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO git_pushes (tenant_id, environment, commit, before, people, complete) VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (tenant_id, environment, commit) DO UPDATE SET people = git_pushes.people || EXCLUDED.people,
+			complete = git_pushes.complete AND EXCLUDED.complete AND git_pushes.before = EXCLUDED.before`,
+		tenant, env, push.Commit, push.Before, raw, push.Complete)
+	return err
+}
+
+// gitMakersHops bounds the walk back through pushes to the last deploy.
+const gitMakersHops = 200
+
+// gitMakers works out who made what a sync of commit deploys: the people
+// behind every push since the commit Taskiem last deployed from this
+// connection, and whoever asked for the sync by hand. unknown says they
+// are not all accounted for: a push was never received, was forced or cut
+// short, or names someone whose email is no member's. Matching a name to
+// a member only ever adds a maker, so any member's email counts.
+// A commit's author is whatever the commit says; the pusher is the Git
+// host's signed-in account.
+func gitMakers(ctx context.Context, tx pgx.Tx, sync uuid.UUID, env, commit, requestedBy string) (makers []uuid.UUID, unknown bool, err error) {
+	seen := map[uuid.UUID]bool{}
+	add := func(id uuid.UUID) {
+		if !seen[id] {
+			seen[id] = true
+			makers = append(makers, id)
+		}
+	}
+	if requestedBy != "webhook" {
+		var human string
+		if err := tx.QueryRow(ctx, `SELECT taskiem_actor_human($1)`, requestedBy).Scan(&human); err != nil {
+			return nil, false, err
+		}
+		if id, err := uuid.Parse(human); err == nil {
+			add(id)
+		}
+	}
+	var base string
+	err = tx.QueryRow(ctx, `SELECT commit FROM git_syncs WHERE environment = $1 AND id <> $2 AND status IN ('deployed', 'unchanged') AND commit <> ''
+		ORDER BY finished_at DESC LIMIT 1`, env, sync).Scan(&base)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, err
+	}
+	for at, hops := commit, 0; at != base || base == ""; hops++ {
+		var before string
+		var raw []byte
+		var complete bool
+		err := tx.QueryRow(ctx, `SELECT before, people, complete FROM git_pushes WHERE environment = $1 AND commit = $2`, env, at).Scan(&before, &raw, &complete)
+		if errors.Is(err, pgx.ErrNoRows) || hops >= gitMakersHops {
+			return makers, true, nil
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		var people []gitprovider.Person
+		if err := json.Unmarshal(raw, &people); err != nil {
+			return nil, false, err
+		}
+		if len(people) == 0 {
+			unknown = true
+		}
+		for _, p := range people {
+			var id uuid.UUID
+			err := tx.QueryRow(ctx, `SELECT u.id FROM users u JOIN memberships m ON m.user_id = u.id
+				WHERE $1 <> '' AND lower(u.email) = $1 LIMIT 1`, p.Email).Scan(&id)
+			switch {
+			case errors.Is(err, pgx.ErrNoRows):
+				unknown = true
+			case err != nil:
+				return nil, false, err
+			default:
+				add(id)
+			}
+		}
+		if !complete || before == "" {
+			return makers, true, nil
+		}
+		at = before
+	}
+	return makers, unknown, nil
 }
 
 func (s *Server) queueSync(ctx context.Context, tenant uuid.UUID, env, commit, by string) (uuid.UUID, error) {
@@ -765,10 +865,10 @@ func auditSystem(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, actor, action
 
 func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, lease time.Time, rep *syncReport) (string, error) {
 	var conn gitConnection
-	var commit string
+	var commit, requestedBy string
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var env string
-		if err := tx.QueryRow(ctx, `SELECT environment, commit FROM git_syncs WHERE id = $1`, id).Scan(&env, &commit); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT environment, commit, requested_by FROM git_syncs WHERE id = $1`, id).Scan(&env, &commit, &requestedBy); err != nil {
 			return err
 		}
 		var err error
@@ -885,6 +985,35 @@ func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, lease time.Time
 		}
 	}
 	rep.Tests = tests
+	// Approval policies are tenant-wide: one from this repository would
+	// govern every environment's approvals. So only the connection of prod,
+	// or of a gated environment, may change one.
+	if len(policies) > 0 {
+		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			var gated bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM environments WHERE name = $1 AND promotion_from IS NOT NULL)`, conn.Environment).Scan(&gated); err != nil {
+				return err
+			}
+			if conn.Environment == "prod" || gated {
+				return nil
+			}
+			for _, name := range slices.Sorted(maps.Keys(policies)) {
+				var current []byte
+				err := tx.QueryRow(ctx, `SELECT document FROM approval_policies WHERE name = $1 AND state = 'active'`, name).Scan(&current)
+				if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+					return err
+				}
+				if current == nil || !sameJSON(current, policies[name]) {
+					rep.Problems = append(rep.Problems, fmt.Sprintf("%s/%s.policy.json: approval policies apply to every environment, so they deploy only from the repository connected to prod or to an environment with a promotion gate, not from %s",
+						policiesDir, name, conn.Environment))
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return "", err
+		}
+	}
 	if len(rep.Problems) > 0 || tests.Failed > 0 {
 		return "failed", nil
 	}
@@ -905,6 +1034,10 @@ func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, lease time.Time
 			return err
 		}
 		actor := "git:" + conn.Environment
+		makers, makerUnknown, err := gitMakers(ctx, tx, id, conn.Environment, snap.Commit, requestedBy)
+		if err != nil {
+			return err
+		}
 		// Policies first: the workflows' checks need them active. Review
 		// in Git stands in for four-eyes on these edits.
 		names := make([]string, 0, len(policies))
@@ -971,7 +1104,7 @@ func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, lease time.Time
 					VALUES ($1, $2, $3, $4, $5, (SELECT id FROM workspaces WHERE tenant_id = $2 ORDER BY created_at LIMIT 1))`, wf, tenant, name, uuid.Nil, d.path); err != nil {
 					return err
 				}
-				if err := insertVersionTx(ctx, tx, tenant, wf, 1, doc, nil, actor, snap.Commit); err != nil {
+				if err := insertMadeVersionTx(ctx, tx, tenant, wf, 1, doc, nil, actor, snap.Commit, makers, makerUnknown); err != nil {
 					return err
 				}
 				note.Action, note.Version = "created", 1
@@ -989,7 +1122,7 @@ func (s *Server) sync(ctx context.Context, tenant, id uuid.UUID, lease time.Time
 				note.Version, note.Action = latest, "unchanged"
 				if !sameJSON(latestDef, doc) {
 					note.Version, note.Action = latest+1, "published"
-					if err := insertVersionTx(ctx, tx, tenant, wf, latest+1, doc, nil, actor, snap.Commit); err != nil {
+					if err := insertMadeVersionTx(ctx, tx, tenant, wf, latest+1, doc, nil, actor, snap.Commit, makers, makerUnknown); err != nil {
 						return err
 					}
 				}

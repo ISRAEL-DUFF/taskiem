@@ -250,7 +250,7 @@ PostgreSQL is the queue in v1, which removes a moving part and keeps events and 
 - A claim sets a lease (default 60 s) and increments the task's `lease_epoch`, which the worker carries as a fencing token. Long steps heartbeat to extend the lease; an expired lease makes the task claimable again.
 - **Fencing.** Every write a worker makes for a task (`StepStarted`, `EffectIntent`, `StepCompleted`, `StepFailed`, heartbeats) runs `UPDATE tasks … WHERE id = $1 AND lease_epoch = $2 AND lease_owner = $3` in the same transaction. If no row matches, the lease was lost: the transaction rolls back, the worker abandons the step, and its result is discarded. A stalled worker that wakes after its lease expired can therefore never record a result over the worker that replaced it.
 - Claiming is cross-tenant, so it runs through the narrow dispatch path in section 5.3, not as an ordinary tenant-scoped query.
-- `LISTEN/NOTIFY` wakes idle workers instantly; polling every 1 s is the fallback.
+- `LISTEN/NOTIFY` wakes idle workers; polling every 1 s is the fallback. The notification is sent after the scheduling transaction has committed, by one notifier in each process and at most once every 10 ms for a queue, not inside the transaction: Postgres commits transactions that have notified one at a time ([decision 0067](../decisions/0067-wake-ups-leave-the-transaction.md), [task wake-ups](task-wake-ups.md)). Workers in the scheduling process are woken in memory.
 - Tasks carry `tenant_id` and a queue name, so tenants and workload classes (connector calls, code sandbox, AI) can get dedicated worker pools.
 - **Postgres is the queue by design, not as a stopgap.** A task row is written in the same transaction as the event that schedules it, and a worker records its result and the next decision in one transaction too. That is what makes a lost step or an orphaned task impossible, and it is why there is no interface to swap: a separate queue (NATS JetStream or any other) cannot join a Postgres transaction. Moving off Postgres would mean a redesign of dispatch, not a configuration change: tasks written to an outbox table with the event, a relay publishing them, and fencing and deduplication rebuilt against the new queue. Before that, in order: tune the primary, a larger primary, the read replica for lists and dashboards, dedicated worker pools for heavy tenants (decision 0024), and moving a large tenant to its own database. The G0 spike sustained 500 steps/s and peaked at 1,302 on 4 vCPUs (decision 0002); load tests on production-sized hardware set the real ceiling.
 
@@ -285,9 +285,10 @@ Automatic retries keep the same `attempt_group`, so every retry of one logical e
 
 ### 4.5 Retries and errors
 
-- Errors are classified as `retryable` (timeouts before send, 429 and 503 honouring `Retry-After`), `fatal` (validation, 4xx auth), or `unknown_outcome` (connection dropped after send, and 500/502/504, after which the provider may have acted). A write that failed with an unknown outcome parks for an operator, rather than failing, if its retries run out.
+- Errors are classified as `retryable` (timeouts before send, 429 and 503 honouring `Retry-After`), `fatal` (validation, 4xx auth), or `unknown_outcome` (connection dropped after send, and 500/502/504, after which the provider may have acted). A write that failed with an unknown outcome parks for an operator, rather than failing, if its retries run out or a later attempt is refused for good.
 - Per-step policy: max attempts, backoff (fixed or exponential with jitter computed from the run id, keeping replay deterministic), and a max total duration.
 - Exhausted retries route to the step's `on_error` path if declared, else fail the run and start compensation.
+- Once a step has failed for good, the steps beside it are not retried: one that never reached a provider is given up. One whose write has an unknown outcome is settled first (reconciled, or sent again under the same key, never under a new one) and then reversed with the rest, or parked. A failing run does not end while a step is parked.
 
 ### 4.6 Timers, signals, and approvals
 
@@ -317,7 +318,7 @@ PII values are never stored in plaintext in either place. Before an event is wri
 
 - **Replay** re-runs the orchestrator over the history to reconstruct state; it executes no effects.
 - **Fork from step** creates a new run that copies history up to a chosen step and continues from there on a newer WD version. This is the repair path for failed runs.
-- **Cancel** appends `RunCancelled`, revokes pending tasks, and runs compensation if configured. *As built* ([decision 0054](../decisions/0054-cancel-reverses-the-run.md)): cancel records `CancelRequested`; the orchestrator withdraws unfinished steps, waits for writes already under way, runs the completed steps' compensations newest first, then appends `RunCancelled`. Cancelling with `reverse: false` appends `RunCancelled` at once and compensates nothing.
+- **Cancel** appends `RunCancelled`, revokes pending tasks, and runs compensation if configured. *As built* ([decision 0054](../decisions/0054-cancel-reverses-the-run.md)): cancel records `CancelRequested`; the orchestrator withdraws unfinished steps, waits for writes already under way, runs the completed steps' compensations newest first, then appends `RunCancelled`. A cancelled step whose write has an unknown outcome is settled before the run ends, as in a failing run (4.5). Cancelling with `reverse: false` appends `RunCancelled` at once and compensates nothing; a task that has sent nothing by then sends nothing after.
 
 ### 4.11 Initial performance targets
 

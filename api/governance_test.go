@@ -78,7 +78,8 @@ func TestPolicyLevelsStepUpAndDelegation(t *testing.T) {
 		t.Fatalf("without step-up: %d %v", status, body)
 	}
 	alice := enrol(t, c["alice"])
-	res := c["alice"].must(200, "POST", path, map[string]any{"decision": "approved", "totp": codeAfter(alice, 1)})
+	aliceCode := codeAfter(alice, 1)
+	res := c["alice"].must(200, "POST", path, map[string]any{"decision": "approved", "totp": aliceCode})
 	if res["status"] != "open" || res["level"] != float64(2) {
 		t.Fatalf("after level 1: %v", res)
 	}
@@ -93,8 +94,14 @@ func TestPolicyLevelsStepUpAndDelegation(t *testing.T) {
 	code := codeAfter(bob, 1)
 	c["bob"].must(200, "POST", path, map[string]any{"decision": "approved", "totp": code})
 	status, _ = c["bob"].do("POST", path, map[string]any{"decision": "approved", "totp": code})
-	if status != 403 {
-		t.Errorf("a replayed code: %d", status)
+	if status != 409 {
+		t.Errorf("a second vote: %d", status)
+	}
+	// A code that was spent does not work on another approval either.
+	other := owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"amount": 5000000}})["run_id"].(string)
+	status, body = c["alice"].do("POST", "/v1/approvals/"+other+"/ok", map[string]any{"decision": "approved", "totp": aliceCode})
+	if status != 403 || body["step_up"] != "totp" {
+		t.Errorf("a replayed code: %d %v", status, body)
 	}
 
 	// Carol is away: she delegates head_of_credit to Dave for a week.
@@ -241,5 +248,30 @@ func TestFourEyesOnPublishingAndPolicies(t *testing.T) {
 		if !strings.Contains(audit, a) {
 			t.Errorf("audit lacks %s", a)
 		}
+	}
+}
+
+// A vote that would be refused anyway does not use up the approver's
+// authenticator code: eligibility is checked before the proof is spent.
+func TestRefusedVoteKeepsTheStepUpCode(t *testing.T) {
+	w := newWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	alice := addMember(t, w, owner, "alice", "approver", "credit_officer")
+	dave := addMember(t, w, owner, "dave", "approver")
+	owner.must(201, "PUT", "/v1/policies/high_value", map[string]any{"document": json.RawMessage(highValuePolicy)})
+	wf := publishFlow(t, owner, policyFlow)
+	run := owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"amount": 5000000}})["run_id"].(string)
+	path := "/v1/approvals/" + run + "/ok"
+
+	// Dave lacks the role: refused, whatever code he sends.
+	code := codeAfter(enrol(t, dave), 1)
+	if st, body := dave.do("POST", path, map[string]any{"decision": "approved", "totp": code}); st != 403 || body["step_up"] != nil {
+		t.Fatalf("without the role: %d %v", st, body)
+	}
+	// Alice hands him the role: the same code still works.
+	alice.must(201, "POST", "/v1/delegations", map[string]any{"to": "dave@acme.test", "roles": []string{"credit_officer"},
+		"ends_at": time.Now().Add(time.Hour), "reason": "leave"})
+	if st, body := dave.do("POST", path, map[string]any{"decision": "approved", "totp": code}); st != 200 {
+		t.Errorf("the refused vote used up the code: %d %v", st, body)
 	}
 }

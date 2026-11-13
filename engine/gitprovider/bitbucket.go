@@ -218,6 +218,10 @@ func (b *bitbucket) VerifyPush(h http.Header, body []byte, secret string) (*Push
 		return nil, nil
 	}
 	var p struct {
+		Actor struct {
+			Nickname  string `json:"nickname"`
+			AccountID string `json:"account_id"`
+		} `json:"actor"`
 		Push struct {
 			Changes []struct {
 				// New is null when the branch was deleted.
@@ -228,6 +232,19 @@ func (b *bitbucket) VerifyPush(h http.Header, body []byte, secret string) (*Push
 						Hash string `json:"hash"`
 					} `json:"target"`
 				} `json:"new"`
+				// Old is null when the branch was created.
+				Old *struct {
+					Target struct {
+						Hash string `json:"hash"`
+					} `json:"target"`
+				} `json:"old"`
+				Forced    bool `json:"forced"`
+				Truncated bool `json:"truncated"`
+				Commits   []struct {
+					Author struct {
+						Raw string `json:"raw"` // "Name <email>"
+					} `json:"author"`
+				} `json:"commits"`
 			} `json:"changes"`
 		} `json:"push"`
 	}
@@ -241,11 +258,29 @@ func (b *bitbucket) VerifyPush(h http.Header, body []byte, secret string) (*Push
 		if c.New == nil || c.New.Type != "branch" {
 			continue // a deleted branch, or a tag
 		}
+		push := &Push{Branch: c.New.Name, Commit: c.New.Target.Hash}
+		if c.Old != nil {
+			push.Before = c.Old.Target.Hash
+		}
+		// Bitbucket names the account that pushed, but not its email.
+		login := p.Actor.Nickname
+		if login == "" {
+			login = p.Actor.AccountID
+		}
+		push.People = addPerson(push.People, "pusher", "", login)
+		for _, cm := range c.Commits {
+			email := ""
+			if i, j := strings.LastIndex(cm.Author.Raw, "<"), strings.LastIndex(cm.Author.Raw, ">"); i >= 0 && j > i {
+				email = cm.Author.Raw[i+1 : j]
+			}
+			push.People = addPerson(push.People, "author", email, "")
+		}
+		push.Complete = !c.Forced && !c.Truncated && len(c.Commits) > 0
 		if c.New.Name == b.c.Branch {
-			return &Push{Branch: c.New.Name, Commit: c.New.Target.Hash}, nil
+			return push, nil
 		}
 		if out == nil {
-			out = &Push{Branch: c.New.Name, Commit: c.New.Target.Hash}
+			out = push
 		}
 	}
 	return out, nil

@@ -786,7 +786,22 @@ func checkBacklog(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, l Limits) er
 
 // CheckCount refuses creating one more of something a tenant has max of
 // (workflows, secrets, connections); max 0 is no limit.
+//
+// Call it in the transaction that creates the thing. It holds a lock on
+// the limit and its first argument (the tenant) until that transaction
+// ends, so creates made at the same moment are counted one after another:
+// with room for one more, one is made and the rest are refused. A check
+// in a transaction of its own is only an early answer.
 func CheckCount(ctx context.Context, tx pgx.Tx, limit, from string, max int, args ...any) error {
+	if max > 0 {
+		scope := ""
+		if len(args) > 0 {
+			scope = fmt.Sprint(args[0])
+		}
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('limit ' || $1 || ' ' || $2, 0))`, scope, limit); err != nil {
+			return err
+		}
+	}
 	n, err := countUpTo(ctx, tx, from, max, args...)
 	if err != nil {
 		return err

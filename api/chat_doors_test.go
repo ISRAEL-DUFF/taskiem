@@ -73,14 +73,14 @@ func TestChatLinkByEmail(t *testing.T) {
 	}
 	token := m[1]
 	// Another account cannot use it, and that does not spend it.
-	if st, out := bob.do("POST", "/v1/me/chat-link", map[string]any{"token": token}); st != 400 {
+	if st, out := bob.do("POST", "/v1/me/chat-link", map[string]any{"token": token, "password": testPassword}); st != 400 {
 		t.Fatalf("another account: %d %v", st, out)
 	}
 	if u, _ := w.wa.UserOf(ctx, number); u != uuid.Nil {
 		t.Fatal("linked before the link was opened")
 	}
 	before := len(w.graph.Sent(number))
-	if out := ada.must(200, "POST", "/v1/me/chat-link", map[string]any{"token": token}); out["channel"] != "whatsapp" {
+	if out := ada.must(200, "POST", "/v1/me/chat-link", map[string]any{"token": token, "password": testPassword}); out["channel"] != "whatsapp" {
 		t.Fatalf("link: %v", out)
 	}
 	w.srv.WaitBackground()
@@ -91,7 +91,7 @@ func TestChatLinkByEmail(t *testing.T) {
 	if u, _ := w.wa.UserOf(ctx, number); u != adaID {
 		t.Fatalf("the number is %v's, want ada's", u)
 	}
-	if st, _ := ada.do("POST", "/v1/me/chat-link", map[string]any{"token": token}); st != 400 {
+	if st, _ := ada.do("POST", "/v1/me/chat-link", map[string]any{"token": token, "password": testPassword}); st != 400 {
 		t.Fatalf("a second use: %d", st)
 	}
 	if got := w.say(t, number, "help"); !strings.Contains(got, "status") {
@@ -107,7 +107,7 @@ func TestChatLinkByEmail(t *testing.T) {
 	w.say(t, other, "ada@foods.test")
 	w.srv.WaitBackground()
 	msg, _ = mailedTo(mail, "ada@foods.test")
-	if st, out := ada.do("POST", "/v1/me/chat-link", map[string]any{"token": chatLinkRe.FindStringSubmatch(msg)[1]}); st != 409 || !strings.Contains(fmt.Sprint(out["error"]), "another WhatsApp number") {
+	if st, out := ada.do("POST", "/v1/me/chat-link", map[string]any{"token": chatLinkRe.FindStringSubmatch(msg)[1], "password": testPassword}); st != 409 || !strings.Contains(fmt.Sprint(out["error"]), "another WhatsApp number") {
 		t.Fatalf("a second number: %d %v", st, out)
 	}
 }
@@ -176,7 +176,7 @@ func TestTelegramWithAWhatsAppNumber(t *testing.T) {
 	if n != 1 || m == nil {
 		t.Fatalf("the link email (%d):\n%s", n, msg)
 	}
-	if out := web.must(200, "POST", "/v1/me/chat-link", map[string]any{"token": m[1]}); out["channel"] != "telegram" {
+	if out := web.must(200, "POST", "/v1/me/chat-link", map[string]any{"token": m[1], "password": testPassword}); out["channel"] != "telegram" {
 		t.Fatalf("link: %v", out)
 	}
 	if u, _ := w.tg.UserOf(ctx, 8202); u == uuid.Nil {

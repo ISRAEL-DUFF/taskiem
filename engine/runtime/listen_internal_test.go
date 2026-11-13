@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/israel-duff/taskiem/engine/db/dbtest"
 )
 
@@ -16,7 +18,7 @@ func TestListenWakesOnlyForWantedPayloads(t *testing.T) {
 	s := &Store{Pool: d.AppPool(t, 4)}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	wake, stop, err := listen(ctx, s, "taskiem_tasks", func(q string) bool { return q == "sandbox" })
+	wake, stop, err := listen(ctx, s, "taskiem_tasks", func(n *pgconn.Notification) bool { return n.Payload == "sandbox" })
 	if err != nil {
 		t.Fatal(err)
 	}

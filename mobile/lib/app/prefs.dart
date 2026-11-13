@@ -51,6 +51,23 @@ class Prefs extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Signing out: what is the person's own (when they last saw Taskiem's
+  /// conversation, whether they turned the app lock off) does not pass to
+  /// whoever signs in on this phone next. Appearance and sound are the
+  /// phone's and stay.
+  Future<void> forgetPerson() async {
+    taskiemSeen = null;
+    lock = true;
+    notifyListeners();
+    for (final k in const ['taskiem-seen', 'app-lock']) {
+      try {
+        await keys.write(k, null);
+      } on Object {
+        // Not removed from storage: already forgotten while the app runs.
+      }
+    }
+  }
+
   Future<void> setLock(bool on) async {
     lock = on;
     notifyListeners();

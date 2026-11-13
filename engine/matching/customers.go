@@ -3,6 +3,7 @@ package matching
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 
@@ -135,8 +136,15 @@ func (m *Matcher) CountCustomer(ctx context.Context, tx pgx.Tx, tenant, entryID 
 		id := entryID
 		k, err := m.countPart(ctx, tx, tenant, Part{Invoice: x.ID.String()}, invoicing.PaymentIn{AmountKobo: part, PaymentID: id.String(), EntryID: &id,
 			Connection: c.Connection, How: c.How, By: c.By, Reasons: append(append([]string{}, c.Reasons...), reason)})
+		if errors.Is(err, invoicing.ErrNothingDue) {
+			// Paid by other money since the list was read: the next.
+			return nil
+		}
 		if err != nil {
 			return err
+		}
+		if k.paymentID != uuid.Nil {
+			part = k.kobo // what was due under the invoice's lock
 		}
 		done = append(done, CountedPart{Invoice: *k.Invoice, PartID: k.paymentID, AmountKobo: part, Became: k.became})
 		return nil

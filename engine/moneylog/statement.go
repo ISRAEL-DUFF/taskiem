@@ -425,6 +425,9 @@ func (l *Log) Enter(ctx context.Context, tenant uuid.UUID, by string, in Entered
 	if in.AmountKobo <= 0 {
 		return uuid.Nil, false, fmt.Errorf("%w: the amount is more than zero", ErrInvalid)
 	}
+	if in.AmountKobo > MaxEnteredKobo {
+		return uuid.Nil, false, fmt.Errorf("%w: the amount is at most ₦1,000,000,000; check it and enter it again", ErrInvalid)
+	}
 	if strings.TrimSpace(in.Description) == "" {
 		return uuid.Nil, false, fmt.Errorf("%w: say what it was for", ErrInvalid)
 	}

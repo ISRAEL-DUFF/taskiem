@@ -46,6 +46,7 @@ void main() {
   LocalStore.enabled = true;
   final auth = Auth(transport: Transport(base: taskiemUrl), store: SessionStore(const SecureKeyStore()), version: appVersion);
   final prefs = Prefs(const SecureKeyStore())..load();
+  auth.onForget = prefs.forgetPerson;
   auth.start();
   runApp(TaskiemApp(auth: auth, unlocker: PhoneUnlocker(), prefs: prefs));
 }
@@ -97,6 +98,9 @@ class TaskiemApp extends StatelessWidget {
                       active: auth!.state == AuthState.signedIn && (prefs?.lock ?? true),
                       unlocker: unlocker!,
                       startLocked: auth!.restored,
+                      // Covered in the app switcher whenever signed in,
+                      // with the lock on or off.
+                      hideWhenAway: auth!.state == AuthState.signedIn,
                       now: now,
                       child: child!,
                     ),
