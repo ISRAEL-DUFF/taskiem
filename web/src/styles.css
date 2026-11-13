@@ -1784,8 +1784,10 @@ fieldset.path-set legend { font-size: 12.5px; font-weight: 600; padding: 0 4px; 
 .chat-mode .chat-list-pane { padding-bottom: 16px; }
 .chat-head h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
 .chat-menu-wrap { position: relative; flex: none; }
-.chat-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 160px; display: flex; flex-direction: column; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-md); }
-.chat-menu button { text-align: left; justify-content: flex-start; background: none; border: 0; border-radius: 6px; padding: 10px 12px; min-height: 40px; }
+.chat-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 200px; display: flex; flex-direction: column; padding: 6px; background: var(--panel); border: 0; border-radius: 18px; box-shadow: var(--tk-lift); transform-origin: 100% 0; }
+@media (prefers-reduced-motion: no-preference) { .chat-menu { animation: chat-menu-in 160ms var(--ease-out) backwards; } }
+@keyframes chat-menu-in { from { opacity: 0; transform: scale(0.92); } }
+.chat-menu button { text-align: left; justify-content: flex-start; background: none; border: 0; box-shadow: none; border-radius: 12px; padding: 12px 14px; min-height: 44px; font-size: 15px; font-weight: 500; }
 .chat-menu button:hover:not(:disabled), .chat-menu button:focus-visible { background: var(--chat-select); }
 @media (min-width: 900px) {
   .chat-mode .chat-layout { grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); }
@@ -1987,7 +1989,7 @@ button.chat-avatar { border: 0; padding: 0; cursor: pointer; }
 .chat-list-head h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
 .chat-list-head .icon-button, .chat-head .icon-button { background: transparent; border-color: transparent; box-shadow: none; color: var(--text); width: 40px; height: 40px; }
 .chat-list-head .icon-button:hover:not(:disabled), .chat-head .icon-button:hover:not(:disabled) { background: var(--chat-select); }
-.chat-menu a.menu-link { display: block; text-align: left; color: var(--text); text-decoration: none; padding: 10px 12px; min-height: 40px; border-radius: 6px; line-height: 20px; }
+.chat-menu a.menu-link { display: block; text-align: left; color: var(--text); text-decoration: none; padding: 12px 14px; min-height: 44px; border-radius: 12px; line-height: 20px; font-size: 15px; font-weight: 500; }
 .chat-menu a.menu-link:hover, .chat-menu a.menu-link:focus-visible { background: var(--chat-select); }
 .new-chat { display: inline-flex; align-items: center; justify-content: center; gap: 8px; flex: none; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: var(--brand); color: var(--brand-dark); box-shadow: none; }
 .new-chat:hover:not(:disabled) { background: var(--brand); filter: brightness(1.12); }

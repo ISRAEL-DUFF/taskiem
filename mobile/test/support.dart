@@ -1,3 +1,4 @@
+import 'dart:ui' as ui;
 import 'dart:convert';
 import 'dart:io';
 
@@ -80,4 +81,24 @@ class Fixture {
     a.state = AuthState.signedIn;
     return a;
   }
+}
+
+/// SNAP: the screen as a picture, when SNAP_DIR is set (looking at pages
+/// while changing their look); nothing otherwise.
+Future<void> snap(dynamic t, String name) async {
+  final dir = Platform.environment['SNAP_DIR'];
+  if (dir == null) return;
+  // ignore: avoid_dynamic_calls
+  await t.pump(const Duration(seconds: 1));
+  // ignore: avoid_dynamic_calls
+  await t.runAsync(() async {
+    // ignore: avoid_dynamic_calls
+    final rv = t.binding.renderViews.first;
+    // ignore: avoid_dynamic_calls
+    final img = await (rv.debugLayer as dynamic).toImage(rv.paintBounds, pixelRatio: 1.0);
+    // ignore: avoid_dynamic_calls
+    final png = await img.toByteData(format: ui.ImageByteFormat.png);
+    // ignore: avoid_dynamic_calls
+    File('$dir/$name.png').writeAsBytesSync(png!.buffer.asUint8List());
+  });
 }

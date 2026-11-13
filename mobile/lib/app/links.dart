@@ -25,3 +25,23 @@ Future<bool> Function(Uri url) openOutside = (url) async {
     return false;
   }
 };
+
+/// Rings [phone] from the phone's dialler (`tel:`); false when nothing
+/// could. A test stands in for it.
+Future<bool> Function(String phone) callPhone = (phone) async {
+  try {
+    return await launchUrl(Uri(scheme: 'tel', path: phone.replaceAll(RegExp(r'[^\d+]'), '')));
+  } on Object {
+    return false;
+  }
+};
+
+/// Writes to [email] from the phone's mail app (`mailto:`); false when
+/// nothing could. A test stands in for it.
+Future<bool> Function(String email) mailTo = (email) async {
+  try {
+    return await launchUrl(Uri(scheme: 'mailto', path: email));
+  } on Object {
+    return false;
+  }
+};

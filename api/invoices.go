@@ -358,6 +358,8 @@ func (s *Server) putCreditTerms(w http.ResponseWriter, r *http.Request) {
 // check is cheap and the date turns at midnight in Lagos).
 func (s *Server) RunInvoices(ctx context.Context) error {
 	s.chatHooks()
+	// Explore's scores (explore.go), whatever else runs here.
+	go s.runExploreScores(ctx)
 	if s.Invoices == nil {
 		<-ctx.Done()
 		return nil

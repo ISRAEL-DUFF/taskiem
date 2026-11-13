@@ -22,7 +22,7 @@ import {
 } from "./ProductPhotos";
 import { type PhotoPick } from "../lib/photos";
 import { useConfirm } from "./ConfirmSheet";
-import { KitEmpty, KitField, KitLoading, Pill } from "../kit";
+import { KitEmpty, KitField, KitLoading, Pill, useSheetStep } from "../kit";
 import { serviceRow } from "../lib/bookings";
 import type { Service, ServiceColumns } from "../lib/bookings";
 import { DELIVERY_STEPS, ORDER_STEPS } from "../lib/cardframe";
@@ -239,6 +239,8 @@ export function ProductForm({
   // Its sizes and colours, set up in place of the form (chat categories
   // Part B).
   const [sizesOpen, setSizesOpen] = useState(false);
+  // The sizes over the product's form: Back comes back to the form.
+  useSheetStep(sizesOpen, () => setSizesOpen(false));
   const [name, setName] = useState(item.name);
   // Its price on a price list, and who the list is shared with (the
   // DeskSeller board): for those who keep the storefront's prices.

@@ -35,7 +35,22 @@ import 'ref_card.dart';
 import 'tag_box.dart';
 import 'tags.dart';
 import 'thread.dart';
+import 'tool_forms.dart' show toolDetail;
+import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
+import 'availability_sheet.dart' show showAvailabilitySheet;
+import 'bookings_page.dart' show BookingsPage;
+import 'invoice_match.dart' show showMatchSheet;
+import 'bills_page.dart' show openBill;
+import 'invoices_page.dart' show InvoicesPage, openInvoice;
+import 'purchases_page.dart' show openPurchase;
+import 'order_sheet.dart' show OrderStart, showOrderSheet;
+import 'team_pages.dart' show StaffPage, TasksPage, openTasks;
+import 'storefront_orders_page.dart' show DeliveriesPage, openStorefrontOrder, showRiderSheet;
+import 'tool_sheet.dart';
+import 'tools.dart';
+import 'tools_panel.dart';
 import 'words.dart';
+import '../kit/mobile.dart' show TkRoute;
 
 /// TaskiemChat.tsx EVERY_MS: what is newer, every 5 seconds (20 with the
 /// stream connected).
@@ -222,6 +237,7 @@ class TaskiemData extends ChangeNotifier {
     if (!chats.chatTools) return;
     try {
       alerts = (await api.getChatAlerts()).alerts;
+      chats.auth.local?.write('taskiem_alerts', [for (final a in alerts) a.toJson()]);
       if (briefs) briefing = await api.getChatBriefing();
     } on Object {
       // The conversation stands without them.
@@ -255,7 +271,42 @@ class TaskiemData extends ChangeNotifier {
     }
   }
 
+  /// Offline: what shows is what the phone kept.
+  bool offline = false;
+
+  /// Taskiem's conversation as the phone kept it: shown at once.
+  void _restore() {
+    final local = chats.auth.local;
+    if (local == null) return;
+    try {
+      final kept = [for (final j in local.messages('taskiem')) TaskiemChatMessagesItem.fromJson(j)];
+      if (kept.isNotEmpty && messages == null) {
+        final list = mergeTaskiem(const [], kept);
+        unread = unreadAfter(list, chats.taskiemSeen);
+        messages = list;
+        hasOlder = true;
+      }
+      final cards = local.read('taskiem_alerts');
+      if (cards is List && alerts.isEmpty) alerts = [for (final c in cards) ChatAlert.fromJson((c as Map).cast<String, dynamic>())];
+      _changed();
+    } on Object {
+      // Kept by an older app, or damaged: the server's answer will do.
+    }
+  }
+
+  void _keep() {
+    final local = chats.auth.local;
+    final list = messages?.where((x) => !x.local).toList();
+    if (local == null || list == null) return;
+    try {
+      local.keepMessages('taskiem', [for (final x in list.length > 200 ? list.sublist(list.length - 200) : list) x.m.toJson()]);
+    } on Object {
+      // Not kept this time.
+    }
+  }
+
   Future<void> open() async {
+    _restore();
     unawaited(loadCards());
     unawaited(loadTags());
     try {
@@ -264,12 +315,18 @@ class TaskiemData extends ChangeNotifier {
       final list = mergeTaskiem(const [], out.messages);
       unread = unreadAfter(list, chats.taskiemSeen);
       messages = list;
+      offline = false;
+      _keep();
       _changed();
     } on ApiError catch (e) {
       error = e.message;
       _changed();
     } on Offline {
-      error = 'You’re offline. The conversation shows when you’re back online.';
+      if (messages != null) {
+        offline = true;
+      } else {
+        error = 'You’re offline. The conversation shows when you’re back online.';
+      }
       _changed();
     }
     // Closed before the history came: nothing to follow.
@@ -296,7 +353,20 @@ class TaskiemData extends ChangeNotifier {
   Future<void> pull() async {
     final kept = messages?.where((x) => !x.local).toList() ?? const [];
     final after = kept.isEmpty ? null : kept.last.m.createdAt;
-    final out = await api.taskiemHistory(after: after?.toUtc().toIso8601String());
+    final TaskiemChat out;
+    try {
+      out = await api.taskiemHistory(after: after?.toUtc().toIso8601String());
+    } on Offline {
+      if (!offline && !_disposed) {
+        offline = true;
+        _changed();
+      }
+      return;
+    }
+    if (offline && !_disposed) {
+      offline = false;
+      _changed();
+    }
     if (out.messages.isEmpty) return;
     _merge(out.messages);
   }
@@ -304,6 +374,7 @@ class TaskiemData extends ChangeNotifier {
   void _merge(List<TaskiemChatMessagesItem> add) {
     if (_disposed) return;
     messages = mergeTaskiem(messages ?? const [], add);
+    _keep();
     _changed();
   }
 
@@ -435,6 +506,77 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     onExplore: (c) => showExploreCard(context, widget.data.chats, c, onOpen: widget.onOpenLink),
   );
 
+  // The tools panel (ChatTools.tsx): every tool the person may open.
+  late final _tools = ToolsController(chats: widget.data.chats)..clearSlash = _text.clear;
+
+  void _openTool(Tool tool, {String? openId}) {
+    _tools.close();
+    // Sell, the handover and availability have sheets of their own: not a
+    // list.
+    // Sell, Handover and Availability have sheets of their own; what they
+    // record lands here as a diary line.
+    void landed() {
+      unawaited(widget.data.pull().catchError((Object _) {}));
+      unawaited(widget.data.chats.load());
+    }
+
+    if (tool.key == 'availability') {
+      unawaited(
+        showAvailabilitySheet(
+          context,
+          auth: widget.data.chats.auth,
+          onChanged: () {
+            // Changed: read now, not only once five seconds old.
+            _tools.refresh(tool);
+            landed();
+          },
+        ),
+      );
+      return;
+    }
+
+    if (tool.key == 'sell') {
+      unawaited(showSellSheet(context, auth: widget.data.chats.auth, onSold: landed));
+      return;
+    }
+    if (tool.key == 'handover') {
+      unawaited(showHandoverSheet(context, auth: widget.data.chats.auth, onSent: landed));
+      return;
+    }
+    showToolSheet(
+      context,
+      tools: _tools,
+      tool: tool,
+      detail: toolDetail(widget.data.chats.auth),
+      openId: openId,
+      // Saved: its diary line here at once, and the alerts read again.
+      onSaved: (_) {
+        unawaited(widget.data.pull().catchError((Object _) {}));
+        unawaited(widget.data.chats.load());
+      },
+    );
+  }
+
+  /// TaskiemChat.tsx extras: the briefing, tasks, and clocking in and out.
+  List<ExtraTile> _extras(TaskiemData d) {
+    final can = d.chats.auth.can;
+    void pick(VoidCallback f) {
+      _tools.close();
+      f();
+    }
+
+    return [
+      if (d.briefs) (key: 'briefing', title: 'Briefing', icon: 'sparkle', line: "Today's numbers", onPick: () => pick(() => _showBriefing(d))),
+      // Tasks, given and done: the Tasks screen.
+      (key: 'tasks', title: 'Tasks', icon: 'check', line: 'To do, and given', onPick: () => pick(() => openTasks(context, d.chats.auth))),
+      // Clocking in and out, as "in" and "out" are said: for staff.
+      if (!can('member.manage')) ...[
+        (key: 'clock-in', title: 'Clock in', icon: 'clock', line: 'Start your shift', onPick: () => pick(() => d.say(text: 'in'))),
+        (key: 'clock-out', title: 'Clock out', icon: 'clock', line: 'End your shift', onPick: () => pick(() => d.say(text: 'out'))),
+      ],
+    ];
+  }
+
   TagSources _tagSources() {
     final d = widget.data;
     final own = d.ownProducts;
@@ -445,7 +587,14 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
         for (final p in d.suppliers)
           for (final it in p.items)
             if (it.available)
-              TagSuggestion(kind: 'item', id: '${p.link}:${it.itemId}', name: it.name, sub: '${p.business} · ${priceWords(it)}', category: it.category, words: it.description),
+              TagSuggestion(
+                kind: 'item',
+                id: '${p.link}:${it.itemId}',
+                name: it.name,
+                sub: '${p.business} · ${priceWords(it)}',
+                category: it.category,
+                words: it.description,
+              ),
       ],
       services: const [],
       businesses: [
@@ -466,6 +615,8 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     _text.text = widget.data.chats.draft('taskiem');
     _text.addListener(() => widget.data.chats.setDraft('taskiem', _text.text));
     _text.addListener(_tags.typed);
+    // "/" and a word as the whole message: the panel, filtered by it.
+    _text.addListener(() => _tools.typed(_tags.query?.mark == '/' ? '' : _text.text));
     if (widget.data.messages == null) widget.data.open();
     widget.data.chats.viewingTaskiem = true;
     _back = widget.data.givenBack.listen((words) {
@@ -475,6 +626,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
 
   @override
   void dispose() {
+    _tools.dispose();
     widget.data.chats.viewingTaskiem = false;
     _back?.cancel();
     _tags.dispose();
@@ -493,8 +645,9 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       child: Semantics(
         label: 'Conversation with Taskiem',
         container: true,
-        child: CustomPaint(
-          painter: Wallpaper(t.chatWallpaper, t.chatDoodle),
+        child: WallpaperBox(
+          ground: t.chatWallpaper,
+          doodle: t.chatDoodle,
           child: ListenableBuilder(
             listenable: d,
             builder: (context, _) => Column(
@@ -513,7 +666,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                         child: TkTaskiemMark(size: 20, color: t.brandDark),
                       ),
                       title: 'Taskiem',
-                      subtitle: d.chats.auth.me?.tenantName ?? 'Your assistant',
+                      subtitle: d.offline ? 'Waiting for network…' : (d.chats.auth.me?.tenantName ?? 'Your assistant'),
                       typing: d.busy,
                     ),
                   ),
@@ -521,7 +674,13 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                 Expanded(child: _thread(context, d)),
                 _tags.plain(),
                 _tags.anchor(context),
+                ToolsAnchor(
+                  tools: _tools,
+                  panel: (context, room) =>
+                      ToolsPanel(tools: _tools, onOpen: _openTool, extras: _extras(d), recent: d.chats.prefs?.recentTools ?? const [], maxHeight: room),
+                ),
                 Composer(
+                  tools: d.chats.chatTools ? _tools : null,
                   text: _text,
                   // TaskiemChat.tsx: with chat tools "Ask Taskiem, or @ to
                   // tag"; a phone shows the words before the comma.
@@ -616,7 +775,33 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (d.briefing != null) ...[
-                    BriefingCard(key: ValueKey(d.briefingShown), briefing: d.briefing!, auth: d.chats.auth, onAsk: (w) => d.say(text: w)),
+                    BriefingCard(
+                      key: ValueKey(d.briefingShown),
+                      briefing: d.briefing!,
+                      auth: d.chats.auth,
+                      onAsk: (w) => d.say(text: w),
+                      onTile: (key) {
+                        final auth = d.chats.auth;
+                        void push(Widget page) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
+                        switch (key) {
+                          case 'stock':
+                            final tool = tools.where((x) => x.key == 'stock').firstOrNull;
+                            if (tool != null) _openTool(tool);
+                          case 'deliveries':
+                            push(DeliveriesPage(auth: auth));
+                          case 'bookings':
+                            push(BookingsPage(auth: auth));
+                          case 'owed':
+                            push(InvoicesPage(auth: auth));
+                          case 'staff':
+                            push(StaffPage(auth: auth));
+                          case 'tasks':
+                            push(TasksPage(auth: auth));
+                          default:
+                            showComingSoon(context);
+                        }
+                      },
+                    ),
                     const SizedBox(height: 2),
                   ],
                   AlertCards(
@@ -628,10 +813,61 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                       d.pull();
                     },
                     onOpen: (what, a) {
+                      final tool = tools.where((x) => x.key == what).firstOrNull;
                       if (what == 'customer' && (a.id ?? '').isNotEmpty) {
                         widget.onOpenCustomer?.call(a.id!);
+                      } else if (what == 'rider' && (a.reference ?? '').isNotEmpty) {
+                        // Assign rider: the next in turn, or one by name.
+                        unawaited(
+                          showRiderSheet(
+                            context,
+                            auth: d.chats.auth,
+                            reference: a.reference!,
+                            line: a.line,
+                            onDone: () {
+                              d.loadCards();
+                              unawaited(d.pull().catchError((Object _) {}));
+                            },
+                          ),
+                        );
+                      } else if (tool != null && (what == 'orders' || what == 'stock')) {
+                        // Review order, Record stock in: the row in its tool's sheet.
+                        _openTool(tool, openId: a.id);
+                      } else if (what == 'match' && (a.id ?? '').isNotEmpty) {
+                        // Match it: what the money pays.
+                        unawaited(
+                          showMatchSheet(
+                            context,
+                            auth: d.chats.auth,
+                            entry: a.id!,
+                            amount: a.amountKobo,
+                            line: a.line,
+                            onDone: () {
+                              d.loadCards();
+                              unawaited(d.pull().catchError((Object _) {}));
+                            },
+                          ),
+                        );
+                      } else if (what == 'reorder' && a.reorder != null) {
+                        // Reorder: the supplier's shop, the low item (or
+                        // its low sizes, in the product's grid) in the bag.
+                        final r = a.reorder!;
+                        unawaited(
+                          showOrderSheet(
+                            context,
+                            chats: d.chats,
+                            link: r.link,
+                            business: r.supplier,
+                            start: r.sizes != null
+                                ? OrderStart(itemId: r.sellerItemId, qty: {for (final e in r.sizes!.entries) e.key: (e.value as num).toInt()})
+                                : OrderStart(qty: {r.sellerItemId: r.quantity}),
+                            onSent: (_) {
+                              d.loadCards();
+                              unawaited(d.pull().catchError((Object _) {}));
+                            },
+                          ),
+                        );
                       } else {
-                        // Its tool's sheet comes with the tools.
                         showComingSoon(context);
                       }
                     },
@@ -806,34 +1042,54 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
           out.addAll(linked(r.text, style, tap));
           continue;
         }
-        final mention = (style ?? const TextStyle()).copyWith(color: t.tintText, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]);
-        final open = ref.kind == 'customer' ? widget.onCustomer : null;
+        final mention = (style ?? const TextStyle()).copyWith(
+          color: t.tintText,
+          fontWeight: FontWeight.w600,
+          fontVariations: const [FontVariation('wght', 600)],
+        );
+        // TaskiemChat.tsx: an order opens on its own screen, by its reference.
+        // An invoice, a bill or a purchase on its own screen (the web's tool
+        // sheet's row leads there too).
+        final a = widget.auth;
+        final open = ref.kind == 'customer'
+            ? widget.onCustomer
+            : a == null
+            ? null
+            : switch (ref.kind) {
+                'order' => (String _) => openStorefrontOrder(context, a, ref.name),
+                'invoice' => (String id) => openInvoice(context, a, id),
+                'bill' => (String id) => openBill(context, a, id),
+                'purchase' => (String id) => openPurchase(context, a, id),
+                _ => null,
+              };
         // Anything else opens in its tool, which comes with the tools.
-        out.add(TextSpan(text: r.text, style: mention, recognizer: tap('ref:${ref.kind}:${ref.id}', () => open == null ? showComingSoon(context) : open(ref.id))));
+        out.add(
+          TextSpan(text: r.text, style: mention, recognizer: tap('ref:${ref.kind}:${ref.id}', () => open == null ? showComingSoon(context) : open(ref.id))),
+        );
       }
       return out;
     }
 
     final words = TapsOwner(
       builder: (context, tap) => Text.rich(
-      TextSpan(
-        children: [
-          for (final p in boldParts(fold.shown))
-            ...part(p.text, p.bold ? const TextStyle(fontWeight: FontWeight.w700, fontVariations: [FontVariation('wght', 700)]) : null, tap),
-          if (fold.folded) ...[
-            const TextSpan(text: '… '),
-            TextSpan(
-              text: 'Read more',
-              style: TextStyle(color: t.accent, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]),
-              recognizer: null,
-            ),
+        TextSpan(
+          children: [
+            for (final p in boldParts(fold.shown))
+              ...part(p.text, p.bold ? const TextStyle(fontWeight: FontWeight.w700, fontVariations: [FontVariation('wght', 700)]) : null, tap),
+            if (fold.folded) ...[
+              const TextSpan(text: '… '),
+              TextSpan(
+                text: 'Read more',
+                style: TextStyle(color: t.accent, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]),
+                recognizer: null,
+              ),
+            ],
+            // TaskiemText's `.stamp-gap` is never the wider `.mine` one: 52 px
+            // either side, even beside the person's own ticks.
+            if (inline) const WidgetSpan(alignment: PlaceholderAlignment.bottom, child: SizedBox(width: 52, height: 1)),
           ],
-          // TaskiemText's `.stamp-gap` is never the wider `.mine` one: 52 px
-          // either side, even beside the person's own ticks.
-          if (inline) const WidgetSpan(alignment: PlaceholderAlignment.bottom, child: SizedBox(width: 52, height: 1)),
-        ],
-      ),
-      style: tkText(size: 16, lineHeight: 23 / 16, color: t.text),
+        ),
+        style: tkText(size: 16, lineHeight: 23 / 16, color: t.text),
       ),
     );
     // TaskiemChat.tsx: a message's menu holds Copy (not one still going).
@@ -850,31 +1106,31 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
             )
           : null,
       child: BubbleFrame(
-      mine: mine,
-      first: widget.first,
-      stamp: stamp,
-      inline: inline,
-      children: [
-        if (!mine && widget.first) Text('Taskiem', style: tkText(size: 12, weight: 600, color: t.tintText)),
-        if (fold.folded)
-          Semantics(
-            button: true,
-            label: 'Read more',
-            child: GestureDetector(onTap: () => setState(() => _taps++), child: words),
-          )
-        else
-          words,
-        // The documents it names, each as its card, read now.
-        for (final r in cardRefs(m.text, widget.known))
-          RefCard(
-            key: ValueKey('${r.kind}:${r.id}'),
-            auth: widget.auth!,
-            now: widget.now ?? DateTime.now(),
-            load: () => widget.auth!.api.chatCard(kind: r.kind, id: r.id),
-            onMessage: widget.onCustomer,
-          ),
-        if (buttons.isNotEmpty) _ReplyButtons(buttons: buttons, choice: widget.choice, pressable: widget.pressable, onPress: widget.onPress),
-      ],
+        mine: mine,
+        first: widget.first,
+        stamp: stamp,
+        inline: inline,
+        children: [
+          if (!mine && widget.first) Text('Taskiem', style: tkText(size: 12, weight: 600, color: t.tintText)),
+          if (fold.folded)
+            Semantics(
+              button: true,
+              label: 'Read more',
+              child: GestureDetector(onTap: () => setState(() => _taps++), child: words),
+            )
+          else
+            words,
+          // The documents it names, each as its card, read now.
+          for (final r in cardRefs(m.text, widget.known))
+            RefCard(
+              key: ValueKey('${r.kind}:${r.id}'),
+              auth: widget.auth!,
+              now: widget.now ?? DateTime.now(),
+              load: () => widget.auth!.api.chatCard(kind: r.kind, id: r.id),
+              onMessage: widget.onCustomer,
+            ),
+          if (buttons.isNotEmpty) _ReplyButtons(buttons: buttons, choice: widget.choice, pressable: widget.pressable, onPress: widget.onPress),
+        ],
       ),
     );
   }
@@ -938,6 +1194,7 @@ class _ReplyButtons extends StatelessWidget {
                         ? Semantics(
                             button: true,
                             label: b.title,
+                            onTap: () => onPress(b),
                             excludeSemantics: true,
                             child: TkPress(onTap: () => onPress(b), child: row),
                           )

@@ -1,0 +1,140 @@
+{
+ "at": "2026-11-12T13:03:46.715Z",
+ "answers": {
+  "/v1/me": {
+   "file": "000.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/billing/status": {
+   "file": "001.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats": {
+   "file": "020.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats?archived=1": {
+   "file": "034.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/settings/chat-tools": {
+   "file": "004.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats": {
+   "file": "033.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/links": {
+   "file": "006.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/supplier-prices": {
+   "file": "007.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/form-requests": {
+   "file": "008.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/taskiem-chat?after=*": {
+   "file": "009.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats/unread": {
+   "file": "010.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/notifications/count": {
+   "file": "011.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-settings": {
+   "file": "012.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/taskiem-chat": {
+   "file": "013.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/onboarding": {
+   "file": "014.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/chat-refs": {
+   "file": "016.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/stock": {
+   "file": "032.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/chat-alerts": {
+   "file": "021.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/chat-briefing": {
+   "file": "022.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/price-lists": {
+   "file": "023.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/trade-orders": {
+   "file": "024.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/storefront/services": {
+   "file": "025.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/bills?status=all": {
+   "file": "026.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/stock/purchases": {
+   "file": "027.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/tables": {
+   "file": "028.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/invoices?limit=200": {
+   "file": "030.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/money/entries": {
+   "file": "031.json",
+   "status": 200,
+   "type": "application/json"
+  }
+ }
+}

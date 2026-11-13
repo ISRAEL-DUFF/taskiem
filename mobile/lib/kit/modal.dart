@@ -34,7 +34,14 @@ Future<T?> showTkModal<T>(BuildContext context, {required String title, required
 }
 
 /// Asks first; true when the person agrees.
-Future<bool> showTkConfirm(BuildContext context, {required String title, String? body, required String ok, bool danger = false}) async {
+Future<bool> showTkConfirm(
+  BuildContext context, {
+  required String title,
+  String? body,
+  required String ok,
+  String cancel = 'Cancel',
+  bool danger = false,
+}) async {
   final yes = await showTkModal<bool>(
     context,
     title: title,
@@ -49,7 +56,7 @@ Future<bool> showTkConfirm(BuildContext context, {required String title, String?
             spacing: 8,
             runSpacing: 8,
             children: [
-              TkPlainButton(label: 'Cancel', onTap: () => Navigator.of(context).pop(false)),
+              TkPlainButton(label: cancel, onTap: () => Navigator.of(context).pop(false)),
               TkPlainButton(label: ok, danger: danger, primary: !danger, onTap: () => Navigator.of(context).pop(true)),
             ],
           ),
@@ -163,33 +170,37 @@ class TkPlainButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return TapArea(child: Semantics(
-      button: true,
-      label: label,
-      excludeSemantics: true,
-      child: TkPress(
+    return TapArea(
+      child: Semantics(
+        button: true,
+        label: label,
         onTap: onTap,
-        child: IntrinsicWidth(
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 36),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: primary ? t.primary : t.panel,
-              border: Border.all(color: primary ? t.primary : t.borderStrong),
-              borderRadius: BorderRadius.circular(999),
+        excludeSemantics: true,
+        child: TkPress(
+          onTap: onTap,
+          child: IntrinsicWidth(
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 36),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: primary ? t.primary : t.panel,
+                border: Border.all(color: primary ? t.primary : t.borderStrong),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(label, style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: primary ? t.primaryText : (danger ? t.danger : t.text))),
             ),
-            child: Text(label, style: tkText(size: 13.5, weight: 500, lineHeight: 1.2, color: primary ? t.primaryText : (danger ? t.danger : t.text))),
           ),
         ),
       ),
-    ));
+    );
   }
 }
 
 /// toast.tsx: a short word after something is done, over the bottom of the
 /// screen for 4 seconds (an error stays until closed), × to close it.
-void showTkToast(BuildContext context, String text, {bool error = false}) {
+/// [action] and [onAction]: a link in it (`toast(…, { href, linkText })`).
+void showTkToast(BuildContext context, String text, {bool error = false, String? action, VoidCallback? onAction}) {
   final overlay = Overlay.of(context, rootOverlay: true);
   late OverlayEntry entry;
   Timer? timer;
@@ -236,11 +247,36 @@ void showTkToast(BuildContext context, String text, {bool error = false}) {
                           Expanded(
                             child: Text(text, style: tkText(size: 14, color: t.text)),
                           ),
+                          if (action != null && onAction != null) ...[
+                            const SizedBox(width: 10),
+                            TapArea(
+                              child: Semantics(
+                                link: true,
+                                label: action,
+                                onTap: () {
+                                  close();
+                                  onAction();
+                                },
+                                excludeSemantics: true,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    close();
+                                    onAction();
+                                  },
+                                  child: Text(
+                                    action,
+                                    style: tkText(size: 14, weight: 600, color: t.accent, decoration: TextDecoration.underline),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                           const SizedBox(width: 10),
                           TapArea(
                             child: Semantics(
                               button: true,
                               label: 'Dismiss',
+                              onTap: close,
                               excludeSemantics: true,
                               child: GestureDetector(
                                 onTap: close,
@@ -274,3 +310,46 @@ void showTkToast(BuildContext context, String text, {bool error = false}) {
 /// tools, docs/spec/mobile-app.md M5 to M8): shown as the web shows it,
 /// and said plainly when pressed, never a press that does nothing.
 void showComingSoon(BuildContext context) => showTkToast(context, 'This is coming to the app soon.');
+
+/// A choice among a few (a `<select>`'s list), in a modal: the one chosen,
+/// or null when put away.
+Future<String?> showTkModalChoices(BuildContext context, {required String title, required List<(String, String)> choices, String? value}) =>
+    showTkModal<String>(
+      context,
+      title: title,
+      builder: (context) {
+        final t = TkTheme.tokens(context);
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final (id, words) in choices)
+              Semantics(
+                button: true,
+                selected: id == value,
+                label: words,
+                onTap: () => Navigator.of(context).pop(id),
+                excludeSemantics: true,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.of(context).pop(id),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      words,
+                      style: tkText(size: 16, weight: id == value ? 700 : 500, color: t.text),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+
+/// Opens something outside the app (a call, a map, a mail); says so when
+/// the phone could not.
+Future<void> openOrSay(BuildContext context, Future<bool> Function() open, String fail) async {
+  final ok = await open();
+  if (!ok && context.mounted) showTkToast(context, fail, error: true);
+}

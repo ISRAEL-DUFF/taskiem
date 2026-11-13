@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskiem/app/lock.dart';
+import 'package:taskiem/kit/keyboard.dart';
 import 'package:taskiem/main.dart';
 
 class FakeUnlocker implements Unlocker {
@@ -118,4 +119,38 @@ void main() {
     expect(find.text('The chats'), findsOneWidget);
     expect(u.asked, 0);
   });
+
+  testWidgets('the keyboard coming up does not build the app afresh (typing in a search box locked it)', (t) async {
+    var made = 0;
+    Widget at(double keys) => MediaQuery(
+      data: MediaQueryData(viewInsets: EdgeInsets.only(bottom: keys)),
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: KeyboardRoom(child: _Counted(onMade: () => made++)),
+      ),
+    );
+    await t.pumpWidget(at(0));
+    await t.pumpWidget(at(300));
+    await t.pumpWidget(at(0));
+    expect(made, 1, reason: 'the lock under it is kept, not made again (and locked again)');
+  });
+}
+
+class _Counted extends StatefulWidget {
+  const _Counted({required this.onMade});
+  final VoidCallback onMade;
+
+  @override
+  State<_Counted> createState() => _CountedState();
+}
+
+class _CountedState extends State<_Counted> {
+  @override
+  void initState() {
+    super.initState();
+    widget.onMade();
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox();
 }

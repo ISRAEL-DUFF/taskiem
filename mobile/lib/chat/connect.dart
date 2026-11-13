@@ -262,7 +262,6 @@ class _ConnectSheetState extends State<ConnectSheet> {
                     Opacity(
                       opacity: m.available ? 1 : 0.45,
                       child: Semantics(
-                        checked: chosen == m.mode,
                         enabled: m.available,
                         child: TkChoiceRow(
                           control: TkRadio(checked: chosen == m.mode),

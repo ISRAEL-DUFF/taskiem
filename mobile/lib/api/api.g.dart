@@ -284,8 +284,8 @@ class TaskiemApi {
   }
 
   /// Businesses to browse (`GET /v1/explore`)
-  Future<ExploreResult> explore({String? q, String? section, String? offset}) async {
-    final j = await _t.send('GET', '/v1/explore', query: {'q': ?q, 'section': ?section, 'offset': ?offset});
+  Future<ExploreResult> explore({String? q, String? section, String? category, String? ids, String? offset}) async {
+    final j = await _t.send('GET', '/v1/explore', query: {'q': ?q, 'section': ?section, 'category': ?category, 'ids': ?ids, 'offset': ?offset});
     return ExploreResult.fromJson(j as Map<String, dynamic>);
   }
 
@@ -3106,64 +3106,84 @@ class StockMovement {
 }
 
 class ExploreResult {
-  const ExploreResult({this.area, this.blind, required this.delivery, required this.deliveryMore, required this.fresh, required this.more, required this.near, required this.nearMore, required this.results});
+  const ExploreResult({this.across, this.acrossMore, this.area, this.blind, this.categories, this.categoryMore, required this.delivery, required this.deliveryMore, this.featured, required this.fresh, this.inCategory, this.known, required this.more, required this.near, required this.nearMore, this.popular, this.popularMore, required this.results, this.trusted, this.trustedMore});
 
+  /// Across Nigeria, in Near you's place when no business in our area can be
+  /// shown or our area is not set (the fullest cards first)
+  final List<ExploreCard>? across;
+  final bool? acrossMore;
   /// Our own area, as near you reads it (the first page only)
   final String? area;
   final ExploreResultBlind? blind;
+  final List<ExploreResultCategoriesItem>? categories;
+  final bool? categoryMore;
   /// Businesses that deliver for others, those covering our area first
   final List<ExploreCard> delivery;
   final bool deliveryMore;
+  final List<ExploreCard>? featured;
   final List<ExploreCard> fresh;
+  final List<ExploreCard>? inCategory;
+  /// section=known, the businesses asked for that may still be shown, as they
+  /// are now, in the order asked
+  final List<ExploreCard>? known;
   final bool more;
   final List<ExploreCard> near;
   final bool nearMore;
+  final List<ExploreCard>? popular;
+  final bool? popularMore;
   final List<ExploreCard> results;
+  final List<ExploreCard>? trusted;
+  final bool? trustedMore;
 
   factory ExploreResult.fromJson(Map<String, dynamic> j) => ExploreResult(
+        across: j['across'] == null ? null : (j['across'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        acrossMore: j['across_more'] == null ? null : j['across_more'] as bool,
         area: j['area'] == null ? null : j['area'] as String,
         blind: j['blind'] == null ? null : ExploreResultBlind.fromJson(j['blind'] as Map<String, dynamic>),
+        categories: j['categories'] == null ? null : (j['categories'] as List).map((e) => ExploreResultCategoriesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        categoryMore: j['category_more'] == null ? null : j['category_more'] as bool,
         delivery: (j['delivery'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
         deliveryMore: j['delivery_more'] as bool,
+        featured: j['featured'] == null ? null : (j['featured'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
         fresh: (j['fresh'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        inCategory: j['in_category'] == null ? null : (j['in_category'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        known: j['known'] == null ? null : (j['known'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
         more: j['more'] as bool,
         near: (j['near'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
         nearMore: j['near_more'] as bool,
+        popular: j['popular'] == null ? null : (j['popular'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        popularMore: j['popular_more'] == null ? null : j['popular_more'] as bool,
         results: (j['results'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        trusted: j['trusted'] == null ? null : (j['trusted'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        trustedMore: j['trusted_more'] == null ? null : j['trusted_more'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
+        'across': ?across?.map((e) => e.toJson()).toList(),
+        'across_more': ?acrossMore,
         'area': ?area,
         'blind': ?blind?.toJson(),
+        'categories': ?categories?.map((e) => e.toJson()).toList(),
+        'category_more': ?categoryMore,
         'delivery': delivery.map((e) => e.toJson()).toList(),
         'delivery_more': deliveryMore,
+        'featured': ?featured?.map((e) => e.toJson()).toList(),
         'fresh': fresh.map((e) => e.toJson()).toList(),
+        'in_category': ?inCategory?.map((e) => e.toJson()).toList(),
+        'known': ?known?.map((e) => e.toJson()).toList(),
         'more': more,
         'near': near.map((e) => e.toJson()).toList(),
         'near_more': nearMore,
+        'popular': ?popular?.map((e) => e.toJson()).toList(),
+        'popular_more': ?popularMore,
         'results': results.map((e) => e.toJson()).toList(),
-      };
-}
-
-class ExploreResultBlind {
-  const ExploreResultBlind({required this.kind, required this.shown});
-
-  final String kind;
-  final String shown;
-
-  factory ExploreResultBlind.fromJson(Map<String, dynamic> j) => ExploreResultBlind(
-        kind: j['kind'] as String,
-        shown: j['shown'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'kind': kind,
-        'shown': shown,
+        'trusted': ?trusted?.map((e) => e.toJson()).toList(),
+        'trusted_more': ?trustedMore,
       };
 }
 
 class ExploreCard {
-  const ExploreCard({this.about, this.area, this.available, required this.business, required this.captions, this.delivers, this.deliveryAreas, required this.logo, required this.name, required this.photos, this.slug, required this.state, this.tagline, required this.v, this.vehicle});
+  const ExploreCard({this.about, this.area, this.available, required this.business, required this.captions, this.categories, this.delivers, this.deliveryAreas, this.links, required this.logo, required this.name, required this.photos, this.slug, required this.state, this.tagline, required this.v, this.vehicle});
 
   final String? about;
   final String? area;
@@ -3172,9 +3192,14 @@ class ExploreCard {
   final String business;
   /// Its photos' captions, in order ("" for a photo with none)
   final List<String> captions;
+  /// The categories it picked (keys of Explore's categories)
+  final List<String>? categories;
   /// It delivers for other businesses (a rider)
   final bool? delivers;
   final List<String>? deliveryAreas;
+  /// Popular only, its links made in the last 90 days, rounded down (3, 5, then
+  /// tens) and shown with a "+"; never under 3
+  final int? links;
   /// Whether it has a logo, at GET /v1/explore/{business}/logo
   final bool logo;
   final String name;
@@ -3195,8 +3220,10 @@ class ExploreCard {
         available: j['available'] == null ? null : j['available'] as String,
         business: j['business'] as String,
         captions: (j['captions'] as List).map((e) => e as String).toList(),
+        categories: j['categories'] == null ? null : (j['categories'] as List).map((e) => e as String).toList(),
         delivers: j['delivers'] == null ? null : j['delivers'] as bool,
         deliveryAreas: j['delivery_areas'] == null ? null : (j['delivery_areas'] as List).map((e) => e as String).toList(),
+        links: j['links'] == null ? null : (j['links'] as num).toInt(),
         logo: j['logo'] as bool,
         name: j['name'] as String,
         photos: (j['photos'] as num).toInt(),
@@ -3213,8 +3240,10 @@ class ExploreCard {
         'available': ?available,
         'business': business,
         'captions': captions.map((e) => e).toList(),
+        'categories': ?categories?.map((e) => e).toList(),
         'delivers': ?delivers,
         'delivery_areas': ?deliveryAreas?.map((e) => e).toList(),
+        'links': ?links,
         'logo': logo,
         'name': name,
         'photos': photos,
@@ -3223,6 +3252,44 @@ class ExploreCard {
         'tagline': ?tagline,
         'v': v,
         'vehicle': ?vehicle,
+      };
+}
+
+class ExploreResultBlind {
+  const ExploreResultBlind({required this.kind, required this.shown});
+
+  final String kind;
+  final String shown;
+
+  factory ExploreResultBlind.fromJson(Map<String, dynamic> j) => ExploreResultBlind(
+        kind: j['kind'] as String,
+        shown: j['shown'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind,
+        'shown': shown,
+      };
+}
+
+class ExploreResultCategoriesItem {
+  const ExploreResultCategoriesItem({required this.key, required this.n, required this.name});
+
+  final String key;
+  /// How many businesses we may find in it
+  final int n;
+  final String name;
+
+  factory ExploreResultCategoriesItem.fromJson(Map<String, dynamic> j) => ExploreResultCategoriesItem(
+        key: j['key'] as String,
+        n: (j['n'] as num).toInt(),
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'n': n,
+        'name': name,
       };
 }
 

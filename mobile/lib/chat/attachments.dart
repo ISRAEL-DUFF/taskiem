@@ -16,6 +16,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../api/api.g.dart';
 import '../api/transport.dart';
+import '../app/store.dart' show keepMediaBytes, keptMedia;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
@@ -125,7 +126,8 @@ class ChatFiles extends ChangeNotifier {
   static String path(LinkMessage m) => '/v1/link-chats/${Uri.encodeComponent(m.link)}/files/${Uri.encodeComponent(m.id)}';
 
   /// A file we just sent: kept as it is, a photo's size read from it.
-  Future<void> keep(String id, Uint8List bytes) async {
+  Future<void> keep(String id, Uint8List bytes, {String? link}) async {
+    if (link != null) unawaited(keepMediaBytes('/v1/link-chats/${Uri.encodeComponent(link)}/files/${Uri.encodeComponent(id)}', bytes));
     Size? size;
     try {
       final codec = await ui.instantiateImageCodec(bytes);
@@ -158,7 +160,11 @@ class ChatFiles extends ChangeNotifier {
 
   Future<ChatFile?> fetch(LinkMessage m) async {
     try {
-      final b = Uint8List.fromList(await transport.bytes(path(m)));
+      // Kept on the phone (a message's file never changes): at once, and
+      // offline too; else from the server, then kept.
+      final kept = await keptMedia(path(m));
+      final b = kept ?? Uint8List.fromList(await transport.bytes(path(m)));
+      if (kept == null) unawaited(keepMediaBytes(path(m), b));
       Size? size;
       if (m.attachment?.kind == 'photo') {
         final codec = await ui.instantiateImageCodec(b);
@@ -242,6 +248,7 @@ class _PhotoView extends StatelessWidget {
               child: Semantics(
                 button: true,
                 label: 'Close',
+                onTap: () => Navigator.of(context).maybePop(),
                 excludeSemantics: true,
                 child: TkPress(
                   onTap: () => Navigator.of(context).maybePop(),
@@ -315,7 +322,16 @@ class AttachmentView extends StatelessWidget {
                     alignment: Alignment.centerLeft,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.memory(f.bytes, width: s.width, height: s.height, fit: BoxFit.fill, gaplessPlayback: true, excludeFromSemantics: true),
+                      child: Image.memory(
+                        f.bytes,
+                        width: s.width,
+                        height: s.height,
+                        // Decoded at the size it is shown, not the camera's.
+                        cacheWidth: (s.width * MediaQuery.devicePixelRatioOf(context)).round(),
+                        fit: BoxFit.fill,
+                        gaplessPlayback: true,
+                        excludeFromSemantics: true,
+                      ),
                     ),
                   ),
                 ),
@@ -347,36 +363,41 @@ class AttachmentView extends StatelessWidget {
   /// `.chat-file`: the file's icon, its name, its size, on panel-2.
   Widget _fileRow(TkTokens t, LinkMessageAttachment a, {void Function(Rect from)? onTap}) => Padding(
     padding: const EdgeInsets.only(top: 2, bottom: 4),
-    child: Semantics(
-      button: true,
-      label: '${attachmentLabel(a)}, ${fileSize(a.size)}',
-      excludeSemantics: true,
-      child: Builder(
-        builder: (context) => GestureDetector(
-          onTap: onTap == null
-              ? null
-              : () {
-                  final box = context.findRenderObject() as RenderBox?;
-                  onTap(box == null ? Rect.zero : box.localToGlobal(Offset.zero) & box.size);
-                },
-          child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: t.panel2, borderRadius: BorderRadius.circular(8)),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TkIcon('file', size: 22, color: t.text),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(attachmentLabel(a), style: tkText(size: 14, weight: 600, color: t.text)),
+    child: Builder(
+      builder: (context) {
+        // Opened from where it is (the viewer grows from the row).
+        final open = onTap == null
+            ? null
+            : () {
+                final box = context.findRenderObject() as RenderBox?;
+                onTap(box == null ? Rect.zero : box.localToGlobal(Offset.zero) & box.size);
+              };
+        return Semantics(
+          button: true,
+          label: '${attachmentLabel(a)}, ${fileSize(a.size)}',
+          onTap: open,
+          excludeSemantics: true,
+          child: GestureDetector(
+            onTap: open,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: t.panel2, borderRadius: BorderRadius.circular(8)),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TkIcon('file', size: 22, color: t.text),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(attachmentLabel(a), style: tkText(size: 14, weight: 600, color: t.text)),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(fileSize(a.size), style: tkText(size: 13, color: m.mine ? t.chatOutMeta : t.muted)),
+                ],
+              ),
             ),
-            const SizedBox(width: 8),
-            Text(fileSize(a.size), style: tkText(size: 13, color: m.mine ? t.chatOutMeta : t.muted)),
-          ],
-        ),
-      ),
-        ),
-      ),
+          ),
+        );
+      },
     ),
   );
 }
@@ -417,7 +438,7 @@ class _LocalPhotoState extends State<_LocalPhoto> {
         label: 'Your photo',
         child: ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child: Image.memory(widget.file.bytes, width: s.width, height: s.height, fit: BoxFit.fill, gaplessPlayback: true),
+          child: Image.memory(widget.file.bytes, width: s.width, height: s.height, cacheWidth: (s.width * MediaQuery.devicePixelRatioOf(context)).round(), fit: BoxFit.fill, gaplessPlayback: true),
         ),
       ),
     );
@@ -494,6 +515,7 @@ class _VoicePlayerState extends State<VoicePlayer> {
       button: true,
       value: '${_clock(_at)} of ${_clock(_length)}',
       onTapHint: _playing ? 'Pause' : 'Play',
+      onTap: _toggle,
       excludeSemantics: true,
       child: TkPress(
         onTap: _toggle,

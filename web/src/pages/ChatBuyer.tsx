@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { ApiError, get, post, postOnce, put } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
-import { KitEmpty, KitField, KitLoading, Pill, SavedTick, Sheet } from "../kit";
+import { KitEmpty, KitField, KitLoading, Pill, SavedTick, Sheet, useSheetStep } from "../kit";
 import {
   billHero,
   billStatus,
@@ -847,6 +847,8 @@ export function PurchaseView({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const [mode, setMode] = useState<"" | "confirm" | "short">("");
+  // A step inside the sheet: Back comes back from it.
+  useSheetStep(mode !== "", () => setMode(""));
   const st = purchaseState(purchase);
   const steps = buyerSteps(purchase);
   // Delivered and not yet said what came (a received order is done).
@@ -1163,6 +1165,8 @@ export function BillView({
     [],
   );
   const [mode, setMode] = useState<"" | "query" | "paid">("");
+  // A step inside the sheet: Back comes back from it.
+  useSheetStep(mode !== "", () => setMode(""));
   const [reason, setReason] = useState("");
   const [amount, setAmount] = useState("");
   const [how, setHow] = useState("transfer");

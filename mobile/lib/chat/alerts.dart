@@ -13,6 +13,7 @@ import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/sheet.dart';
 import 'approve.dart';
+import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'cards.dart' show CardPill;
 import 'give_task.dart';
@@ -108,9 +109,13 @@ String firstName(String? name, String? email) {
 /// ChatStaff.tsx BriefingCard: on pine, from 8am: yesterday's sales and the
 /// week's bars, what is owed, low and due today; Got it puts it away.
 class BriefingCard extends StatefulWidget {
-  const BriefingCard({super.key, required this.briefing, required this.auth, this.onAsk, this.onGone});
+  const BriefingCard({super.key, required this.briefing, required this.auth, this.onAsk, this.onGone, this.onTile});
   final GetChatBriefingResponse briefing;
   final Auth auth;
+
+  /// A tile pressed: owed, stock, deliveries, staff, tasks or bookings
+  /// (ChatStaff.tsx's tiles lead to their screens).
+  final ValueChanged<String>? onTile;
 
   /// "How did we do yesterday", asked from the sales.
   final ValueChanged<String>? onAsk;
@@ -164,25 +169,38 @@ class _BriefingCardState extends State<BriefingCard> {
     final change = sales == null ? null : changeWords(sales.changePct as num?, 'last ${sales.weekday ?? ''}');
     final week = sales?.week ?? const <DaySales>[];
     final heights = barHeights([for (final d in week) d.kobo]);
-    Widget tile(String label, String value) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(color: mix(0.09), borderRadius: BorderRadius.circular(14)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: tkText(size: 12, color: mix(0.72))),
-          const SizedBox(height: 2),
-          Text(value, style: tkText(size: 15, weight: 700, color: on)),
-        ],
-      ),
-    );
+    Widget tile(String label, String value, [String? key]) {
+      final go = key == null || widget.onTile == null ? null : () => widget.onTile!(key);
+      final box = Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(color: mix(0.09), borderRadius: BorderRadius.circular(14)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: tkText(size: 12, color: mix(0.72))),
+            const SizedBox(height: 2),
+            Text(value, style: tkText(size: 15, weight: 700, color: on)),
+          ],
+        ),
+      );
+      if (go == null) return box;
+      return TapArea(
+        child: Semantics(
+          button: true,
+          label: '$label, $value',
+          onTap: go,
+          excludeSemantics: true,
+          child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: go, child: box),
+        ),
+      );
+    }
     final tiles = <Widget>[
-      if (b.owedKobo != null) tile('Owed to you', naira(b.owedKobo!)),
-      if (b.low != null) tile('Low stock', b.low == 1 ? '1 item' : '${b.low} items'),
-      if (b.deliveries != null) tile('Deliveries', '${b.deliveries} today'),
-      if (b.staff case final n?) tile('Staff', staffTile(n.in_.length, n.late.length)),
-      if (b.tasks case final n?) tile('Tasks', tasksTile(n.today, n.late)),
-      if (b.bookings != null && b.bookings! > 0) tile('Bookings', '${b.bookings} today'),
+      if (b.owedKobo != null) tile('Owed to you', naira(b.owedKobo!), 'owed'),
+      if (b.low != null) tile('Low stock', b.low == 1 ? '1 item' : '${b.low} items', 'stock'),
+      if (b.deliveries != null) tile('Deliveries', '${b.deliveries} today', 'deliveries'),
+      if (b.staff case final n?) tile('Staff', staffTile(n.in_.length, n.late.length), 'staff'),
+      if (b.tasks case final n?) tile('Tasks', tasksTile(n.today, n.late), 'tasks'),
+      if (b.bookings != null && b.bookings! > 0) tile('Bookings', '${b.bookings} today', 'bookings'),
     ];
     final parts = <Widget>[
       Row(
@@ -215,6 +233,7 @@ class _BriefingCardState extends State<BriefingCard> {
         Semantics(
           button: true,
           label: 'Sales yesterday ${naira(sales.yesterdayKobo ?? 0)}: ask how we did yesterday',
+          onTap: () => widget.onAsk?.call('how did we do yesterday'),
           excludeSemantics: true,
           child: TkPress(
             onTap: () => widget.onAsk?.call('how did we do yesterday'),
@@ -260,6 +279,7 @@ class _BriefingCardState extends State<BriefingCard> {
       Semantics(
         button: true,
         label: 'Got it: put the briefing away for today',
+        onTap: _gotIt,
         excludeSemantics: true,
         // chat.css `.tk-brief .tk-brief-ok`: plain words, 40 px tall, 10 px
         // below the tiles (over kit.css's pill).
@@ -435,6 +455,7 @@ class _Pill extends StatelessWidget {
       button: true,
       enabled: onTap != null,
       label: '$label: $named',
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         scale: 0.97,

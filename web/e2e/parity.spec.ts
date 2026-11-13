@@ -170,6 +170,24 @@ const SCREENS: {
     },
   },
   {
+    // Explore's start page with every section (the explore fixture, its
+    // answer given categories, Featured, Trusted and Popular): the chips,
+    // the Featured row, Near you.
+    name: "explore-start",
+    path: "/chat",
+    fixture: "explore-start",
+    touch: true,
+    ready: async (p) => {
+      await expect(p.getByTestId("new-chat")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("new-chat").click();
+      await expect(p.getByTestId("explore-featured")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.waitForTimeout(500);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
     // Explore searched: "rice".
     name: "explore-search",
     path: "/chat",
@@ -434,6 +452,124 @@ const SCREENS: {
       await expect(p.getByTestId("taskiem-stream")).toBeVisible();
       await expect(p.getByTestId("chat-alerts")).toBeAttached();
       await p.waitForLoadState("networkidle");
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // The tools panel open over Taskiem's conversation (M5): every tool the
+    // owner may open, its line and badge from its list.
+    name: "chat-tools",
+    touch: true,
+    path: "/chat?with=taskiem",
+    fixture: "chat-tools",
+    ready: async (p) => {
+      await expect(p.getByTestId("taskiem-stream")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "Open tools" }).click();
+      await expect(p.getByTestId("tools-panel")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      // The tiles' counts rolled into place.
+      await p.waitForTimeout(600);
+    },
+  },
+  {
+    // A tool's sheet from it: Products, its search, chips and rows.
+    name: "chat-tool-sheet",
+    touch: true,
+    path: "/chat?with=taskiem",
+    fixture: "chat-tools",
+    ready: async (p) => {
+      await expect(p.getByTestId("taskiem-stream")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "Open tools" }).click();
+      await p.getByTestId("tools-panel").getByRole("button", { name: /^Products/ }).click();
+      await expect(p.getByTestId("tool-sheet")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.waitForTimeout(600);
+      // Not hovering the first row, where the tile was pressed.
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // A product's form from Products (M6): its photos, name, category,
+    // prices on the storefront and the list, who sees it, the lowest price.
+    name: "chat-product",
+    touch: true,
+    path: "/chat?with=taskiem",
+    fixture: "chat-product",
+    ready: async (p) => {
+      await expect(p.getByTestId("taskiem-stream")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "Open tools" }).click();
+      await p.getByTestId("tools-panel").getByRole("button", { name: /^Products/ }).click();
+      await expect(p.getByTestId("tool-sheet")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("tool-sheet").locator("li button").first().click();
+      await p.waitForLoadState("networkidle");
+      await p.waitForTimeout(800);
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // Sell from the tools (M6): what has a price, one thing in the bag.
+    name: "chat-sell",
+    touch: true,
+    path: "/chat?with=taskiem",
+    fixture: "chat-sell",
+    ready: async (p) => {
+      await expect(p.getByTestId("taskiem-stream")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "Open tools" }).click();
+      await p.getByTestId("tools-panel").getByRole("button", { name: /^Sell/ }).click();
+      await expect(p.getByTestId("sell-sheet")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: /^One more / }).first().click();
+      await p.waitForTimeout(800);
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // Their shop from a business's tools (M5): their prices, one item in
+    // the bag, the bag in pine at the foot.
+    name: "chat-order",
+    touch: true,
+    path: "/chat?with=e03b6c00-cf87-43ff-8421-3bad056db361",
+    fixture: "chat-order",
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-message").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "Open tools" }).click();
+      await p.getByTestId("tools-panel").getByRole("button", { name: /^Their shop/ }).click();
+      await expect(p.getByTestId("order-sheet")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: /^One more / }).first().click();
+      await p.waitForTimeout(800);
+      await p.mouse.move(0, 0);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
+    // The same order's review: not one of our suppliers yet, the lines,
+    // Make an offer, the note, and Place order.
+    name: "chat-order-review",
+    touch: true,
+    path: "/chat?with=e03b6c00-cf87-43ff-8421-3bad056db361",
+    fixture: "chat-order",
+    ready: async (p) => {
+      await expect(p.getByTestId("chat-message").first()).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: "Open tools" }).click();
+      await p.getByTestId("tools-panel").getByRole("button", { name: /^Their shop/ }).click();
+      await expect(p.getByTestId("order-sheet")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByRole("button", { name: /^One more / }).first().click();
+      await p.getByRole("button", { name: "Review order" }).click();
+      await p.waitForLoadState("networkidle");
+      await p.waitForTimeout(800);
+      await p.mouse.move(0, 0);
       await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     },
   },

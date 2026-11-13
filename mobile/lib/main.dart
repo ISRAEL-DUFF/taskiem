@@ -7,20 +7,32 @@ import 'package:flutter/widgets.dart';
 
 import 'api/transport.dart';
 import 'app/auth.dart';
+import 'app/openers.dart';
 import 'app/config.dart';
+import 'kit/keyboard.dart';
 import 'app/lock.dart';
 import 'app/prefs.dart';
 import 'app/session.dart';
+import 'app/store.dart' show LocalStore;
 import 'api/api.g.dart';
+import 'chat/money_page.dart' show MoneyPage;
+import 'chat/order_sheet.dart' show showOrderSheet;
+import 'chat/orders_tab.dart' show OrdersTab;
+import 'chat/today_tab.dart' show TodayTab;
 import 'chat/chats.dart';
 import 'chat/conversation.dart';
 import 'chat/customer.dart';
+import 'chat/links_screen.dart';
+import 'chat/explore.dart' show showExplore;
+import 'chat/profile_screen.dart';
 import 'chat/live.dart';
 import 'chat/taskiem.dart';
+import 'screens/home_tabs.dart';
 import 'screens/signed_in.dart';
 import 'screens/sign_in.dart';
 import 'screens/sign_up.dart';
 import 'theme/theme.dart';
+import 'kit/mobile.dart' show TkRoute;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +42,8 @@ void main() {
     statusBarIconBrightness: Brightness.light,
     statusBarBrightness: Brightness.dark,
   ));
+  // The chats kept on the phone, encrypted (lib/app/store.dart).
+  LocalStore.enabled = true;
   final auth = Auth(transport: Transport(base: taskiemUrl), store: SessionStore(const SecureKeyStore()), version: appVersion);
   final prefs = Prefs(const SecureKeyStore())..load();
   auth.onForget = prefs.forgetPerson;
@@ -73,7 +87,9 @@ class TaskiemApp extends StatelessWidget {
           builder: (context) => DefaultTextStyle(
             style: tkText(size: 14, color: TkTheme.tokens(context).text).copyWith(decoration: TextDecoration.none),
             // The lock over every screen, not only the first.
-            child: auth == null || unlocker == null || home != null
+            // Above the keyboard when it is up, every screen and sheet.
+            child: KeyboardRoom(
+              child: auth == null || unlocker == null || home != null
                 ? child!
                 : ListenableBuilder(
                     listenable: Listenable.merge([auth!, ?prefs]),
@@ -89,6 +105,7 @@ class TaskiemApp extends StatelessWidget {
                       child: child!,
                     ),
                   ),
+            ),
           ),
         ),
       ),
@@ -265,6 +282,18 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _live.start();
     _chats.follow(true);
+    // What a tool's screen leads to: the shell's own screens.
+    Openers.linkedBusinesses = _links;
+    Openers.findBusiness = (context) => showExplore(context, chats: _chats, onOpen: (c) => _openConv(context, c));
+    Openers.businessProfile = (context) => _profile(context, back: 'Back to Explore');
+    // Drafting an order needs table.edit; else their shop to look around.
+    Openers.conversation = (context, link) {
+      final c = _chats.conversations.where((x) => x.link == link).firstOrNull;
+      if (c != null) _openConv(context, c);
+      return c != null;
+    };
+    Openers.orderFrom = (context, link, business) =>
+        showOrderSheet(context, chats: _chats, link: link, business: business, browse: !_chats.auth.can('table.edit'));
   }
 
   @override
@@ -282,6 +311,11 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    Openers.linkedBusinesses = null;
+    Openers.businessProfile = null;
+    Openers.findBusiness = null;
+    Openers.orderFrom = null;
+    Openers.conversation = null;
     // Stopped now; let go once the screens closed with this session (which
     // may still hold them this frame) are gone.
     _chats.follow(false);
@@ -296,32 +330,66 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    return HomeTabs(
+      count: () => _chats.tabCount,
+      offline: widget.auth.transport.offline,
+      updating: widget.auth.transport.updating,
+      counted: _chats,
+      tabs: [
+        (label: 'Chats', icon: 'chat', build: _chatsTab),
+        // Today (the web's Home); Updates as WhatsApp's (status and
+        // channels) is planned for later: docs/spec/mobile-app-updates.md.
+        (label: 'Today', icon: 'home', build: (_) => TodayTab(auth: _chats.auth)),
+        (
+          label: 'Money',
+          icon: 'money',
+          build: (_) => MoneyPage(auth: _chats.auth, tab: true),
+        ),
+        (
+          label: 'Orders',
+          icon: 'orders',
+          build: (_) => OrdersTab(auth: _chats.auth),
+        ),
+      ],
+    );
+  }
+
+  void _profile(BuildContext context, {String back = 'Back to Chat'}) => Navigator.of(context).push(TkRoute<void>(
+    pageBuilder: (_, _, _) => ProfileScreen(chats: _chats, backLabel: back),
+  ));
+
+  void _openConv(BuildContext context, LinkConversation c) => Navigator.of(context).push(TkRoute<void>(
+    pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c),
+  ));
+
+  /// Linked businesses, over [context].
+  void _links(BuildContext context) => Navigator.of(context).push(TkRoute<void>(
+    pageBuilder: (_, _, _) => LinksScreen(
+      chats: _chats,
+      onProfile: () => _profile(context, back: 'Back to Linked businesses'),
+      // No links yet: Find a business, over this page.
+      onFind: (links) => showExplore(links, chats: _chats, onOpen: (c) => _openConv(context, c)),
+    ),
+  ));
+
+  Widget _chatsTab(BuildContext context) {
     return ChatsScreen(
       data: _chats,
-      onMenu: () => Navigator.of(context).push(PageRouteBuilder<void>(
+      onLinks: () => _links(context),
+      onProfile: () => _profile(context),
+      onMenu: () => Navigator.of(context).push(TkRoute<void>(
         pageBuilder: (_, _, _) => SignedInScreen(auth: widget.auth, prefs: widget.prefs, unlocker: widget.unlocker),
       )),
-      // On a phone the web shows the conversation in the list's place, at
-      // once: no transition either way.
-      onOpenTaskiem: () => Navigator.of(context).push(PageRouteBuilder<void>(
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats),
+      // A conversation slides in over the list, as a phone's chats do.
+      onOpenTaskiem: () => Navigator.of(context).push(TkRoute<void>(
+    pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats),
       )),
-      onOpenCustomer: (c) => Navigator.of(context).push(PageRouteBuilder<void>(
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => _OpenCustomer(chats: _chats, id: c.id),
+      onOpenCustomer: (c) => Navigator.of(context).push(TkRoute<void>(
+    pageBuilder: (_, _, _) => _OpenCustomer(chats: _chats, id: c.id),
       )),
-      onOpen: (c) => Navigator.of(context).push(PageRouteBuilder<void>(
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c),
-      )),
-      onOpenAt: (c, message) => Navigator.of(context).push(PageRouteBuilder<void>(
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c, focus: message),
+      onOpen: (c) => _openConv(context, c),
+      onOpenAt: (c, message) => Navigator.of(context).push(TkRoute<void>(
+    pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c, focus: message),
       )),
     );
   }
@@ -354,6 +422,15 @@ class _OpenState extends State<_Open> {
     data: _data,
     // A business tagged in a message: its conversation, in this one's place.
     onOpenLink: (link) {
+      // "Open" on a save's toast: Taskiem's conversation, in this one's place.
+      if (link == 'taskiem') {
+        Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          pageBuilder: (_, _, _) => _OpenTaskiem(chats: widget.chats),
+        ));
+        return;
+      }
       final c = widget.chats.conversations.where((c) => c.link == link).firstOrNull;
       if (c == null) return;
       Navigator.of(context).pushReplacement(PageRouteBuilder<void>(

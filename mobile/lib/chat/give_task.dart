@@ -284,6 +284,7 @@ class TkPickBox extends StatelessWidget {
       button: true,
       label: label,
       value: shown,
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
