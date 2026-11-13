@@ -358,8 +358,12 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 		// A file, its caption as the text (a list for a table).
 		in.Type = "document"
 		in.Document = &whatsapp.Media{ID: u.Document.FileID, MimeType: u.Document.MimeType, Name: u.Document.Name}
+	case u.Location != "":
+		// A location shared: a clock-in carries it (staff_clock.go), as
+		// on WhatsApp.
+		in.Type, in.Text, in.Location = "location", "", u.Location
 	case in.Text == "":
-		return nil // a sticker, a location: nothing to act on
+		return nil // a sticker: nothing to act on
 	default:
 		// Telegram's commands are /help, /approvals...: read as the words.
 		// "/start" is help, unless it brings back a business's updates.

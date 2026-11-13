@@ -299,3 +299,24 @@ func TestOutboxSlowBatchIsSentOnce(t *testing.T) {
 		t.Errorf("attempts: %d %v", attempts, err)
 	}
 }
+
+// TestTelegramLocationGoesWithTheClockIn (E6): a linked member's shared
+// location reaches the conversation on Telegram as it does on WhatsApp.
+func TestTelegramLocationGoesWithTheClockIn(t *testing.T) {
+	w := newTGWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(200, "PUT", "/v1/settings/chat-tools", map[string]any{"chat_tools": true})
+	const ada = int64(7401)
+	w.link(t, owner, ada, "ada")
+	if got := w.say(t, ada, "in"); !strings.Contains(got.Text, "Clocked in at") {
+		t.Fatalf("in: %+v", got)
+	}
+	got := w.update(t, ada, func(id int64) []byte { return telegramtest.LocationMessage(id, ada, 6.4541, 3.3947) })
+	if len(got) != 1 || !strings.Contains(got[0].Text, "Your location is with today's clock-in") {
+		t.Fatalf("the location: %+v", got)
+	}
+	var where string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT COALESCE(in_where, '') FROM staff_clock`).Scan(&where); err != nil || !strings.Contains(where, "6.4541") {
+		t.Fatalf("the clock-in's place: %q %v", where, err)
+	}
+}
