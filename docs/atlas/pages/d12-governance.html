@@ -31,7 +31,7 @@
   <li>One vote per person per level, and nobody who approved an earlier level approves a later one.</li>
   <li>The step-up the rule asks for, last.</li>
 </ol>
-<x-code path="engine/runtime/approvals.go" start="SELECT taskiem_actor_human(r.started_by), taskiem_actor_human(wv.created_by), taskiem_actor_human(wv.published_by::text) FROM runs r" lines="3" caption="who counts as a maker"/>
+<x-code path="engine/runtime/approvals.go" start="SELECT taskiem_actor_human(r.started_by), taskiem_actor_human(wv.created_by), taskiem_actor_human(wv.published_by::text)," lines="3" caption="who counts as a maker"/>
 <p>The final approval continues the run in the same transaction. API keys never vote. The same rule, that whoever asks does not decide, holds elsewhere:</p>
 <div class="table-wrap"><table>
   <thead><tr><th>Where</th><th>Rule</th></tr></thead>
