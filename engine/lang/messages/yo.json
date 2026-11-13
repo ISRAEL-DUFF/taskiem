@@ -6034,6 +6034,18 @@
     "customer.chat_expired": {
       "text": "O kò sanwó fún {reference} lásìkò, nítorí náà a ti fagilé e. Kọ sí wa láti béèrè lẹ́ẹ̀kan sí i.",
       "reviewed": false
+    },
+    "rider.photo_kept_for": {
+      "text": "Photo kept as proof of delivery for {reference}. Thank you.",
+      "reviewed": false
+    },
+    "rider.photo_kept_which": {
+      "text": "Photo kept as proof of delivery for {reference}. If it is for another order, tap that order.",
+      "reviewed": false
+    },
+    "rider.photo_moved": {
+      "text": "Done: the photo is now kept for {reference}.",
+      "reviewed": false
     }
   }
 }

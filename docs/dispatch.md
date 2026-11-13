@@ -95,7 +95,7 @@ The rider's taps, each a button in their chat (or the words `picked up`, `arrive
 
 The order is completed in the same step that saves the tap, so a delivery is never delivered with its order still open. Telling the order's workflow and the customer comes straight after; if that fails (the service restarts at that moment), a second tap on **Delivered** does it, and so does the dispatch sweep within a couple of minutes, each once (`deliveries.finished_at` says it is done). The same holds for the paid flow after **Cash received**.
 
-A **photo** the rider sends after Delivered is kept as proof, in the business's own storage. A **location** they share at the door is kept with the delivery. Both show on the order's Delivery card. Taskiem never tracks where a rider is.
+A **photo** the rider sends is kept as proof, in the business's own storage, for the order they last marked **Arrived** or **Delivered** (in the last two hours), and the answer names that order. A rider with other orders of the business at the door or just delivered gets each of them on a button: a tap moves the photo to that order (for half an hour, once). A later photo is kept beside the earlier ones (`delivery_proofs`), never in their place; the order's Delivery card shows the latest, and `proofs` in the API says how many there are. A **location** they share at the door is kept with the delivery. Both show on the order's Delivery card. Taskiem never tracks where a rider is.
 
 **Quiet riders.** A rider who has not picked up an order in time (20 minutes by default), or not reached the door in time (90 minutes), is raised to the owner with the rider's phone. The owner can call them or take the order back.
 
