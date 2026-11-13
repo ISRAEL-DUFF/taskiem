@@ -1199,7 +1199,7 @@ func (d *decider) compensations(insts []string) bool {
 		_, id := history.SplitInstance(inst)
 		s := d.def.Step(id)
 		if len(f.scheduled) == 0 {
-			in, err := engine.Resolve(s.Compensate.Input, d.activationFor(inst), true)
+			in, kept, err := engine.ResolveKeeping(s.Compensate.Input, d.activationFor(inst))
 			if err != nil {
 				d.fail(cinst, "expression", err)
 				return false
@@ -1207,7 +1207,7 @@ func (d *decider) compensations(insts []string) bool {
 			d.emit(history.StepScheduled, cinst, 1, history.ScheduledPayload{
 				// The connection the step itself used: the account its effect is on.
 				Kind: history.KindTask, Queue: "connector", Connector: s.Connector, Action: s.Compensate.Action, Connection: s.Connection,
-				Input: in, KeyStep: cinst, Compensates: inst, AvailableAt: history.FormatTime(d.now),
+				Input: in, SecretPaths: kept, KeyStep: cinst, Compensates: inst, AvailableAt: history.FormatTime(d.now),
 			})
 			return false
 		}
@@ -1301,47 +1301,34 @@ func (d *decider) waitUntil(s *wd.Step, act map[string]any) (time.Time, error) {
 
 func (d *decider) taskPayload(s *wd.Step, inst string, act map[string]any) (history.ScheduledPayload, error) {
 	p := history.ScheduledPayload{Kind: history.KindTask, Queue: s.Queue(), KeyStep: inst}
+	// The expressions left for the worker are recorded by place
+	// (SecretPaths): a value that only reads like one is never evaluated.
 	var err error
 	switch s.Type {
 	case "connector":
 		p.Connector, p.Action, p.Connection = s.Connector, s.Action, s.Connection
-		p.Input, err = engine.Resolve(orEmpty(s.Input), act, true)
+		p.Input, p.SecretPaths, err = engine.ResolveKeeping(orEmpty(s.Input), act)
 		if err == nil && s.Capability != nil {
-			p.Input, p.Capability, err = capabilityInput(s, p.Input, act)
+			p.Input, p.SecretPaths, p.Capability, err = capabilityInput(s, p.Input, p.SecretPaths, act)
 		}
 	case "http":
-		c := s.HTTP
-		cfg := map[string]any{"method": c.Method, "url": c.URL}
-		if c.Headers != nil {
-			cfg["headers"] = c.Headers
-		}
-		if c.Query != nil {
-			cfg["query"] = c.Query
-		}
-		if c.Body != nil {
-			cfg["body"] = c.Body
-		}
-		if c.Class != "" {
-			cfg["class"] = c.Class
-		}
-		if c.IdempotencyHeader != "" {
-			cfg["idempotency_header"] = c.IdempotencyHeader
-		}
-		p.Input, err = engine.Resolve(cfg, act, true)
+		p.Input, p.SecretPaths, err = engine.ResolveKeeping(httpConfig(s.HTTP), act)
 	case "ai":
 		// The question as it leaves: the prompt (an expression is
 		// evaluated) and the input. The worker masks personal data in both
 		// and reads the rest of the step from the definition.
 		var prompt, in any
+		var keptPrompt, keptIn []string
 		if s.AI != nil {
-			prompt, err = engine.Resolve(s.AI.Prompt, act, true)
+			prompt, keptPrompt, err = engine.ResolveKeeping(s.AI.Prompt, act)
 		}
 		if err == nil {
-			in, err = engine.Resolve(orEmpty(s.Input), act, true)
+			in, keptIn, err = engine.ResolveKeeping(orEmpty(s.Input), act)
 		}
 		p.Input = map[string]any{"prompt": prompt, "input": in}
+		p.SecretPaths = append(under("/input", keptIn), under("/prompt", keptPrompt)...)
 	default:
-		p.Input, err = engine.Resolve(orEmpty(s.Input), act, true)
+		p.Input, p.SecretPaths, err = engine.ResolveKeeping(orEmpty(s.Input), act)
 	}
 	if err != nil {
 		return p, err
@@ -1359,8 +1346,10 @@ func (d *decider) taskPayload(s *wd.Step, inst string, act map[string]any) (hist
 
 // capabilityInput maps an expanded step's capability input to its
 // action's input through the rail's mapping, which may read the outputs
-// of the composite's earlier steps.
-func capabilityInput(s *wd.Step, in any, act map[string]any) (any, *history.CapabilityScheduled, error) {
+// of the composite's earlier steps. kept is where the capability input
+// holds secret expressions; the places the mapping carried them to are
+// returned with the action's input.
+func capabilityInput(s *wd.Step, in any, kept []string, act map[string]any) (any, []string, *history.CapabilityScheduled, error) {
 	all, _ := act["steps"].(map[string]any)
 	steps := map[string]any{}
 	for name, id := range s.Capability.Steps {
@@ -1370,13 +1359,13 @@ func capabilityInput(s *wd.Step, in any, act map[string]any) (any, *history.Capa
 	}
 	out, err := capability.ResolveMapping(s.Capability.Input, in, nil, steps)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%s input: %w", s.Capability.Uses, err)
+		return nil, nil, nil, fmt.Errorf("%s input: %w", s.Capability.Uses, err)
 	}
 	cs := &history.CapabilityScheduled{Uses: s.Capability.Uses, Input: in}
 	if len(steps) > 0 {
 		cs.Steps = steps
 	}
-	return out, cs, nil
+	return out, mappedSecretPaths(s.Capability.Input, in, kept, steps, out), cs, nil
 }
 
 func orEmpty(m map[string]any) map[string]any {

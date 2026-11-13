@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"runtime/debug"
@@ -27,6 +28,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/container"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/decide"
 	"github.com/israel-duff/taskiem/engine/drift"
 	"github.com/israel-duff/taskiem/engine/effects"
 	"github.com/israel-duff/taskiem/engine/egress"
@@ -1341,15 +1343,30 @@ func (w *Worker) classify(p *plan, err error) history.Event {
 	return history.Event{Type: history.StepFailed, StepID: p.c.step, Attempt: p.c.attempt, Payload: raw}
 }
 
-// resolveSecrets evaluates the secret-only expressions decide left in the input.
+// resolveSecrets evaluates the secret-only expressions decide left in the
+// input, at the places decide recorded and nowhere else. Every other
+// string is data and is sent as it is, whatever it starts with: a value
+// from a trigger or an earlier step may read "=secrets.name", and it must
+// never be looked up.
 func (w *Worker) resolveSecrets(ctx context.Context, p *plan) (any, error) {
-	names := map[string]bool{}
-	collectSecrets(p.sched.Input, names)
-	if len(names) == 0 {
+	places := secretPlaces(p)
+	if len(places) == 0 {
 		return p.sched.Input, nil
 	}
+	names := map[string]bool{}
+	for _, at := range places {
+		v, _ := expr.At(p.sched.Input, at)
+		s, _ := v.(string)
+		r, err := exprEngine.References(s)
+		if !expr.IsExpr(s) || err != nil || !r.Roots["secrets"] {
+			return nil, fmt.Errorf("the step's input has no secret expression at %q", at)
+		}
+		for n := range r.Secrets {
+			names[n] = true
+		}
+	}
 	vals := map[string]any{}
-	for n := range names {
+	for _, n := range slices.Sorted(maps.Keys(names)) {
 		v, err := w.secret(ctx, p, n)
 		if err != nil {
 			return nil, err
@@ -1357,28 +1374,18 @@ func (w *Worker) resolveSecrets(ctx context.Context, p *plan) (any, error) {
 		vals[n] = v
 		p.scrub = append(p.scrub, v)
 	}
-	return exprEngine.Resolve(p.sched.Input, map[string]any{"secrets": vals}, false)
+	return exprEngine.ResolveAt(p.sched.Input, places, map[string]any{"secrets": vals})
 }
 
-func collectSecrets(v any, into map[string]bool) {
-	switch t := v.(type) {
-	case string:
-		if expr.IsExpr(t) {
-			if r, err := exprEngine.References(t); err == nil {
-				for n := range r.Secrets {
-					into[n] = true
-				}
-			}
-		}
-	case map[string]any:
-		for _, c := range t {
-			collectSecrets(c, into)
-		}
-	case []any:
-		for _, c := range t {
-			collectSecrets(c, into)
-		}
+// secretPlaces is where the scheduled input holds its author's secret
+// expressions: the list decide recorded, or, for a task scheduled before
+// decide recorded one, the places of the step as authored that the input
+// still holds unchanged. The input is never searched for expressions.
+func secretPlaces(p *plan) []string {
+	if p.sched.SecretPaths != nil {
+		return p.sched.SecretPaths
 	}
+	return decide.AuthoredSecretPaths(p.step, p.sched)
 }
 
 // ConnectionExpirer marks a connection expired when its provider refused

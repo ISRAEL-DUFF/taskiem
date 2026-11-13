@@ -180,6 +180,14 @@ type ScheduledPayload struct {
 	// capability's input and the earlier steps' outputs the rail's mapping
 	// read, kept so the worker maps the action's output back the same way.
 	Capability *CapabilityScheduled `json:"capability,omitempty"`
+	// SecretPaths lists where Input holds an expression its author wrote
+	// that reads secrets, as JSON pointers into Input. The worker evaluates
+	// those places and no others: every other string in Input is data,
+	// whatever it starts with. Decide writes the list from the definition
+	// alone, so no value of a run can add to it. A payload written before
+	// the field existed has none: the worker then finds the places in the
+	// step as authored (decide.AuthoredSecretPaths).
+	SecretPaths []string `json:"secret_paths,omitempty"`
 }
 
 // CapabilityScheduled is what an expanded step's output mapping reads

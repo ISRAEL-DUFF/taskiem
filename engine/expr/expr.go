@@ -10,6 +10,7 @@ import (
 	"maps"
 	"math"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -225,7 +226,28 @@ func (e *Engine) EvalBool(src string, act map[string]any) (bool, error) {
 // Resolve walks a value and evaluates every expression in it. With
 // keepSecrets, expressions that reference secrets are left as strings for the
 // worker to resolve at execution time, so secret values never enter history.
+// A caller that keeps secrets and stores the result needs ResolveKeeping:
+// without the places it reports, a kept expression cannot be told from a
+// value that only looks like one.
 func (e *Engine) Resolve(v any, act map[string]any, keepSecrets bool) (any, error) {
+	return e.resolve(v, act, keepSecrets, "", nil)
+}
+
+// ResolveKeeping is Resolve with keepSecrets. It also reports where the
+// expressions it left are: one JSON pointer (RFC 6901) each, in a fixed
+// order. Only those places hold expressions. Every other string in the
+// result is a value, whatever it starts with: an expression may evaluate to
+// text that reads like another expression, and that text is data.
+func (e *Engine) ResolveKeeping(v any, act map[string]any) (any, []string, error) {
+	var kept []string
+	out, err := e.resolve(v, act, true, "", &kept)
+	if err != nil {
+		return nil, nil, err
+	}
+	return out, kept, nil
+}
+
+func (e *Engine) resolve(v any, act map[string]any, keepSecrets bool, at string, kept *[]string) (any, error) {
 	switch t := v.(type) {
 	case string:
 		if !IsExpr(t) {
@@ -237,6 +259,9 @@ func (e *Engine) Resolve(v any, act map[string]any, keepSecrets bool) (any, erro
 				return nil, err
 			}
 			if refs.Roots["secrets"] {
+				if kept != nil {
+					*kept = append(*kept, at)
+				}
 				return t, nil
 			}
 		}
@@ -247,7 +272,7 @@ func (e *Engine) Resolve(v any, act map[string]any, keepSecrets bool) (any, erro
 		// a replay must reproduce it exactly.
 		out := make(map[string]any, len(t))
 		for _, k := range slices.Sorted(maps.Keys(t)) {
-			r, err := e.Resolve(t[k], act, keepSecrets)
+			r, err := e.resolve(t[k], act, keepSecrets, at+"/"+pointerEscape.Replace(k), kept)
 			if err != nil {
 				return nil, err
 			}
@@ -257,13 +282,155 @@ func (e *Engine) Resolve(v any, act map[string]any, keepSecrets bool) (any, erro
 	case []any:
 		out := make([]any, len(t))
 		for i, c := range t {
-			r, err := e.Resolve(c, act, keepSecrets)
+			r, err := e.resolve(c, act, keepSecrets, at+"/"+strconv.Itoa(i), kept)
 			if err != nil {
 				return nil, err
 			}
 			out[i] = r
 		}
 		return out, nil
+	}
+	return v, nil
+}
+
+var (
+	pointerEscape   = strings.NewReplacer("~", "~0", "/", "~1")
+	pointerUnescape = strings.NewReplacer("~1", "/", "~0", "~")
+)
+
+// SecretPaths reports where the expressions that reference secrets are in a
+// value as its author wrote it: the places ResolveKeeping would leave.
+func (e *Engine) SecretPaths(v any) []string {
+	var out []string
+	WalkStrings(v, func(at, s string) {
+		if e.readsSecrets(s) {
+			out = append(out, at)
+		}
+	})
+	return out
+}
+
+// WalkStrings calls fn for every string in v with its JSON pointer, in a
+// fixed order.
+func WalkStrings(v any, fn func(pointer, s string)) {
+	walkStrings(v, "", fn)
+}
+
+func walkStrings(v any, at string, fn func(pointer, s string)) {
+	switch t := v.(type) {
+	case string:
+		fn(at, t)
+	case map[string]any:
+		for _, k := range slices.Sorted(maps.Keys(t)) {
+			walkStrings(t[k], at+"/"+pointerEscape.Replace(k), fn)
+		}
+	case []any:
+		for i, c := range t {
+			walkStrings(c, at+"/"+strconv.Itoa(i), fn)
+		}
+	}
+}
+
+func (e *Engine) readsSecrets(s string) bool {
+	if !IsExpr(s) {
+		return false
+	}
+	refs, err := e.References(s)
+	return err == nil && refs.Roots["secrets"]
+}
+
+// At returns the value at a JSON pointer in v, and whether there is one.
+func At(v any, pointer string) (any, bool) {
+	for _, seg := range pointerSegments(pointer) {
+		switch t := v.(type) {
+		case map[string]any:
+			c, ok := t[seg]
+			if !ok {
+				return nil, false
+			}
+			v = c
+		case []any:
+			i, err := strconv.Atoi(seg)
+			if err != nil || i < 0 || i >= len(t) || strconv.Itoa(i) != seg {
+				return nil, false
+			}
+			v = t[i]
+		default:
+			return nil, false
+		}
+	}
+	return v, true
+}
+
+func pointerSegments(pointer string) []string {
+	if pointer == "" {
+		return nil
+	}
+	segs := strings.Split(strings.TrimPrefix(pointer, "/"), "/")
+	for i, s := range segs {
+		segs[i] = pointerUnescape.Replace(s)
+	}
+	return segs
+}
+
+// SetAt returns v with the value at a JSON pointer replaced. The maps and
+// lists on the way are copied; v itself is not changed. The place must
+// exist.
+func SetAt(v any, pointer string, to any) (any, error) {
+	return setAt(v, pointerSegments(pointer), to, pointer)
+}
+
+func setAt(v any, segs []string, to any, pointer string) (any, error) {
+	if len(segs) == 0 {
+		return to, nil
+	}
+	switch t := v.(type) {
+	case map[string]any:
+		c, ok := t[segs[0]]
+		if !ok {
+			break
+		}
+		r, err := setAt(c, segs[1:], to, pointer)
+		if err != nil {
+			return nil, err
+		}
+		out := maps.Clone(t)
+		out[segs[0]] = r
+		return out, nil
+	case []any:
+		i, err := strconv.Atoi(segs[0])
+		if err != nil || i < 0 || i >= len(t) || strconv.Itoa(i) != segs[0] {
+			break
+		}
+		r, err := setAt(t[i], segs[1:], to, pointer)
+		if err != nil {
+			return nil, err
+		}
+		out := slices.Clone(t)
+		out[i] = r
+		return out, nil
+	}
+	return nil, fmt.Errorf("nothing at %q", pointer)
+}
+
+// ResolveAt evaluates the expressions at the given places (JSON pointers,
+// as ResolveKeeping reports them) and nothing else: every other string in
+// v is data and is returned as it is. A place that does not hold an
+// expression that reads secrets is an error, never a guess.
+func (e *Engine) ResolveAt(v any, places []string, act map[string]any) (any, error) {
+	for _, at := range places {
+		c, ok := At(v, at)
+		s, isString := c.(string)
+		if !ok || !isString || !e.readsSecrets(s) {
+			return nil, fmt.Errorf("no secret expression at %q", at)
+		}
+		r, err := e.Eval(s, act)
+		if err != nil {
+			return nil, err
+		}
+		if v, err = SetAt(v, at, r); err != nil {
+			return nil, err
+		}
 	}
 	return v, nil
 }
