@@ -257,6 +257,12 @@ func (s *Server) saveKeyConnection(ctx context.Context, p *Principal, env string
 	subscribes := false
 	err = inTx(func(tx pgx.Tx) error {
 		var err error
+		// Counted again where it is made: the lock the count takes holds
+		// until this commits, so connections made at once cannot pass the
+		// limit together.
+		if err := s.checkCount(ctx, tx, p.TenantID, "max_connections"); err != nil {
+			return err
+		}
 		if name == "" {
 			if name, err = freeConnectionName(ctx, tx, env, c.Manifest.ID); err != nil {
 				return err
@@ -346,17 +352,21 @@ func (s *Server) putSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
+	// A new secret is counted and written in one transaction, under the
+	// count's lock, so secrets made at once cannot pass the limit together.
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var exists bool
-		if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM secrets WHERE environment = $1 AND name = $2)`, env, name).Scan(&exists); err != nil || exists {
+		if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM secrets WHERE environment = $1 AND name = $2)`, env, name).Scan(&exists); err != nil {
 			return err
 		}
-		return s.checkCount(r.Context(), tx, p.TenantID, "max_secrets")
+		if !exists {
+			if err := s.checkCount(r.Context(), tx, p.TenantID, "max_secrets"); err != nil {
+				return err
+			}
+		}
+		_, err := s.Vault.PutTx(r.Context(), tx, p.TenantID, env, name, []byte(req.Value), p.Actor())
+		return err
 	}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err := s.Vault.Put(r.Context(), p.TenantID, env, name, []byte(req.Value), p.Actor()); err != nil {
 		s.fail(w, r, err)
 		return
 	}
