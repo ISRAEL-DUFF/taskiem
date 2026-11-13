@@ -239,4 +239,61 @@ void main() {
     expect(Directory('${tmp.path}/data').listSync(), isEmpty);
     expect(Directory('${tmp.path}/media').listSync(), isEmpty);
   });
+
+  test('what changed while closed comes into what is kept: written, reacted to, deleted', () async {
+    final f = Fixture('chats');
+    final store = await LocalStore.open('t_u', keys);
+    store.keepMessages(_link, [
+      {'id': 'old', 'link': _link, 'kind': 'text', 'mine': false, 'body': 'Gone soon', 'created_at': '2026-11-12T09:00:00Z'},
+      {'id': 'kept', 'link': _link, 'kind': 'text', 'mine': true, 'body': 'Two bags', 'created_at': '2026-11-12T09:01:00Z'},
+    ]);
+    final asked = <String>[];
+    final s = signedIn(
+      f,
+      () => true,
+      also: (req) async {
+        if (req.url.path != '/v1/link-chats/changes') return null;
+        final since = req.url.queryParameters['since'];
+        asked.add(since ?? '');
+        final body = since == null
+            ? {'messages': <Object>[], 'gone': <Object>[], 'until': '2026-11-13T08:00:00Z', 'more': false}
+            : {
+                'messages': [
+                  {'id': 'new', 'link': _link, 'kind': 'text', 'mine': false, 'body': 'Rice is back', 'created_at': '2026-11-13T08:30:00Z'},
+                  {
+                    'id': 'kept',
+                    'link': _link,
+                    'kind': 'text',
+                    'mine': true,
+                    'body': 'Two bags',
+                    'created_at': '2026-11-12T09:01:00Z',
+                    'reactions': [
+                      {'emoji': '👍', 'count': 1},
+                    ],
+                  },
+                ],
+                'gone': [
+                  {'id': 'old', 'link': _link},
+                ],
+                'until': '2026-11-13T09:00:00Z',
+                'more': false,
+              };
+        return http.Response(jsonEncode(body), 200, headers: {'content-type': 'application/json'});
+      },
+    );
+    s.auth.local = store;
+    final chats = ChatsData(s.auth, now: () => f.at);
+    // The first time: only where to begin.
+    await chats.syncChanges();
+    expect(store.messages(_link).map((m) => m['id']), ['old', 'kept']);
+    // Then what changed since.
+    await chats.syncChanges();
+    expect(asked, ['', '2026-11-13T08:00:00Z']);
+    final kept = store.messages(_link);
+    expect(kept.map((m) => m['id']), ['kept', 'new']);
+    expect(kept.first['reactions'], isNotEmpty);
+    expect(store.read('changes_until'), '2026-11-13T09:00:00Z');
+    chats.dispose();
+    store.close();
+  });
 }

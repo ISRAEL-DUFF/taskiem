@@ -283,6 +283,44 @@ class ChatsData extends ChangeNotifier {
     }
   }
 
+  bool _syncing = false;
+
+  /// K3: what changed in the conversations since the phone last asked
+  /// (GET /v1/link-chats/changes): the messages written, read or reacted
+  /// to go into what it keeps, those deleted for us leave it. So a
+  /// conversation opened offline, or before its page comes, is as it is
+  /// now, not as it was when last opened.
+  Future<void> syncChanges() async {
+    final local = auth.local;
+    if (local == null || _syncing || !linksOn) return;
+    _syncing = true;
+    try {
+      for (var round = 0; round < 10 && !_disposed; round++) {
+        final since = local.read('changes_until');
+        final r = await auth.transport.send('GET', '/v1/link-chats/changes', query: {if (since is String) 'since': since});
+        if (r is! Map) return;
+        final byConv = <String, List<Map<String, dynamic>>>{};
+        for (final m in (r['messages'] as List? ?? const [])) {
+          final j = (m as Map).cast<String, dynamic>();
+          (byConv['${j['link']}'] ??= []).add(j);
+        }
+        for (final e in byConv.entries) {
+          local.keepMessages(e.key, e.value);
+        }
+        for (final g in (r['gone'] as List? ?? const [])) {
+          final j = (g as Map).cast<String, dynamic>();
+          local.dropMessage('${j['link']}', '${j['id']}');
+        }
+        local.write('changes_until', r['until']);
+        if (r['more'] != true) return;
+      }
+    } on Object {
+      // Asked again with the next load.
+    } finally {
+      _syncing = false;
+    }
+  }
+
   /// Drawn from what the phone kept (not yet, or not, from the server).
   bool kept = false;
 
@@ -335,7 +373,10 @@ class ChatsData extends ChangeNotifier {
         // Not kept this time.
       }
     }
-    if (!offline) unawaited(flushOutbox().then((_) {}, onError: (Object _) {}));
+    if (!offline) {
+      unawaited(flushOutbox().then((_) {}, onError: (Object _) {}));
+      unawaited(syncChanges());
+    }
     notifyListeners();
   }
 
