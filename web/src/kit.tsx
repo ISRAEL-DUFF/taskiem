@@ -9,7 +9,7 @@ import {
 import { Link } from "react-router-dom";
 import { Icon } from "./icons";
 import { useSheetDrag } from "./lib/sheetDrag";
-import { useFocusTrap } from "./ui";
+import { FieldLabel, useFocusTrap } from "./ui";
 
 // Taskiem's new look as shared parts (docs/spec/chat-tools.md §2,
 // docs/brand/screens.md "The new kit"): built in phase 1 and used first by
@@ -154,10 +154,13 @@ export function KitField({
   error?: string;
   children: ReactNode;
 }) {
+  const id = useId();
   return (
     <label className="tk-field">
-      <span className="tk-field-label">{label}</span>
-      {children}
+      <span className="tk-field-label" id={id}>
+        {label}
+      </span>
+      <FieldLabel.Provider value={id}>{children}</FieldLabel.Provider>
       {error && (
         <span className="tk-field-error" role="alert">
           {error}

@@ -596,6 +596,10 @@ const SCREENS: {
       await p.waitForLoadState("networkidle");
       await p.getByTestId("chat-message").first().click({ button: "right", position: { x: 40, y: 20 } });
       await p.getByTestId("chat-more").getByRole("button", { name: "Reply" }).click();
+      // A reply to write puts the cursor in the message box a frame later
+      // (composerFocus.ts): wait for it, or the blur below can come first
+      // and the picture keeps the box's focus ring.
+      await expect(p.locator("textarea:focus")).toHaveCount(1);
       await p.mouse.move(0, 0);
       await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     },
