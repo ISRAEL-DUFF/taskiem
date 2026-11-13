@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -732,6 +733,15 @@ func (s *Server) listAnchors(w http.ResponseWriter, r *http.Request) {
 		resp["public_key"] = base64.StdEncoding.EncodeToString(s.AnchorKey)
 		resp["key_id"] = audit.KeyID(s.AnchorKey)
 	}
+	// Every key an anchor may be signed with: the current one first, then
+	// the retired ones.
+	if keys := s.anchorKeys(); len(keys) > 0 {
+		all := make([]string, len(keys))
+		for i, k := range keys {
+			all[i] = base64.StdEncoding.EncodeToString(k)
+		}
+		resp["public_keys"] = all
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -1014,4 +1024,14 @@ func (s *Server) listConnectionNames(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"connections": nonNil(out)})
+}
+
+// anchorKeys are the keys an anchor may be signed with: the current one,
+// then the retired ones.
+func (s *Server) anchorKeys() []ed25519.PublicKey {
+	var keys []ed25519.PublicKey
+	if s.AnchorKey != nil {
+		keys = append(keys, s.AnchorKey)
+	}
+	return append(keys, s.RetiredAnchorKeys...)
 }

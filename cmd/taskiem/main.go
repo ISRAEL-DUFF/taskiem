@@ -6,8 +6,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -363,13 +361,18 @@ func passkeysCmd(args []string, stdout io.Writer) error {
 }
 
 func auditCmd(args []string, stdout io.Writer) error {
-	usage := errors.New("usage: taskiem audit verify [--anchors FILE [--key BASE64]] FILE (an export from GET /v1/audit/export; - for stdin)")
+	usage := errors.New("usage: taskiem audit verify [--anchors FILE (--key BASE64 [--key BASE64 ...] | --unsigned-ok)] FILE (an export from GET /v1/audit/export; - for stdin)")
 	if len(args) < 1 || args[0] != "verify" {
 		return usage
 	}
 	fs := flag.NewFlagSet("audit verify", flag.ContinueOnError)
 	anchorsFile := fs.String("anchors", "", "anchors to check the export against: the JSON lines delivered outside the database, or GET /v1/audit/anchors")
-	key := fs.String("key", "", "the anchor public key (base64), from GET /v1/audit/anchors")
+	var keys []string
+	fs.Func("key", "an anchor public key (base64), from GET /v1/audit/anchors; repeat it for each retired key (TASKIEM_ANCHOR_PUBLIC_KEYS is read too)", func(v string) error {
+		keys = append(keys, v)
+		return nil
+	})
+	unsignedOK := fs.Bool("unsigned-ok", false, "compare the export with the anchors without checking who signed them")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -404,24 +407,26 @@ func auditCmd(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
-	var pub ed25519.PublicKey
-	if *key != "" {
-		b, err := base64.StdEncoding.DecodeString(*key)
-		if err != nil || len(b) != ed25519.PublicKeySize {
-			return errors.New("audit verify: --key must be a base64 Ed25519 public key")
-		}
-		pub = b
+	pubs, err := audit.ParsePublicKeys(strings.Join(append(keys, os.Getenv("TASKIEM_ANCHOR_PUBLIC_KEYS")), ","))
+	if err != nil {
+		return fmt.Errorf("audit verify: --key and TASKIEM_ANCHOR_PUBLIC_KEYS must be base64 Ed25519 public keys: %w", err)
 	}
-	res, err := audit.VerifyWithAnchors(r, anchors, pub)
+	if len(pubs) == 0 && !*unsignedOK {
+		return errors.New("audit verify: nothing was verified: without --key no anchor's signature can be checked, and anyone could have written the anchors file. Give the anchor public key with --key (and each retired one), or pass --unsigned-ok to compare without checking signatures")
+	}
+	res, err := audit.VerifyWithAnchors(r, anchors, pubs...)
 	if err != nil {
 		return err
 	}
 	if res.FirstBroken != 0 {
 		return fmt.Errorf("audit chain BROKEN at entry %d: %s", res.FirstBroken, res.Reason)
 	}
-	signed := "signatures not checked (no --key)"
-	if pub != nil {
-		signed = "every signature checked"
+	if len(anchors) == 0 && res.Entries > 0 {
+		return fmt.Errorf("audit verify: no anchors in %s: the chain's %d entries link up, but nothing shows it was not rewritten", *anchorsFile, res.Entries)
+	}
+	signed := "every signature checked"
+	if len(pubs) == 0 {
+		signed = "signatures NOT checked: this shows only that the export and the anchors file agree, not who made the anchors"
 	}
 	fmt.Fprintf(stdout, "audit chain intact: %d entries, and it matches all %d anchors (%s)\n", res.Entries, res.Anchors, signed)
 	return nil

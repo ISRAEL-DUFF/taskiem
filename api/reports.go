@@ -373,8 +373,8 @@ func chainReport(ctx context.Context, tx pgx.Tx, s *Server, tenant uuid.UUID, fr
 			continue
 		}
 		row := map[string]any{"anchored_at": at, "seq": a.Seq, "hash": a.Hash, "key_id": a.KeyID, "matches_chain": logged[a.Seq] == a.Hash}
-		if s.AnchorKey != nil {
-			row["signature_valid"] = a.VerifySignature(s.AnchorKey)
+		if keys := s.anchorKeys(); len(keys) > 0 {
+			row["signature_valid"] = a.SignedByAny(keys)
 		}
 		rep.Rows = append(rep.Rows, row)
 	}

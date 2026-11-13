@@ -217,6 +217,9 @@ type Server struct {
 	// AnchorKey is the public key audit anchors are signed with, published
 	// to tenants so they can check anchors themselves.
 	AnchorKey ed25519.PublicKey
+	// RetiredAnchorKeys are earlier anchor keys' public halves: anchors
+	// made before the key was changed verify with them.
+	RetiredAnchorKeys []ed25519.PublicKey
 	// WhatsApp is the platform number (spec 11); nil turns the channel off.
 	WhatsApp *whatsapp.Platform
 	// WhatsAppPublic answers numbers bound to no one; nil sends how to link.

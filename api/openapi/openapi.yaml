@@ -38287,6 +38287,11 @@ components:
           description: The platform's Ed25519 anchor key, base64, when anchoring is on.
         key_id:
           type: string
+        public_keys:
+          type: array
+          description: Every key an anchor may be signed with, base64 - the current key first, then retired ones. Give them all to `taskiem audit verify --key`.
+          items:
+            type: string
       additionalProperties: false
     Report:
       type: object

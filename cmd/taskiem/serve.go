@@ -93,6 +93,10 @@ type config struct {
 	OpenBaoAddr, OpenBaoToken, KMSKey string
 	WebDir                            string
 	AnchorKey, AnchorDir              string
+	// AnchorPublicKeys are retired anchor keys' public halves
+	// (TASKIEM_ANCHOR_PUBLIC_KEYS): anchors made before the key was
+	// changed still verify with them.
+	AnchorPublicKeys                  string
 	SecureCookies, TrustProxy, Signup bool
 	// AppMinVersion is the lowest phone app version served (TASKIEM_APP_MIN_VERSION).
 	AppMinVersion string
@@ -460,30 +464,31 @@ func loadConfig() (config, error) {
 	var bad []error
 	flag := envBools(&bad)
 	c := config{
-		DSN:           os.Getenv("TASKIEM_DATABASE_URL"),
-		DBRole:        env("TASKIEM_DATABASE_ROLE", "taskiem_app"),
-		Listen:        env("TASKIEM_LISTEN", ":8080"),
-		EdgeListen:    env("TASKIEM_EDGE_LISTEN", ":8081"),
-		MetricsListen: env("TASKIEM_METRICS_LISTEN", ":9090"),
-		KMS:           env("TASKIEM_KMS", "local"),
-		LocalKey:      os.Getenv("TASKIEM_LOCAL_KMS_KEY"),
-		AllowLocalKMS: flag("TASKIEM_ALLOW_LOCAL_KMS", false),
-		OpenBaoAddr:   os.Getenv("TASKIEM_OPENBAO_ADDR"),
-		OpenBaoToken:  os.Getenv("TASKIEM_OPENBAO_TOKEN"),
-		KMSKey:        env("TASKIEM_KMS_KEY", "taskiem"),
-		PublicURL:     strings.TrimRight(os.Getenv("TASKIEM_PUBLIC_URL"), "/"),
-		PasskeyRPID:   os.Getenv("TASKIEM_PASSKEY_RP_ID"),
-		HooksURL:      strings.TrimRight(os.Getenv("TASKIEM_HOOKS_URL"), "/"),
-		AnchorKey:     os.Getenv("TASKIEM_ANCHOR_KEY"),
-		AnchorDir:     os.Getenv("TASKIEM_ANCHOR_DIR"),
-		SMTPURL:       os.Getenv("TASKIEM_SMTP_URL"),
-		AlertFrom:     os.Getenv("TASKIEM_ALERT_FROM"),
-		WebDir:        os.Getenv("TASKIEM_WEB_DIR"),
-		SecureCookies: flag("TASKIEM_SECURE_COOKIES", true),
-		TrustProxy:    flag("TASKIEM_TRUST_PROXY", false),
-		Signup:        flag("TASKIEM_ALLOW_SIGNUP", false),
-		AppMinVersion: os.Getenv("TASKIEM_APP_MIN_VERSION"),
-		Queues:        strings.Split(env("TASKIEM_WORKER_QUEUES", "connector,sandbox,ai"), ","),
+		DSN:              os.Getenv("TASKIEM_DATABASE_URL"),
+		DBRole:           env("TASKIEM_DATABASE_ROLE", "taskiem_app"),
+		Listen:           env("TASKIEM_LISTEN", ":8080"),
+		EdgeListen:       env("TASKIEM_EDGE_LISTEN", ":8081"),
+		MetricsListen:    env("TASKIEM_METRICS_LISTEN", ":9090"),
+		KMS:              env("TASKIEM_KMS", "local"),
+		LocalKey:         os.Getenv("TASKIEM_LOCAL_KMS_KEY"),
+		AllowLocalKMS:    flag("TASKIEM_ALLOW_LOCAL_KMS", false),
+		OpenBaoAddr:      os.Getenv("TASKIEM_OPENBAO_ADDR"),
+		OpenBaoToken:     os.Getenv("TASKIEM_OPENBAO_TOKEN"),
+		KMSKey:           env("TASKIEM_KMS_KEY", "taskiem"),
+		PublicURL:        strings.TrimRight(os.Getenv("TASKIEM_PUBLIC_URL"), "/"),
+		PasskeyRPID:      os.Getenv("TASKIEM_PASSKEY_RP_ID"),
+		HooksURL:         strings.TrimRight(os.Getenv("TASKIEM_HOOKS_URL"), "/"),
+		AnchorKey:        os.Getenv("TASKIEM_ANCHOR_KEY"),
+		AnchorDir:        os.Getenv("TASKIEM_ANCHOR_DIR"),
+		AnchorPublicKeys: os.Getenv("TASKIEM_ANCHOR_PUBLIC_KEYS"),
+		SMTPURL:          os.Getenv("TASKIEM_SMTP_URL"),
+		AlertFrom:        os.Getenv("TASKIEM_ALERT_FROM"),
+		WebDir:           os.Getenv("TASKIEM_WEB_DIR"),
+		SecureCookies:    flag("TASKIEM_SECURE_COOKIES", true),
+		TrustProxy:       flag("TASKIEM_TRUST_PROXY", false),
+		Signup:           flag("TASKIEM_ALLOW_SIGNUP", false),
+		AppMinVersion:    os.Getenv("TASKIEM_APP_MIN_VERSION"),
+		Queues:           strings.Split(env("TASKIEM_WORKER_QUEUES", "connector,sandbox,ai"), ","),
 		Connectors: builtin.Options{
 			PaystackURL: os.Getenv("TASKIEM_PAYSTACK_URL"),
 			TermiiURL:   os.Getenv("TASKIEM_TERMII_URL"),
@@ -583,6 +588,9 @@ func loadConfig() (config, error) {
 	// A bad anchor key used to be logged and anchoring left off.
 	if _, err := c.anchorSigner(); err != nil {
 		return c, err
+	}
+	if _, err := audit.ParsePublicKeys(c.AnchorPublicKeys); err != nil {
+		return c, fmt.Errorf("TASKIEM_ANCHOR_PUBLIC_KEYS must be base64 Ed25519 public keys, separated by commas: %w", err)
 	}
 	limits, err := runtime.LimitsFromEnv(os.LookupEnv)
 	if err != nil {
@@ -1197,7 +1205,11 @@ func serve(ctx context.Context, args []string) error {
 	is := func(r string) bool { return *role == r || *role == "all" }
 	runCtx, stopRun, draining := drainOnShutdown(ctx, cfg, log)
 	defer stopRun()
-	ready := readiness(draining, e.pool)
+	var readyNotes []string
+	if off := cfg.anchoringOff(); off != "" && is("scheduler") {
+		readyNotes = append(readyNotes, off)
+	}
+	ready := readiness(draining, e.pool, readyNotes...)
 	alerter, err := cfg.alerter(e, log)
 	if err != nil {
 		return fmt.Errorf("serve: %w", err)
@@ -1227,6 +1239,7 @@ func serve(ctx context.Context, args []string) error {
 		if signer, _ := cfg.anchorSigner(); signer != nil {
 			srv.AnchorKey = signer.PublicKey()
 		}
+		srv.RetiredAnchorKeys, _ = audit.ParsePublicKeys(cfg.AnchorPublicKeys)
 		rp, err := cfg.relyingParty()
 		if err != nil {
 			return err
@@ -1475,7 +1488,7 @@ func serve(ctx context.Context, args []string) error {
 			a := &audit.Anchorer{Pool: e.pool, Signer: signer, Dir: cfg.AnchorDir, Logger: log}
 			tasks = append(tasks, a.Run)
 		} else {
-			log.Warn("TASKIEM_ANCHOR_KEY or TASKIEM_ANCHOR_DIR unset: audit chain heads are not anchored outside the database")
+			log.Warn(cfg.anchoringOff())
 		}
 	}
 	if *role == "orchestrator" {
@@ -1556,8 +1569,10 @@ func serve(ctx context.Context, args []string) error {
 // letting workers drain.
 // readiness answers /readyz: 503 while draining or while the database
 // does not answer a ping within 2 seconds, so load balancers stop sending
-// requests that could only fail.
-func readiness(draining *atomic.Bool, pool *pgxpool.Pool) http.HandlerFunc {
+// requests that could only fail. When ready it answers "ok", then one line
+// for each note: something an operator should know that does not stop the
+// role serving, such as audit anchoring being off.
+func readiness(draining *atomic.Bool, pool *pgxpool.Pool, notes ...string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if draining.Load() {
 			http.Error(w, "draining", http.StatusServiceUnavailable)
@@ -1570,7 +1585,26 @@ func readiness(draining *atomic.Bool, pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 		_, _ = w.Write([]byte("ok"))
+		for _, n := range notes {
+			_, _ = w.Write([]byte("\n" + n))
+		}
 	}
+}
+
+// anchoringOff says why audit anchoring is off, or nothing when it is on.
+// The scheduler role anchors only with both the key and the directory.
+func (c config) anchoringOff() string {
+	var unset []string
+	if c.AnchorKey == "" {
+		unset = append(unset, "TASKIEM_ANCHOR_KEY")
+	}
+	if c.AnchorDir == "" {
+		unset = append(unset, "TASKIEM_ANCHOR_DIR")
+	}
+	if len(unset) == 0 {
+		return ""
+	}
+	return "audit anchoring: off (" + strings.Join(unset, " and ") + " unset): audit chain heads are not signed or kept outside the database"
 }
 
 func drainOnShutdown(ctx context.Context, cfg config, log *slog.Logger) (context.Context, context.CancelFunc, *atomic.Bool) {

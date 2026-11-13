@@ -112,6 +112,9 @@ const statusUsage = `usage:
 components: api, webhooks, runs, scheduler, integration:<name>; impacts: degraded, partial_outage, major_outage
 `
 
+// statusNotes is where "status show" writes notes for the operator.
+var statusNotes io.Writer = os.Stderr
+
 var (
 	errStatusUsage = errors.New(strings.TrimSpace(statusUsage))
 	errCanaryUsage = errors.New(strings.TrimSpace(canaryUsage))
@@ -189,7 +192,15 @@ func statusCmd(ctx context.Context, args []string, stdout io.Writer) error {
 		}
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
-		return enc.Encode(v)
+		if err := enc.Encode(v); err != nil {
+			return err
+		}
+		// Not part of the status page: a note for the operator, kept off
+		// stdout so the JSON stays whole.
+		if off := cfg.anchoringOff(); off != "" && args[0] == "show" {
+			fmt.Fprintln(statusNotes, off)
+		}
+		return nil
 	case "open", "maintenance":
 		d := status.Declaration{Kind: "incident", Title: *title, Components: split(*components), Status: *st, Impact: *impact, Message: *message}
 		if args[0] == "maintenance" {
