@@ -12152,7 +12152,7 @@ paths:
       tags:
       - Stock
       summary: Add a supplier
-      description: A supplier by name and phone, sent the tap-in link by SMS so orders reach them on WhatsApp; items names the catalogue rows they supply (their supplier column set to the name). Or a linked business by name and link_id, with no phone, its orders going through the link (with a phone too, it is added and linked). 409 when a current supplier has the name or phone, or is that linked business.
+      description: A supplier by name and phone, sent the tap-in link by SMS so orders reach them on WhatsApp; items names the catalogue rows they supply (their supplier column set to the name). 409 when a current supplier has the name or phone.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -12166,16 +12166,13 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name]
+              required: [name, phone]
               properties:
                 name:
                   type: string
                   maxLength: 80
                 phone:
                   type: string
-                link_id:
-                  type: string
-                  format: uuid
                 items:
                   type: array
                   items:

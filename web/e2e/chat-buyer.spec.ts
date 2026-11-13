@@ -310,16 +310,18 @@ test("a supplier added and linked once, a retry that does nothing twice, and the
   await order.getByRole("button", { name: /Same as last time/ }).click();
   await expect(order.getByRole("group", { name: "How many Rice, 50kg bag" })).toContainText("4");
   await order.getByRole("button", { name: "Review order" }).click();
-  // Not one of our suppliers yet: made one from the link, no number asked.
-  await expect(order).toContainText(`${name} becomes one of your suppliers`);
-  await expect(order.getByText(/phone number/)).toHaveCount(0);
+  // Not one of our suppliers yet: their number first, and why Place waits.
+  await expect(order).toContainText(`${name} is not one of your suppliers yet`);
+  await expect(order).toContainText(`Add ${name}'s phone number to place the order.`);
+  await expect(order.getByRole("button", { name: "Place order" })).toBeDisabled();
+  await order.getByLabel(`${name}'s phone number`).fill("0803 123 4567");
   await order.getByRole("button", { name: "Place order" }).click();
   await expect(order.getByRole("alert")).toBeVisible();
   await order.getByRole("button", { name: "Place order" }).click();
   await expect(order).toHaveCount(0, { timeout: 5000 });
   expect(posts).toBe(1);
-  expect(sent.filter((x) => x.path === "/v1/stock/suppliers/new-sup/link")).toHaveLength(0);
-  expect(sent.find((x) => x.path === "/v1/stock/suppliers")?.body).toEqual({ name, link_id: link });
+  expect(sent.filter((x) => x.path === "/v1/stock/suppliers/new-sup/link")).toHaveLength(1);
+  expect(sent.find((x) => x.path === "/v1/stock/suppliers")?.body).toEqual({ name, phone: "0803 123 4567" });
 });
 
 test("a buyer that keeps no stock yet is told first, and starts keeping it from the order", async ({ browser }) => {

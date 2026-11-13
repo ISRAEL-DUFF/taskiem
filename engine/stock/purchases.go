@@ -173,12 +173,6 @@ func (p *Purchases) scanSuppliers(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 	out := make([]Supplier, 0, len(list))
 	for _, v := range list {
 		x := v.x
-		if v.phone == nil {
-			// A linked business made a supplier from the link alone: no
-			// number, reached through the link.
-			out = append(out, x)
-			continue
-		}
 		x.Phone = pii.Erased
 		var env map[string]any
 		if err := json.Unmarshal(v.phone, &env); err != nil {
@@ -312,46 +306,6 @@ func (p *Purchases) AddSupplierTx(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 	return x, nil
 }
 
-// AddLinkedSupplierTx makes a linked business a supplier from the link
-// alone: its name, no phone number (its orders, bills and words go through
-// the link). A current supplier with the name, or that business already,
-// answers ErrSupplierExists with them.
-func (p *Purchases) AddLinkedSupplierTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, name string, link uuid.UUID, actor string) (Supplier, error) {
-	clean := cleanSupplierName(name)
-	if clean == "" {
-		return Supplier{}, fmt.Errorf("%w: a supplier's name is 1 to %d characters", ErrPurchase, MaxSupplierName)
-	}
-	var ok bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM taskiem_links_of() WHERE id = $1 AND state = 'active')`, link).Scan(&ok); err != nil {
-		return Supplier{}, err
-	}
-	if !ok {
-		return Supplier{}, fmt.Errorf("%w: that is not one of your linked businesses", ErrPurchase)
-	}
-	var id uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT id FROM suppliers WHERE tenant_id = $1 AND retired_at IS NULL AND (lower(name) = lower($2) OR link_id = $3)
-		ORDER BY (link_id = $3) DESC NULLS LAST LIMIT 1`, tenant, clean, link).Scan(&id)
-	if err == nil {
-		x, err := p.SupplierTx(ctx, tx, tenant, id)
-		if err != nil {
-			return Supplier{}, err
-		}
-		return x, fmt.Errorf("%w: %s is already your supplier", ErrSupplierExists, x.Name)
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return Supplier{}, err
-	}
-	id = uuid.Must(uuid.NewV7())
-	if _, err := tx.Exec(ctx, `INSERT INTO suppliers (id, tenant_id, name, link_id, created_by) VALUES ($1, $2, $3, $4, $5)`,
-		id, tenant, clean, link, actor); err != nil {
-		return Supplier{}, err
-	}
-	if err := stockAudit(ctx, tx, tenant, "supplier.added", clean, map[string]any{"supplier_id": id, "link": link, "by": actor}); err != nil {
-		return Supplier{}, err
-	}
-	return p.SupplierTx(ctx, tx, tenant, id)
-}
-
 // RenameSupplierTx changes a current supplier's name. Their items keep the
 // name the catalogue's supplier column holds: the caller changes them.
 func (p *Purchases) RenameSupplierTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, name, actor string) (Supplier, error) {
@@ -410,9 +364,6 @@ func (p *Purchases) LinkSupplierTx(ctx context.Context, tx pgx.Tx, tenant, id uu
 	}
 	if x.RetiredAt != nil {
 		return Supplier{}, fmt.Errorf("%w: %s is retired", ErrPurchase, x.Name)
-	}
-	if link == nil && x.Phone == "" {
-		return Supplier{}, fmt.Errorf("%w: %s has no phone number: their orders reach them only through the link", ErrPurchase, x.Name)
 	}
 	if link != nil {
 		var ok bool
@@ -497,7 +448,7 @@ func businessName(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (string, err
 // inviteTx queues the tap-in link by SMS; false when it cannot be sent
 // here.
 func (p *Purchases) inviteTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Supplier) (bool, error) {
-	if p.Messages == nil || x.Phone == pii.Erased || x.Phone == "" {
+	if p.Messages == nil || x.Phone == pii.Erased {
 		return false, nil
 	}
 	link, err := p.tapIn(ctx, tx, tenant)
@@ -917,17 +868,6 @@ func (p *Purchases) SendTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID,
 	link, err := activeLinkTx(ctx, tx, tenant, x.SupplierID)
 	if err != nil {
 		return x, err
-	}
-	if link == nil {
-		// Made from a link alone, it has no number to send by once the link
-		// has ended.
-		var reachable bool
-		if err := tx.QueryRow(ctx, `SELECT phone_hash IS NOT NULL FROM suppliers WHERE tenant_id = $1 AND id = $2`, tenant, x.SupplierID).Scan(&reachable); err != nil {
-			return x, err
-		}
-		if !reachable {
-			return x, fmt.Errorf("%w: the link with %s has ended, and Taskiem has no phone number for them: add one to send it", ErrPurchase, x.Supplier)
-		}
 	}
 	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET status = 'sent', approved_by = $3, sent_at = now(), link_id = $4, updated_at = now()
 		WHERE tenant_id = $1 AND id = $2`, tenant, id, approver, link); err != nil {
