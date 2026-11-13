@@ -4,6 +4,7 @@
 // built yet says it is coming (ComingTab). The bar shows on the home only: an open
 // conversation takes the whole screen, as it does on WhatsApp.
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/widgets.dart';
 
 import '../chat/chats.dart' show UnreadCount;
@@ -15,7 +16,11 @@ import '../theme/theme.dart';
 typedef HomeTab = ({String label, String icon, Widget Function(BuildContext) build});
 
 class HomeTabs extends StatefulWidget {
-  const HomeTabs({super.key, required this.tabs, this.count, this.counted});
+  const HomeTabs({super.key, required this.tabs, this.count, this.counted, this.offline});
+
+  /// No connection, the pages showing what the phone kept: said in a
+  /// strip over the bar, quietly, as WhatsApp's "Waiting for network".
+  final ValueListenable<bool>? offline;
 
   final List<HomeTab> tabs;
 
@@ -66,6 +71,29 @@ class HomeTabsState extends State<HomeTabs> {
             ),
           ),
         ),
+        if (widget.offline != null)
+          ValueListenableBuilder<bool>(
+            valueListenable: widget.offline!,
+            builder: (context, off, _) => AnimatedSize(
+              duration: (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ? Duration.zero : const Duration(milliseconds: 200),
+              child: !off
+                  ? const SizedBox(width: double.infinity)
+                  : Semantics(
+                      liveRegion: true,
+                      container: true,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                        color: t.tkSoft,
+                        child: Text(
+                          'No connection. Showing what was kept on this phone.',
+                          textAlign: TextAlign.center,
+                          style: tkText(size: 12.5, weight: 500, color: t.muted),
+                        ),
+                      ),
+                    ),
+            ),
+          ),
         // `.tabbar { background: color-mix(panel 94%); border-top: 1px solid var(--border) }`
         DecoratedBox(
           decoration: BoxDecoration(

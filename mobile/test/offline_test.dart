@@ -296,4 +296,41 @@ void main() {
     chats.dispose();
     store.close();
   });
+
+  test('pages kept: asked again with their ETag, unchanged a 304; offline, the kept page; the chats keep their own', () async {
+    final store = await LocalStore.open('t_u', keys);
+    var online = true;
+    final seen = <String?>[];
+    final transport = Transport(
+      base: 'http://localhost',
+      token: 'x',
+      client: MockClient((req) async {
+        if (!online) throw http.ClientException('no connection');
+        seen.add(req.headers['If-None-Match']);
+        if (req.headers['If-None-Match'] == 'W/"v1"') return http.Response('', 304, headers: {'etag': 'W/"v1"'});
+        return http.Response(jsonEncode({'orders': ['AK-1']}), 200, headers: {'content-type': 'application/json', 'etag': 'W/"v1"'});
+      }),
+    );
+    transport.pages = store;
+    expect(await transport.send('GET', '/v1/storefront/orders'), {'orders': ['AK-1']});
+    expect(await transport.send('GET', '/v1/storefront/orders'), {'orders': ['AK-1']}, reason: 'a 304: the kept page');
+    expect(seen, [null, 'W/"v1"']);
+    expect(transport.offline.value, isFalse);
+    online = false;
+    expect(await transport.send('GET', '/v1/storefront/orders'), {'orders': ['AK-1']});
+    expect(transport.offline.value, isTrue);
+    // Never read before: offline is offline.
+    await expectLater(transport.send('GET', '/v1/money/summary'), throwsA(isA<Offline>()));
+    // The chats are not kept here: their own store says offline its way.
+    online = true;
+    await transport.send('GET', '/v1/link-chats');
+    online = false;
+    await expectLater(transport.send('GET', '/v1/link-chats'), throwsA(isA<Offline>()));
+    // Nor a search, nor a write.
+    expect(Transport.keeps('/v1/stock', {'q': 'rice'}), isFalse);
+    online = true;
+    await transport.send('POST', '/v1/storefront/orders', body: const {});
+    expect(transport.offline.value, isFalse);
+    store.close();
+  });
 }

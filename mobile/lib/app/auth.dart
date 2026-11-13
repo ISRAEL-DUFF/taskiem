@@ -66,6 +66,9 @@ class Auth extends ChangeNotifier {
   set local(LocalStore? s) {
     _local = s;
     LocalStore.current = s;
+    // The pages read are kept in it too (Today, Money, Orders: K4).
+    transport.pages = s;
+    if (s == null) transport.offline.value = false;
   }
 
   LocalStore? _local;

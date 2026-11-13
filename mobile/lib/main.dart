@@ -328,6 +328,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return HomeTabs(
       count: () => _chats.tabCount,
+      offline: widget.auth.transport.offline,
       counted: _chats,
       tabs: [
         (label: 'Chats', icon: 'chat', build: _chatsTab),

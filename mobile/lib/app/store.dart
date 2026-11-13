@@ -18,6 +18,7 @@ import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import '../api/transport.dart' show PageKeep;
 import 'session.dart' show KeyStore;
 
 /// How many messages a conversation keeps (starred ones besides).
@@ -30,7 +31,7 @@ const storeLife = Duration(days: 30);
 /// file's bytes when it has one.
 typedef KeptOut = ({String id, String conv, DateTime at, Map<String, dynamic> json, Uint8List? file});
 
-class LocalStore {
+class LocalStore implements PageKeep {
   LocalStore._(this.scope, this._db, this._mediaDir, {this.mediaLimit = 300 << 20, DateTime Function()? now}) : _now = now ?? DateTime.now;
 
   /// Whose it is: "tenant_user".
@@ -116,6 +117,7 @@ class LocalStore {
         CREATE INDEX IF NOT EXISTS msg_at ON msg (conv, at);
         CREATE TABLE IF NOT EXISTS outbox (id TEXT PRIMARY KEY, conv TEXT NOT NULL, at TEXT NOT NULL, j TEXT NOT NULL, file BLOB);
         CREATE TABLE IF NOT EXISTS media (k TEXT PRIMARY KEY, name TEXT NOT NULL, bytes INTEGER NOT NULL, used INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS pages (k TEXT PRIMARY KEY, body TEXT NOT NULL, etag TEXT, used INTEGER NOT NULL);
       ''');
       return db;
     } on Object {
@@ -236,6 +238,31 @@ class LocalStore {
     _db.execute('DELETE FROM outbox WHERE id = ?', [id]);
   }
 
+  // --- pages (Today, Money, Orders, the tools' lists: K4) ---
+
+  /// How many pages are kept, the least lately read going first.
+  static const keptPages = 400;
+
+  /// A page's last answer, and its ETag.
+  @override
+  ({String body, String? etag})? readPage(String key) {
+    if (_closed) return null;
+    final rows = _db.select('SELECT body, etag FROM pages WHERE k = ?', ['page:$key']);
+    if (rows.isEmpty) return null;
+    _db.execute('UPDATE pages SET used = ? WHERE k = ?', [_now().microsecondsSinceEpoch, 'page:$key']);
+    return (body: rows.first['body'] as String, etag: rows.first['etag'] as String?);
+  }
+
+  @override
+  void writePage(String key, String body, String? etag) {
+    if (_closed) return;
+    _db.execute(
+      'INSERT INTO pages (k, body, etag, used) VALUES (?, ?, ?, ?) ON CONFLICT (k) DO UPDATE SET body = excluded.body, etag = excluded.etag, used = excluded.used',
+      ['page:$key', body, etag, _now().microsecondsSinceEpoch],
+    );
+    _db.execute('DELETE FROM pages WHERE k NOT IN (SELECT k FROM pages ORDER BY used DESC LIMIT ?)', [keptPages]);
+  }
+
   // --- photos, voice notes and files ---
 
   /// The bytes kept for [key] (a file's path on the server, its version in
@@ -292,7 +319,7 @@ class LocalStore {
   }
 
   void _clear() {
-    _db.execute('DELETE FROM kv; DELETE FROM msg; DELETE FROM outbox; DELETE FROM media;');
+    _db.execute('DELETE FROM kv; DELETE FROM msg; DELETE FROM outbox; DELETE FROM media; DELETE FROM pages;');
     try {
       if (_mediaDir.existsSync()) {
         for (final f in _mediaDir.listSync()) {

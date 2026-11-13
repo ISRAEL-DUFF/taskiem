@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show IOException;
 
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
@@ -35,8 +36,42 @@ class Offline implements Exception {
   String toString() => 'Offline';
 }
 
+/// Where the answers the app read are kept on the phone (lib/app/store.dart),
+/// with their ETags: asked again with If-None-Match, an unchanged page is a
+/// 304; with no connection, the kept answer is the page.
+abstract class PageKeep {
+  ({String body, String? etag})? readPage(String key);
+  void writePage(String key, String body, String? etag);
+}
+
 class Transport {
   Transport({required this.base, this.token, http.Client? client, this.timeout = const Duration(seconds: 30)}) : _client = client ?? http.Client();
+
+  /// The pages kept on the phone, while signed in (null: none kept).
+  PageKeep? pages;
+
+  /// Whether the last request found no connection and was answered from
+  /// what the phone kept: the app says so, quietly, as WhatsApp does.
+  final offline = ValueNotifier<bool>(false);
+
+  /// How long a page that is kept waits for the network before the kept
+  /// one is shown: a weak connection must not hold up what the phone has.
+  static const keptWait = Duration(seconds: 6);
+
+  /// A page worth keeping: a read, not a stream, a search, or anything a
+  /// person asked to see unmasked.
+  static bool keeps(String path, Map<String, String>? query) =>
+      path.startsWith('/v1/') &&
+      !path.startsWith('/v1/chat/stream') &&
+      // The chats keep their own (lib/app/store.dart), and say offline in
+      // their own words.
+      !path.startsWith('/v1/link-chats') &&
+      !path.startsWith('/v1/links') &&
+      !path.startsWith('/v1/customer-chats') &&
+      !path.startsWith('/v1/taskiem-chat') &&
+      !path.contains('reveal') &&
+      !(query?.containsKey('reveal') ?? false) &&
+      !(query?.containsKey('q') ?? false);
 
   /// How long an answer may take before the network counts as gone: on a
   /// weak connection a request must not hang with its button spinning.
@@ -54,8 +89,48 @@ class Transport {
 
   final http.Client _client;
 
-  /// Sends one request and answers its JSON (null for 204).
+  /// Sends one request and answers its JSON (null for 204). A read the
+  /// phone kept is asked again with its ETag; unchanged, or with no
+  /// connection, the kept answer is the answer.
   Future<Object?> send(String method, String path, {Object? body, Map<String, String>? query, Map<String, String>? headers}) async {
+    final keep = method == 'GET' && body == null ? pages : null;
+    if (keep != null && keeps(path, query)) return _sendKept(keep, path, query, headers);
+    return _send(method, path, body: body, query: query, headers: headers);
+  }
+
+  Future<Object?> _sendKept(PageKeep keep, String path, Map<String, String>? query, Map<String, String>? headers) async {
+    final key = _uri(path, query).toString().substring(base.length);
+    final kept = keep.readPage(key);
+    final req = http.Request('GET', _uri(path, query))..headers['Accept'] = 'application/json';
+    if (headers != null) req.headers.addAll(headers);
+    if (kept?.etag != null) req.headers['If-None-Match'] = kept!.etag!;
+    final t = _sign(req);
+    final http.Response res;
+    try {
+      res = await _reach(() async => http.Response.fromStream(await _client.send(req)), kept == null ? timeout : keptWait);
+    } on Offline {
+      if (kept == null) {
+        offline.value = true;
+        rethrow;
+      }
+      offline.value = true;
+      return kept.body.isEmpty ? null : jsonDecode(kept.body);
+    }
+    offline.value = false;
+    if (res.statusCode == 304 && kept != null) return kept.body.isEmpty ? null : jsonDecode(kept.body);
+    final text = utf8.decode(res.bodyBytes);
+    final out = _answer(res.statusCode, text, t);
+    if (res.statusCode == 200) {
+      try {
+        keep.writePage(key, text, res.headers['etag']);
+      } on Object {
+        // Not kept this time.
+      }
+    }
+    return out;
+  }
+
+  Future<Object?> _send(String method, String path, {Object? body, Map<String, String>? query, Map<String, String>? headers}) async {
     final req = http.Request(method, _uri(path, query))..headers['Accept'] = 'application/json';
     // An Idempotency-Key, where one press must be one action however often it is sent.
     if (headers != null) req.headers.addAll(headers);
@@ -66,6 +141,8 @@ class Transport {
     final t = _sign(req);
     // The whole exchange, waiting for the answer to start included.
     final res = await _reach(() async => http.Response.fromStream(await _client.send(req)), timeout);
+    // Reached: whatever was said about being offline is over.
+    if (offline.value) offline.value = false;
     return _answer(res.statusCode, utf8.decode(res.bodyBytes), t);
   }
 

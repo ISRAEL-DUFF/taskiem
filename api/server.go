@@ -377,6 +377,8 @@ func (s *Server) Handler() http.Handler {
 		r.Route("/embed/{app}", s.embedRoutes)
 		r.Group(func(r chi.Router) {
 			r.Use(s.authenticate)
+			// An unchanged answer is a 304 to an app that kept it (etag.go).
+			r.Use(etagJSON)
 			r.With(s.partnerPlan).Route("/partner", s.partnerRoutes) // partner admin API (partner.go)
 			r.Route("/billing", s.billingRoutes)                     // plans and subscriptions (billing.go)
 			r.Route("/keys", s.keyRoutes)                            // encryption keys and BYOK (keys.go)
