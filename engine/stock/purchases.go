@@ -1066,8 +1066,11 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 		return x, nil, nil, ErrLinked
 	}
 	known := map[string]bool{}
+	left, names := map[string]int64{}, map[string]string{}
 	for _, l := range x.Lines {
 		known[l.ItemID] = true
+		left[l.ItemID] += max(0, l.Quantity-l.Received)
+		names[l.ItemID] = l.Item
 	}
 	for item, n := range got {
 		if !known[item] {
@@ -1075,6 +1078,18 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 		}
 		if n < 0 || n > MaxDelta {
 			return x, nil, nil, fmt.Errorf("%w: how many came is a whole number", ErrPurchase)
+		}
+		// An order takes what it ordered and no more: what came beyond it
+		// would be owed to the supplier at the order's price with nobody
+		// having agreed to buy it. It is recorded as goods received on
+		// their own (or on a new order). A linked supplier's count is
+		// taken as it is: that order is received by the link's own steps.
+		if n > left[item] && !strings.HasPrefix(key, LinkReceiptKey) {
+			if left[item] == 0 {
+				return x, nil, nil, fmt.Errorf("%w: all the %s on %s has come already; record more as goods received on their own", ErrPurchase, names[item], x.Reference)
+			}
+			return x, nil, nil, fmt.Errorf("%w: only %d of %s are still to come on %s; record %d here, and the rest as goods received on their own",
+				ErrPurchase, left[item], names[item], x.Reference, left[item])
 		}
 	}
 	var moves []Movement
@@ -1246,6 +1261,25 @@ func PayTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, amount int64, h
 		return x, fmt.Errorf("%w: an idempotency key", ErrPurchase)
 	}
 	key = FitKey(key)
+	// A payment already recorded under this key answers as it did, even
+	// when the order is paid up now.
+	var made bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM purchase_payments p JOIN money_entries e ON e.id = p.entry_id
+		WHERE p.tenant_id = $1 AND p.purchase_id = $2 AND e.reference = $3)`, tenant, id, "purchase:"+key).Scan(&made); err != nil {
+		return x, err
+	}
+	if made {
+		return x, nil
+	}
+	// An order is paid up to its total and no more: an amount beyond what
+	// is left would be an expense nothing explains. (Paying before the
+	// goods come is allowed, as it was: up to the order's total.)
+	if rest := max(0, x.TotalKobo-x.PaidKobo); amount > rest {
+		if rest == 0 {
+			return x, fmt.Errorf("%w: %s is paid in full already", ErrPurchase, x.Reference)
+		}
+		return x, fmt.Errorf("%w: only %s is left to pay on %s", ErrPurchase, storefront.FormatNaira(rest), x.Reference)
+	}
 	channel := "cash"
 	if how == Transfer {
 		channel = "bank"
