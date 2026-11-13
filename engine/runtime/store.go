@@ -842,18 +842,29 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 				return nil, err
 			}
 		}
-		// A run cancelled with reversing reverses the child runs its subflow
-		// steps wait for first (decision 0054): the step keeps its wait, so
-		// it hears when each child has ended, and decide waits for that.
-		children, err := s.childrenToReverse(ctx, tx, run, ev.StepID)
+		// A withdrawn subflow step's child run is cancelled with reversing
+		// (decision 0054), whatever withdrew the step. In a run cancelled
+		// with reversing the step keeps its wait, so it hears when each
+		// child has ended, and decide waits for that. A step withdrawn for
+		// another reason (a branch that lost, a scope that failed) is not
+		// waited for: its wait goes, and the child reverses on its own.
+		children, waited, err := s.childrenToReverse(ctx, tx, run, ev.StepID)
 		if err != nil {
 			return nil, err
 		}
-		if len(children) == 0 {
+		if len(children) == 0 || !waited {
 			if _, err := tx.Exec(ctx, `DELETE FROM signal_waits WHERE run_id = $1 AND step_id = $2`, run.ref.ID, ev.StepID); err != nil {
 				return nil, err
 			}
+		}
+		if len(children) == 0 {
 			break
+		}
+		if !waited {
+			// Now, before a later event of this batch ends the run and
+			// cancels the children it finds outright (cancelChildren).
+			// Nothing comes back to this run: the step's wait is gone.
+			return nil, s.reverseChildren(ctx, tx, run.ref.TenantID, children)
 		}
 		// After decide's batch: a child with nothing to reverse ends at
 		// once and tells this step so, and that event must follow the
