@@ -35,10 +35,19 @@ dependencies:
   url_launcher: 6.3.3
   # A PDF someone sent, to the phone's share sheet (open it in a viewer, keep it), as the web downloads it. BSD-3-Clause.
   share_plus: 13.3.1
+  # The chats, messages and pages kept on the phone, encrypted (lib/app/store.dart;
+  # docs/spec/mobile-app-explore-and-offline.md §3). MIT; SQLite3MultipleCiphers, MIT.
+  sqlite3: 3.9.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+
+hooks:
+  user_defines:
+    sqlite3:
+      # SQLite3MultipleCiphers: SQLite with encryption (PRAGMA key).
+      source: sqlite3mc
 
 flutter:
   uses-material-design: false

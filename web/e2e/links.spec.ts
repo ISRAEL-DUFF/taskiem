@@ -55,14 +55,14 @@ test("two businesses find each other and link", async ({ browser }) => {
 
   // Ada finds it and asks, as a supplier.
   await ada.goto("/chat");
-  await expect(ada.getByText("No linked businesses yet")).toBeVisible();
+  await expect(ada.getByTestId("chats-start")).toContainText("Link with the businesses you trade with");
   // Asked once whether others find her; Not now keeps the default.
   await expect(ada.getByTestId("link-findable-ask")).toBeVisible();
   await axeBoth(ada, "/chat, empty");
   await ada.getByRole("button", { name: "Not now" }).click();
   await expect(ada.getByTestId("link-findable-ask")).toBeHidden();
   await ada.reload();
-  await expect(ada.getByText("No linked businesses yet")).toBeVisible();
+  await expect(ada.getByTestId("chats-start")).toContainText("Link with the businesses you trade with");
   await expect(ada.getByTestId("link-findable-ask")).toBeHidden();
   await ada.getByTestId("link-search").fill(`dangote depot ${stamp}`);
   const found = ada.getByTestId("link-found").filter({ hasText: dangoteName });

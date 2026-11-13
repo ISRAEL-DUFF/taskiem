@@ -4,7 +4,7 @@
 
 import 'dart:convert';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/api/api.g.dart';
@@ -27,8 +27,8 @@ void main() {
     }
   }
 
-  Future<List<String>> open(WidgetTester t) async {
-    t.view.physicalSize = const Size(390, 844);
+  Future<List<String>> open(WidgetTester t, {Size size = const Size(390, 844)}) async {
+    t.view.physicalSize = size;
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
     final f = Fixture('chat-tunde');
@@ -63,6 +63,40 @@ void main() {
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ConversationScreen(data: ConversationData(chats, conv, follow: false))));
     await settle(t);
     return posts;
+  }
+
+  // Phone feedback: on a phone with large text the three buttons squeezed
+  // into one row, "Accept" broken over two lines or cut to "Acc…".
+  for (final scale in [1.0, 1.3, 2.0]) {
+    testWidgets('a new order on a small phone, text ×$scale: Accept and Decline side by side, View order the whole width under them', (t) async {
+      t.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(t.platformDispatcher.clearTextScaleFactorTestValue);
+      await open(t, size: const Size(360, 640));
+      final accept = find.bySemanticsLabel('Accept ORD-7');
+      final decline = find.bySemanticsLabel('Decline ORD-7');
+      final view = find.bySemanticsLabel('View order ORD-7');
+      await t.ensureVisible(view);
+      await t.pumpAndSettle();
+      final a = t.getRect(accept), d = t.getRect(decline), v = t.getRect(view);
+      if (scale < 2) {
+        expect(a.top, moreOrLessEquals(d.top, epsilon: 1), reason: 'one row');
+        expect(a.width, moreOrLessEquals(d.width, epsilon: 1), reason: 'as wide as each other');
+        expect(v.width, moreOrLessEquals(d.right - a.left, epsilon: 1), reason: 'the whole width');
+      } else {
+        // Twice the size, the two do not fit side by side in the bubble:
+        // each the whole width, one under the other, rather than cut.
+        expect(d.top, greaterThan(a.bottom));
+        expect(a.width, moreOrLessEquals(v.width, epsilon: 1));
+        expect(d.width, moreOrLessEquals(v.width, epsilon: 1));
+      }
+      expect(v.top, greaterThan(d.bottom), reason: 'View order under them');
+      // Each word whole, on one line.
+      for (final w in ['Accept', 'Decline', 'View order']) {
+        final text = t.renderObject<RenderParagraph>(find.text(w));
+        expect(text.didExceedMaxLines, isFalse, reason: '$w cut');
+        expect(text.size.height, lessThan(14 * scale * 1.2 * 1.5), reason: '$w on one line');
+      }
+    });
   }
 
   testWidgets('Decline asks first; then it is sent and said', (t) async {

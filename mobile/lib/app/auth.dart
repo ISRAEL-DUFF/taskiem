@@ -4,11 +4,14 @@
 // GET /v1/me, so a person stays signed in until the session ends (30 days
 // unused, 180 at most, or signed out from Your phones).
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import 'session.dart';
+import 'store.dart';
 
 enum AuthState { checking, signedOut, signedIn, outdated }
 
@@ -56,10 +59,84 @@ class Auth extends ChangeNotifier {
   /// chats, the stream, the screens open on it) starts afresh with each.
   int session = 0;
 
+  /// What the phone keeps of this business's chats (lib/app/store.dart):
+  /// open while signed in, once who is signed in is known; null before,
+  /// or where the phone cannot keep it (the screens then work without).
+  LocalStore? get local => _local;
+  set local(LocalStore? s) {
+    _local = s;
+    LocalStore.current = s;
+    // The pages read are kept in it too (Today, Money, Orders: K4).
+    transport.pages = s;
+    if (s == null) transport.offline.value = false;
+  }
+
+  LocalStore? _local;
+
+  /// Who is signed in, kept on the phone: the store's name, and their
+  /// permissions read offline.
+  Future<void> _keepMe() async {
+    final m = me;
+    final tenant = m?.tenantId?.toString();
+    final user = m?.user?.id;
+    if (m == null || tenant == null || user == null) return;
+    final scope = LocalStore.scopeOf(tenant, user);
+    try {
+      if (local?.scope != scope) {
+        local?.close();
+        local = await LocalStore.open(scope, store.keys);
+      }
+      local!.write('me', m.toJson());
+      await store.keys.write('scope', scope);
+    } on Object {
+      // Not kept on this phone: the screens ask the server, as before.
+      local = null;
+    }
+  }
+
+  /// The store of the business last signed in, and who that was, as kept:
+  /// for opening at once, offline too.
+  Future<Me?> _keptMe() async {
+    try {
+      final scope = await store.keys.read('scope');
+      if (scope == null) return null;
+      local = await LocalStore.open(scope, store.keys);
+      final j = local!.read('me');
+      return j is Map ? Me.fromJson(j.cast<String, dynamic>()) : null;
+    } on Object {
+      local = null;
+      return null;
+    }
+  }
+
   /// Opening the app: a kept token is checked; one the server no longer
   /// knows (ended, expired) is forgotten and the person signs in again.
   /// Offline, a kept token is trusted until the server can be asked.
   Future<void> start() async {
+    final String? t;
+    try {
+      t = await store.token();
+    } on Object {
+      // The phone's secure storage could not be read (on Android, its keys
+      // lost after a backup is restored): the token is as good as gone.
+      return _forgetQuietly();
+    }
+    // Signed in before, and who it was kept on the phone: the app opens at
+    // once on what it kept, as WhatsApp does, offline too; the server is
+    // asked meanwhile, and its answer takes over (an ended session signs
+    // out, an app too old asks to be updated).
+    if (t != null) {
+      final kept = await _keptMe();
+      if (kept != null) {
+        transport.token = t;
+        restored = true;
+        session++;
+        me = kept;
+        _set(AuthState.signedIn);
+        unawaited(_checkKept());
+        return;
+      }
+    }
     // An app older than the server serves asks to be updated, rather than
     // failing in ways nobody can see (GET /v1/app/config). Offline, or the
     // server not saying, the app goes on.
@@ -69,20 +146,13 @@ class Auth extends ChangeNotifier {
     } on Object {
       // Asked again next time the app opens (an answer not understood too).
     }
-    final String? t;
-    try {
-      t = await store.token();
-    } on Object {
-      // The phone's secure storage could not be read (on Android, its keys
-      // lost after a backup is restored): the token is as good as gone.
-      return _forgetQuietly();
-    }
     if (t == null) return _set(AuthState.signedOut);
     transport.token = t;
     restored = true;
     session++;
     try {
       me = await api.me();
+      await _keepMe();
       _set(AuthState.signedIn);
     } on ApiError catch (e) {
       // Only 401 means the session has ended. A 403 is a session that is
@@ -98,6 +168,28 @@ class Auth extends ChangeNotifier {
       // An answer this app cannot read: signing in again is the way on,
       // never the opening screen for good.
       await _forgetQuietly();
+    }
+  }
+
+  /// Opened from what was kept: the server asked, its answer taking over.
+  Future<void> _checkKept() async {
+    final at = session;
+    try {
+      final c = await api.appConfig();
+      if (at == session && olderThan(version, c.minVersion)) return _set(AuthState.outdated);
+    } on Object {
+      // Asked again next time.
+    }
+    try {
+      final m = await api.me();
+      if (at != session) return;
+      me = m;
+      await _keepMe();
+      notifyListeners();
+    } on ApiError catch (e) {
+      if (at == session && e.status == 401) await _forgetQuietly();
+    } on Object {
+      // Offline: what was kept stands.
     }
   }
 
@@ -162,6 +254,7 @@ class Auth extends ChangeNotifier {
     // now (offline, held); the screens read it again.
     try {
       me = await api.me();
+      await _keepMe();
     } on ApiError {
       me = null;
     } on Offline {
@@ -175,6 +268,16 @@ class Auth extends ChangeNotifier {
     me = null;
     session++;
     await store.keep(null);
+    // Nothing of any business stays on the phone once signed out.
+    final open = local;
+    local = null;
+    try {
+      await store.keys.write('scope', null);
+      await LocalStore.wipeAll(store.keys, open: [?open]);
+    } on Object {
+      // The folders could not be read: the keys are gone, so the stores
+      // cannot be opened again; the phone clears them in time.
+    }
     _set(AuthState.signedOut);
   }
 

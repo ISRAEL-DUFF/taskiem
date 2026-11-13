@@ -15,11 +15,13 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../kit/icon.dart';
+import '../kit/keyboard.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'chats.dart';
+import 'customer_orders.dart' show CustomerOrders;
 import 'thread.dart';
 import 'words.dart';
 
@@ -111,7 +113,43 @@ class CustomerData extends ChangeNotifier {
   final _back = StreamController<String>.broadcast();
   Stream<String> get givenBack => _back.stream;
 
+  /// Offline: what shows is what the phone kept.
+  bool offline = false;
+
+  String get _key => 'customer:$id';
+
+  /// The conversation as the phone kept it: shown at once.
+  void _restore() {
+    final local = chats.auth.local;
+    if (local == null) return;
+    try {
+      final kept = [for (final j in local.messages(_key)) CustomerLine(CustomerMessage.fromJson(j))];
+      if (kept.isNotEmpty && messages == null) {
+        messages = kept;
+        hasOlder = true;
+      }
+      final c = local.read('$_key:chat');
+      if (c is Map && chat == null) chat = CustomerChat.fromJson(c.cast<String, dynamic>());
+      _changed();
+    } on Object {
+      // Kept by an older app, or damaged: the server's answer will do.
+    }
+  }
+
+  void _keep() {
+    final local = chats.auth.local;
+    final list = messages?.where((x) => !x.local).toList();
+    if (local == null || list == null) return;
+    try {
+      local.keepMessages(_key, [for (final x in list.length > 200 ? list.sublist(list.length - 200) : list) x.m.toJson()]);
+      if (chat != null) local.write('$_key:chat', chat!.toJson());
+    } on Object {
+      // Not kept this time.
+    }
+  }
+
   Future<void> open() async {
+    _restore();
     await Future.wait([_chat(), _pull(first: true)]);
     // Closed before the first page came: nothing to follow.
     if (follow && !_disposed) {
@@ -161,6 +199,9 @@ class CustomerData extends ChangeNotifier {
       final page = [for (final m in out.messages) CustomerLine(m)];
       if (first) hasOlder = out.more;
       messages = first ? page : latestPage(messages ?? const [], page, out.more);
+      offline = false;
+      error = null;
+      _keep();
       _changed();
       if (out.messages.any((m) => !m.mine && m.readAt == null)) {
         await api.readCustomerChat(id: id);
@@ -173,7 +214,12 @@ class CustomerData extends ChangeNotifier {
 
   void _fail(Object e) {
     if (_disposed) return;
-    error = e is ApiError ? e.message : (e is Offline ? 'You’re offline. The conversation shows when you’re back online.' : null);
+    if (e is Offline && messages != null) {
+      // What the phone kept shows; said quietly.
+      offline = true;
+    } else {
+      error = e is ApiError ? e.message : (e is Offline ? 'You’re offline. The conversation shows when you’re back online.' : null);
+    }
     _changed();
   }
 
@@ -298,8 +344,9 @@ class _CustomerScreenState extends State<CustomerScreen> {
           return Semantics(
             label: 'Conversation with ${c == null ? 'a customer' : title}',
             container: true,
-            child: CustomPaint(
-              painter: Wallpaper(t.chatWallpaper, t.chatDoodle),
+            child: WallpaperBox(
+              ground: t.chatWallpaper,
+              doodle: t.chatDoodle,
               child: Column(
                 children: [
                   ColoredBox(
@@ -329,43 +376,56 @@ class _CustomerScreenState extends State<CustomerScreen> {
                               ),
                         avatar: ChatAvatar(name: c == null ? 'Customer' : customerLetter(c), size: 42, letterSize: 15),
                         title: title,
-                        subtitle: c == null
+                        subtitle: d.offline
+                            ? 'Waiting for network…'
+                            : c == null
                             ? null
                             : [if (c.phone.isNotEmpty && c.phone != c.name) phoneWords(c.phone), owes, 'Customer on WhatsApp'].where((s) => s.isNotEmpty).join(' · '),
                       ),
                     ),
                   ),
+                  // The thread and the order card share what is under the
+                  // head (and over the keyboard): the card at most half, a
+                  // little more while the keyboard is up (it is typed in).
                   Expanded(
-                    child: ThreadView<CustomerLine>(
-                      items: d.messages,
-                      of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
-                      now: d.chats.now(),
-                      hasOlder: d.hasOlder,
-                      onOlder: d.older,
-                      errors: [?d.error],
-                      empty: Text(
-                        c?.stopped == true
-                            ? 'What they wrote was deleted when they sent STOP.'
-                            : 'Nothing here yet. What this customer writes to your WhatsApp number shows here.',
-                        textAlign: TextAlign.center,
-                        style: tkHint(t),
+                    child: LayoutBuilder(
+                      builder: (context, box) => Column(
+                        children: [
+                        Expanded(
+                          child: ThreadView<CustomerLine>(
+                            items: d.messages,
+                            of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
+                            now: d.chats.now(),
+                            hasOlder: d.hasOlder,
+                            onOlder: d.older,
+                            errors: [?d.error],
+                            empty: Text(
+                              c?.stopped == true
+                                  ? 'What they wrote was deleted when they sent STOP.'
+                                  : 'Nothing here yet. What this customer writes to your WhatsApp number shows here.',
+                              textAlign: TextAlign.center,
+                              style: tkHint(t),
+                            ),
+                            render: (m, prev) {
+                              final first = prev == null || prev.m.mine != m.m.mine || prev.m.senderName != m.m.senderName;
+                              return Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: _CustomerBubble(x: m, first: first));
+                            },
+                          ),
+                        ),
+                        // CustomerOrders.tsx: the order read from their messages, or
+                        // Start an order.
+                          if (c != null)
+                            CustomerOrders(
+                              auth: d.chats.auth,
+                              chatId: d.id,
+                              canSend: canSend,
+                              follow: d.follow,
+                              maxHeight: box.maxHeight * (MediaQuery.viewInsetsOf(context).bottom > 0 || KeyboardRoom.up(context) ? 0.75 : 0.5),
+                            ),
+                        ],
                       ),
-                      render: (m, prev) {
-                        final first = prev == null || prev.m.mine != m.m.mine || prev.m.senderName != m.m.senderName;
-                        return Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: _CustomerBubble(x: m, first: first));
-                      },
                     ),
                   ),
-                  // CustomerOrders.tsx: an order started from the conversation (M7
-                  // builds what it opens).
-                  if (canSend)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: _StartOrder(onTap: () => showComingSoon(context)),
-                      ),
-                    ),
                   if (note != null) _Note(text: note.text, stop: note.stop),
                   if (canSend && tooLong)
                     _Note(
@@ -475,38 +535,6 @@ class _Note extends StatelessWidget {
   }
 }
 
-/// `.small.customer-order-start`: the web's plain small button with a +.
-class _StartOrder extends StatelessWidget {
-  const _StartOrder({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    return Semantics(
-      button: true,
-      label: 'Start an order',
-      excludeSemantics: true,
-      child: TkPress(
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 40),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(color: t.panel, border: Border.all(color: t.borderStrong), borderRadius: BorderRadius.circular(8)),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TkIcon('plus', size: 14, color: t.text),
-              const SizedBox(width: 6),
-              Text('Start an order', style: tkText(size: 11.9, weight: 500, lineHeight: 1.2, color: t.text)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// CustomerPane's box: the round box alone, and Send.
 class _ReplyBox extends StatelessWidget {
   const _ReplyBox({required this.text, required this.onSend, required this.bottom, required this.label});
@@ -522,7 +550,7 @@ class _ReplyBox extends StatelessWidget {
     const lift = [BoxShadow(color: Color(0x140E1A14), offset: Offset(0, 1), blurRadius: 2)];
     final ready = onSend != null && text.text.trim().isNotEmpty;
     return Container(
-      color: t.tkSoft,
+      // On the chat's wallpaper, as the composer.
       padding: EdgeInsets.fromLTRB(10, 8, 10, 12 + bottom),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,

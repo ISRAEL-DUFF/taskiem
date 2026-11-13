@@ -124,6 +124,7 @@ class _Pick extends StatelessWidget {
     return Semantics(
       button: true,
       label: [s.name, ?s.sub, ?s.badge].join(', ') + (s.explore != null ? ': see their card' : ''),
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -200,6 +201,7 @@ class TagList extends StatelessWidget {
                 Semantics(
                   button: true,
                   label: '${mark == '/' ? '#' : mark}${s.name}${s.sub != null ? ', ${s.sub}' : ''}',
+                  onTap: () => onPick(s),
                   excludeSemantics: true,
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,

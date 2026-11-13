@@ -272,10 +272,11 @@ class _IconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Semantics(
+    return TapArea(child: Semantics(
       button: true,
       label: label,
       expanded: icon == 'calendar' ? on : null,
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,
@@ -287,7 +288,7 @@ class _IconButton extends StatelessWidget {
           child: TkIcon(icon, size: 18, color: t.text),
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -425,10 +426,11 @@ class _DayPickerState extends State<_DayPicker> {
     final weeks = monthGrid(_focus.year, _focus.month);
     final month = monthLabel(_focus);
     final canNext = !sameMonth(_focus, today) && _focus.isBefore(today);
-    Widget arrow(String label, String icon, bool enabled, VoidCallback onTap) => Semantics(
+    Widget arrow(String label, String icon, bool enabled, VoidCallback onTap) => TapArea(child: Semantics(
       button: true,
       enabled: enabled,
       label: label,
+      onTap: enabled ? onTap : null,
       excludeSemantics: true,
       child: GestureDetector(
         onTap: enabled ? onTap : null,
@@ -440,7 +442,7 @@ class _DayPickerState extends State<_DayPicker> {
           ),
         ),
       ),
-    );
+    ));
     return Semantics(
       container: true,
       label: 'Go to a day',
@@ -542,6 +544,10 @@ class _Day extends StatelessWidget {
       button: true,
       enabled: !future,
       label: calendarDayLabel(d),
+      onTap: future ? null : onTap,
+      // A day of the month's grid, 38 px as the web's: a dense grid, as the
+      // emoji keyboard, not padded to 48 each (they would overlap).
+      identifier: 'calendar-day',
       excludeSemantics: true,
       child: GestureDetector(
         onTap: future ? null : onTap,

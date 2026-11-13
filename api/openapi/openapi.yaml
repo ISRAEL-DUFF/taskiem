@@ -9118,6 +9118,58 @@ paths:
                       $ref: '#/components/schemas/LinkMessage'
         default:
           $ref: '#/components/responses/Error'
+  /v1/link-chats/changes:
+    get:
+      operationId: linkChatChanges
+      tags:
+      - Links
+      summary: What changed in the conversations since a time
+      description: For a phone that kept the conversations while it was closed or offline. The messages changed since (written, read, reacted to), those deleted for you since, and until, where the next ask goes on from (with more, a full batch, ask again at once). With no since, nothing is listed and until is where to begin.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: since
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: What changed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages, gone, until, more]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkMessage'
+                  gone:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [id, link]
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        link:
+                          type: string
+                          format: uuid
+                  until:
+                    type: string
+                    format: date-time
+                  more:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
   /v1/link-chats/{link}/read:
     post:
       operationId: readLinkChat
@@ -9826,7 +9878,7 @@ paths:
       tags:
       - Links
       summary: Businesses to browse
-      description: With q, what a search finds (at most 20) and, for a phone number, the one row that sends a request. Without it, three sections, Near you (findable businesses in our own area), Delivery (businesses that deliver for others, those covering our area first) and New on Taskiem (the newest, a page of 12 and more when there is another; section=new, section=near or section=delivery with offset= gives the next page of that section, and near_more and delivery_more say those have another). A search for delivery words also finds the businesses that deliver. Only businesses that chose to be found are listed, each with its profile, whether it has a logo and how many photos it shows (at most 8). Businesses already linked with are left out of the two sections.
+      description: With q, what a search finds (at most 20) and, for a phone number, the one row that sends a request. Without it, three sections, Near you (findable businesses in our own area), Delivery (businesses that deliver for others, those covering our area first) and New on Taskiem (the newest, a page of 12 and more when there is another; section=new, section=near or section=delivery with offset= gives the next page of that section, and near_more and delivery_more say those have another). A search for delivery words also finds the businesses that deliver. Only businesses that chose to be found are listed, each with its profile, whether it has a logo and how many photos it shows (at most 8). Businesses already linked with are left out of the two sections. The first page also has Featured (at most six, Taskiem's picks and then businesses Trusted on Taskiem in an order that changes each day), Trusted on Taskiem (verified, a logo, a tagline, two photos and someone of theirs active in the last 30 days), Popular (each card with its count of links made in the last 90 days, rounded down to 3, 5 or tens, never under 3) and the categories with how many businesses are in each; section=trusted, popular or featured gives that section, and section=category with category= one category's businesses (in_category). A suspended page is in none of them. When no business in our area can be shown, or our area is not set, across lists businesses from anywhere (section=across pages it).
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -9842,7 +9894,19 @@ paths:
         required: false
         schema:
           type: string
-          enum: [new, near, delivery]
+          enum: [new, near, delivery, trusted, popular, featured, category, across, known]
+      - name: category
+        in: query
+        required: false
+        schema:
+          type: string
+        description: With section=category, the category's key (one of categories)
+      - name: ids
+        in: query
+        required: false
+        schema:
+          type: string
+        description: With section=known, up to ten business ids, comma-separated (Recently viewed); answered in known as they are now, only those that may still be shown
       - name: offset
         in: query
         required: false
@@ -10108,6 +10172,12 @@ paths:
                   items:
                     type: string
                     maxLength: 80
+                categories:
+                  type: array
+                  maxItems: 2
+                  description: The one or two categories it is found by in Explore (keys of Explore's categories). Left out, they stay as they are.
+                  items:
+                    type: string
       responses:
         '200':
           description: The profile
@@ -37244,8 +37314,13 @@ components:
     BusinessProfile:
       type: object
       additionalProperties: false
-      required: [name, tagline, area, about, logo, gallery, max_gallery, delivers, vehicle, delivery_areas]
+      required: [name, tagline, area, about, logo, gallery, max_gallery, delivers, vehicle, delivery_areas, categories]
       properties:
+        categories:
+          type: array
+          description: The one or two categories it is found by in Explore
+          items:
+            type: string
         name:
           type: string
         tagline:
@@ -37278,6 +37353,14 @@ components:
       additionalProperties: false
       required: [business, name, logo, photos, captions, state, v]
       properties:
+        categories:
+          type: array
+          description: The categories it picked (keys of Explore's categories)
+          items:
+            type: string
+        links:
+          type: integer
+          description: Popular only, its links made in the last 90 days, rounded down (3, 5, then tens) and shown with a "+"; never under 3
         business:
           type: string
           format: uuid
@@ -37326,6 +37409,55 @@ components:
       additionalProperties: false
       required: [results, near, near_more, fresh, more, delivery, delivery_more]
       properties:
+        featured:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+        across:
+          type: array
+          description: Across Nigeria, in Near you's place when no business in our area can be shown or our area is not set (the fullest cards first)
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+        across_more:
+          type: boolean
+        known:
+          type: array
+          description: section=known, the businesses asked for that may still be shown, as they are now, in the order asked
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+
+        trusted:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+        trusted_more:
+          type: boolean
+        popular:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+        popular_more:
+          type: boolean
+        in_category:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExploreCard'
+        category_more:
+          type: boolean
+        categories:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [key, name, 'n']
+            properties:
+              key:
+                type: string
+              name:
+                type: string
+              'n':
+                type: integer
+                description: How many businesses we may find in it
         results:
           type: array
           items:

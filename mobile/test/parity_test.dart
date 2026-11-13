@@ -26,6 +26,7 @@ import 'package:taskiem/api/transport.dart';
 import 'package:taskiem/app/auth.dart';
 import 'package:taskiem/app/session.dart';
 import 'package:taskiem/kit/kit.dart';
+import 'package:taskiem/kit/list.dart' show TkRow;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/chat/chats.dart';
@@ -164,6 +165,18 @@ final screens = <String, Screen>{
       await _loaded(t);
     },
   ),
+  'explore-start': (
+    build: () {
+      final f = Fixture('explore-start');
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Find a business to link with'));
+      await _loaded(t);
+      await _loaded(t);
+    },
+  ),
   'explore-search': (
     build: () {
       final f = Fixture('explore');
@@ -249,6 +262,67 @@ final screens = <String, Screen>{
     },
     drive: _loaded,
   ),
+  // The tools panel over Taskiem's conversation (M5), and a tool's sheet.
+  'chat-tools': (
+    build: () {
+      final f = Fixture('chat-tools');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Open tools'));
+      await _loaded(t);
+    },
+  ),
+  'chat-tool-sheet': (
+    build: () {
+      final f = Fixture('chat-tools');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Open tools'));
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel(RegExp('^Products')));
+      await _loaded(t);
+    },
+  ),
+  'chat-product': (
+    build: () {
+      final f = Fixture('chat-product');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Open tools'));
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel(RegExp('^Products')));
+      await _loaded(t);
+      await t.tap(find.byType(TkRow).first);
+      await _loaded(t);
+    },
+  ),
+  'chat-sell': (
+    build: () {
+      final f = Fixture('chat-sell');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Open tools'));
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel(RegExp('^Sell')));
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel(RegExp('^One more ')).first);
+      await _loaded(t);
+    },
+  ),
+  'chat-order': (build: () => _conversation('chat-order', 'Bayo Rice Mills'), drive: (t) => _shop(t)),
+  'chat-order-review': (build: () => _conversation('chat-order', 'Bayo Rice Mills'), drive: (t) => _shop(t, review: true)),
   'chat-taskiem-cards': (
     build: () {
       final f = Fixture('chat-taskiem');
@@ -567,4 +641,29 @@ Future<void> _hold(WidgetTester t) async {
   await _loaded(t);
   await t.longPress(find.textContaining('Good morning ma', findRichText: true));
   await t.pumpAndSettle();
+  // The reactions' pill is placed once the menu is measured.
+  await t.pump(const Duration(milliseconds: 50));
+  await t.pumpAndSettle();
+}
+
+/// Their shop from the tools panel, the first item it can add in the bag;
+/// with [review], its review.
+Future<void> _shop(WidgetTester t, {bool review = false}) async {
+  await _loaded(t);
+  await t.tap(find.bySemanticsLabel('Open tools'));
+  await _loaded(t);
+  await t.tap(find.bySemanticsLabel(RegExp('^Their shop')));
+  await _loaded(t);
+  // At large text the head can fill the sheet: the first row scrolled to.
+  final more = find.bySemanticsLabel(RegExp('^One more '));
+  for (var i = 0; i < 20 && more.evaluate().isEmpty; i++) {
+    await t.drag(find.byType(Scrollable).last, const Offset(0, -80));
+    await t.pumpAndSettle();
+  }
+  await t.tap(more.first);
+  await _loaded(t);
+  if (review) {
+    await t.tap(find.bySemanticsLabel('Review order'));
+    await _loaded(t);
+  }
 }

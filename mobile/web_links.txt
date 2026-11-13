@@ -14,28 +14,28 @@
 /account | app lib/screens/settings_more.dart
 /login | app lib/screens/sign_in.dart
 /signup | app lib/screens/sign_up.dart
-/settings/links | M5
-/settings/links/profile | M5
-/staff | M5
-/tasks | M5
-/storefront/stock | M6
-/storefront/price-lists | M6
-/storefront/bookings | M6
-/storefront/orders/ | M7
-/storefront/deliveries | M7
-/trade-orders | M7
-/trade-orders/ | M7
-/links/ | M7
-/invoices | M8
-/invoices/ | M8
-/bills | M8
-/bills/ | M8
-/purchases/ | M8
-/storefront/suppliers | M8
-/storefront/suppliers/ | M8
-/money | M8
-/tables | M8
-/tables/ | M8
+/settings/links | app lib/chat/links_screen.dart
+/settings/links/profile | app lib/chat/profile_screen.dart
+/staff | app lib/chat/team_pages.dart
+/tasks | app lib/chat/team_pages.dart
+/storefront/stock | app lib/chat/stock_page.dart
+/storefront/price-lists | app lib/chat/price_lists_page.dart
+/storefront/bookings | app lib/chat/bookings_page.dart
+/storefront/orders/ | app lib/chat/storefront_orders_page.dart
+/storefront/deliveries | app lib/chat/storefront_orders_page.dart
+/trade-orders | app lib/chat/trade_orders_page.dart
+/trade-orders/ | app lib/chat/trade_orders_page.dart
+/links/ | app lib/chat/statement_page.dart
+/invoices | app lib/chat/invoices_page.dart
+/invoices/ | app lib/chat/invoices_page.dart
+/bills | app lib/chat/bills_page.dart
+/bills/ | app lib/chat/bills_page.dart
+/purchases/ | app lib/chat/purchases_page.dart
+/storefront/suppliers | app lib/chat/purchases_page.dart
+/storefront/suppliers/ | app lib/chat/purchases_page.dart
+/money | app lib/chat/money_page.dart
+/tables | app lib/chat/table_tool.dart
+/tables/ | app lib/chat/table_tool.dart
 /invoice | not a page
 /invoice/ | not a page
 /bill | not a page

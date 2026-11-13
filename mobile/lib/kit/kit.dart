@@ -10,6 +10,17 @@ import 'tap_area.dart';
 
 /// A press, as the web's `button:active { transform: scale(0.98) }` with its
 /// 80 ms transition: the thing gives a little while held.
+/// Inside a page away from the chat: the kit draws itself in the app's
+/// own look (mobile.dart). Without it, the web's, as the chat keeps.
+class TkAppLook extends InheritedWidget {
+  const TkAppLook({super.key, required super.child});
+
+  static bool on(BuildContext context) => context.dependOnInheritedWidgetOfExactType<TkAppLook>() != null;
+
+  @override
+  bool updateShouldNotify(TkAppLook old) => false;
+}
+
 class TkPress extends StatefulWidget {
   const TkPress({super.key, required this.child, this.onTap, this.scale = 0.98});
 
@@ -227,6 +238,8 @@ class TkLink extends StatelessWidget {
     return TapArea(
       child: Semantics(
         link: true,
+        enabled: onTap != null,
+        onTap: onTap,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
@@ -279,6 +292,27 @@ class TkLinkButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!TkAppLook.on(context)) return _web(context);
+    final t = TkTheme.tokens(context);
+    return TapArea(child: Semantics(
+      button: true,
+      child: TkPress(
+        onTap: onPressed ?? () {},
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Align(
+            widthFactor: 1,
+            heightFactor: 1,
+            child: Text(label, style: tkText(size: 14, weight: 600, lineHeight: 1.2, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand)),
+          ),
+        ),
+      ),
+    ));
+  }
+
+  /// The web's look, kept in the chat (its sheets match the web's).
+  Widget _web(BuildContext context) {
     final t = TkTheme.tokens(context);
     return TapArea(child: Semantics(
       button: true,
@@ -386,19 +420,29 @@ class _CheckPainter extends CustomPainter {
 /// Chrome's margins: 3 px above and right, 5 px left), 8 px, the words;
 /// 16 px below. The whole row is pressed.
 class TkChoiceRow extends StatelessWidget {
-  const TkChoiceRow({super.key, required this.control, required this.label, required this.onTap, this.radio = true});
+  const TkChoiceRow({super.key, required this.control, required this.label, required this.onTap, this.radio = true, this.checked});
   final Widget control;
   final Widget label;
-  final VoidCallback onTap;
+
+  /// Null: shown, not to be changed (`disabled`), and said so.
+  final VoidCallback? onTap;
   final bool radio;
+
+  /// Whether it is the one chosen, said to a screen reader; by default
+  /// what [control] (a [TkRadio] or [TkCheckbox]) shows.
+  final bool? checked;
 
   @override
   Widget build(BuildContext context) {
+    final c = control;
+    final on = checked ?? (c is TkRadio ? c.checked : (c is TkCheckbox ? c.checked : null));
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TapArea(
         child: Semantics(
           inMutuallyExclusiveGroup: radio,
+          checked: on,
+          enabled: onTap != null,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onTap,
@@ -457,10 +501,45 @@ class TkSmallButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!TkAppLook.on(context)) return _web(context);
     final t = TkTheme.tokens(context);
     return TapArea(child: Semantics(
       button: true,
       label: semantics,
+      enabled: onPressed != null,
+      onTap: onPressed,
+      excludeSemantics: semantics != null,
+      child: TkPress(
+        onTap: onPressed ?? () {},
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 36),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          decoration: BoxDecoration(
+            color: primary ? t.primary : (danger ? t.tkDangerBg : t.tkSoft),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          // As wide as its words, not the row it is in.
+          child: Align(
+            widthFactor: 1,
+            heightFactor: 1,
+            child: Text(
+              label,
+              style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: primary ? t.primaryText : (danger ? t.tkDangerInk : t.text)),
+            ),
+          ),
+        ),
+      ),
+    ));
+  }
+
+  /// The web's look, kept in the chat (its sheets match the web's).
+  Widget _web(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return TapArea(child: Semantics(
+      button: true,
+      label: semantics,
+      enabled: onPressed != null,
+      onTap: onPressed,
       excludeSemantics: semantics != null,
       child: TkPress(
         onTap: onPressed ?? () {},

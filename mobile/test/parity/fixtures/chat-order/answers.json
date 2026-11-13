@@ -1,0 +1,150 @@
+{
+ "at": "2026-11-12T11:51:19.993Z",
+ "answers": {
+  "/v1/me": {
+   "file": "000.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/billing/status": {
+   "file": "001.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats": {
+   "file": "039.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats?archived=1": {
+   "file": "038.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/settings/chat-tools": {
+   "file": "004.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-settings": {
+   "file": "005.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/links": {
+   "file": "006.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/taskiem-chat?after=*": {
+   "file": "007.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats": {
+   "file": "025.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/customer-chats/unread": {
+   "file": "009.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/form-requests": {
+   "file": "010.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/notifications/count": {
+   "file": "011.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/onboarding": {
+   "file": "012.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/chat-alerts": {
+   "file": "015.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/links/01a1cf72-0f87-7c22-87a3-f41ecde512a1/logo": {
+   "file": "016.img",
+   "status": 200,
+   "type": "image/jpeg"
+  },
+  "/v1/link-chats/e03b6c00-cf87-43ff-8421-3bad056db361/items": {
+   "file": "017.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/storefront/services": {
+   "file": "018.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats/e03b6c00-cf87-43ff-8421-3bad056db361/refs": {
+   "file": "032.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats/e03b6c00-cf87-43ff-8421-3bad056db361/messages": {
+   "file": "020.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/stock": {
+   "file": "037.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/price-lists": {
+   "file": "026.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/trade-orders": {
+   "file": "027.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/invoices?limit=200": {
+   "file": "028.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/bills?status=all": {
+   "file": "029.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/stock/purchases": {
+   "file": "036.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/link-chats/e03b6c00-cf87-43ff-8421-3bad056db361/services": {
+   "file": "031.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/item-links/e03b6c00-cf87-43ff-8421-3bad056db361": {
+   "file": "033.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/supplier-prices?link=e03b6c00-cf87-43ff-8421-3bad056db361": {
+   "file": "034.json",
+   "status": 200,
+   "type": "application/json"
+  },
+  "/v1/stock/suppliers": {
+   "file": "035.json",
+   "status": 200,
+   "type": "application/json"
+  }
+ }
+}

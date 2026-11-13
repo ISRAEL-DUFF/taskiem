@@ -155,10 +155,14 @@ void main() {
     });
 
     test('a message that did not go is sent again as the same message, once', () async {
+      addTearDown(() => buyer.net.down = false);
       buyer.net.down = true;
       await buying.send('Send 4 bags please');
       final o = buying.outbox.single;
-      expect(o.failed, isTrue);
+      // Offline it waits with its clock, not failed (docs/spec/mobile-app-
+      // explore-and-offline.md K5): it goes by itself once back.
+      expect(o.failed, isFalse);
+      expect(buying.offline, isTrue);
       buyer.net.down = false;
       await buying.retry(o);
       await buying.retry(o);

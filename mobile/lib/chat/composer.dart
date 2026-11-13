@@ -24,6 +24,7 @@ import '../kit/modal.dart' show showComingSoon;
 import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
+import 'tools_panel.dart';
 
 /// Where a file to send comes from: the phone's gallery, camera and files.
 class Pickers {
@@ -31,14 +32,32 @@ class Pickers {
 
   /// A photo from the gallery. JPEG at 85: an iPhone's HEIC comes as a
   /// photo the server takes, and a phone's large photo well under the limit.
-  Future<PickedFile?> photo() => _image(ImageSource.gallery);
+  Future<PickedFile?> photo({double? side}) => _image(ImageSource.gallery, side: side);
 
   /// A photo taken now, with the phone's own camera.
-  Future<PickedFile?> camera() => _image(ImageSource.camera);
+  Future<PickedFile?> camera({double? side}) => _image(ImageSource.camera, side: side);
 
-  Future<PickedFile?> _image(ImageSource from) async {
-    final x = await ImagePicker().pickImage(source: from, imageQuality: 85, requestFullMetadata: false);
-    if (x == null) return null;
+  /// Up to [limit] photos from the gallery at once (a profile's photos);
+  /// none when put away.
+  ///
+  /// [side]: the longest side it is sent at (photos.ts SEND_SIDE, a
+  /// product's 1600), drawn smaller on the phone before it goes.
+  Future<List<PickedFile>> photos(int limit, {double? side}) async {
+    if (limit <= 0) return const [];
+    if (limit == 1) {
+      final one = await photo(side: side);
+      return one == null ? const [] : [one];
+    }
+    final xs = await ImagePicker().pickMultiImage(imageQuality: 85, requestFullMetadata: false, limit: limit, maxWidth: side, maxHeight: side);
+    return [for (final x in xs.take(limit)) await _file(x)];
+  }
+
+  Future<PickedFile?> _image(ImageSource from, {double? side}) async {
+    final x = await ImagePicker().pickImage(source: from, imageQuality: 85, requestFullMetadata: false, maxWidth: side, maxHeight: side);
+    return x == null ? null : _file(x);
+  }
+
+  Future<PickedFile> _file(XFile x) async {
     final bytes = await x.readAsBytes();
     final name = x.name.toLowerCase().endsWith('.png') ? x.name : '${x.name.split('.').first}.jpg';
     return PickedFile(bytes: bytes, name: name, type: name.endsWith('.png') ? 'image/png' : 'image/jpeg');
@@ -161,6 +180,7 @@ class Composer extends StatefulWidget {
     this.busy = false,
     this.replying,
     this.onCancelReply,
+    this.tools,
   });
 
   final TextEditingController text;
@@ -168,6 +188,9 @@ class Composer extends StatefulWidget {
   /// The message being answered, in a line (ChatComposer's replyLine).
   final String? replying;
   final VoidCallback? onCancelReply;
+
+  /// The tools panel this composer's button opens (with chat tools).
+  final ToolsController? tools;
 
   /// Sends the words, with the file waiting for its caption if there is one.
   final void Function(String text, PickedFile? file) onSend;
@@ -354,7 +377,8 @@ class ComposerState extends State<Composer> {
         if (widget.replying != null && !recording) _Replying(line: widget.replying!, onCancel: widget.onCancelReply),
         if (file != null && !recording) _Pending(file: file, onRemove: () => setState(() => _file = null)),
         Container(
-          color: t.tkSoft,
+          // On the chat's wallpaper, as WhatsApp's (`.chat-pane .composer` on a
+          // phone): no strip of its own.
           // `.chat-pane .composer { padding: 8px 10px 12px; gap: 8px }`
           padding: EdgeInsets.fromLTRB(10, 8, 10, 12 + widget.bottom),
           child: recording ? _recordingBar(t) : _row(t, dark, file, words),
@@ -382,21 +406,31 @@ class ComposerState extends State<Composer> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        TapArea(child: Semantics(
-          button: true,
-          label: 'Chat tools',
-          child: TkPress(
-            // The tools come with M5 to M8.
-            onTap: () => showComingSoon(context),
-            child: Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(color: t.panel, shape: BoxShape.circle, boxShadow: _lift),
-              alignment: Alignment.center,
-              child: TkIcon('grid', size: 22, stroke: 2, color: dark ? t.text : t.brand),
-            ),
-          ),
-        )),
+        ListenableBuilder(
+          listenable: widget.tools ?? const _Still(),
+          builder: (context, _) {
+            // `.composer-tools.open { background: var(--brand); color: var(--brand-dark) }`
+            final open = widget.tools?.shown ?? false;
+            return TapArea(
+              child: Semantics(
+                button: true,
+                expanded: widget.tools == null ? null : open,
+                label: widget.tools == null ? 'Chat tools' : (open ? 'Close tools' : 'Open tools'),
+                child: TkPress(
+                  // Without chat tools, the tools are not here yet.
+                  onTap: widget.tools?.toggle ?? () => showComingSoon(context),
+                  child: Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(color: open ? t.brand : t.panel, shape: BoxShape.circle, boxShadow: _lift),
+                    alignment: Alignment.center,
+                    child: TkIcon('grid', size: 22, stroke: 2, color: open ? t.brandDark : (dark ? t.text : t.brand)),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: Container(
@@ -460,6 +494,9 @@ class ComposerState extends State<Composer> {
             button: true,
             label: 'Record a voice note',
             hint: 'Hold to record, release to send. Tap to record and send when you are done.',
+            // A screen reader's double tap: a tap, recording until Done or
+            // Cancel.
+            onTap: _record,
             child: Listener(
               onPointerDown: _press,
               onPointerMove: _move,
@@ -497,10 +534,21 @@ class ComposerState extends State<Composer> {
               decoration: BoxDecoration(color: t.panel, borderRadius: BorderRadius.circular(24)),
               child: Row(
                 children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(color: t.danger, shape: BoxShape.circle),
+                  // The red dot breathing with each second.
+                  AnimatedOpacity(
+                    opacity: s.isEven ? 1 : 0.35,
+                    duration: (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ? Duration.zero : const Duration(milliseconds: 600),
+                    curve: Curves.easeInOut,
+                    child: AnimatedScale(
+                      scale: s.isEven ? 1 : 0.8,
+                      duration: (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ? Duration.zero : const Duration(milliseconds: 600),
+                      curve: Curves.easeInOut,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(color: t.danger, shape: BoxShape.circle),
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Flexible(
@@ -531,6 +579,7 @@ class ComposerState extends State<Composer> {
           Semantics(
             button: true,
             label: 'Done',
+            onTap: () => _stop(keep: true),
             excludeSemantics: true,
             child: TkPress(
               onTap: () => _stop(keep: true),
@@ -567,6 +616,7 @@ class _PlainSmall extends StatelessWidget {
     return Semantics(
       button: true,
       label: semantics ?? label,
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,
@@ -707,6 +757,7 @@ class _AttachMenu extends StatelessWidget {
     Widget item(String what, String icon, String label) => Semantics(
       button: true,
       label: label,
+      onTap: () => onChoose(what),
       excludeSemantics: true,
       child: TkPress(
         onTap: () => onChoose(what),
@@ -790,6 +841,7 @@ class _Replying extends StatelessWidget {
           Semantics(
             button: true,
             label: 'Cancel the reply',
+            onTap: onCancel,
             excludeSemantics: true,
             child: TkPress(
               onTap: onCancel,
@@ -807,4 +859,12 @@ class _Replying extends StatelessWidget {
       ),
     );
   }
+}
+
+class _Still extends Listenable {
+  const _Still();
+  @override
+  void addListener(VoidCallback listener) {}
+  @override
+  void removeListener(VoidCallback listener) {}
 }
