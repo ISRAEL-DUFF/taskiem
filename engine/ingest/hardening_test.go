@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/connector"
+	"github.com/israel-duff/taskiem/engine/httpsec"
 	"github.com/israel-duff/taskiem/engine/ingest"
 	"github.com/israel-duff/taskiem/engine/runtime"
 )
@@ -129,7 +130,7 @@ func TestUnknownTenantAndSecurityHeaders(t *testing.T) {
 	if resp.StatusCode != 404 {
 		t.Errorf("unknown tenant: %d", resp.StatusCode)
 	}
-	if csp := resp.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "form-action 'self'") || resp.Header.Get("X-Content-Type-Options") != "nosniff" {
+	if csp := resp.Header.Get("Content-Security-Policy"); csp != httpsec.AnswerCSP || resp.Header.Get("X-Content-Type-Options") != "nosniff" {
 		t.Errorf("security headers: %v", resp.Header)
 	}
 }

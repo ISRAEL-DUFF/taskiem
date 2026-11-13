@@ -199,7 +199,7 @@ func (h *Handler) appEvent(w http.ResponseWriter, r *http.Request) {
 		if ct == "" {
 			ct = "text/plain; charset=utf-8"
 		}
-		w.Header().Set("Content-Type", ct)
+		w.Header().Set("Content-Type", ackContentType(ct))
 		w.WriteHeader(status)
 		_, _ = w.Write([]byte(a.Body))
 		return

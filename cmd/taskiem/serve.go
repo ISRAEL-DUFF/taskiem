@@ -1188,6 +1188,10 @@ func serve(ctx context.Context, args []string) error {
 	for _, w := range dsnWarnings("TASKIEM_DATABASE_URL", cfg.DSN) {
 		log.Warn(w)
 	}
+	if hooksShareConsole(cfg.PublicURL, cfg.HooksURL) {
+		log.Warn("webhooks are served from the same host as the console: workflows choose what /hooks answers, so in production give it a host of its own (TASKIEM_HOOKS_URL, docs/operations.md#webhooks)",
+			"public_url", cfg.PublicURL, "hooks_url", cfg.HooksURL)
+	}
 	db.RetryWindow = cfg.Cloud.RetryWindow
 
 	is := func(r string) bool { return *role == r || *role == "all" }
@@ -1828,4 +1832,25 @@ func setTelegramWebhook(ctx context.Context, tg *telegram.Platform, publicURL st
 		case <-time.After(wait):
 		}
 	}
+}
+
+// hooksShareConsole reports whether /hooks is reached at the same host as
+// the console and the API. Answers there are made safe for browsers
+// (engine/ingest), but a host of its own is the stronger wall: nothing a
+// workflow answers with then shares an origin with a signed-in person. A
+// machine's own address (a developer's laptop) is not worth a warning.
+func hooksShareConsole(publicURL, hooksURL string) bool {
+	pu, err := url.Parse(publicURL)
+	if err != nil || pu.Host == "" {
+		return false
+	}
+	hu, err := url.Parse(hooksURL)
+	if err != nil || !strings.EqualFold(pu.Host, hu.Host) {
+		return false
+	}
+	host := pu.Hostname()
+	if ip := net.ParseIP(host); host == "localhost" || ip != nil && ip.IsLoopback() {
+		return false
+	}
+	return true
 }
