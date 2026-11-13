@@ -303,8 +303,13 @@ in_window() {
 
 # --- alerts ------------------------------------------------------------------
 
+# NOTIFY_SENT says whether the last alert reached anyone: yes when a
+# channel took it, or when no channel is configured (the log is then the
+# only alert there is). notify itself never fails, so callers need not
+# guard it.
+NOTIFY_SENT=yes
 notify() { # SUBJECT BODY
-  local subject body=$2 smtp from to webhook msg
+  local subject body=$2 smtp from to webhook msg tried=0 sent=0
   subject="[Taskiem $(conf DOMAIN)] $1"
   log "ALERT: $1"
   to=$(conf ALERT_EMAIL)
@@ -315,15 +320,32 @@ notify() { # SUBJECT BODY
     printf 'From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\n\r\n%s\r\n' "$from" "$to" "$subject" "$(date -R)" "$body" >"$msg"
     local tls=()
     [ "${smtp%%://*}" != smtp ] || tls=(--ssl-reqd) # smtp:// must upgrade with STARTTLS
-    curl -fsS --max-time 30 "${tls[@]}" --url "$smtp" --mail-from "$from" --mail-rcpt "$to" --upload-file "$msg" >/dev/null ||
+    tried=$((tried + 1))
+    if curl -fsS --max-time 30 "${tls[@]}" --url "$smtp" --mail-from "$from" --mail-rcpt "$to" --upload-file "$msg" >/dev/null; then
+      sent=$((sent + 1))
+    else
       log "alert email failed"
+    fi
     rm -f "$msg"
   fi
   webhook=$(conf ALERT_WEBHOOK)
   if [ -n "$webhook" ]; then
-    jq -n --arg text "$subject"$'\n'"$body" '{text: $text}' |
-      curl -fsS --max-time 15 -H 'Content-Type: application/json' -d @- "$webhook" >/dev/null || log "alert webhook failed"
+    tried=$((tried + 1))
+    if jq -n --arg text "$subject"$'\n'"$body" '{text: $text}' |
+      curl -fsS --max-time 15 -H 'Content-Type: application/json' -d @- "$webhook" >/dev/null; then
+      sent=$((sent + 1))
+    else
+      log "alert webhook failed"
+    fi
   fi
+  NOTIFY_SENT=yes
+  if [ "$tried" -gt 0 ] && [ "$sent" -eq 0 ]; then
+    NOTIFY_SENT=no
+    # Nobody was told: say so where a person watching the server looks.
+    log "ERROR: the alert \"$1\" could not be sent by any channel"
+    logger -t taskiem-vps -p daemon.err "alert could not be sent by any channel: $subject: $body" 2>/dev/null || true
+  fi
+  return 0
 }
 
 # --- commands ----------------------------------------------------------------
@@ -910,7 +932,10 @@ cmd_check() {
   before=$(cat "$STATE/alerts" 2>/dev/null || true)
   if [ "$now" != "$before" ]; then
     if [ -n "$now" ]; then notify "problems" "$now"; else notify "all checks pass again" "Previously: $before"; fi
-    printf '%s' "$now" >"$STATE/alerts"
+    # Remembered only once someone was told: an alert that could not be
+    # sent (the mail server or webhook down with everything else) is tried
+    # again on the next check.
+    if [ "$NOTIFY_SENT" = yes ]; then printf '%s' "$now" >"$STATE/alerts"; fi
   fi
   if [ -n "$now" ]; then printf '%s\n' "$now"; return 1; fi
   echo "all checks pass"

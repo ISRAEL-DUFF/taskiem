@@ -65,7 +65,8 @@ case "$*" in
 esac
 `)
 	// curl: the kit tarballs codeload would serve; everything else answers.
-	stub("curl", `for a in "$@"; do case $a in https://codeload.github.com/*) echo "kit ${a##*/}" >>"$CALLS"; cat "$KITS/${a##*/}.tgz"; exit 0 ;; esac; done
+	stub("curl", `for a in "$@"; do case $a in https://codeload.github.com/*) echo "kit ${a##*/}" >>"$CALLS"; cat "$KITS/${a##*/}.tgz"; exit 0 ;;
+  https://alerts.test/*) [ -z "${ALERTS_DOWN:-}" ] || exit 22; echo "alert $(tr -d '\n')" >>"$CALLS"; exit 0 ;; esac; done
 exit 0
 `)
 	// cosign: CI's signed statement of the channel a release was promoted
@@ -254,8 +255,9 @@ func TestVPSTakesOnlyNewerReleasesOfItsChannel(t *testing.T) {
 		}
 	}
 	// The timer does not try a refused release again on every tick.
-	if out, err := v.run("taskiem:old", "update", "--auto"); err == nil {
-		t.Errorf("the timer took an older release: %s", out)
+	_, _ = v.run("taskiem:old", "update", "--auto") // refused, and remembered
+	if current() != "taskiem:good2" {
+		t.Errorf("the timer took an older release: now running %s", current())
 	}
 	before, _ := os.ReadFile(v.log)
 	if out, err := v.run("taskiem:old", "update", "--auto"); err != nil {
@@ -281,5 +283,49 @@ func TestVPSTakesOnlyNewerReleasesOfItsChannel(t *testing.T) {
 	}
 	if got := v.read(filepath.Join(v.state, "current-release")); got != "12" {
 		t.Errorf("recorded release after rollback = %q, want 12", got)
+	}
+}
+
+// alerts is the alerts that reached the webhook.
+func (v *vps) alerts() []string {
+	b, _ := os.ReadFile(v.log)
+	var out []string
+	for _, l := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(l, "alert ") {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// TestVPSResendsAnAlertThatDidNotGoOut: the check alerts when the set of
+// problems changes and remembers the set. It used to remember it even when
+// the alert could not be sent, so an outage that took the alert channel
+// down with it was never reported. The set is now remembered only once an
+// alert got through; until then every check tries again.
+func TestVPSResendsAnAlertThatDidNotGoOut(t *testing.T) {
+	v := newVPS(t)
+	v.write(filepath.Join(v.dir, "etc", "vps.conf"), "ALERT_WEBHOOK='https://alerts.test/hook'\n")
+	v.write(filepath.Join(v.state, "update-failed"), "taskiem:broken\n")
+
+	v.env = []string{"ALERTS_DOWN=1"}
+	out, err := v.run("", "check")
+	if err == nil || !strings.Contains(out, "could not be sent") {
+		t.Fatalf("check with the alert channel down: %v: %s", err, out)
+	}
+	if b, _ := os.ReadFile(filepath.Join(v.state, "alerts")); len(b) != 0 {
+		t.Fatalf("the problems were remembered though nobody was told: %q", b)
+	}
+	v.env = nil
+	if _, err := v.run("", "check"); err == nil {
+		t.Fatal("the check passed with a problem outstanding")
+	}
+	if got := v.alerts(); len(got) != 1 || !strings.Contains(got[0], "taskiem:broken") {
+		t.Fatalf("alerts once the channel is back = %q, want the one that did not go out", got)
+	}
+	// Told once: the same problems do not alert again.
+	_, _ = v.run("", "check")
+	if got := v.alerts(); len(got) != 1 {
+		t.Errorf("the same problems alerted again: %q", got)
 	}
 }

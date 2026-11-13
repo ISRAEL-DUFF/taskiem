@@ -69,7 +69,7 @@ An upgrade stops Taskiem for about 30 seconds while workers drain, so keep payro
 
 ## Alerts
 
-`taskiem-vps check` runs every 5 minutes and sends an email (through Taskiem's SMTP) and a Slack-compatible webhook when the set of problems changes, and again when it clears:
+`taskiem-vps check` runs every 5 minutes and sends an email (through Taskiem's SMTP) and a Slack-compatible webhook when the set of problems changes, and again when it clears. An alert that neither channel took is sent again by every check until one does, and is written to the journal as an error (`journalctl -t taskiem-vps -p err`); the problems are:
 
 - Taskiem unhealthy, or `https://<domain>/readyz` not answering;
 - OpenBao sealed or down, or its token renewal failing (Taskiem never renews its own OpenBao token; the `openbao-renew` service does, daily);
