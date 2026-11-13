@@ -231,6 +231,12 @@ func (s *Stock) Apply(ctx context.Context, tenant, id uuid.UUID) (Movement, erro
 		}
 		from, to := m.Before, m.After
 		if from == nil {
+			if m.SetTo != nil {
+				if err := s.landOlder(ctx, tenant, m); err != nil {
+					s.failed(ctx, tenant, m.ID, err)
+					return m, err
+				}
+			}
 			if m, err = s.claim(ctx, tenant, m); err != nil || m.Status != "pending" {
 				return m, err
 			}
@@ -257,6 +263,43 @@ func (s *Stock) Apply(ctx context.Context, tenant, id uuid.UUID) (Movement, erro
 		}
 	}
 	return s.get(ctx, tenant, id)
+}
+
+// ErrBehind: a count waits for a change made before it that has not
+// reached the table yet.
+var ErrBehind = errors.New("stock: an earlier change to this item has not reached the table yet; the count lands after it")
+
+// landOlder sends the item's movements made before a count and still on
+// their way, oldest first. A count is what was on the shelf when it was
+// taken, and the shelf already showed every sale, receipt and adjustment
+// made before it: so those land first, as what they were, and the count
+// then sets the number, booking only the difference they do not explain.
+// Landing the count first would let an older sale come off the counted
+// number later, and book what was sold as lost. While one of them cannot
+// land, the count waits too.
+func (s *Stock) landOlder(ctx context.Context, tenant uuid.UUID, m Movement) error {
+	var ids []uuid.UUID
+	if err := s.inTx(ctx, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT id FROM stock_movements WHERE tenant_id = $1 AND item_id = $2 AND status = 'pending'
+			AND (created_at, id) < ($3, $4) ORDER BY created_at, id`, tenant, m.ItemID, m.CreatedAt, m.ID)
+		if err != nil {
+			return err
+		}
+		ids, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		return err
+	}); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		older, err := s.Apply(ctx, tenant, id)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrBehind, err)
+		}
+		if older.Status == "pending" {
+			return ErrBehind
+		}
+	}
+	return nil
 }
 
 func (s *Stock) inTx(ctx context.Context, tenant uuid.UUID, fn func(pgx.Tx) error) error {

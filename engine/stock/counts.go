@@ -109,7 +109,7 @@ func CountTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in CountIn) (Stoc
 		return StockCount{}, nil, fmt.Errorf("%w: a count has 1 to %d items", ErrCount, MaxCountLines)
 	}
 	in.Reason = cut(strings.TrimSpace(in.Reason), 200)
-	seen := map[string]bool{}
+	seen, behind := map[string]bool{}, map[string]bool{}
 	var lost int64
 	for i := range in.Lines {
 		l := &in.Lines[i]
@@ -123,6 +123,10 @@ func CountTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in CountIn) (Stoc
 		seen[l.ItemID] = true
 		if l.Counted < 0 || l.Counted > MaxDelta {
 			return StockCount{}, nil, fmt.Errorf("%w: how many %s is a whole number, 0 or more", ErrCount, l.Item)
+		}
+		var err error
+		if l.Expected, behind[l.ItemID], err = expectedTx(ctx, tx, tenant, l.ItemID, l.Expected); err != nil {
+			return StockCount{}, nil, err
 		}
 		if l.CostKobo != nil {
 			lost += l.Lost() * *l.CostKobo
@@ -141,7 +145,9 @@ func CountTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in CountIn) (Stoc
 	}
 	var moves []Movement
 	for _, l := range in.Lines {
-		if l.Expected != nil && *l.Expected == l.Counted {
+		// With a change still on its way, the count is recorded even when
+		// it agrees: it lands after it (landOlder) and sets the number.
+		if l.Expected != nil && *l.Expected == l.Counted && !behind[l.ItemID] {
 			continue
 		}
 		n := l.Counted
@@ -158,6 +164,29 @@ func CountTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in CountIn) (Stoc
 	}
 	c, err := scanCount(tx.QueryRow(ctx, `SELECT `+countCols+` FROM stock_counts WHERE id = $1`, id))
 	return c, moves, err
+}
+
+// expectedTx is the count Taskiem expects of an item once its changes
+// still on their way to the table have landed: the count the table held
+// (expected, as the screen showed it) moved by each of them in turn. The
+// shelf already shows them, so the count is compared with this: a sale
+// that had not reached the table is not a loss. behind is true when there
+// is one.
+func expectedTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, item string, expected *int64) (*int64, bool, error) {
+	rows, err := tx.Query(ctx, `SELECT `+movementCols+` FROM stock_movements WHERE tenant_id = $1 AND item_id = $2 AND status = 'pending'
+		ORDER BY created_at, id`, tenant, item)
+	if err != nil {
+		return expected, false, err
+	}
+	pending, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Movement, error) { return scanMovement(r) })
+	if err != nil || len(pending) == 0 || expected == nil {
+		return expected, len(pending) > 0, err
+	}
+	n := *expected
+	for _, m := range pending {
+		n, _ = target(n, m)
+	}
+	return &n, true, nil
 }
 
 // RecordCount records a count, then sends its movements to the table.
