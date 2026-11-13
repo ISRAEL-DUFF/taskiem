@@ -1,6 +1,6 @@
 # Task wake-ups outside the transaction
 
-Status: **spec; W1 to W3 built 12 November 2026 and audited the same day (§9.2), with the review machine's measurements of W4 (§9.1), which show no difference there. W5, the target hardware, is open, and is where the change has to prove itself.** Written 2026-11-12. Decision: [0067](../decisions/0067-wake-ups-leave-the-transaction.md), which amends [0002](../decisions/0002-postgres-as-queue.md). It closes the first item of "What remains" in [performance](../performance.md#what-remains).
+Status: **spec; W1 to W3 built 12 November 2026 and audited the same day (§9.2), with the review machine's measurements of W4 (§9.1), which show no difference on its fast disk, and with a run on a disk made slow (§9.3), where the change takes the engine from about 17 runs/s to 40 within its objectives. W5, the target hardware, is open.** Written 2026-11-12. Decision: [0067](../decisions/0067-wake-ups-leave-the-transaction.md), which amends [0002](../decisions/0002-postgres-as-queue.md). It closes the first item of "What remains" in [performance](../performance.md#what-remains).
 
 ## 1. Summary
 
@@ -234,6 +234,10 @@ The ramp (step 2) was run with one binary and `TASKIEM_WAKE_IN_TX` changed, inte
 | A `Store` with no pool would have crashed the process from the notifier's goroutine | The send fails instead |
 | After giving up on a run of failed sends, the next failure was dropped without a retry | The count starts again |
 | The first ramp's figures were taken on the incomplete build and read as an improvement | Rerun, five rounds, and reported as no difference (§9.1) |
+
+### 9.3 A disk made slow, 13 November 2026
+
+The collapse was reproduced by slowing the disk (`tools/loadtest/slowsync/slowsync.c`, 10 ms added to every flush) and the two settings compared, two rounds: [performance](../performance.md#a-slow-disk-13-november-2026). With the wake-up in the transaction the engine reached about 17 runs/s and fell to 10 as more was offered, refusing webhooks with the CPUs half idle. With it after the commit the engine held 40 runs/s inside every objective and reached about 55, where the machine's CPUs ran out. This is the "done when" of §9 met on a disk made slow; W5 remains for the target hardware.
 
 No figure for runs a second is promised here. The review machine is shared and noisy, and the next limits (§10) are not touched. The number to quote comes from the target hardware (P4-R5).
 
