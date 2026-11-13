@@ -211,7 +211,7 @@ Before and after, the two builds interleaved, as [performance](../performance.md
 
 ### 9.1 The review machine, 12 November 2026
 
-The ramp (step 2) was run with one binary and `TASKIEM_WAKE_IN_TX` changed, interleaved: two rounds at 20, 40, 60 and 80 runs/s and three more at 50 and 60. The table is in [performance](../performance.md#wake-ups-after-the-commit-decision-0067-migration-00426).
+The ramp (step 2) was run with one binary and `TASKIEM_WAKE_IN_TX` changed, interleaved: two rounds at 20, 40, 60 and 80 runs/s and three more at 50 and 60. The table is in [performance](../performance.md#wake-ups-after-the-commit-decision-0067-migration-00427).
 
 | "Done when" | Result |
 | --- | --- |
