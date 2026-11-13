@@ -2,8 +2,14 @@ package api_test
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -318,5 +324,54 @@ func TestTelegramLocationGoesWithTheClockIn(t *testing.T) {
 	var where string
 	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT COALESCE(in_where, '') FROM staff_clock`).Scan(&where); err != nil || !strings.Contains(where, "6.4541") {
 		t.Fatalf("the clock-in's place: %q %v", where, err)
+	}
+}
+
+// TestSlackClickReplayedIsReadOnce (E7): a signed click sent again inside
+// the signature's time window is not read a second time.
+func TestSlackClickReplayedIsReadOnce(t *testing.T) {
+	w := newSlackWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	owner.must(201, "POST", "/v1/connections", map[string]any{"connector": "slack@1", "environment": "prod", "credentials": map[string]string{"bot_token": "xoxb-acme"}})
+	w.fake.users["owner@acme.test"] = "U0OWNER"
+	w.link(t, owner, "U0OWNER")
+	pl, _ := json.Marshal(map[string]any{"type": "block_actions", "team": map[string]any{"id": "T0ACME"}, "user": map[string]any{"id": "U0OWNER"},
+		"trigger_id": "13345224609.738474920.8088930838d88f008e0", "actions": []any{map[string]any{"action_id": "taskiem.reply.0", "value": "su:tpl:daily-reminder", "action_ts": "1548426417.840180"}}})
+	body := "payload=" + url.QueryEscape(string(pl))
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
+	m := hmac.New(sha256.New, []byte(slackSecret))
+	m.Write([]byte("v0:" + ts + ":" + body))
+	sig := "v0=" + hex.EncodeToString(m.Sum(nil))
+	post := func() {
+		t.Helper()
+		req, _ := http.NewRequest("POST", w.hook, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("X-Slack-Request-Timestamp", ts)
+		req.Header.Set("X-Slack-Signature", sig)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != 200 {
+			t.Fatalf("a click: %d", resp.StatusCode)
+		}
+		w.srv.WaitBackground()
+	}
+	before := len(w.fake.to("U0OWNER"))
+	post()
+	if got := w.fake.to("U0OWNER")[before:]; len(got) != 1 || !strings.Contains(got[0]["text"].(string), "What to remind you of") {
+		t.Fatalf("the click: %v", got)
+	}
+	post()
+	if got := w.fake.to("U0OWNER")[before:]; len(got) != 1 {
+		t.Fatalf("the replayed click was read again: %v", got[1:])
+	}
+	// Another press of the same button is another click.
+	if st := w.click(t, "U0OWNER", "taskiem.reply.0", "su:tpl:daily-reminder", slackSecret); st != 200 {
+		t.Fatalf("a second click: %d", st)
+	}
+	if got := w.fake.to("U0OWNER")[before:]; len(got) != 2 {
+		t.Fatalf("a second click was dropped: %v", got)
 	}
 }
