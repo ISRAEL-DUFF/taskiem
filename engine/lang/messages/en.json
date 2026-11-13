@@ -529,6 +529,11 @@
       "reviewed": true,
       "context": "Someone sent STOP: the business that messaged them last stops"
     },
+    "reach.stopped_dropped": {
+      "text": "You will no longer get updates from {business} here. Send START to get them again. What you were in the middle of here was dropped too.",
+      "reviewed": true,
+      "context": "Someone with a Taskiem account sent STOP while something of their own was waiting for an answer: the business that messaged them last stops, and what was waiting is dropped"
+    },
     "customer.resumed": {
       "text": "You can write to {business} here again, and they can reply.",
       "reviewed": true,

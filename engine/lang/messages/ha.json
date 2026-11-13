@@ -424,6 +424,10 @@
       "text": "Ba za ka ƙara samun labarai daga {business} a nan ba. Aika START don sake samun su.",
       "reviewed": false
     },
+    "reach.stopped_dropped": {
+      "text": "You will no longer get updates from {business} here. Send START to get them again. What you were in the middle of here was dropped too.",
+      "reviewed": false
+    },
     "customer.resumed": {
       "text": "Za ka iya sake rubuta wa {business} a nan, kuma za su iya ba ka amsa.",
       "reviewed": false

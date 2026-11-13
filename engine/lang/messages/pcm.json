@@ -424,6 +424,10 @@
       "text": "You no go dey get update from {business} for here again. Send START make e start again.",
       "reviewed": false
     },
+    "reach.stopped_dropped": {
+      "text": "You will no longer get updates from {business} here. Send START to get them again. What you were in the middle of here was dropped too.",
+      "reviewed": false
+    },
     "customer.resumed": {
       "text": "You fit write {business} for here again, and dem fit answer you.",
       "reviewed": false

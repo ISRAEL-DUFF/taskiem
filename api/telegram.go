@@ -336,6 +336,7 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 		}
 		return s.tgUnbound(ctx, addr, in.Text)
 	}
+	start := false
 	switch {
 	case u.Kind == "callback":
 		payload, ok, err := tg.ResolveCallback(ctx, u.FromID, u.CallbackData)
@@ -361,9 +362,11 @@ func (s *Server) tgHandle(ctx context.Context, u telegram.Update) error {
 		return nil // a sticker, a location: nothing to act on
 	default:
 		// Telegram's commands are /help, /approvals...: read as the words.
+		// "/start" is help, unless it brings back a business's updates.
+		start = strings.HasPrefix(in.Text, "/") && reachWord(in.Text) == "start"
 		in.Text = tgCommandWords(in.Text, tg.Config.BotUsername)
 	}
-	return s.converse(ctx, &chat{ch: tg, addr: addr, in: in}, user)
+	return s.converse(ctx, &chat{ch: tg, addr: addr, in: in, start: start}, user)
 }
 
 // tgCommandWords reads "/help" (or "/help@bot", or "/start" with nothing

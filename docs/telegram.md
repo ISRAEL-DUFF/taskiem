@@ -37,7 +37,7 @@ Telegram delivers only to `https` URLs on ports 443, 80, 88 or 8443. A local ins
 
 **What messages never show** is as on WhatsApp: no secrets, and personal data masked.
 
-**People outside a business** (customers, staff who don't sign in) can get a business's workflow messages from the same bot, without a Taskiem account: they open the business's link and press **Start** ([updates](updates.md)). To them the bot only sends updates, and understands STOP and START.
+**People outside a business** (customers, staff who don't sign in) can get a business's workflow messages from the same bot, without a Taskiem account: they open the business's link and press **Start** ([updates](updates.md)). To them the bot only sends updates, and understands STOP and START; someone with a Taskiem account who takes another business's updates stops and starts them the same way ([stopping](updates.md#stopping)).
 
 ## Connecting a service
 

@@ -424,6 +424,10 @@
       "text": "O kò ní gba ìròyìn láti ọ̀dọ̀ {business} níbí mọ́. Fi START ránṣẹ́ láti tún gbà wọ́n.",
       "reviewed": false
     },
+    "reach.stopped_dropped": {
+      "text": "You will no longer get updates from {business} here. Send START to get them again. What you were in the middle of here was dropped too.",
+      "reviewed": false
+    },
     "customer.resumed": {
       "text": "O lè kọ sí {business} níbí lẹ́ẹ̀kan sí i, wọ́n sì lè dá ọ lóhùn.",
       "reviewed": false

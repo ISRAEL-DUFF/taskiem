@@ -201,6 +201,9 @@ type chat struct {
 	lang langChoice
 	// note goes before the next reply (a voice note's transcript).
 	note string
+	// start is Telegram's "/start" with nothing after it, read as "help"
+	// unless it resumes a business's updates (memberStopStart).
+	start bool
 	// areaState is which parts of Taskiem the business uses, read once for
 	// a message (chatAreas).
 	areaState areas.State
@@ -363,6 +366,12 @@ func (s *Server) converse(ctx context.Context, c *chat, user uuid.UUID) error {
 	if l, ok := ch.(interface{ linkedTenants() []uuid.UUID }); ok {
 		linked := l.linkedTenants()
 		c.tenants = slices.DeleteFunc(c.tenants, func(t tenantRef) bool { return !slices.Contains(linked, t.ID) })
+	}
+	// STOP and START to the businesses whose updates the person takes
+	// (reach.go): theirs to say whatever else is going on, before
+	// anything of their own businesses.
+	if done, err := s.memberStopStart(ctx, c, user); done || err != nil {
+		return err
 	}
 	// A dormant binding acts on nothing until it is proven again
 	// (chat_dormant.go).

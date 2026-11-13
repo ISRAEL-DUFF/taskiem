@@ -1,9 +1,11 @@
 package api_test
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 
+	"github.com/israel-duff/taskiem/engine/telegram/telegramtest"
 	"github.com/israel-duff/taskiem/engine/whatsapp/whatsapptest"
 )
 
@@ -30,6 +32,98 @@ func (w *reachWorld) standingPath(t *testing.T, owner *client) string {
 		t.Fatalf("reach page: %q", pageURL)
 	}
 	return strings.TrimPrefix(pageURL, "https://"+reachFormHost)
+}
+
+// TestStopFromSomeoneOnTaskiem (E1): a person with a Taskiem account of
+// their own who takes another business's updates can stop them, on
+// WhatsApp and on Telegram.
+func TestStopFromSomeoneOnTaskiem(t *testing.T) {
+	w := newReachWorld(t)
+	supplier := w.tenant(t, "Ada Stores", "ada@ada.test")
+	shift := publishFlow(t, supplier, shiftFlow)
+	shop := w.tenant(t, "Chidi Shop", "chidi@chidi.test")
+	const chidi = "+2348039998888"
+	w.bindWA(t, shop, chidi)
+
+	path := w.standingPath(t, supplier)
+	to := w.page(t, path+"/whatsapp", nil)
+	loc, _ := url.Parse(to.Header().Get("Location"))
+	if sent := w.whatsapp(t, chidi, loc.Query().Get("text")); len(sent) != 1 || !strings.Contains(sent[0].Text, "You'll get updates from Ada Stores here") {
+		t.Fatalf("Chidi links: %+v", sent)
+	}
+	remind := func() {
+		t.Helper()
+		supplier.must(201, "POST", "/v1/workflows/"+shift+"/runs", map[string]any{"input": map[string]any{"phone": chidi}})
+		w.env.Drain(t)
+		w.tick(t)
+	}
+	remind()
+	if last := w.graph.Last(t, chidi); !strings.Contains(last.Text, "Your shift starts") {
+		t.Fatalf("the update: %+v", last)
+	}
+
+	// Something of Chidi's own is under way: STOP drops it and stops Ada
+	// Stores, and says both.
+	if got := w.whatsapp(t, chidi, "invite +2348012340000 as viewer"); len(got) != 1 || !strings.Contains(got[0].Text, "Invite +2348012340000") {
+		t.Fatalf("something pending: %+v", got)
+	}
+	got := w.whatsapp(t, chidi, "STOP")
+	if len(got) != 1 || !strings.Contains(got[0].Text, "no longer get updates from Ada Stores") || !strings.Contains(got[0].Text, "dropped") {
+		t.Fatalf("STOP from a linked number: %+v", got)
+	}
+	if got := w.whatsapp(t, chidi, "yes"); len(got) != 1 || strings.Contains(got[0].Text, "Invitation sent") {
+		t.Fatalf("the dropped action was confirmed: %+v", got)
+	}
+	before := len(w.graph.Sent(chidi))
+	texts := w.texts(t)
+	remind()
+	if after := w.graph.Sent(chidi); len(after) != before {
+		t.Fatalf("an update after STOP: %+v", after[before:])
+	}
+	if w.texts(t) != texts+1 {
+		t.Fatalf("the update did not go by SMS instead: %d texts", w.texts(t)-texts)
+	}
+	// With nothing to stop, "stop" is the conversation's own word again.
+	if got := w.whatsapp(t, chidi, "stop"); len(got) != 1 || !strings.Contains(got[0].Text, "Nothing to cancel") {
+		t.Fatalf("stop with nothing to stop: %+v", got)
+	}
+	// START brings the updates back.
+	if got := w.whatsapp(t, chidi, "START"); len(got) != 1 || !strings.Contains(got[0].Text, "updates from Ada Stores here again") {
+		t.Fatalf("START: %+v", got)
+	}
+	remind()
+	if last := w.graph.Last(t, chidi); !strings.Contains(last.Text, "Your shift starts") {
+		t.Fatalf("the update after START: %+v", last)
+	}
+
+	// The same on Telegram.
+	const dayo = int64(7301)
+	const dayoPhone = "+2348035557777"
+	other := w.tenant(t, "Dayo Bakes", "dayo@dayo.test")
+	made := other.must(201, "POST", "/v1/me/telegram", map[string]any{"password": testPassword})
+	u, _ := url.Parse(made["url"].(string))
+	if got := w.telegram(t, dayo, func(id int64) []byte { return telegramtest.Start(id, dayo, "dayo", u.Query().Get("start")) }); len(got) != 1 || !strings.Contains(got[0].Text, "now linked") {
+		t.Fatalf("linking Telegram: %+v", got)
+	}
+	tgTo := w.page(t, path+"/telegram", nil)
+	tgLoc, _ := url.Parse(tgTo.Header().Get("Location"))
+	if tgLoc == nil || tgLoc.Query().Get("start") == "" {
+		t.Fatalf("the Telegram button: %d %v", tgTo.Code, tgTo.Header())
+	}
+	w.telegram(t, dayo, func(id int64) []byte { return telegramtest.Start(id, dayo, "dayo", tgLoc.Query().Get("start")) })
+	if got := w.telegram(t, dayo, func(id int64) []byte { return telegramtest.ContactMessage(id, dayo, dayoPhone, dayo) }); len(got) != 1 || !strings.Contains(got[0].Text, "You'll get updates from Ada Stores here") {
+		t.Fatalf("Dayo links: %+v", got)
+	}
+	if got := w.telegram(t, dayo, func(id int64) []byte { return telegramtest.Message(id, dayo, "dayo", "/stop") }); len(got) != 1 || !strings.Contains(got[0].Text, "no longer get updates from Ada Stores") {
+		t.Fatalf("/stop from a linked account: %+v", got)
+	}
+	n := len(w.bot.Sent(dayo))
+	supplier.must(201, "POST", "/v1/workflows/"+shift+"/runs", map[string]any{"input": map[string]any{"phone": dayoPhone}})
+	w.env.Drain(t)
+	w.tick(t)
+	if after := w.bot.Sent(dayo); len(after) != n {
+		t.Fatalf("a Telegram update after /stop: %+v", after[n:])
+	}
 }
 
 // TestSomeoneOnTaskiemIsACustomerElsewhere (E2): a person with an account

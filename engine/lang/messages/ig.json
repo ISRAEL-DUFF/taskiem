@@ -424,6 +424,10 @@
       "text": "Ị gaghị enwetakwa ozi site na {business} ebe a. Zipu START iji nweta ha ọzọ.",
       "reviewed": false
     },
+    "reach.stopped_dropped": {
+      "text": "You will no longer get updates from {business} here. Send START to get them again. What you were in the middle of here was dropped too.",
+      "reviewed": false
+    },
     "customer.resumed": {
       "text": "Ị nwere ike idegara {business} ebe a ọzọ, ha nwekwara ike ịza gị.",
       "reviewed": false
