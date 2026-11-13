@@ -796,7 +796,7 @@ func (c *client) initiatePayment(ctx context.Context, req connector.Request) (co
 		// Already initiated under this reference: report that payment.
 		out, verr := c.verify(ctx, req, ref)
 		if errors.Is(verr, connector.ErrNotFound) {
-			return connector.Response{}, fmt.Errorf("mono refused reference %s (%s) and has no payment under it: %w", ref, monoError(err).message, effects.ErrFatal)
+			return connector.Response{}, fmt.Errorf("mono refused reference %s (%s) and shows no payment under it; check it in Mono, then resolve the step: %w", ref, monoError(err).message, effects.ErrIndeterminate)
 		}
 		if verr != nil {
 			return connector.Response{}, verr
@@ -853,10 +853,24 @@ func (c *client) verify(ctx context.Context, req connector.Request, ref string) 
 	return out, nil
 }
 
+// unconfirmedLookup is reconcile's answer when Mono shows nothing under
+// the engine's reference. It is not "not found": Mono has not confirmed
+// that these lookups find every payment, debit and mandate by our
+// reference (a mandate's path documents an id; whether payment verify
+// lists mandate debits is not stated), and "not found" would have the
+// engine send again: a second debit or a second mandate. The step parks
+// for a person until Mono confirms them (docs/integrations/mono.md).
+func unconfirmedLookup(what, ref string) error {
+	return fmt.Errorf("mono shows no %s under reference %s, but Mono has not confirmed that this lookup finds every one: check it in Mono, then resolve the step: %w",
+		what, ref, effects.ErrIndeterminate)
+}
+
 func (c *client) verifyPayment(ctx context.Context, req connector.Request) (connector.Response, error) {
 	out, err := c.verify(ctx, req, str(req.Input, "reference"))
 	if errors.Is(err, connector.ErrNotFound) {
-		// Also what reconcile reads as "never sent".
+		if req.Reconciling {
+			return connector.Response{}, unconfirmedLookup("payment or debit", str(req.Input, "reference"))
+		}
 		return connector.Response{}, fmt.Errorf("%w: %w", err, effects.ErrFatal)
 	}
 	if err != nil {
@@ -977,7 +991,7 @@ func (c *client) mandateWrite(ctx context.Context, req connector.Request, ref st
 	if duplicate(err) {
 		out, gerr := c.mandate(ctx, req, ref)
 		if errors.Is(gerr, connector.ErrNotFound) {
-			return connector.Response{}, fmt.Errorf("mono refused reference %s (%s) and has no mandate under it: %w", ref, monoError(err).message, effects.ErrFatal)
+			return connector.Response{}, fmt.Errorf("mono refused reference %s (%s) and shows no mandate under it; check it in Mono, then resolve the step: %w", ref, monoError(err).message, effects.ErrIndeterminate)
 		}
 		if gerr != nil {
 			return connector.Response{}, gerr
@@ -1065,6 +1079,9 @@ func (c *client) getMandate(ctx context.Context, req connector.Request) (connect
 	}
 	out, err := c.mandate(ctx, req, id)
 	if errors.Is(err, connector.ErrNotFound) {
+		if req.Reconciling {
+			return connector.Response{}, unconfirmedLookup("mandate", id)
+		}
 		return connector.Response{}, fmt.Errorf("%w: %w", err, effects.ErrFatal)
 	}
 	if err != nil {
@@ -1174,7 +1191,7 @@ func (c *client) debitMandate(ctx context.Context, req connector.Request) (conne
 		// A resend after a lost response: report the debit already made.
 		out, verr := c.verify(ctx, req, ref)
 		if errors.Is(verr, connector.ErrNotFound) {
-			return connector.Response{}, fmt.Errorf("mono refused reference %s (%s) and has no debit under it: %w", ref, monoError(err).message, effects.ErrFatal)
+			return connector.Response{}, fmt.Errorf("mono refused reference %s (%s) and shows no debit under it; check it in Mono, then resolve the step: %w", ref, monoError(err).message, effects.ErrIndeterminate)
 		}
 		if verr != nil {
 			return connector.Response{}, verr

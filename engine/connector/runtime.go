@@ -24,9 +24,16 @@ type Request struct {
 	// to be sent (database clock), for providers whose duplicate protection
 	// expires; zero for reads.
 	KeyFirstSent time.Time
-	Attempt      int
-	Logger       *slog.Logger
-	HTTP         *http.Client
+	// Reconciling is set when the engine runs the action as another
+	// action's reconcile (contract: action-classes.md), with the key in
+	// Input. A not-found answer then has the engine send the effect again,
+	// so a connector whose lookup by the key is not confirmed with the
+	// provider answers effects.ErrIndeterminate instead of ErrNotFound: the
+	// step parks for a person.
+	Reconciling bool
+	Attempt     int
+	Logger      *slog.Logger
+	HTTP        *http.Client
 	// Dial opens egress-guarded TCP connections for connectors that do not
 	// speak HTTP (databases, SFTP).
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)

@@ -321,7 +321,8 @@ func (c *client) transfer(ctx context.Context, req connector.Request) (connector
 		// Already sent under this reference: report that transfer.
 		r, gerr := c.byReference(ctx, req, ref)
 		if errors.Is(gerr, connector.ErrNotFound) {
-			return connector.Response{}, fmt.Errorf("lenco refused reference %s (%s) and has no transfer under it: %w", ref, ae.message, effects.ErrFatal)
+			// Refused as sent before, yet not shown: it may still appear.
+			return connector.Response{}, fmt.Errorf("lenco refused reference %s (%s) and has no transfer under it: %w", ref, ae.message, effects.ErrUnknownOutcome)
 		}
 		if gerr != nil {
 			return connector.Response{}, gerr

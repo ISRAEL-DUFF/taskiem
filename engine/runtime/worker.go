@@ -1356,7 +1356,7 @@ func (w *Worker) reconcile(ctx context.Context, p *plan) (history.Event, error) 
 	if err != nil {
 		return history.Event{}, err
 	}
-	resp, err := action.Execute(rctx, connector.Request{Input: map[string]any{field: p.key}, Credentials: creds, IdempotencyKey: p.key, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Rotate: w.rotate(p)})
+	resp, err := action.Execute(rctx, connector.Request{Input: map[string]any{field: p.key}, Credentials: creds, IdempotencyKey: p.key, Reconciling: true, Attempt: p.c.attempt, Logger: w.Logger, HTTP: hc, Rotate: w.rotate(p)})
 	switch {
 	case err == nil:
 		return completedEvent(p.c, resp.Output, true), nil
