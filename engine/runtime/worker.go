@@ -1149,7 +1149,7 @@ func (w *Worker) finish(ctx context.Context, p *plan, outcome *history.Event) er
 const maxUnrecorded = 3
 
 // maxStoredPayload is what run_events.payload takes, as stored (migration
-// 00437): room for a container step's 1 MB and for what storing adds.
+// 00438): room for a container step's 1 MB and for what storing adds.
 const maxStoredPayload = 4 << 20
 
 // refused reports whether err is the database refusing the data it was

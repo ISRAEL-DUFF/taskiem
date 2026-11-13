@@ -131,7 +131,7 @@ What this does **not** do: the engine inserts each task with its own statement, 
 
 No difference beyond the noise, as expected: about one trigger call per worker step either way, and the ceiling stays at 30 to 38 runs/s. At 40 runs/s and above the largest waits in these runs were `Lock:transactionid` (23% to 33%, the run row and `connector_rate_buckets`) and WAL writes, more than the notify lock. The change removes per-row work for any batch insert and the wake-ups for retries; it is not the fix for the commit ceiling.
 
-### Wake-ups after the commit (decision 0067, migration 00427)
+### Wake-ups after the commit (decision 0067, migration 00432)
 
 A transaction that schedules a task no longer notifies. The process sends the wake-up after the commit, at most once every 10 ms for a queue, and wakes its own workers in memory ([plan](spec/task-wake-ups.md), `engine/runtime/wake.go`). `TASKIEM_WAKE_IN_TX=true` returns a process to the old behaviour, which is how the two were compared: one binary, the setting changed.
 

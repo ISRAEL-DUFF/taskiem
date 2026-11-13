@@ -166,7 +166,7 @@ single sign-on.
   - No link for an email no one confirmed (§3): the reply says to send `email` and
     open the confirmation link first.
   - A link sent in chat proves the chat, not the mailbox: using it confirms no email
-    and clears no factors (`password_resets.origin`, migration 00435).
+    and clears no factors (`password_resets.origin`, migration 00436).
   - A chat linked from an emailed link (chat-way-in §10.1) gets neither link, nor a
     code, for its first 24 hours.
 - **Account > Password on the web** stays as it is. It is already offered to people
@@ -194,7 +194,7 @@ single sign-on.
   200,000 per code. Wrong tries are also counted across codes, so asking for a new
   code does not start again: every fifth locks the person's codes, for 15 minutes,
   then twice as long each time, up to a day; a right code, or a week without a wrong
-  one, clears the count (migration 00436).
+  one, clears the count (migration 00437).
 - **Telling the owner:**
   - Every chat sign-in sends a line to the person's chat: "You signed in to Taskiem
     on the web (Chrome on Windows, Lagos). Not you? Send *sign out everywhere*."

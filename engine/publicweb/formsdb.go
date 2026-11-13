@@ -295,7 +295,7 @@ func submitError(err error) error {
 }
 
 // What asking for a code answers (taskiem_public_form_code_ask,
-// migration 00451).
+// migration 00444).
 const (
 	CodeSent    = "ok"
 	CodePressed = "pressed" // sent, and the form is over its ceiling of codes not yet confirmed

@@ -1284,7 +1284,7 @@ func (s *Invoices) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 			}
 			// Nor does one with nothing due: the money is not swallowed
 			// by an invoice already paid (the database refuses it too,
-			// 00432).
+			// 00434).
 			if cur.DueKobo <= 0 {
 				return nil, false, fmt.Errorf("%w on invoice %s; it takes no more", ErrNothingDue, cur.Number)
 			}

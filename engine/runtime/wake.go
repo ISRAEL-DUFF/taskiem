@@ -65,7 +65,7 @@ type waker struct {
 }
 
 // wakeSetting is the value of app.task_wake that tells the task trigger
-// the engine sends this transaction's wake-up (migration 00427).
+// the engine sends this transaction's wake-up (migration 00432).
 const wakeSetting = "engine"
 
 // wakeAfterCommit arranges the wake-up for a task of queue due at at, and

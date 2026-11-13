@@ -164,7 +164,7 @@ func TestPublicRoleReachesNothingElse(t *testing.T) {
 		"taskiem_public_form(text)": true, "taskiem_public_form_link(bytea)": true, "taskiem_public_form_request(bytea)": true,
 		"taskiem_public_form_submit(uuid,uuid,uuid,bytea,text,bytea,bytea,bytea)": true, "taskiem_public_form_upload(uuid,text,bytea)": true,
 		"taskiem_public_form_code(uuid,bytea,bytea,bytea)": true, "taskiem_public_form_code_check(uuid,bytea,bytea)": true,
-		// A code asked for with who asks and the number across forms (E10, migration 00451).
+		// A code asked for with who asks and the number across forms (E10, migration 00444).
 		"taskiem_public_form_code_ask(uuid,bytea,bytea,bytea,bytea,bytea)": true,
 		"taskiem_public_form_status(text,bytea)":                           true, "taskiem_public_report(text,text,text,text,bytea,bytea)": true,
 		// A form over its own submission limit is guarded for an hour (forms 7.3, F68b).

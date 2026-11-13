@@ -1088,7 +1088,7 @@ func (s *Server) formCode(w http.ResponseWriter, r *http.Request, hf *hform, st 
 		return
 	}
 	// Who asks, and the number across every form: the database counts
-	// both, for every replica of the form host (migration 00451).
+	// both, for every replica of the form host (migration 00444).
 	asker := sha256.Sum256([]byte("form code asker\x00" + ipKey))
 	var number []byte
 	if hf.req == nil && a.Address != "" {
@@ -1135,7 +1135,7 @@ const anyFormScope = "any form"
 
 // FormCodesPerIP is how many verification codes one client address may
 // ask for: six an hour after a burst of four, per public host process.
-// The database counts askers too, across processes (migration 00451).
+// The database counts askers too, across processes (migration 00444).
 var FormCodesPerIP = formguard.Bucket{Rate: rate.Every(time.Hour / 6), Burst: 4}
 
 // addressHash is a code's address under its scope: none for a request,
