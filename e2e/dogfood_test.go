@@ -104,8 +104,16 @@ func TestTopupReconciliationExample(t *testing.T) {
 	if len(calls) != len(want) {
 		t.Errorf("unexpected iSpend calls: %v (t4 is still pending, t5 is too new)", calls)
 	}
+	// Replayed as decide read it: opened. The rows the database step
+	// returned are declared personal (output.rows) and so are stored
+	// sealed, value by value; each copy of a value is sealed afresh, so the
+	// stored form does not replay byte for byte and is not what decide saw.
+	opened, err := e.Store.OpenedHistory(ctx, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
 	def, _ := wd.Load(doc)
-	if err := decide.Verify(def, h); err != nil {
+	if err := decide.Verify(def, opened); err != nil {
 		t.Errorf("replay: %v", err)
 	}
 }

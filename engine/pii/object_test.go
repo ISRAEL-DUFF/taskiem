@@ -103,6 +103,12 @@ func TestADeclaredObjectSealsEveryLeaf(t *testing.T) {
 			t.Errorf("a number leaf is remembered: %s", k)
 		}
 	}
+	// Opening remembers exactly what sealing did, so what is followed does
+	// not depend on when the history is read.
+	again := Taint{}
+	if _, err := Open(context.Background(), c, nil, uuid.Nil, out, again); err != nil || !reflect.DeepEqual(again, taint) {
+		t.Errorf("opening remembers %v, sealing %v (%v)", again, taint, err)
+	}
 	// Opened leaf by leaf, it is the record again.
 	var opened func(v any) any
 	opened = func(v any) any {
@@ -162,12 +168,18 @@ func TestALargeDeclaredListIsSealedWhole(t *testing.T) {
 			t.Fatal(err)
 		}
 		env, _ := out.(map[string]any)["data"].(map[string]any)
-		if !IsEnvelope(env) || c.sealed != 1 || len(taint) != 0 {
+		// Its text values are remembered (26 references), its numbers not.
+		if _, ok := taint["s:P-a"]; !IsEnvelope(env) || c.sealed != 1 || len(taint) != 26 || !ok {
 			t.Fatalf("sealed %d times, taint %d: %v", c.sealed, len(taint), out)
 		}
-		got, _ := c.OpenTx(context.Background(), nil, uuid.Nil, env)
-		if !reflect.DeepEqual(got, in["data"]) {
-			t.Error("opened, it is not the value sealed")
+		// Opened, it is the value again, and the same values are remembered.
+		again := Taint{}
+		got, err := Open(context.Background(), c, nil, uuid.Nil, out, again)
+		if err != nil || !reflect.DeepEqual(got, in) {
+			t.Errorf("opened, it is not the value sealed (%v)", err)
+		}
+		if !reflect.DeepEqual(again, taint) {
+			t.Errorf("opening remembers %d values, sealing %d", len(again), len(taint))
 		}
 	}
 }
