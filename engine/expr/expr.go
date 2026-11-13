@@ -6,7 +6,9 @@ package expr
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"math"
 	"slices"
@@ -20,9 +22,7 @@ import (
 	"cel.dev/cel-go/common/types/traits"
 	"cel.dev/cel-go/ext"
 
-	"errors"
 	"github.com/israel-duff/taskiem/engine/lru"
-	"io"
 )
 
 // Roots are the variables an expression may reference (wd-v1 contract rule 10).

@@ -3,6 +3,7 @@ package inmail
 import (
 	"bufio"
 	"context"
+	"errors"
 	"net"
 	"net/smtp"
 	"strings"
@@ -27,7 +28,10 @@ func startLimited(t *testing.T, st *fakeStore, set func(*Server)) string {
 	t.Cleanup(func() {
 		cancel()
 		select {
-		case <-done:
+		case err := <-done:
+			if err != nil {
+				t.Logf("the server stopped: %v", err)
+			}
 		case <-time.After(15 * time.Second):
 			t.Error("the server did not stop")
 		}
@@ -124,7 +128,8 @@ func TestOneHostCannotHoldEveryConnection(t *testing.T) {
 		buf := make([]byte, 256)
 		for {
 			if _, err := c.Read(buf); err != nil {
-				if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				var ne net.Error
+				if errors.As(err, &ne) && ne.Timeout() {
 					t.Fatal("an idle connection was still open after 4 seconds")
 				}
 				break

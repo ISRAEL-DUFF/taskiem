@@ -293,7 +293,7 @@ func (s *Stock) landOlder(ctx context.Context, tenant uuid.UUID, m Movement) err
 	for _, id := range ids {
 		older, err := s.Apply(ctx, tenant, id)
 		if err != nil {
-			return fmt.Errorf("%w: %v", ErrBehind, err)
+			return fmt.Errorf("%w: %w", ErrBehind, err)
 		}
 		if older.Status == "pending" {
 			return ErrBehind

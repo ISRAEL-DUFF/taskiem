@@ -54,7 +54,9 @@ apt-get install -y -qq curl ca-certificates jq openssl tar coreutils util-linux 
 # which is unsigned and runs whatever it is served, as root.)
 install_docker() {
   local id codename tmp fpr
+  # shellcheck source=/dev/null
   id=$(. /etc/os-release && printf '%s' "$ID")
+  # shellcheck source=/dev/null
   codename=$(. /etc/os-release && printf '%s' "${VERSION_CODENAME:-}")
   case $id in ubuntu | debian) ;; *) die "Docker is not installed and this installer adds it only on Ubuntu and Debian: install Docker Engine with the Compose and buildx plugins, then run this again" ;; esac
   [ -n "$codename" ] || die "cannot tell this system's release name (/etc/os-release): install Docker Engine by hand, then run this again"

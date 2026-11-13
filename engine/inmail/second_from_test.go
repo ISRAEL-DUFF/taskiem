@@ -74,7 +74,12 @@ func TestSecondFromHeaderIsRefused(t *testing.T) {
 	s := &Server{Domain: "in.taskiem.test", Store: st, Seal: plainSeal{}, Resolver: dns}
 	done := make(chan error, 1)
 	go func() { done <- s.Serve(ctx, l) }()
-	defer func() { cancel(); <-done }()
+	defer func() {
+		cancel()
+		if err := <-done; err != nil {
+			t.Logf("the server stopped: %v", err)
+		}
+	}()
 
 	senders := []string{"boss@example.com"} // the trigger's allow-list
 	type result struct {

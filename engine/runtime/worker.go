@@ -1040,7 +1040,7 @@ func (w *Worker) recordIntent(ctx context.Context, tx pgx.Tx, p *plan) error {
 	// may send again under a key already sent, which is how an idempotent
 	// write's outcome is found out (contract: action-classes.md); what it
 	// completes, the run then reverses.
-	if cancelled && !(p.owes && p.resend) {
+	if cancelled && (!p.owes || !p.resend) {
 		return errCancelled
 	}
 	digest := sha256.New()

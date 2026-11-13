@@ -131,10 +131,10 @@ func lateStart(t *testing.T, e *rt.Env, ref runtime.RunRef, want string, end fun
 	endSeq, intentSeq := int64(0), int64(0)
 	for _, ev := range h {
 		if ev.Type == history.RunCancelled || ev.Type == history.RunFailed {
-			endSeq = int64(ev.Seq)
+			endSeq = ev.Seq
 		}
 		if ev.Type == history.EffectIntent && ev.StepID == "pay_b" {
-			intentSeq = int64(ev.Seq)
+			intentSeq = ev.Seq
 		}
 	}
 	n := e.Provider.Executions(ref.ID.String() + ":b")

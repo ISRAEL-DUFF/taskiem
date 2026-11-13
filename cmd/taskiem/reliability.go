@@ -197,7 +197,7 @@ func statusCmd(ctx context.Context, args []string, stdout io.Writer) error {
 		}
 		// Not part of the status page: a note for the operator, kept off
 		// stdout so the JSON stays whole.
-		if off := cfg.anchoringOff(); off != "" && args[0] == "show" {
+		if off := cfg.anchoringOff(); off != "" && len(args) > 0 && args[0] == "show" {
 			fmt.Fprintln(statusNotes, off)
 		}
 		return nil
