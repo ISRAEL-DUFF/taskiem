@@ -452,11 +452,13 @@ end_users.external_id
 end_users.id
 end_users.tenant_id
 form_codes.address_hash
+form_codes.asker_hash
 form_codes.attempts
 form_codes.code_hash
 form_codes.created_at
 form_codes.expires_at
 form_codes.id
+form_codes.number_hash
 form_codes.payload
 form_codes.scope
 form_codes.tenant_id

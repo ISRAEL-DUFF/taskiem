@@ -45,9 +45,11 @@ type fakeForms struct {
 	answered  map[uuid.UUID]bool
 	codes     []fakeCode
 	limited   bool
-	closed    bool
-	taken     int
-	tripped   []uuid.UUID
+	// codeAnswer, when set, is what asking for a code answers.
+	codeAnswer string
+	closed     bool
+	taken      int
+	tripped    []uuid.UUID
 }
 
 type fakeCode struct {
@@ -55,6 +57,7 @@ type fakeCode struct {
 	address, code []byte
 	payload       []byte
 	verified      bool
+	asker, number []byte
 }
 
 func newFakeForms() *fakeForms {
@@ -148,14 +151,20 @@ func (f *fakeForms) Submit(_ context.Context, w FormWrite) (bool, error) {
 	return true, nil
 }
 
-func (f *fakeForms) Code(_ context.Context, scope uuid.UUID, address, code, payload []byte) (bool, error) {
+func (f *fakeForms) Code(_ context.Context, scope uuid.UUID, address, code, payload, asker, number []byte) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.limited {
-		return false, nil
+		return CodeAddress, nil
 	}
-	f.codes = append(f.codes, fakeCode{scope: scope, address: address, code: code, payload: payload})
-	return true, nil
+	if f.codeAnswer != "" && f.codeAnswer != CodePressed {
+		return f.codeAnswer, nil
+	}
+	f.codes = append(f.codes, fakeCode{scope: scope, address: address, code: code, payload: payload, asker: asker, number: number})
+	if f.codeAnswer == CodePressed {
+		return CodePressed, nil
+	}
+	return CodeSent, nil
 }
 
 func (f *fakeForms) CheckCode(_ context.Context, scope uuid.UUID, address, code []byte) (bool, error) {

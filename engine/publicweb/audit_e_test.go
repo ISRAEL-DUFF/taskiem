@@ -1,9 +1,11 @@
 package publicweb
 
 import (
+	"bytes"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -96,4 +98,38 @@ func TestFileFormIsRefusedBeforeItsFilesAreRead(t *testing.T) {
 	if len(e.f.writes) != 0 {
 		t.Fatalf("junk was kept: %d", len(e.f.writes))
 	}
+}
+
+// TestCodeRequestsNeedTheTokenAndAreFew (E10): a code is asked for with
+// the page's token, an address may ask for few, and a form with many
+// codes no one confirmed tells its owners while it still serves people.
+func TestCodeRequestsNeedTheTokenAndAreFew(t *testing.T) {
+	e := newFormHost(t)
+	pub := e.add("verify000001", `{"title":"Register","verify":"phone"}`, `{"type":"object","required":["name"],"properties":{"name":{"type":"string"}}}`)
+	body := must(t, e.get("/f/verify000001"), 200, "Send code")
+	// Without the page's token nothing is sent.
+	must(t, e.post("/f/verify000001/code", url.Values{"address": {"0803 123 4567"}, "website": {""}}), 422)
+	must(t, e.post("/f/verify000001/code", url.Values{"address": {"0803 123 4567"}, "website": {""}, "token": {"made-up"}, "state": {""}}), 422)
+	if len(e.f.codes) != 0 {
+		t.Fatalf("a code without the page's token: %d", len(e.f.codes))
+	}
+	// Over its ceiling the form still sends this person a code, and the
+	// owners are told.
+	e.f.codeAnswer = CodePressed
+	must(t, e.next("/f/verify000001/code", body, url.Values{"address": {"0803 123 4567"}}), 200, "We sent a code")
+	if len(e.f.tripped) != 1 || e.f.tripped[0] != pub.Endpoint {
+		t.Fatalf("the owners were not told: %v", e.f.tripped)
+	}
+	c := e.f.codes[len(e.f.codes)-1]
+	if len(c.asker) != 32 || !bytes.Equal(c.number, e.keys.AddressHash("any form", "+2348031234567")) {
+		t.Fatalf("who asked, and the number across forms: %x %x", c.asker, c.number)
+	}
+	e.f.codeAnswer = CodeBusy
+	must(t, e.next("/f/verify000001/code", body, url.Values{"address": {"0803 123 4568"}}), 429, "This form is busy")
+	e.f.codeAnswer = CodeNumber
+	must(t, e.next("/f/verify000001/code", body, url.Values{"address": {"0803 123 4568"}}), 429, "Too many codes have been sent to this phone number today")
+	e.f.codeAnswer = ""
+	// One address asks for few: four at once, then it waits.
+	must(t, e.next("/f/verify000001/code", body, url.Values{"address": {"0803 123 4569"}}), 200, "We sent a code")
+	must(t, e.next("/f/verify000001/code", body, url.Values{"address": {"0803 123 4570"}}), 429, "Too many codes have been asked for from this connection")
 }

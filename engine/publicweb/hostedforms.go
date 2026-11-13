@@ -1067,9 +1067,13 @@ func (s *Server) formCode(w http.ResponseWriter, r *http.Request, hf *hform, st 
 			return
 		}
 	}
-	if !s.formLimiter().Allow(s.ipKey(r)) {
-		w.Header().Set("Retry-After", "60")
-		s.showHosted(w, r, http.StatusTooManyRequests, hf, st, token, "Too many requests from this connection. Please wait a few minutes and try again.", "")
+	// A code is a text or an email to whoever's number was typed: an
+	// address may ask for few (FormCodesPerIP), fewer than it may send
+	// forms.
+	ipKey := s.ipKey(r)
+	if !s.FormCodes.Allow(ipKey) {
+		w.Header().Set("Retry-After", "600")
+		s.showHosted(w, r, http.StatusTooManyRequests, hf, st, token, "Too many codes have been asked for from this connection. Please wait a few minutes and try again.", "")
 		return
 	}
 	code, err := sixDigits()
@@ -1083,18 +1087,56 @@ func (s *Server) formCode(w http.ResponseWriter, r *http.Request, hf *hform, st 
 		s.tryLater(w, r, "seal code", err)
 		return
 	}
-	ok, err := s.Forms.Code(r.Context(), hf.scope, hf.addressHash(a), s.FormKeys.CodeHash(scope, code), payload)
+	// Who asks, and the number across every form: the database counts
+	// both, for every replica of the form host (migration 00451).
+	asker := sha256.Sum256([]byte("form code asker\x00" + ipKey))
+	var number []byte
+	if hf.req == nil && a.Address != "" {
+		number = hf.keys.AddressHash(anyFormScope, a.Address)
+	}
+	out, err := s.Forms.Code(r.Context(), hf.scope, hf.addressHash(a), s.FormKeys.CodeHash(scope, code), payload, asker[:], number)
 	if err != nil {
 		s.tryLater(w, r, "code", err)
 		return
 	}
-	if !ok {
+	switch out {
+	case CodeSent:
+	case CodePressed:
+		// Many codes no one confirmed: the form's owners hear of it, and
+		// people who have not asked yet are still served.
+		if hf.pub.Endpoint != uuid.Nil {
+			s.tripped(r.Context(), hf.pub)
+		}
+	case CodeBusy:
+		if hf.pub.Endpoint != uuid.Nil {
+			s.tripped(r.Context(), hf.pub)
+		}
+		w.Header().Set("Retry-After", "600")
+		s.showHosted(w, r, http.StatusTooManyRequests, hf, st, token, "This form is busy. Please wait 10 minutes and ask for a code again.", "")
+		return
+	case CodeAsker:
+		w.Header().Set("Retry-After", "600")
+		s.showHosted(w, r, http.StatusTooManyRequests, hf, st, token, "Too many codes have been asked for from this connection. Please wait 10 minutes and try again.", "")
+		return
+	case CodeNumber:
+		s.showHosted(w, r, http.StatusTooManyRequests, hf, st, token, "Too many codes have been sent to this "+channelWord(a.Channel)+" today. Please try again tomorrow.", "")
+		return
+	default:
 		s.showHosted(w, r, http.StatusTooManyRequests, hf, st, token, "Too many codes have been asked for. Please wait 10 minutes and try again.", "")
 		return
 	}
 	st.Pending = a
 	s.showHosted(w, r, http.StatusOK, hf, st, token, "", "We sent a code to "+hf.hintFor(a)+". It works for 10 minutes.")
 }
+
+// anyFormScope is the scope a number or email is hashed under to count
+// its codes across every form.
+const anyFormScope = "any form"
+
+// FormCodesPerIP is how many verification codes one client address may
+// ask for: six an hour after a burst of four, per public host process.
+// The database counts askers too, across processes (migration 00451).
+var FormCodesPerIP = formguard.Bucket{Rate: rate.Every(time.Hour / 6), Burst: 4}
 
 // addressHash is a code's address under its scope: none for a request,
 // whose code goes to its recipient.

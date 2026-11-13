@@ -179,6 +179,9 @@ type Server struct {
 	// FormPerForm limits one form's submissions from every address
 	// together; nil uses FormSubmissionsPerForm (500 an hour).
 	FormPerForm *formguard.Limiter
+	// FormCodes limits verification codes asked for per client address;
+	// nil uses FormCodesPerIP.
+	FormCodes *formguard.Limiter
 	// FormUploads limits bodies with files to forms that take files, per
 	// client address, before they are read; nil uses FormUploadsPerIP.
 	// UploadsAtOncePerIP and UploadsAtOncePerForm cap those arriving at
@@ -261,6 +264,10 @@ func (s *Server) Handler() http.Handler {
 	if s.FormSubmissions == nil {
 		b := FormSubmissionsPerIP
 		s.FormSubmissions = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	if s.FormCodes == nil {
+		b := FormCodesPerIP
+		s.FormCodes = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
 	}
 	if s.FormUploads == nil {
 		b := FormUploadsPerIP

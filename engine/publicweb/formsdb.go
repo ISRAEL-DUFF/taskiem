@@ -112,7 +112,11 @@ type FormStore interface {
 	// false when the form or request takes nothing now.
 	Submit(ctx context.Context, w FormWrite) (ok bool, err error)
 	// Code records a verification code to send; false when limited.
-	Code(ctx context.Context, scope uuid.UUID, addressHash, codeHash, payload []byte) (bool, error)
+	// Code asks for a verification code. asker is who asks (a keyed hash
+	// of the client address) and numberHash the number or email across
+	// every form; either may be nil. The answer is one of the Code*
+	// outcomes.
+	Code(ctx context.Context, scope uuid.UUID, addressHash, codeHash, payload, asker, numberHash []byte) (string, error)
 	CheckCode(ctx context.Context, scope uuid.UUID, addressHash, codeHash []byte) (bool, error)
 	Status(ctx context.Context, reference string, statusHash []byte) (FormState, bool, error)
 	// Tripped records that a form went over its submission limit: it is
@@ -290,10 +294,22 @@ func submitError(err error) error {
 	return err
 }
 
-func (d dbForms) Code(ctx context.Context, scope uuid.UUID, addressHash, codeHash, payload []byte) (bool, error) {
-	var ok bool
-	err := d.pool.QueryRow(ctx, `SELECT taskiem_public_form_code($1, $2, $3, $4)`, scope, addressHash, codeHash, payload).Scan(&ok)
-	return ok, err
+// What asking for a code answers (taskiem_public_form_code_ask,
+// migration 00451).
+const (
+	CodeSent    = "ok"
+	CodePressed = "pressed" // sent, and the form is over its ceiling of codes not yet confirmed
+	CodeGone    = "gone"
+	CodeAddress = "address" // too many to this address on this form
+	CodeNumber  = "number"  // too many to this number or email across every form
+	CodeAsker   = "asker"   // too many asked for from this client address
+	CodeBusy    = "busy"    // the form is over its ceiling and this asker must wait
+)
+
+func (d dbForms) Code(ctx context.Context, scope uuid.UUID, addressHash, codeHash, payload, asker, numberHash []byte) (string, error) {
+	var out string
+	err := d.pool.QueryRow(ctx, `SELECT taskiem_public_form_code_ask($1, $2, $3, $4, $5, $6)`, scope, addressHash, codeHash, payload, asker, numberHash).Scan(&out)
+	return out, err
 }
 
 func (d dbForms) CheckCode(ctx context.Context, scope uuid.UUID, addressHash, codeHash []byte) (bool, error) {
