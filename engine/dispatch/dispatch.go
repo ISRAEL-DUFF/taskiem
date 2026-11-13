@@ -1183,67 +1183,105 @@ func (d *Dispatch) Sweep(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
+// sweepTenant sweeps one business. Each expired offer is passed in a
+// transaction of its own, and so are the quiet riders, the remittances
+// and the ratings: an error in one (a delivery that cannot be passed on)
+// is logged and counted, and holds back nothing else, this tick or the
+// next.
 func (d *Dispatch) sweepTenant(ctx context.Context, tenant uuid.UUID) error {
-	return d.tx(ctx, tenant, func(tx pgx.Tx) error {
-		s, err := GetSettings(ctx, tx, tenant)
+	var s Settings
+	var expired []uuid.UUID
+	if err := d.tx(ctx, tenant, func(tx pgx.Tx) error {
+		var err error
+		if s, err = GetSettings(ctx, tx, tenant); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `SELECT id FROM deliveries WHERE tenant_id = $1 AND status = 'offered' AND expires_at <= now() ORDER BY expires_at, id`, tenant)
 		if err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT `+deliveryCols+` FROM deliveries d JOIN storefront_orders o ON o.id = d.order_id
-			WHERE d.tenant_id = $1 AND d.status = 'offered' AND d.expires_at <= now() FOR UPDATE OF d`, tenant)
-		if err != nil {
-			return err
+		expired, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		return err
+	}); err != nil {
+		return err
+	}
+	var errs []error
+	failed := 0
+	for _, id := range expired {
+		if err := d.tx(ctx, tenant, func(tx pgx.Tx) error { return d.passTx(ctx, tx, tenant, id) }); err != nil {
+			failed++
+			d.log().Warn("dispatch: an expired offer was not passed on", "tenant", tenant, "delivery", id, "err", err)
+			errs = append(errs, fmt.Errorf("delivery %s: %w", id, err))
 		}
-		passed, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Delivery, error) { return scanDelivery(r) })
-		if err != nil {
-			return err
-		}
-		for _, x := range passed {
-			if _, err := tx.Exec(ctx, `UPDATE deliveries SET status = 'passed', answered_at = now() WHERE id = $1`, x.ID); err != nil {
-				return err
-			}
-			// Three unanswered in a day (Lagos) and they are not answering.
-			if _, err := tx.Exec(ctx, `UPDATE riders SET missed = CASE WHEN missed_on = (now() AT TIME ZONE 'Africa/Lagos')::date THEN missed + 1 ELSE 1 END,
-				missed_on = (now() AT TIME ZONE 'Africa/Lagos')::date WHERE id = $1`, x.RiderID); err != nil {
-				return err
-			}
-			if _, err := tx.Exec(ctx, `UPDATE riders SET not_answering_since = now() WHERE id = $1 AND missed >= 3 AND not_answering_since IS NULL`, x.RiderID); err != nil {
-				return err
-			}
-			if err := d.queue(ctx, tx, tenant, x.ID, x.RiderID, StageWithdrawn, ""); err != nil {
-				return err
-			}
-			if err := d.mirrorStep(ctx, tx, tenant, x, "passed", true); err != nil {
-				return err
-			}
-			ord, err := d.Orders.GetOrder(ctx, tx, tenant, x.Reference)
+	}
+	if failed > 0 {
+		d.log().Warn("dispatch: expired offers left for the next sweep", "tenant", tenant, "failed", failed, "of", len(expired))
+	}
+	for _, part := range []func(tx pgx.Tx) error{
+		func(tx pgx.Tx) error {
+			held, err := d.ListTx(ctx, tx, tenant, ListFilter{Open: true})
 			if err != nil {
 				return err
 			}
-			if err := d.next(ctx, tx, tenant, x, ord); err != nil {
-				return err
+			for _, x := range held {
+				switch x.Late {
+				case "pickup":
+					err = d.raiseQuiet(ctx, tx, tenant, x, "has not picked up", s.PickupMinutes)
+				case "arrival":
+					err = d.raiseQuiet(ctx, tx, tenant, x, "has not arrived with", s.ArriveMinutes)
+				}
+				if err != nil {
+					return err
+				}
 			}
-		}
-		held, err := d.ListTx(ctx, tx, tenant, ListFilter{Open: true})
-		if err != nil {
+			return nil
+		},
+		func(tx pgx.Tx) error {
+			_, err := d.MatchRemittances(ctx, tx, tenant)
 			return err
+		},
+		func(tx pgx.Tx) error { return d.lowRatings(ctx, tx, tenant, s) },
+	} {
+		if err := d.tx(ctx, tenant, part); err != nil {
+			errs = append(errs, err)
 		}
-		for _, x := range held {
-			switch x.Late {
-			case "pickup":
-				err = d.raiseQuiet(ctx, tx, tenant, x, "has not picked up", s.PickupMinutes)
-			case "arrival":
-				err = d.raiseQuiet(ctx, tx, tenant, x, "has not arrived with", s.ArriveMinutes)
-			}
-			if err != nil {
-				return err
-			}
-		}
-		if _, err := d.MatchRemittances(ctx, tx, tenant); err != nil {
-			return err
-		}
-		return d.lowRatings(ctx, tx, tenant, s)
-	})
+	}
+	return errors.Join(errs...)
+}
+
+// passTx passes one offer not answered in its window, on to the next
+// rider; nothing when it was answered meanwhile.
+func (d *Dispatch) passTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID) error {
+	x, err := scanDelivery(tx.QueryRow(ctx, `SELECT `+deliveryCols+` FROM deliveries d JOIN storefront_orders o ON o.id = d.order_id
+		WHERE d.tenant_id = $1 AND d.id = $2 AND d.status = 'offered' AND d.expires_at <= now() FOR UPDATE OF d`, tenant, id))
+	if errors.Is(err, ErrNoDelivery) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE deliveries SET status = 'passed', answered_at = now() WHERE id = $1`, x.ID); err != nil {
+		return err
+	}
+	// Three unanswered in a day (Lagos) and they are not answering.
+	if _, err := tx.Exec(ctx, `UPDATE riders SET missed = CASE WHEN missed_on = (now() AT TIME ZONE 'Africa/Lagos')::date THEN missed + 1 ELSE 1 END,
+		missed_on = (now() AT TIME ZONE 'Africa/Lagos')::date WHERE id = $1`, x.RiderID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE riders SET not_answering_since = now() WHERE id = $1 AND missed >= 3 AND not_answering_since IS NULL`, x.RiderID); err != nil {
+		return err
+	}
+	if err := d.queue(ctx, tx, tenant, x.ID, x.RiderID, StageWithdrawn, ""); err != nil {
+		return err
+	}
+	if err := d.mirrorStep(ctx, tx, tenant, x, "passed", true); err != nil {
+		return err
+	}
+	ord, err := d.Orders.GetOrder(ctx, tx, tenant, x.Reference)
+	if err != nil {
+		return err
+	}
+	return d.next(ctx, tx, tenant, x, ord)
 }
 
 func (d *Dispatch) raiseQuiet(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Delivery, what string, minutes int) error {
