@@ -43,7 +43,7 @@ The web app shows both guides, step by step, under **Forward mail here from your
 | `forwarded_by` | The mailbox that forwarded it by a filter, when the provider says (Gmail does) |
 | `truncated` | `true` when `text` (100,000 characters) or `html` (200,000) was cut |
 
-`trigger.email` is `{address, received_at, auth}`, where `auth` is what the receiving server found: `spf` (the sender's server check), `dkim` (the domains whose signatures verified), `dmarc` (the From domain's published policy) and `aligned`. `aligned` is true when a signature or the SPF check belongs to the From address's domain, so the sender is not forged.
+`trigger.email` is `{address, received_at, auth}`, where `auth` is what the receiving server found: `spf` (the sender's server check), `dkim` (the domains whose signatures verified), `dmarc` (the From domain's published policy) and `aligned`. `aligned` is true when a signature or the SPF check belongs to the From address's domain, so the sender is not forged. It is proven of the message's one From address, the one a signature covers: a message with two From lines is never accepted.
 
 The sender and recipients (`email` and `name`), the subject, the text, the HTML and the files' names are sealed as personal data at the start of the run, like a form's personal answers. Steps read them as usual. The run's history and the web app show them masked to members without `pii.reveal`.
 
@@ -53,13 +53,14 @@ A step gets a file through the `email` connector's **Get a link to an attachment
 
 Each of these is recorded with its reason and listed in the tab:
 
-- **Mail from a sender not on the list.** The list trusts a sender only when the message proves it (`aligned`), so a forged From does not pass.
+- **Mail from a sender not on the list.** The list trusts a sender only when the message proves it (`aligned`), so a forged From does not pass. What is proven is who wrote the message, not that they sent it to this address: someone who holds a genuine signed message from a listed sender can send that same message here once (a second copy starts nothing, see below). The signature also covers only the headers the sender's provider chose to sign, usually From, To, Subject, Date and Message-ID, and the whole body; do not let a workflow act on other headers.
 - **Automatic mail:** out-of-office replies (`Auto-Submitted`, `Precedence: auto_reply`), delivery reports (no return address), and Taskiem's own mail (its sending address, or a message carrying `X-Taskiem-Run`). This ends loops between a workflow that sends email and an address that runs it.
 - **Forwarding confirmations** from Gmail, Zoho Mail, Yahoo Mail and Outlook, when the message proves it comes from them. They are shown, not run (see above).
+- **A message that repeats a header it may carry once:** From, Sender, Reply-To, To, Cc, Bcc, Subject, Date, Message-ID, In-Reply-To or References (RFC 5322). The mail server refuses it outright (`550`, "The message has more than one From line…"), so it is not stored or listed: a signature covers the lowest of two such lines and a reader takes the top one, so a second From would pass as a proven sender. The large mailbox providers refuse such mail too.
 - **A message that cannot be read** as email.
 - **The plan's run limits**, as for any run.
 
-The same message delivered twice starts one run (by its Message-ID, or the whole message when it has none). One address takes at most 60 messages an hour, and one business 300. Past that, the sending server is asked to try again later, and it does, for days.
+The same message delivered twice starts one run. A message whose DKIM signature verifies for its From domain is known by what the signature covers (its body hash and signed headers), so a copy with a new Message-ID or other lines added around it is still the same message; other mail is known by its Message-ID, or by the whole message when it has none. The record of a message is kept as long as the workflow's list of mail, so a copy sent weeks later starts nothing either. One address takes at most 60 messages an hour, and one business 300. Past that, the sending server is asked to try again later, and it does, for days.
 
 ## For operators
 

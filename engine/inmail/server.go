@@ -225,25 +225,36 @@ func (ss *session) Data(r io.Reader) error {
 	if err != nil {
 		return errMalformed
 	}
-	from := ""
-	if a, err := mail.ParseAddress(hdr.Header.Get("From")); err == nil {
-		from = a.Address
+	// One From, one Message-ID: a second would be read by people and
+	// skipped by the signature check (headers.go). Nothing is stored.
+	if name := RepeatedHeader(raw); name != "" {
+		telemetry.Ingest.WithLabelValues("email_smtp", "repeated_header").Inc()
+		return &smtp.SMTPError{Code: 550, EnhancedCode: smtp.EnhancedCode{5, 6, 0},
+			Message: "The message has more than one " + name + " line; a message may have only one, so it was not accepted"}
 	}
+	from := signedFrom(raw)
 	var ip net.IP
 	if a, ok := ss.conn.Conn().RemoteAddr().(*net.TCPAddr); ok {
 		ip = a.IP
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	auth := Authenticate(ctx, ss.s.Resolver, raw, from, ss.from, ss.conn.Hostname(), ip)
+	auth, signed := authenticate(ctx, ss.s.Resolver, raw, from, ss.from, ss.conn.Hostname(), ip)
 	messageID := strings.Trim(strings.TrimSpace(hdr.Header.Get("Message-Id")), "<>")
 	for _, rc := range ss.rcpts {
 		id := uuid.Must(uuid.NewV7())
 		h := sha256.New()
 		h.Write(rc.endpoint[:])
-		if messageID != "" {
+		switch {
+		case signed != nil:
+			// A signed message is the same message whatever is added
+			// around it: its key is what the signature covers, so a copy
+			// with a new Message-ID or other unsigned lines starts nothing.
+			h.Write([]byte("dkim\x00"))
+			h.Write(signed)
+		case messageID != "":
 			h.Write([]byte("message-id\x00" + messageID))
-		} else {
+		default:
 			h.Write(raw)
 		}
 		meta := Meta{Reference: id.String(), Address: rc.address, MailFrom: ss.from, Helo: ss.conn.Hostname(), ReceivedAt: ss.s.now().UTC(), Auth: auth}
