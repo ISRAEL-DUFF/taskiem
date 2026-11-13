@@ -571,6 +571,26 @@ func (s *Server) waUnbound(ctx context.Context, wa *whatsapp.Platform, number st
 	if done, err := s.riderMedia(ctx, &chat{ch: wa, wa: wa, addr: number, in: in}, reach.WhatsApp); done || err != nil {
 		return err
 	}
+	// "Stop" typed to an invitation declines it, as its button does
+	// (chat_invites.go); the reach book's STOP would otherwise answer
+	// first and leave it waiting. The latest business's updates stop too,
+	// when there are any: STOP is never less than the opt-out.
+	if !wa.Own() && !guest && normalizeCommand(text) == "stop" {
+		declined, err := s.chatInviteMessage(ctx, &inviteChat{ch: wa, addr: number, lang: l}, text, "")
+		if err != nil {
+			return err
+		}
+		if declined {
+			if !s.Reach.Ready() {
+				return nil
+			}
+			name, err := s.Reach.Stop(ctx, reach.WhatsApp, number)
+			if err != nil || name == "" {
+				return err
+			}
+			return s.waSay(ctx, wa, number, "", tr(l, "reach.stopped", "business", name))
+		}
+	}
 	// A customer's STOP or START on the business's own number
 	// (customer_chat.go), before the reach book's.
 	if done, err := s.customerStopStart(ctx, wa, number, text); done || err != nil {

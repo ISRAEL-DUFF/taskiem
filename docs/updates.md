@@ -52,6 +52,7 @@ The AI builder uses this step whenever a goal messages someone outside the busin
 - **START** undoes it.
 - **Someone with a Taskiem account of their own** stops and starts the same way. STOP also drops what they were in the middle of in the chat, and says so; when no business sends them updates, *stop* is the chat's own word for dropping what is under way. On a business's own WhatsApp number, STOP from anyone who is not on its team is the customer's STOP.
 - Besides these, a person can only press the buttons of an invoice the business sent them (**Pay by transfer**, **New account number**, **Open invoice**; [decision 0045](decisions/0045-tally-in-taskiem.md), point 7). Anything else gets one answer naming who sends them updates.
+- **Stop** typed to a waiting WhatsApp invitation declines it, as its button does, and stops the latest business's updates as well when there are any.
 - Blocking the Telegram bot stops every business there.
 - **Remove** in **Settings > People you message** stops the business reaching someone on chat apps.
 

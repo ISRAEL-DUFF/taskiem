@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"net/url"
 	"strings"
 	"testing"
@@ -123,6 +124,27 @@ func TestStopFromSomeoneOnTaskiem(t *testing.T) {
 	w.tick(t)
 	if after := w.bot.Sent(dayo); len(after) != n {
 		t.Fatalf("a Telegram update after /stop: %+v", after[n:])
+	}
+}
+
+// TestTypedStopDeclinesAnInvitation (E5): the word, not only the button.
+func TestTypedStopDeclinesAnInvitation(t *testing.T) {
+	ctx := context.Background()
+	w := newReachWorld(t)
+	chatSignupOn(w.world, "whatsapp")
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	const ownerNumber, bayo = "+2348031239301", "+2348031239303"
+	w.bindWA(t, owner, ownerNumber)
+	w.whatsapp(t, ownerNumber, "invite "+bayo+" as viewer")
+	if got := w.whatsapp(t, ownerNumber, "yes"); len(got) != 1 || !strings.Contains(got[0].Text, "Invitation sent to "+bayo) {
+		t.Fatalf("inviting: %+v", got)
+	}
+	if got := w.whatsapp(t, bayo, "Stop"); len(got) != 1 || !strings.Contains(got[0].Text, "you did not join") {
+		t.Fatalf("a typed Stop: %+v", got)
+	}
+	var state string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT state FROM chat_invites WHERE address = $1`, bayo).Scan(&state); err != nil || state != "declined" {
+		t.Fatalf("declined: %q %v", state, err)
 	}
 }
 
