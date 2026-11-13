@@ -7,9 +7,12 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import '../api/transport.dart' show Transport;
+
 mixin Polling<T extends StatefulWidget> on State<T> {
   Timer? _poll;
   AppLifecycleListener? _life;
+  StreamSubscription<String>? _fresh;
   bool _awake = true;
 
   /// Calls [read] every [every] while the screen is seen; and once when the
@@ -21,6 +24,11 @@ mixin Polling<T extends StatefulWidget> on State<T> {
       // Another screen over it: it reads again once it is on top.
       if (ModalRoute.of(context)?.isCurrent == false) return;
       read();
+    });
+    // A kept page drawn at once and since brought up to date: read again,
+    // which now answers the fresh copy from the phone.
+    _fresh ??= Transport.pageChanged.stream.listen((_) {
+      if (mounted) read();
     });
     _life ??= AppLifecycleListener(
       onStateChange: (s) {
@@ -34,6 +42,7 @@ mixin Polling<T extends StatefulWidget> on State<T> {
   @override
   void dispose() {
     _poll?.cancel();
+    _fresh?.cancel();
     _life?.dispose();
     super.dispose();
   }

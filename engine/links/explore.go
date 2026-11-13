@@ -29,6 +29,10 @@ const (
 	SectionPopular  = "popular"
 	SectionFeatured = "featured"
 	SectionCategory = "category"
+	// SectionAcross is Across Nigeria: findable businesses from anywhere,
+	// the fullest cards first, in Near you's place when it is empty
+	// (migration 00428).
+	SectionAcross = "across"
 )
 
 // ExploreCard is a business as Explore shows it: its profile (or storefront

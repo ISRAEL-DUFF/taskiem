@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import { get, post, put } from "../api";
@@ -25,6 +25,7 @@ import {
 } from "../lib/explore";
 import type { Conversation } from "../lib/linkchat";
 import { EmptyState, ErrorBox, Skeleton, useAction, useFocusTrap } from "../ui";
+import { AskCategories } from "./CategoryPicker";
 import { ChatAvatar } from "./ChatAvatar";
 
 // Explore: finding a business by browsing, on a screen of its own over the
@@ -154,6 +155,7 @@ export function Card({
   onAnswer,
   onLook,
   categories = [],
+  featured = false,
   as = "li",
 }: {
   card: ExploreCard;
@@ -172,6 +174,8 @@ export function Card({
   onLook?: () => void;
   /** Its categories' names, under its line. */
   categories?: string[];
+  /** The Featured row's wide card: its first photo as a cover; no swipe, no words about it. */
+  featured?: boolean;
   /** A list item in Explore; a block of its own in a sheet. */
   as?: "li" | "div";
 }) {
@@ -185,6 +189,15 @@ export function Card({
       data-testid="explore-card"
       aria-label={card.name}
     >
+      {featured && (
+        <div className="tk-x-cover">
+          {card.photos > 0 ? (
+            <img src={explorePhoto(card.business, 0, card.v)} alt={card.captions?.[0] || `Photo of ${card.name}`} loading="lazy" draggable={false} />
+          ) : (
+            <span aria-hidden="true">{card.name.slice(0, 1).toUpperCase()}</span>
+          )}
+        </div>
+      )}
       <div className="explore-head">
         <ChatAvatar
           name={card.name}
@@ -259,7 +272,7 @@ export function Card({
             ))}
         </div>
       </div>
-      {card.photos > 0 && (
+      {card.photos > 0 && !featured && (
         <Carousel
           business={card.business}
           name={card.name}
@@ -269,7 +282,7 @@ export function Card({
           onLook={onLook}
         />
       )}
-      {card.about && <p className="explore-about">{card.about}</p>}
+      {card.about && !featured && <p className="explore-about">{card.about}</p>}
       {!manage && (offer === "connect" || offer === "asked") && (
         <p className="tk-x-note">An owner or admin can connect.</p>
       )}
@@ -318,6 +331,9 @@ export function Explore({
   const [blindSent, setBlindSent] = useState<string>();
   const [asked, setAsked] = useState<Record<string, BusinessLink | true>>({});
   const typed = q.trim();
+  // Made findable here with no category: asked what it sells.
+  const [askCats, setAskCats] = useState(false);
+  const doneAsking = useCallback(() => setAskCats(false), []);
   // Recently viewed: this browser only, for the business signed in.
   const owner = useAuth().me?.tenant_id;
   const [recent, setRecent] = useState<ExploreCard[]>(() => recentlyViewed(owner));
@@ -473,7 +489,7 @@ export function Explore({
       }
     }, false);
 
-  const cardOf = (c: ExploreCard) => {
+  const cardOf = (c: ExploreCard, featured = false) => {
     const a = asked[c.business];
     return (
       <Card
@@ -496,6 +512,7 @@ export function Explore({
         )}
         onAnswer={(l, answer) => answerAsk(c, l, answer)}
         onLook={() => seen(c)}
+        featured={featured}
         categories={(c.categories ?? []).map(nameOf)}
         onMessage={() =>
           void (async () => {
@@ -568,6 +585,7 @@ export function Explore({
         </Link>
       </header>
       <div className="explore-body tk-x-body">
+        {askCats && <AskCategories onClose={doneAsking} />}
         <ErrorBox error={error ?? act.error} />
         {searching ? (
           !results ? (
@@ -610,7 +628,7 @@ export function Explore({
             </EmptyState>
           ) : (
             <ul className="explore-list" aria-label="Businesses found">
-              {results.results.map(cardOf)}
+              {results.results.map((c) => cardOf(c))}
             </ul>
           )
         ) : !start ? (
@@ -639,7 +657,7 @@ export function Explore({
                   </EmptyState>
                 ) : (
                   <ul className="explore-list" aria-label={nameOf(chosen)}>
-                    {(inCat.in_category ?? []).map(cardOf)}
+                    {(inCat.in_category ?? []).map((c) => cardOf(c))}
                   </ul>
                 )}
               </section>
@@ -656,9 +674,11 @@ export function Explore({
                             className="tk-x-connect"
                             disabled={act.busy}
                             onClick={() =>
-                              void act.run(async () => {
-                                setSettings(await put<LinkSettings>("/v1/link-settings", { findable: true }));
-                              }, "Other businesses can find you")
+                              void act
+                                .run(async () => {
+                                  setSettings(await put<LinkSettings>("/v1/link-settings", { findable: true }));
+                                }, "Other businesses can find you")
+                                .then((ok) => ok && setAskCats(true))
                             }
                           >
                             Let other businesses find me
@@ -692,13 +712,15 @@ export function Explore({
                       aria-label="Featured businesses"
                       data-testid="explore-featured"
                     >
-                      {(start.featured ?? []).map(cardOf)}
+                      {(start.featured ?? []).map((c) => cardOf(c, true))}
                     </ul>
                   </section>
                 )}
                 {(
                   [
                     ["near", "Near you", start.area, start.near, start.near_more, "businesses near you"],
+                    // No one in our area (or none set): businesses from anywhere, in its place.
+                    ["across", "Across Nigeria", undefined, start.near.length === 0 ? (start.across ?? []) : [], !!start.across_more, "businesses across Nigeria"],
                     ["trusted", "Trusted on Taskiem", undefined, start.trusted ?? [], !!start.trusted_more, "trusted businesses"],
                     ["popular", "Popular", undefined, start.popular ?? [], !!start.popular_more, "popular businesses"],
                     ["delivery", "Delivery", undefined, start.delivery ?? [], start.delivery_more, "delivery businesses"],
@@ -718,7 +740,7 @@ export function Explore({
                         moreWords={words}
                         onMore={key === "recent" ? undefined : () => loadMore(key)}
                       />
-                      <ul className="explore-list">{cards.map(cardOf)}</ul>
+                      <ul className="explore-list">{cards.map((c) => cardOf(c))}</ul>
                     </section>
                   ))}
               </>
@@ -731,7 +753,7 @@ export function Explore({
   );
 }
 
-type MoreSection = "near" | "new" | "delivery" | "trusted" | "popular" | "category";
+type MoreSection = "near" | "new" | "delivery" | "trusted" | "popular" | "category" | "across";
 
 /** Each section with more to show: its list, and whether another page waits. */
 const MORE: Record<MoreSection, [keyof ExploreResult, keyof ExploreResult]> = {
@@ -741,6 +763,7 @@ const MORE: Record<MoreSection, [keyof ExploreResult, keyof ExploreResult]> = {
   trusted: ["trusted", "trusted_more"],
   popular: ["popular", "popular_more"],
   category: ["in_category", "category_more"],
+  across: ["across", "across_more"],
 };
 
 /** Every list of cards in an answer, changed the same way. */
@@ -755,12 +778,13 @@ function everyList(s: ExploreResult, f: (cards: ExploreCard[]) => ExploreCard[])
     trusted: s.trusted && f(s.trusted),
     popular: s.popular && f(s.popular),
     in_category: s.in_category && f(s.in_category),
+    across: s.across && f(s.across),
   };
 }
 
 /** No business to show in any section (the categories are still there). */
 function nobody(s: ExploreResult): boolean {
-  return [s.near, s.fresh, s.delivery ?? [], s.featured ?? [], s.trusted ?? [], s.popular ?? []].every((l) => l.length === 0);
+  return [s.near, s.across ?? [], s.fresh, s.delivery ?? [], s.featured ?? [], s.trusted ?? [], s.popular ?? []].every((l) => l.length === 0);
 }
 
 /** A section's title (what it is about after a dot), and Show more. */
@@ -830,12 +854,13 @@ function mark(cards: ExploreCard[], business: string): ExploreCard[] {
   );
 }
 
-/** The first few businesses worth showing someone with no links yet: near
- * them first, then those that deliver, then the newest, each once. */
+/** The first few businesses worth showing someone with no links yet (§2.3):
+ * Featured first, then near them (or across Nigeria), then those that
+ * deliver, then the newest, each once. */
 export function firstPicks(r: ExploreResult, n = 3): ExploreCard[] {
   const seen = new Set<string>();
   const out: ExploreCard[] = [];
-  for (const c of [...r.near, ...(r.delivery ?? []), ...r.fresh]) {
+  for (const c of [...(r.featured ?? []), ...r.near, ...(r.across ?? []), ...(r.delivery ?? []), ...r.fresh]) {
     if (seen.has(c.business) || cardOffer(c.state) !== "connect") continue;
     seen.add(c.business);
     out.push(c);
@@ -863,6 +888,9 @@ export function GetStarted({
   const [settings, setSettings] = useState<LinkSettings>();
   const [asked, setAsked] = useState<Record<string, true>>({});
   const act = useAction();
+  // Made findable here with no category: asked what it sells.
+  const [askCats, setAskCats] = useState(false);
+  const doneAsking = useCallback(() => setAskCats(false), []);
   useEffect(() => {
     let live = true;
     get<ExploreResult>("/v1/explore").then(
@@ -921,6 +949,7 @@ export function GetStarted({
           ))}
         </ul>
       )}
+      {askCats && <AskCategories onClose={doneAsking} />}
       <button type="button" className="tk-cta" onClick={onExplore}>
         <Icon name="search" />
         Find a business
@@ -933,9 +962,11 @@ export function GetStarted({
             className="link"
             disabled={act.busy}
             onClick={() =>
-              void act.run(async () => {
-                setSettings(await put<LinkSettings>("/v1/link-settings", { findable: true }));
-              }, "Other businesses can find you")
+              void act
+                .run(async () => {
+                  setSettings(await put<LinkSettings>("/v1/link-settings", { findable: true }));
+                }, "Other businesses can find you")
+                .then((ok) => ok && setAskCats(true))
             }
           >
             Let them find me

@@ -565,10 +565,14 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
 :root[data-theme="dark"] .tk-x .tk-x-chip[aria-pressed="true"] { background: var(--brand-dark); color: var(--brand); }
 .tk-x-chip-n { font-size: 12.5px; font-weight: 700; color: var(--muted); }
 .tk-x-chip[aria-pressed="true"] .tk-x-chip-n { color: inherit; opacity: 0.75; }
-.tk-x .explore-list.tk-x-featured { display: flex; flex-direction: row; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -16px; padding: 0 16px 8px; scrollbar-width: none; }
+.tk-x .explore-list.tk-x-featured { display: flex; flex-direction: row; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: 16px; margin: 0 -16px; padding: 0 16px 8px; scrollbar-width: none; }
 .tk-x-featured::-webkit-scrollbar { display: none; }
 .tk-x-featured > .tk-x-card { flex: none; width: min(86%, 360px); scroll-snap-align: start; }
 .tk-x-featured > .tk-x-card:only-child { width: 100%; }
+.tk-x-cover { position: relative; height: 140px; margin-bottom: 10px; border-radius: 18px; overflow: hidden; background: var(--tk-lime-soft); display: grid; place-items: center; }
+.tk-x-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.tk-x-cover span { font-size: 40px; font-weight: 800; color: var(--brand); }
+:root[data-theme="dark"] .tk-x-cover span { color: var(--brand-dark); }
 .tk-x-cats { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tk-x-links { display: block; font-size: 12.5px; font-weight: 600; color: var(--text); }
 
@@ -619,7 +623,7 @@ button.tk-cta.tk-cta-danger, button.tk-cta.tk-cta-danger:hover:not(:disabled), b
   .tk-x-sec h3 span { font-size: 15px; }
   .tk-x section + section { margin-top: 32px; }
   .tk-x .explore-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 20px; }
-  .tk-x .explore-list.tk-x-featured { display: flex; margin: 0 -24px; padding: 0 24px 8px; gap: 20px; }
+  .tk-x .explore-list.tk-x-featured { display: flex; margin: 0 -24px; padding: 0 24px 8px; gap: 20px; scroll-padding-inline: 24px; }
   .tk-x-featured > .tk-x-card { width: 360px; }
   .tk-x-chips { margin: 0 -24px 20px; padding: 2px 24px 4px; }
   .tk-x-card .explore-head .chat-avatar, .tk-x-card .tk-x-logo { width: 46px; height: 46px; font-size: 15px; }

@@ -69,6 +69,15 @@ func TestExploreSections(t *testing.T) {
 	if got := names(page["popular"]); len(got) != 0 {
 		t.Fatalf("popular with no links: %v", got)
 	}
+	// Our area not set: Across Nigeria in Near you's place, the fullest first.
+	if got := names(page["across"]); len(got) != 2 || page["near"].([]any) == nil || len(page["near"].([]any)) != 0 {
+		t.Fatalf("across Nigeria: %v", got)
+	}
+	ada.must(200, "PUT", "/v1/business-profile", map[string]any{"area": "Ikeja"})
+	if p := ada.must(200, "GET", "/v1/explore", nil); len(p["near"].([]any)) != 2 || len(p["across"].([]any)) != 0 {
+		t.Fatalf("with businesses near us, no Across Nigeria: %v %v", names(p["near"]), names(p["across"]))
+	}
+	ada.must(200, "PUT", "/v1/business-profile", map[string]any{"area": ""})
 
 	// Categories: one or two of the list; left out of a save, kept.
 	cherry.must(400, "PUT", "/v1/business-profile", map[string]any{"tagline": "Blocks, cement and sand", "area": "Ikeja", "categories": []string{"food", "building", "farm"}})

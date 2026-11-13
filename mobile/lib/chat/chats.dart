@@ -2241,11 +2241,15 @@ class _GetStartedState extends State<_GetStarted> {
                 runSpacing: 4,
                 children: [
                   Text('Other businesses cannot find you yet.', style: tkText(size: 14, color: t.muted)),
-                  pill('Let them find me', 'Let them find me', false, () => _run(() async {
-                    await d.auth.transport.send('PUT', '/v1/link-settings', body: {'findable': true});
-                    await d.load();
-                    return 'Other businesses can find you';
-                  })),
+                  pill('Let them find me', 'Let them find me', false, () async {
+                    await _run(() async {
+                      await d.auth.transport.send('PUT', '/v1/link-settings', body: {'findable': true});
+                      await d.load();
+                      return 'Other businesses can find you';
+                    });
+                    // Found now: asked what it sells, so the categories find it.
+                    if (mounted && d.linkSettings?.findableNow == true) await askCategories(this.context, d.auth.transport);
+                  }),
                 ],
               ),
             ],

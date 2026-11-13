@@ -170,6 +170,24 @@ const SCREENS: {
     },
   },
   {
+    // Explore's start page with every section (the explore fixture, its
+    // answer given categories, Featured, Trusted and Popular): the chips,
+    // the Featured row, Near you.
+    name: "explore-start",
+    path: "/chat",
+    fixture: "explore-start",
+    touch: true,
+    ready: async (p) => {
+      await expect(p.getByTestId("new-chat")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.getByTestId("new-chat").click();
+      await expect(p.getByTestId("explore-featured")).toBeVisible();
+      await p.waitForLoadState("networkidle");
+      await p.waitForTimeout(500);
+      await p.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    },
+  },
+  {
     // Explore searched: "rice".
     name: "explore-search",
     path: "/chat",

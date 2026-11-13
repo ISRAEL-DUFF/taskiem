@@ -20,9 +20,9 @@ import {
   type GalleryPhoto,
   type ProfileWords,
 } from "../lib/businessProfile";
-import { CATEGORY_NAMES, MAX_CATEGORIES } from "../lib/explore";
 import type { LinkSettings } from "../lib/links";
 import { ErrorBox, Skeleton, useAction, useLoad } from "../ui";
+import { CategoryPicker } from "./CategoryPicker";
 
 // Your business in Explore (docs/spec/business-links.md, "Business profile and
 // gallery"): the words, the logo and the photos other businesses see when they
@@ -474,29 +474,11 @@ export function BusinessProfilePage() {
                   ? "Pick one or two, so businesses looking for them find you."
                   : "One or two. Businesses find you by them in Explore."}
               </span>
-              <div className="tk-p-cat-list">
-                {Object.entries(CATEGORY_NAMES).map(([key, name]) => {
-                  const on = form.categories.includes(key);
-                  const full = !on && form.categories.length >= MAX_CATEGORIES;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      className="tk-p-cat"
-                      aria-pressed={on}
-                      disabled={!manage || full}
-                      onClick={() =>
-                        setForm({
-                          ...form,
-                          categories: on ? form.categories.filter((k) => k !== key) : [...form.categories, key],
-                        })
-                      }
-                    >
-                      {name}
-                    </button>
-                  );
-                })}
-              </div>
+              <CategoryPicker
+                chosen={form.categories}
+                disabled={!manage}
+                onChange={(categories) => setForm({ ...form, categories })}
+              />
             </fieldset>
             {/* A rider: a business whose service is delivery. Businesses
                 find it under Delivery in Explore. */}

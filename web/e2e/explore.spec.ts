@@ -480,7 +480,7 @@ test("with no linked business, the chats offer businesses to link with, Find a b
   await buyer.route(/\/v1\/explore(\?.*)?$/, async (route) => {
     const res = await route.fetch();
     const j = (await res.json()) as Record<string, unknown>;
-    for (const k of ["near", "fresh", "delivery"])
+    for (const k of ["near", "fresh", "delivery", "featured", "across", "trusted", "popular"])
       j[k] = ((j[k] as { name: string }[]) ?? []).filter((c) => c.name === name);
     return route.fulfill({ response: res, json: j });
   });
@@ -494,6 +494,11 @@ test("with no linked business, the chats offer businesses to link with, Find a b
   // Not findable yet (no storefront): said, with the switch.
   await expect(start).toContainText("Other businesses cannot find you yet.");
   await start.getByRole("button", { name: "Let them find me" }).click();
+  // Asked what it sells; not now.
+  const ask = buyer.getByRole("dialog", { name: "What do you sell?" });
+  await expect(ask).toBeVisible();
+  await ask.getByRole("button", { name: "Not now" }).click();
+  await expect(ask).toHaveCount(0);
   await expect(start).not.toContainText("Other businesses cannot find you yet.");
   await axeBoth(buyer, "the chats with no linked business");
   // Find a business opens Explore; closed, the chats again.
@@ -516,6 +521,16 @@ test("Explore with no one to show says why, and offers to be found", async ({ br
   await page.getByTestId("chats-start").getByRole("button", { name: "Find a business" }).click();
   await expect(page.getByText("No other business can be found yet")).toBeVisible();
   await page.getByRole("button", { name: "Let other businesses find me" }).click();
+  // Found now, with no category: asked what it sells.
+  const ask = page.getByRole("dialog", { name: "What do you sell?" });
+  await expect(ask).toBeVisible();
+  await axeBoth(page, "What do you sell?");
+  await ask.getByRole("button", { name: "Food and drinks" }).click();
+  await ask.getByRole("button", { name: "Save" }).click();
+  await expect(ask).toHaveCount(0);
+  await expect
+    .poll(async () => (await (await page.request.get("/v1/business-profile", { headers: H })).json()).categories)
+    .toEqual(["food"]);
   await expect(page.getByRole("button", { name: "Let other businesses find me" })).toHaveCount(0);
   expect((await (await page.request.get("/v1/link-settings", { headers: H })).json()).findable_now).toBe(true);
   await axeBoth(page, "Explore with no one to show");
@@ -559,6 +574,9 @@ test("Explore's start page: the categories with their counts, one chosen and bac
   await expect(chips.getByRole("button", { name: /Building materials [1-9]\d* business/ })).toBeVisible();
   await expect(chips.getByRole("button")).toHaveCount(13);
   await expect(ex.getByTestId("explore-featured").getByText(name, { exact: true })).toBeVisible();
+  // The Featured card: a cover, then who it is; no swipe of photos.
+  await expect(ex.getByTestId("explore-featured").locator(".tk-x-cover")).toHaveCount(1);
+  await expect(ex.getByTestId("explore-featured").locator(".carousel")).toHaveCount(0);
   const popular = ex.getByTestId("explore-popular");
   await expect(popular).toContainText("Linked with 20+ businesses");
   await expect(popular).toContainText("Building materials");
@@ -596,4 +614,25 @@ test("Explore's start page: the categories with their counts, one chosen and bac
     .poll(async () => (await (await buyer.request.get("/v1/business-profile", { headers: H })).json()).categories)
     .toEqual(["food", "farm"]);
   await axeBoth(buyer, "Your business in Explore with categories");
+});
+
+test("with no one near us, or no area set, Across Nigeria takes Near you's place", async ({ browser }) => {
+  const { buyer, name } = await twoBusinesses(browser);
+  expect((await buyer.request.put("/v1/business-profile", { headers: H, data: { name: "", tagline: "", area: "", about: "" } })).ok()).toBe(true);
+  const page = (await (await buyer.request.get("/v1/explore", { headers: H })).json()) as { near: unknown[]; across: { name: string }[] };
+  expect(page.near).toHaveLength(0);
+  expect(page.across.length).toBeGreaterThan(0);
+  await buyer.goto("/chat");
+  await buyer.getByTestId("new-chat").click();
+  const ex = buyer.getByTestId("explore");
+  await expect(ex.getByRole("heading", { name: "Across Nigeria" })).toBeVisible();
+  await expect(ex.getByRole("heading", { name: "Near you" })).toHaveCount(0);
+  await expect(ex.getByTestId("explore-no-area")).toBeVisible();
+  // Our area set again, with the seller in it: Near you is back.
+  expect((await buyer.request.put("/v1/business-profile", { headers: H, data: { name: "", tagline: "", area: "Ikeja", about: "" } })).ok()).toBe(true);
+  await ex.getByTestId("explore-back").click();
+  await buyer.getByTestId("new-chat").click();
+  await expect(buyer.getByTestId("explore").getByRole("heading", { name: "Near you" })).toBeVisible();
+  await expect(buyer.getByTestId("explore").getByRole("heading", { name: "Across Nigeria" })).toHaveCount(0);
+  void name;
 });

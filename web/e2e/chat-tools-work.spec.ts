@@ -394,7 +394,8 @@ test("Back goes up one level at a time: a product to the list, the list to the t
   // Pulled up by its grab bar: the whole screen.
   await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Products/ }).first().click();
   const grab = sheet.locator(".tk-sheet-grab");
-  const box = (await grab.boundingBox())!;
+  const box = await grab.boundingBox();
+  if (!box) throw new Error("the sheet's grab bar is not drawn");
   await owner.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await owner.mouse.down();
   await owner.mouse.move(box.x + box.width / 2, box.y - 120, { steps: 6 });

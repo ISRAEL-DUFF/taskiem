@@ -3106,8 +3106,12 @@ class StockMovement {
 }
 
 class ExploreResult {
-  const ExploreResult({this.area, this.blind, this.categories, this.categoryMore, required this.delivery, required this.deliveryMore, this.featured, required this.fresh, this.inCategory, required this.more, required this.near, required this.nearMore, this.popular, this.popularMore, required this.results, this.trusted, this.trustedMore});
+  const ExploreResult({this.across, this.acrossMore, this.area, this.blind, this.categories, this.categoryMore, required this.delivery, required this.deliveryMore, this.featured, required this.fresh, this.inCategory, required this.more, required this.near, required this.nearMore, this.popular, this.popularMore, required this.results, this.trusted, this.trustedMore});
 
+  /// Across Nigeria, in Near you's place when no business in our area can be
+  /// shown or our area is not set (the fullest cards first)
+  final List<ExploreCard>? across;
+  final bool? acrossMore;
   /// Our own area, as near you reads it (the first page only)
   final String? area;
   final ExploreResultBlind? blind;
@@ -3129,6 +3133,8 @@ class ExploreResult {
   final bool? trustedMore;
 
   factory ExploreResult.fromJson(Map<String, dynamic> j) => ExploreResult(
+        across: j['across'] == null ? null : (j['across'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        acrossMore: j['across_more'] == null ? null : j['across_more'] as bool,
         area: j['area'] == null ? null : j['area'] as String,
         blind: j['blind'] == null ? null : ExploreResultBlind.fromJson(j['blind'] as Map<String, dynamic>),
         categories: j['categories'] == null ? null : (j['categories'] as List).map((e) => ExploreResultCategoriesItem.fromJson(e as Map<String, dynamic>)).toList(),
@@ -3149,6 +3155,8 @@ class ExploreResult {
       );
 
   Map<String, dynamic> toJson() => {
+        'across': ?across?.map((e) => e.toJson()).toList(),
+        'across_more': ?acrossMore,
         'area': ?area,
         'blind': ?blind?.toJson(),
         'categories': ?categories?.map((e) => e.toJson()).toList(),
@@ -3166,44 +3174,6 @@ class ExploreResult {
         'results': results.map((e) => e.toJson()).toList(),
         'trusted': ?trusted?.map((e) => e.toJson()).toList(),
         'trusted_more': ?trustedMore,
-      };
-}
-
-class ExploreResultBlind {
-  const ExploreResultBlind({required this.kind, required this.shown});
-
-  final String kind;
-  final String shown;
-
-  factory ExploreResultBlind.fromJson(Map<String, dynamic> j) => ExploreResultBlind(
-        kind: j['kind'] as String,
-        shown: j['shown'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'kind': kind,
-        'shown': shown,
-      };
-}
-
-class ExploreResultCategoriesItem {
-  const ExploreResultCategoriesItem({required this.key, required this.n, required this.name});
-
-  final String key;
-  /// How many businesses we may find in it
-  final int n;
-  final String name;
-
-  factory ExploreResultCategoriesItem.fromJson(Map<String, dynamic> j) => ExploreResultCategoriesItem(
-        key: j['key'] as String,
-        n: (j['n'] as num).toInt(),
-        name: j['name'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'key': key,
-        'n': n,
-        'name': name,
       };
 }
 
@@ -3277,6 +3247,44 @@ class ExploreCard {
         'tagline': ?tagline,
         'v': v,
         'vehicle': ?vehicle,
+      };
+}
+
+class ExploreResultBlind {
+  const ExploreResultBlind({required this.kind, required this.shown});
+
+  final String kind;
+  final String shown;
+
+  factory ExploreResultBlind.fromJson(Map<String, dynamic> j) => ExploreResultBlind(
+        kind: j['kind'] as String,
+        shown: j['shown'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind,
+        'shown': shown,
+      };
+}
+
+class ExploreResultCategoriesItem {
+  const ExploreResultCategoriesItem({required this.key, required this.n, required this.name});
+
+  final String key;
+  /// How many businesses we may find in it
+  final int n;
+  final String name;
+
+  factory ExploreResultCategoriesItem.fromJson(Map<String, dynamic> j) => ExploreResultCategoriesItem(
+        key: j['key'] as String,
+        n: (j['n'] as num).toInt(),
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'n': n,
+        'name': name,
       };
 }
 

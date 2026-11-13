@@ -23,7 +23,7 @@ import '../theme/theme.dart';
 import 'chats.dart';
 import 'attachments.dart' show PickedFile;
 import 'composer.dart' show Pickers;
-import 'explore.dart' show exploreCategoryNames;
+import 'explore.dart' show CategoryPicker;
 import 'thread.dart' show ChatHeadBar;
 
 const maxName = 80, maxTagline = 140, maxArea = 80, maxAbout = 1000, maxCaption = 120, maxVehicle = 40, maxDeliveryAreas = 20;
@@ -502,7 +502,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 12),
           field('About', _about, max: maxAbout, lines: 3, count: true),
           const SizedBox(height: 14),
-          _Categories(
+          CategoryPicker(
             chosen: _cats,
             asked: _cats.isEmpty && (_settings?['findable_now'] == true),
             onChanged: _manage && !_busy ? (v) => setState(() => _cats = v) : null,
@@ -658,70 +658,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 /// `.tk-p-field`: the label (and its count) over a tall soft box.
-/// The categories it is found by in Explore: pick one or two. A business
-/// already findable with none is asked to.
-class _Categories extends StatelessWidget {
-  const _Categories({required this.chosen, required this.asked, this.onChanged});
-  final List<String> chosen;
-  final bool asked;
-  final ValueChanged<List<String>>? onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    final dark = TkTheme.of(context).mode == TkMode.dark;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('What you sell', style: tkText(size: 13, weight: 600, color: t.text)),
-        Text(
-          asked ? 'Pick one or two, so businesses looking for them find you.' : 'One or two. Businesses find you by them in Explore.',
-          style: tkText(size: 12.5, color: asked ? t.text : t.muted),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final MapEntry(:key, :value) in exploreCategoryNames.entries)
-              Builder(
-                builder: (context) {
-                  final on = chosen.contains(key);
-                  final full = !on && chosen.length >= 2;
-                  final tap = onChanged == null || full ? null : () => onChanged!(on ? chosen.where((k) => k != key).toList() : [...chosen, key]);
-                  return Semantics(
-                    button: true,
-                    selected: on,
-                    enabled: tap != null,
-                    label: value,
-                    excludeSemantics: true,
-                    onTap: tap,
-                    child: TkPress(
-                      onTap: tap,
-                      child: Opacity(
-                        opacity: full ? 0.45 : 1,
-                        child: Container(
-                          constraints: const BoxConstraints(minHeight: 40),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: on ? (dark ? t.brandDark : t.brand) : t.panel,
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: on ? const Color(0x00000000) : t.border),
-                          ),
-                          child: Text(value, style: tkText(size: 13.5, weight: 600, color: on ? (dark ? t.brandDarkText : t.brandDark) : t.text)),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
 class _Field extends StatelessWidget {
   const _Field({required this.label, required this.controller, this.max, this.hint, this.lines = 1, this.count = false, this.enabled = true});
   final String label;

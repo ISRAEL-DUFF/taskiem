@@ -49,6 +49,10 @@ type exploreOut struct {
 	// categories with their counts; section=category&category=<key> lists
 	// one category's businesses in InCategory.
 	Featured     []links.ExploreCard `json:"featured"`
+	// Across is Across Nigeria, in Near you's place when no business in our
+	// area can be shown, or our area is not set (section=across pages it).
+	Across       []links.ExploreCard `json:"across"`
+	AcrossMore   bool                `json:"across_more"`
 	Trusted      []links.ExploreCard `json:"trusted"`
 	TrustedMore  bool                `json:"trusted_more"`
 	Popular      []links.ExploreCard `json:"popular"`
@@ -89,7 +93,7 @@ func (s *Server) moreSection(r *http.Request, tx pgx.Tx, section, category strin
 func (s *Server) explore(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	out := exploreOut{Results: []links.ExploreCard{}, Near: []links.ExploreCard{}, Fresh: []links.ExploreCard{}, Delivery: []links.ExploreCard{},
-		Featured: []links.ExploreCard{}, Trusted: []links.ExploreCard{}, Popular: []links.ExploreCard{}, Categories: []links.Category{}, InCategory: []links.ExploreCard{}}
+		Featured: []links.ExploreCard{}, Across: []links.ExploreCard{}, Trusted: []links.ExploreCard{}, Popular: []links.ExploreCard{}, Categories: []links.Category{}, InCategory: []links.ExploreCard{}}
 	// A phone number is never searched: one row that sends a request.
 	if links.LooksLikePhone(q) {
 		if phone, err := whatsapp.Normalise(q, s.defaultCountry()); err == nil {
@@ -114,6 +118,8 @@ func (s *Server) explore(w http.ResponseWriter, r *http.Request) {
 			out.Near, out.NearMore, err = s.exploreSection(r, tx, links.SectionNear, offset)
 		case section == links.SectionDelivery:
 			out.Delivery, out.DeliveryMore, err = s.exploreSection(r, tx, links.SectionDelivery, offset)
+		case section == links.SectionAcross:
+			out.Across, out.AcrossMore, err = s.moreSection(r, tx, links.SectionAcross, "", offset)
 		case section == links.SectionTrusted:
 			out.Trusted, out.TrustedMore, err = s.moreSection(r, tx, links.SectionTrusted, "", offset)
 		case section == links.SectionPopular:
@@ -138,6 +144,11 @@ func (s *Server) explore(w http.ResponseWriter, r *http.Request) {
 			}
 			if out.Fresh, out.More, err = s.exploreSection(r, tx, links.SectionNew, 0); err != nil {
 				return err
+			}
+			if len(out.Near) == 0 {
+				if out.Across, out.AcrossMore, err = s.moreSection(r, tx, links.SectionAcross, "", 0); err != nil {
+					return err
+				}
 			}
 			if out.Featured, err = links.ExploreMoreTx(r.Context(), tx, links.SectionFeatured, "", 6, 0); err != nil {
 				return err
@@ -211,6 +222,21 @@ func (s *Server) sendBusinessImage(w http.ResponseWriter, r *http.Request, busin
 		return
 	}
 	w.Header().Set("Content-Type", ctype)
-	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.Header().Set("Cache-Control", pictureCache(r))
 	_, _ = w.Write(data) //nolint:gosec // a JPEG or PNG by its bytes (FetchPublic), sent as that type with nosniff
+}
+
+// keptLong is how long a picture or file whose address names its version
+// may be kept (docs/spec/mobile-app-explore-and-offline.md K-S4): the 30
+// days a phone keeps what it read. A changed picture has another version,
+// so another address; an attachment never changes.
+const keptLong = "private, max-age=2592000, immutable"
+
+// pictureCache is keptLong for a picture asked for by its version (the
+// card's v), an hour for one asked for without.
+func pictureCache(r *http.Request) string {
+	if r.URL.Query().Get("v") != "" {
+		return keptLong
+	}
+	return "private, max-age=3600"
 }

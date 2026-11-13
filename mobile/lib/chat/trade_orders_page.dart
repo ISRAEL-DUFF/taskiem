@@ -6,6 +6,7 @@
 
 import 'package:flutter/widgets.dart';
 
+import '../kit/polling.dart';
 import '../app/auth.dart';
 import '../app/openers.dart';
 import '../kit/forms.dart' show TkSwitchRow, errorWords, nairaKobo, nairaText;
@@ -160,7 +161,7 @@ class TradeOrdersPage extends StatefulWidget {
   State<TradeOrdersPage> createState() => _TradeOrdersPageState();
 }
 
-class _TradeOrdersPageState extends State<TradeOrdersPage> {
+class _TradeOrdersPageState extends State<TradeOrdersPage> with Polling {
   List<Map<String, dynamic>>? _orders;
   Map<String, String> _parents = const {};
   String? _error;
@@ -169,6 +170,7 @@ class _TradeOrdersPageState extends State<TradeOrdersPage> {
   void initState() {
     super.initState();
     _load();
+    startPolling(const Duration(seconds: 60), _load);
     _ownItems(widget.auth).then((x) {
       if (mounted) setState(() => _parents = sizeParents(x));
     });

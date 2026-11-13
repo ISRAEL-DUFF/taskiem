@@ -16,6 +16,14 @@ Settled by the founder, 13 November 2026: every suggestion in §4 is taken, and 
   - Recently viewed, kept in the phone's store: a business is counted as looked at when its photos are swiped or it is acted on;
   - the operators' console has *Featured in Explore* (add a pick until a date, end one).
 - X2 to X4 on the web: the same sections and chips in Explore, and *What you sell* in Your business in Explore. Recently viewed is kept in the browser for the business signed in, and forgotten on signing out.
+- The rest of §2 and §3, on the server, the web and the app:
+  - **Across Nigeria** (E-S4, migration 00428): with no one in our area, or no area set, findable businesses from anywhere, the fullest cards first, in Near you's place.
+  - **The chats with no links** suggest Featured first, then Near you (or Across Nigeria), then Delivery and New.
+  - **Categories asked** when a business makes itself findable with none ("What do you sell?", which can be put off).
+  - **The Featured card** is wide, with the first photo as a cover (or the initial on a tint), then the logo, name, line and Connect.
+  - **Pages drawn at once** (§3.1): a page kept from before is shown at once and brought up to date behind it; a screen reads again when the fresh copy differs. "Updating…" shows over the tabs when that takes more than a second. The business profile and the switch to be found are never kept: they are edited and saved whole.
+  - **Pictures and files kept long** (K-S4): a picture asked for by its version, and every attachment, may be kept 30 days (`private, max-age=2592000, immutable`).
+  - **Tests:** the sections at twice the text on a small phone, and the start page as a parity screen (`explore-start`).
 
 ## 1. Where things stand
 

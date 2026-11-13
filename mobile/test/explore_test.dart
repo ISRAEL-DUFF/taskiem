@@ -58,6 +58,46 @@ void main() {
     expect(exploreLine(c(delivers: true, vehicle: 'bike', areas: ['Lekki', 'Ajah'], available: 'free')), 'Delivers by bike · Lekki, Ajah · Free now');
   });
 
+  test('first picks (§2.3): Featured first, then near us or across Nigeria, each once, only those that can be asked', () {
+    ExploreCard c(String b, [String state = 'none']) => ExploreCard(business: b, name: b, logo: false, photos: 0, captions: const [], state: state, v: '1');
+    final r = ExploreResult(
+      results: const [],
+      near: [c('n1'), c('n2', 'active')],
+      nearMore: false,
+      fresh: [c('x1')],
+      more: false,
+      delivery: const [],
+      deliveryMore: false,
+      featured: [c('f1'), c('n1')],
+      across: [c('a1')],
+    );
+    expect(firstPicks(r).map((x) => x.business), ['f1', 'n1', 'a1']);
+  });
+
+  testWidgets('no one near us: Across Nigeria in Near you\'s place', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    await loadFonts();
+    final f = Fixture('explore');
+    Map<String, Object?> card(String id, String name) => {'business': id, 'name': name, 'logo': false, 'photos': 0, 'captions': <Object>[], 'state': 'none', 'v': '1'};
+    final chats = ChatsData(
+      f.auth(also: (req) async => req.url.path == '/v1/explore' && req.method == 'GET' && req.url.queryParameters.isEmpty
+          ? _answer({'results': <Object>[], 'near': <Object>[], 'near_more': false, 'fresh': <Object>[], 'more': false, 'delivery': <Object>[], 'delivery_more': false,
+              'across': [card('a1', 'Kano Leather Works')], 'across_more': false})
+          : null),
+      now: () => f.at,
+    );
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ChatsScreen(data: chats, onOpen: (_) {})));
+    await _settle(t);
+    await t.tap(find.bySemanticsLabel('Find a business to link with'));
+    await t.pumpAndSettle();
+    await _settle(t);
+    expect(find.text('Across Nigeria'), findsOneWidget);
+    expect(find.text('Kano Leather Works'), findsOneWidget);
+    expect(find.textContaining('Near you', findRichText: true), findsNothing);
+  });
+
   group('the screen', () {
     setUpAll(loadFonts);
 
@@ -254,7 +294,7 @@ void main() {
       await t.pumpAndSettle();
       await _settle(t);
 
-      expect(find.bySemanticsLabel('Food and drinks, 2 businesses'), findsOneWidget);
+      expect(find.bySemanticsLabel('Food and drinks 2 businesses'), findsOneWidget);
       expect(find.text('Featured'), findsOneWidget);
       expect(find.text('Lagos Grains'), findsOneWidget);
       expect(find.text('Food and drinks · Farm produce'), findsOneWidget, reason: "a card's categories, by name");
@@ -285,15 +325,48 @@ void main() {
       // A category: its businesses in the sections' place; tapped again, back.
       list.position.jumpTo(0);
       await t.pump();
-      await t.tap(find.bySemanticsLabel('Food and drinks, 2 businesses'));
+      await t.tap(find.bySemanticsLabel('Food and drinks 2 businesses'));
       await _settle(t);
       expect(asked.last, {'section': 'category', 'category': 'food'});
       expect(find.text('Mama Put Foods'), findsOneWidget);
       expect(find.text('Featured'), findsNothing);
-      await t.tap(find.bySemanticsLabel('Food and drinks, 2 businesses'));
+      await t.tap(find.bySemanticsLabel('Food and drinks 2 businesses'));
       await _settle(t);
       expect(find.text('Featured'), findsOneWidget);
       await down(find.text('Recently viewed'));
+    });
+  });
+
+  group('the start page at large text', () {
+    setUpAll(loadFonts);
+    setUp(RecentlyViewed.clear);
+
+    testWidgets('on a small phone at twice the text: the chips, Featured, Trusted and Popular, nothing cut off, all pressable', (t) async {
+      final f = Fixture('explore-start');
+      final chats = ChatsData(f.auth(), now: () => f.at);
+      await expectLargeText(
+        t,
+        TaskiemApp(mode: TkMode.dark, home: ChatsScreen(data: chats, onOpen: (_) {})),
+        drive: (t) async {
+          await _settle(t);
+          await t.tap(find.bySemanticsLabel('Find a business to link with'));
+          await t.pumpAndSettle();
+          await _settle(t);
+          expect(find.bySemanticsLabel('Food and drinks 5 businesses'), findsOneWidget);
+          expect(find.text('Featured'), findsOneWidget);
+          // Down the page: every section drawn without overflowing.
+          final list = t.state<ScrollableState>(_list);
+          for (final title in ['Near you', 'Trusted on Taskiem', 'Popular']) {
+            while (find.textContaining(title, findRichText: true).evaluate().isEmpty && list.position.pixels < list.position.maxScrollExtent) {
+              list.position.jumpTo((list.position.pixels + 300).clamp(0, list.position.maxScrollExtent));
+              await t.pump();
+            }
+            expect(find.textContaining(title, findRichText: true), findsWidgets);
+          }
+          list.position.jumpTo(0);
+          await t.pump();
+        },
+      );
     });
   });
 
@@ -317,6 +390,7 @@ void main() {
               '/v1/link-chats' => _answer({'conversations': <Object>[]}),
               '/v1/links' => _answer({'links': <Object>[], 'sent': <Object>[]}),
               '/v1/link-settings' => _answer({'findable': findable, 'findable_now': findable, 'asked_at': '2026-11-01T09:00:00Z'}),
+              '/v1/business-profile' => _answer({'name': 'Mama Nkechi', 'tagline': 'Soups', 'area': 'Yaba', 'about': '', 'delivers': false, 'vehicle': '', 'delivery_areas': <String>[], 'categories': <String>[]}),
               '/v1/explore' when explore != null && !req.url.queryParameters.containsKey('q') => _answer(explore),
               _ => null,
             };
@@ -341,6 +415,17 @@ void main() {
       await _settle(t);
       expect((sent.last.$1, sent.last.$2), ('PUT', '/v1/link-settings'));
       expect(sent.last.$3, {'findable': true});
+      // Found now, with no category: asked what it sells.
+      expect(find.text('What do you sell?'), findsOneWidget);
+      await t.pumpAndSettle();
+      await t.tap(find.bySemanticsLabel('Food and drinks'));
+      await t.pump();
+      await t.tap(find.bySemanticsLabel('Save'));
+      await _settle(t);
+      expect((sent.last.$1, sent.last.$2), ('PUT', '/v1/business-profile'));
+      expect((sent.last.$3 as Map)['categories'], ['food']);
+      expect((sent.last.$3 as Map)['tagline'], 'Soups', reason: 'the rest of the words as they were');
+      await t.pumpAndSettle();
       expect(find.text('Other businesses cannot find you yet.'), findsNothing);
       await t.tap(find.bySemanticsLabel('Connect with Akoka Print Hub'));
       await _settle(t);

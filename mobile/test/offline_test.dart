@@ -1,3 +1,4 @@
+import 'dart:async';
 // The app with no connection, as WhatsApp works (docs/spec/mobile-app-
 // explore-and-offline.md §3): it opens at once on what the phone kept,
 // who is signed in included; the chats, a conversation and its files read
@@ -331,6 +332,35 @@ void main() {
     online = true;
     await transport.send('POST', '/v1/storefront/orders', body: const {});
     expect(transport.offline.value, isFalse);
+    store.close();
+  });
+
+  test('a page kept from before: drawn at once, brought up to date behind it, the screen told; read again, the fresh copy with no request', () async {
+    final store = await LocalStore.open('t_u', keys);
+    store.writePage('/v1/money/summary', jsonEncode({'in': 100}), 'W/"old"');
+    final answer = Completer<http.Response>();
+    var asked = 0;
+    final transport = Transport(
+      base: 'http://localhost',
+      token: 'x',
+      client: MockClient((req) {
+        asked++;
+        return answer.future;
+      }),
+    )..pages = store;
+    final told = <String>[];
+    final sub = Transport.pageChanged.stream.listen(told.add);
+    // Drawn at once, though the server has not answered.
+    expect(await transport.send('GET', '/v1/money/summary'), {'in': 100});
+    expect(transport.updating.value, 1);
+    answer.complete(http.Response(jsonEncode({'in': 250}), 200, headers: {'content-type': 'application/json', 'etag': 'W/"new"'}));
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(transport.updating.value, 0);
+    expect(told, ['/v1/money/summary']);
+    expect(await transport.send('GET', '/v1/money/summary'), {'in': 250}, reason: 'the reload it caused: from the phone');
+    expect(asked, 1);
+    await sub.cancel();
     store.close();
   });
 }

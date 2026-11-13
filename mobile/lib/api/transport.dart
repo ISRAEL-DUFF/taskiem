@@ -39,8 +39,10 @@ class Offline implements Exception {
 /// Where the answers the app read are kept on the phone (lib/app/store.dart),
 /// with their ETags: asked again with If-None-Match, an unchanged page is a
 /// 304; with no connection, the kept answer is the page.
+typedef KeptPage = ({String body, String? etag});
+
 abstract class PageKeep {
-  ({String body, String? etag})? readPage(String key);
+  KeptPage? readPage(String key);
   void writePage(String key, String body, String? etag);
 }
 
@@ -58,6 +60,24 @@ class Transport {
   /// one is shown: a weak connection must not hold up what the phone has.
   static const keptWait = Duration(seconds: 6);
 
+  /// Told the key of a kept page whose fresh copy differs from what was
+  /// shown (docs/spec/mobile-app-explore-and-offline.md §3.1: draw what was
+  /// kept at once, then bring it up to date in place). The screens that
+  /// poll read again when told (lib/kit/polling.dart).
+  static final pageChanged = StreamController<String>.broadcast();
+
+  /// How many kept pages are being brought up to date now ("Updating…").
+  final updating = ValueNotifier<int>(0);
+
+  /// The pages read this run (from the phone or the server): asked again,
+  /// the server is asked first, as before.
+  final _shown = <String>{};
+
+  /// Pages just brought up to date behind what was shown: the one read
+  /// that follows (the screen reading again when told) is answered from
+  /// the phone, with no request.
+  final _justFresh = <String>{};
+
   /// A page worth keeping: a read, not a stream, a search, or anything a
   /// person asked to see unmasked.
   static bool keeps(String path, Map<String, String>? query) =>
@@ -69,6 +89,9 @@ class Transport {
       !path.startsWith('/v1/links') &&
       !path.startsWith('/v1/customer-chats') &&
       !path.startsWith('/v1/taskiem-chat') &&
+      // Edited here and saved whole: always read as the server has it.
+      !path.startsWith('/v1/business-profile') &&
+      !path.startsWith('/v1/link-settings') &&
       !path.contains('reveal') &&
       !(query?.containsKey('reveal') ?? false) &&
       !(query?.containsKey('q') ?? false);
@@ -101,13 +124,47 @@ class Transport {
   Future<Object?> _sendKept(PageKeep keep, String path, Map<String, String>? query, Map<String, String>? headers) async {
     final key = _uri(path, query).toString().substring(base.length);
     final kept = keep.readPage(key);
+    if (kept != null) {
+      // Just brought up to date: the phone's copy is the server's.
+      if (_justFresh.remove(key)) return kept.body.isEmpty ? null : jsonDecode(kept.body);
+      // First asked this run: what was kept, at once; the server after.
+      if (_shown.add(key)) {
+        unawaited(_refresh(keep, key, path, query, headers, kept));
+        return kept.body.isEmpty ? null : jsonDecode(kept.body);
+      }
+    }
+    return _ask(keep, key, path, query, headers, kept);
+  }
+
+  /// A kept page brought up to date behind what is shown: told when it
+  /// changed; left as it is when the server cannot be reached or refuses
+  /// (the next read says why).
+  Future<void> _refresh(PageKeep keep, String key, String path, Map<String, String>? query, Map<String, String>? headers, KeptPage kept) async {
+    updating.value++;
+    try {
+      await _ask(keep, key, path, query, headers, kept, wait: timeout);
+      // Offline, the answer was the kept copy itself: not brought up to date.
+      if (offline.value) return;
+      final now = keep.readPage(key);
+      if (now != null && now.body != kept.body) {
+        _justFresh.add(key);
+        pageChanged.add(key);
+      }
+    } on Object {
+      // Offline or refused: what was kept stays shown.
+    } finally {
+      updating.value--;
+    }
+  }
+
+  Future<Object?> _ask(PageKeep keep, String key, String path, Map<String, String>? query, Map<String, String>? headers, KeptPage? kept, {Duration? wait}) async {
     final req = http.Request('GET', _uri(path, query))..headers['Accept'] = 'application/json';
     if (headers != null) req.headers.addAll(headers);
     if (kept?.etag != null) req.headers['If-None-Match'] = kept!.etag!;
     final t = _sign(req);
     final http.Response res;
     try {
-      res = await _reach(() async => http.Response.fromStream(await _client.send(req)), kept == null ? timeout : keptWait);
+      res = await _reach(() async => http.Response.fromStream(await _client.send(req)), wait ?? (kept == null ? timeout : keptWait));
     } on Offline {
       if (kept == null) {
         offline.value = true;
@@ -117,6 +174,7 @@ class Transport {
       return kept.body.isEmpty ? null : jsonDecode(kept.body);
     }
     offline.value = false;
+    _shown.add(key);
     if (res.statusCode == 304 && kept != null) return kept.body.isEmpty ? null : jsonDecode(kept.body);
     final text = utf8.decode(res.bodyBytes);
     final out = _answer(res.statusCode, text, t);

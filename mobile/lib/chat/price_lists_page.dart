@@ -7,6 +7,7 @@
 
 import 'package:flutter/widgets.dart';
 
+import '../kit/polling.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../kit/kit.dart';
@@ -49,7 +50,7 @@ class PriceListsPage extends StatefulWidget {
   State<PriceListsPage> createState() => _PriceListsPageState();
 }
 
-class _PriceListsPageState extends State<PriceListsPage> {
+class _PriceListsPageState extends State<PriceListsPage> with Polling {
   List<Map<String, dynamic>>? _lists;
   List<Map<String, dynamic>> _active = const [];
   String? _error;
@@ -63,6 +64,7 @@ class _PriceListsPageState extends State<PriceListsPage> {
     super.initState();
     _name.addListener(() => setState(() {}));
     _load();
+    startPolling(const Duration(seconds: 60), _load);
   }
 
   @override

@@ -5,6 +5,8 @@
 // conversation takes the whole screen, as it does on WhatsApp.
 
 import 'package:flutter/foundation.dart' show ValueListenable;
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import '../chat/chats.dart' show UnreadCount;
@@ -16,11 +18,15 @@ import '../theme/theme.dart';
 typedef HomeTab = ({String label, String icon, Widget Function(BuildContext) build});
 
 class HomeTabs extends StatefulWidget {
-  const HomeTabs({super.key, required this.tabs, this.count, this.counted, this.offline});
+  const HomeTabs({super.key, required this.tabs, this.count, this.counted, this.offline, this.updating});
 
   /// No connection, the pages showing what the phone kept: said in a
   /// strip over the bar, quietly, as WhatsApp's "Waiting for network".
   final ValueListenable<bool>? offline;
+
+  /// How many kept pages are being brought up to date: "Updating…" in the
+  /// same place, once it has taken more than a second.
+  final ValueListenable<int>? updating;
 
   final List<HomeTab> tabs;
 
@@ -94,6 +100,8 @@ class HomeTabsState extends State<HomeTabs> {
                     ),
             ),
           ),
+        if (widget.updating != null)
+          _Updating(updating: widget.updating!, offline: widget.offline),
         // `.tabbar { background: color-mix(panel 94%); border-top: 1px solid var(--border) }`
         DecoratedBox(
           decoration: BoxDecoration(
@@ -306,6 +314,69 @@ class ComingTab extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "Updating…" over the bar while what was kept is brought up to date, once
+/// that has taken more than a second (not while offline: that strip says so).
+class _Updating extends StatefulWidget {
+  const _Updating({required this.updating, this.offline});
+  final ValueListenable<int> updating;
+  final ValueListenable<bool>? offline;
+
+  @override
+  State<_Updating> createState() => _UpdatingState();
+}
+
+class _UpdatingState extends State<_Updating> {
+  Timer? _wait;
+  bool _show = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.updating.addListener(_changed);
+    _changed();
+  }
+
+  void _changed() {
+    if (widget.updating.value > 0) {
+      _wait ??= Timer(const Duration(seconds: 1), () {
+        if (mounted && widget.updating.value > 0) setState(() => _show = true);
+      });
+    } else {
+      _wait?.cancel();
+      _wait = null;
+      if (_show && mounted) setState(() => _show = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _wait?.cancel();
+    widget.updating.removeListener(_changed);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final off = widget.offline?.value ?? false;
+    return AnimatedSize(
+      duration: (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ? Duration.zero : const Duration(milliseconds: 200),
+      child: !_show || off
+          ? const SizedBox(width: double.infinity)
+          : Semantics(
+              liveRegion: true,
+              container: true,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                color: t.tkSoft,
+                child: Text('Updating…', textAlign: TextAlign.center, style: tkText(size: 12.5, weight: 500, color: t.muted)),
+              ),
+            ),
     );
   }
 }

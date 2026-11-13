@@ -49,6 +49,9 @@ export interface ExploreResult {
   /** Our own area, as near you reads it. */
   area?: string;
   blind?: BlindOffer;
+  /** Across Nigeria: in Near you's place when no one in our area can be shown, or our area is not set. */
+  across?: ExploreCard[];
+  across_more?: boolean;
   /** At most six: Taskiem's picks, then businesses Trusted on Taskiem. */
   featured?: ExploreCard[];
   trusted?: ExploreCard[];

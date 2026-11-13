@@ -5,6 +5,7 @@
 
 import 'package:flutter/widgets.dart';
 
+import '../kit/polling.dart';
 import '../app/auth.dart';
 import '../app/openers.dart';
 import '../kit/forms.dart' show errorWords;
@@ -46,7 +47,7 @@ class StatementPage extends StatefulWidget {
   State<StatementPage> createState() => _StatementPageState();
 }
 
-class _StatementPageState extends State<StatementPage> {
+class _StatementPageState extends State<StatementPage> with Polling {
   Map<String, dynamic>? _st;
   String? _error;
 
@@ -54,6 +55,7 @@ class _StatementPageState extends State<StatementPage> {
   void initState() {
     super.initState();
     _load();
+    startPolling(const Duration(seconds: 60), _load);
   }
 
   Future<void> _load() async {

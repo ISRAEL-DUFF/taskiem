@@ -165,6 +165,18 @@ final screens = <String, Screen>{
       await _loaded(t);
     },
   ),
+  'explore-start': (
+    build: () {
+      final f = Fixture('explore-start');
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Find a business to link with'));
+      await _loaded(t);
+      await _loaded(t);
+    },
+  ),
   'explore-search': (
     build: () {
       final f = Fixture('explore');

@@ -9,6 +9,7 @@
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 
+import '../kit/polling.dart';
 import '../api/transport.dart' show ApiError;
 import '../app/auth.dart';
 import '../app/links.dart';
@@ -237,7 +238,7 @@ class RidersPage extends StatefulWidget {
   State<RidersPage> createState() => _RidersPageState();
 }
 
-class _RidersPageState extends State<RidersPage> {
+class _RidersPageState extends State<RidersPage> with Polling {
   bool _retired = false;
   Map<String, dynamic>? _view;
   Object? _error;
@@ -250,6 +251,7 @@ class _RidersPageState extends State<RidersPage> {
   void initState() {
     super.initState();
     _load();
+    startPolling(const Duration(seconds: 60), _load);
   }
 
   Future<void> _load() async {
