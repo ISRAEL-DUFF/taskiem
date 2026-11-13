@@ -241,11 +241,7 @@ func TestWorkflowCannotWriteAKeptTable(t *testing.T) {
 		wf := w.Publish(t, `{"schema":"wd/v1","id":"wf_`+name+`","version":1,"name":"`+name+`","trigger":{"type":"manual"},"steps":[`+step+`]}`)
 		ref := w.Start(t, wf, map[string]any{"table": "money_log"})
 		w.Drain(t)
-		var payload string
-		_ = db.InTenantTx(ctx, w.DB.App, []uuid.UUID{w.Tenant}, func(tx pgx.Tx) error {
-			return tx.QueryRow(ctx, `SELECT payload::text FROM run_events WHERE run_id = $1 AND type IN ('StepCompleted', 'StepFailed') ORDER BY seq DESC LIMIT 1`, ref.ID).Scan(&payload)
-		})
-		return w.Status(t, ref), payload
+		return w.Status(t, ref), w.lastStepEvent(t, ref)
 	}
 	st, out := run("reads", `{"id":"read","type":"connector","connector":"xenibase@1","action":"read_rows","connection":"data_tables","input":{"table":"money_log"}}`)
 	if st != "completed" || !strings.Contains(out, "e1") {
