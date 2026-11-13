@@ -551,3 +551,27 @@ func TestMoneyInAnotherCurrencyIsNotNaira(t *testing.T) {
 		t.Fatalf("money in other currencies: %+v", s.OtherCurrencies)
 	}
 }
+
+// A payment a rail reports with a negative amount is not money received:
+// it is in the log with no amount, pays nothing, and waits in To match
+// for a person.
+func TestNegativeRailAmountWaitsForAPerson(t *testing.T) {
+	w := newWorld(t)
+	x := w.invoice("Ada Obi", 5000)
+	w.account(x.ID, 1, "neg_acct", 5000)
+	w.heard("payment.received", map[string]any{"payment_id": "neg_acct", "amount_kobo": int64(-5000)})
+	if y := w.read(x.Number); y.PaidKobo != 0 {
+		t.Fatalf("a negative amount paid the invoice: %d", y.PaidKobo)
+	}
+	got := w.entries("neg_acct")
+	if len(got) != 1 || got[0].amount != 0 {
+		t.Fatalf("the entry: %+v", got)
+	}
+	waits := false
+	for _, p := range w.unmatched() {
+		waits = waits || p.Reference == "neg_acct" && p.AmountKobo == nil
+	}
+	if !waits {
+		t.Fatalf("it does not wait in To match: %+v (state %q)", w.unmatched(), got[0].state)
+	}
+}

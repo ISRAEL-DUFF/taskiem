@@ -282,6 +282,17 @@ func TestStatementsAndEntries(t *testing.T) {
 	if b, again, err := log.Enter(ctx, e.Tenant, "user:ada", in); err != nil || again || b != a {
 		t.Errorf("retry: %v %v", err, again)
 	}
+	// An amount no business enters by hand is refused in plain words
+	// (two of these would overflow every sum), at the ceiling it is taken.
+	for _, huge := range []int64{9_000_000_000_000_000_000, moneylog.MaxEnteredKobo + 1} {
+		_, _, err := log.Enter(ctx, e.Tenant, "user:ada", moneylog.Entered{Kind: "cash", Direction: "in", AmountKobo: huge, Description: "Till"})
+		if !errors.Is(err, moneylog.ErrInvalid) || !strings.Contains(err.Error(), "₦1,000,000,000") {
+			t.Errorf("an amount of %d kobo entered by hand: %v", huge, err)
+		}
+	}
+	if _, _, err := log.Enter(ctx, e.Tenant, "user:ada", moneylog.Entered{Kind: "cash", Direction: "in", AmountKobo: moneylog.MaxEnteredKobo, Description: "Till", Key: "max"}); err != nil {
+		t.Errorf("the ceiling itself: %v", err)
+	}
 	for _, bad := range []moneylog.Entered{{Kind: "gift", AmountKobo: 1, Description: "x"}, {Kind: "cash", Direction: "sideways", AmountKobo: 1, Description: "x"},
 		{Kind: "expense", AmountKobo: 0, Description: "x"}, {Kind: "expense", AmountKobo: 1}} {
 		if _, _, err := log.Enter(ctx, e.Tenant, "user:ada", bad); !errors.Is(err, moneylog.ErrInvalid) {

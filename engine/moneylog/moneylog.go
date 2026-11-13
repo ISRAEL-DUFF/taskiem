@@ -137,6 +137,12 @@ func (l *Log) now() time.Time {
 // another currency is recorded under its own and counted nowhere.
 const Naira = "NGN"
 
+// MaxEnteredKobo is the most a person enters by hand as one amount of
+// cash or one expense: ₦1,000,000,000, the most an invoice takes. A
+// larger amount is a slip of the keyboard, and amounts near the largest
+// number a sum can hold would overflow every total.
+const MaxEnteredKobo = 100_000_000_000
+
 // ErrInvalid is an entry the log refuses.
 var ErrInvalid = errors.New("moneylog: invalid entry")
 
@@ -373,6 +379,7 @@ func FromEvent(channel, event string, fields map[string]any) (Entry, bool) {
 		return Entry{}, false
 	}
 	e.AmountKobo = kobo(fields, "amount_kobo")
+	noteNegative(&e, negativeNote(fields, "amount_kobo", "fee_kobo"))
 	if e.Reference == "" {
 		return Entry{}, false
 	}
@@ -433,9 +440,12 @@ func FromPayout(channel string, input, output map[string]any) (Entry, bool) {
 	if str(output, "status") != "settled" || str(output, "payout_id") == "" {
 		return Entry{}, false
 	}
-	return Entry{Direction: "out", Kind: "payout", Status: "settled", Channel: channel, Reference: str(output, "payout_id"),
+	e := Entry{Direction: "out", Kind: "payout", Status: "settled", Channel: channel, Reference: str(output, "payout_id"),
 		Event: "payout.settled", Source: "step", Currency: str(input, "currency"),
-		AmountKobo: kobo(input, "amount_kobo"), FeeKobo: kobo(output, "fee_kobo"), Description: clip(str(input, "narration"), 300)}, true
+		AmountKobo: kobo(input, "amount_kobo"), FeeKobo: kobo(output, "fee_kobo"), Description: clip(str(input, "narration"), 300)}
+	noteNegative(&e, negativeNote(input, "amount_kobo"))
+	noteNegative(&e, negativeNote(output, "fee_kobo"))
+	return e, true
 }
 
 var posStatus = map[string]string{"approved": "settled", "declined": "failed", "reversed": "reversed", "pending": "pending"}
@@ -452,6 +462,20 @@ func str(m map[string]any, k string) string {
 }
 
 func kobo(m map[string]any, k string) *int64 {
+	n, _ := signedKobo(m, k)
+	if n == nil || *n < 0 {
+		// A negative amount is not turned positive: which way money went
+		// is the event's to say, so the sign means the rail (or its
+		// manifest) is wrong about this movement. negativeNote says so
+		// on the entry, which is recorded with no amount.
+		return nil
+	}
+	return n
+}
+
+// signedKobo reads an amount as the rail gave it; ok is false when there
+// is none or it is not a number.
+func signedKobo(m map[string]any, k string) (*int64, bool) {
 	var n int64
 	switch v := m[k].(type) {
 	case int64:
@@ -463,16 +487,42 @@ func kobo(m map[string]any, k string) *int64 {
 	case string:
 		x, err := strconv.ParseInt(v, 10, 64)
 		if err != nil {
-			return nil
+			return nil, false
 		}
 		n = x
 	default:
-		return nil
+		return nil, false
 	}
-	if n < 0 {
-		n = -n
+	return &n, true
+}
+
+// negativeNote is the note of an entry whose rail gave a negative amount
+// or fee (in keys of m): what was sent, and that nothing was counted. It
+// is "" when none is negative. Such an entry has no amount, so it is in
+// no total and no invoice counts it: it waits for a person, who checks
+// the movement with the rail.
+func negativeNote(m map[string]any, keys ...string) string {
+	var bad []string
+	for _, k := range keys {
+		if n, ok := signedKobo(m, k); ok && *n < 0 {
+			bad = append(bad, fmt.Sprintf("%s %d", k, *n))
+		}
 	}
-	return &n
+	if len(bad) == 0 {
+		return ""
+	}
+	return "The service sent a negative amount (" + strings.Join(bad, ", ") + "): recorded with no amount and not counted. Check this movement with the service."
+}
+
+// noteNegative adds negativeNote to an entry's note.
+func noteNegative(e *Entry, why string) {
+	if why == "" {
+		return
+	}
+	if e.Note != "" {
+		why = e.Note + ". " + why
+	}
+	e.Note = clip(why, 300)
 }
 
 func when(m map[string]any, k string) *time.Time {

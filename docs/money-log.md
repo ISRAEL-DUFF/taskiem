@@ -23,6 +23,8 @@ Sandbox and staging connections are not recorded: the log is the business's real
 
 ## How each movement is recorded once
 
+An amount is never negative in the log: which way money went is the entry's direction. A service that reports a negative amount or fee is not believed and the sign is not dropped: the movement is recorded with no amount and a note of what was sent, counts nowhere, and waits in **To match** for a person to check with the service.
+
 A movement is known by where it happened (the connection, such as `paystack/main`), what was heard (the event) and the service's reference. A credit to a customer's account number is known by the account's reference and the service's id for that credit, since one account takes many payments; so is a transfer into a one-time number on a service that refuses no second transfer into it (iswallet), so two transfers into one number are two entries and neither is lost. The same event sent twice, sent and also found by polling, or found by asking, is one entry. A later status is a new entry that names the first in `corrects`: a payout that settled and was then reversed has two entries.
 
 A payment is also heard without the service's id for the transfer: when Taskiem asks about it by its reference alone, or in entries written before transfers into one-time numbers had ids. Such an entry and the same transfer heard later with its id are one entry: the id-less entry stands for it unless the service's own times put the transfer more than five minutes after that entry's, which makes it another transfer into the same number. A transfer with no time of its own is taken as the same, so no transfer is recorded twice; the cost is that a second transfer within five minutes of a first recorded without an id is not told apart.
@@ -74,7 +76,7 @@ The log's own copy in Taskiem's database is the record of reference: the `money_
 - When two or more such transfers fit, or a line is of another amount but is the only line near the only transfer near it, the line waits under **Transfers to confirm** on **Upload statement**, and is not in the log until someone with `invoice.manage` chooses **Same money** (and which transfer) or **Different money** (new money, matched like any other). Uploading the statement again does not add a waiting line twice.
 - A transfer no statement ever confirms stays as the person's word, as entered cash does.
 
-**Cash and expenses.** Cash in, cash out and expenses are entered with an amount, a date, what it was for, and for an expense the vendor and a category; each is recorded once, attributed to the person. Over the API: `POST /v1/money/statements` and `POST /v1/money/entries` (with an `Idempotency-Key`).
+**Cash and expenses.** Cash in, cash out and expenses are entered with an amount, a date, what it was for, and for an expense the vendor and a category; each is recorded once, attributed to the person. One amount entered by hand is at most ₦1,000,000,000; more is refused in plain words. Over the API: `POST /v1/money/statements` and `POST /v1/money/entries` (with an `Idempotency-Key`).
 
 ### From chat
 
