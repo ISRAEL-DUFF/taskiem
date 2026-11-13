@@ -4,6 +4,10 @@ Matching decides which invoice or [storefront order](storefronts.md#payments-and
 
 A match is a payment counted towards an invoice or an order, listed on it with how it was matched and why. **Nothing else marks an invoice paid**, and an order is marked paid along the same path whether its own payment check or matching hears of the money first. Money a [counter sale](stock.md#sales) took (its cash takings, or a transfer or terminal sale matched to it) counts for that sale: it is never suggested or matched for an invoice or order. The same holds for a transfer counted towards cash a [rider owed](dispatch.md).
 
+## Naira only
+
+Invoices, orders and every total are in naira. Money a service reports in another currency (a card charged in dollars on Paystack) is recorded in the [money log](money-log.md) under its currency and is **never counted as naira**: it is not matched exactly, not suggested, not matched automatically, and a match by hand is refused in plain words (the database refuses a payment part of such an entry too). It waits in **To match** with its currency shown ("USD 50.00", and why it is held), and the Money page says how many such payments are outside its totals. Taskiem does not convert.
+
 ## Exact matches
 
 A payment into an account number or payment link Taskiem gave for an invoice ([paying an invoice](invoices.md#paying-from-the-page)) is matched to that invoice at once, with no one asked. Taskiem matches it when the payment service tells it about the payment, or when its own check every 30 seconds finds it, whichever comes first. A second transfer into the same account number, on a payment service that takes one (iswallet's one-time numbers), is its own money log entry and is matched the same way, to the same invoice. Money paid in after the invoice was voided is not counted towards it: it is left for a person in **To match**, and the account is no longer checked.

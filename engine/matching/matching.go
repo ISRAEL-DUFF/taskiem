@@ -140,6 +140,14 @@ type entry struct {
 	// Description is what the rail passed on of the payer's note, where
 	// it gives one: an invoice it names (business links).
 	Description string
+	// Currency is the money's (NGN unless the rail said otherwise).
+	Currency string
+}
+
+// HeldCurrency is why money in another currency waits for a person:
+// invoices and orders are in naira, and Taskiem does not convert.
+func HeldCurrency(currency string) string {
+	return "paid in " + currency + ", not naira: Taskiem counts naira only, so it is not matched to an invoice or order"
 }
 
 // Tenant looks at up to 100 of a tenant's new money-in entries.
@@ -147,7 +155,7 @@ func (m *Matcher) Tenant(ctx context.Context, tenant uuid.UUID) error {
 	var list []entry
 	err := db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT e.id, COALESCE(e.occurred_at, e.recorded_at), e.amount_kobo, e.fee_kobo, e.net, e.channel, e.reference,
-				COALESCE(e.account_number, ''), e.payer, taskiem_money_entry_reversed(e.id), e.source, COALESCE(e.description, '')
+				COALESCE(e.account_number, ''), e.payer, taskiem_money_entry_reversed(e.id), e.source, COALESCE(e.description, ''), e.currency
 			FROM money_entries e WHERE e.tenant_id = $1 AND e.direction = 'in' AND e.status = 'settled'
 			  AND e.kind IN ('payment', 'account_credit', 'pos_sale', 'statement', 'cash')
 			  AND NOT EXISTS (SELECT 1 FROM money_match_state s WHERE s.entry_id = e.id)
@@ -162,7 +170,7 @@ func (m *Matcher) Tenant(ctx context.Context, tenant uuid.UUID) error {
 		rs, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (raw, error) {
 			var x raw
 			var m moneylog.Entry
-			err := r.Scan(&x.e.ID, &x.e.When, &m.AmountKobo, &m.FeeKobo, &m.Net, &x.e.Channel, &x.e.Reference, &x.e.AccountNumber, &x.payer, &x.e.Reversed, &x.e.Source, &x.e.Description)
+			err := r.Scan(&x.e.ID, &x.e.When, &m.AmountKobo, &m.FeeKobo, &m.Net, &x.e.Channel, &x.e.Reference, &x.e.AccountNumber, &x.payer, &x.e.Reversed, &x.e.Source, &x.e.Description, &x.e.Currency)
 			x.e.AmountKobo = moneylog.CountableKobo(m) - x.e.Reversed
 			return x, err
 		})
@@ -197,6 +205,11 @@ func (m *Matcher) Tenant(ctx context.Context, tenant uuid.UUID) error {
 
 // consider matches one entry exactly, or suggests, and remembers it did.
 func (m *Matcher) consider(ctx context.Context, tenant uuid.UUID, e entry) error {
+	if e.Currency != "" && e.Currency != moneylog.Naira {
+		// Not naira: 5000 cents are not 5000 kobo. Never matched or
+		// suggested; it waits in To match under its currency.
+		return m.hold(ctx, tenant, e.ID, "unmatched", HeldCurrency(e.Currency))
+	}
 	if e.Reversed > 0 && e.AmountKobo <= 0 {
 		// All of it went back to the payer before it was looked at.
 		return m.hold(ctx, tenant, e.ID, "matched", HeldReversed)

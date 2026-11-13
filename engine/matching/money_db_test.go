@@ -12,6 +12,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/moneylog"
+	"github.com/israel-duff/taskiem/engine/moneyreport"
 )
 
 // The money rules, each shown by the case that once broke it: every bank
@@ -498,5 +499,55 @@ func TestPaymentsAtOnceCountNoMoreThanIsDue(t *testing.T) {
 			_, err := tx.Exec(ctx, `DELETE FROM money_entry_customers WHERE tenant_id = $1`, w.env.Tenant)
 			return err
 		})
+	}
+}
+
+// Money in another currency is not naira: a $50 charge (5000 cents) is
+// neither counted towards nor suggested for a ₦50 invoice, by itself or
+// by hand, nor added to the naira totals. It stays in the log under its
+// currency and waits in To match for a person.
+func TestMoneyInAnotherCurrencyIsNotNaira(t *testing.T) {
+	w := newWorld(t)
+	x := w.invoice("Ada Obi", 5000)
+	// Into the invoice's own account, and with nothing naming an invoice.
+	w.account(x.ID, 1, "usd_acct", 5000)
+	w.heard("payment.received", map[string]any{"payment_id": "usd_acct", "amount_kobo": int64(5000), "currency": "USD"})
+	w.heard("payment.received", map[string]any{"payment_id": "usd_plain", "amount_kobo": int64(5000), "currency": "USD"})
+	if y := w.read(x.Number); y.PaidKobo != 0 || y.Status == "paid" {
+		t.Fatalf("$50 counted towards a ₦50 invoice: %s, %d paid", y.Status, y.PaidKobo)
+	}
+	if open := w.open(); len(open) != 0 {
+		t.Fatalf("$50 suggested for a naira invoice: %+v", open)
+	}
+	waiting := map[string]matching.Payment{}
+	for _, p := range w.unmatched() {
+		waiting[p.Reference] = p
+	}
+	for _, ref := range []string{"usd_acct", "usd_plain"} {
+		p, ok := waiting[ref]
+		if !ok || p.Currency != "USD" || p.HeldReason == "" {
+			t.Fatalf("%s is not in To match under its currency: %+v (%v)", ref, p, ok)
+		}
+		// By hand it is refused too, in plain words.
+		if _, err := w.m.Match(ctx, w.env.Tenant, p.EntryID, x.Number, "user:ada"); !errors.Is(err, invoicing.ErrState) {
+			t.Fatalf("matching %s by hand: %v", ref, err)
+		}
+	}
+	if y := w.read(x.Number); y.PaidKobo != 0 {
+		t.Fatalf("counted by hand: %d", y.PaidKobo)
+	}
+	// Naira beside it is counted as ever, and the totals are naira's.
+	w.heard("payment.received", map[string]any{"payment_id": "ngn_plain", "amount_kobo": int64(700000), "currency": "NGN"})
+	var s moneyreport.Summary
+	w.in(func(tx pgx.Tx) error {
+		var err error
+		s, err = moneyreport.Summarise(ctx, tx, w.env.Tenant, time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
+		return err
+	})
+	if s.InSettled != 700000 {
+		t.Fatalf("money in, in naira: %d, want 700000", s.InSettled)
+	}
+	if len(s.OtherCurrencies) != 1 || s.OtherCurrencies[0].Currency != "USD" || s.OtherCurrencies[0].Movements != 2 {
+		t.Fatalf("money in other currencies: %+v", s.OtherCurrencies)
 	}
 }

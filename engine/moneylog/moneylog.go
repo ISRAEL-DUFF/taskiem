@@ -133,6 +133,10 @@ func (l *Log) now() time.Time {
 	return time.Now()
 }
 
+// Naira is the currency invoices, orders and every total are in. Money in
+// another currency is recorded under its own and counted nowhere.
+const Naira = "NGN"
+
 // ErrInvalid is an entry the log refuses.
 var ErrInvalid = errors.New("moneylog: invalid entry")
 

@@ -53,7 +53,7 @@ The log is copied to a data table named `money_log`, a [kept table](data-tables.
 | `occurred_at`, `recorded_at` | When it happened at the service (when the service says), and when Taskiem recorded it |
 | `direction` | `in` or `out` |
 | `kind` | `payment`, `account_credit`, `payout`, `refund`, `pos_sale`, `statement`, `cash`, `expense` (and, later, `correction`) |
-| `amount_kobo`, `fee_kobo`, `currency` | Amounts in kobo |
+| `amount_kobo`, `fee_kobo`, `currency` | Amounts in kobo; for money a service reports in another currency (`USD`), in that currency's smallest unit, under its `currency`. Only naira is counted: such money is never matched to an invoice or order, is in no total, and waits in **To match** under its currency for a person to see |
 | `status` | `settled`, `pending`, `failed` or `reversed` |
 | `channel` | The connection, such as `paystack/main` |
 | `reference` | The payment service's reference |

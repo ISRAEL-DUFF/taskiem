@@ -214,15 +214,18 @@ func (m *Matcher) countTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c co
 				parts = []Part{p}
 			}
 		}
-		var direction, status, channel, reference, source string
+		var direction, status, channel, reference, source, currency string
 		var amount *int64
-		err := tx.QueryRow(ctx, `SELECT direction, status, amount_kobo, channel, reference, source FROM money_entries WHERE tenant_id = $1 AND id = $2`, tenant, c.entry).
-			Scan(&direction, &status, &amount, &channel, &reference, &source)
+		err := tx.QueryRow(ctx, `SELECT direction, status, amount_kobo, channel, reference, source, currency FROM money_entries WHERE tenant_id = $1 AND id = $2`, tenant, c.entry).
+			Scan(&direction, &status, &amount, &channel, &reference, &source, &currency)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("%w: no such payment", invoicing.ErrNotFound)
 		}
 		if err != nil {
 			return err
+		}
+		if currency != moneylog.Naira {
+			return fmt.Errorf("%w: this money was paid in %s, not naira, and Taskiem counts naira only: it cannot be matched to an invoice or order", invoicing.ErrState, currency)
 		}
 		if direction != "in" || status != "settled" || amount == nil || *amount <= 0 {
 			return fmt.Errorf("%w: only money received and settled, with its amount, can be matched to an invoice or order", invoicing.ErrState)

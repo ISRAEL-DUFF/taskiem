@@ -3031,6 +3031,9 @@ paths:
                         to_match:
                           type: boolean
                           description: Matching left it for a person (as /v1/money/unmatched).
+                        currency:
+                          type: string
+                          description: The money's currency when it is not naira, such as "USD". Its amounts are then in that currency's smallest unit, nothing counts it towards an invoice or order, and it is in no naira total.
         default:
           $ref: '#/components/responses/Error'
     post:
@@ -36921,6 +36924,9 @@ components:
         held_reason:
           type: string
           description: Why matching held it for a person, such as a credit to a customer's account whose account number or reference disagrees with what was registered
+        currency:
+          type: string
+          description: The money's currency when it is not naira, such as "USD". Its amounts are then in that currency's smallest unit, and it cannot be matched to an invoice or order.
     MoneyLeak:
       type: object
       required: [id, kind, amount_kobo, detail, status, opened_at]
@@ -37104,6 +37110,17 @@ components:
         own_in_settled_kobo:
           type: integer
           description: The settled money in less what was collected for others
+        other_currencies:
+          type: array
+          description: The period's money that is not naira, by currency. It is in the log and in none of the sums.
+          items:
+            type: object
+            required: [currency, movements]
+            properties:
+              currency:
+                type: string
+              movements:
+                type: integer
         unit:
           type: string
           enum: [hour, day, ""]

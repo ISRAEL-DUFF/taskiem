@@ -2,7 +2,7 @@
 // phase 2 additions): what a business is owed and the money it has, worked
 // on in the chat as orders and stock are. Pure helpers, tested on their own.
 
-import { invoiceStatus, naira, type CustomerInvoice } from "./invoices";
+import { invoiceStatus, naira, otherMoney, type CustomerInvoice } from "./invoices";
 import type { PillTone } from "./tools";
 
 /** One entry of the money log (GET /v1/money/entries). */
@@ -25,6 +25,8 @@ export interface MoneyEntry {
   towards?: string;
   /** Matching left it for a person. */
   to_match: boolean;
+  /** Its currency when it is not naira ("USD"): the amounts are then in that currency. */
+  currency?: string;
 }
 
 const short = (iso: string) =>
@@ -89,7 +91,8 @@ export function entryName(e: MoneyEntry): string {
 /** Its amount with which way it went: "+₦4,500.00", "−₦1,200.00". */
 export function entryAmount(e: MoneyEntry): string {
   if (e.amount_kobo === undefined) return "No amount";
-  return `${e.direction === "in" ? "+" : "−"}${naira(e.amount_kobo)}`;
+  const amount = e.currency ? otherMoney(e.amount_kobo, e.currency) : naira(e.amount_kobo);
+  return `${e.direction === "in" ? "+" : "−"}${amount}`;
 }
 
 /** An entry's line: "+₦4,500.00 · Cash · 9 Nov". */
@@ -117,15 +120,18 @@ export function entryTags(e: MoneyEntry): string[] {
 }
 
 /** Money in with something left to count: it can be matched to an
- * invoice by hand (cash typed in never waits in the matching queue). */
+ * invoice by hand (cash typed in never waits in the matching queue).
+ * Money that is not naira is never matched. */
 export const matchable = (e: MoneyEntry) =>
   e.direction === "in" &&
   e.status === "settled" &&
+  !e.currency &&
   (e.left_kobo ?? 0) > 0;
 
 /** What an entry counts towards, in a sentence. */
 export function towardsWords(e: MoneyEntry): string {
   if (e.towards) return `Counted towards ${e.towards}.`;
+  if (e.currency) return `Paid in ${e.currency}, not naira: it is not in your totals and cannot be matched to an invoice or order.`;
   if (e.to_match) return "Not matched to an invoice or order yet.";
   return "";
 }

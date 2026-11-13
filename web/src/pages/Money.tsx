@@ -81,6 +81,7 @@ import {
   type StatementColumns,
   type StatementRefusal,
   type WaitingLine,
+  otherCurrenciesLine,
 } from "../lib/money";
 
 /** Runs a request and words the server's refusal as a sentence. */
@@ -293,6 +294,11 @@ export function MoneyOverview() {
               </span>
               <Icon name="chevron" className="go" />
             </Link>
+            {otherCurrenciesLine(s.other_currencies) && (
+              <p className="hint" data-testid="other-currencies">
+                {otherCurrenciesLine(s.other_currencies)}
+              </p>
+            )}
             {!!s.collected_for_others_kobo && (
               <div className="list-row" data-testid="collected-for-others">
                 <span className="list-icon">

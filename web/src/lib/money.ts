@@ -594,6 +594,8 @@ export interface MoneySummary {
   collected_for_others_kobo?: number;
   collected_for?: { body: string; kobo: number }[] | null;
   own_in_settled_kobo?: number;
+  /** The period's money that is not naira, by currency: in the log, in none of the sums. */
+  other_currencies?: { currency: string; movements: number }[] | null;
   /** The period in stretches, for charts: hours for one day, days for up to 92, none beyond. */
   unit?: "hour" | "day" | "";
   buckets?: MoneyBucket[];
@@ -755,3 +757,12 @@ export function feeRatePercent(bp: number | null | undefined): string {
 
 /** A count with its noun: "1 invoice", "3 invoices". */
 export const counted = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** "2 payments in USD are not in these totals: Taskiem counts naira only." or "" with none. */
+export function otherCurrenciesLine(list: { currency: string; movements: number }[] | null | undefined): string {
+  const rows = (list ?? []).filter((c) => c.movements > 0);
+  if (rows.length === 0) return "";
+  const n = rows.reduce((t, c) => t + c.movements, 0);
+  const names = rows.map((c) => c.currency).join(", ");
+  return `${n} payment${n === 1 ? "" : "s"} in ${names} ${n === 1 ? "is" : "are"} not in these totals: Taskiem counts naira only.`;
+}
