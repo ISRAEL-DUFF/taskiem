@@ -232,6 +232,320 @@ tests:
   interval: 1m
   name: a queue nobody serves, in any pool
 - alert_rule_test:
+  - alertname: TaskiemWebhookIngestBudgetBurn
+    eval_time: 70m
+    exp_alerts:
+    - exp_annotations:
+        description: 'Share of webhook and connector-event deliveries answered without
+          a 5xx (a 4xx is the sender''s problem: bad signature, limits). Objective:
+          99.9% over 30d. At this rate the whole budget lasts 2.1 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemwebhookingestbudgetburn
+        summary: Webhook ingest is burning its error budget 14.4x too fast (1h and
+          5m windows)
+      exp_labels:
+        severity: page
+        slo: webhook_ingest
+        window: 1h
+    - exp_annotations:
+        description: 'Share of webhook and connector-event deliveries answered without
+          a 5xx (a 4xx is the sender''s problem: bad signature, limits). Objective:
+          99.9% over 30d. At this rate the whole budget lasts 5 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemwebhookingestbudgetburn
+        summary: Webhook ingest is burning its error budget 6x too fast (6h and 30m
+          windows)
+      exp_labels:
+        severity: page
+        slo: webhook_ingest
+        window: 6h
+    - exp_annotations:
+        description: 'Share of webhook and connector-event deliveries answered without
+          a 5xx (a 4xx is the sender''s problem: bad signature, limits). Objective:
+          99.9% over 30d. At this rate the whole budget lasts 10 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemwebhookingestbudgetburn
+        summary: Webhook ingest is burning its error budget 3x too fast (1d and 2h
+          windows)
+      exp_labels:
+        severity: ticket
+        slo: webhook_ingest
+        window: 1d
+    - exp_annotations:
+        description: 'Share of webhook and connector-event deliveries answered without
+          a 5xx (a 4xx is the sender''s problem: bad signature, limits). Objective:
+          99.9% over 30d. At this rate the whole budget lasts 30 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemwebhookingestbudgetburn
+        summary: Webhook ingest is burning its error budget 1x too fast (3d and 6h
+          windows)
+      exp_labels:
+        severity: ticket
+        slo: webhook_ingest
+        window: 3d
+  input_series:
+  - series: taskiem_ingest_deliveries_total{kind="webhook",result="200"}
+    values: 0+98x80
+  - series: taskiem_ingest_deliveries_total{kind="connector",result="502"}
+    values: 0+2x80
+  - series: taskiem_ingest_deliveries_total{kind="schedule",result="500"}
+    values: 0+1000x80
+  interval: 1m
+  name: '2% of webhook deliveries are answered with a 5xx: every burn-rate window
+    fires'
+- alert_rule_test:
+  - alertname: TaskiemWebhookIngestBudgetBurn
+    eval_time: 70m
+    exp_alerts: []
+  input_series:
+  - series: taskiem_ingest_deliveries_total{kind="webhook",result="200"}
+    values: 0+50x80
+  - series: taskiem_ingest_deliveries_total{kind="webhook",result="401"}
+    values: 0+50x80
+  - series: taskiem_ingest_deliveries_total{kind="webhook",result="500"}
+    values: "0x80"
+  interval: 1m
+  name: refused webhook deliveries do not burn the ingest budget
+- alert_rule_test:
+  - alertname: TaskiemAPILatencyBudgetBurn
+    eval_time: 70m
+    exp_alerts:
+    - exp_annotations:
+        description: 'Share of API requests (same routes) answered within 1 second.
+          Objective: 99% over 30d. At this rate the whole budget lasts 2.1 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemapilatencybudgetburn
+        summary: API latency is burning its error budget 14.4x too fast (1h and 5m
+          windows)
+      exp_labels:
+        severity: page
+        slo: api_latency
+        window: 1h
+    - exp_annotations:
+        description: 'Share of API requests (same routes) answered within 1 second.
+          Objective: 99% over 30d. At this rate the whole budget lasts 5 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemapilatencybudgetburn
+        summary: API latency is burning its error budget 6x too fast (6h and 30m windows)
+      exp_labels:
+        severity: page
+        slo: api_latency
+        window: 6h
+    - exp_annotations:
+        description: 'Share of API requests (same routes) answered within 1 second.
+          Objective: 99% over 30d. At this rate the whole budget lasts 10 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemapilatencybudgetburn
+        summary: API latency is burning its error budget 3x too fast (1d and 2h windows)
+      exp_labels:
+        severity: ticket
+        slo: api_latency
+        window: 1d
+    - exp_annotations:
+        description: 'Share of API requests (same routes) answered within 1 second.
+          Objective: 99% over 30d. At this rate the whole budget lasts 30 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemapilatencybudgetburn
+        summary: API latency is burning its error budget 1x too fast (3d and 6h windows)
+      exp_labels:
+        severity: ticket
+        slo: api_latency
+        window: 3d
+  input_series:
+  - series: taskiem_http_request_duration_seconds_bucket{route="/v1/workflows",method="GET",le="1"}
+    values: 0+50x80
+  - series: taskiem_http_request_duration_seconds_count{route="/v1/workflows",method="GET"}
+    values: 0+100x80
+  - series: taskiem_http_request_duration_seconds_bucket{route="/v1/runs/{run}/stream",method="GET",le="1"}
+    values: "0x80"
+  - series: taskiem_http_request_duration_seconds_count{route="/v1/runs/{run}/stream",method="GET"}
+    values: 0+1000x80
+  interval: 1m
+  name: 'half of API requests take over a second: the latency budget burns'
+- alert_rule_test:
+  - alertname: TaskiemRunStartBudgetBurn
+    eval_time: 70m
+    exp_alerts:
+    - exp_annotations:
+        description: 'Share of runs whose first worker step is claimed within 5 seconds
+          of the trigger being accepted. Objective: 99% over 30d. At this rate the
+          whole budget lasts 2.1 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemrunstartbudgetburn
+        summary: Run start latency is burning its error budget 14.4x too fast (1h
+          and 5m windows)
+      exp_labels:
+        severity: page
+        slo: run_start
+        window: 1h
+    - exp_annotations:
+        description: 'Share of runs whose first worker step is claimed within 5 seconds
+          of the trigger being accepted. Objective: 99% over 30d. At this rate the
+          whole budget lasts 5 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemrunstartbudgetburn
+        summary: Run start latency is burning its error budget 6x too fast (6h and
+          30m windows)
+      exp_labels:
+        severity: page
+        slo: run_start
+        window: 6h
+    - exp_annotations:
+        description: 'Share of runs whose first worker step is claimed within 5 seconds
+          of the trigger being accepted. Objective: 99% over 30d. At this rate the
+          whole budget lasts 10 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemrunstartbudgetburn
+        summary: Run start latency is burning its error budget 3x too fast (1d and
+          2h windows)
+      exp_labels:
+        severity: ticket
+        slo: run_start
+        window: 1d
+    - exp_annotations:
+        description: 'Share of runs whose first worker step is claimed within 5 seconds
+          of the trigger being accepted. Objective: 99% over 30d. At this rate the
+          whole budget lasts 30 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemrunstartbudgetburn
+        summary: Run start latency is burning its error budget 1x too fast (3d and
+          6h windows)
+      exp_labels:
+        severity: ticket
+        slo: run_start
+        window: 3d
+  input_series:
+  - series: taskiem_run_start_seconds_bucket{le="5"}
+    values: 0+20x80
+  - series: taskiem_run_start_seconds_count
+    values: 0+100x80
+  interval: 1m
+  name: 'most runs wait over 5 seconds for their first step: the run-start budget
+    burns'
+- alert_rule_test:
+  - alertname: TaskiemSchedulerTimelinessBudgetBurn
+    eval_time: 70m
+    exp_alerts:
+    - exp_annotations:
+        description: 'Share of timers and schedules fired within 5 seconds of being
+          due. Objective: 99% over 30d. At this rate the whole budget lasts 2.1 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemschedulertimelinessbudgetburn
+        summary: Scheduler timeliness is burning its error budget 14.4x too fast (1h
+          and 5m windows)
+      exp_labels:
+        severity: page
+        slo: scheduler_timeliness
+        window: 1h
+    - exp_annotations:
+        description: 'Share of timers and schedules fired within 5 seconds of being
+          due. Objective: 99% over 30d. At this rate the whole budget lasts 5 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemschedulertimelinessbudgetburn
+        summary: Scheduler timeliness is burning its error budget 6x too fast (6h
+          and 30m windows)
+      exp_labels:
+        severity: page
+        slo: scheduler_timeliness
+        window: 6h
+    - exp_annotations:
+        description: 'Share of timers and schedules fired within 5 seconds of being
+          due. Objective: 99% over 30d. At this rate the whole budget lasts 10 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemschedulertimelinessbudgetburn
+        summary: Scheduler timeliness is burning its error budget 3x too fast (1d
+          and 2h windows)
+      exp_labels:
+        severity: ticket
+        slo: scheduler_timeliness
+        window: 1d
+    - exp_annotations:
+        description: 'Share of timers and schedules fired within 5 seconds of being
+          due. Objective: 99% over 30d. At this rate the whole budget lasts 30 days.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemschedulertimelinessbudgetburn
+        summary: Scheduler timeliness is burning its error budget 1x too fast (3d
+          and 6h windows)
+      exp_labels:
+        severity: ticket
+        slo: scheduler_timeliness
+        window: 3d
+  input_series:
+  - series: taskiem_scheduler_lateness_seconds_bucket{le="5"}
+    values: 0+20x80
+  - series: taskiem_scheduler_lateness_seconds_count
+    values: 0+100x80
+  interval: 1m
+  name: 'most timers fire over 5 seconds late: the scheduler budget burns'
+- alert_rule_test:
+  - alertname: TaskiemSchedulerTimelinessBudgetBurn
+    eval_time: 70m
+    exp_alerts: []
+  input_series:
+  - series: taskiem_scheduler_lateness_seconds_bucket{le="5"}
+    values: 0+100x80
+  - series: taskiem_scheduler_lateness_seconds_count
+    values: 0+100x80
+  interval: 1m
+  name: timers on time do not alert
+- alert_rule_test:
+  - alertname: TaskiemLeaseExpiries
+    eval_time: 8m
+    exp_alerts: []
+  - alertname: TaskiemLeaseExpiries
+    eval_time: 45m
+    exp_alerts:
+    - exp_annotations:
+        description: 'More than 10 task or timer leases were recovered after expiring
+          in 15 minutes: processes are dying or being killed before they drain.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemleaseexpiries
+        summary: Task leases are expiring
+      exp_labels:
+        severity: ticket
+  input_series:
+  - series: taskiem_lease_expiries_total{kind="task"}
+    values: 0+1x50
+  interval: 1m
+  name: leases keep expiring
+- alert_rule_test:
+  - alertname: TaskiemLeaseExpiries
+    eval_time: 45m
+    exp_alerts: []
+  input_series:
+  - series: taskiem_lease_expiries_total{kind="task"}
+    values: 0+1x5 5x45
+  interval: 1m
+  name: a few leases expiring in a deploy do not alert
+- alert_rule_test:
+  - alertname: TaskiemCanaryStopped
+    eval_time: 20m
+    exp_alerts: []
+  - alertname: TaskiemCanaryStopped
+    eval_time: 50m
+    exp_alerts:
+    - exp_annotations:
+        description: No canary probes ran in 15 minutes although the canary is configured.
+          The availability signal it gives (and the status page's automatic check)
+          is missing.
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemcanarystopped
+        summary: The synthetic canary stopped probing
+      exp_labels:
+        severity: ticket
+  input_series:
+  - series: taskiem_canary_probes_total{result="ok"}
+    values: 0+1x10 10x50
+  interval: 1m
+  name: the canary stops probing
+- alert_rule_test:
+  - alertname: TaskiemTargetDown
+    eval_time: 10m
+    exp_alerts: []
+  - alertname: TaskiemTargetDown
+    eval_time: 25m
+    exp_alerts:
+    - exp_annotations:
+        description: Prometheus cannot scrape a Taskiem pod. If it serves traffic,
+          the API and ingest SLIs miss its requests.
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiemtargetdown
+        summary: A Taskiem pod's metrics cannot be scraped
+      exp_labels:
+        instance: a
+        job: taskiem-api
+        severity: ticket
+  input_series:
+  - series: up{job="taskiem-api",instance="a"}
+    values: 1x5 0x30
+  - series: up{job="taskiem-api",instance="b"}
+    values: 1x35
+  - series: up{job="postgres",instance="c"}
+    values: "0x35"
+  interval: 1m
+  name: a Taskiem pod cannot be scraped
+- alert_rule_test:
   - alertname: TaskiemRetentionPurgeBehind
     eval_time: 20m
     exp_alerts: []
