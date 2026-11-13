@@ -388,6 +388,9 @@ func (s *Stock) done(ctx context.Context, tenant, id uuid.UUID, from int64) (Mov
 		if err != nil {
 			return err
 		}
+		if err := returnLandedTx(ctx, tx, tenant, m); err != nil {
+			return err
+		}
 		return copyCount(ctx, tx, tenant, m.ItemID, *m.After)
 	})
 	return m, err

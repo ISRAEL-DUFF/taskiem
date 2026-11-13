@@ -27,7 +27,7 @@ A movement is one change to one item's stock: the change, the count before and a
 
 | Reason | Made by |
 | --- | --- |
-| `order` | A storefront order accepted (`decide`), one per catalogue row, naming the order's reference |
+| `order` | A storefront order accepted (`decide`), one per catalogue row, naming the order's reference. When the order is then declined, cancelled, left refund due or not paid for in time, a second `order` movement puts back what the first took ("Put back: the order did not go ahead"), once however often the step is retried; an order its rider delivered keeps what it took |
 | `sale` | A sale recorded: `sold 3 bags of rice 45,000 cash`, **Record a sale**, `record_sale`, one per item, naming the sale's reference |
 | `received` | Goods received: an item added with its quantity, `add 20 cartons of Indomie`, **Record stock** |
 | `adjustment` | A correction with a reason: `adjust rice -2 spoilt` |

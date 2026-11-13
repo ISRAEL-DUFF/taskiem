@@ -254,7 +254,7 @@ func ShrinkTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to time.Ti
 	out := Shrink{From: from, To: to, Items: []ShrinkItem{}}
 	rows, err := tx.Query(ctx, `SELECT m.item_id, (array_agg(m.item ORDER BY m.done_at DESC))[1],
 			COALESCE(sum(m.change) FILTER (WHERE m.reason = 'received' AND m.change > 0), 0),
-			COALESCE(-sum(m.change) FILTER (WHERE m.reason IN ('sale', 'order') AND m.change < 0), 0),
+			GREATEST(COALESCE(-sum(m.change) FILTER (WHERE m.reason = 'sale' AND m.change < 0 OR m.reason = 'order'), 0), 0),
 			COALESCE(-sum(m.change) FILTER (WHERE m.reason IN ('count', 'adjustment') AND m.change < 0), 0),
 			COALESCE(-sum(m.change * `+CostSQL+`) FILTER (WHERE m.reason IN ('count', 'adjustment') AND m.change < 0), 0)
 		FROM stock_movements m WHERE m.tenant_id = $1 AND m.status = 'done' AND m.done_at >= $2 AND m.done_at < $3 AND m.change IS NOT NULL
