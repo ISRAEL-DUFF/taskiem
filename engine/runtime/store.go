@@ -799,6 +799,9 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			return nil, insertTimer(ctx, tx, tenant, run.ref.ID, ev.StepID, "approval_timeout", at)
 		}
 	case history.StepCompleted:
+		if err := dropWait(ctx, tx, run.ref.ID, def, ev.StepID); err != nil {
+			return nil, err
+		}
 		// Closes an approval, if this step was one (decision or timeout).
 		if out, ok := ev.Payload.(history.CompletedPayload).Output.(map[string]any); ok {
 			if d, _ := out["decision"].(string); d != "" {
@@ -813,6 +816,11 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 			}
 		}
 	case history.StepFailed:
+		// A step that timed out waits no longer: a signal that comes now
+		// is buffered for whoever waits next, not handed to this step.
+		if err := dropWait(ctx, tx, run.ref.ID, def, ev.StepID); err != nil {
+			return nil, err
+		}
 		p := ev.Payload.(history.FailedPayload)
 		if p.Error.Next == "park" || (p.Error.Next == "fail" && isCompensation(ev.StepID)) {
 			if _, err := tx.Exec(ctx, `UPDATE runs SET status = 'needs_reconciliation' WHERE id = $1`, run.ref.ID); err != nil {
@@ -859,6 +867,37 @@ func (s *Store) applyEffects(ctx context.Context, tx pgx.Tx, run runRow, def *wd
 		return nil, s.endRun(ctx, tx, run, def, "cancelled") // a reversed cancel, once its compensations ran
 	}
 	return nil, nil
+}
+
+// dropWait removes the signal wait of a step that has completed or failed.
+// Only steps that wait have one (a signal, form, callback or subflow step,
+// whatever a capability step expanded to); other steps cost no statement.
+func dropWait(ctx context.Context, tx pgx.Tx, run uuid.UUID, def *wd.Definition, inst string) error {
+	if _, id := history.SplitInstance(inst); def != nil {
+		if st := def.Step(id); st != nil {
+			switch st.Type {
+			case "signal", "form", "callback", "subflow":
+			default:
+				return nil
+			}
+		}
+	}
+	_, err := tx.Exec(ctx, `DELETE FROM signal_waits WHERE run_id = $1 AND step_id = $2`, run, inst)
+	return err
+}
+
+// waitSettled reports whether the step a wait row belongs to has already
+// completed or failed, so that the row is stale (an older engine left a
+// timed-out step's wait behind). A cancelled step is not settled here: a
+// subflow step withdrawn by a cancel keeps its wait to hear from its child.
+func waitSettled(ctx context.Context, tx pgx.Tx, run uuid.UUID, step string) (bool, error) {
+	var last string
+	err := tx.QueryRow(ctx, `SELECT type FROM run_events WHERE run_id = $1 AND step_id = $2 AND type IN ($3, $4, $5) ORDER BY seq DESC LIMIT 1`,
+		run, step, history.StepScheduled, history.StepCompleted, history.StepFailed).Scan(&last)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return last != history.StepScheduled, err
 }
 
 func isCompensation(inst string) bool {
@@ -1178,18 +1217,19 @@ func (s *Store) deliverSignalTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	if len(waits) == 0 {
-		if !buffer {
-			return nil, nil
-		}
-		_, err := tx.Exec(ctx, `INSERT INTO signals (id, tenant_id, environment, event, correlation, payload, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + $7::interval)`,
-			uuid.Must(uuid.NewV7()), tenant, env, event, correlation, raw, SignalTTL.String())
-		return nil, err
-	}
 	var woke []uuid.UUID
 	for _, w := range waits {
 		if _, err := lockRun(ctx, tx, w.run); err != nil {
 			return nil, err
+		}
+		// Under the run's lock: a step that settled since its wait was
+		// written (or whose wait an older engine left) is passed over.
+		stale, err := waitSettled(ctx, tx, w.run, w.step)
+		if err != nil {
+			return nil, err
+		}
+		if stale {
+			continue
 		}
 		if _, err := appendEvent(ctx, tx, w.run, history.SignalReceived, w.step, 0, signalPayload(event, raw), history.OriginSignal); err != nil {
 			return nil, err
@@ -1200,6 +1240,11 @@ func (s *Store) deliverSignalTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 			}
 		}
 		woke = append(woke, w.run)
+	}
+	if len(woke) == 0 && buffer {
+		_, err := tx.Exec(ctx, `INSERT INTO signals (id, tenant_id, environment, event, correlation, payload, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + $7::interval)`,
+			uuid.Must(uuid.NewV7()), tenant, env, event, correlation, raw, SignalTTL.String())
+		return nil, err
 	}
 	return woke, nil
 }
