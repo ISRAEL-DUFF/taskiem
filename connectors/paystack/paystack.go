@@ -25,6 +25,9 @@ type Options struct {
 	BaseURL string
 	// Now is the clock for one-time accounts' expiry; nil uses time.Now.
 	Now func() time.Time
+	// PollPages bounds how many pages of a hundred one poll reads (tests);
+	// 0 is ten.
+	PollPages int
 }
 
 // New returns the Paystack connector.
@@ -32,9 +35,12 @@ func New(o Options) *connector.Connector {
 	m := connector.MustParse(manifest)
 	m.OverrideBaseURL(o.BaseURL)
 	base := strings.TrimRight(m.BaseURL, "/")
-	c := &client{base: base, now: o.Now}
+	c := &client{base: base, now: o.Now, pollPages: o.PollPages}
 	if c.now == nil {
 		c.now = time.Now
+	}
+	if c.pollPages < 1 {
+		c.pollPages = 10
 	}
 	return &connector.Connector{Manifest: m, Actions: map[string]connector.Action{
 		"check_balance":          connector.ActionFunc(c.checkBalance),
@@ -57,8 +63,9 @@ func New(o Options) *connector.Connector {
 }
 
 type client struct {
-	base string
-	now  func() time.Time
+	base      string
+	now       func() time.Time
+	pollPages int
 }
 
 // envelope is Paystack's response wrapper.
@@ -90,30 +97,87 @@ func (c *client) checkBalance(ctx context.Context, req connector.Request) (conne
 	return connector.Response{Output: map[string]any{"balances": balances}}, nil
 }
 
-// listSince lists a resource's records created since input.from, up to a
-// hundred, with Paystack's status filter when given.
+// pollPerPage is the page size of a poll's listing; maxPollProbes bounds
+// how often one poll halves its window looking for one it can read whole.
+const (
+	pollPerPage   = 100
+	maxPollProbes = 16
+)
+
+// listSince lists a resource's records since input.from, every page, with
+// Paystack's status filter when given. Where there are more than a poll
+// may read (pollPages pages: an outage, a busy day), it lists the first
+// part of the time instead, whole, and says in "through" how far that
+// went, so the poller carries on from there: nothing is skipped. The
+// part is found by halving the window (from..to), which relies only on
+// Paystack's own from and to filter, not on the order of its list.
 func (c *client) listSince(path, status string) func(context.Context, connector.Request) (connector.Response, error) {
 	return func(ctx context.Context, req connector.Request) (connector.Response, error) {
 		from, _ := req.Input["from"].(string)
-		if _, err := time.Parse(time.RFC3339, from); err != nil {
+		start, err := time.Parse(time.RFC3339, from)
+		if err != nil {
 			return connector.Response{}, fmt.Errorf("paystack: from must be a time (RFC 3339): %w", effects.ErrFatal)
 		}
-		q := url.Values{"from": {from}, "perPage": {"100"}}
+		q := url.Values{"from": {from}, "perPage": {fmt.Sprint(pollPerPage)}}
 		if status != "" {
 			q.Set("status", status)
 		}
-		var env struct {
-			Data []map[string]any `json:"data"`
-		}
-		if err := c.do(ctx, req, http.MethodGet, path+"?"+q.Encode(), nil, &env); err != nil {
+		data, whole, err := c.listWindow(ctx, req, path, q)
+		if err != nil {
 			return connector.Response{}, err
 		}
-		data := make([]any, len(env.Data))
-		for i, d := range env.Data {
-			data[i] = d
+		if whole {
+			return connector.Response{Output: map[string]any{"data": data}}, nil
 		}
-		return connector.Response{Output: map[string]any{"data": data}}, nil
+		end := c.now().UTC()
+		for probe := 0; probe < maxPollProbes; probe++ {
+			end = start.Add(end.Sub(start) / 2).Truncate(time.Second)
+			if !end.After(start) {
+				break
+			}
+			q.Set("to", end.Format(time.RFC3339))
+			data, whole, err = c.listWindow(ctx, req, path, q)
+			if err != nil {
+				return connector.Response{}, err
+			}
+			if whole {
+				return connector.Response{Output: map[string]any{"data": data, "through": end.Format(time.RFC3339)}}, nil
+			}
+		}
+		// Not skipped past: the poll fails, stays where it is and shows.
+		return connector.Response{}, fmt.Errorf("paystack: more than %d records in the seconds after %s; the listing cannot be read whole: %w",
+			c.pollPages*pollPerPage, from, effects.ErrFatal)
 	}
+}
+
+// listWindow reads every page of one listing, up to pollPages; whole is
+// false when there was more than that.
+func (c *client) listWindow(ctx context.Context, req connector.Request, path string, q url.Values) (data []any, whole bool, err error) {
+	data = []any{}
+	for page := 1; page <= c.pollPages; page++ {
+		q.Set("page", fmt.Sprint(page))
+		var env struct {
+			Data []map[string]any `json:"data"`
+			Meta struct {
+				PageCount int `json:"pageCount"`
+			} `json:"meta"`
+		}
+		if err := c.do(ctx, req, http.MethodGet, path+"?"+q.Encode(), nil, &env); err != nil {
+			return nil, false, err
+		}
+		if env.Meta.PageCount > c.pollPages {
+			return nil, false, nil // too many: no need to read the rest
+		}
+		for _, d := range env.Data {
+			data = append(data, d)
+		}
+		// The last page by Paystack's count, or, where it gives none, a
+		// page that is not full.
+		if (env.Meta.PageCount > 0 && page >= env.Meta.PageCount) || (env.Meta.PageCount == 0 && len(env.Data) < pollPerPage) {
+			return data, true, nil
+		}
+	}
+	return nil, false, nil
 }
 
 func transferOutput(d map[string]any) map[string]any {

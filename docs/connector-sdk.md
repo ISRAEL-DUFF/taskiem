@@ -139,6 +139,7 @@ triggers:
 - `action` is a read action. Its input field `since` names the time (RFC 3339) it lists records from; Taskiem keeps where it got to, starts at the first deployment (nothing earlier is replayed), and looks back ten minutes each time.
 - `items` (over `output`) lists the records; `event` (over `item`) names each one's event.
 - Each record becomes the delivery the provider would send, `{"event": …, "data": item}`, signed with the connection's own secret, and goes through the trigger's usual checks, dedup and subscribers. An event the webhook also delivers is taken once.
+- The action must list **everything** since the time asked: read every page. Where there can be more than one call should read, bound it and declare `through` (over `output`): the time up to which the list is complete, given only when there was more. Taskiem then moves on only that far and asks again at its next tick, so a backlog is read in parts and nothing is skipped. Without `through`, Taskiem moves on to now after each poll, and whatever the action left out is never seen. (Paystack's `list_transactions` and `list_transfers` do this.)
 - Only a trigger verified by plain HMAC (`hmac_sha256`, `hmac_sha512`) can be polled.
 
 The editor then says the address in the provider's dashboard is optional; with it, events arrive at once.

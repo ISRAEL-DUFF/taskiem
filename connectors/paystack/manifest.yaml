@@ -45,7 +45,7 @@ actions:
               balance: { type: integer, description: Minor units }
   list_transactions:
     title: List successful payments
-    description: Payments received since a time, newest first (Paystack's GET /transaction). Taskiem uses it to notice payments without a webhook set up in Paystack.
+    description: Successful payments since a time, every page (Paystack's GET /transaction). Taskiem uses it to notice payments without a webhook set up in Paystack. Beyond 1,000 it lists the first part of the time whole and says how far it got in through.
     class: read
     input:
       type: object
@@ -56,11 +56,12 @@ actions:
       type: object
       properties:
         data: { type: array, items: { type: object }, description: "Paystack transaction objects, as its charge.success webhook carries them" }
+        through: { type: string, format: date-time, description: "Only when there was more than one call may read: the time up to which data is complete. Ask again from it" }
     pii:
       - { field: output.data, category: other }
   list_transfers:
     title: List transfers
-    description: Transfers made since a time (Paystack's GET /transfer). Taskiem uses it to notice transfer results without a webhook set up in Paystack.
+    description: Transfers made since a time, every page (Paystack's GET /transfer). Taskiem uses it to notice transfer results without a webhook set up in Paystack. Beyond 1,000 it lists the first part of the time whole and says how far it got in through.
     class: read
     input:
       type: object
@@ -71,6 +72,7 @@ actions:
       type: object
       properties:
         data: { type: array, items: { type: object }, description: "Paystack transfer objects, as its transfer webhooks carry them" }
+        through: { type: string, format: date-time, description: "Only when there was more than one call may read: the time up to which data is complete. Ask again from it" }
     pii:
       - { field: output.data, category: other }
   list_banks:
@@ -352,7 +354,7 @@ triggers:
     # Without the webhook in Paystack's dashboard, Taskiem asks Paystack
     # itself every few minutes (no-technical-steps N4); with it, events
     # arrive at once, and each is taken once either way.
-    poll: { action: list_transfers, since: from, items: =output.data, event: "='transfer.' + item.status", every: 5m }
+    poll: { action: list_transfers, since: from, items: =output.data, event: "='transfer.' + item.status", through: "=output.?through", every: 5m }
   charge_event:
     type: webhook
     title: Payments you receive
@@ -374,7 +376,7 @@ triggers:
       && has(body.data.authorization.channel) && body.data.authorization.channel == 'dedicated_nuban'
       && has(body.data.customer) && type(body.data.customer) == map && has(body.data.customer.customer_code) ? body.data.customer.customer_code
       : body.data.reference
-    poll: { action: list_transactions, since: from, items: =output.data, event: "='charge.success'", every: 5m }
+    poll: { action: list_transactions, since: from, items: =output.data, event: "='charge.success'", through: "=output.?through", every: 5m }
 # What Paystack can do in Taskiem's words (rule 16, schemas/capabilities-v1.json).
 capabilities:
   balance:
