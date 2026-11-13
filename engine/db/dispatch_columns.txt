@@ -379,6 +379,7 @@ data_tables.updated_at
 deliveries.accepted_at
 deliveries.arrived_at
 deliveries.delivered_at
+deliveries.finished_at
 deliveries.id
 deliveries.offered_at
 deliveries.order_id

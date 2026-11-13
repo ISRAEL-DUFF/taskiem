@@ -111,7 +111,7 @@ taskiem_customer_invoices_overdue()	@ISRAEL-DUFF (money)	The daily overdue check
 taskiem_data_table_keep(uuid,uuid,text,text,text,text)	@ISRAEL-DUFF (engine)	Records a kept table of the tenant in scope, without columns, unless a table of that name exists (00201)
 taskiem_data_table_keep_column(uuid,uuid,text,text,text,boolean,boolean)	@ISRAEL-DUFF (engine)	Records a column of a kept table after its others, once (00201)
 taskiem_data_table_renewals(timestamp with time zone)	@ISRAEL-DUFF (engine)	Tenants whose platform-provisioned project's token expires before p_before, for the renewal job, before any tenant scope exists (00173)
-taskiem_dispatch_tenants()	@ISRAEL-DUFF (storefront)	The businesses with deliveries out, ratings to watch or cash riders owe, for the dispatch sweep: ids only (00243)
+taskiem_dispatch_tenants()	@ISRAEL-DUFF (storefront)	The businesses with deliveries out, ratings to watch, a delivered delivery to finish or cash riders owe, for the dispatch sweep: ids only (00243, 00447)
 taskiem_drop_empty_run_event_partitions()	@ISRAEL-DUFF (engine)	Drops run_events partitions entirely before the current month that hold no rows (retention deletes runs; empty months are then dropped) (00009)
 taskiem_email_inbox_claim(integer)	@ISRAEL-DUFF (messaging)	The api role's side (00192)
 taskiem_email_inbox_done(uuid)	@ISRAEL-DUFF (messaging)	part of: Inbound email (decision 0038, no-technical-steps N10) (00192)
