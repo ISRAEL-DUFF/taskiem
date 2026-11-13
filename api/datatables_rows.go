@@ -64,6 +64,16 @@ func idempotencyKey(r *http.Request) (string, error) {
 	return k, nil
 }
 
+// optionalKey is the request's Idempotency-Key when it sent one, "" when
+// it sent none.
+func optionalKey(r *http.Request) (string, error) {
+	k := strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+	if k != "" && !keyCharset.MatchString(k) {
+		return "", fmt.Errorf("%w: Idempotency-Key is 1 to 255 letters, digits, dashes and underscores", errBadRequest)
+	}
+	return k, nil
+}
+
 // tableRows is the table in the path with the connector ready to act on
 // its rows.
 type tableRows struct {

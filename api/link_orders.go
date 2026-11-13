@@ -1371,8 +1371,14 @@ func (s *Server) setTradeLineItem(w http.ResponseWriter, r *http.Request) {
 // linked business that buys from us (a phone order, §7). It reaches the
 // buyer as a purchase order to us waiting for its Confirm. Each line is
 // one of our items (item_id, at its price unless one is given) or named
-// with its price.
+// with its price. With an Idempotency-Key, the same request again answers
+// the order it made, and the buyer is not told twice.
 func (s *Server) placeTradeOrder(w http.ResponseWriter, r *http.Request) {
+	key, err := optionalKey(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	var in struct {
 		Link  uuid.UUID `json:"link"`
 		Lines []struct {
@@ -1419,17 +1425,25 @@ func (s *Server) placeTradeOrder(w http.ResponseWriter, r *http.Request) {
 	var out tradeOrderOut
 	var told *links.Told
 	if err := s.tx(r, func(tx pgx.Tx) error {
+		if key != "" {
+			if o, ok, err := links.PlacedOrderTx(r.Context(), tx, p.TenantID, in.Link, key); err != nil || ok {
+				out.Order = o
+				return err
+			}
+		}
 		if err := auditTx(r, tx, "trade_order.place", in.Link.String(), map[string]any{"lines": len(lines)}); err != nil {
 			return err
 		}
 		var err error
-		out.Order, told, err = links.PlaceOrderTx(r.Context(), tx, s.Vault, p.TenantID, in.Link, lines, in.Note, actorOf(p))
+		out.Order, told, err = links.PlaceOrderTx(r.Context(), tx, s.Vault, p.TenantID, in.Link, lines, in.Note, actorOf(p), key)
 		return err
 	}); err != nil {
 		s.fail(w, r, orderErr(err))
 		return
 	}
-	s.tellOrder(r.Context(), told, links.StepIn{Note: linesWords(out.Order.Lines, s.sizeParents(r.Context(), p.TenantID)) + ", " + storefront.FormatNaira(out.Order.TotalKobo)})
+	if told != nil {
+		s.tellOrder(r.Context(), told, links.StepIn{Note: linesWords(out.Order.Lines, s.sizeParents(r.Context(), p.TenantID)) + ", " + storefront.FormatNaira(out.Order.TotalKobo)})
+	}
 	writeJSON(w, http.StatusCreated, out)
 }
 

@@ -6592,6 +6592,13 @@ paths:
       - apiKey: []
       x-taskiem-permission: storefront.manage
       x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key answers the order it made, and the buyer gets one purchase order'
       requestBody:
         required: true
         content:
@@ -11004,7 +11011,8 @@ paths:
       summary: Pay riders now
       description: |
         Starts the pay-riders workflow now, as its weekly schedule does: the bank checks each account's name, the approver approves
-        the batch, and each rider is paid once. 409 until it is set up and published.
+        the batch, and each rider is paid once. 409 until it is set up and published, and while a payout is still open (waiting to
+        be approved, or being paid): one payout runs at a time.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -11012,6 +11020,13 @@ paths:
       - apiKey: []
       x-taskiem-permission: storefront.manage,run.start
       x-taskiem-all-environments: true
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key answers the payout it started, and starts no other'
       responses:
         '202':
           description: The run started

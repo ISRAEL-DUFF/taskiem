@@ -124,7 +124,7 @@ A delivery's fee is the rider's fee per delivery unless it was set on the offer.
 
 **A rider's bank account** is where their money goes, so whoever adds or changes one confirms it is them with their passkey or authenticator code, for that rider only. Someone with neither is asked to add one under Account first, and an API key cannot change it. The audit log records how it was confirmed.
 
-**Set up weekly pay** chooses a day and a time (Lagos). It makes the **Pay riders** workflow from the [`pay-riders-weekly`](templates.md) template and publishes it, paying from the business's Taskiem wallet. A business with another payments account chooses it through the API. **Pay riders now** starts the same payout at once. Each payout runs the same way:
+**Set up weekly pay** chooses a day and a time (Lagos). It makes the **Pay riders** workflow from the [`pay-riders-weekly`](templates.md) template and publishes it, paying from the business's Taskiem wallet. A business with another payments account chooses it through the API. **Pay riders now** starts the same payout at once. One payout is open at a time: while one waits to be approved or is being paid, another is refused (409) until it is approved or declined, and a request sent again with the same `Idempotency-Key` (a weak connection, the button pressed twice) answers the payout it started. Each payout runs the same way:
 
 1. Each rider's fees since their last payout are added up, less the cash they owe. A rider whose cash owed covers their fees is settled at once with nothing to pay. A rider with no bank account set is named and paid next time.
 2. Each rider's bank confirms the name on their account.

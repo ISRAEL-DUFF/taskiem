@@ -439,3 +439,25 @@ func TestRiderPayoutBindsOnlyWhatItPays(t *testing.T) {
 		t.Fatalf("paid %d and %d still due of 150000", p.FeesKobo, due)
 	}
 }
+
+// A second batch made while the first is still open pays nothing: the
+// deliveries are bound to the first, so two payout runs started by a
+// request sent twice cannot pay a rider twice.
+func TestRiderSecondBatchPaysNothing(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	tunde := w.rider("Tunde", "+2348031110022", "Lekki")
+	w.in(func(tx pgx.Tx) error {
+		_, err := w.d.SetBankTx(ctx, tx, w.env.Tenant, tunde.ID, dispatch.Bank{BankCode: "035", BankName: "Wema Bank", AccountNumber: "0123456789"}, "user:ada", "totp")
+		return err
+	})
+	w.deliver(tunde.ID, 80000, false)
+	first, err := w.d.PrepareBatch(ctx, w.env.Tenant, uuid.New(), uuid.Nil)
+	if err != nil || len(first.Payouts) != 1 || first.TotalKobo != 80000 {
+		t.Fatalf("the first batch %+v %v", first, err)
+	}
+	second, err := w.d.PrepareBatch(ctx, w.env.Tenant, uuid.New(), uuid.Nil)
+	if err != nil || len(second.Payouts) != 0 || second.TotalKobo != 0 {
+		t.Fatalf("the second batch pays again: %+v %v", second, err)
+	}
+}
