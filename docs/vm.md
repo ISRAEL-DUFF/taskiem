@@ -10,7 +10,7 @@ Taskiem's own staging is set up with this kit step by step in the [staging runbo
 
 | You need | Notes |
 | --- | --- |
-| A VPS | Ubuntu 22.04 or 24.04 (or Debian 12), x86_64, hosted in Nigeria (P4-C1). At least 2 vCPU and 4 GiB; 4 vCPU and 8 GiB is comfortable |
+| A VPS | Ubuntu 22.04 or 24.04 (or Debian 12), x86_64, hosted in Nigeria (P4-C1). At least 2 vCPU and 4 GiB; 4 vCPU and 8 GiB is comfortable, and is what to use with public pages or mail on (their malware scanner alone may take 2.5 GiB) |
 | A DNS name | An A record pointing at the VPS, so Caddy can get a certificate |
 | A Postgres 16 database | Managed, with point-in-time recovery turned on. An empty database and its owner, who must have `CREATEROLE` (managed services' admin users usually do) |
 | SMTP | For the owner's set-your-password link, invitations, password resets and alerts |
@@ -107,7 +107,7 @@ The [public host](public-host.md) serves storefronts and hosted forms (Phase 5).
 - It creates a second database login, `<database>_public`, a member of `taskiem_public` only, which can read no table.
 - It writes `/opt/taskiem/public.env` holding that login alone: no OpenBao token and no other secret.
 - It starts `taskiem-public` (`--role public`; metrics on `127.0.0.1:9091`) and puts `public.caddy` in `/opt/taskiem/caddy.d/` so Caddy routes it.
-- It starts `clamav`, the malware scanner for files sent in [forms](forms.md#files), and points Taskiem at it (`TASKIEM_CLAMD_ADDR=clamav:3310`). It is reachable only on the Compose network, keeps its signatures on the `clamav_db` volume and updates them itself from the ClamAV mirrors. It needs about **1.5 GB of memory**: on a 4 GB server, public pages and forms with files fit beside Taskiem. Its first start downloads the signatures (a few minutes); until then, form files wait and are tried again.
+- It starts `clamav`, the malware scanner for files sent in [forms](forms.md#files), and points Taskiem at it (`TASKIEM_CLAMD_ADDR=clamav:3310`). It is reachable only on the Compose network, keeps its signatures on the `clamav_db` volume and updates them itself from the ClamAV mirrors. It needs about **1.5 GB of memory**, and up to 2.5 GB while it reloads its signatures, which is its limit. Every service has a memory and a process limit (Taskiem 2 GiB, the scanner 2.5 GiB, OpenBao 512 MiB, the public pages, mail and Caddy 256 MiB each), about 6 GiB in all: use an 8 GiB server with public pages on. A 4 GB server can run short; the scanner is then the first thing stopped and OpenBao the last, and form files wait and are tried again. Its first start downloads the signatures (a few minutes); until then, form files wait and are tried again.
 
 Answering **no** later stops the service, removes the route and disables the login.
 
