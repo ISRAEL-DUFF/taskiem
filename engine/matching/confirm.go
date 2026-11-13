@@ -247,7 +247,7 @@ func (m *Matcher) countTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c co
 			// Money a person entered, towards a school's invoice at or
 			// above its cash threshold: recorded for a second person, and
 			// nothing counted (approval.go).
-			if held, err = m.holdMatch(ctx, tx, tenant, c, source, *amount, parts); err != nil || held != nil {
+			if held, err = m.holdMatch(ctx, tx, tenant, c, source, *amount, left, parts); err != nil || held != nil {
 				return err
 			}
 		}

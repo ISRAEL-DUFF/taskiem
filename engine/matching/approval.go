@@ -84,20 +84,41 @@ func StudentInvoicesSQL(param string) string {
 // line, cash posted at a school's desk) counts without a second person
 // having approved it towards the invoices given and, for a student,
 // towards any of the student's invoices within the window
-// (SchoolWindowSQL): what a school's cash threshold weighs a further such
-// payment for the student with, so that splitting the money, over one of
-// their invoices or several, does not pass under it. Money a rail
-// reported is never counted.
+// (SchoolWindowSQL), together with the money a person entered that was
+// made the student's own within the window, in full, whatever it has
+// been counted towards (money with no invoice to pay is the student's
+// credit, and pays their next invoice): what a school's cash threshold
+// weighs a further such payment for the student with, so that splitting
+// the money, over one of their invoices, several or none, does not pass
+// under it. The window is by when the money was made the student's, not
+// the date it was said to be paid on, so backdating does not pass under
+// it either. Money a rail reported is never counted. Call it under
+// LockStudentCash, so that two payments weighed at once see each other.
 func EnteredUnapproved(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, student *uuid.UUID, invoices []uuid.UUID) (int64, error) {
+	const approved = `EXISTS (SELECT 1 FROM school_pending_postings r WHERE r.tenant_id = e.tenant_id AND r.status = 'posted' AND r.decided_by IS NOT NULL
+		                  AND COALESCE(r.result->>'entry_id', r.details->>'entry_id') = e.id::text)`
+	// own: the entry was made this student's money within the window.
+	const own = `$3::uuid IS NOT NULL AND c.tenant_id = $1 AND c.customer_id = 'key:student:' || $3::text AND c.created_at >= ` + SchoolWindowSQL
 	var n int64
-	err := tx.QueryRow(ctx, `SELECT COALESCE(sum(p.amount_kobo), 0)::bigint FROM customer_invoice_payments p JOIN money_entries e ON e.id = p.entry_id
+	err := tx.QueryRow(ctx, `SELECT (SELECT COALESCE(sum(p.amount_kobo), 0) FROM customer_invoice_payments p JOIN money_entries e ON e.id = p.entry_id
 		WHERE p.tenant_id = $1 AND p.undoes IS NULL
 		  AND (p.invoice_id = ANY ($2) OR $3::uuid IS NOT NULL AND p.created_at >= `+SchoolWindowSQL+` AND p.invoice_id IN (`+StudentInvoicesSQL("$3")+`))
 		  AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id)
 		  AND e.source IN ('entered', 'upload')
-		  AND NOT EXISTS (SELECT 1 FROM school_pending_postings r WHERE r.tenant_id = p.tenant_id AND r.status = 'posted' AND r.decided_by IS NOT NULL
-		                  AND COALESCE(r.result->>'entry_id', r.details->>'entry_id') = e.id::text)`, tenant, invoices, student).Scan(&n)
+		  AND NOT EXISTS (SELECT 1 FROM money_entry_customers c WHERE c.entry_id = e.id AND `+own+`)
+		  AND NOT `+approved+`)::bigint
+		+ (SELECT COALESCE(sum(e.amount_kobo), 0) FROM money_entry_customers c JOIN money_entries e ON e.id = c.entry_id
+		WHERE `+own+` AND e.direction = 'in' AND e.source IN ('entered', 'upload') AND NOT `+approved+`)::bigint`, tenant, invoices, student).Scan(&n)
 	return n, err
+}
+
+// LockStudentCash makes the weighing of a student's money a person
+// entered one at a time, until tx ends: two postings or matches made at
+// the same moment are weighed one after the other, the second with the
+// first.
+func LockStudentCash(ctx context.Context, tx pgx.Tx, tenant, student uuid.UUID) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem school cash ' || $1::text || ' ' || $2::text, 0))`, tenant, student)
+	return err
 }
 
 // heldRequest is what a held match asks for, as its request's details
@@ -116,7 +137,7 @@ type heldRequest struct {
 // match's, their amounts known. A match automatic matching asked for is
 // refused instead (a person decides); a payment whose match waits
 // already is refused.
-func (m *Matcher) holdMatch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c counting, source string, amount int64, parts []Part) (*Held, error) {
+func (m *Matcher) holdMatch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c counting, source string, amount, left int64, parts []Part) (*Held, error) {
 	limit, err := CashLimit(ctx, tx, tenant, source)
 	if err != nil || limit == nil {
 		return nil, err
@@ -132,6 +153,15 @@ func (m *Matcher) holdMatch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c 
 	over := amount >= *limit
 	of := map[uuid.UUID][]uuid.UUID{}
 	kobo := map[uuid.UUID]int64{}
+	// What the parts leave of the money, when it is kept as credit, is
+	// the first student's too and is weighed with their part.
+	rest := left
+	for _, p := range parts {
+		rest -= p.AmountKobo
+	}
+	if !c.creditRest || rest < 0 {
+		rest = 0
+	}
 	for _, p := range parts {
 		if p.Invoice == "" {
 			continue
@@ -158,10 +188,14 @@ func (m *Matcher) holdMatch(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c 
 		if invoice == nil {
 			id := x.ID
 			invoice, student = &id, sid
+			kobo[*sid] += rest
 		}
 		of[*sid] = append(of[*sid], x.ID)
 		kobo[*sid] += p.AmountKobo
 		if !over {
+			if err := LockStudentCash(ctx, tx, tenant, *sid); err != nil {
+				return nil, err
+			}
 			prior, err := EnteredUnapproved(ctx, tx, tenant, sid, of[*sid])
 			if err != nil {
 				return nil, err
