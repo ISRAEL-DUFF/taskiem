@@ -30,6 +30,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/alerts"
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/moneylog"
@@ -1191,9 +1192,17 @@ func (d *Dispatch) Sweep(ctx context.Context) error {
 func (d *Dispatch) sweepTenant(ctx context.Context, tenant uuid.UUID) error {
 	var s Settings
 	var expired []uuid.UUID
+	// A business that turned its Online shop off is told nothing by the
+	// sweep (quiet riders, low ratings); deliveries already out are still
+	// carried through, and cash handed in still matched
+	// (docs/spec/business-areas.md §5: background jobs).
+	shopOn := true
 	if err := d.tx(ctx, tenant, func(tx pgx.Tx) error {
 		var err error
 		if s, err = GetSettings(ctx, tx, tenant); err != nil {
+			return err
+		}
+		if shopOn, err = areas.Enabled(ctx, tx, tenant, areas.Storefront); err != nil {
 			return err
 		}
 		rows, err := tx.Query(ctx, `SELECT id FROM deliveries WHERE tenant_id = $1 AND status = 'offered' AND expires_at <= now() ORDER BY expires_at, id`, tenant)
@@ -1219,6 +1228,9 @@ func (d *Dispatch) sweepTenant(ctx context.Context, tenant uuid.UUID) error {
 	}
 	for _, part := range []func(tx pgx.Tx) error{
 		func(tx pgx.Tx) error {
+			if !shopOn {
+				return nil
+			}
 			held, err := d.ListTx(ctx, tx, tenant, ListFilter{Open: true})
 			if err != nil {
 				return err
@@ -1240,7 +1252,12 @@ func (d *Dispatch) sweepTenant(ctx context.Context, tenant uuid.UUID) error {
 			_, err := d.MatchRemittances(ctx, tx, tenant)
 			return err
 		},
-		func(tx pgx.Tx) error { return d.lowRatings(ctx, tx, tenant, s) },
+		func(tx pgx.Tx) error {
+			if !shopOn {
+				return nil
+			}
+			return d.lowRatings(ctx, tx, tenant, s)
+		},
 	} {
 		if err := d.tx(ctx, tenant, part); err != nil {
 			errs = append(errs, err)
