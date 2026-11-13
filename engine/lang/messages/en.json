@@ -7558,6 +7558,36 @@
       "text": "Done: the photo is now kept for {reference}.",
       "reviewed": true,
       "context": "A rider tapped another order's button: their photo was moved to that order"
+    },
+    "link.ended_open.mine": {
+      "text": "You ended the link with {name}. These were still open between you: {list}. They stay as they are and get no more updates here, so settle them with {name} directly.",
+      "reviewed": true,
+      "context": "A line in a business's conversation with a linked business, written when it ends the link while orders or invoices are still open between them; {list} names them"
+    },
+    "link.ended_open.theirs": {
+      "text": "{name} ended the link with your business. These were still open between you: {list}. They stay as they are and get no more updates here, so settle them with {name} directly.",
+      "reviewed": true,
+      "context": "The same line in the other business's conversation, when the business that ended the link is {name}"
+    },
+    "link.ended_open.orders": {
+      "text": "orders {refs}",
+      "reviewed": true,
+      "context": "Part of the list of what was still open when a link ended: the orders' references, separated by commas"
+    },
+    "link.ended_open.orders_more": {
+      "text": "orders {refs} and {more} more",
+      "reviewed": true,
+      "context": "The same, when there are more orders than are named"
+    },
+    "link.ended_open.invoices": {
+      "text": "invoices {refs}",
+      "reviewed": true,
+      "context": "Part of the list of what was still open when a link ended: the invoices' numbers, separated by commas"
+    },
+    "link.ended_open.invoices_more": {
+      "text": "invoices {refs} and {more} more",
+      "reviewed": true,
+      "context": "The same, when there are more invoices than are named"
     }
   }
 }
