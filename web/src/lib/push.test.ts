@@ -518,3 +518,54 @@ describe("the browser's device, per business", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("finding this browser's device again", () => {
+  it("asks the server by its address (known), and keeps the id it answers for the business", async () => {
+    const { findMyDevice, myDevice, setPushScope } = await import("./push");
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    });
+    const sub = {
+      endpoint: "https://fcm.googleapis.com/fcm/send/abc",
+      toJSON: () => ({ endpoint: "https://fcm.googleapis.com/fcm/send/abc", keys: { p256dh: "p", auth: "a" } }),
+    };
+    vi.stubGlobal("navigator", {
+      serviceWorker: { getRegistration: async () => ({ pushManager: { getSubscription: async () => sub } }) },
+    });
+    const sent: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_: string, init: RequestInit) => {
+        sent.push(JSON.parse(String(init.body)));
+        return new Response(JSON.stringify({ devices: [], max: 10, added: "d-9" }), { status: 200 });
+      }),
+    );
+    vi.stubGlobal("window", { dispatchEvent: () => true, location: { pathname: "/" } });
+    setPushScope("t1");
+    const v = await findMyDevice();
+    expect(v?.added).toBe("d-9");
+    expect(sent[0]).toEqual({ endpoint: sub.endpoint, keys: { p256dh: "p", auth: "a" }, known: true });
+    expect(myDevice()).toBe("d-9");
+    // Not known to the server (removed elsewhere): nothing kept, nothing added.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "not found" }), { status: 404 })));
+    store.clear();
+    expect(await findMyDevice()).toBeUndefined();
+    expect(myDevice()).toBeNull();
+    setPushScope(null);
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("the kinds a person is offered", () => {
+  it("by what they can do: an owner all five, a cashier no business chats, a viewer the three for everyone", async () => {
+    const { offeredKinds } = await import("./push");
+    const all = ["business", "customers", "orders", "approvals", "alerts"] as const;
+    const as = (perms: string[]) => (p: string) => perms.includes(p);
+    expect(offeredKinds([...all], as(["chat.trade", "order.handle"]))).toEqual([...all]);
+    expect(offeredKinds([...all], as(["order.handle"]))).toEqual(["customers", "orders", "approvals", "alerts"]);
+    expect(offeredKinds([...all], as([]))).toEqual(["orders", "approvals", "alerts"]);
+  });
+});

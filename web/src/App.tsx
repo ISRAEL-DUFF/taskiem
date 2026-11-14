@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from "./auth";
 import { PageBoundary } from "./PageBoundary";
 import { safeNext } from "./lib/safePath";
 import { useOpenFromPush } from "./lib/pushOpen";
+import { PushNotices } from "./pages/PushNotices";
 import { Login } from "./pages/Login";
 import { Workflows } from "./pages/Workflows";
 import { NewWorkflow } from "./pages/NewWorkflow";
@@ -701,53 +702,7 @@ function SignedIn() {
         >
           <BillingBanner />
           <TermsBanner />
-          {pushOpen.problem && (
-            <div
-              className="notice"
-              role="alert"
-              data-testid="push-other-business"
-            >
-              {pushOpen.problem}
-              {pushOpen.signInThere && (
-                <>
-                  {" "}
-                  <button
-                    type="button"
-                    className="small"
-                    onClick={() => void logout()}
-                  >
-                    Sign out, to sign in there
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-          {pushOpen.ask && (
-            <div
-              className="notice"
-              role="region"
-              aria-label="Switch business"
-              data-testid="push-ask-business"
-            >
-              <p style={{ margin: "0 0 8px" }}>
-                This page is for {pushOpen.ask.name}. Switch to it?
-              </p>
-              <button
-                type="button"
-                className="primary small"
-                onClick={pushOpen.accept}
-              >
-                Switch to {pushOpen.ask.name}
-              </button>{" "}
-              <button
-                type="button"
-                className="small"
-                onClick={pushOpen.decline}
-              >
-                Stay here
-              </button>
-            </div>
-          )}
+          <PushNotices open={pushOpen} onSignOut={() => void logout()} />
           <NotifyBanner />
           <PasskeyNudge />
           {/* Keyed by the address: a page for another :id (an invoice, a run)

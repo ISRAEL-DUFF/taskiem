@@ -6,6 +6,7 @@ import {
   disablePush,
   enablePush,
   findMyDevice,
+  offeredKinds,
   KIND_WORDS,
   myDevice,
   pushSupport,
@@ -95,11 +96,7 @@ export function ChatPush() {
   const mine = view?.devices.find((d) => d.id === myDevice());
   // The kinds this person can get at all: business chats for those who
   // write in them, customers for those who answer customers.
-  const offered = (view?.kinds ?? ALL_KINDS).filter(
-    (k) =>
-      (k !== "business" || can("chat.trade")) &&
-      (k !== "customers" || can("storefront.manage") || can("order.handle")),
-  );
+  const offered = offeredKinds(view?.kinds ?? ALL_KINDS, can);
   const on = subscribed && !!mine;
   const others = (view?.devices ?? []).filter((d) => d.id !== mine?.id);
 

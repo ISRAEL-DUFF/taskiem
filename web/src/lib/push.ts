@@ -292,3 +292,18 @@ export async function disablePush(
   if (signingOut) await sub.unsubscribe().catch(() => false);
   return view;
 }
+
+/**
+ * The kinds a person can get at all, in order: business chats for those who
+ * write in them (chat.trade), customers for those who answer them (orders).
+ */
+export function offeredKinds(
+  kinds: PushKind[],
+  can: (perm: string) => boolean,
+): PushKind[] {
+  return kinds.filter(
+    (k) =>
+      (k !== "business" || can("chat.trade")) &&
+      (k !== "customers" || can("storefront.manage") || can("order.handle")),
+  );
+}
