@@ -8,6 +8,7 @@ import 'package:flutter/services.dart' show TextInputAction;
 import 'package:flutter/widgets.dart';
 
 import '../chat/words.dart' show CardTone, toneOf;
+import 'motion.dart';
 import '../theme/theme.dart';
 import 'icon.dart';
 import 'kit.dart';
@@ -352,14 +353,17 @@ class TkEmpty extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ExcludeSemantics(
-            child: Container(
-              width: 52,
-              height: 52,
-              margin: const EdgeInsets.only(bottom: 4),
-              decoration: BoxDecoration(color: t.tkLimeSoft, borderRadius: BorderRadius.circular(16)),
-              alignment: Alignment.center,
-              child: TkIcon(icon, size: 24, color: dark ? t.brandDark : t.brand),
+          // styles.css `.empty-icon { animation: pop 0.4s }`.
+          TkIn.pop(
+            child: ExcludeSemantics(
+              child: Container(
+                width: 52,
+                height: 52,
+                margin: const EdgeInsets.only(bottom: 4),
+                decoration: BoxDecoration(color: t.tkLimeSoft, borderRadius: BorderRadius.circular(16)),
+                alignment: Alignment.center,
+                child: TkIcon(icon, size: 24, color: dark ? t.brandDark : t.brand),
+              ),
             ),
           ),
           const SizedBox(height: 6),

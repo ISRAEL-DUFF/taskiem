@@ -18,6 +18,7 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
+import '../kit/motion.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
@@ -765,6 +766,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
         key: _threadKey,
         items: list,
         of: (id: (x) => x.id == nilId ? '${x.id}-${x.m.createdAt}' : x.id, at: (x) => x.m.createdAt, mine: (x) => x.m.inbound),
+        arrival: (x) => x.m.kind == 'diary' ? TkArrival.diary : x.m.kind == 'chart' ? TkArrival.card : TkArrival.bubble,
         now: d.chats.now(),
         unread: d.unread,
         hasOlder: d.hasOlder,

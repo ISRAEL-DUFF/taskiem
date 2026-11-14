@@ -55,6 +55,8 @@ void main() {
         await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 40)));
         await t.pump();
       }
+      // A dialog's leaving (200 ms) played out.
+      await t.pump(const Duration(milliseconds: 250));
     }
 
     Future<Prefs> noLock() async {

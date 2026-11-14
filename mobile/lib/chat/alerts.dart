@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
+import '../kit/motion.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/sheet.dart';
@@ -220,12 +221,21 @@ class _BriefingCardState extends State<BriefingCard> {
             ),
           ),
           const SizedBox(width: 12),
-          // Live: today's numbers.
+          // Live: today's numbers; chat.css `.tk-brief-live { animation:
+          // tkd-pulse-lime 2s 1.2s infinite }`.
           Container(
             margin: const EdgeInsets.only(top: 6, right: 4),
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: t.brandDark, shape: BoxShape.circle),
+            child: TkPulse(
+              color: const Color(0x8CC8F169),
+              spread: 8,
+              period: const Duration(seconds: 2),
+              delay: const Duration(milliseconds: 1200),
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(color: t.brandDark, shape: BoxShape.circle),
+              ),
+            ),
           ),
         ],
       ),
@@ -259,13 +269,17 @@ class _BriefingCardState extends State<BriefingCard> {
                     children: [
                       for (var i = 0; i < week.length; i++) ...[
                         if (i > 0) const SizedBox(width: 5),
-                        Container(
+                        // `.tk-brief-bars > span`: each grows 50 ms after the last.
+                        TkGrow.bar(
+                          index: i,
+                          child: Container(
                           width: 9,
                           height: (heights[i] * 100).round() / 100 * 58,
                           decoration: BoxDecoration(
                             color: i == week.length - 1 ? t.brandDark : cssMix(t.brandDark, const Color(0x00000000), 0.45),
                             borderRadius: BorderRadius.circular(3),
                           ),
+                        ),
                         ),
                       ],
                     ],
@@ -299,7 +313,9 @@ class _BriefingCardState extends State<BriefingCard> {
           child: Text('That didn’t go through. Try Got it again.', style: tkText(size: 13, weight: 600, color: on)),
         ),
     ];
-    return Align(
+    // chat.css `.tk-brief { animation: tkd-card-rise 0.5s 0.05s }`.
+    return TkIn.cardRise(
+      child: Align(
       alignment: Alignment.centerLeft,
       child: Semantics(
         container: true,
@@ -314,6 +330,7 @@ class _BriefingCardState extends State<BriefingCard> {
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _gaps(parts, 14)),
         ),
+      ),
       ),
     );
   }
@@ -405,8 +422,12 @@ class _AlertCardsState extends State<AlertCards> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: _gaps([
-              for (final a in shown)
-                a.kind == 'approval'
+              // chat.css `.tk-alerts > li`: each rises 300 ms after the last.
+              for (final (i, a) in shown.indexed)
+                TkIn.cardRise(
+                  key: ValueKey(a.key),
+                  index: i + 1,
+                  child: a.kind == 'approval'
                     ? _ApprovalCard(
                         a: a,
                         now: widget.now,
@@ -416,6 +437,7 @@ class _AlertCardsState extends State<AlertCards> {
                         },
                       )
                     : _AlertCard(a: a, auth: widget.auth, onDone: () => _done(a), onOpen: widget.onOpen),
+                ),
             ], 12),
           ),
         ),

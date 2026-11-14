@@ -15,6 +15,7 @@ import 'package:flutter/widgets.dart';
 
 import '../chat/thread.dart' show ChatHeadBar;
 import '../chat/words.dart' show CardTone, naira, toneOf;
+import 'motion.dart';
 import '../theme/theme.dart';
 import 'icon.dart';
 import 'kit.dart';
@@ -60,57 +61,16 @@ Widget tkSlide(BuildContext context, Animation<double> a, Animation<double> unde
 /// Pushes [page] with [TkRoute].
 Future<T?> tkPush<T>(BuildContext context, Widget page) => Navigator.of(context).push<T>(TkRoute<T>(pageBuilder: (_, _, _) => page));
 
-/// A part of a page rising into place: faded in and lifted 14 px, the
-/// [index]th a little after the one before it.
-class TkEnter extends StatefulWidget {
+/// A part of a page rising into place (styles.css `.stats .stat,
+/// .home-col > .panel, .list-row { animation: rise-in 0.36s }`): faded in
+/// and lifted 4 px, the [index]th 30 ms after the one before it.
+class TkEnter extends StatelessWidget {
   const TkEnter({super.key, required this.child, this.index = 0});
   final Widget child;
   final int index;
 
   @override
-  State<TkEnter> createState() => _TkEnterState();
-}
-
-class _TkEnterState extends State<TkEnter> with SingleTickerProviderStateMixin {
-  static const _each = 45;
-  static const _run = 360;
-  late final int _delay = math.min(widget.index, 7) * _each;
-  late final _a = AnimationController(
-    vsync: this,
-    duration: Duration(milliseconds: _run + _delay),
-  );
-  late final _curve = CurvedAnimation(
-    parent: _a,
-    curve: Interval(_delay / (_run + _delay), 1, curve: Curves.easeOutCubic),
-  );
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_still(context)) {
-      _a.value = 1;
-    } else if (_a.value == 0 && !_a.isAnimating) {
-      _a.forward();
-    }
-  }
-
-  @override
-  void dispose() {
-    _curve.dispose();
-    _a.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _curve,
-    builder: (context, child) => Opacity(
-      alwaysIncludeSemantics: true,
-      opacity: _curve.value,
-      child: Transform.translate(offset: Offset(0, 14 * (1 - _curve.value)), child: child),
-    ),
-    child: widget.child,
-  );
+  Widget build(BuildContext context) => TkIn.rise(index: index, child: child);
 }
 
 /// An amount in naira counting up to [kobo] (from where it was, when it
