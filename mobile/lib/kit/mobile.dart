@@ -15,7 +15,6 @@ import 'package:flutter/widgets.dart';
 
 import '../chat/thread.dart' show ChatHeadBar;
 import '../chat/words.dart' show CardTone, naira, toneOf;
-import 'motion.dart';
 import '../theme/theme.dart';
 import 'icon.dart';
 import 'kit.dart';
@@ -61,16 +60,17 @@ Widget tkSlide(BuildContext context, Animation<double> a, Animation<double> unde
 /// Pushes [page] with [TkRoute].
 Future<T?> tkPush<T>(BuildContext context, Widget page) => Navigator.of(context).push<T>(TkRoute<T>(pageBuilder: (_, _, _) => page));
 
-/// A part of a page rising into place (styles.css `.stats .stat,
-/// .home-col > .panel, .list-row { animation: rise-in 0.36s }`): faded in
-/// and lifted 4 px, the [index]th 30 ms after the one before it.
+/// A part of a page. It used to rise in (styles.css rise-in), but the page
+/// already slides in from the right as a phone's do, and the parts rising
+/// after it read as a flicker on a real phone (14 November 2026): a page's
+/// parts are simply there when it arrives.
 class TkEnter extends StatelessWidget {
   const TkEnter({super.key, required this.child, this.index = 0});
   final Widget child;
   final int index;
 
   @override
-  Widget build(BuildContext context) => TkIn.rise(index: index, child: child);
+  Widget build(BuildContext context) => child;
 }
 
 /// An amount in naira counting up to [kobo] (from where it was, when it

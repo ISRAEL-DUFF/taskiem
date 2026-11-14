@@ -7,6 +7,7 @@ import 'package:taskiem/chat/cards.dart';
 import 'package:taskiem/chat/thread.dart';
 import 'package:taskiem/kit/kit.dart';
 import 'package:taskiem/kit/list.dart';
+import 'package:taskiem/kit/mobile.dart';
 import 'package:taskiem/kit/modal.dart';
 import 'package:taskiem/kit/motion.dart';
 import 'package:taskiem/kit/sheet.dart';
@@ -67,6 +68,12 @@ void main() {
     await t.pump(const Duration(milliseconds: 100));
     expect(opacityOf(t, find.text('Money in today')), greaterThan(0.5));
     await t.pumpAndSettle();
+  });
+
+  testWidgets('a page\'s parts are there as it arrives: nothing rises after the page slides in', (t) async {
+    await t.pumpWidget(host(const TkEnter(index: 3, child: Text('Money in today'))));
+    expect(opacityOf(t, find.text('Money in today')), 1);
+    expect(find.byType(TkIn), findsNothing);
   });
 
   testWidgets('a dialog springs up from the bottom over a fading veil, and drops away', (t) async {

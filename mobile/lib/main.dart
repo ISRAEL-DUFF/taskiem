@@ -74,7 +74,30 @@ void main() {
   auth.start();
   // Links to this server's pages, opened in the app (lib/app/applinks.dart).
   final links = LinkInbox();
+  // The phone's own start screen (the mark on pine) stays until the app's
+  // first screen is the real one, so there is one opening, not two: the
+  // app draws nothing until the session and the settings are read (or a
+  // few seconds have gone, on a slow phone: then its own mark on pine).
+  WidgetsBinding.instance.deferFirstFrame();
+  unawaited(_whenOpen(auth, prefs).timeout(const Duration(seconds: 3), onTimeout: () {}).whenComplete(WidgetsBinding.instance.allowFirstFrame));
   runApp(TaskiemApp(auth: auth, unlocker: PhoneUnlocker(), prefs: prefs, notify: notify, links: links));
+}
+
+/// Done once the session is known and the settings are read.
+Future<void> _whenOpen(Auth auth, Prefs prefs) async {
+  await prefs.ready;
+  if (auth.state != AuthState.checking) return;
+  final done = Completer<void>();
+  void changed() {
+    if (auth.state != AuthState.checking && !done.isCompleted) done.complete();
+  }
+
+  auth.addListener(changed);
+  try {
+    await done.future;
+  } finally {
+    auth.removeListener(changed);
+  }
 }
 
 class TaskiemApp extends StatelessWidget {
