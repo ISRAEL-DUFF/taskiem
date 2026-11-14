@@ -11,11 +11,28 @@
 
 var ICON = "/brand/relay/icon-192.png";
 
-/** A link inside the app that a notification may open; anything else is the chat page. */
+/** A path inside the app a notification may open (a page, and at most one plain question such as ?with=); anything else is the app's start. */
+var LINK = /^\/(?!\/)[A-Za-z0-9\-_\/]{0,120}(\?[a-z_]{1,20}=[A-Za-z0-9\-]{1,80})?$/;
 function safeLink(link) {
-  if (typeof link === "string" && /^\/chat(\?with=[A-Za-z0-9-]{1,64})?$/.test(link)) return link;
-  return "/chat";
+  if (typeof link === "string" && LINK.test(link)) return link;
+  return "/";
 }
+
+/** The business a push is for (a person can be in more than one), or "". */
+var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+function safeBusiness(b) {
+  return typeof b === "string" && UUID.test(b) ? b : "";
+}
+
+/** The address a tap opens: the link, in its business (the page switches to it first). */
+function openLink(link, business) {
+  var l = safeLink(link);
+  var b = safeBusiness(business);
+  if (!b) return l;
+  return l + (l.indexOf("?") < 0 ? "?" : "&") + "business=" + b;
+}
+
+var KINDS = ["business", "customers", "orders", "approvals", "alerts"];
 
 /** The sender's logo, a path inside the app the worker may fetch with the person's own session (nothing else is fetched). */
 var ICON_PATH = /^\/v1\/links\/[0-9a-f-]{36}\/logo(\?size=(320|800|2000))?$/;
@@ -36,10 +53,12 @@ function parsePayload(read) {
     title: typeof p.title === "string" && p.title ? p.title.slice(0, 200) : "Taskiem",
     body: typeof p.body === "string" && p.body ? p.body.slice(0, 400) : "New message",
     link: safeLink(p.link),
-    tag: typeof p.tag === "string" && p.tag ? p.tag.slice(0, 64) : "taskiem-chat",
+    tag: typeof p.tag === "string" && p.tag ? p.tag.slice(0, 200) : "taskiem-chat",
     // How many conversations have something unread, for the icon's badge; -1 when the push does not say.
     unread: typeof p.unread === "number" && p.unread >= 0 ? Math.floor(p.unread) : -1,
     icon: safeIcon(p.icon),
+    business: safeBusiness(p.business),
+    kind: KINDS.indexOf(p.kind) >= 0 ? p.kind : "business",
   };
 }
 
@@ -53,9 +72,16 @@ function notificationOf(p, icon) {
       renotify: false,
       icon: icon || ICON,
       badge: ICON,
-      data: { link: p.link },
+      data: { link: p.link, business: p.business },
     },
   };
+}
+
+/** What the worker tells the server when the browser renews its subscription. */
+function renewal(json, oldEndpoint) {
+  var body = { endpoint: json.endpoint, keys: json.keys };
+  if (oldEndpoint && oldEndpoint !== json.endpoint) body.replaces = oldEndpoint;
+  return body;
 }
 
 function toBase64(bytes) {
@@ -179,7 +205,7 @@ async function pageFor(preload, doFetch) {
 
 if (typeof module !== "undefined") {
   module.exports = {
-    safeLink: safeLink, safeIcon: safeIcon, parsePayload: parsePayload, notificationOf: notificationOf, iconFor: iconFor, staysSilent: staysSilent,
+    safeLink: safeLink, safeBusiness: safeBusiness, openLink: openLink, renewal: renewal, safeIcon: safeIcon, parsePayload: parsePayload, notificationOf: notificationOf, iconFor: iconFor, staysSilent: staysSilent,
     handlesRequest: handlesRequest, offlinePage: offlinePage, OFFLINE_SCRIPT: OFFLINE_SCRIPT, OFFLINE_SCRIPT_HASH: OFFLINE_SCRIPT_HASH, offlineResponse: offlineResponse, pageFor: pageFor,
   };
 }
@@ -236,7 +262,8 @@ if (typeof self !== "undefined" && typeof self.addEventListener === "function" &
 
   self.addEventListener("notificationclick", function (event) {
     event.notification.close();
-    var link = safeLink(event.notification.data && event.notification.data.link);
+    var data = event.notification.data || {};
+    var link = openLink(data.link, data.business);
     event.waitUntil(
       (async function () {
         var windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
@@ -254,7 +281,8 @@ if (typeof self !== "undefined" && typeof self.addEventListener === "function" &
   });
 
   // A browser may replace its subscription (its keys expired): subscribe
-  // again with the same key and tell the server, then forget the old one.
+  // again with the same key and tell the server, which moves the old one's
+  // name and choices to it and forgets the old one.
   self.addEventListener("pushsubscriptionchange", function (event) {
     event.waitUntil(
       (async function () {
@@ -262,17 +290,12 @@ if (typeof self !== "undefined" && typeof self.addEventListener === "function" &
         var key = (old && old.options && old.options.applicationServerKey) || (event.newSubscription && event.newSubscription.options && event.newSubscription.options.applicationServerKey);
         var sub = event.newSubscription || (key ? await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }) : null);
         if (!sub) return;
-        var json = sub.toJSON();
-        var headers = { "Content-Type": "application/json", "X-Taskiem-Request": "1" };
         await fetch("/v1/me/push", {
           method: "PUT",
           credentials: "same-origin",
-          headers: headers,
-          body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys, label: "A browser" }),
+          headers: { "Content-Type": "application/json", "X-Taskiem-Request": "1" },
+          body: JSON.stringify(renewal(sub.toJSON(), old && old.endpoint)),
         });
-        if (old && old.endpoint && old.endpoint !== json.endpoint) {
-          await fetch("/v1/me/push", { method: "DELETE", credentials: "same-origin", headers: headers, body: JSON.stringify({ endpoint: old.endpoint }) });
-        }
       })().catch(function () {
         // Signed out or offline: the person turns it on again.
       }),

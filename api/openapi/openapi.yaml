@@ -19013,6 +19013,9 @@ paths:
                   type: string
                   maxLength: 2048
                   description: The same browser's previous subscription address
+                known:
+                  type: boolean
+                  description: Only find this device (a page that lost which one it is); one the server does not have is not added again (404)
                 keys:
                   type: object
                   additionalProperties: false

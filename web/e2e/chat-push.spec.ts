@@ -125,7 +125,12 @@ async function owner(
 const devices = async (page: Page) =>
   (
     (await (await page.request.get("/v1/me/push", { headers: H })).json()) as {
-      devices: { id: string; label: string; preview: boolean }[];
+      devices: {
+        id: string;
+        label: string;
+        preview: boolean;
+        kinds: string[];
+      }[];
     }
   ).devices;
 
@@ -152,9 +157,27 @@ test("the switch turns notifications on for this device, with its own switch for
   await expect(preview).toBeChecked();
   await preview.click();
   await expect(section).toContainText(
-    "Off: the notification says only that a business wrote.",
+    "Off: the notification says only that something came",
   );
   await expect.poll(async () => (await devices(page))[0]?.preview).toBe(false);
+
+  // The kinds this device takes: the owner's takes all five; one off is kept.
+  expect(mine[0]?.kinds).toEqual([
+    "business",
+    "customers",
+    "orders",
+    "approvals",
+    "alerts",
+  ]);
+  const alerts = section
+    .getByTestId("chat-push-kind-alerts")
+    .getByRole("switch", { name: "Alerts" });
+  await expect(alerts).toBeChecked();
+  await alerts.click();
+  await expect(alerts).not.toBeChecked();
+  await expect
+    .poll(async () => (await devices(page))[0]?.kinds)
+    .toEqual(["business", "customers", "orders", "approvals"]);
 
   // It is still on after a reload (the browser's subscription and the id kept).
   await page.reload();
@@ -177,7 +200,7 @@ test("the switch turns notifications on for this device, with its own switch for
   const row = section.getByTestId("chat-push-device");
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("Firefox on Linux");
-  await expect(row).toContainText("Not notified yet");
+  await expect(row).toContainText("Browser · not notified yet");
   await row.getByRole("button", { name: /^Remove/ }).click();
   await expect(section.getByTestId("chat-push-device")).toHaveCount(0);
   expect(await devices(page)).toHaveLength(1);
@@ -415,7 +438,7 @@ test("the worker shows what is pushed: one notification a conversation, only a p
       (await shown()).map((n: Shown) => `${n.tag}:${n.body}`).sort(),
     )
     .toEqual(["abc:Musa: And 46k for two", "def:Hello"]);
-  // A link outside the app, and what cannot be read, are only the chat page / a plain message.
+  // A link outside the app, and what cannot be read, are only the app's start / a plain message.
   await push({
     v: 1,
     title: "Evil",
@@ -428,7 +451,7 @@ test("the worker shows what is pushed: one notification a conversation, only a p
     .poll(
       async () => (await shown()).find((n: Shown) => n.tag === "evil")?.link,
     )
-    .toBe("/chat");
+    .toBe("/");
   // The icon is the app's own: an address outside the app is never fetched,
   // and a sender's logo that the server does not have (a 404) is the same.
   const evil = (await shown()).find((n: Shown) => n.tag === "evil");
@@ -532,4 +555,29 @@ test("the app's icon shows how many conversations have something unread, and non
   await expect(buyer.getByTestId("chat-message")).toHaveCount(1);
   await expect.poll(badge, { timeout: 15000 }).toBe("clear");
   await ownerCtx.close();
+});
+
+test("a tapped notification opens its page in its business: this one as it is, one the person is not in says so", async ({
+  browser,
+}) => {
+  const { ctx, page } = await owner(browser);
+  const mine = (
+    (await (await page.request.get("/v1/me")).json()) as { tenant_id: string }
+  ).tenant_id;
+  await page.goto(`/approvals?business=${mine}`);
+  await expect(page).toHaveURL(/\/approvals$/);
+  await expect(page.getByTestId("push-other-business")).toHaveCount(0);
+
+  await page.goto(
+    "/approvals?business=0192f6c4-8a9e-7b3c-9d2e-112233445566",
+  );
+  await expect(page).toHaveURL(/\/approvals$/);
+  await expect(page.getByTestId("push-other-business")).toContainText(
+    "another of your businesses",
+  );
+  await axeBoth(page, "a notification for another business");
+  // Gone on the next page.
+  await page.goto("/settings/notifications");
+  await expect(page.getByTestId("push-other-business")).toHaveCount(0);
+  await ctx.close();
 });

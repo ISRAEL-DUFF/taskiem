@@ -205,6 +205,9 @@ type Subscription struct {
 	// (it renewed it): its name, preview and kinds move to this one, and it
 	// goes.
 	Replaces string `json:"replaces"`
+	// Known asks only to find the device (a page that lost which one it is):
+	// one the server does not have is not added again (ErrNotFound).
+	Known bool `json:"known"`
 }
 
 // address is where the device is reached: the browser's endpoint, or the
@@ -303,6 +306,16 @@ func AddTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, s Subscriptio
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('push:' || $1::text || $2::text, 0))`, tenant, user); err != nil {
 		return Device{}, err
 	}
+	if s.Known {
+		var n int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM push_subscriptions WHERE tenant_id = $1 AND user_id = $2 AND endpoint_hash = $3`,
+			tenant, user, hashOf(s.address())).Scan(&n); err != nil {
+			return Device{}, err
+		}
+		if n == 0 {
+			return Device{}, ErrNotFound
+		}
+	}
 	// A browser that renewed its subscription: the old one's choices carry
 	// over, and it goes.
 	var label *string
@@ -343,11 +356,12 @@ func AddTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, s Subscriptio
 	err := scanDevice(tx.QueryRow(ctx, `INSERT INTO push_subscriptions (id, tenant_id, user_id, kind, platform, endpoint, endpoint_hash, p256dh, auth, label, preview, kinds)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11::boolean, true), COALESCE($12::text[], $13::text[]))
 		ON CONFLICT (tenant_id, user_id, endpoint_hash) DO UPDATE
-		   SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, label = EXCLUDED.label, platform = EXCLUDED.platform,
+		   SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, platform = EXCLUDED.platform,
+		       label = CASE WHEN $14::boolean THEN EXCLUDED.label ELSE push_subscriptions.label END,
 		       preview = COALESCE($11::boolean, push_subscriptions.preview),
 		       kinds = COALESCE($12::text[], push_subscriptions.kinds), failed_since = NULL
 		RETURNING `+deviceCols,
-		uuid.Must(uuid.NewV7()), tenant, user, s.Kind, platform, addr, hashOf(addr), p256dh, auth, name, s.Preview, kinds, defaults), &d)
+		uuid.Must(uuid.NewV7()), tenant, user, s.Kind, platform, addr, hashOf(addr), p256dh, auth, name, s.Preview, kinds, defaults, strings.TrimSpace(s.Label) != "" || label != nil), &d)
 	if err != nil {
 		return Device{}, err
 	}

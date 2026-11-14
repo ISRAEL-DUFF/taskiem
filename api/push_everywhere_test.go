@@ -234,6 +234,16 @@ func TestPushEverywhere(t *testing.T) {
 		t.Errorf("the cashier's bell: %d items", n)
 	}
 
+	// A device that lost which one it is asks the server (known): found, it
+	// keeps its name; not found, it is not added again.
+	k := cashier.must(200, "PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": cashierPhone, "platform": "android", "known": true})
+	if k["added"] != cd["id"] || k["devices"].([]any)[0].(map[string]any)["label"] != "Tecno Spark" {
+		t.Errorf("a known phone: %v", k)
+	}
+	if s, _ := cashier.do("PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": "fGx1:APA91bH_never-seen-aaaaaaaaaaaaa", "platform": "android", "known": true}); s != 404 {
+		t.Errorf("an unknown phone asked as known: %d", s)
+	}
+
 	// Signing out takes the phone off (the app sends its token).
 	cashier.must(200, "DELETE", "/v1/me/push", map[string]any{"token": cashierPhone})
 	if n := len(cashier.must(200, "GET", "/v1/me/push", nil)["devices"].([]any)); n != 0 {

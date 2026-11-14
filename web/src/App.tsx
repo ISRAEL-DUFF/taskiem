@@ -10,6 +10,7 @@ import {
 import { AuthProvider, useAuth } from "./auth";
 import { PageBoundary } from "./PageBoundary";
 import { safeNext } from "./lib/safePath";
+import { useOpenFromPush } from "./lib/pushOpen";
 import { Login } from "./pages/Login";
 import { Workflows } from "./pages/Workflows";
 import { NewWorkflow } from "./pages/NewWorkflow";
@@ -347,6 +348,8 @@ function SignedIn() {
   useScrollableTables(mainRef);
   const { pathname, search } = useLocation();
   const off = areaOffFor(pathname, me?.areas);
+  // A tapped notification: its page, in its business.
+  const pushProblem = useOpenFromPush();
   useEffect(() => setDrawer(false), [pathname]);
   // A row of tabs wider than a phone scrolls sideways: bring the open one into view.
   useEffect(() => {
@@ -698,6 +701,15 @@ function SignedIn() {
         >
           <BillingBanner />
           <TermsBanner />
+          {pushProblem && (
+            <div
+              className="notice"
+              role="alert"
+              data-testid="push-other-business"
+            >
+              {pushProblem}
+            </div>
+          )}
           <NotifyBanner />
           <PasskeyNudge />
           {/* Keyed by the address: a page for another :id (an invoice, a run)
