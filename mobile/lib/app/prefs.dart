@@ -38,6 +38,9 @@ class Prefs extends ChangeNotifier {
 
   /// Done once what is kept has been read.
   Future<void> get ready => _ready.future;
+
+  /// Whether what is kept has been read.
+  bool get loaded => _ready.isCompleted;
   final _ready = Completer<void>();
 
   Future<void> load() async {

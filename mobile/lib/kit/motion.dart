@@ -141,7 +141,10 @@ class _TkInState extends State<TkIn> with SingleTickerProviderStateMixin {
   late final AnimationController _a = AnimationController(vsync: this, duration: widget.delay + widget.duration);
   late final double _from = widget.delay.inMicroseconds / (widget.delay + widget.duration).inMicroseconds;
   late final _move = CurvedAnimation(parent: _a, curve: Interval(_from, 1, curve: widget.curve));
-  late final _fade = CurvedAnimation(parent: _a, curve: Interval(_from, _from + (1 - _from) * widget.fadeBy, curve: Curves.linear));
+  // The web's timing function eases the fade as well as the move: a linear
+  // fade left a page's parts all but unseen for a quarter of a second as it
+  // opened, and then popped them in.
+  late final _fade = CurvedAnimation(parent: _a, curve: Interval(_from, _from + (1 - _from) * widget.fadeBy, curve: widget.curve));
 
   @override
   void didChangeDependencies() {

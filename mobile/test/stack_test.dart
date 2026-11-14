@@ -2,6 +2,7 @@
 // covers them, signing out closes them, and another business starts the
 // chats afresh (docs/spec/mobile-app-m3-fixes.md B1–B3).
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
@@ -143,4 +144,44 @@ void main() {
     expect(o.asked, contains('GET /v1/link-chats'), reason: 'the new business\'s list');
     expect(o.auth.transport.token, 'other-business');
   });
+
+  testWidgets('opening: the mark on pine until the session and the settings are both read; a kept session with the lock on is asked for it then', (t) async {
+    t.view.physicalSize = const Size(390, 844);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final keys = _SlowKeys();
+    await keys.inner.write('app-lock-after', '60');
+    final prefs = Prefs(keys);
+    unawaited(prefs.load());
+    final auth = Fixture('chats').auth()..restored = true;
+    final u = FakeUnlocker();
+    await t.pumpWidget(TaskiemApp(auth: auth, unlocker: u, prefs: prefs));
+    await settle(t);
+    expect(find.bySemanticsLabel('Taskiem is opening'), findsOneWidget, reason: 'the settings not read yet');
+    expect(find.text('Bayo Rice Mills'), findsNothing, reason: 'no chats shown before the lock is decided');
+    expect(u.asked, 0);
+    keys.open.complete();
+    await settle(t);
+    expect(find.bySemanticsLabel('Taskiem is opening'), findsNothing);
+    expect(u.asked, 1, reason: 'the lock was on: asked as the kept session opens');
+    expect(find.text('Bayo Rice Mills'), findsWidgets);
+    addTearDown(() async {
+      await t.pumpWidget(const SizedBox());
+      await t.pump();
+    });
+  });
+}
+
+/// The phone's storage, answering only once [open] is completed.
+class _SlowKeys implements KeyStore {
+  final inner = MemoryKeyStore();
+  final open = Completer<void>();
+  @override
+  Future<String?> read(String key) async {
+    await open.future;
+    return inner.read(key);
+  }
+
+  @override
+  Future<void> write(String key, String? value) => inner.write(key, value);
 }

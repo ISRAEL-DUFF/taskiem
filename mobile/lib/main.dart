@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/material.dart' show MaterialApp;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import 'api/transport.dart';
 import 'app/auth.dart';
@@ -68,9 +69,9 @@ void main() {
     await prefs.forgetPerson();
     await notify.forgotten();
   };
-  // The app lock's setting read first: a kept session opened with the lock
-  // on is asked for it (AppLock), and one with it off is not.
-  prefs.ready.then((_) => auth.start());
+  // The session and the settings read side by side; the app opens once
+  // both are (_Root), so a kept session with the lock on is asked for it.
+  auth.start();
   // Links to this server's pages, opened in the app (lib/app/applinks.dart).
   final links = LinkInbox();
   runApp(TaskiemApp(auth: auth, unlocker: PhoneUnlocker(), prefs: prefs, notify: notify, links: links));
@@ -127,9 +128,11 @@ class TaskiemApp extends StatelessWidget {
                     builder: (context, _) => AppLock(
                       // Signed in, and the lock turned on here (off
                       // until turned on, as WhatsApp's).
-                      active: auth!.state == AuthState.signedIn && (prefs?.lock ?? false),
+                      // Signed in counts once the settings are read too (the
+                      // screens open then), so the lock is decided with them.
+                      active: auth!.state == AuthState.signedIn && (prefs?.loaded ?? true) && (prefs?.lock ?? false),
                       after: prefs?.lockAfter ?? lockAfter,
-                      signedIn: auth!.state == AuthState.signedIn,
+                      signedIn: auth!.state == AuthState.signedIn && (prefs?.loaded ?? true),
                       unlocker: unlocker!,
                       startLocked: auth!.restored,
                       now: now,
@@ -169,12 +172,20 @@ class _RootState extends State<_Root> {
     super.initState();
     _session = widget.auth.session;
     widget.auth.addListener(_changed);
+    widget.prefs?.addListener(_prefs);
   }
 
   @override
   void dispose() {
     widget.auth.removeListener(_changed);
+    widget.prefs?.removeListener(_prefs);
     super.dispose();
+  }
+
+  bool _loaded = false;
+
+  void _prefs() {
+    if (!_loaded && (widget.prefs?.loaded ?? true)) setState(() => _loaded = true);
   }
 
   void _changed() {
@@ -189,9 +200,12 @@ class _RootState extends State<_Root> {
   @override
   Widget build(BuildContext context) {
     final auth = widget.auth;
+    // Opening, until the session and the settings are read: the mark on
+    // pine, as the phone's own start screen shows it, so one runs on into
+    // the other.
+    if (auth.state == AuthState.checking || !(widget.prefs?.loaded ?? true)) return const _Opening();
     return switch (auth.state) {
-      // Opening: the pine the sign-in page starts with, for a moment.
-      AuthState.checking => ColoredBox(color: TkTheme.tokens(context).brand),
+      AuthState.checking => const _Opening(),
       AuthState.signedOut => _SignedOut(auth: auth),
       AuthState.outdated => const _Outdated(),
       AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify, links: widget.links),
@@ -697,4 +711,27 @@ class _OpenCustomerState extends State<_OpenCustomer> {
 
   @override
   Widget build(BuildContext context) => CustomerScreen(data: _data);
+}
+
+/// The app's first screen while it opens: the Taskiem mark on pine, the
+/// size and place the phone's start screen draws it (android/…/values-v31:
+/// the launcher icon's foreground, its glyph about 100 dp wide).
+class _Opening extends StatelessWidget {
+  const _Opening();
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: TkTheme.tokens(context).brand,
+    child: Center(
+      child: Semantics(
+        label: 'Taskiem is opening',
+        // The glyph sits a little right of and above the middle of the mark's
+        // square; the start screen centres the glyph's own box.
+        child: Transform.translate(
+          offset: const Offset(-10, 3),
+          child: SvgPicture.asset('assets/brand/mark.svg', width: 172, height: 172),
+        ),
+      ),
+    ),
+  );
 }

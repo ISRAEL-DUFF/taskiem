@@ -61,6 +61,14 @@ void main() {
     expect(opacityOf(t, find.text('row 2')), 1, reason: 'simply there');
   });
 
+  testWidgets('a page\'s part is mostly seen within 100 ms (the fade eased as the web eases it, not linear)', (t) async {
+    await t.pumpWidget(host(TkIn.rise(child: const Text('Money in today'))));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 100));
+    expect(opacityOf(t, find.text('Money in today')), greaterThan(0.5));
+    await t.pumpAndSettle();
+  });
+
   testWidgets('a dialog springs up from the bottom over a fading veil, and drops away', (t) async {
     late BuildContext ctx;
     await t.pumpWidget(TaskiemApp(home: Builder(builder: (c) {
