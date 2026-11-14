@@ -12,7 +12,7 @@
 var ICON = "/brand/relay/icon-192.png";
 
 /** A path inside the app a notification may open (a page, and at most one plain question such as ?with=); anything else is the app's start. */
-var LINK = /^\/(?!\/)[A-Za-z0-9\-_\/]{0,120}(\?[a-z_]{1,20}=[A-Za-z0-9\-]{1,80})?$/;
+var LINK = /^\/(?!\/)[A-Za-z0-9_/-]{0,120}(\?[a-z_]{1,20}=[A-Za-z0-9-]{1,80})?$/;
 function safeLink(link) {
   if (typeof link === "string" && LINK.test(link)) return link;
   return "/";
@@ -90,9 +90,11 @@ function pickWindow(windows) {
 var TAP_CACHE = "taskiem-push-tap";
 var TAP_KEY = "/__taskiem/push-tap";
 async function markTap(business) {
-  if (!safeBusiness(business) || typeof caches === "undefined") return;
+  // The worker's own Cache API (the page reads the same, same origin).
+  var store = typeof self !== "undefined" ? self.caches : undefined;
+  if (!safeBusiness(business) || !store) return;
   try {
-    var c = await caches.open(TAP_CACHE);
+    var c = await store.open(TAP_CACHE);
     await c.put(TAP_KEY, new Response(JSON.stringify({ business: business, at: Date.now() }), { headers: { "Content-Type": "application/json" } }));
   } catch {
     // Not written: the page asks before it switches.
