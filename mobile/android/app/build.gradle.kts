@@ -1,3 +1,6 @@
+import java.net.URI
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -9,10 +12,10 @@ plugins {
 val taskiemHost: String = run {
     val defines = (project.findProperty("dart-defines") as String?)
         ?.split(",")
-        ?.mapNotNull { runCatching { String(java.util.Base64.getDecoder().decode(it)) }.getOrNull() }
+        ?.mapNotNull { d -> runCatching { String(Base64.getDecoder().decode(d)) }.getOrNull() }
         .orEmpty()
     val url = defines.firstOrNull { it.startsWith("TASKIEM_URL=") }?.substringAfter("=") ?: "https://staging.ispend.name.ng"
-    runCatching { java.net.URI(url).host }.getOrNull() ?: "staging.ispend.name.ng"
+    runCatching { URI(url).host }.getOrNull() ?: "staging.ispend.name.ng"
 }
 
 android {

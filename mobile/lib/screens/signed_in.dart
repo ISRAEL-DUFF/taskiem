@@ -10,9 +10,11 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/lock.dart';
 import '../app/notify.dart';
+import '../app/passkey.dart';
 import '../app/prefs.dart';
 import '../kit/forms.dart' show TkSwitchRow;
 import '../kit/kit.dart';
+import '../kit/modal.dart' show showTkToast;
 import '../theme/theme.dart';
 import 'settings_more.dart';
 
@@ -168,6 +170,7 @@ class _SignedInScreenState extends State<SignedInScreen> {
                 ],
               ),
               if (widget.notify != null) NotificationsCard(notify: widget.notify!),
+              PasskeysCard(auth: widget.auth),
               if (prefs != null) LockCard(prefs: prefs, unlocker: widget.unlocker),
               if (prefs != null) ...[
                 const SizedBox(height: 16),
@@ -399,4 +402,115 @@ class NotificationsCard extends StatelessWidget {
       );
     },
   );
+}
+
+/// Passkeys (docs/spec/mobile-app-m4.md N6; the web's Account, Passkeys):
+/// the person's passkeys, and adding one on this phone. Shown where the
+/// server has passkeys on.
+class PasskeysCard extends StatefulWidget {
+  const PasskeysCard({super.key, required this.auth});
+  final Auth auth;
+
+  @override
+  State<PasskeysCard> createState() => _PasskeysCardState();
+}
+
+class _PasskeysCardState extends State<PasskeysCard> {
+  List<Map<String, dynamic>>? _keys;
+  final _proof = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _proof.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final r = (await widget.auth.transport.send('GET', '/v1/me/passkeys') as Map)['passkeys'] as List;
+      if (mounted) setState(() => _keys = [for (final k in r) (k as Map).cast<String, dynamic>()]);
+    } on Object {
+      // Off on this server (501), or offline: the card is not shown.
+    }
+  }
+
+  Future<void> _add() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      // What the server asks before a new way in: a code, the password, or
+      // the passkey the person already has.
+      final Map<String, dynamic> proof = switch (proofAsked(widget.auth)) {
+        'totp' => {'totp': _proof.text.trim()},
+        'password' => {'password': _proof.text},
+        null => {'passkey': await passkeyProof(widget.auth, 'account.reauth', 'passkey.add')},
+        _ => const {},
+      };
+      await addPasskey(widget.auth, proof);
+      _proof.clear();
+      await _load();
+      // me.factors now has a passkey.
+      await widget.auth.refreshMe();
+      if (mounted) showTkToast(context, 'Passkey added');
+    } on PasskeyCancelled {
+      // Closed the phone's sheet.
+    } on ApiError catch (e) {
+      _error = e.message;
+    } on Offline {
+      _error = 'You’re offline. Try again when you’re back online.';
+    } on Object {
+      _error = 'Something went wrong. Try again.';
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final keys = _keys;
+    if (keys == null) return const SizedBox.shrink();
+    final t = TkTheme.tokens(context);
+    final asked = proofAsked(widget.auth);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: _Card(
+        title: 'Passkeys',
+        children: [
+          Text(
+            'Sign in and approve with your phone’s fingerprint, face or screen lock instead of a password. The same passkey works on the web.',
+            style: tkHint(t),
+          ),
+          const SizedBox(height: 8),
+          for (final k in keys)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Text('${k['name']}${k['synced'] == true ? ' · synced' : ''}', style: tkText(size: 14, weight: 500, color: t.text)),
+            ),
+          if (_error != null) TkErrorBox(_error!),
+          if (asked == 'totp' || asked == 'password')
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: TkField(
+                label: asked == 'totp' ? 'Authenticator code, to add a passkey' : 'Your password, to add a passkey',
+                controller: _proof,
+                obscure: asked == 'password',
+                digits: asked == 'totp' ? 6 : null,
+                keyboard: asked == 'totp' ? TextInputType.number : null,
+              ),
+            ),
+          const SizedBox(height: 8),
+          TkButton(label: _busy ? 'Adding…' : 'Add a passkey on this phone', enabled: !_busy, onPressed: _add),
+        ],
+      ),
+    );
+  }
 }

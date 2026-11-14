@@ -10,6 +10,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../api/transport.dart';
 import '../app/auth.dart';
+import '../app/passkey.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 
@@ -93,6 +94,8 @@ mixin _Acting<T extends StatefulWidget> on State<T> {
     });
     try {
       await f();
+    } on PasskeyCancelled {
+      // Closed the phone's passkey sheet: nothing to say.
     } on ApiError catch (e) {
       error = e.message;
       passkeyRequired = e.has('passkey_required');
@@ -171,10 +174,9 @@ class _EmailSignInState extends State<_EmailSignIn> with _Acting {
         TkButton(
           label: 'Sign in with a passkey',
           minHeight: 44,
-          // Passkeys in the app need its link to Taskiem's address and its
-          // signing key (docs/spec/mobile-app.md §5.6, M4); until then, said.
+          // The phone's own passkey (lib/app/passkey.dart; M4 N6).
           onPressed: widget.onPasskey ??
-              () => setState(() => error = 'Signing in with a passkey comes to the app soon. For now, sign in with your email or with WhatsApp or Telegram.'),
+              (widget.auth == null || busy ? null : () => act(() => signInWithPasskey(widget.auth!))),
         ),
         const SizedBox(height: 8),
         TkButton(label: 'Sign in with WhatsApp or Telegram', minHeight: 44, onPressed: widget.onChat),

@@ -227,6 +227,24 @@ Migration 00446. Nothing in the app yet: no phone registers until P3.
 - **The icon's count** is the server's, in each push (Android's notification count, the iPhone's badge). The app does not set it itself yet.
 - **Tests**: `mobile/test/notify_test.dart` (a stand-in Firebase and server): off without Firebase, no Google services, on and off, refused, a changed token, opened again and removed elsewhere, signing out in order, taps in this and another business, the conversation on the screen, and the Settings card.
 
+## As built: P4, links (14 November 2026)
+
+- **The server** serves `/.well-known/assetlinks.json` (`handle_all_urls` and `get_login_creds`, for the package and its certificates) and `/.well-known/apple-app-site-association` (the pages the app opens, and `webcredentials`) from `TASKIEM_ANDROID_APP` (`{"package", "sha256": [...]}`) and `TASKIEM_IOS_APP` (`TEAMID.bundle.id`); without them, 404. A bad value stops the server starting, with what it should be.
+- **Android** declares verified links (`autoVerify`) for the host of the `TASKIEM_URL` it is built with (read from the build's Dart defines in `build.gradle.kts`): `/chat`, `/approvals`, `/invoices/…`, `/trade-orders/…`, `/storefront/orders/…`, `/bills/…`, `/purchases/…`. **iPhone**: Associated Domains (`applinks:`, `webcredentials:`) for `TASKIEM_HOST` in `Flutter/*.xcconfig`, push's `aps-environment`, and the remote-notification background mode.
+- **The app** (`lib/app/applinks.dart`, `app_links` 7.2.2, Apache-2.0): a link to one of those pages of its own server opens the conversation (a customer's too), the invoice, bill, purchase or order over its tab, or Taskiem's conversation for the approvals; a question other than a conversation's is dropped. A link that comes signed out waits behind signing in. Notifications use the same opening.
+- **Tests**: `TestParseAppLinks`, `TestWellKnownAppFiles`; `mobile/test/applinks_test.dart`.
+
+## As built: P5, passkeys (14 November 2026)
+
+- **The server**: the Android app's origin (`android:apk-key-hash:` and the certificate's SHA-256, base64url) joins the relying party's origins when `TASKIEM_ANDROID_APP` is set; an iPhone app's passkeys come from the web's origin through its associated domain. The relying party is the web's host, so one passkey works in both.
+- **The app** (`lib/app/passkey.dart`, `passkeys` 2.24.1, BSD-3-Clause):
+  - **Sign in with a passkey** on the sign-in screen: a device session, as every way in; closing the phone's sheet says nothing.
+  - **Settings, Passkeys**: the person's passkeys, and **Add a passkey on this phone**, after the proof the server asks (an authenticator code, the password, or the passkey they already have), named after the phone.
+  - **Approvals**: a decision that asks for confirmation uses the phone's passkey (operation `approval.decide`, target run/step/decision), or a typed authenticator code; a rule that takes only a passkey now works in the app.
+  - The phone's own refusals are said in plain words: no passkey here, the app not set up for passkeys yet (no verified domain), a phone that cannot (no screen lock, Android below 9).
+- **Still on the web**: linking WhatsApp, Telegram and Slack, and the WhatsApp PIN, for a person whose only proof is a passkey (those requests take a code or the password).
+- **Tests**: `mobile/test/passkey_test.dart` (a stand-in for the phone's passkeys): sign-in, cancelled, off on the server, adding with a proof, an approval's passkey.
+
 ## 6. Tests
 
 **Go:**

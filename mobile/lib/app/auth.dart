@@ -238,6 +238,17 @@ class Auth extends ChangeNotifier {
     restored = restoredBefore;
   }
 
+  /// Who is signed in, read again (a way in added: me.factors).
+  Future<void> refreshMe() async {
+    try {
+      me = await api.me();
+      await _keepMe();
+      notifyListeners();
+    } on Object {
+      // As it was; read again next time the app opens.
+    }
+  }
+
   /// A session made by signing up (or another way in that answers one).
   Future<void> signedInWith(String? token) => _signedIn(token);
 

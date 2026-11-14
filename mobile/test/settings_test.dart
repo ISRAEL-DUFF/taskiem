@@ -229,7 +229,7 @@ void main() {
 
   testWidgets('a passkey alone: linking says to do it where the passkey is', (t) async {
     await open(t, factors: const {'passkey': true}, answers: {'GET /v1/me/telegram': (_) => _json({'enabled': true, 'linked': false})});
-    expect(find.textContaining('This needs your passkey, and this phone cannot use one yet.'), findsOneWidget);
+    expect(find.textContaining('This needs your passkey. Do it on the web, where Taskiem asks for it.'), findsOneWidget);
     final link = t.getSemantics(find.bySemanticsLabel('Link Telegram'));
     expect(link.flagsCollection.isEnabled, isNot(true), reason: 'nothing to press with');
   });

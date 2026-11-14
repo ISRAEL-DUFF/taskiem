@@ -1,8 +1,8 @@
 // Approve or Decline, confirmed (web/src/pages/ChatAlerts.tsx ApproveSheet):
 // what it is, what the person was shown, a comment, and the confirmation
-// its rules ask for (a code from their authenticator; a passkey once the
-// app has them, M4); the server refuses a decision without it, and what it
-// asks for is what the sheet asks next. POST /v1/approvals/{run}/{step}.
+// its rules ask for (the phone's passkey, or a code from their
+// authenticator; M4 N6); the server refuses a decision without it, and what
+// it asks for is what the sheet asks next. POST /v1/approvals/{run}/{step}.
 
 import 'dart:async';
 
@@ -13,6 +13,7 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
+import '../app/passkey.dart';
 import '../kit/forms.dart' show RuneLimit;
 import '../kit/kit.dart';
 import '../kit/sheet.dart';
@@ -25,11 +26,21 @@ import 'words.dart';
 /// The approve sheet; it closes with true once decided.
 /// The decision, as the sheet sends it (POST /v1/approvals/{run}/{step}):
 /// approved or rejected, with its comment and the code a rule asks for.
-Future<void> decideApproval(Auth auth, Approval ap, String decision, {String comment = '', String code = ''}) => auth.transport.send(
+Future<void> decideApproval(Auth auth, Approval ap, String decision, {String comment = '', String code = '', Map<String, dynamic>? passkey}) => auth.transport.send(
   'POST',
   '/v1/approvals/${ap.runId}/${Uri.encodeComponent(ap.stepId)}',
-  body: {'decision': decision, if (comment.trim().isNotEmpty) 'comment': comment.trim(), if (code.isNotEmpty) 'totp': code},
+  body: {
+    'decision': decision,
+    if (comment.trim().isNotEmpty) 'comment': comment.trim(),
+    if (code.isNotEmpty) 'totp': code,
+    'passkey': ?passkey,
+  },
 );
+
+/// The phone's passkey for this decision (operation approval.decide, its
+/// run, step and decision as the target).
+Future<Map<String, dynamic>> approvalPasskey(Auth auth, Approval ap, String decision) =>
+    passkeyProof(auth, 'approval.decide', '${ap.runId}/${ap.stepId}/$decision');
 
 class ApproveSheet extends StatefulWidget {
   const ApproveSheet({super.key, required this.a, required this.decision, required this.auth});
@@ -73,7 +84,9 @@ class _ApproveSheetState extends State<ApproveSheet> {
       _error = null;
     });
     try {
-      await decideApproval(widget.auth, ap, widget.decision, comment: _comment.text, code: _code.text);
+      // Asked for a confirmation and no code typed: the phone's passkey.
+      final passkey = _stepUp != null && _code.text.isEmpty ? await approvalPasskey(widget.auth, ap, widget.decision) : null;
+      await decideApproval(widget.auth, ap, widget.decision, comment: _comment.text, code: _code.text, passkey: passkey);
       setState(() => _saved = true);
       // The tick draws, then the sheet goes and the card with it.
       await Future<void>.delayed(const Duration(milliseconds: 1200));
@@ -85,6 +98,8 @@ class _ApproveSheetState extends State<ApproveSheet> {
         if (up is String) _stepUp = up;
         _error = e.message;
       });
+    } on PasskeyCancelled {
+      // Closed the phone's passkey sheet: the decision waits.
     } on Offline {
       setState(() => _error = 'You’re offline. Try again when you’re back online.');
     } finally {
@@ -111,7 +126,8 @@ class _ApproveSheetState extends State<ApproveSheet> {
       if (ap.levels > 1) CardPill('Level ${ap.level} of ${ap.levels}', CardTone.plain),
       if (ap.required > 1) CardPill('${ap.approvals} of ${ap.required} approvals', CardTone.plain),
     ];
-    final ready = !_busy && !(_stepUp != null && (passkeyOnly || _code.text.length != 6));
+    // With a confirmation asked, the phone's passkey, or a whole code.
+    final ready = !_busy && !(_stepUp != null && !passkeyOnly && _code.text.isNotEmpty && _code.text.length != 6);
     return TkSheet(
       title: _approve ? 'Approve it?' : 'Decline it?',
       overlay: _saved ? TkSavedTick(words: _approve ? 'Approved' : 'Declined') : null,
@@ -141,13 +157,17 @@ class _ApproveSheetState extends State<ApproveSheet> {
             label: 'A comment (optional, recorded)',
             child: TkTextBox(controller: _comment, lines: 2),
           ),
+          if (_stepUp != null)
+            Text(
+              'Your phone asks for your passkey (your fingerprint, face or screen lock) when you ${_approve ? 'approve' : 'decline'}.',
+              style: tkFormNow(t),
+            ),
           if (_stepUp != null && !passkeyOnly)
             TkKitField(
               label: 'Or a code from your authenticator app',
-              hint: 'No authenticator yet? Add one under Account on the web.',
+              hint: 'No passkey on this phone? Add one in Settings.',
               child: TkTextBox(controller: _code, lines: 1, digits: 6),
             ),
-          if (passkeyOnly) Text('This needs your passkey, and this phone cannot use one yet. Decide it on a device with your passkey.', style: tkFormNow(t)),
           if (_error != null) TkErrorBox(_error!),
         ],
       ),

@@ -118,7 +118,7 @@ class ProofField extends StatelessWidget {
       ),
       null => Padding(
         padding: const EdgeInsets.only(bottom: 12),
-        child: Text('This needs your passkey, and this phone cannot use one yet. Do it on the web, on a device with your passkey.', style: tkHint(t)),
+        child: Text('This needs your passkey. Do it on the web, where Taskiem asks for it.', style: tkHint(t)),
       ),
       _ => const SizedBox.shrink(),
     };
