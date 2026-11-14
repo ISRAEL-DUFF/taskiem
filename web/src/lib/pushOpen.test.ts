@@ -14,3 +14,11 @@ describe("a tapped notification", () => {
     for (const bad of ["https://evil.example", "//evil.example", "/a/../b", "javascript:x", 5, null]) expect(appLink(bad)).toBe(false);
   });
 });
+
+describe("a link that is not a tap", () => {
+  it("is not taken for one", async () => {
+    const { tappedFor } = await import("./pushOpen");
+    // No worker wrote anything down (no caches here at all).
+    expect(await tappedFor("0192f6c4-8a9e-7b3c-9d2e-112233445566")).toBe(false);
+  });
+});

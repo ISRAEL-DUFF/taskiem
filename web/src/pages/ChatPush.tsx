@@ -49,7 +49,7 @@ const WHY: Record<PushWhy, string> = {
 };
 
 export function ChatPush() {
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const [feature, setFeature] = useState<"loading" | "off" | "on">("loading");
   const [view, setView] = useState<PushView>();
   const [subscribed, setSubscribed] = useState(false);
@@ -73,22 +73,23 @@ export function ChatPush() {
   useEffect(() => {
     if (feature !== "on") return;
     let live = true;
-    get<PushView>("/v1/me/push").then(
-      (v) => live && setView(v),
-      () => undefined,
-    );
-    void thisSubscription().then((s) => {
+    void Promise.all([
+      get<PushView>("/v1/me/push").catch(() => undefined),
+      thisSubscription(),
+    ]).then(([v, s]) => {
       if (!live) return;
+      if (v) setView(v);
       setSubscribed(!!s);
-      // The worker renewed the subscription, or this browser forgot which
-      // device it is: the server finds it by its address.
-      if (s && !myDevice())
-        void findMyDevice().then((v) => live && v && setView(v));
+      // The worker renewed the subscription, or this browser does not know
+      // which device it is here: the server finds it by its address.
+      const id = myDevice();
+      if (s && (!id || (v && !v.devices.some((d) => d.id === id))))
+        void findMyDevice().then((f) => live && f && setView(f));
     });
     return () => {
       live = false;
     };
-  }, [feature]);
+  }, [feature, me?.tenant_id]);
 
   if (feature !== "on") return null;
   const mine = view?.devices.find((d) => d.id === myDevice());
@@ -169,6 +170,7 @@ export function ChatPush() {
               <label className="switch-line">
                 <input
                   type="checkbox"
+                  role="switch"
                   aria-label="Notify me on this device"
                   checked={on}
                   disabled={act.busy || permission === "denied"}

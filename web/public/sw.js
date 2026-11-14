@@ -77,6 +77,28 @@ function notificationOf(p, icon) {
   };
 }
 
+/** The window a tap goes to: the one in front, else one that is seen, else any. */
+function pickWindow(windows) {
+  return (
+    windows.find(function (w) { return w.focused; }) ||
+    windows.find(function (w) { return w.visibilityState === "visible"; }) ||
+    windows[0]
+  );
+}
+
+/** Where a tap is written down for the page (lib/pushOpen.ts reads it once). */
+var TAP_CACHE = "taskiem-push-tap";
+var TAP_KEY = "/__taskiem/push-tap";
+async function markTap(business) {
+  if (!safeBusiness(business) || typeof caches === "undefined") return;
+  try {
+    var c = await caches.open(TAP_CACHE);
+    await c.put(TAP_KEY, new Response(JSON.stringify({ business: business, at: Date.now() }), { headers: { "Content-Type": "application/json" } }));
+  } catch {
+    // Not written: the page asks before it switches.
+  }
+}
+
 /** What the worker tells the server when the browser renews its subscription. */
 function renewal(json, oldEndpoint) {
   var body = { endpoint: json.endpoint, keys: json.keys };
@@ -205,7 +227,7 @@ async function pageFor(preload, doFetch) {
 
 if (typeof module !== "undefined") {
   module.exports = {
-    safeLink: safeLink, safeBusiness: safeBusiness, openLink: openLink, renewal: renewal, safeIcon: safeIcon, parsePayload: parsePayload, notificationOf: notificationOf, iconFor: iconFor, staysSilent: staysSilent,
+    safeLink: safeLink, safeBusiness: safeBusiness, openLink: openLink, renewal: renewal, pickWindow: pickWindow, safeIcon: safeIcon, parsePayload: parsePayload, notificationOf: notificationOf, iconFor: iconFor, staysSilent: staysSilent,
     handlesRequest: handlesRequest, offlinePage: offlinePage, OFFLINE_SCRIPT: OFFLINE_SCRIPT, OFFLINE_SCRIPT_HASH: OFFLINE_SCRIPT_HASH, offlineResponse: offlineResponse, pageFor: pageFor,
   };
 }
@@ -266,10 +288,13 @@ if (typeof self !== "undefined" && typeof self.addEventListener === "function" &
     var link = openLink(data.link, data.business);
     event.waitUntil(
       (async function () {
-        var windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-        var mine = windows.find(function (w) {
+        // A tap is what may move the page to another business: said where
+        // the page can read it, so a link from elsewhere cannot.
+        await markTap(data.business);
+        var windows = (await self.clients.matchAll({ type: "window", includeUncontrolled: true })).filter(function (w) {
           return new URL(w.url).origin === self.location.origin;
         });
+        var mine = pickWindow(windows);
         if (mine) {
           await mine.focus();
           mine.postMessage({ type: "taskiem-go", link: link });

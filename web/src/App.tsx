@@ -349,7 +349,7 @@ function SignedIn() {
   const { pathname, search } = useLocation();
   const off = areaOffFor(pathname, me?.areas);
   // A tapped notification: its page, in its business.
-  const pushProblem = useOpenFromPush();
+  const pushOpen = useOpenFromPush();
   useEffect(() => setDrawer(false), [pathname]);
   // A row of tabs wider than a phone scrolls sideways: bring the open one into view.
   useEffect(() => {
@@ -701,13 +701,38 @@ function SignedIn() {
         >
           <BillingBanner />
           <TermsBanner />
-          {pushProblem && (
+          {pushOpen.problem && (
             <div
               className="notice"
               role="alert"
               data-testid="push-other-business"
             >
-              {pushProblem}
+              {pushOpen.problem}
+            </div>
+          )}
+          {pushOpen.ask && (
+            <div
+              className="notice"
+              role="alert"
+              data-testid="push-ask-business"
+            >
+              <p style={{ margin: "0 0 8px" }}>
+                This page is for {pushOpen.ask.name}. Switch to it?
+              </p>
+              <button
+                type="button"
+                className="primary small"
+                onClick={pushOpen.accept}
+              >
+                Switch to {pushOpen.ask.name}
+              </button>{" "}
+              <button
+                type="button"
+                className="small"
+                onClick={pushOpen.decline}
+              >
+                Stay here
+              </button>
             </div>
           )}
           <NotifyBanner />

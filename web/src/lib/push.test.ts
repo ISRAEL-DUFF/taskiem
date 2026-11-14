@@ -18,6 +18,9 @@ new Function(
 const sw = mod.exports as {
   safeLink: (l: unknown) => string;
   safeBusiness: (b: unknown) => string;
+  pickWindow: (
+    w: { focused?: boolean; visibilityState?: string; id: string }[],
+  ) => { id: string } | undefined;
   openLink: (l: unknown, b: unknown) => string;
   renewal: (
     json: { endpoint: string; keys: unknown },
@@ -173,6 +176,22 @@ describe("the service worker's words", () => {
     expect(sw.openLink("/approvals", "not-a-business")).toBe("/approvals");
     expect(sw.openLink("https://evil.example", b)).toBe(`/?business=${b}`);
     expect(sw.safeBusiness(b.toUpperCase())).toBe("");
+  });
+  it("takes a tap to the window in front, else one that is seen", () => {
+    expect(
+      sw.pickWindow([
+        { id: "a", visibilityState: "hidden" },
+        { id: "b", visibilityState: "visible" },
+        { id: "c", focused: true, visibilityState: "visible" },
+      ])?.id,
+    ).toBe("c");
+    expect(
+      sw.pickWindow([
+        { id: "a", visibilityState: "hidden" },
+        { id: "b", visibilityState: "visible" },
+      ])?.id,
+    ).toBe("b");
+    expect(sw.pickWindow([])).toBeUndefined();
   });
   it("renews a subscription in place of the old one", () => {
     const json = {

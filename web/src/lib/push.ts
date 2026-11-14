@@ -130,10 +130,17 @@ export function keyBytes(b64: string): Uint8Array {
 
 const KEY = "taskiem-push-device";
 
-/** The id the server gave this browser, kept here so the list can say "This device". */
+/** The business the page is in: a browser is a different device in each. */
+let scope = "";
+export function setPushScope(tenant: string | null) {
+  scope = tenant ?? "";
+}
+const key = () => (scope ? `${KEY}:${scope}` : KEY);
+
+/** The id the server gave this browser in this business, kept here so the list can say "This device". */
 export function myDevice(): string | null {
   try {
-    return localStorage.getItem(KEY);
+    return localStorage.getItem(key());
   } catch {
     return null;
   }
@@ -141,8 +148,8 @@ export function myDevice(): string | null {
 
 function keepDevice(id: string | null) {
   try {
-    if (id) localStorage.setItem(KEY, id);
-    else localStorage.removeItem(KEY);
+    if (id) localStorage.setItem(key(), id);
+    else localStorage.removeItem(key());
   } catch {
     // Not kept: the list does not say which is this one.
   }
