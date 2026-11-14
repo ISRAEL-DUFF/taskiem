@@ -201,17 +201,37 @@ test("the switch turns notifications on for this device, with its own switch for
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("Firefox on Linux");
   await expect(row).toContainText("Browser · not notified yet");
+  // Its own switches: what it tells the person, set from here.
+  await row.getByText("What it tells you").click();
+  const otherAlerts = row.getByRole("switch", {
+    name: "Alerts on Firefox on Linux",
+  });
+  await expect(otherAlerts).toBeChecked();
+  await otherAlerts.click();
+  await expect
+    .poll(
+      async () =>
+        (await devices(page)).find((d) => d.label === "Firefox on Linux")
+          ?.kinds,
+    )
+    .not.toContain("alerts");
   await row.getByRole("button", { name: /^Remove/ }).click();
   await expect(section.getByTestId("chat-push-device")).toHaveCount(0);
   expect(await devices(page)).toHaveLength(1);
 
-  // Off: the server forgets this browser, and so does the browser.
+  // Off: the server forgets this browser here; the browser keeps its
+  // subscription (the person's other businesses may use it), and only
+  // signing out drops it.
   await section.getByTestId("chat-push-switch").click();
   await expect(section.getByTestId("chat-push-switch")).not.toBeChecked();
   expect(await devices(page)).toHaveLength(0);
   expect(
     await page.evaluate(() => localStorage.getItem("e2e-push-sub")),
-  ).toBeNull();
+  ).not.toBeNull();
+  // Opened again, it stays off: found by its address, not added back.
+  await page.reload();
+  await expect(section.getByTestId("chat-push-switch")).not.toBeChecked();
+  expect(await devices(page)).toHaveLength(0);
 
   // On again, then signing out: this browser is taken off before the session ends.
   await section.getByTestId("chat-push-switch").click();
@@ -227,6 +247,9 @@ test("the switch turns notifications on for this device, with its own switch for
   });
   expect(again.ok(), await again.text()).toBe(true);
   expect(await devices(page)).toHaveLength(0);
+  expect(
+    await page.evaluate(() => localStorage.getItem("e2e-push-sub")),
+  ).toBeNull();
   await ctx.close();
 });
 

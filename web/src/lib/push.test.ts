@@ -498,3 +498,23 @@ describe("the worker offline (docs/spec/offline.md)", () => {
     expect(inner(page)).toBe(inner(mark));
   });
 });
+
+describe("the browser's device, per business", () => {
+  it("keeps the id it had before, for the business it is in, once", async () => {
+    const { setPushScope, myDevice } = await import("./push");
+    const store = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+    });
+    localStorage.setItem("taskiem-push-device", "d-old");
+    setPushScope("t1");
+    expect(myDevice()).toBe("d-old");
+    expect(localStorage.getItem("taskiem-push-device")).toBeNull();
+    setPushScope("t2");
+    expect(myDevice()).toBeNull();
+    setPushScope(null);
+    vi.unstubAllGlobals();
+  });
+});

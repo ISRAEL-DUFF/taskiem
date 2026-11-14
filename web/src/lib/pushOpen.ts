@@ -49,18 +49,36 @@ export async function tappedFor(business: string): Promise<boolean> {
     const c = await caches.open(TAP_CACHE);
     const r = await c.match(TAP_KEY);
     if (!r) return false;
-    await c.delete(TAP_KEY);
     const t = (await r.json()) as { business?: string; at?: number };
-    return t.business === business && Date.now() - (t.at ?? 0) < 120_000;
+    const fresh = Date.now() - (t.at ?? 0) < 120_000;
+    // Used up by its own business's page only (another tab's load for
+    // another business leaves it); an old one goes.
+    if (t.business === business || !fresh) await c.delete(TAP_KEY);
+    return t.business === business && fresh;
   } catch {
     return false;
   }
+}
+
+// One answer per address: an effect that runs twice (StrictMode, a fresh
+// me) reads the same answer, not an emptied cache.
+const checks = new Map<string, Promise<boolean>>();
+function tappedOnce(key: string, business: string): Promise<boolean> {
+  let p = checks.get(key);
+  if (!p) {
+    p = tappedFor(business);
+    checks.set(key, p);
+    setTimeout(() => checks.delete(key), 10_000);
+  }
+  return p;
 }
 
 /** What the page says about a business in its address. */
 export interface PushOpen {
   /** Why the switch could not be done. */
   problem: string | null;
+  /** That business is signed in to on its own (single sign-on): offer it. */
+  signInThere: boolean;
   /** A link (not a tap) for another business: asked before switching. */
   ask: { business: string; name: string; to: string } | null;
   accept: () => void;
@@ -78,6 +96,7 @@ export function useOpenFromPush(): PushOpen {
   const navigate = useNavigate();
   const [problem, setProblem] = useState<string | null>(null);
   const [ask, setAsk] = useState<PushOpen["ask"]>(null);
+  const [signInThere, setSignInThere] = useState(false);
   const here = me?.tenant_id ?? null;
   // One switch at a time: a second run of the effect (StrictMode, a fresh
   // me) must not send another, which the first would have ended.
@@ -86,6 +105,7 @@ export function useOpenFromPush(): PushOpen {
   useEffect(() => {
     setProblem(null);
     setAsk(null);
+    setSignInThere(false);
   }, [pathname]);
 
   const doSwitch = useCallback(
@@ -97,6 +117,10 @@ export function useOpenFromPush(): PushOpen {
         () => window.location.replace(to),
         (e: unknown) => {
           switching.current = null;
+          setSignInThere(
+            e instanceof ApiError &&
+              (!!e.body.sign_in || !!e.body.sso_required),
+          );
           setProblem(
             e instanceof ApiError && e.status !== 404 && e.message
               ? e.message
@@ -113,28 +137,32 @@ export function useOpenFromPush(): PushOpen {
     if (!new URLSearchParams(search).has("business")) return;
     const { to, business } = splitBusiness(pathname, search);
     if (!business || business === here) {
+      // A tap for the business in use: its mark is used up here, so it
+      // cannot move a later link without asking.
+      if (business) void tappedOnce(pathname + search, business);
       navigate(to, { replace: true });
       return;
     }
     if (switching.current) return;
     let live = true;
-    void tappedFor(business).then(async (tapped) => {
+    void tappedOnce(pathname + search, business).then(async (tapped) => {
       if (!live) return;
       if (tapped) return doSwitch(business, to);
-      // Not a tap: ask, naming the business, or say it is not one of theirs.
-      let name = "";
+      // Not a tap: ask, naming the business; one that is not theirs is
+      // said so; not knowing (the list did not load), asked all the same.
+      let name: string | null;
       try {
         const r = await get<{ businesses: { id: string; name: string }[] }>(
           "/v1/me/businesses",
         );
         name = r.businesses.find((b) => b.id === business)?.name ?? "";
       } catch {
-        // Not named: asked all the same.
+        name = null;
       }
       if (!live) return;
       navigate(to, { replace: true });
-      if (name) setAsk({ business, name, to });
-      else setProblem(OTHER_BUSINESS);
+      if (name === "") setProblem(OTHER_BUSINESS);
+      else setAsk({ business, name: name ?? "another of your businesses", to });
     });
     return () => {
       live = false;
@@ -154,6 +182,7 @@ export function useOpenFromPush(): PushOpen {
 
   return {
     problem,
+    signInThere,
     ask,
     accept: () => {
       if (ask) doSwitch(ask.business, ask.to);

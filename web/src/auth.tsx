@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     logout: async () => {
       // This browser stops being notified for this person (it needs the session).
-      await disablePush().catch(() => undefined);
+      await disablePush(true).catch(() => undefined);
       setAppBadge(0);
       setLeaving("trying");
       const ended = await endSession();

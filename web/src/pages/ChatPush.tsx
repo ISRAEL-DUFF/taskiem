@@ -126,12 +126,16 @@ export function ChatPush() {
       if (mine)
         setView(await patch<PushView>(`/v1/me/push/${mine.id}`, { preview }));
     }, "Saved");
-  const take = (kind: PushKind, on: boolean) =>
+  const take = (
+    kind: PushKind,
+    on: boolean,
+    d: PushDevice | undefined = mine,
+  ) =>
     void act.run(async () => {
-      if (!mine) return;
-      const now = mine.kinds ?? ALL_KINDS;
+      if (!d) return;
+      const now = d.kinds ?? ALL_KINDS;
       const kinds = on ? [...now, kind] : now.filter((k) => k !== kind);
-      setView(await patch<PushView>(`/v1/me/push/${mine.id}`, { kinds }));
+      setView(await patch<PushView>(`/v1/me/push/${d.id}`, { kinds }));
     }, "Saved");
   const remove = (id: string) =>
     void act.run(
@@ -256,6 +260,27 @@ export function ChatPush() {
                 }
                 testid="chat-push-device"
               >
+                {offered.length > 1 && (
+                  <details data-testid="chat-push-device-kinds">
+                    <summary>
+                      What it tells you
+                      <span className="sr-only"> on {d.label}</span>
+                    </summary>
+                    {offered.map((k) => (
+                      <label className="switch-line" key={k}>
+                        <input
+                          type="checkbox"
+                          role="switch"
+                          aria-label={`${KIND_WORDS[k].title} on ${d.label}`}
+                          checked={(d.kinds ?? ALL_KINDS).includes(k)}
+                          disabled={act.busy}
+                          onChange={(e) => take(k, e.target.checked, d)}
+                        />
+                        <span>{KIND_WORDS[k].title}</span>
+                      </label>
+                    ))}
+                  </details>
+                )}
                 <button
                   type="button"
                   className="small"

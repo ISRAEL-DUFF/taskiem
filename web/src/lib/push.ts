@@ -134,6 +134,17 @@ const KEY = "taskiem-push-device";
 let scope = "";
 export function setPushScope(tenant: string | null) {
   scope = tenant ?? "";
+  // The id kept before it was per business: this business's, once.
+  try {
+    const old = localStorage.getItem(KEY);
+    if (old && scope) {
+      if (!localStorage.getItem(`${KEY}:${scope}`))
+        localStorage.setItem(`${KEY}:${scope}`, old);
+      localStorage.removeItem(KEY);
+    }
+  } catch {
+    // Storage blocked: found again by the server (findMyDevice).
+  }
 }
 const key = () => (scope ? `${KEY}:${scope}` : KEY);
 
@@ -260,8 +271,15 @@ export async function findMyDevice(): Promise<PushView | undefined> {
   }
 }
 
-/** Turns notifications off for this browser: tells the server, then lets the browser forget it. */
-export async function disablePush(): Promise<PushView | undefined> {
+/**
+ * Turns notifications off for this browser in this business: tells the
+ * server. The browser's own subscription is kept (the person's other
+ * businesses may use it) unless [signingOut]: then the browser forgets it,
+ * and every business's record of it goes when the push service says so.
+ */
+export async function disablePush(
+  signingOut = false,
+): Promise<PushView | undefined> {
   const sub = await thisSubscription();
   keepDevice(null);
   if (!sub) return undefined;
@@ -271,6 +289,6 @@ export async function disablePush(): Promise<PushView | undefined> {
   } catch {
     // Signed out already, or offline: the server drops it when the push service says it is gone.
   }
-  await sub.unsubscribe().catch(() => false);
+  if (signingOut) await sub.unsubscribe().catch(() => false);
   return view;
 }

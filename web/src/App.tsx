@@ -708,12 +708,25 @@ function SignedIn() {
               data-testid="push-other-business"
             >
               {pushOpen.problem}
+              {pushOpen.signInThere && (
+                <>
+                  {" "}
+                  <button
+                    type="button"
+                    className="small"
+                    onClick={() => void logout()}
+                  >
+                    Sign out, to sign in there
+                  </button>
+                </>
+              )}
             </div>
           )}
           {pushOpen.ask && (
             <div
               className="notice"
-              role="alert"
+              role="region"
+              aria-label="Switch business"
               data-testid="push-ask-business"
             >
               <p style={{ margin: "0 0 8px" }}>

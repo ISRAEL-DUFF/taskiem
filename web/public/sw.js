@@ -290,7 +290,8 @@ if (typeof self !== "undefined" && typeof self.addEventListener === "function" &
       (async function () {
         // A tap is what may move the page to another business: said where
         // the page can read it, so a link from elsewhere cannot.
-        await markTap(data.business);
+        // At most a moment: a browser lets a click open a window only soon after it.
+        await Promise.race([markTap(data.business), new Promise(function (r) { setTimeout(r, 300); })]);
         var windows = (await self.clients.matchAll({ type: "window", includeUncontrolled: true })).filter(function (w) {
           return new URL(w.url).origin === self.location.origin;
         });
