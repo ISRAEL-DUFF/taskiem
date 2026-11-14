@@ -257,7 +257,11 @@ void main() {
   test('a tap opens its page; one for another business switches to it first', () async {
     final server = PushServer();
     const other = '0192f6c4-8a9e-7b3c-9d2e-112233445566';
-    server.answers['POST /v1/me/switch'] = () => _json({'token': 'tok-2'});
+    server.answers['POST /v1/me/switch'] = () {
+      // Now in the other business, as the real server's me would say.
+      server.answers['GET /v1/me'] = () => _json({'tenant_id': other, 'auth_method': 'password', 'permissions': <String>[], 'roles': ['owner']});
+      return _json({'token': 'tok-2'});
+    };
     final (auth, n, fb, _) = await signedIn(server);
     await n.start();
     fb.taps.add({'link': '/chat?with=abc', 'business': 't1'});
@@ -274,6 +278,38 @@ void main() {
     expect(server.calls.lastWhere((c) => c.path == '/v1/me/switch').body, {'tenant_id': other});
     expect(auth.session, greaterThan(session));
     expect(n.takePending(), '/approvals');
+  });
+
+  test('a tap that opened the app from closed, for another business: switched first, opened only there', () async {
+    const other = '0192f6c4-8a9e-7b3c-9d2e-112233445566';
+    final server = PushServer();
+    server.answers['POST /v1/me/switch'] = () => _json({'token': 'tok-2'});
+    final fb = FakeFirebase()..initial = {'link': '/bills/b1', 'business': other};
+    final (auth, n, _, _) = await signedIn(server, fb: fb);
+    final session = auth.session;
+    var told = 0;
+    n.addListener(() => told++);
+    await n.start();
+    expect(auth.session, greaterThan(session));
+    // The old business never gets it (still t1 here, as the fake's me says).
+    expect(n.takePending(), isNull);
+    expect(told, 0);
+    // A switch that fails is said once.
+    server.answers['POST /v1/me/switch'] = () => _json({'error': 'no'}, 404);
+    await n.open({'link': '/approvals', 'business': other});
+    expect(n.takeProblem(), contains('another of your businesses'));
+    expect(n.takeProblem(), isNull);
+  });
+
+  test('a toast for another business is said even with its tag on the screen', () async {
+    final (_, n, fb, _) = await signedIn(PushServer());
+    await n.start();
+    final said = <String>[];
+    n.onArrived = (note) => said.add(note.title);
+    n.showing = 'abc';
+    fb.notes.add(const PushNote(title: 'Other', body: '', data: {'tag': 'abc', 'business': '0192f6c4-8a9e-7b3c-9d2e-112233445566'}));
+    await pumpEventQueue();
+    expect(said, ['Other']);
   });
 
   test('a notification for the conversation on the screen shows nothing; another is said', () async {

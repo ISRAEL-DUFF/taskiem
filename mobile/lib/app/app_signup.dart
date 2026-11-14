@@ -34,10 +34,25 @@ class AppSignup extends ChangeNotifier {
   List<({String id, String title})> get buttons =>
       step == AppSignupStep.chat && lines.isNotEmpty && !lines.last.mine ? lines.last.buttons : const [];
 
+  bool _gone = false;
+
+  @override
+  void notifyListeners() {
+    // The screen goes as the new business opens, while a turn may still end.
+    if (!_gone) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _gone = true;
+    super.dispose();
+  }
+
   Future<void> _run(Future<void> Function() f) async {
     busy = true;
     error = null;
     notifyListeners();
+    final kept = lines.length;
     try {
       await f();
     } on ApiError catch (e) {
@@ -48,6 +63,11 @@ class AppSignup extends ChangeNotifier {
       error = 'You’re offline. Check your connection and try again.';
     } on Object {
       error = 'Something went wrong. Try again.';
+    }
+    // A turn that did not go through: the answer is taken back, so its
+    // question's buttons are there again to try.
+    if (error != null && step == AppSignupStep.chat && lines.length > kept) {
+      lines.removeRange(kept, lines.length);
     }
     busy = false;
     notifyListeners();

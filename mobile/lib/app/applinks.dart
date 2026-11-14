@@ -45,8 +45,17 @@ class LinkInbox extends ChangeNotifier {
 
   bool get waiting => _pending != null;
 
-  /// A link that came (tests give one).
+  Uri? _last;
+  DateTime _lastAt = DateTime(2000);
+
+  /// A link that came (tests give one). The first link may come twice (the
+  /// initial link, and again on the stream): once is opened; the same link
+  /// tapped again later opens again.
   void receive(Uri uri) {
+    final now = DateTime.now();
+    if (uri == _last && now.difference(_lastAt) < const Duration(seconds: 3)) return;
+    _last = uri;
+    _lastAt = now;
     final page = appPageOf(uri);
     if (page == null) return;
     _pending = page;

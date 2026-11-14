@@ -91,7 +91,15 @@ bool appPath(String? link) =>
 final _uuid = RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$');
 
 class PhoneNotifications extends ChangeNotifier {
-  PhoneNotifications({required this.auth, required this.keys, this.platform});
+  PhoneNotifications({required this.auth, required this.keys, this.platform}) {
+    // Who is signed in known later (offline at signing in): start then.
+    auth.addListener(() {
+      if (_wanted && auth.state == AuthState.signedIn && _tenant.isNotEmpty && _started != auth.session) unawaited(start());
+    });
+  }
+
+  /// A home asked to start (start waits for the business to be known).
+  bool _wanted = false;
 
   final Auth auth;
   final KeyStore keys;
@@ -147,7 +155,11 @@ class PhoneNotifications extends ChangeNotifier {
   /// business: Firebase, this phone's device, the taps.
   Future<void> start() async {
     final p = platform;
+    _wanted = true;
     if (p == null || auth.session == _started) return;
+    // Not before the business is known: its keys are per business (offline
+    // at signing in, me comes later and start runs again).
+    if (_tenant.isEmpty) return;
     _started = auth.session;
     final at = auth.session;
     final AppConfig c;
@@ -176,17 +188,20 @@ class PhoneNotifications extends ChangeNotifier {
         ..add(p.arrived.listen(_arrived))
         ..add(p.tokenChanged.listen((t) => _renew(t)));
       final first = await p.openedFrom();
-      if (first != null) _tapped(first);
+      // A tap for another business switches it: this session's start ends.
+      if (first != null) await _tapped(first);
+      if (at != auth.session) return;
     }
     blocked = await p.permission() == PushPermission.denied;
     isOn = await keys.read(_onKey) == '1';
     _token = await keys.read(_tokenKey);
+    if (at != auth.session) return;
     notifyListeners();
     if (isOn) {
       // Still a device of this business? Found by its token, never added
       // back if removed from another device; a changed token replaces it.
       final now = await p.token();
-      if (now == null) return;
+      if (now == null || at != auth.session) return;
       try {
         await _register(now, known: now == _token, replaces: now == _token ? null : _token);
       } on ApiError catch (e) {
@@ -360,35 +375,52 @@ class PhoneNotifications extends ChangeNotifier {
     return [for (final b in list) for (final k in ['push-on', 'push-token', 'push-asked']) '$k:$b'];
   }
 
-  /// A tap: its page, in its business.
+  /// A tap (or a toast's Open): its page, in its business.
+  Future<void> open(Map<String, String> data) => _tapped(data);
+
+  /// Where the page a tap waits on belongs ('' for the business in use).
+  String _pendingFor = '';
+
+  /// A tap that could not be opened, to say once (the home shows it).
+  String? tapProblem;
+
   Future<void> _tapped(Map<String, String> data) async {
     final link = appPath(data['link']) ? data['link']! : '/chat';
-    final business = data['business'];
-    if (business != null && _uuid.hasMatch(business) && business != _tenant) {
+    final b = data['business'];
+    final business = b != null && _uuid.hasMatch(b) ? b : '';
+    pending = link;
+    _pendingFor = business;
+    if (business.isNotEmpty && business != _tenant) {
       try {
-        pending = link;
         await auth.switchTo(business);
-        return; // the new home opens it
+        return; // the new home opens it, in its business
       } on Object {
         pending = null;
-        error = 'This notification is for another of your businesses, and Taskiem could not open it here. Sign in to that business to see it.';
-        notifyListeners();
-        return;
+        tapProblem = 'This notification is for another of your businesses, and Taskiem could not open it here. Sign in to that business to see it.';
       }
     }
-    pending = link;
     notifyListeners();
   }
 
   void _arrived(PushNote n) {
-    if (n.tag.isNotEmpty && n.tag == showing) return;
+    // The conversation on the screen, in this business: it is there already.
+    final mine = n.business == null || n.business == _tenant;
+    if (mine && n.tag.isNotEmpty && n.tag == showing) return;
     onArrived?.call(n);
   }
 
-  /// The page waiting to be opened, once.
+  /// The page waiting to be opened, once, when it is for the business in use.
   String? takePending() {
     final p = pending;
+    if (p == null || (_pendingFor.isNotEmpty && _pendingFor != _tenant)) return null;
     pending = null;
+    return p;
+  }
+
+  /// The tap's problem, once.
+  String? takeProblem() {
+    final p = tapProblem;
+    tapProblem = null;
     return p;
   }
 

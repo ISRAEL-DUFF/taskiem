@@ -51,4 +51,17 @@ void main() {
     inbox.dispose();
     await links.close();
   });
+
+  test('the first link, given twice, opens once', () async {
+    final links = StreamController<Uri>();
+    final u = Uri.parse('https://staging.ispend.name.ng/approvals');
+    final inbox = LinkInbox(links: links.stream, first: () async => u);
+    await pumpEventQueue();
+    expect(inbox.take(), '/approvals');
+    links.add(u);
+    await pumpEventQueue();
+    expect(inbox.take(), isNull);
+    inbox.dispose();
+    await links.close();
+  });
 }

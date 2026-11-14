@@ -68,6 +68,18 @@ void main() {
     expect(auth.transport.token, 'tok-new');
   });
 
+  test('a turn that fails gives the question’s buttons back', () async {
+    final (auth, server) = _world();
+    final s = AppSignup(auth);
+    await s.sendCode('+2348031239901');
+    await s.verify('123456');
+    server.offline = true;
+    await s.answer('Yes', reply: 'su:yes');
+    expect(s.error, contains('offline'));
+    expect(s.lines.where((l) => l.mine), isEmpty);
+    expect(s.buttons.map((b) => b.title), ['Yes', 'No']);
+  });
+
   test('a number already on an account is sent to sign in', () async {
     final (auth, server) = _world();
     server.answers['POST /v1/signup/app/verify'] = () => _json({'error': 'This number is already on a Taskiem account. Sign in with WhatsApp instead.', 'sign_in': true}, 409);

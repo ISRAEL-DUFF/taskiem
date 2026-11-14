@@ -67,6 +67,8 @@ class _AppSignUpScreenState extends State<AppSignUpScreen> {
     if (words.trim().isEmpty) return;
     _answer.clear();
     await _s.answer(words);
+    // Not gone through: the words back in the box, to send again.
+    if (mounted && _s.error != null && _answer.text.isEmpty) _answer.text = words;
   }
 
   @override

@@ -1,6 +1,8 @@
 // Taskiem's chat as a phone app (docs/spec/mobile-app.md): the web chat,
 // drawn and moving the same.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart' show MaterialApp;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -368,6 +370,8 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   void _notified() {
     final notify = widget.notify;
     if (notify == null || !mounted) return;
+    final problem = notify.takeProblem();
+    if (problem != null) showTkToast(context, problem, error: true);
     final link = notify.takePending();
     if (link != null) _openPath(link);
   }
@@ -381,10 +385,16 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   void _arrived(PushNote n) {
     if (!mounted) return;
     final words = n.body.isEmpty ? n.title : '${n.title}: ${n.body}';
-    showTkToast(context, words, action: 'Open', onAction: () => _openPath(appPath(n.link) ? n.link : '/chat'));
+    // Open goes the way a tap does: to its business first.
+    showTkToast(context, words, action: 'Open', onAction: () => widget.notify?.open(n.data));
   }
 
+  /// The ask-once question is up: a page to open waits for it.
+  bool _asking = false;
+  String? _afterAsking;
+
   Future<void> _askOnce(PhoneNotifications notify) async {
+    _asking = true;
     final yes = await showTkConfirm(
       context,
       title: 'Get a notification when a business or customer writes?',
@@ -398,6 +408,10 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     } else {
       await notify.declined();
     }
+    _asking = false;
+    final then = _afterAsking;
+    _afterAsking = null;
+    if (then != null && mounted) unawaited(_openPath(then));
   }
 
   /// Opens a page of the app by its web path (a notification's link, the
@@ -405,6 +419,11 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   Future<void> _openPath(String path) async {
     final uri = Uri.tryParse(path);
     if (uri == null || !mounted) return;
+    // Not over the ask-once question (closing it would count as Not now).
+    if (_asking) {
+      _afterAsking = path;
+      return;
+    }
     final nav = Navigator.of(context);
     nav.popUntil((r) => r.isFirst);
     final p = uri.path;

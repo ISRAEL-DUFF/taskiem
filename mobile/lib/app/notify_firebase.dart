@@ -37,9 +37,15 @@ class FirebasePush implements PushPlatform {
         });
       }
       if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp(
-          options: FirebaseOptions(apiKey: v.apiKey, appId: appId, messagingSenderId: v.senderId, projectId: v.projectId),
-        );
+        try {
+          await Firebase.initializeApp(
+            options: FirebaseOptions(apiKey: v.apiKey, appId: appId, messagingSenderId: v.senderId, projectId: v.projectId),
+          );
+        } on FirebaseException catch (e) {
+          // Started already at the app's start, from the values kept then
+          // (the server's changed values take over at the next start).
+          if (e.code != 'duplicate-app') rethrow;
+        }
       }
       // An iPhone shows nothing itself while the app is in front, as Android does.
       await _m.setForegroundNotificationPresentationOptions(alert: false, badge: true, sound: false);
@@ -50,9 +56,12 @@ class FirebasePush implements PushPlatform {
     }
   }
 
+  // Android 13 and later says denied while it can still ask again (it stops
+  // asking after the second no: deniedPermanently); an iPhone's denied is final.
   static PushPermission _of(AuthorizationStatus s) => switch (s) {
     AuthorizationStatus.authorized || AuthorizationStatus.provisional => PushPermission.granted,
-    AuthorizationStatus.denied || AuthorizationStatus.deniedPermanently => PushPermission.denied,
+    AuthorizationStatus.deniedPermanently => PushPermission.denied,
+    AuthorizationStatus.denied => Platform.isIOS ? PushPermission.denied : PushPermission.notAsked,
     AuthorizationStatus.notDetermined => PushPermission.notAsked,
   };
 
