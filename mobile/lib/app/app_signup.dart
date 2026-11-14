@@ -35,6 +35,7 @@ class AppSignup extends ChangeNotifier {
       step == AppSignupStep.chat && lines.isNotEmpty && !lines.last.mine ? lines.last.buttons : const [];
 
   bool _gone = false;
+  bool _made = false;
 
   @override
   void notifyListeners() {
@@ -53,6 +54,7 @@ class AppSignup extends ChangeNotifier {
     error = null;
     notifyListeners();
     final kept = lines.length;
+    _made = false;
     try {
       await f();
     } on ApiError catch (e) {
@@ -66,7 +68,11 @@ class AppSignup extends ChangeNotifier {
     }
     // A turn that did not go through: the answer is taken back, so its
     // question's buttons are there again to try.
-    if (error != null && step == AppSignupStep.chat && lines.length > kept) {
+    if (_made && error != null) {
+      // The business is made: nothing to take back; sign in to open it.
+      step = AppSignupStep.signIn;
+      error = 'Your business is ready. Sign in with WhatsApp to open it.';
+    } else if (error != null && step == AppSignupStep.chat && lines.length > kept) {
       lines.removeRange(kept, lines.length);
     }
     busy = false;
@@ -118,9 +124,11 @@ class AppSignup extends ChangeNotifier {
     }) as Map);
     _said(r['messages']);
     if (r['done'] == true) {
+      _made = true;
       final session = r['token'] as String?;
       if (session != null) {
         // Signed in: the app's home takes over, Taskiem's conversation first.
+        auth.welcome = true;
         await auth.signedInWith(session);
       } else {
         error = 'Your business is ready. Sign in with WhatsApp to open it.';

@@ -238,6 +238,9 @@ class Auth extends ChangeNotifier {
     restored = restoredBefore;
   }
 
+  /// Just signed up in the app: the home opens Taskiem's conversation first.
+  bool welcome = false;
+
   /// Who is signed in, read again (a way in added: me.factors).
   Future<void> refreshMe() async {
     try {

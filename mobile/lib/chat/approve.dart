@@ -84,8 +84,18 @@ class _ApproveSheetState extends State<ApproveSheet> {
       _error = null;
     });
     try {
-      // Asked for a confirmation and no code typed: the phone's passkey.
-      final passkey = _stepUp != null && _code.text.isEmpty ? await approvalPasskey(widget.auth, ap, widget.decision) : null;
+      // Asked for a confirmation and no code typed: the phone's passkey,
+      // where the phone has one; else the code is what it needs.
+      Map<String, dynamic>? passkey;
+      if (_stepUp != null && _code.text.isEmpty) {
+        if (!await passkeys.available()) {
+          setState(() => _error = _stepUp == 'passkey'
+              ? 'This needs your passkey, and this phone cannot use one. Decide it on the web, on a device with your passkey.'
+              : 'This phone cannot use a passkey. Type a code from your authenticator app.');
+          return;
+        }
+        passkey = await approvalPasskey(widget.auth, ap, widget.decision);
+      }
       await decideApproval(widget.auth, ap, widget.decision, comment: _comment.text, code: _code.text, passkey: passkey);
       setState(() => _saved = true);
       // The tick draws, then the sheet goes and the card with it.

@@ -60,6 +60,9 @@ class FakeFirebase implements PushPlatform {
   Future<void> forget() async => forgot = true;
   @override
   Future<void> unkeep() async => unkept = true;
+  bool cleared = false;
+  @override
+  Future<void> clearShown() async => cleared = true;
 }
 
 http.Response _json(Object body, [int status = 200]) => http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json; charset=utf-8'});
@@ -283,7 +286,10 @@ void main() {
   test('a tap that opened the app from closed, for another business: switched first, opened only there', () async {
     const other = '0192f6c4-8a9e-7b3c-9d2e-112233445566';
     final server = PushServer();
-    server.answers['POST /v1/me/switch'] = () => _json({'token': 'tok-2'});
+    server.answers['POST /v1/me/switch'] = () {
+      server.answers['GET /v1/me'] = () => _json({'tenant_id': other, 'auth_method': 'password', 'permissions': <String>[], 'roles': ['owner']});
+      return _json({'token': 'tok-2'});
+    };
     final fb = FakeFirebase()..initial = {'link': '/bills/b1', 'business': other};
     final (auth, n, _, _) = await signedIn(server, fb: fb);
     final session = auth.session;
@@ -291,12 +297,13 @@ void main() {
     n.addListener(() => told++);
     await n.start();
     expect(auth.session, greaterThan(session));
-    // The old business never gets it (still t1 here, as the fake's me says).
-    expect(n.takePending(), isNull);
+    // Not told while the switch ran (the old home would have opened it in
+    // the old business); the new business's home takes it.
     expect(told, 0);
+    expect(n.takePending(), '/bills/b1');
     // A switch that fails is said once.
     server.answers['POST /v1/me/switch'] = () => _json({'error': 'no'}, 404);
-    await n.open({'link': '/approvals', 'business': other});
+    await n.open({'link': '/approvals', 'business': '0192f6c4-8a9e-7b3c-9d2e-000000000003'});
     expect(n.takeProblem(), contains('another of your businesses'));
     expect(n.takeProblem(), isNull);
   });
@@ -322,6 +329,60 @@ void main() {
     fb.notes.add(const PushNote(title: 'Cherry', body: 'Hi', data: {'tag': 'def', 'link': '/chat?with=def'}));
     await pumpEventQueue();
     expect(said, ['Cherry']);
+  });
+
+  test('Android’s "Don’t allow" (it may ask again): nothing is turned on, and it is said', () async {
+    final server = PushServer();
+    final (_, n, _, _) = await signedIn(server, fb: FakeFirebase()..allowed = PushPermission.notAsked);
+    await n.start();
+    await n.turnOn();
+    expect(n.isOn, isFalse);
+    expect(n.blocked, isFalse);
+    expect(n.error, contains('choose Allow'));
+    expect(server.devices, isEmpty);
+  });
+
+  test('two starts at once are one: the second waits for the first', () async {
+    final server = PushServer();
+    final (_, n, _, _) = await signedIn(server);
+    await Future.wait([n.start(), n.start()]);
+    expect(n.available, isTrue);
+    expect(server.calls.where((c) => c.path == '/v1/app/config'), hasLength(1));
+    expect(await n.shouldAsk(), isTrue);
+  });
+
+  test('a switch that lands in another business says so, and nothing waits', () async {
+    const other = '0192f6c4-8a9e-7b3c-9d2e-112233445566';
+    final server = PushServer();
+    server.answers['POST /v1/me/switch'] = () => _json({'token': 'tok-2'});
+    final (_, n, _, _) = await signedIn(server);
+    await n.start();
+    await n.open({'link': '/approvals', 'business': other});
+    expect(n.takePending(), isNull);
+    expect(n.takeProblem(), contains('could not open'));
+  });
+
+  test('signing out takes what was shown off the phone, and a tap after it opens nothing', () async {
+    final server = PushServer();
+    server.answers['POST /v1/auth/logout'] = () => http.Response('', 204);
+    final (auth, n, fb, _) = await signedIn(server);
+    await n.start();
+    await auth.signOut();
+    expect(fb.cleared, isTrue);
+    fb.taps.add({'link': '/chat?with=abc'});
+    await pumpEventQueue();
+    expect(n.takePending(), isNull);
+  });
+
+  test('the conversation on the screen is the newest screen’s: an older one closing leaves it', () async {
+    final (_, n, _, _) = await signedIn(PushServer());
+    final older = Object(), newer = Object();
+    n.show('abc', older);
+    n.show('abc', newer);
+    n.unshow(older);
+    expect(n.showing, 'abc');
+    n.unshow(newer);
+    expect(n.showing, isNull);
   });
 
   test('only paths of the app are opened', () {

@@ -13,11 +13,13 @@ import 'app/openers.dart';
 import 'app/config.dart';
 import 'kit/keyboard.dart';
 import 'app/lock.dart';
+import 'app/app_signup.dart' show AppSignup;
 import 'app/applinks.dart';
 import 'app/notify.dart';
 import 'app/notify_firebase.dart';
 import 'app/prefs.dart';
 import 'app/session.dart';
+import 'app/sound.dart' show chime;
 import 'app/store.dart' show LocalStore;
 import 'api/api.g.dart';
 import 'chat/bills_page.dart' show openBill;
@@ -209,6 +211,16 @@ class _SignedOutState extends State<_SignedOut> {
   String _at = 'in';
   bool _open = false;
   bool _chat = false;
+  bool _passkeys = true;
+  // Kept while signed out: back from Get started and in again finds the
+  // conversation where it was (its code and token are not spent again).
+  late final AppSignup _signup = AppSignup(widget.auth);
+
+  @override
+  void dispose() {
+    _signup.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -218,7 +230,12 @@ class _SignedOutState extends State<_SignedOut> {
     }, onError: (_) {});
     // Signing up as on WhatsApp, where the server has it (M4 N7).
     widget.auth.api.appConfig().then((c) {
-      if (mounted) setState(() => _chat = c.chatSignup ?? false);
+      if (mounted) {
+        setState(() {
+          _chat = c.chatSignup ?? false;
+          _passkeys = c.passkeys;
+        });
+      }
     }, onError: (_) {});
   }
 
@@ -233,8 +250,8 @@ class _SignedOutState extends State<_SignedOut> {
       },
       child: switch (_at) {
         'email' => SignUpScreen(auth: widget.auth, onSignIn: () => go('in')),
-        'app' => AppSignUpScreen(auth: widget.auth, onSignIn: () => go('in'), onEmail: _open ? () => go('email') : null),
-        _ => SignInScreen(auth: widget.auth, signup: _open || _chat, onSignUp: () => go(_chat ? 'app' : 'email')),
+        'app' => AppSignUpScreen(auth: widget.auth, signup: _signup, onSignIn: () => go('in'), onEmail: _open ? () => go('email') : null),
+        _ => SignInScreen(auth: widget.auth, signup: _open || _chat, passkeys: _passkeys, onSignUp: () => go(_chat ? 'app' : 'email')),
       },
     );
   }
@@ -323,6 +340,13 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     // Notifications on this phone: started for this session's business; a
     // tapped one opens its page; one that comes with the app in front is a
     // toast; asked once after signing in.
+    // Just signed up in the app: Taskiem's conversation, its first message.
+    if (widget.auth.welcome) {
+      widget.auth.welcome = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats)));
+      });
+    }
     // A link to one of this server's pages: opened now, or the one that
     // waited behind signing in.
     widget.links?.addListener(_linked);
@@ -384,6 +408,8 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
 
   void _arrived(PushNote n) {
     if (!mounted) return;
+    // The chime the app already has, where the person keeps it on.
+    if (widget.prefs?.sound ?? true) unawaited(chime());
     final words = n.body.isEmpty ? n.title : '${n.title}: ${n.body}';
     // Open goes the way a tap does: to its business first.
     showTkToast(context, words, action: 'Open', onAction: () => widget.notify?.open(n.data));
@@ -454,7 +480,12 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     final one = RegExp(r'^/(invoices|bills|purchases|trade-orders|storefront/orders)/([^/]+)$').firstMatch(p);
     final auth = _chats.auth;
     if (one != null) {
-      final id = Uri.decodeComponent(one[2]!);
+      final String id;
+      try {
+        id = Uri.decodeComponent(one[2]!);
+      } on FormatException {
+        return tab(one[1] == 'invoices' || one[1] == 'bills' ? 2 : 3);
+      }
       switch (one[1]) {
         case 'invoices':
           tab(2);
@@ -591,12 +622,12 @@ class _OpenState extends State<_Open> {
   void initState() {
     super.initState();
     // On the screen: its notifications show nothing while it is.
-    widget.notify?.showing = widget.conv.link;
+    widget.notify?.show(widget.conv.link, this);
   }
 
   @override
   void dispose() {
-    if (widget.notify?.showing == widget.conv.link) widget.notify?.showing = null;
+    widget.notify?.unshow(this);
     _data.dispose();
     super.dispose();
   }
@@ -677,12 +708,12 @@ class _OpenCustomerState extends State<_OpenCustomer> {
   @override
   void initState() {
     super.initState();
-    widget.notify?.showing = 'c-${widget.id}';
+    widget.notify?.show('c-${widget.id}', this);
   }
 
   @override
   void dispose() {
-    if (widget.notify?.showing == 'c-${widget.id}') widget.notify?.showing = null;
+    widget.notify?.unshow(this);
     _data.dispose();
     super.dispose();
   }

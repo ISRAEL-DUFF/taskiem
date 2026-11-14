@@ -132,6 +132,15 @@ class FirebasePush implements PushPlatform {
   }
 
   @override
+  Future<void> clearShown() async {
+    try {
+      if (Platform.isAndroid) await _native.invokeMethod<void>('clear');
+    } on Object {
+      // Left in the tray.
+    }
+  }
+
+  @override
   Future<void> unkeep() async {
     try {
       if (Platform.isAndroid) await _native.invokeMethod<void>('keep', null);

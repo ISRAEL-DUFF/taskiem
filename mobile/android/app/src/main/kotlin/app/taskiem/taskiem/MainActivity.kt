@@ -18,6 +18,11 @@ class MainActivity : FlutterFragmentActivity() {
                     TaskiemApplication.keep(applicationContext, call.arguments as? Map<String, String>)
                     result.success(null)
                 }
+                "clear" -> {
+                    // Signing out: what this person was shown leaves the tray.
+                    (getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager).cancelAll()
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }

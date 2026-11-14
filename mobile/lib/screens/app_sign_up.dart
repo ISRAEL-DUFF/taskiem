@@ -22,7 +22,7 @@ class AppSignUpScreen extends StatefulWidget {
   /// The web's sign-up form, where the server has it open.
   final VoidCallback? onEmail;
 
-  /// A test's own.
+  /// Kept by the screen that shows it (or a test's own).
   final AppSignup? signup;
 
   @override

@@ -81,6 +81,9 @@ abstract class PushPlatform {
 
   /// Forgets the server's values kept for a closed app's start.
   Future<void> unkeep();
+
+  /// Takes the notifications shown off the phone (signing out).
+  Future<void> clearShown();
 }
 
 /// Whether [link] is a path of the app a notification may open (the
@@ -92,11 +95,18 @@ final _uuid = RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 
 class PhoneNotifications extends ChangeNotifier {
   PhoneNotifications({required this.auth, required this.keys, this.platform}) {
-    // Who is signed in known later (offline at signing in): start then.
-    auth.addListener(() {
-      if (_wanted && auth.state == AuthState.signedIn && _tenant.isNotEmpty && _started != auth.session) unawaited(start());
-    });
+    auth.addListener(_authChanged);
   }
+
+  // Who is signed in known later (offline at signing in): start then.
+  void _authChanged() {
+    if (_wanted && auth.state == AuthState.signedIn && _tenant.isNotEmpty && _started != auth.session) unawaited(start());
+  }
+
+  /// The start running, which a second caller waits for (the home asks
+  /// whether to ask once only when it is done).
+  Future<void>? _starting;
+  int _startingFor = -1;
 
   /// A home asked to start (start waits for the business to be known).
   bool _wanted = false;
@@ -140,6 +150,20 @@ class PhoneNotifications extends ChangeNotifier {
   /// The conversation on the screen (its tag: a link, or `c-` and a customer):
   /// a notification for it shows nothing.
   String? showing;
+  Object? _showingBy;
+
+  /// [by] (a screen) shows the conversation [tag].
+  void show(String tag, Object by) {
+    showing = tag;
+    _showingBy = by;
+  }
+
+  /// [by] closes: what it showed, if nothing newer took its place.
+  void unshow(Object by) {
+    if (!identical(_showingBy, by)) return;
+    showing = null;
+    _showingBy = null;
+  }
 
   String? _device;
   String? _token;
@@ -153,7 +177,18 @@ class PhoneNotifications extends ChangeNotifier {
 
   /// Starts what notifications need once signed in, for this session's
   /// business: Firebase, this phone's device, the taps.
-  Future<void> start() async {
+  Future<void> start() {
+    final running = _starting;
+    if (running != null && _startingFor == auth.session) return running;
+    final f = _start();
+    _starting = f;
+    _startingFor = auth.session;
+    return f.whenComplete(() {
+      if (identical(_starting, f)) _starting = null;
+    });
+  }
+
+  Future<void> _start() async {
     final p = platform;
     _wanted = true;
     if (p == null || auth.session == _started) return;
@@ -162,11 +197,17 @@ class PhoneNotifications extends ChangeNotifier {
     if (_tenant.isEmpty) return;
     _started = auth.session;
     final at = auth.session;
+    // Another business (or person): nothing of the last one's stands.
+    isOn = false;
+    blocked = false;
+    view = null;
+    _device = null;
+    _token = null;
     final AppConfig c;
     try {
       c = await auth.api.appConfig();
     } on Object {
-      _started = -1; // asked again next time
+      if (_started == at) _started = -1; // asked again next time
       return;
     }
     final fcm = c.push?.fcm;
@@ -265,6 +306,10 @@ class PhoneNotifications extends ChangeNotifier {
     if (blocked) {
       throw ApiError(0, {'error': 'Notifications are off for Taskiem in this phone’s settings. Turn them on there (Settings, Apps, Taskiem, Notifications), then try again.'});
     }
+    // Android's "Don't allow", which it may ask again: nothing is on.
+    if (allowed != PushPermission.granted) {
+      throw ApiError(0, {'error': 'Notifications were not allowed. Turn this on again and choose Allow when the phone asks.'});
+    }
     final t = await p.token();
     if (t == null) throw ApiError(0, {'error': 'This phone could not be set up for notifications. Try again in a moment.'});
     await _register(t);
@@ -347,17 +392,26 @@ class PhoneNotifications extends ChangeNotifier {
 
   /// Signed out, by the person or the server: nothing of theirs stays.
   Future<void> forgotten() async {
-    try {
-      await platform?.forget();
-    } on Object {
-      // Not reached: the server drops the token when Firebase says it is gone.
-    }
+    // Off first: a token Firebase changes meanwhile is not registered again.
     isOn = false;
     _device = null;
     _token = null;
     view = null;
     pending = null;
+    tapProblem = null;
     _started = -1;
+    _wanted = false;
+    try {
+      await platform?.forget();
+    } on Object {
+      // Not reached: the server drops the token when Firebase says it is gone.
+    }
+    try {
+      // What this person was shown stays on no lock screen.
+      await platform?.clearShown();
+    } on Object {
+      // Left: the next person's taps on them open nothing of theirs.
+    }
     // The per-business keys are found by what was kept.
     for (final k in await _keptKeys()) {
       try {
@@ -385,6 +439,8 @@ class PhoneNotifications extends ChangeNotifier {
   String? tapProblem;
 
   Future<void> _tapped(Map<String, String> data) async {
+    // A notification left from before signing out: nobody's to open now.
+    if (auth.state != AuthState.signedIn) return;
     final link = appPath(data['link']) ? data['link']! : '/chat';
     final b = data['business'];
     final business = b != null && _uuid.hasMatch(b) ? b : '';
@@ -393,7 +449,9 @@ class PhoneNotifications extends ChangeNotifier {
     if (business.isNotEmpty && business != _tenant) {
       try {
         await auth.switchTo(business);
-        return; // the new home opens it, in its business
+        if (_tenant == business || _tenant.isEmpty) return; // the new home opens it, in its business
+        pending = null;
+        tapProblem = 'Taskiem could not open this notification’s business. Switch to it under Settings, Your businesses.';
       } on Object {
         pending = null;
         tapProblem = 'This notification is for another of your businesses, and Taskiem could not open it here. Sign in to that business to see it.';
@@ -439,6 +497,7 @@ class PhoneNotifications extends ChangeNotifier {
 
   @override
   void dispose() {
+    auth.removeListener(_authChanged);
     for (final s in _subs) {
       s.cancel();
     }
