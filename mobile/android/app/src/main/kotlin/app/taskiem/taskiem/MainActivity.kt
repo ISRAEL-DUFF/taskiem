@@ -26,5 +26,19 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> result.notImplemented()
             }
         }
+        // lib/app/lock.dart: with the app lock on, the app switcher shows no
+        // picture of the screens (Android 13 and later), as WhatsApp's lock
+        // does, without stopping screenshots or covering the app while it is
+        // in front.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "taskiem/window").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "recents" -> {
+                    val hide = call.arguments as? Boolean ?: false
+                    if (android.os.Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(!hide)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 }

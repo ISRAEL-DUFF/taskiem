@@ -1,9 +1,13 @@
-// The app lock (docs/spec/mobile-app.md §5.2): opening the app with a kept
-// session, or coming back after 5 minutes away, asks for the phone's own
-// fingerprint, face or PIN, so a phone left on a counter does not open the
-// business's chats. It is the phone's lock, not the server's step-up. A
-// phone with no lock of its own set opens without it.
+// The app lock (docs/spec/mobile-app.md §5.2), as WhatsApp's: off until the
+// person turns it on in Settings. On, opening the app with a kept session,
+// or coming back after the time they chose (at once, a minute, half an
+// hour), asks for the phone's own fingerprint, face or PIN, so a phone left
+// on a counter does not open the business's chats. It is the phone's lock,
+// not the server's step-up. A phone with no lock of its own set opens
+// without it. A dialog, the notification shade or the phone's own picker
+// over the app is not being away: nothing is covered or asked for then.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -12,8 +16,56 @@ import 'package:local_auth/local_auth.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 
-/// How long the app may be away before it locks.
-const lockAfter = Duration(minutes: 5);
+/// The times the lock can wait, as WhatsApp's: at once, a minute, half an hour.
+const lockTimes = [Duration.zero, Duration(minutes: 1), Duration(minutes: 30)];
+
+/// The time it waits when turned on without a choice.
+const lockAfter = Duration(minutes: 1);
+
+/// How a lock time is said in Settings.
+String lockTimeLabel(Duration d) => d == Duration.zero
+    ? 'Immediately'
+    : d.inMinutes == 1
+    ? 'After 1 minute'
+    : 'After ${d.inMinutes} minutes';
+
+int _outside = 0;
+
+const _window = MethodChannel('taskiem/window');
+
+/// Whether the app switcher may show a picture of the screens: not with the
+/// lock on. On Android the phone leaves the picture out (13 and later); an
+/// iPhone takes it as the app goes, so the app covers itself then
+/// ([AppLock]). A test stands in for it.
+Future<void> Function(bool hide) hideFromRecents = (hide) async {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+  try {
+    await _window.invokeMethod<void>('recents', hide);
+  } on Object {
+    // An older app shell: the picture shows.
+  }
+};
+
+/// Whether the app covers itself as soon as it is not in front (the
+/// switcher opening, a call): on an iPhone, where the switcher's picture is
+/// taken then. Android leaves the picture out instead, so a dialog, the
+/// notification shade or the phone's fingerprint prompt over the app never
+/// covers it there.
+bool get coverWhenInactive => !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+/// Runs [f], which opens the phone's own screen over the app (the camera,
+/// the photo picker, a file picker, the share sheet), so that going there
+/// and back is not counted as being away: the app neither covers itself nor
+/// locks, as WhatsApp does not when a photo is picked.
+Future<T> stepOut<T>(Future<T> Function() f) async {
+  _outside++;
+  try {
+    return await f();
+  } finally {
+    // Only going away is checked against it: coming back needs nothing.
+    _outside--;
+  }
+}
 
 /// The phone's own unlock: local_auth, or a stand-in in tests.
 abstract class Unlocker {
@@ -53,18 +105,21 @@ class PhoneUnlocker implements Unlocker {
 /// Covers [child] while locked, keeping it as it was underneath (every
 /// screen open stays open, its place kept). It sits above the app's
 /// screens, so nothing opened on top of the chats shows past it. [active]
-/// is whether there is anything to lock (signed in); [now] is the clock,
-/// replaceable in tests.
+/// is whether there is anything to lock (signed in, with the lock turned
+/// on); [now] is the clock, replaceable in tests.
 class AppLock extends StatefulWidget {
-  const AppLock({super.key, required this.child, required this.active, required this.unlocker, this.startLocked = true, this.hideWhenAway, this.now = DateTime.now});
+  const AppLock({super.key, required this.child, required this.active, required this.unlocker, this.startLocked = true, this.after = lockAfter, this.signedIn, this.now = DateTime.now});
 
   final Widget child;
   final bool active;
 
-  /// Whether to cover the screens while the app is not in front (the app
-  /// switcher's picture of it): whenever someone is signed in, with the
-  /// lock on or off. Null: as [active].
-  final bool? hideWhenAway;
+  /// Whether someone is signed in, with the lock on or off. Null: as
+  /// [active]. The lock turned on in Settings does not ask at once; a kept
+  /// session opened does.
+  final bool? signedIn;
+
+  /// How long the app may be away before it locks (zero: at once).
+  final Duration after;
 
   /// Whether to ask at once: a session kept from before is opened with the
   /// phone's lock; one the person signed in to just now is not.
@@ -81,14 +136,16 @@ class AppLockState extends State<AppLock> with WidgetsBindingObserver {
   DateTime? _away;
   bool _asking = false;
 
-  /// The app is not in front: its screens are covered, so the phone's app
-  /// switcher shows the brand and not a conversation or an amount.
+  /// The app is not in front, with the lock on: its screens are covered,
+  /// so the phone's app switcher shows the brand and not a conversation or
+  /// an amount. With the lock off nothing is covered, as on WhatsApp.
   bool _behind = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    hideFromRecents(widget.active);
     _ask();
   }
 
@@ -96,8 +153,15 @@ class AppLockState extends State<AppLock> with WidgetsBindingObserver {
   void didUpdateWidget(AppLock oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.active == widget.active) return;
-    // Signed in (a kept session opened, or signed in just now), or out.
+    hideFromRecents(widget.active);
     _away = null;
+    _behind = false;
+    if ((oldWidget.signedIn ?? oldWidget.active) == (widget.signedIn ?? widget.active)) {
+      // The lock turned on or off in Settings: nothing asked now.
+      setState(() => locked = false);
+      return;
+    }
+    // Signed in (a kept session opened, or signed in just now), or out.
     setState(() => locked = widget.active && widget.startLocked);
     _ask();
   }
@@ -110,22 +174,29 @@ class AppLockState extends State<AppLock> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    final behind = state != AppLifecycleState.resumed;
-    if (behind != _behind) setState(() => _behind = behind);
     switch (state) {
       case AppLifecycleState.hidden:
       case AppLifecycleState.paused:
-        if (widget.active) _away ??= widget.now();
+        // Gone to another app or the home screen; not to the phone's own
+        // picker opened from here.
+        if (!widget.active || _outside > 0) return;
+        _away ??= widget.now();
+        if (!_behind) setState(() => _behind = true);
       case AppLifecycleState.resumed:
+        if (_behind) setState(() => _behind = false);
         final away = _away;
         _away = null;
-        if (away != null && widget.now().difference(away) >= lockAfter) {
+        if (widget.active && away != null && widget.now().difference(away) >= widget.after) {
           // The keyboard goes too: nothing typed shows over the lock.
           FocusManager.instance.primaryFocus?.unfocus();
           setState(() => locked = true);
           _ask();
         }
       case AppLifecycleState.inactive:
+        // A dialog, the notification shade, the phone's fingerprint prompt:
+        // still in the app, nothing covered or counted. An iPhone's switcher
+        // takes its picture now, so there, with the lock on, it is covered.
+        if (coverWhenInactive && widget.active && _outside == 0 && !_behind) setState(() => _behind = true);
       case AppLifecycleState.detached:
         break;
     }
@@ -146,7 +217,7 @@ class AppLockState extends State<AppLock> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final asked = widget.active && locked;
-    final covered = asked || (_behind && (widget.hideWhenAway ?? widget.active));
+    final covered = asked || (_behind && widget.active);
     // Offstage: not drawn, not pressed, not read out, but kept.
     return Stack(
       fit: StackFit.expand,

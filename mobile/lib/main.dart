@@ -68,7 +68,9 @@ void main() {
     await prefs.forgetPerson();
     await notify.forgotten();
   };
-  auth.start();
+  // The app lock's setting read first: a kept session opened with the lock
+  // on is asked for it (AppLock), and one with it off is not.
+  prefs.ready.then((_) => auth.start());
   // Links to this server's pages, opened in the app (lib/app/applinks.dart).
   final links = LinkInbox();
   runApp(TaskiemApp(auth: auth, unlocker: PhoneUnlocker(), prefs: prefs, notify: notify, links: links));
@@ -123,13 +125,13 @@ class TaskiemApp extends StatelessWidget {
                 : ListenableBuilder(
                     listenable: Listenable.merge([auth!, ?prefs]),
                     builder: (context, _) => AppLock(
-                      // Signed in, and the lock not turned off here.
-                      active: auth!.state == AuthState.signedIn && (prefs?.lock ?? true),
+                      // Signed in, and the lock turned on here (off
+                      // until turned on, as WhatsApp's).
+                      active: auth!.state == AuthState.signedIn && (prefs?.lock ?? false),
+                      after: prefs?.lockAfter ?? lockAfter,
+                      signedIn: auth!.state == AuthState.signedIn,
                       unlocker: unlocker!,
                       startLocked: auth!.restored,
-                      // Covered in the app switcher whenever signed in,
-                      // with the lock on or off.
-                      hideWhenAway: auth!.state == AuthState.signedIn,
                       now: now,
                       child: child!,
                     ),

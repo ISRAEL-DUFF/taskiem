@@ -2,4 +2,6 @@
 <resources>
     <!-- The brand pine (the web brand colour), behind the notification icon. -->
     <color name="notification">#0D3B2E</color>
+    <!-- Behind the launcher icon's mark (mipmap-anydpi-v26/ic_launcher.xml). -->
+    <color name="ic_launcher_background">#0D3B2E</color>
 </resources>

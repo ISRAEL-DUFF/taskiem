@@ -57,6 +57,12 @@ void main() {
       return null;
     });
     final u = FakeUnlocker();
+    // The lock turned on (it is off until turned on), after a minute away.
+    if (prefs == null) {
+      prefs = Prefs(MemoryKeyStore());
+      await prefs.load();
+      await prefs.setLockAfter(const Duration(minutes: 1));
+    }
     await t.pumpWidget(TaskiemApp(auth: auth, unlocker: u, now: () => now, prefs: prefs));
     await settle(t);
     await t.tap(find.text('Bayo Rice Mills').first);
@@ -89,10 +95,10 @@ void main() {
     expect(t.widget<ConversationScreen>(find.byType(ConversationScreen)).data, same(data), reason: 'the same conversation, its place kept');
   });
 
-  testWidgets('the lock turned off in Settings: away 5 minutes, the conversation is still there', (t) async {
+  testWidgets('the lock off (as it is until turned on): away 5 minutes, the conversation is still there', (t) async {
     final prefs = Prefs(MemoryKeyStore());
     await prefs.load();
-    await prefs.setLock(false);
+    expect(prefs.lock, isFalse);
     final o = await openBayo(t, prefs: prefs);
     away(t);
     o.setNow(DateTime(2026, 11, 11, 9, 6));

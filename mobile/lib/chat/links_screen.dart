@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../app/lock.dart' show stepOut;
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../kit/icon.dart';
@@ -417,7 +418,7 @@ class _CodeCardState extends State<_CodeCard> {
             IntrinsicWidth(
               child: TkSmallButton(
                 label: 'Share the link',
-                onPressed: () => SharePlus.instance.share(ShareParams(text: widget.url, sharePositionOrigin: _from())),
+                onPressed: () => stepOut(() => SharePlus.instance.share(ShareParams(text: widget.url, sharePositionOrigin: _from()))),
               ),
             ),
           ],

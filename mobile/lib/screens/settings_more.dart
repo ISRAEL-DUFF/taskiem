@@ -206,39 +206,67 @@ class _YouCardState extends _Section<YouCard> {
 
 // --- the lock ---
 
-/// The app lock: on unless turned off, and turned off only by the phone's
-/// own unlock (a phone left on a counter cannot be made to open freely).
-class LockCard extends StatelessWidget {
+/// The app lock, as WhatsApp's: off until turned on, then locking at once,
+/// after a minute or after half an hour away. Every change is made with the
+/// phone's own unlock (a phone left on a counter cannot be made to open
+/// freely, and turning it on proves the phone has a lock to ask for).
+class LockCard extends StatefulWidget {
   const LockCard({super.key, required this.prefs, this.unlocker});
   final Prefs prefs;
   final Unlocker? unlocker;
 
   @override
+  State<LockCard> createState() => _LockCardState();
+}
+
+class _LockCardState extends State<LockCard> {
+  String? _error;
+
+  Future<void> _choose(Duration? after) async {
+    final prefs = widget.prefs;
+    if (after == prefs.lockAfter) return;
+    final u = widget.unlocker;
+    if (u != null) {
+      final has = await u.available();
+      if (!has && after != null) {
+        if (mounted) setState(() => _error = 'Set a screen lock on this phone first: a fingerprint, face or PIN.');
+        return;
+      }
+      if (has && !await stepOut(u.unlock)) return;
+    }
+    if (mounted) setState(() => _error = null);
+    await prefs.setLockAfter(after);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final prefs = widget.prefs;
+    Widget row(String label, Duration? after) {
+      final on = prefs.lockAfter == after;
+      return TkChoiceRow(
+        control: TkRadio(checked: on),
+        label: Text(label, style: tkText(size: 14, color: t.text)),
+        onTap: () => _choose(after),
+      );
+    }
+
     return ListenableBuilder(
       listenable: prefs,
       builder: (context, _) => SettingsCard(
         title: 'App lock',
         children: [
-          Semantics(
-            toggled: prefs.lock,
-            child: TkChoiceRow(
-              radio: false,
-              control: TkCheckbox(checked: prefs.lock),
-              label: Text('Ask for this phone’s fingerprint, face or PIN', style: tkText(size: 14, color: t.text)),
-              onTap: () async {
-                if (prefs.lock) {
-                  final u = unlocker;
-                  if (u != null && await u.available() && !await u.unlock()) return;
-                  await prefs.setLock(false);
-                } else {
-                  await prefs.setLock(true);
-                }
-              },
-            ),
+          Text('Ask for this phone’s fingerprint, face or PIN to open Taskiem.', style: tkHint(t)),
+          const SizedBox(height: 12),
+          row('Off', null),
+          for (final d in lockTimes) row(lockTimeLabel(d), d),
+          if (_error != null) TkErrorBox(_error!),
+          Text(
+            prefs.lock
+                ? 'When Taskiem opens, and when you come back to it ${prefs.lockAfter == Duration.zero ? 'from another app' : 'after ${lockTimeLabel(prefs.lockAfter!).substring(6)} away'}. Picking a photo or a file does not lock it.'
+                : 'Taskiem opens without asking.',
+            style: tkHint(t),
           ),
-          Text('When Taskiem opens, and when you come back to it after 5 minutes away.', style: tkHint(t)),
         ],
       ),
     );

@@ -60,7 +60,6 @@ void main() {
     Future<Prefs> noLock() async {
       final p = Prefs(MemoryKeyStore());
       await p.load();
-      await p.setLock(false);
       return p;
     }
 
