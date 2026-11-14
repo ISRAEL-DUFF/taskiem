@@ -375,7 +375,9 @@ func AddTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, s Subscriptio
 		return Device{}, err
 	}
 	_, err = tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE tenant_id = $1 AND user_id = $2 AND id IN
-		(SELECT id FROM push_subscriptions WHERE tenant_id = $1 AND user_id = $2 ORDER BY created_at DESC, id DESC OFFSET $3)`, tenant, user, MaxDevices)
+		(SELECT id FROM push_subscriptions WHERE tenant_id = $1 AND user_id = $2
+		  -- The least used goes, not the oldest: a phone in daily use stays.
+		  ORDER BY COALESCE(last_ok_at, created_at) DESC, created_at DESC, id DESC OFFSET $3)`, tenant, user, MaxDevices)
 	return d, err
 }
 
@@ -509,6 +511,10 @@ const (
 	Off                   // this server cannot send to such a device now (its keys are not set): neither
 )
 
+// UnreachedAfter is how long a device may go unreached (its push service
+// not answering at all) before it is dropped.
+const UnreachedAfter = 7 * 24 * time.Hour
+
 // OutcomeNames label the outcomes in metrics.
 var OutcomeNames = []string{"sent", "gone", "failed", "later", "off"}
 
@@ -516,13 +522,22 @@ var OutcomeNames = []string{"sent", "gone", "failed", "later", "off"}
 // answered is marked, one that has failed for DropAfter is dropped.
 func RecordTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, o Outcome) error {
 	switch o {
-	case Later, Off:
+	case Off:
 		return nil // not the device's doing
+	case Later:
+		// The service's trouble, not the device's: but a week of nothing
+		// (an address that no longer resolves) and the device goes.
+		_, err := tx.Exec(ctx, `UPDATE push_subscriptions SET unreached_since = COALESCE(unreached_since, now()) WHERE tenant_id = $1 AND id = $2`, tenant, id)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE tenant_id = $1 AND id = $2 AND unreached_since < now() - make_interval(secs => $3)`, tenant, id, UnreachedAfter.Seconds())
+		return err
 	case Gone:
 		_, err := tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE tenant_id = $1 AND id = $2`, tenant, id)
 		return err
 	case Sent:
-		_, err := tx.Exec(ctx, `UPDATE push_subscriptions SET last_sent_at = now(), last_ok_at = now(), failed_since = NULL WHERE tenant_id = $1 AND id = $2`, tenant, id)
+		_, err := tx.Exec(ctx, `UPDATE push_subscriptions SET last_sent_at = now(), last_ok_at = now(), failed_since = NULL, unreached_since = NULL WHERE tenant_id = $1 AND id = $2`, tenant, id)
 		return err
 	default:
 		_, err := tx.Exec(ctx, `UPDATE push_subscriptions SET last_sent_at = now(), failed_since = COALESCE(failed_since, now()) WHERE tenant_id = $1 AND id = $2`, tenant, id)

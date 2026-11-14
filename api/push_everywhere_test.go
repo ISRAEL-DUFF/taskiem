@@ -239,6 +239,21 @@ func TestPushEverywhere(t *testing.T) {
 	if n := len(cashier.must(200, "GET", "/v1/notifications", nil)["notifications"].([]any)); n != 1 {
 		t.Errorf("the cashier's bell: %d items", n)
 	}
+	// The icon's count is each person's: the cashier (customers, no linked
+	// businesses' chats) counts the one customer; the owner, who also has
+	// the linked business's unread chat, counts more.
+	if u := dataOf(cg[1])["unread"]; u != "1" {
+		t.Errorf("the cashier's count: %v", u)
+	}
+	var ownerCount string
+	for _, m := range fb.to(ownerPhone) {
+		if dataOf(m)["kind"] == "customers" {
+			ownerCount, _ = dataOf(m)["unread"].(string)
+		}
+	}
+	if ownerCount == "" || ownerCount == "1" {
+		t.Errorf("the owner's count: %q", ownerCount)
+	}
 
 	// A device that lost which one it is asks the server (known): found, it
 	// keeps its name; not found, it is not added again.
@@ -298,6 +313,39 @@ func TestApprovalInTheBell(t *testing.T) {
 	if ti, _ := wordsOf(got[0]); !strings.HasPrefix(ti, "Approval waiting: ") || dataOf(got[0])["kind"] != "approvals" || dataOf(got[0])["link"] != "/approvals" {
 		t.Errorf("the approval's push: %v %v", got[0]["notification"], dataOf(got[0]))
 	}
+	// Someone set aside as not able to decide it is looked at again after
+	// an hour (a role given since): told then, once.
+	ctx := context.Background()
+	admin := w.env.DB.Admin
+	if _, err := admin.Exec(ctx, `UPDATE whatsapp_notices SET error = 'may_not_decide', sent_at = now() - interval '2 hours' WHERE channel = 'bell'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := admin.Exec(ctx, `DELETE FROM notifications WHERE title LIKE 'Approval waiting%'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.srv.ApprovalBellTick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	pushSettle(t, w.srv)
+	if got = fb.to(alicePhone); len(got) != 2 {
+		t.Errorf("set aside, then able: %d pushes", len(got))
+	}
+	var aside int
+	if err := admin.QueryRow(ctx, `SELECT count(*) FROM whatsapp_notices WHERE channel = 'bell' AND error IS NOT NULL`).Scan(&aside); err != nil || aside != 0 {
+		t.Errorf("still set aside: %d %v", aside, err)
+	}
+	// Set aside within the hour: not looked at again yet.
+	if _, err := admin.Exec(ctx, `UPDATE whatsapp_notices SET error = 'may_not_decide', sent_at = now() WHERE channel = 'bell'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.srv.ApprovalBellTick(ctx); err != nil {
+		t.Fatal(err)
+	}
+	pushSettle(t, w.srv)
+	if got = fb.to(alicePhone); len(got) != 2 {
+		t.Errorf("set aside just now: %d pushes", len(got))
+	}
+
 	// The maker is not asked, in the bell or anywhere.
 	for _, n := range owner.must(200, "GET", "/v1/notifications", nil)["notifications"].([]any) {
 		if strings.HasPrefix(n.(map[string]any)["title"].(string), "Approval waiting") {
@@ -409,6 +457,11 @@ func TestPushQueue(t *testing.T) {
 		if err != nil || len(got) != 1 {
 			return fmt.Errorf("claimed %d: %w", len(got), err)
 		}
+		// Held by its sender: another (a replica) claims nothing meanwhile.
+		again, err := push.ClaimTx(ctx, tx, 10)
+		if err != nil || len(again) != 0 {
+			return fmt.Errorf("claimed while held: %d %w", len(again), err)
+		}
 		_, err = push.RetryTx(ctx, tx, got[0], []uuid.UUID{took})
 		return err
 	})
@@ -422,4 +475,106 @@ func TestPushQueue(t *testing.T) {
 		}
 		return nil
 	})
+	// A sender that stopped: its lease runs out and the push is due again.
+	if _, err := admin.Exec(ctx, `UPDATE push_outbox SET next_at = now() - interval '1 second'`); err != nil {
+		t.Fatal(err)
+	}
+	in(func(tx pgx.Tx) error {
+		got, err := push.ClaimTx(ctx, tx, 10)
+		if err != nil || len(got) != 1 {
+			return fmt.Errorf("after the lease: %d %w", len(got), err)
+		}
+		return nil
+	})
+	// A device whose push service is never reached: kept a week, then gone.
+	var dev uuid.UUID
+	if err := admin.QueryRow(ctx, `SELECT id FROM push_subscriptions WHERE user_id = $1`, user).Scan(&dev); err != nil {
+		t.Fatal(err)
+	}
+	in(func(tx pgx.Tx) error { return push.RecordTx(ctx, tx, tenant, dev, push.Later) })
+	var left int
+	if err := admin.QueryRow(ctx, `SELECT count(*) FROM push_subscriptions WHERE id = $1 AND unreached_since IS NOT NULL AND failed_since IS NULL`, dev).Scan(&left); err != nil || left != 1 {
+		t.Errorf("unreached once: %d %v", left, err)
+	}
+	if _, err := admin.Exec(ctx, `UPDATE push_subscriptions SET unreached_since = now() - interval '8 days' WHERE id = $1`, dev); err != nil {
+		t.Fatal(err)
+	}
+	in(func(tx pgx.Tx) error { return push.RecordTx(ctx, tx, tenant, dev, push.Later) })
+	if err := admin.QueryRow(ctx, `SELECT count(*) FROM push_subscriptions WHERE id = $1`, dev).Scan(&left); err != nil || left != 0 {
+		t.Errorf("unreached a week: %d %v", left, err)
+	}
+
+	// Past the limit, the least used device goes, not the oldest: the first
+	// one, notified just now, stays.
+	other := uuid.New()
+	sub := func(i int) push.Subscription {
+		var x push.Subscription
+		x.Endpoint = fmt.Sprintf("https://fcm.googleapis.com/fcm/send/d%d", i)
+		x.Keys.P256dh, x.Keys.Auth = "p", "a"
+		return x
+	}
+	var first push.Device
+	in(func(tx pgx.Tx) error {
+		var err error
+		first, err = push.AddTx(ctx, tx, tenant, other, sub(0), push.Kinds)
+		return err
+	})
+	for i := 1; i < push.MaxDevices; i++ {
+		in(func(tx pgx.Tx) error { _, err := push.AddTx(ctx, tx, tenant, other, sub(i), push.Kinds); return err })
+	}
+	// The first, the oldest, is notified now; then one more is added.
+	if _, err := admin.Exec(ctx, `UPDATE push_subscriptions SET last_ok_at = now() WHERE id = $1`, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	in(func(tx pgx.Tx) error {
+		_, err := push.AddTx(ctx, tx, tenant, other, sub(push.MaxDevices), push.Kinds)
+		return err
+	})
+	var count int
+	if err := admin.QueryRow(ctx, `SELECT count(*) FROM push_subscriptions WHERE user_id = $1`, other).Scan(&count); err != nil || count != push.MaxDevices {
+		t.Errorf("devices kept: %d %v", count, err)
+	}
+	if err := admin.QueryRow(ctx, `SELECT count(*) FROM push_subscriptions WHERE id = $1`, first.ID).Scan(&left); err != nil || left != 1 {
+		t.Errorf("the device in use was dropped: %d %v", left, err)
+	}
+
+	// Pushes past their life go (this server sending none).
+	if _, err := admin.Exec(ctx, `UPDATE push_outbox SET created_at = now() - interval '13 hours'`); err != nil {
+		t.Fatal(err)
+	}
+	var gone int64
+	if err := admin.QueryRow(ctx, `SELECT taskiem_push_expire('12 hours')`).Scan(&gone); err != nil || gone != 1 {
+		t.Errorf("expired: %d %v", gone, err)
+	}
+}
+
+// A business chat's push is queued in the message's own transaction: there
+// once the message is, before anything runs after it.
+func TestLinkPushWithItsMessage(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	w.srv.LoginBurst = 1000
+	seller, buyer, _, buyerID := linkedPair(t, w)
+	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	fb := newFakeFirebase(t)
+	w.srv.Push = firebaseSender(t, fb)
+	const token = "fGx1:APA91bH_with-message-aaaaaaaaaaa"
+	phoneSession(t, w, "ada@bills.test").must(200, "PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": token, "platform": "android"})
+	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Rice is 45k"})
+	// Nothing after the message has run yet (no WaitBackground): the push
+	// is queued all the same, in the buyer's business.
+	var queued int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM push_outbox WHERE tenant_id = $1 AND kind = 'business'`, buyerID).Scan(&queued); err != nil || queued != 1 {
+		t.Fatalf("queued with the message: %d %v", queued, err)
+	}
+	pushSettle(t, w.srv)
+	if n := len(fb.to(token)); n != 1 {
+		t.Errorf("pushed: %d", n)
+	}
+	// A muted conversation: nothing queued.
+	buyer.must(200, "PUT", "/v1/link-chats/"+link, map[string]any{"muted": true})
+	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "And beans"})
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM push_outbox WHERE tenant_id = $1`, buyerID).Scan(&queued); err != nil || queued != 0 {
+		t.Errorf("queued for a muted conversation: %d %v", queued, err)
+	}
 }

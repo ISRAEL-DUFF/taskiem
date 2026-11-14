@@ -261,7 +261,7 @@ func (s *Server) customerInbound(ctx context.Context, wa *whatsapp.Platform, num
 		if err != nil {
 			return err
 		}
-		if err := s.tellCustomerMessageTx(ctx, sp, wa.Tenant, id, subject, in.ProfileName, number); err != nil {
+		if err := s.tellCustomerMessageTx(ctx, sp, wa.Tenant, id); err != nil {
 			s.Logger.Warn("customer chat: telling the bell", "err", err)
 			return sp.Rollback(ctx)
 		}
@@ -293,21 +293,15 @@ func (s *Server) customerInbound(ctx context.Context, wa *whatsapp.Platform, num
 // conversation while it is unread ("Ade wrote", then "Ade wrote 3 messages"),
 // in the message's own transaction, which also queues its push (migration
 // 00446). WhatsApp is not told: the customer's own chat is the business's.
-// Neither their words nor their number is copied: the message is kept
-// sealed, and the bell and the push would keep them in the clear.
-func (s *Server) tellCustomerMessageTx(ctx context.Context, tx pgx.Tx, tenant, chat uuid.UUID, subject, profile, number string) error {
+// Nothing of theirs is copied (their words, their number, the name the
+// business keeps for them, all kept sealed): the bell and the push would
+// keep it in the clear. The chat, opened, says who.
+func (s *Server) tellCustomerMessageTx(ctx context.Context, tx pgx.Tx, tenant, chat uuid.UUID) error {
 	users, err := holdersTx(ctx, tx, PermOrders)
 	if err != nil || len(users) == 0 {
 		return err
 	}
-	name, err := s.customerName(ctx, tx, tenant, subject, profile, number)
-	if err != nil {
-		return err
-	}
-	if name = strings.TrimSpace(name); name == "" || strings.Contains(name, strings.TrimPrefix(number, "+")) || len([]rune(name)) > 60 {
-		name = "A customer"
-	}
-	return notices.AddTx(ctx, tx, tenant, users, notices.Notice{Kind: notices.Setup, Title: name + " wrote", Many: name + " wrote {n} messages",
+	return notices.AddTx(ctx, tx, tenant, users, notices.Notice{Kind: notices.Setup, Title: "A customer wrote", Many: "A customer wrote {n} messages",
 		Link: "/chat?with=c-" + chat.String(), Group: "customer:" + chat.String()})
 }
 

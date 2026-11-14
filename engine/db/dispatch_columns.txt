@@ -1460,6 +1460,7 @@ explore_scores.trusted
 approvals.requested_at
 approvals.status
 approvals.tenant_id
+push_outbox.created_at
 push_outbox.next_at
 push_outbox.tag
 push_outbox.tenant_id

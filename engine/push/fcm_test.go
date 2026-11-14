@@ -156,6 +156,8 @@ func TestFCMSend(t *testing.T) {
 	_, _, _ = s.Send(ctx, tenant, phone("tok-bbbbbbbbbbbbbbbbbbbb", false), p)
 	_, _, _ = s.Send(ctx, tenant, phone("tok-bbbbbbbbbbbbbbbbbbbb", false), Payload{Title: "Bill from Dangote: ₦450,000", Body: "Due Friday", Link: "/bills", Tag: "bill:1", Kind: KindOrders})
 	_, _, _ = s.Send(ctx, tenant, phone("tok-bbbbbbbbbbbbbbbbbbbb", false), Payload{Title: "Ade Okafor wrote", Body: "Is the rice in?", Link: "/chat?with=c-1", Tag: "c-1", Kind: KindCustomers})
+	_, _, _ = s.Send(ctx, tenant, phone("tok-bbbbbbbbbbbbbbbbbbbb", false), Payload{Title: "Approval waiting: Pay Bayo ₦450,000", Body: "Payroll", Link: "/approvals", Tag: "approval:1", Kind: KindApprovals})
+	_, _, _ = s.Send(ctx, tenant, phone("tok-bbbbbbbbbbbbbbbbbbbb", false), Payload{Title: "A run failed: Payroll", Body: "Step 3", Link: "/runs/1", Tag: "alert:1", Kind: KindAlerts})
 	words := func(i int) (string, string) {
 		n := f.sent[i]["message"].(map[string]any)["notification"].(map[string]any)
 		return n["title"].(string), n["body"].(string)
@@ -169,6 +171,11 @@ func TestFCMSend(t *testing.T) {
 	if ti, b := words(2); ti != "Taskiem" || b != "A customer wrote" {
 		t.Errorf("a customer, preview off: %q %q", ti, b)
 	}
+	for i, what := range []string{"an approval", "an alert"} {
+		if ti, b := words(3 + i); ti != "Taskiem" || b != "Something needs you" {
+			t.Errorf("%s, preview off: %q %q", what, ti, b)
+		}
+	}
 }
 
 func TestFCMOutcomes(t *testing.T) {
@@ -180,6 +187,8 @@ func TestFCMOutcomes(t *testing.T) {
 	f.answers["tok-gone-aaaaaaaaaaaaaaa"], f.bodies["tok-gone-aaaaaaaaaaaaaaa"] = []int{404}, unregistered
 	f.answers["tok-bad-aaaaaaaaaaaaaaaa"], f.bodies["tok-bad-aaaaaaaaaaaaaaaa"] = []int{400}, `{"error":{"code":400,"status":"INVALID_ARGUMENT","message":"The registration token is not a valid FCM registration token"}}`
 	f.answers["tok-busy-aaaaaaaaaaaaaaa"] = []int{503, 429}
+	f.answers["tok-400x-aaaaaaaaaaaaaaa"], f.bodies["tok-400x-aaaaaaaaaaaaaaa"] = []int{400}, `{"error":{"code":400,"status":"INVALID_ARGUMENT","message":"Invalid value at 'message.android.ttl'"}}`
+	f.answers["tok-down-aaaaaaaaaaaaaaa"] = []int{503, 503, 503}
 	f.answers["tok-404x-aaaaaaaaaaaaaaa"], f.bodies["tok-404x-aaaaaaaaaaaaaaa"] = []int{404}, `{"error":{"code":404,"status":"NOT_FOUND","message":"Requested entity was not found."}}`
 	f.answers["tok-stale-aaaaaaaaaaaaaa"] = []int{401}
 	f.answers["tok-nope-aaaaaaaaaaaaaaa"], f.bodies["tok-nope-aaaaaaaaaaaaaaa"] = []int{403, 403, 403}, `{"error":{"code":403,"status":"PERMISSION_DENIED","message":"SenderId mismatch"}}`
@@ -190,6 +199,8 @@ func TestFCMOutcomes(t *testing.T) {
 		"tok-stale-aaaaaaaaaaaaaa":  Sent,   // a fresh access token after a 401
 		"tok-nope-aaaaaaaaaaaaaaa":  Failed, // the project is wrong: kept, not dropped
 		"tok-404x-aaaaaaaaaaaaaaa":  Failed, // a 404 that is not UNREGISTERED: kept
+		"tok-400x-aaaaaaaaaaaaaaa":  Failed, // a 400 about the message, not the token: kept
+		"tok-down-aaaaaaaaaaaaaaa":  Later,  // FCM down all three tries: later, not the phone's fault
 		"tok-ok-aaaaaaaaaaaaaaaaaa": Sent,
 	} {
 		if out, _, _ := s.Send(ctx, tenant, phone(token, true), p); out != want {

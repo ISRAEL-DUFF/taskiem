@@ -225,6 +225,7 @@ taskiem_purge_run_failed(uuid,text)	@ISRAEL-DUFF (engine)	records a failed purge
 taskiem_purge_sessions(integer)	@ISRAEL-DUFF (identity)	deletes sign-in sessions that expired more than 30 days ago (revoked ones keep their expiry), for every tenant, in batches; returns only a count and cannot touch a live or recently ended session (00356)
 taskiem_purge_trigger_receipts()	@ISRAEL-DUFF (engine)	deletes trigger receipts older than the fixed 30-day dedup window, for every tenant; reads only received_at and takes no arguments, so it cannot clear a fresh receipt (00240)
 taskiem_push_device_live(uuid,uuid)	@ISRAEL-DUFF (messaging)	Whether a phone app install still has a session, so a signed-out phone is not notified (00447)
+taskiem_push_expire(interval)	@ISRAEL-DUFF (messaging)	Pushes queued past their life go, while this server sends none (00447)
 taskiem_put_plan(jsonb,text)	@ISRAEL-DUFF (engine)	Operators load a plan (taskiem billing plans --load) (00090)
 taskiem_queue_stats()	@ISRAEL-DUFF (engine)	Queue depth and age for metrics (spec 15.2), across tenants (00013)
 taskiem_reach_blocked(text,bytea)	@ISRAEL-DUFF (messaging)	Telegram told the bot it may not write to an account (the person blocked it) (00193)

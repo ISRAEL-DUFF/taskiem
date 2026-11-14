@@ -154,7 +154,30 @@ END
 $$;
 -- +goose StatementEnd
 
+-- A device the push service could not be reached for, day after day (its
+-- address no longer resolves): dropped after a week, as one that refuses is
+-- after three days; the service's trouble alone (busy, down) is not the
+-- device's, but a week of nothing is.
+ALTER TABLE push_subscriptions ADD COLUMN unreached_since timestamptz;
+
+-- Pushes queued while this server sends none (its keys removed, devices
+-- left): gone after their life (12 hours), so the queue does not grow.
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_push_expire(p_ttl interval)
+RETURNS bigint LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  WITH gone AS (DELETE FROM push_outbox o WHERE o.created_at < now() - p_ttl RETURNING 1)
+  SELECT count(*) FROM gone
+$$;
+-- +goose StatementEnd
+ALTER FUNCTION taskiem_push_expire(interval) OWNER TO taskiem_dispatch;
+REVOKE EXECUTE ON FUNCTION taskiem_push_expire(interval) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION taskiem_push_expire(interval) TO taskiem_app;
+GRANT SELECT (created_at) ON push_outbox TO taskiem_dispatch;
+
 -- +goose Down
+REVOKE SELECT (created_at) ON push_outbox FROM taskiem_dispatch;
+DROP FUNCTION taskiem_push_expire(interval);
+ALTER TABLE push_subscriptions DROP COLUMN unreached_since;
 REVOKE SELECT (user_id, tag), DELETE ON push_outbox FROM taskiem_dispatch;
 ALTER TABLE push_outbox DROP COLUMN sent_to;
 -- +goose StatementBegin

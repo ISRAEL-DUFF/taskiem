@@ -168,7 +168,10 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 			SELECT DISTINCT c.run_id, c.step_id, c.level, c.user_id, c.role FROM cand c
 			  JOIN runs r ON r.id = c.run_id JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version
 			 WHERE NOT EXISTS (SELECT 1 FROM whatsapp_notices n WHERE n.run_id = c.run_id AND n.step_id = c.step_id AND n.level = c.level AND n.user_id = c.user_id
-			                     AND n.channel = $1)
+			                     AND n.channel = $1
+			                     -- Set aside as not able to decide it: looked at again
+			                     -- after an hour (a role given since).
+			                     AND (n.error IS DISTINCT FROM 'may_not_decide' OR n.sent_at > now() - interval '1 hour'))
 			   AND NOT EXISTS (SELECT 1 FROM approval_decisions d WHERE d.run_id = c.run_id AND d.step_id = c.step_id
 			                     AND (d.level = c.level OR c.distinct_ap) AND (d.user_id = c.user_id OR d.on_behalf_of = c.user_id))
 			   AND NOT (c.forbid_self AND c.user_id::text IN (COALESCE(taskiem_actor_human(r.started_by), ''),
@@ -227,7 +230,8 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 			// those after them).
 			if t.channel == "bell" {
 				if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-					_, err := tx.Exec(ctx, `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id, channel) VALUES ($1, $2, $3, $4, $5, 'bell') ON CONFLICT DO NOTHING`,
+					_, err := tx.Exec(ctx, `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id, channel, error) VALUES ($1, $2, $3, $4, $5, 'bell', 'may_not_decide')
+						ON CONFLICT (run_id, step_id, level, user_id, channel) DO UPDATE SET sent_at = now() WHERE whatsapp_notices.error = 'may_not_decide'`,
 						tenant, t.run, t.step, t.level, t.user)
 					return err
 				}); err != nil {
@@ -288,7 +292,10 @@ func (s *Server) ApprovalBellTick(ctx context.Context) error {
 // outbox sends it, and retries it if sending fails.
 func (s *Server) waQueueApproval(ctx context.Context, tenant uuid.UUID, t approvalTarget) error {
 	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id, channel) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+		// A row that only set this person aside (they may decide it now) is
+		// taken over; any other means another notifier has it.
+		tag, err := tx.Exec(ctx, `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id, channel) VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (run_id, step_id, level, user_id, channel) DO UPDATE SET error = NULL, sent_at = now() WHERE whatsapp_notices.error = 'may_not_decide'`,
 			tenant, t.run, t.step, t.level, t.user, t.channel)
 		if err != nil || tag.RowsAffected() == 0 {
 			return err // another notifier has it

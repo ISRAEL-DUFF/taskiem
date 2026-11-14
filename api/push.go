@@ -269,36 +269,36 @@ const pushMaxParallel = 8
 // "New message"), the link the conversation. It does what tellLinkMessage has
 // decided is to be told (the mute is checked there); the bell item that
 // follows is not pushed again (migration 00446 skips a chat's).
-func (s *Server) pushMessage(ctx context.Context, to, link, fromTenant uuid.UUID, from string, m links.Message) {
+func (s *Server) pushMessageTx(ctx context.Context, tx pgx.Tx, to, link, fromTenant uuid.UUID, from string, m links.Message) error {
 	if !s.Push.Enabled() {
-		return
+		return nil
 	}
 	body := whatsapp.SafeText(linkMessageLine(lang.EN, m, false))
 	if m.Kind == "card" {
 		body = "Sent you a document" // a document says only what it is
 	}
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{to}, func(tx pgx.Tx) error {
-		users, err := holdersTx(ctx, tx, PermChatTrade)
-		if err != nil || len(users) == 0 {
-			return err
-		}
-		var icon string
-		// The business as the chat list shows it: the name and logo it chose.
-		if shown, err := links.ShownTx(ctx, tx); err == nil {
-			if sh, ok := shown[fromTenant]; ok {
-				if sh.Name != "" {
-					from = sh.Name
-				}
-				if sh.HasLogo {
-					icon = "/v1/links/" + fromTenant.String() + "/logo?size=320"
-				}
+	// A muted conversation is not pushed.
+	if muted, err := links.MutedTx(ctx, tx, to, link); err != nil || muted {
+		return err
+	}
+	users, err := holdersTx(ctx, tx, PermChatTrade)
+	if err != nil || len(users) == 0 {
+		return err
+	}
+	var icon string
+	// The business as the chat list shows it: the name and logo it chose.
+	if shown, err := links.ShownTx(ctx, tx); err == nil {
+		if sh, ok := shown[fromTenant]; ok {
+			if sh.Name != "" {
+				from = sh.Name
+			}
+			if sh.HasLogo {
+				icon = "/v1/links/" + fromTenant.String() + "/logo?size=320"
 			}
 		}
-		return push.EnqueueTx(ctx, tx, to, users, push.Queued{Kind: push.KindBusiness, Title: from, Body: body,
-			Link: "/chat?with=" + link.String(), Tag: link.String(), Icon: icon})
-	}); err != nil {
-		s.Logger.Warn("push: queueing a message", "tenant", to, "err", err)
 	}
+	return push.EnqueueTx(ctx, tx, to, users, push.Queued{Kind: push.KindBusiness, Title: from, Body: body,
+		Link: "/chat?with=" + link.String(), Tag: link.String(), Icon: icon})
 }
 
 // pushEvery is how often the queue is looked at without being told of a push
@@ -309,6 +309,17 @@ const pushEvery = 5 * time.Second
 // queued, and every pushEvery for those waiting to be tried again.
 func (s *Server) RunPush(ctx context.Context) {
 	if !s.Push.Enabled() {
+		// Nothing is sent, but devices left may still have pushes queued:
+		// they go after their life, so the queue does not grow.
+		for ctx.Err() == nil {
+			if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_push_expire($1::interval)`, (push.TTL * time.Second).String()); err != nil && ctx.Err() == nil {
+				s.Logger.Warn("push: expiring the queue", "err", err)
+			}
+			select {
+			case <-ctx.Done():
+			case <-time.After(time.Hour):
+			}
+		}
 		return
 	}
 	for ctx.Err() == nil {
@@ -376,14 +387,46 @@ func (s *Server) DrainPush(ctx context.Context) (int, error) {
 // pushBatch is how many pushes of one business are claimed at once.
 const pushBatch = 50
 
-// pushUnreadTx is the icon's count: the conversations with something unread,
-// from businesses and from customers.
-func pushUnreadTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (int, error) {
-	var n int
-	err := tx.QueryRow(ctx, `SELECT
-		(SELECT count(DISTINCT link_id) FROM link_messages WHERE tenant_id = $1 AND NOT mine AND read_at IS NULL AND hidden_at IS NULL)
-		+ (SELECT count(DISTINCT conversation_id) FROM customer_messages WHERE tenant_id = $1 AND NOT mine AND read_at IS NULL)`, tenant).Scan(&n)
-	return n, err
+// pushUnread is the icon's count, per person: the conversations with
+// something unread that are theirs to see (linked businesses' chats for
+// those who chat, customers' for those who answer them).
+type pushUnread struct {
+	links, customers int
+	chat, orders     map[uuid.UUID]bool
+}
+
+func (u pushUnread) of(user uuid.UUID) int {
+	n := 0
+	if u.chat[user] {
+		n += u.links
+	}
+	if u.orders[user] {
+		n += u.customers
+	}
+	return n
+}
+
+func pushUnreadTx(ctx context.Context, tx pgx.Tx) (pushUnread, error) {
+	var u pushUnread
+	if err := tx.QueryRow(ctx, `SELECT
+		(SELECT count(DISTINCT link_id) FROM link_messages WHERE NOT mine AND read_at IS NULL AND hidden_at IS NULL),
+		(SELECT count(DISTINCT conversation_id) FROM customer_messages WHERE NOT mine AND read_at IS NULL)`).Scan(&u.links, &u.customers); err != nil {
+		return u, err
+	}
+	set := func(perm string) (map[uuid.UUID]bool, error) {
+		users, err := holdersTx(ctx, tx, perm)
+		m := map[uuid.UUID]bool{}
+		for _, x := range users {
+			m[x] = true
+		}
+		return m, err
+	}
+	var err error
+	if u.chat, err = set(PermChatTrade); err != nil {
+		return u, err
+	}
+	u.orders, err = set(PermOrders)
+	return u, err
 }
 
 // drainPushOf sends one batch of a business's due pushes; it answers how
@@ -391,7 +434,7 @@ func pushUnreadTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (int, error)
 func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, error) {
 	var queued []push.Queued
 	var targets []push.Target
-	var unread int
+	var unread pushUnread
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var err error
 		if queued, err = push.ClaimTx(ctx, tx, pushBatch); err != nil || len(queued) == 0 {
@@ -404,7 +447,7 @@ func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, e
 		if targets, err = push.TargetsTx(ctx, tx, tenant, users); err != nil {
 			return err
 		}
-		unread, err = pushUnreadTx(ctx, tx, tenant)
+		unread, err = pushUnreadTx(ctx, tx)
 		return err
 	}); err != nil || len(queued) == 0 {
 		return 0, 0, err
@@ -438,7 +481,7 @@ func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, e
 		if newest[q.User.String()+"\x00"+q.Tag] != i {
 			continue
 		}
-		payload := push.Payload{Title: q.Title, Body: q.Body, Link: q.Link, Tag: q.Tag, Unread: unread, Icon: q.Icon,
+		payload := push.Payload{Title: q.Title, Body: q.Body, Link: q.Link, Tag: q.Tag, Unread: unread.of(q.User), Icon: q.Icon,
 			Business: tenant.String(), Kind: q.Kind}
 		for _, t := range targets {
 			// A retry is not sent again to the devices that took it.
@@ -492,8 +535,14 @@ func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, e
 				}
 				continue
 			}
-			if _, err := push.RetryTx(ctx, tx, j.q, took); err != nil {
+			dropped, err := push.RetryTx(ctx, tx, j.q, took)
+			if err != nil {
 				return err
+			}
+			if dropped {
+				// Said where an operator looks: a push nobody will get.
+				s.Logger.Error("push: dropped after its tries", "tenant", tenant, "kind", j.q.Kind, "attempts", j.q.Attempts+1)
+				telemetry.PushSent.WithLabelValues("dropped").Inc()
 			}
 		}
 		return nil

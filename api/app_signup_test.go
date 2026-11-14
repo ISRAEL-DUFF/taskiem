@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -121,5 +122,96 @@ func TestAppSignupCancelled(t *testing.T) {
 	}
 	if s, _ := anon.do("POST", "/v1/signup/app/turn", map[string]any{"phone": bayo, "token": v["token"], "reply": "su:yes"}); s != 404 {
 		t.Errorf("after: %d", s)
+	}
+}
+
+// The sign-up's limits: five guesses at a code, counted even when sent all
+// at once; a new code does not give five more; three codes a number while
+// one lives; ten an hour from one address; the binding needs the proof the
+// right code left, and the proof's expiry ends the sign-up without one.
+func TestAppSignupLimits(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	w.srv.LoginBurst = 1000
+	chatSignupOn(w.world, "whatsapp", "app")
+	anon := &client{t: t, base: w.base}
+	code := func(n string) string {
+		t.Helper()
+		anon.must(202, "POST", "/v1/signup/app/code", map[string]any{"phone": n})
+		return codeRe.FindString(w.graph.Last(t, n).Text)
+	}
+	wrong := func(right string) string {
+		if right == "000000" {
+			return "000001"
+		}
+		return "000000"
+	}
+
+	// Twenty guesses at once: five are counted, then the right code is no good.
+	const a = "+2348031230001"
+	right := code(a)
+	var wg sync.WaitGroup
+	for range 20 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			anon.do("POST", "/v1/signup/app/verify", map[string]any{"phone": a, "code": wrong(right)})
+		}()
+	}
+	wg.Wait()
+	if s, _ := anon.do("POST", "/v1/signup/app/verify", map[string]any{"phone": a, "code": right}); s != 401 {
+		t.Errorf("the right code after twenty guesses at once: %d", s)
+	}
+	// A new code keeps the guesses made: still locked.
+	again := code(a)
+	if s, _ := anon.do("POST", "/v1/signup/app/verify", map[string]any{"phone": a, "code": again}); s != 401 {
+		t.Errorf("a new code after five wrong: %d", s)
+	}
+	// Three codes a number while one lives.
+	code(a)
+	if s, _ := anon.do("POST", "/v1/signup/app/code", map[string]any{"phone": a}); s != 429 {
+		t.Errorf("a fourth code: %d", s)
+	}
+
+	// The binding needs the proof: without one it is refused.
+	var outcome string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT taskiem_chat_bind_whatsapp_proven($1, '+2348031230009')`, uuid.New()).Scan(&outcome); err != nil || outcome != "unproven" {
+		t.Errorf("a binding with no proof: %q %v", outcome, err)
+	}
+
+	// The proof expiring before the last answer: nothing is made.
+	const b = "+2348031230002"
+	v := anon.must(200, "POST", "/v1/signup/app/verify", map[string]any{"phone": b, "code": code(b)})
+	turn := func(text, reply string) map[string]any {
+		t.Helper()
+		return anon.must(200, "POST", "/v1/signup/app/turn", map[string]any{"phone": b, "token": v["token"], "text": text, "reply": reply, "bearer": true,
+			"device": map[string]any{"id": uuid.NewString(), "name": "Tecno", "platform": "android"}})
+	}
+	turn("", "su:yes")
+	turn("Bayo Rice", "")
+	turn("Bayo Ade", "")
+	turn("food", "")
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE chat_signups SET expires_at = now() - interval '1 second'
+		WHERE address_hash = sha256(convert_to('chat-signup:app-proven:' || $1::text, 'UTF8'))`, b); err != nil {
+		t.Fatal(err)
+	}
+	if out := turn("cash", ""); out["done"] == true || out["token"] != nil {
+		t.Errorf("made with the proof expired: %v", out)
+	}
+	var made int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM taskiem_auth_chat_user($1)`, b).Scan(&made); err != nil || made != 0 {
+		t.Errorf("bound with the proof expired: %d %v", made, err)
+	}
+
+	// Ten codes an hour from one address, whatever the numbers.
+	limited := false
+	for i := range 12 {
+		if s, _ := anon.do("POST", "/v1/signup/app/code", map[string]any{"phone": fmt.Sprintf("+23480312301%02d", 10+i)}); s == 429 {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Error("no limit on codes from one address")
 	}
 }
