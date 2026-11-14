@@ -255,6 +255,20 @@ func TestPushEverywhere(t *testing.T) {
 		t.Errorf("the owner's count: %q", ownerCount)
 	}
 
+	// Muted, the conversation tells nobody: no bell item, no push.
+	chat := strings.TrimPrefix(dataOf(cg[1])["link"].(string), "/chat?with=c-")
+	cashier.must(204, "PUT", "/v1/customer-chats/"+chat, map[string]any{"muted": true})
+	if c := cashier.must(200, "GET", "/v1/customer-chats/"+chat, nil); c["muted"] != true {
+		t.Errorf("not muted: %v", c["muted"])
+	}
+	cashier.must(200, "POST", "/v1/notifications/read", map[string]any{"all": true})
+	w.sendTo(t, "/channels/whatsapp", pnA, waSecret, customer, whatsapptest.Text("Hello?"))
+	pushSettle(t, w.srv)
+	if n := len(fb.to(cashierPhone)); n != 2 {
+		t.Errorf("a muted customer pushed: %d", n)
+	}
+	cashier.must(204, "PUT", "/v1/customer-chats/"+chat, map[string]any{"muted": false})
+
 	// A device that lost which one it is asks the server (known): found, it
 	// keeps its name; not found, it is not added again.
 	k := cashierApp.must(200, "PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": cashierPhone, "platform": "android", "known": true})

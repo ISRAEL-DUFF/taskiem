@@ -497,6 +497,7 @@ func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, e
 				out, status, err := s.Push.Send(sendCtx, tenant, t, payload)
 				telemetry.PushSeconds.Observe(time.Since(start).Seconds())
 				telemetry.PushSent.WithLabelValues(push.OutcomeNames[out]).Inc()
+				telemetry.PushByKind.WithLabelValues(q.Kind, push.OutcomeNames[out]).Inc()
 				if err != nil {
 					// No address, no keys, no words: the status and what kind of error.
 					s.Logger.Warn("push: not sent", "tenant", tenant, "device", t.ID, "kind", t.Kind, "status", status, "gone", out == push.Gone)
@@ -543,6 +544,7 @@ func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, e
 				// Said where an operator looks: a push nobody will get.
 				s.Logger.Error("push: dropped after its tries", "tenant", tenant, "kind", j.q.Kind, "attempts", j.q.Attempts+1)
 				telemetry.PushSent.WithLabelValues("dropped").Inc()
+				telemetry.PushByKind.WithLabelValues(j.q.Kind, "dropped").Inc()
 			}
 		}
 		return nil

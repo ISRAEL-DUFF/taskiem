@@ -297,6 +297,10 @@ func (s *Server) customerInbound(ctx context.Context, wa *whatsapp.Platform, num
 // business keeps for them, all kept sealed): the bell and the push would
 // keep it in the clear. The chat, opened, says who.
 func (s *Server) tellCustomerMessageTx(ctx context.Context, tx pgx.Tx, tenant, chat uuid.UUID) error {
+	var muted bool
+	if err := tx.QueryRow(ctx, `SELECT muted FROM customer_conversations WHERE id = $1`, chat).Scan(&muted); err != nil || muted {
+		return err
+	}
 	users, err := holdersTx(ctx, tx, PermOrders)
 	if err != nil || len(users) == 0 {
 		return err
@@ -331,6 +335,8 @@ type customerChatView struct {
 	WindowUntil *time.Time `json:"window_until"`
 	Stopped     bool       `json:"stopped"`
 	Archived    bool       `json:"archived"`
+	// Muted: no bell item and no push for it.
+	Muted bool `json:"muted"`
 	// The thread's page only: what the customer owes on open invoices.
 	OwesKobo *int64 `json:"owes_kobo,omitempty"`
 	Invoices *int   `json:"open_invoices,omitempty"`
@@ -393,7 +399,7 @@ func (s *Server) customerName(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	return c.Name, nil
 }
 
-const customerChatCols = `c.id, c.subject_id, c.who, c.last_inbound_at, c.last_message_at, c.stopped_at, c.archived,
+const customerChatCols = `c.id, c.subject_id, c.who, c.last_inbound_at, c.last_message_at, c.stopped_at, c.archived, c.muted,
 	(SELECT count(*) FROM customer_messages m WHERE m.tenant_id = c.tenant_id AND m.conversation_id = c.id AND NOT m.mine AND m.read_at IS NULL),
 	(SELECT row(m.mine, m.body) FROM customer_messages m WHERE m.tenant_id = c.tenant_id AND m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1)`
 
@@ -415,7 +421,7 @@ func scanCustomerChatRaw(r pgx.Row) (customerChatRaw, error) {
 		Mine bool
 		Body []byte
 	}
-	if err := r.Scan(&x.v.ID, &x.subject, &x.who, &x.inbound, &x.v.LastAt, &x.stopped, &x.v.Archived, &x.v.Unread, &last); err != nil {
+	if err := r.Scan(&x.v.ID, &x.subject, &x.who, &x.inbound, &x.v.LastAt, &x.stopped, &x.v.Archived, &x.v.Muted, &x.v.Unread, &last); err != nil {
 		return x, err
 	}
 	if last != nil {
@@ -628,18 +634,19 @@ func (s *Server) readCustomerChat(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// putCustomerChat archives a thread, or brings it back.
+// putCustomerChat archives a thread or brings it back, and mutes it or not.
 func (s *Server) putCustomerChat(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var req struct {
 		Archived *bool `json:"archived"`
+		Muted    *bool `json:"muted"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if req.Archived == nil {
-		writeErr(w, http.StatusBadRequest, "archived is required")
+	if req.Archived == nil && req.Muted == nil {
+		writeErr(w, http.StatusBadRequest, "archived or muted is required")
 		return
 	}
 	err := db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
@@ -647,7 +654,8 @@ func (s *Server) putCustomerChat(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return errCustomerChatNone
 		}
-		tag, err := tx.Exec(r.Context(), `UPDATE customer_conversations SET archived = $3 WHERE tenant_id = $1 AND id = $2`, p.TenantID, id, *req.Archived)
+		tag, err := tx.Exec(r.Context(), `UPDATE customer_conversations SET archived = COALESCE($3, archived), muted = COALESCE($4, muted) WHERE tenant_id = $1 AND id = $2`,
+			p.TenantID, id, req.Archived, req.Muted)
 		if err == nil && tag.RowsAffected() == 0 {
 			return errCustomerChatNone
 		}

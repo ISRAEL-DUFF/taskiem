@@ -174,7 +174,11 @@ REVOKE EXECUTE ON FUNCTION taskiem_push_expire(interval) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION taskiem_push_expire(interval) TO taskiem_app;
 GRANT SELECT (created_at) ON push_outbox TO taskiem_dispatch;
 
+-- A customer's conversation muted (N2): no bell item and no push for it.
+ALTER TABLE customer_conversations ADD COLUMN muted boolean NOT NULL DEFAULT false;
+
 -- +goose Down
+ALTER TABLE customer_conversations DROP COLUMN muted;
 REVOKE SELECT (created_at) ON push_outbox FROM taskiem_dispatch;
 DROP FUNCTION taskiem_push_expire(interval);
 ALTER TABLE push_subscriptions DROP COLUMN unreached_since;

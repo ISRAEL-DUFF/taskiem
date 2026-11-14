@@ -9365,8 +9365,8 @@ paths:
       operationId: putCustomerChat
       tags:
       - Customers
-      summary: Archive a customer's conversation, or bring it back
-      description: An archived thread comes back when the customer writes again.
+      summary: Archive or mute a customer's conversation, or undo either
+      description: An archived thread comes back when the customer writes again. A muted one tells nobody (no bell item, no push) until unmuted.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -9388,9 +9388,11 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [archived]
+              minProperties: 1
               properties:
                 archived:
+                  type: boolean
+                muted:
                   type: boolean
       responses:
         '204':
@@ -35846,7 +35848,7 @@ components:
     CustomerChat:
       type: object
       additionalProperties: false
-      required: [id, name, phone, last, last_mine, last_at, unread, window_open, window_until, stopped, archived]
+      required: [id, name, phone, last, last_mine, last_at, unread, window_open, window_until, stopped, archived, muted]
       properties:
         id:
           type: string
@@ -35877,6 +35879,9 @@ components:
           description: The customer sent STOP; nothing is sent until START.
         archived:
           type: boolean
+        muted:
+          type: boolean
+          description: Nobody is told of its messages (no bell item, no push).
         owes_kobo:
           type: integer
           description: One thread only, what the customer owes on open invoices.
