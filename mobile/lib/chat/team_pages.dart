@@ -9,6 +9,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:image_picker/image_picker.dart' show ImagePicker, ImageSource;
 
+import '../app/lock.dart' show stepOut;
 import '../api/api.g.dart' show ListStaffTasksResponsePeopleItem;
 import '../app/auth.dart';
 import '../app/links.dart';
@@ -934,7 +935,7 @@ class _EditProfileState extends State<_EditProfile> {
 typedef TaskPhotoPick = Future<({List<int> bytes, String name})?> Function();
 
 TaskPhotoPick pickTaskPhoto = () async {
-  final x = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 85, maxWidth: 2000);
+  final x = await stepOut(() => ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 85, maxWidth: 2000));
   if (x == null) return null;
   return (bytes: await x.readAsBytes(), name: x.name.toLowerCase().endsWith('.png') ? x.name : '${x.name.split('.').first}.jpg');
 };

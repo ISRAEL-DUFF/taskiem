@@ -254,6 +254,18 @@ class CustomerData extends ChangeNotifier {
     }
   }
 
+  /// Mute (its messages tell nobody: no notification, no bell), or not.
+  Future<bool> setMuted(bool muted) async {
+    try {
+      await api.putCustomerChat(id: id, body: PutCustomerChatRequest(muted: muted));
+      await _chat();
+      return true;
+    } on Object catch (e) {
+      _fail(e);
+      return false;
+    }
+  }
+
   /// Archive, or bring back to the chats; false if it could not be.
   Future<bool> setArchived(bool archived) async {
     try {
@@ -355,7 +367,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                       padding: EdgeInsets.only(top: pad.top),
                       child: ChatHeadBar(
                         onBack: widget.onBack,
-                        // CustomerChat.tsx's menu: Archive, or Unarchive.
+                        // CustomerChat.tsx's menu: Archive, or Unarchive; Mute.
                         onMore: c == null
                             ? null
                             : (at) => showHeadMenu(
@@ -370,6 +382,15 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                       showTkToast(context, c.archived ? 'Brought back to the chats' : 'Archived');
                                       // Archived, it leaves the open chat for the list.
                                       if (!c.archived) (widget.onBack ?? () => Navigator.of(context).maybePop())();
+                                    },
+                                  ),
+                                  (
+                                    c.muted == true ? 'Unmute notifications' : 'Mute notifications',
+                                    () async {
+                                      final muted = c.muted == true;
+                                      final ok = await d.setMuted(!muted);
+                                      if (!ok || !context.mounted) return;
+                                      showTkToast(context, muted ? 'Notifications on for this customer' : 'Muted');
                                     },
                                   ),
                                 ],

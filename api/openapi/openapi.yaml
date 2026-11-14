@@ -9365,8 +9365,8 @@ paths:
       operationId: putCustomerChat
       tags:
       - Customers
-      summary: Archive a customer's conversation, or bring it back
-      description: An archived thread comes back when the customer writes again.
+      summary: Archive or mute a customer's conversation, or undo either
+      description: An archived thread comes back when the customer writes again. A muted one tells nobody (no bell item, no push) until unmuted.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -9388,9 +9388,11 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [archived]
+              minProperties: 1
               properties:
                 archived:
+                  type: boolean
+                muted:
                   type: boolean
       responses:
         '204':
@@ -15159,6 +15161,178 @@ paths:
                 $ref: '#/components/schemas/Error'
         default:
           $ref: '#/components/responses/Error'
+  /v1/signup/app/code:
+    post:
+      operationId: appSignupCode
+      tags:
+      - Authentication
+      summary: Send a sign-up code on WhatsApp (the app)
+      description: The phone app's sign-up as on WhatsApp (docs/spec/mobile-app-m4.md N7) starts by proving the number with a code sent on WhatsApp.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              additionalProperties: false
+              properties:
+                phone:
+                  type: string
+                  maxLength: 32
+      responses:
+        '202':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+        '403':
+          description: Sign-up is not open to this number (its country, or its limit), with what to say.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Signing up in the app is not open on this server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many codes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/signup/app/verify:
+    post:
+      operationId: appSignupVerify
+      tags:
+      - Authentication
+      summary: Prove the number and start the sign-up (the app)
+      description: The code right, a token for the sign-up's answers and its first question. A number already on an account answers 409 with `sign_in`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              additionalProperties: false
+              properties:
+                phone:
+                  type: string
+                  maxLength: 32
+                code:
+                  type: string
+                  maxLength: 12
+      responses:
+        '200':
+          description: Begun
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, messages]
+                properties:
+                  token:
+                    type: string
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AppSignupMessage'
+        '401':
+          description: The code is wrong, expired or locked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The number is on an account already (`sign_in`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/signup/app/turn:
+    post:
+      operationId: appSignupTurn
+      tags:
+      - Authentication
+      summary: Answer the sign-up's question (the app)
+      description: An answer (typed, or a button's id as `reply`) and the next question. The last answer makes the business, as on WhatsApp, and signs this phone in (`done`, with a device session).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, token]
+              additionalProperties: false
+              properties:
+                phone:
+                  type: string
+                  maxLength: 32
+                token:
+                  type: string
+                  maxLength: 100
+                text:
+                  type: string
+                  maxLength: 500
+                reply:
+                  type: string
+                  maxLength: 100
+                bearer:
+                  type: boolean
+                device:
+                  $ref: '#/components/schemas/DeviceRequest'
+      responses:
+        '200':
+          description: The next question, or the end
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AppSignupMessage'
+                  done:
+                    type: boolean
+                    description: The business is made.
+                  ended:
+                    type: boolean
+                    description: Cancelled or declined; nothing was made.
+                  token:
+                    type: string
+                    description: The session, when done (bearer).
+                  tenant_id:
+                    type: string
+                    format: uuid
+                  user_id:
+                    type: string
+                    format: uuid
+        '404':
+          description: The sign-up has ended or the token is not its (`ended`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/auth/password/forgot:
     post:
       operationId: forgotPassword
@@ -18956,8 +19130,8 @@ paths:
       operationId: listPush
       tags:
       - Notifications
-      summary: The browsers this person allowed to be notified when the app is closed
-      description: In the business they are in. Never the browsers' addresses or keys. Only for a person (not an API key); 404 when the feature is off.
+      summary: The devices (browsers and phones) this person allowed to be notified when the app is closed
+      description: In the business they are in. Never the devices' addresses, tokens or keys. Only for a person (not an API key); 404 when neither browsers nor phones can be notified on this server.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -18975,8 +19149,8 @@ paths:
       operationId: putPush
       tags:
       - Notifications
-      summary: Allow this browser to be notified
-      description: The address must be a push service's (https, on Google's, Mozilla's, Apple's or Microsoft's host). The same browser again is updated, not added twice; at most 10 browsers a person in a business, the oldest replaced.
+      summary: Allow this browser or phone to be notified
+      description: A browser (kind webpush, the default) gives its subscription, whose address must be a push service's (https, on Google's, Mozilla's, Apple's or Microsoft's host); the phone app (kind fcm) gives its Firebase registration token and platform. The same device again is updated, not added twice; at most 10 devices a person in a business, the oldest replaced. A browser that renewed its subscription names the old address in replaces, and keeps its name, preview and kinds.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -18989,11 +19163,33 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [endpoint, keys]
               properties:
+                kind:
+                  type: string
+                  enum: [webpush, fcm]
                 endpoint:
                   type: string
                   maxLength: 2048
+                token:
+                  type: string
+                  maxLength: 4096
+                  description: The app's Firebase registration token (kind fcm)
+                platform:
+                  type: string
+                  enum: [android, ios]
+                kinds:
+                  type: [array, 'null']
+                  items:
+                    type: string
+                    enum: [business, customers, orders, approvals, alerts]
+                  description: The kinds of notification the device takes; left out, a new device takes the defaults (all for owners and admins, all but alerts for others)
+                replaces:
+                  type: string
+                  maxLength: 2048
+                  description: The same device's previous address (a browser's renewed subscription, or the app's token before Firebase changed it)
+                known:
+                  type: boolean
+                  description: Only find this device (a page that lost which one it is); one the server does not have is not added again (404)
                 keys:
                   type: object
                   additionalProperties: false
@@ -19024,8 +19220,8 @@ paths:
       operationId: deletePushEndpoint
       tags:
       - Notifications
-      summary: This browser takes itself off
-      description: By its address, which only it knows. Nothing there is not an error.
+      summary: This browser or phone takes itself off
+      description: By its address or token, which only it knows. Nothing there is not an error.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -19038,9 +19234,10 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [endpoint]
               properties:
                 endpoint:
+                  type: string
+                token:
                   type: string
       responses:
         '200':
@@ -19056,7 +19253,7 @@ paths:
       operationId: patchPush
       tags:
       - Notifications
-      summary: Rename a browser or switch its preview
+      summary: Rename a device, switch its preview, or set the kinds of notification it takes
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -19082,6 +19279,11 @@ paths:
                   maxLength: 80
                 preview:
                   type: [boolean, 'null']
+                kinds:
+                  type: [array, 'null']
+                  items:
+                    type: string
+                    enum: [business, customers, orders, approvals, alerts]
       responses:
         '200':
           description: This person's browsers
@@ -32630,6 +32832,23 @@ components:
           type: array
           items:
             type: string
+    AppSignupMessage:
+      type: object
+      description: What Taskiem says in the app's sign-up, with its buttons (an id to send back as `reply`).
+      required: [text]
+      properties:
+        text:
+          type: string
+        buttons:
+          type: array
+          items:
+            type: object
+            required: [id, title]
+            properties:
+              id:
+                type: string
+              title:
+                type: string
     AppConfig:
       type: object
       required:
@@ -32647,6 +32866,30 @@ components:
         signup:
           type: boolean
           description: Whether self-serve signup is open (TASKIEM_ALLOW_SIGNUP).
+        chat_signup:
+          type: boolean
+          description: Whether the app may sign people up as on WhatsApp (`app` in TASKIEM_CHAT_SIGNUP, with WhatsApp and terms).
+        push:
+          type: object
+          description: Present when phones can be notified (Firebase is set up). The app starts Firebase with these public client values, so turning notifications on needs no new build.
+          additionalProperties: false
+          required: [fcm]
+          properties:
+            fcm:
+              type: object
+              additionalProperties: false
+              required: [api_key, project_id, sender_id]
+              properties:
+                api_key:
+                  type: string
+                app_id_android:
+                  type: string
+                app_id_ios:
+                  type: string
+                project_id:
+                  type: string
+                sender_id:
+                  type: string
     SignupOptions:
       type: object
       required:
@@ -35636,6 +35879,9 @@ components:
           description: The customer sent STOP; nothing is sent until START.
         archived:
           type: boolean
+        muted:
+          type: boolean
+          description: Nobody is told of its messages (no bell item, no push).
         owes_kobo:
           type: integer
           description: One thread only, what the customer owes on open invoices.
@@ -37685,11 +37931,24 @@ components:
     PushDevice:
       type: object
       additionalProperties: false
-      required: [id, label, preview, created_at, last_sent_at, last_ok_at]
+      required: [id, kind, platform, label, preview, kinds, created_at, last_sent_at, last_ok_at]
       properties:
         id:
           type: string
           format: uuid
+        kind:
+          type: string
+          enum: [webpush, fcm]
+          description: A browser (webpush) or the phone app (fcm)
+        platform:
+          type: [string, 'null']
+          enum: [android, ios, null]
+        kinds:
+          type: array
+          items:
+            type: string
+            enum: [business, customers, orders, approvals, alerts]
+          description: The kinds of notification it takes
         label:
           type: string
         preview:
@@ -37706,7 +37965,7 @@ components:
     PushDevices:
       type: object
       additionalProperties: false
-      required: [devices, max]
+      required: [devices, max, kinds, browsers, phones]
       properties:
         devices:
           type: array
@@ -37714,6 +37973,17 @@ components:
             $ref: '#/components/schemas/PushDevice'
         max:
           type: integer
+        kinds:
+          type: array
+          items:
+            type: string
+          description: The kinds of notification a device may take, in the order to show them
+        browsers:
+          type: boolean
+          description: Browsers can be notified on this server (its VAPID keys)
+        phones:
+          type: boolean
+          description: Phones can be notified on this server (Firebase)
         added:
           type: string
           format: uuid

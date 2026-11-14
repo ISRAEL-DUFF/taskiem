@@ -11,7 +11,7 @@ import { endSession, keepSigningOut, NOT_SIGNED_OUT } from "./lib/signout";
 import { passkeyLogin } from "./passkeys";
 import { toast } from "./toast";
 import { claimTab, forgetTab } from "./lib/tabOwner";
-import { disablePush } from "./lib/push";
+import { disablePush, setPushScope } from "./lib/push";
 import { setAppBadge } from "./lib/badge";
 import { forgetViewed } from "./lib/explore";
 
@@ -46,6 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // A session that ran out keeps the tab's drafts for the same
           // person; someone else signing in here does not see them.
           claimTab(m.user?.id ?? "");
+          // This browser's notification device is per business (lib/push.ts).
+          setPushScope(m.tenant_id);
           setMe(m);
         },
         () => setMe(null),
@@ -79,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     logout: async () => {
       // This browser stops being notified for this person (it needs the session).
-      await disablePush().catch(() => undefined);
+      await disablePush(true).catch(() => undefined);
       setAppBadge(0);
       setLeaving("trying");
       const ended = await endSession();

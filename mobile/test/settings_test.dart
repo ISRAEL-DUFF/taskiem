@@ -107,23 +107,60 @@ void main() {
     await t.pumpAndSettle();
   });
 
-  testWidgets('S1: the app lock is turned off only by the phone\'s own unlock', (t) async {
+  testWidgets('S1: the app lock is off until turned on, and every change is made with the phone\'s own unlock', (t) async {
     final o = await open(t);
-    expect(o.prefs.lock, isTrue);
-    final row = find.text('Ask for this phone’s fingerprint, face or PIN');
+    expect(o.prefs.lock, isFalse, reason: 'off, as WhatsApp\'s');
+    expect(find.text('Taskiem opens without asking.'), findsOneWidget);
     o.u.answer = false;
-    await t.tap(row);
+    await t.tap(find.text('After 1 minute'));
     await settle(t);
-    expect(o.prefs.lock, isTrue, reason: 'not unlocked: still on');
+    expect(o.prefs.lock, isFalse, reason: 'not unlocked: still off');
     o.u.answer = true;
-    await t.tap(row);
+    await t.tap(find.text('After 1 minute'));
+    await settle(t);
+    expect(o.prefs.lockAfter, const Duration(minutes: 1));
+    expect(find.textContaining('after 1 minute away'), findsOneWidget);
+    await t.tap(find.text('Immediately'));
+    await settle(t);
+    expect(o.prefs.lockAfter, Duration.zero);
+    await t.tap(find.text('After 30 minutes'));
+    await settle(t);
+    expect(o.prefs.lockAfter, const Duration(minutes: 30));
+    o.u.answer = false;
+    await t.tap(find.text('Off'));
+    await settle(t);
+    expect(o.prefs.lockAfter, const Duration(minutes: 30), reason: 'not unlocked: still on');
+    o.u.answer = true;
+    await t.tap(find.text('Off'));
     await settle(t);
     expect(o.prefs.lock, isFalse);
-    expect(o.u.asked, 2);
-    await t.tap(row);
+    expect(o.u.asked, 6);
+  });
+
+  testWidgets('S1: a phone with no lock of its own cannot turn the app lock on', (t) async {
+    final o = await open(t);
+    o.u.has = false;
+    await t.tap(find.text('Immediately'));
     await settle(t);
-    expect(o.prefs.lock, isTrue, reason: 'on again without asking');
-    expect(o.u.asked, 2);
+    expect(o.prefs.lock, isFalse);
+    expect(find.textContaining('Set a screen lock on this phone first'), findsOneWidget);
+    expect(o.u.asked, 0);
+  });
+
+  test('S1: the lock\'s choice is kept, and the old always-on setting is not read', () async {
+    final keys = MemoryKeyStore();
+    await keys.write('app-lock', null);
+    final p = Prefs(keys);
+    await p.load();
+    expect(p.lock, isFalse);
+    await p.setLockAfter(const Duration(minutes: 30));
+    final again = Prefs(keys);
+    await again.load();
+    expect(again.lockAfter, const Duration(minutes: 30));
+    await again.forgetPerson();
+    final next = Prefs(keys);
+    await next.load();
+    expect(next.lock, isFalse, reason: 'whoever signs in next starts with it off');
   });
 
   testWidgets('S5: chat tools switched for everyone; refused, it goes back', (t) async {
@@ -229,7 +266,7 @@ void main() {
 
   testWidgets('a passkey alone: linking says to do it where the passkey is', (t) async {
     await open(t, factors: const {'passkey': true}, answers: {'GET /v1/me/telegram': (_) => _json({'enabled': true, 'linked': false})});
-    expect(find.textContaining('This needs your passkey, and this phone cannot use one yet.'), findsOneWidget);
+    expect(find.textContaining('This needs your passkey. Do it on the web, where Taskiem asks for it.'), findsOneWidget);
     final link = t.getSemantics(find.bySemanticsLabel('Link Telegram'));
     expect(link.flagsCollection.isEnabled, isNot(true), reason: 'nothing to press with');
   });

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The notification's small icon: the brand's mark (web/public/brand),
+     its strokes and dot alone, in white as Android draws small icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:pathData="M24,40H64M42,18V58Q42,76 60,76H62"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="16"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M81,67a9,9 0,1 1,0 18a9,9 0,1 1,0 -18z"
+        android:fillColor="#FFFFFFFF" />
+</vector>

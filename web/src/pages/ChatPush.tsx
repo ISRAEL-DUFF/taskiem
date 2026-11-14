@@ -5,20 +5,41 @@ import {
   browserEnv,
   disablePush,
   enablePush,
+  findMyDevice,
+  offeredKinds,
+  KIND_WORDS,
   myDevice,
   pushSupport,
   serverKey,
   thisSubscription,
+  type PushDevice,
+  type PushKind,
   type PushView,
   type PushWhy,
 } from "../lib/push";
 import { ErrorBox, fmtTime, Items, Row, useAction } from "../ui";
 
-// Chat when Taskiem is closed (docs/spec/chat-push.md §6.6): a notification on
-// this phone or computer when a business writes, even with the app closed. It
-// shows only where the server has the keys for it, and only to people who write
-// in conversations. Each device has its own switch for showing what the
-// message says.
+// Notifications when Taskiem is closed (docs/spec/chat-push.md §6.6,
+// docs/spec/mobile-app-m4.md N3): on this phone or computer, even with the app
+// closed, whatever the bell tells and every chat message. It shows only where
+// the server has the keys for it. Each device has its own switches: which kinds
+// it takes, and whether it shows what the message says.
+
+const ALL_KINDS: PushKind[] = [
+  "business",
+  "customers",
+  "orders",
+  "approvals",
+  "alerts",
+];
+
+/** What a device of the list is, in a few words. */
+export function deviceKind(d: PushDevice): string {
+  if (d.kind !== "fcm") return "Browser";
+  return d.platform === "ios"
+    ? "Taskiem app on an iPhone"
+    : "Taskiem app on Android";
+}
 
 const WHY: Record<PushWhy, string> = {
   denied:
@@ -29,7 +50,7 @@ const WHY: Record<PushWhy, string> = {
 };
 
 export function ChatPush() {
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const [feature, setFeature] = useState<"loading" | "off" | "on">("loading");
   const [view, setView] = useState<PushView>();
   const [subscribed, setSubscribed] = useState(false);
@@ -53,18 +74,29 @@ export function ChatPush() {
   useEffect(() => {
     if (feature !== "on") return;
     let live = true;
-    get<PushView>("/v1/me/push").then(
-      (v) => live && setView(v),
-      () => undefined,
-    );
-    void thisSubscription().then((s) => live && setSubscribed(!!s));
+    void Promise.all([
+      get<PushView>("/v1/me/push").catch(() => undefined),
+      thisSubscription(),
+    ]).then(([v, s]) => {
+      if (!live) return;
+      if (v) setView(v);
+      setSubscribed(!!s);
+      // The worker renewed the subscription, or this browser does not know
+      // which device it is here: the server finds it by its address.
+      const id = myDevice();
+      if (s && (!id || (v && !v.devices.some((d) => d.id === id))))
+        void findMyDevice().then((f) => live && f && setView(f));
+    });
     return () => {
       live = false;
     };
-  }, [feature]);
+  }, [feature, me?.tenant_id]);
 
-  if (feature !== "on" || !can("chat.trade")) return null;
+  if (feature !== "on") return null;
   const mine = view?.devices.find((d) => d.id === myDevice());
+  // The kinds this person can get at all: business chats for those who
+  // write in them, customers for those who answer customers.
+  const offered = offeredKinds(view?.kinds ?? ALL_KINDS, can);
   const on = subscribed && !!mine;
   const others = (view?.devices ?? []).filter((d) => d.id !== mine?.id);
 
@@ -91,6 +123,17 @@ export function ChatPush() {
       if (mine)
         setView(await patch<PushView>(`/v1/me/push/${mine.id}`, { preview }));
     }, "Saved");
+  const take = (
+    kind: PushKind,
+    on: boolean,
+    d: PushDevice | undefined = mine,
+  ) =>
+    void act.run(async () => {
+      if (!d) return;
+      const now = d.kinds ?? ALL_KINDS;
+      const kinds = on ? [...now, kind] : now.filter((k) => k !== kind);
+      setView(await patch<PushView>(`/v1/me/push/${d.id}`, { kinds }));
+    }, "Saved");
   const remove = (id: string) =>
     void act.run(
       async () => setView(await del<PushView>(`/v1/me/push/${id}`)),
@@ -98,17 +141,20 @@ export function ChatPush() {
     );
 
   return (
-    <section aria-label="Chat when Taskiem is closed" data-testid="chat-push">
-      <h2>Chat when Taskiem is closed</h2>
+    <section
+      aria-label="Notifications when Taskiem is closed"
+      data-testid="chat-push"
+    >
+      <h2>Notifications when Taskiem is closed</h2>
       <ErrorBox error={act.error} />
-      <Items label="Chat when Taskiem is closed">
+      <Items label="Notifications when Taskiem is closed">
         <Row
           icon="bell"
-          title="Notify me on this device when a business writes"
+          title="Notify me on this device"
           sub={
             <span className="sub">
-              You get a notification here even when Taskiem is closed. Turn it
-              off any time.
+              Messages, orders and what needs you, here even when Taskiem is
+              closed. Turn it off any time.
             </span>
           }
           testid="chat-push-here"
@@ -125,7 +171,8 @@ export function ChatPush() {
               <label className="switch-line">
                 <input
                   type="checkbox"
-                  aria-label="Notify me on this device when a business writes"
+                  role="switch"
+                  aria-label="Notify me on this device"
                   checked={on}
                   disabled={act.busy || permission === "denied"}
                   onChange={(e) => (e.target.checked ? turnOn() : turnOff())}
@@ -151,7 +198,8 @@ export function ChatPush() {
               )}
               {on && mine && !mine.preview && (
                 <span className="hint">
-                  Off: the notification says only that a business wrote.
+                  Off: the notification says only that something came, not what
+                  it says.
                 </span>
               )}
               <span className="hint">
@@ -163,6 +211,33 @@ export function ChatPush() {
           )}
         </Row>
       </Items>
+      {on && mine && offered.length > 1 && (
+        <>
+          <h3>What this device tells you</h3>
+          <Items label="What this device tells you">
+            {offered.map((k) => (
+              <Row
+                key={k}
+                icon="bell"
+                title={KIND_WORDS[k].title}
+                sub={<span className="sub">{KIND_WORDS[k].sub}</span>}
+                testid={`chat-push-kind-${k}`}
+              >
+                <label className="switch-line">
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    aria-label={KIND_WORDS[k].title}
+                    checked={(mine.kinds ?? ALL_KINDS).includes(k)}
+                    disabled={act.busy}
+                    onChange={(e) => take(k, e.target.checked)}
+                  />
+                </label>
+              </Row>
+            ))}
+          </Items>
+        </>
+      )}
       {others.length > 0 && (
         <>
           <h3>Your other devices</h3>
@@ -174,13 +249,35 @@ export function ChatPush() {
                 title={d.label}
                 sub={
                   <span className="sub">
+                    {deviceKind(d)} ·{" "}
                     {d.last_ok_at
-                      ? `Last notified ${fmtTime(d.last_ok_at)}`
-                      : "Not notified yet"}
+                      ? `last notified ${fmtTime(d.last_ok_at)}`
+                      : "not notified yet"}
                   </span>
                 }
                 testid="chat-push-device"
               >
+                {offered.length > 1 && (
+                  <details data-testid="chat-push-device-kinds">
+                    <summary>
+                      What it tells you
+                      <span className="sr-only"> on {d.label}</span>
+                    </summary>
+                    {offered.map((k) => (
+                      <label className="switch-line" key={k}>
+                        <input
+                          type="checkbox"
+                          role="switch"
+                          aria-label={`${KIND_WORDS[k].title} on ${d.label}`}
+                          checked={(d.kinds ?? ALL_KINDS).includes(k)}
+                          disabled={act.busy}
+                          onChange={(e) => take(k, e.target.checked, d)}
+                        />
+                        <span>{KIND_WORDS[k].title}</span>
+                      </label>
+                    ))}
+                  </details>
+                )}
                 <button
                   type="button"
                   className="small"

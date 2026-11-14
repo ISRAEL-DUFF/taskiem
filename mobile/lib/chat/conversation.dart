@@ -15,6 +15,7 @@ import '../app/auth.dart';
 import '../app/sound.dart';
 import '../api/transport.dart';
 import '../app/session.dart' show uuid4;
+import '../kit/motion.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
@@ -1517,6 +1518,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
       key: ValueKey(d.epoch),
       items: items,
       of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
+      // Conversation.tsx: a diary line lands, a card arrives (`tk-arrive`).
+      arrival: (m) => runs.containsKey(m.id) || member.contains(m.id)
+          ? TkArrival.diary
+          : m.m.kind == 'card'
+          ? TkArrival.card
+          : TkArrival.bubble,
       now: now,
       unread: d.unread,
       hasOlder: d.hasOlder,

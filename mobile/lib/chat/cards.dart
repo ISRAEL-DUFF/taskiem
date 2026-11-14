@@ -12,6 +12,7 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/motion.dart';
 import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'deal.dart';
@@ -423,13 +424,29 @@ class DiaryLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final fresh = TkFresh.of(context);
     final arrow = words.lastIndexOf(' → ');
     final spans = <InlineSpan>[
       if (arrow >= 0) ...[
         TextSpan(text: words.substring(0, arrow + 3)),
-        TextSpan(
-          text: words.substring(arrow + 3),
-          style: const TextStyle(fontWeight: FontWeight.w700, fontVariations: [FontVariation('wght', 700)]),
+        // kit.tsx: a fresh line's new value `.tk-roll`s into place.
+        if (!fresh)
+          TextSpan(
+            text: words.substring(arrow + 3),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontVariations: [FontVariation('wght', 700)]),
+          )
+        else
+        WidgetSpan(
+          alignment: PlaceholderAlignment.baseline,
+          baseline: TextBaseline.alphabetic,
+          child: TkRoll(
+            value: words,
+            child: Text(
+              words.substring(arrow + 3),
+              semanticsLabel: words.substring(arrow + 3),
+              style: tkText(size: 13, weight: 700, color: t.text),
+            ),
+          ),
         ),
       ] else
         TextSpan(text: words),
@@ -452,13 +469,16 @@ class DiaryLine extends StatelessWidget {
                   label: when,
                   child: TkPress(
                     onTap: onTap,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    // kit.tsx: a fresh line `.tk-land`s, lit in lime.
+                    child: TkLand(
+                      fresh: fresh,
                       decoration: BoxDecoration(
                         color: t.panel,
                         borderRadius: BorderRadius.circular(999),
                         boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 2), blurRadius: 8)],
                       ),
+                      child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       // `display: inline-flex; flex-wrap: wrap; justify-content:
                       // center; gap: 4px 8px`: words too long to sit beside the
                       // tick put it on a line of its own, above them.
@@ -472,6 +492,7 @@ class DiaryLine extends StatelessWidget {
                           Text.rich(TextSpan(children: spans), style: tkText(size: 13, color: t.text)),
                         ],
                       ),
+                    ),
                     ),
                   ),
                 ),

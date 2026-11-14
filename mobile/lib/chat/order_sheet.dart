@@ -13,6 +13,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../api/transport.dart';
+import '../kit/motion.dart';
 import '../kit/api_image.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
@@ -496,7 +497,8 @@ class _OrderSheetState extends State<OrderSheet> {
                   child: Text(sec.label.toUpperCase(), style: tkText(size: 13, weight: 700, letterSpacing: 0.78, color: t.muted)),
                 ),
               ),
-            for (final it in sec.items) side(ValueKey('item:${it.id}'), _row(t, dark, it)),
+            // ChatBuyer.tsx `.tk-order-list.tk-stagger`: rows follow the sheet up.
+            for (final (i, it) in sec.items.indexed) side(ValueKey('item:${it.id}'), TkIn.sheetRow(index: i, child: _row(t, dark, it))),
           ],
         ],
       );

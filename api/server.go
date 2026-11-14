@@ -201,6 +201,9 @@ type Server struct {
 	// LoginBurst is how many sign-in attempts an address may make at once
 	// (then one every six seconds); default 10.
 	LoginBurst int
+	// AppLinks is which phone apps this server's links and passkeys belong
+	// to (applinks.go); empty serves no well-known files.
+	AppLinks AppLinks
 	// WebAuthn is the relying party for passkeys; empty turns them off.
 	WebAuthn webauthn.Config
 	// RequireAdminPasskeys holds members with administrative permissions to
@@ -314,6 +317,8 @@ func (s *Server) Handler() http.Handler {
 	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, s.securityHeaders, s.hsts, s.customDomains)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	r.Get("/readyz", s.ready)
+	r.Get("/.well-known/assetlinks.json", s.assetLinks)
+	r.Get("/.well-known/apple-app-site-association", s.appleSiteAssociation)
 	if s.Status != nil && s.Status.Page != nil {
 		// The public status page: no session, no tenant data, cacheable.
 		r.Get("/status", s.Status.Page.HTML)
@@ -346,6 +351,9 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/password/reset", s.resetPassword)
 		r.Post("/auth/chat/start", s.chatSigninStart) // signing in with the chat (chat_signin.go)
 		r.Post("/auth/chat/verify", s.chatSigninVerify)
+		r.Post("/signup/app/code", s.appSignupCode) // signing up in the app as on WhatsApp (app_signup.go)
+		r.Post("/signup/app/verify", s.appSignupVerify)
+		r.Post("/signup/app/turn", s.appSignupTurn)
 		r.Post("/auth/chat/link/peek", s.chatSigninLinkPeek)
 		r.Post("/auth/chat/link", s.chatSigninLink)
 		r.Post("/auth/invitation/options", s.invitationLinkOptions) // invitation links (invitationlinks.go)

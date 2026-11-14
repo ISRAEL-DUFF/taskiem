@@ -360,6 +360,10 @@ func (s *Server) RunInvoices(ctx context.Context) error {
 	s.chatHooks()
 	// Explore's scores (explore.go), whatever else runs here.
 	go s.runExploreScores(ctx)
+	// The queued pushes (push.go), to browsers and the app.
+	go s.RunPush(ctx)
+	// Approvals waiting, in the bell (whatsapp_approvals.go).
+	go s.RunApprovalBell(ctx)
 	if s.Invoices == nil {
 		<-ctx.Done()
 		return nil

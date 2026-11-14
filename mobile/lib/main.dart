@@ -1,9 +1,12 @@
 // Taskiem's chat as a phone app (docs/spec/mobile-app.md): the web chat,
 // drawn and moving the same.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart' show MaterialApp;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import 'api/transport.dart';
 import 'app/auth.dart';
@@ -11,11 +14,22 @@ import 'app/openers.dart';
 import 'app/config.dart';
 import 'kit/keyboard.dart';
 import 'app/lock.dart';
+import 'app/app_signup.dart' show AppSignup;
+import 'app/applinks.dart';
+import 'app/notify.dart';
+import 'app/notify_firebase.dart';
 import 'app/prefs.dart';
+import 'app/route.dart';
 import 'app/session.dart';
+import 'app/sound.dart' show chime;
 import 'app/store.dart' show LocalStore;
 import 'api/api.g.dart';
+import 'chat/bills_page.dart' show openBill;
+import 'chat/invoices_page.dart' show openInvoice;
 import 'chat/money_page.dart' show MoneyPage;
+import 'chat/purchases_page.dart' show openPurchase;
+import 'chat/storefront_orders_page.dart' show openStorefrontOrder;
+import 'chat/trade_orders_page.dart' show openTradeOrder;
 import 'chat/order_sheet.dart' show showOrderSheet;
 import 'chat/orders_tab.dart' show OrdersTab;
 import 'chat/today_tab.dart' show TodayTab;
@@ -27,12 +41,14 @@ import 'chat/explore.dart' show showExplore;
 import 'chat/profile_screen.dart';
 import 'chat/live.dart';
 import 'chat/taskiem.dart';
+import 'screens/app_sign_up.dart';
 import 'screens/home_tabs.dart';
 import 'screens/signed_in.dart';
 import 'screens/sign_in.dart';
 import 'screens/sign_up.dart';
 import 'theme/theme.dart';
 import 'kit/mobile.dart' show TkRoute;
+import 'kit/modal.dart' show showTkConfirm, showTkToast;
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,13 +62,46 @@ void main() {
   LocalStore.enabled = true;
   final auth = Auth(transport: Transport(base: taskiemUrl), store: SessionStore(const SecureKeyStore()), version: appVersion);
   final prefs = Prefs(const SecureKeyStore())..load();
-  auth.onForget = prefs.forgetPerson;
+  // Notifications on this phone (lib/app/notify.dart).
+  final notify = PhoneNotifications(auth: auth, keys: const SecureKeyStore(), platform: FirebasePush());
+  auth.beforeSignOut = notify.signingOut;
+  auth.onForget = () async {
+    await prefs.forgetPerson();
+    await notify.forgotten();
+  };
+  // The session and the settings read side by side; the app opens once
+  // both are (_Root), so a kept session with the lock on is asked for it.
   auth.start();
-  runApp(TaskiemApp(auth: auth, unlocker: PhoneUnlocker(), prefs: prefs));
+  // Links to this server's pages, opened in the app (lib/app/applinks.dart).
+  final links = LinkInbox();
+  // The phone's own start screen (the mark on pine) stays until the app's
+  // first screen is the real one, so there is one opening, not two: the
+  // app draws nothing until the session and the settings are read (or a
+  // few seconds have gone, on a slow phone: then its own mark on pine).
+  WidgetsBinding.instance.deferFirstFrame();
+  unawaited(_whenOpen(auth, prefs).timeout(const Duration(seconds: 3), onTimeout: () {}).whenComplete(WidgetsBinding.instance.allowFirstFrame));
+  runApp(TaskiemApp(auth: auth, unlocker: PhoneUnlocker(), prefs: prefs, notify: notify, links: links));
+}
+
+/// Done once the session is known and the settings are read.
+Future<void> _whenOpen(Auth auth, Prefs prefs) async {
+  await prefs.ready;
+  if (auth.state != AuthState.checking) return;
+  final done = Completer<void>();
+  void changed() {
+    if (auth.state != AuthState.checking && !done.isCompleted) done.complete();
+  }
+
+  auth.addListener(changed);
+  try {
+    await done.future;
+  } finally {
+    auth.removeListener(changed);
+  }
 }
 
 class TaskiemApp extends StatelessWidget {
-  const TaskiemApp({super.key, this.mode = TkMode.light, this.home, this.auth, this.unlocker, this.prefs, this.now = DateTime.now});
+  const TaskiemApp({super.key, this.mode = TkMode.light, this.home, this.auth, this.unlocker, this.prefs, this.notify, this.links, this.now = DateTime.now});
 
   /// The theme when there are no [prefs] (tests show one theme).
   final TkMode mode;
@@ -68,6 +117,12 @@ class TaskiemApp extends StatelessWidget {
 
   /// The phone's own unlock, for the app lock.
   final Unlocker? unlocker;
+
+  /// Notifications on this phone (none in a test that gives none).
+  final PhoneNotifications? notify;
+
+  /// Links that open the app; one that comes signed out waits.
+  final LinkInbox? links;
 
   /// The clock the lock counts time away by (a test's own).
   final DateTime Function() now;
@@ -94,13 +149,15 @@ class TaskiemApp extends StatelessWidget {
                 : ListenableBuilder(
                     listenable: Listenable.merge([auth!, ?prefs]),
                     builder: (context, _) => AppLock(
-                      // Signed in, and the lock not turned off here.
-                      active: auth!.state == AuthState.signedIn && (prefs?.lock ?? true),
+                      // Signed in, and the lock turned on here (off
+                      // until turned on, as WhatsApp's).
+                      // Signed in counts once the settings are read too (the
+                      // screens open then), so the lock is decided with them.
+                      active: auth!.state == AuthState.signedIn && (prefs?.loaded ?? true) && (prefs?.lock ?? false),
+                      after: prefs?.lockAfter ?? lockAfter,
+                      signedIn: auth!.state == AuthState.signedIn && (prefs?.loaded ?? true),
                       unlocker: unlocker!,
                       startLocked: auth!.restored,
-                      // Covered in the app switcher whenever signed in,
-                      // with the lock on or off.
-                      hideWhenAway: auth!.state == AuthState.signedIn,
                       now: now,
                       child: child!,
                     ),
@@ -109,7 +166,7 @@ class TaskiemApp extends StatelessWidget {
           ),
         ),
       ),
-      home: home ?? (auth == null ? const SignInScreen() : _Root(auth: auth!, prefs: prefs, unlocker: unlocker)),
+      home: home ?? (auth == null ? const SignInScreen() : _Root(auth: auth!, prefs: prefs, unlocker: unlocker, notify: notify, links: links)),
     );
   }
 }
@@ -119,10 +176,12 @@ class TaskiemApp extends StatelessWidget {
 /// or moved to another business, they are closed, and the chats start
 /// afresh for the new session.
 class _Root extends StatefulWidget {
-  const _Root({required this.auth, this.prefs, this.unlocker});
+  const _Root({required this.auth, this.prefs, this.unlocker, this.notify, this.links});
   final Auth auth;
   final Prefs? prefs;
   final Unlocker? unlocker;
+  final PhoneNotifications? notify;
+  final LinkInbox? links;
 
   @override
   State<_Root> createState() => _RootState();
@@ -136,12 +195,20 @@ class _RootState extends State<_Root> {
     super.initState();
     _session = widget.auth.session;
     widget.auth.addListener(_changed);
+    widget.prefs?.addListener(_prefs);
   }
 
   @override
   void dispose() {
     widget.auth.removeListener(_changed);
+    widget.prefs?.removeListener(_prefs);
     super.dispose();
+  }
+
+  bool _loaded = false;
+
+  void _prefs() {
+    if (!_loaded && (widget.prefs?.loaded ?? true)) setState(() => _loaded = true);
   }
 
   void _changed() {
@@ -156,12 +223,15 @@ class _RootState extends State<_Root> {
   @override
   Widget build(BuildContext context) {
     final auth = widget.auth;
+    // Opening, until the session and the settings are read: the mark on
+    // pine, as the phone's own start screen shows it, so one runs on into
+    // the other.
+    if (auth.state == AuthState.checking || !(widget.prefs?.loaded ?? true)) return const _Opening();
     return switch (auth.state) {
-      // Opening: the pine the sign-in page starts with, for a moment.
-      AuthState.checking => ColoredBox(color: TkTheme.tokens(context).brand),
+      AuthState.checking => const _Opening(),
       AuthState.signedOut => _SignedOut(auth: auth),
       AuthState.outdated => const _Outdated(),
-      AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker),
+      AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify, links: widget.links),
     };
   }
 }
@@ -177,8 +247,20 @@ class _SignedOut extends StatefulWidget {
 }
 
 class _SignedOutState extends State<_SignedOut> {
-  bool _signup = false;
+  // What is open: signing in, the email form, or Get started (as on WhatsApp).
+  String _at = 'in';
   bool _open = false;
+  bool _chat = false;
+  bool _passkeys = true;
+  // Kept while signed out: back from Get started and in again finds the
+  // conversation where it was (its code and token are not spent again).
+  late final AppSignup _signup = AppSignup(widget.auth);
+
+  @override
+  void dispose() {
+    _signup.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -186,19 +268,31 @@ class _SignedOutState extends State<_SignedOut> {
     widget.auth.api.signupOptions().then((o) {
       if (mounted) setState(() => _open = o.enabled);
     }, onError: (_) {});
+    // Signing up as on WhatsApp, where the server has it (M4 N7).
+    widget.auth.api.appConfig().then((c) {
+      if (mounted) {
+        setState(() {
+          _chat = c.chatSignup ?? false;
+          _passkeys = c.passkeys;
+        });
+      }
+    }, onError: (_) {});
   }
 
   @override
   Widget build(BuildContext context) {
+    void go(String at) => setState(() => _at = at);
     // Android's back from signing up returns to signing in, not out of the app.
     return PopScope(
-      canPop: !_signup,
+      canPop: _at == 'in',
       onPopInvokedWithResult: (popped, _) {
-        if (!popped && _signup) setState(() => _signup = false);
+        if (!popped && _at != 'in') go('in');
       },
-      child: _signup
-          ? SignUpScreen(auth: widget.auth, onSignIn: () => setState(() => _signup = false))
-          : SignInScreen(auth: widget.auth, signup: _open, onSignUp: () => setState(() => _signup = true)),
+      child: switch (_at) {
+        'email' => SignUpScreen(auth: widget.auth, onSignIn: () => go('in')),
+        'app' => AppSignUpScreen(auth: widget.auth, signup: _signup, onSignIn: () => go('in'), onEmail: _open ? () => go('email') : null),
+        _ => SignInScreen(auth: widget.auth, signup: _open || _chat, passkeys: _passkeys, onSignUp: () => go(_chat ? 'app' : 'email')),
+      },
     );
   }
 }
@@ -262,10 +356,12 @@ class _Outdated extends StatelessWidget {
 
 /// Signed in: the chats; the menu opens the app's settings.
 class _Home extends StatefulWidget {
-  const _Home({super.key, required this.auth, this.prefs, this.unlocker});
+  const _Home({super.key, required this.auth, this.prefs, this.unlocker, this.notify, this.links});
   final Auth auth;
   final Prefs? prefs;
   final Unlocker? unlocker;
+  final PhoneNotifications? notify;
+  final LinkInbox? links;
 
   @override
   State<_Home> createState() => _HomeState();
@@ -275,11 +371,37 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   // The chat as it happens, followed while the app is in front.
   late final ChatLive _live = ChatLive(widget.auth.transport);
   late final ChatsData _chats = ChatsData(widget.auth, live: _live, prefs: widget.prefs);
+  final _tabs = GlobalKey<HomeTabsState>();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Notifications on this phone: started for this session's business; a
+    // tapped one opens its page; one that comes with the app in front is a
+    // toast; asked once after signing in.
+    // Just signed up in the app: Taskiem's conversation, its first message.
+    if (widget.auth.welcome) {
+      widget.auth.welcome = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats)));
+      });
+    }
+    // A link to one of this server's pages: opened now, or the one that
+    // waited behind signing in.
+    widget.links?.addListener(_linked);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _linked());
+    final notify = widget.notify;
+    if (notify != null) {
+      notify.addListener(_notified);
+      notify.onArrived = _arrived;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await notify.start();
+        if (!mounted) return;
+        _notified();
+        if (await notify.shouldAsk() && mounted) await _askOnce(notify);
+      });
+    }
     _live.start();
     _chats.follow(true);
     // What a tool's screen leads to: the shell's own screens.
@@ -308,8 +430,105 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     }
   }
 
+  /// A tapped notification's page, or a problem to say.
+  void _notified() {
+    final notify = widget.notify;
+    if (notify == null || !mounted) return;
+    final problem = notify.takeProblem();
+    if (problem != null) showTkToast(context, problem, error: true);
+    final link = notify.takePending();
+    if (link != null) _openPath(link);
+  }
+
+  void _linked() {
+    if (!mounted) return;
+    final page = widget.links?.take();
+    if (page != null) _openPath(page);
+  }
+
+  void _arrived(PushNote n) {
+    if (!mounted) return;
+    // The chime the app already has, where the person keeps it on.
+    if (widget.prefs?.sound ?? true) unawaited(chime());
+    final words = n.body.isEmpty ? n.title : '${n.title}: ${n.body}';
+    // Open goes the way a tap does: to its business first.
+    showTkToast(context, words, action: 'Open', onAction: () => widget.notify?.open(n.data));
+  }
+
+  /// The ask-once question is up: a page to open waits for it.
+  bool _asking = false;
+  String? _afterAsking;
+
+  Future<void> _askOnce(PhoneNotifications notify) async {
+    _asking = true;
+    final yes = await showTkConfirm(
+      context,
+      title: 'Get a notification when a business or customer writes?',
+      body: 'Taskiem tells you on this phone, even when the app is closed. You can change this in Settings.',
+      ok: 'Yes',
+      cancel: 'Not now',
+    );
+    if (yes) {
+      await notify.turnOn();
+      if (mounted && notify.error != null) showTkToast(context, notify.error!, error: true);
+    } else {
+      await notify.declined();
+    }
+    _asking = false;
+    final then = _afterAsking;
+    _afterAsking = null;
+    if (then != null && mounted) unawaited(_openPath(then));
+  }
+
+  /// Opens a page of the app by its web path (a notification's link, the
+  /// bell's): its conversation, else the tab it belongs to.
+  Future<void> _openPath(String path) async {
+    final uri = Uri.tryParse(path);
+    if (uri == null || !mounted) return;
+    // Not over the ask-once question (closing it would count as Not now).
+    if (_asking) {
+      _afterAsking = path;
+      return;
+    }
+    final nav = Navigator.of(context);
+    nav.popUntil((r) => r.isFirst);
+    final route = routeOf(path);
+    _tabs.currentState?.show(route.tab);
+    final auth = _chats.auth;
+    final id = route.id;
+    switch (route.screen) {
+      case RouteScreen.none:
+        return;
+      case RouteScreen.customer:
+        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => _OpenCustomer(chats: _chats, id: id, notify: widget.notify)));
+      case RouteScreen.conversation:
+        var c = _chats.conversations.where((x) => x.link == id).firstOrNull;
+        if (c == null) {
+          await _chats.load();
+          if (!mounted) return;
+          c = _chats.conversations.where((x) => x.link == id).firstOrNull;
+        }
+        if (c != null && mounted) _openConv(context, c);
+      case RouteScreen.taskiem:
+        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats)));
+      case RouteScreen.invoice:
+        openInvoice(context, auth, id);
+      case RouteScreen.bill:
+        openBill(context, auth, id);
+      case RouteScreen.purchase:
+        openPurchase(context, auth, id);
+      case RouteScreen.tradeOrder:
+        openTradeOrder(context, auth, id);
+      case RouteScreen.storefrontOrder:
+        openStorefrontOrder(context, auth, id);
+    }
+  }
+
   @override
   void dispose() {
+    widget.notify?.removeListener(_notified);
+    widget.links?.removeListener(_linked);
+    if (widget.notify?.onArrived == _arrived) widget.notify?.onArrived = null;
     WidgetsBinding.instance.removeObserver(this);
     Openers.linkedBusinesses = null;
     Openers.businessProfile = null;
@@ -331,6 +550,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return HomeTabs(
+      key: _tabs,
       count: () => _chats.tabCount,
       offline: widget.auth.transport.offline,
       updating: widget.auth.transport.updating,
@@ -359,7 +579,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   ));
 
   void _openConv(BuildContext context, LinkConversation c) => Navigator.of(context).push(TkRoute<void>(
-    pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c),
+    pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c, notify: widget.notify),
   ));
 
   /// Linked businesses, over [context].
@@ -378,18 +598,18 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
       onLinks: () => _links(context),
       onProfile: () => _profile(context),
       onMenu: () => Navigator.of(context).push(TkRoute<void>(
-        pageBuilder: (_, _, _) => SignedInScreen(auth: widget.auth, prefs: widget.prefs, unlocker: widget.unlocker),
+        pageBuilder: (_, _, _) => SignedInScreen(auth: widget.auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify),
       )),
       // A conversation slides in over the list, as a phone's chats do.
       onOpenTaskiem: () => Navigator.of(context).push(TkRoute<void>(
     pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats),
       )),
       onOpenCustomer: (c) => Navigator.of(context).push(TkRoute<void>(
-    pageBuilder: (_, _, _) => _OpenCustomer(chats: _chats, id: c.id),
+    pageBuilder: (_, _, _) => _OpenCustomer(chats: _chats, id: c.id, notify: widget.notify),
       )),
       onOpen: (c) => _openConv(context, c),
       onOpenAt: (c, message) => Navigator.of(context).push(TkRoute<void>(
-    pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c, focus: message),
+    pageBuilder: (_, _, _) => _Open(chats: _chats, conv: c, focus: message, notify: widget.notify),
       )),
     );
   }
@@ -397,9 +617,10 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
 
 /// An open conversation: its data lives while it is open.
 class _Open extends StatefulWidget {
-  const _Open({required this.chats, required this.conv, this.focus});
+  const _Open({required this.chats, required this.conv, this.focus, this.notify});
   final ChatsData chats;
   final LinkConversation conv;
+  final PhoneNotifications? notify;
 
   /// Opened at this message.
   final String? focus;
@@ -412,7 +633,15 @@ class _OpenState extends State<_Open> {
   late final ConversationData _data = ConversationData(widget.chats, widget.conv, focus: widget.focus);
 
   @override
+  void initState() {
+    super.initState();
+    // On the screen: its notifications show nothing while it is.
+    widget.notify?.show(widget.conv.link, this);
+  }
+
+  @override
   void dispose() {
+    widget.notify?.unshow(this);
     _data.dispose();
     super.dispose();
   }
@@ -436,7 +665,7 @@ class _OpenState extends State<_Open> {
       Navigator.of(context).pushReplacement(PageRouteBuilder<void>(
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, _, _) => _Open(chats: widget.chats, conv: c),
+        pageBuilder: (_, _, _) => _Open(chats: widget.chats, conv: c, notify: widget.notify),
       ));
     },
   );
@@ -478,9 +707,10 @@ class _OpenTaskiemState extends State<_OpenTaskiem> {
 
 /// A customer's conversation, open: its data lives while it is open.
 class _OpenCustomer extends StatefulWidget {
-  const _OpenCustomer({required this.chats, required this.id});
+  const _OpenCustomer({required this.chats, required this.id, this.notify});
   final ChatsData chats;
   final String id;
+  final PhoneNotifications? notify;
 
   @override
   State<_OpenCustomer> createState() => _OpenCustomerState();
@@ -490,11 +720,41 @@ class _OpenCustomerState extends State<_OpenCustomer> {
   late final CustomerData _data = CustomerData(widget.chats, widget.id);
 
   @override
+  void initState() {
+    super.initState();
+    widget.notify?.show('c-${widget.id}', this);
+  }
+
+  @override
   void dispose() {
+    widget.notify?.unshow(this);
     _data.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => CustomerScreen(data: _data);
+}
+
+/// The app's first screen while it opens: the Taskiem mark on pine, the
+/// size and place the phone's start screen draws it (android/…/values-v31:
+/// the launcher icon's foreground, its glyph about 100 dp wide).
+class _Opening extends StatelessWidget {
+  const _Opening();
+
+  @override
+  Widget build(BuildContext context) => ColoredBox(
+    color: TkTheme.tokens(context).brand,
+    child: Center(
+      child: Semantics(
+        label: 'Taskiem is opening',
+        // The glyph sits a little right of and above the middle of the mark's
+        // square; the start screen centres the glyph's own box.
+        child: Transform.translate(
+          offset: const Offset(-10, 3),
+          child: SvgPicture.asset('assets/brand/mark.svg', width: 172, height: 172),
+        ),
+      ),
+    ),
+  );
 }

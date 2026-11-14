@@ -521,6 +521,8 @@ export function BriefingCard({
   const [error, setError] = useState<unknown>();
   const card = useRef<HTMLElement>(null);
   const asked = useRef(false);
+  /** Asked for: the card takes the focus once it is drawn. */
+  const focusShown = useRef(false);
   // Read again when the page comes back, and every ten minutes: the card
   // appears at 8am and a new day's card replaces yesterday's. Asked for
   // (the tools menu's Briefing, or "briefing"), today's comes back, put
@@ -540,13 +542,12 @@ export function BriefingCard({
         (x) => {
           asked.current = false;
           if (!live) return;
+          // Focused after React has drawn it (the effect below), not on the
+          // next frame: a frame can come before the render, with no card yet.
+          focusShown.current = true;
           setB(x);
           setGone(undefined);
           setError(undefined);
-          requestAnimationFrame(() => {
-            card.current?.scrollIntoView({ block: "nearest" });
-            card.current?.focus();
-          });
         },
         (e: unknown) => {
           asked.current = false;
@@ -568,6 +569,12 @@ export function BriefingCard({
       window.removeEventListener(SHOW_BRIEFING, show);
     };
   }, []);
+  useEffect(() => {
+    if (!focusShown.current || !card.current) return;
+    focusShown.current = false;
+    card.current.scrollIntoView({ block: "nearest" });
+    card.current.focus();
+  });
   if (!b || !b.ready || b.put_off || gone === b.key) return null;
   const gotIt = () => {
     setGone(b.key);

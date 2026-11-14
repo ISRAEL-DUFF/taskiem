@@ -559,6 +559,23 @@ test.describe("customers' conversations", () => {
     await expect(row).toBeVisible();
     await row.click();
 
+    // Muted: its messages tell nobody; the menu offers to unmute.
+    await pane
+      .getByRole("button", { name: "More about this conversation" })
+      .click();
+    answer = saved();
+    await page.getByRole("menuitem", { name: "Mute notifications" }).click();
+    await answer;
+    await pane
+      .getByRole("button", { name: "More about this conversation" })
+      .click();
+    await expect(
+      page.getByRole("menuitem", { name: "Unmute notifications" }),
+    ).toBeVisible();
+    answer = saved();
+    await page.getByRole("menuitem", { name: "Unmute notifications" }).click();
+    await answer;
+
     // At 360 px too.
     await page.setViewportSize({ width: 360, height: 640 });
     await fits(page);

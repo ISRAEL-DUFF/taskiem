@@ -43,6 +43,10 @@ class Auth extends ChangeNotifier {
   /// this phone (Prefs.forgetPerson).
   Future<void> Function()? onForget;
 
+  /// Called on Sign out before the session ends, while the server still
+  /// takes it (this phone's notifications taken off: lib/app/notify.dart).
+  Future<void> Function()? beforeSignOut;
+
   /// This app's version, checked against the lowest the server serves.
   final String version;
 
@@ -234,11 +238,30 @@ class Auth extends ChangeNotifier {
     restored = restoredBefore;
   }
 
+  /// Just signed up in the app: the home opens Taskiem's conversation first.
+  bool welcome = false;
+
+  /// Who is signed in, read again (a way in added: me.factors).
+  Future<void> refreshMe() async {
+    try {
+      me = await api.me();
+      await _keepMe();
+      notifyListeners();
+    } on Object {
+      // As it was; read again next time the app opens.
+    }
+  }
+
   /// A session made by signing up (or another way in that answers one).
   Future<void> signedInWith(String? token) => _signedIn(token);
 
   /// Signs this phone out: the server ends its session, the token goes.
   Future<void> signOut() async {
+    try {
+      await beforeSignOut?.call();
+    } on Object {
+      // Signing out goes on whatever happens there.
+    }
     try {
       await api.logout();
     } on Exception {

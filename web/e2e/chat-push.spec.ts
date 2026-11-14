@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { axe, describe } from "./a11y";
 
@@ -9,7 +10,11 @@ import { axe, describe } from "./a11y";
 // a push service's host (the server keeps it as it would a real one); the
 // worker and the page are the real ones.
 // serviceWorkers: the config blocks them for every other spec.
-test.use({ bypassCSP: true, viewport: { width: 1280, height: 900 }, serviceWorkers: "allow" });
+test.use({
+  bypassCSP: true,
+  viewport: { width: 1280, height: 900 },
+  serviceWorkers: "allow",
+});
 
 const H = { "X-Taskiem-Request": "1" };
 const letters = () =>
@@ -29,6 +34,22 @@ async function signUp(page: Page) {
   });
   expect(r.status(), await r.text()).toBe(201);
   return email;
+}
+
+function sql(text: string): string {
+  const base = process.env.TASKIEM_TEST_DATABASE_URL;
+  if (!base) throw new Error("set TASKIEM_TEST_DATABASE_URL");
+  return execFileSync(
+    "psql",
+    [
+      base.replace(/\/[^/?]*(\?.*)?$/, "/taskiem_e2e$1"),
+      "-v",
+      "ON_ERROR_STOP=1",
+      "-tAqc",
+      text,
+    ],
+    { encoding: "utf8" },
+  ).trim();
 }
 
 async function axeBoth(page: Page, where: string) {
@@ -125,7 +146,12 @@ async function owner(
 const devices = async (page: Page) =>
   (
     (await (await page.request.get("/v1/me/push", { headers: H })).json()) as {
-      devices: { id: string; label: string; preview: boolean }[];
+      devices: {
+        id: string;
+        label: string;
+        preview: boolean;
+        kinds: string[];
+      }[];
     }
   ).devices;
 
@@ -152,9 +178,27 @@ test("the switch turns notifications on for this device, with its own switch for
   await expect(preview).toBeChecked();
   await preview.click();
   await expect(section).toContainText(
-    "Off: the notification says only that a business wrote.",
+    "Off: the notification says only that something came",
   );
   await expect.poll(async () => (await devices(page))[0]?.preview).toBe(false);
+
+  // The kinds this device takes: the owner's takes all five; one off is kept.
+  expect(mine[0]?.kinds).toEqual([
+    "business",
+    "customers",
+    "orders",
+    "approvals",
+    "alerts",
+  ]);
+  const alerts = section
+    .getByTestId("chat-push-kind-alerts")
+    .getByRole("switch", { name: "Alerts" });
+  await expect(alerts).toBeChecked();
+  await alerts.click();
+  await expect(alerts).not.toBeChecked();
+  await expect
+    .poll(async () => (await devices(page))[0]?.kinds)
+    .toEqual(["business", "customers", "orders", "approvals"]);
 
   // It is still on after a reload (the browser's subscription and the id kept).
   await page.reload();
@@ -177,18 +221,38 @@ test("the switch turns notifications on for this device, with its own switch for
   const row = section.getByTestId("chat-push-device");
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("Firefox on Linux");
-  await expect(row).toContainText("Not notified yet");
+  await expect(row).toContainText("Browser · not notified yet");
+  // Its own switches: what it tells the person, set from here.
+  await row.getByText("What it tells you").click();
+  const otherAlerts = row.getByRole("switch", {
+    name: "Alerts on Firefox on Linux",
+  });
+  await expect(otherAlerts).toBeChecked();
+  await otherAlerts.click();
+  await expect
+    .poll(
+      async () =>
+        (await devices(page)).find((d) => d.label === "Firefox on Linux")
+          ?.kinds,
+    )
+    .not.toContain("alerts");
   await row.getByRole("button", { name: /^Remove/ }).click();
   await expect(section.getByTestId("chat-push-device")).toHaveCount(0);
   expect(await devices(page)).toHaveLength(1);
 
-  // Off: the server forgets this browser, and so does the browser.
+  // Off: the server forgets this browser here; the browser keeps its
+  // subscription (the person's other businesses may use it), and only
+  // signing out drops it.
   await section.getByTestId("chat-push-switch").click();
   await expect(section.getByTestId("chat-push-switch")).not.toBeChecked();
   expect(await devices(page)).toHaveLength(0);
   expect(
     await page.evaluate(() => localStorage.getItem("e2e-push-sub")),
-  ).toBeNull();
+  ).not.toBeNull();
+  // Opened again, it stays off: found by its address, not added back.
+  await page.reload();
+  await expect(section.getByTestId("chat-push-switch")).not.toBeChecked();
+  expect(await devices(page)).toHaveLength(0);
 
   // On again, then signing out: this browser is taken off before the session ends.
   await section.getByTestId("chat-push-switch").click();
@@ -204,6 +268,9 @@ test("the switch turns notifications on for this device, with its own switch for
   });
   expect(again.ok(), await again.text()).toBe(true);
   expect(await devices(page)).toHaveLength(0);
+  expect(
+    await page.evaluate(() => localStorage.getItem("e2e-push-sub")),
+  ).toBeNull();
   await ctx.close();
 });
 
@@ -334,8 +401,14 @@ test("the worker shows what is pushed: one notification a conversation, only a p
     // The icon's count is the next test's; here it is only kept from the
     // browser, which ends a worker that sets it with no window of the app open.
     const badge = () => Promise.resolve();
-    Object.defineProperty(self.navigator, "setAppBadge", { value: badge, configurable: true });
-    Object.defineProperty(self.navigator, "clearAppBadge", { value: badge, configurable: true });
+    Object.defineProperty(self.navigator, "setAppBadge", {
+      value: badge,
+      configurable: true,
+    });
+    Object.defineProperty(self.navigator, "clearAppBadge", {
+      value: badge,
+      configurable: true,
+    });
   });
   const shown = (): Promise<Shown[]> =>
     worker.evaluate(() => (self as unknown as { __shown: Shown[] }).__shown);
@@ -415,7 +488,7 @@ test("the worker shows what is pushed: one notification a conversation, only a p
       (await shown()).map((n: Shown) => `${n.tag}:${n.body}`).sort(),
     )
     .toEqual(["abc:Musa: And 46k for two", "def:Hello"]);
-  // A link outside the app, and what cannot be read, are only the chat page / a plain message.
+  // A link outside the app, and what cannot be read, are only the app's start / a plain message.
   await push({
     v: 1,
     title: "Evil",
@@ -428,7 +501,7 @@ test("the worker shows what is pushed: one notification a conversation, only a p
     .poll(
       async () => (await shown()).find((n: Shown) => n.tag === "evil")?.link,
     )
-    .toBe("/chat");
+    .toBe("/");
   // The icon is the app's own: an address outside the app is never fetched,
   // and a sender's logo that the server does not have (a 404) is the same.
   const evil = (await shown()).find((n: Shown) => n.tag === "evil");
@@ -532,4 +605,129 @@ test("the app's icon shows how many conversations have something unread, and non
   await expect(buyer.getByTestId("chat-message")).toHaveCount(1);
   await expect.poll(badge, { timeout: 15000 }).toBe("clear");
   await ownerCtx.close();
+});
+
+test("a tapped notification opens its page in its business: this one as it is, one the person is not in says so", async ({
+  browser,
+}) => {
+  const { ctx, page } = await owner(browser);
+  const mine = (
+    (await (await page.request.get("/v1/me")).json()) as { tenant_id: string }
+  ).tenant_id;
+  await page.goto(`/approvals?business=${mine}`);
+  await expect(page).toHaveURL(/\/approvals$/);
+  await expect(page.getByTestId("push-other-business")).toHaveCount(0);
+
+  await page.goto("/approvals?business=0192f6c4-8a9e-7b3c-9d2e-112233445566");
+  await expect(page).toHaveURL(/\/approvals$/);
+  await expect(page.getByTestId("push-other-business")).toContainText(
+    "another of your businesses",
+  );
+  await axeBoth(page, "a notification for another business");
+  // Gone on the next page.
+  await page.goto("/settings/notifications");
+  await expect(page.getByTestId("push-other-business")).toHaveCount(0);
+  await ctx.close();
+});
+
+test("a notification for another business: a tap switches to it; a link that was not a tap asks first, and Stay here stays", async ({
+  browser,
+}) => {
+  const { ctx, page, email } = await owner(browser);
+  // A second business, and this person in it too (as staff).
+  const other = await browser.newContext();
+  const op = await other.newPage();
+  await signUp(op);
+  const otherId = (
+    (await (await op.request.get("/v1/me")).json()) as { tenant_id: string }
+  ).tenant_id;
+  const otherName = sql(`SELECT name FROM tenants WHERE id = '${otherId}'`);
+  sql(
+    `INSERT INTO memberships (tenant_id, user_id, role) SELECT '${otherId}', id, 'viewer' FROM users WHERE email = '${email}'`,
+  );
+  await other.close();
+  const mine = (
+    (await (await page.request.get("/v1/me")).json()) as { tenant_id: string }
+  ).tenant_id;
+
+  // A link from elsewhere (not a tap): asked, naming the business; Stay here stays.
+  await page.goto(`/approvals?business=${otherId}`);
+  const ask = page.getByTestId("push-ask-business");
+  await expect(ask).toContainText(`This page is for ${otherName}`);
+  await axeBoth(page, "the switch question");
+  await ask.getByRole("button", { name: "Stay here" }).click();
+  await expect(ask).toHaveCount(0);
+  expect(
+    ((await (await page.request.get("/v1/me")).json()) as { tenant_id: string })
+      .tenant_id,
+  ).toBe(mine);
+
+  // Asked again, and switched.
+  await page.goto(`/approvals?business=${otherId}`);
+  await page
+    .getByTestId("push-ask-business")
+    .getByRole("button", { name: `Switch to ${otherName}` })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (
+          (await (await page.request.get("/v1/me")).json()) as {
+            tenant_id: string;
+          }
+        ).tenant_id,
+    )
+    .toBe(otherId);
+  await expect(page).toHaveURL(/\/approvals$/);
+
+  // A tap (the worker writes it down): switched back at once, nothing asked.
+  await page.evaluate(async (b) => {
+    const c = await caches.open("taskiem-push-tap");
+    await c.put(
+      "/__taskiem/push-tap",
+      new Response(JSON.stringify({ business: b, at: Date.now() })),
+    );
+  }, mine);
+  await page.goto(`/approvals?business=${mine}`);
+  await expect
+    .poll(
+      async () =>
+        (
+          (await (await page.request.get("/v1/me")).json()) as {
+            tenant_id: string;
+          }
+        ).tenant_id,
+    )
+    .toBe(mine);
+  await expect(page.getByTestId("push-ask-business")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/approvals$/);
+  await ctx.close();
+});
+
+test("the worker writes a tap down for the page to find", async ({
+  browser,
+}) => {
+  const { ctx, page } = await owner(browser);
+  await page.goto("/settings/notifications");
+  await page.getByTestId("chat-push-switch").click();
+  await expect(page.getByTestId("chat-push-switch")).toBeChecked();
+  const isWorker = (w: { url(): string }) => w.url().endsWith("/sw.js");
+  await expect.poll(() => ctx.serviceWorkers().some(isWorker)).toBe(true);
+  const worker = ctx.serviceWorkers().find(isWorker);
+  if (!worker) throw new Error("the worker is not there");
+  const b = "0192f6c4-8a9e-7b3c-9d2e-112233445566";
+  await worker.evaluate(
+    (business) =>
+      (self as unknown as { markTap(b: string): Promise<void> }).markTap(
+        business,
+      ),
+    b,
+  );
+  const found = await page.evaluate(async () => {
+    const c = await caches.open("taskiem-push-tap");
+    const r = await c.match("/__taskiem/push-tap");
+    return r ? ((await r.json()) as { business: string }).business : null;
+  });
+  expect(found).toBe(b);
+  await ctx.close();
 });

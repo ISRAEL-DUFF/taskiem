@@ -9,6 +9,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 
+import 'motion.dart';
 import '../theme/theme.dart';
 import 'icon.dart';
 import 'kit.dart';
@@ -603,7 +604,7 @@ class TkSavedTick extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CustomPaint(size: const Size(76, 76), painter: _Tick(t.brandDark, t.brand)),
+              _TickIn(ground: t.brandDark, ink: t.brand),
               const SizedBox(height: 12),
               Text(words, style: tkText(size: 18, weight: 700, color: t.text)),
             ],
@@ -614,21 +615,84 @@ class TkSavedTick extends StatelessWidget {
   }
 }
 
-class _Tick extends CustomPainter {
-  _Tick(this.ground, this.ink);
+/// chat.css `.tk-tick`: the circle pops (tkd-pop, 0.45 s) and the tick
+/// draws itself after 0.2 s (tkd-draw, 0.35 s).
+class _TickIn extends StatefulWidget {
+  const _TickIn({required this.ground, required this.ink});
   final Color ground;
   final Color ink;
+
+  @override
+  State<_TickIn> createState() => _TickInState();
+}
+
+class _TickInState extends State<_TickIn> with SingleTickerProviderStateMixin {
+  late final _a = AnimationController(vsync: this, duration: const Duration(milliseconds: 550));
+  late final _pop = CurvedAnimation(parent: _a, curve: const Interval(0, 450 / 550, curve: Cubic(0.2, 0.9, 0.25, 1.2)));
+  late final _draw = CurvedAnimation(parent: _a, curve: const Interval(200 / 550, 1, curve: Curves.easeOut));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (tkStill(context)) {
+      _a.value = 1;
+    } else if (_a.value == 0 && !_a.isAnimating) {
+      _a.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _pop.dispose();
+    _draw.dispose();
+    _a.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _a,
+    builder: (context, _) => CustomPaint(
+      size: const Size(76, 76),
+      painter: _Tick(widget.ground, widget.ink, pop: _pop.value, draw: _draw.value),
+    ),
+  );
+}
+
+class _Tick extends CustomPainter {
+  _Tick(this.ground, this.ink, {this.pop = 1, this.draw = 1});
+  final Color ground;
+  final Color ink;
+
+  /// How far the circle has popped (0 to 1, past 1 on the overshoot).
+  final double pop;
+
+  /// How much of the tick is drawn.
+  final double draw;
 
   @override
   void paint(Canvas canvas, Size size) {
     final s = size.width / 52;
     canvas.scale(s);
-    canvas.drawCircle(const Offset(26, 26), 24, Paint()..color = ground);
+    // tkd-pop: from 0.6 and faded, full by 60%.
+    final scale = 0.6 + 0.4 * pop;
+    canvas.save();
+    canvas.translate(26, 26);
+    canvas.scale(scale);
+    canvas.translate(-26, -26);
+    canvas.drawCircle(const Offset(26, 26), 24, Paint()..color = ground.withValues(alpha: ground.a * (pop / 0.6).clamp(0.0, 1.0)));
+    canvas.restore();
+    if (draw <= 0) return;
+    final tick = Path()
+      ..moveTo(15, 27)
+      ..lineTo(22, 34)
+      ..lineTo(37, 18);
+    final drawn = Path();
+    for (final m in tick.computeMetrics()) {
+      drawn.addPath(m.extractPath(0, m.length * draw.clamp(0.0, 1.0)), Offset.zero);
+    }
     canvas.drawPath(
-      Path()
-        ..moveTo(15, 27)
-        ..lineTo(22, 34)
-        ..lineTo(37, 18),
+      drawn,
       Paint()
         ..color = ink
         ..style = PaintingStyle.stroke
@@ -639,7 +703,7 @@ class _Tick extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_Tick old) => old.ground != ground || old.ink != ink;
+  bool shouldRepaint(_Tick old) => old.ground != ground || old.ink != ink || old.pop != pop || old.draw != draw;
 }
 
 /// `.tk-foot-two`: two buttons sharing the foot as CSS flex shares it

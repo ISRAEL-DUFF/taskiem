@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Release and Profile builds (the Debug build uses Runner.entitlements):
+     Apple's production push service. docs/spec/mobile-app-m4.md: notifications (N4), links to the server's
+     pages opening the app (N5) and its passkeys (N6). TASKIEM_HOST is the
+     server's host (Flutter/Debug.xcconfig, Release.xcconfig). -->
+<plist version="1.0">
+<dict>
+	<key>aps-environment</key>
+	<string>production</string>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:$(TASKIEM_HOST)</string>
+		<string>webcredentials:$(TASKIEM_HOST)</string>
+	</array>
+</dict>
+</plist>

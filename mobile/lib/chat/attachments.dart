@@ -14,6 +14,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../app/lock.dart' show stepOut;
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/store.dart' show keepMediaBytes, keptMedia;
@@ -198,9 +199,9 @@ Size photoSize(Size natural, double room) {
 typedef FileHandOff = Future<void> Function(Uint8List bytes, String name, String type, Rect? from);
 
 FileHandOff handOffFile = (bytes, name, type, from) async {
-  await SharePlus.instance.share(
+  await stepOut(() => SharePlus.instance.share(
     ShareParams(files: [XFile.fromData(bytes, mimeType: type, name: name)], fileNameOverrides: [name], sharePositionOrigin: from),
-  );
+  ));
 };
 
 /// Conversation.tsx AttachmentView's link: a photo opens full size, as the

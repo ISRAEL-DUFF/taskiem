@@ -38,6 +38,14 @@ dependencies:
   # The chats, messages and pages kept on the phone, encrypted (lib/app/store.dart;
   # docs/spec/mobile-app-explore-and-offline.md §3). MIT; SQLite3MultipleCiphers, MIT.
   sqlite3: 3.9.1
+  # Notifications on this phone (lib/app/notify.dart; docs/spec/mobile-app-m4.md N4):
+  # Firebase started from the server's values, so the build has no Firebase file. BSD-3-Clause.
+  firebase_core: 5.1.0
+  firebase_messaging: 17.0.1
+  # Links to this server opening the app (lib/app/applinks.dart; docs/spec/mobile-app-m4.md N5). Apache-2.0.
+  app_links: 7.2.2
+  # Passkeys in the app: signing in, adding one, approving (lib/app/passkey.dart; N6). BSD-3-Clause.
+  passkeys: 2.24.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
