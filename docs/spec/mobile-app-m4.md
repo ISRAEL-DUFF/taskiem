@@ -1,0 +1,226 @@
+# Phone app M4: notifications, links, passkeys and signing up as on WhatsApp
+
+The plan for M4 of the [phone app](mobile-app.md) (§10, S3, S6, §3.6). Written 14 November 2026, after M8, offline keeping and the new Explore.
+
+M4 builds on [chat push](chat-push.md) (PR #173, merged 12 November 2026). That PR is the web's Web Push for a chat message:
+- the subscriptions table;
+- `engine/push`;
+- `/v1/me/push`;
+- the service worker;
+- the switch, the device list, the badge and the logo.
+
+M4 adds the phone to it, and closes what #173 left open.
+
+**Done when** (mobile-app.md §10): a message to a closed app shows on a real Android phone's lock screen in under 5 seconds and opens that conversation.
+
+## 1. What is there already
+
+| | Where |
+| --- | --- |
+| Web Push to browsers: who (members whose role holds `chat.trade`), when (a message from a linked business, not muted), the words, one notification per conversation, the preview switch, 404/410 dropping a browser, ten browsers a person | `engine/push`, `api/push.go`, migration 00423 |
+| The browser's side: the worker, the switch, **Your other devices**, the iPhone note, the badge, the sender's logo | `web/public/sw.js`, `web/src/lib/push.ts`, `pages/ChatPush.tsx` |
+| Device sessions and **Your phones** in the app (sign out a phone) | migration 00424, `api/devices.go`, the app's Settings (M2) |
+| `GET /v1/app/config`: the lowest version, passkeys on, sign-up on | `api/app_config.go` |
+| Signing in with a WhatsApp or Telegram code in the app | `auth/chat/verify` (M2) |
+| Signing up in chat, step by step (terms, names, what they sell, how customers pay, three templates) on WhatsApp and Telegram | `api/chat_signup.go` ([chat as the way in](chat-way-in.md) C1) |
+| Everything a business's people are told: the bell, WhatsApp, Telegram, Slack | `tellHoldersSent` (`api/bills.go`) for chat messages, bills, orders, reminders, reactions and staff; the alerts (`engine/alerts`); approvals by their own loop (`api/whatsapp_approvals.go`) |
+
+## 2. What #173 left open
+
+These are the "make it better" of this plan; §4 closes each:
+
+1. **Only a chat message is pushed.** A new order, a bill, an approval waiting, a payment that came in, a failed run: these reach the bell, WhatsApp and Telegram, but never a notification on a closed app.
+2. **A customer's message tells nobody.** A customer writing to the business's own WhatsApp number leaves no bell item, no WhatsApp line to its staff and no push. For many businesses that is the message that matters most.
+3. **A push can be lost.** It is sent in the background after the message commits; a server restart in that second loses it (chat push §10).
+4. **A person in two businesses.** A notification for their other business opens the chat page, where that conversation is not found (chat push §13).
+5. **A browser that renews its subscription** comes back as a new device: its name and its preview switch are lost (chat push §13).
+6. **Nothing can be turned off by kind.** A device takes every push or none.
+
+## 3. Decisions to make (suggestions in bold)
+
+| # | Question | Suggested |
+| --- | --- | --- |
+| D1 | What is pushed | **Everything the bell tells a person, plus customers' messages** (§4.2), each kind with its own switch |
+| D2 | The kinds a person can switch, per device | **Business chats · Customer chats · Orders and money · Approvals · Alerts** (failed runs, connections, stock running low). All on, but Alerts on only for owners and admins |
+| D3 | Firebase (A4) | **The code is ready without it and turns on by configuration**. Both are sent to the app by the server, so no new app build is needed:<br>- the project's public client values (`TASKIEM_FCM_CLIENT`);<br>- the service-account key (`TASKIEM_FCM_CREDENTIALS`).<br>A founder creates the project; until then the phone shows nothing about notifications. |
+| D4 | Quiet hours | **Not now** (a phone's own Do Not Disturb does it) |
+| D5 | Reply from the notification | **Not now**; it comes with the app's own notification actions later |
+| D6 | Signing up in the app | **As settled on 12 November**: the phone proved by a WhatsApp or Telegram code, then the same sign-up conversation as on WhatsApp, in the app's own chat screen |
+| D7 | Passkeys in the app | **Sign-in and step-up** (approving a payment) with the phone's own passkeys, through Android's Credential Manager and iOS's AuthenticationServices; the same passkeys as the web |
+
+## 4. What M4 builds
+
+### 4.1 N1: the phone as a push target (server)
+
+- **Two kinds of device.** `push_subscriptions` gains `kind` (`webpush` or `fcm`).
+  - An app's row keeps its FCM registration token in `endpoint`, with no browser keys.
+  - `PUT /v1/me/push` takes either: `{kind: "fcm", token, label, preview, platform}` or a browser's subscription as today.
+  - Everything else is shared: the list, rename, remove, ten devices, preview, dropping on "gone".
+- **The FCM transport** in `engine/push`:
+  - **Sending:** FCM HTTP v1 (`POST fcm.googleapis.com/v1/projects/<id>/messages:send`) through the egress guard, purpose `fcm`.
+  - **Authorisation:** an OAuth token from the service account. It is signed with the standard library (RS256), so no new dependency, and kept until it expires.
+  - **"Gone":** `UNREGISTERED` and `INVALID_ARGUMENT` on the token mean gone; 429 and 5xx are retried, as Web Push is.
+- **One notification per conversation:**
+  - Android: `android.notification.tag` (per conversation) and `collapse_key`.
+  - iPhone: `apns-collapse-id`.
+- **The icon's count:**
+  - Android: `notification_count`.
+  - iPhone: `aps.badge`.
+- **Android channels:** one per kind (§4.3), so the phone's own settings can silence one.
+- **What the app is told** (`GET /v1/app/config`): `push: {fcm: {api_key, app_id_android, app_id_ios, project_id, sender_id}}` when `TASKIEM_FCM_CLIENT` is set. These are Firebase's public client values, the same as in any app's own `google-services.json`. The app starts Firebase with them itself, so turning Firebase on needs no new build.
+- **Metrics** gain `kind` (`webpush`, `fcm`).
+
+### 4.2 N2: push follows the bell, durably (server)
+
+This closes 2.1, 2.2 and 2.3 with one design: **a push is queued in the same transaction as what it tells**, and a sender sends from the queue.
+
+- **`push_outbox`** (migration): `tenant_id, user_id, kind, title, body, link, tag, icon, created_at, attempts, next_at`, row-level secured.
+- **It is filled two ways:**
+  - **A trigger on `notifications`.** Every bell item for a person who has a device in that business queues one push. This covers everything that already tells the bell: `tellHoldersSent`, the alerts, the reversals, schools. A repeat of the same group (the bell's count) queues again with its new title ("Payroll failed 3 times").
+  - **Approvals** become one more channel of `notifyApprovalsOn` (`push`), told once per approver and level, as WhatsApp is.
+- **Customers' messages** get a bell item of their own:
+  - **Who is told:** the people who answer customer chats are told "Ade wrote", once per conversation while unread. This uses the bell's grouping, so ten messages are one item with a count.
+  - **What follows:** the trigger pushes it, and WhatsApp and Telegram tell them too, as for any bell item.
+  - **Mute:** a customer chat can be muted, as a business's can (`customer_chats.muted_at`, Contact info's switch).
+- **The kind of a push** is read from what it is:
+  - **Business chats:** `group_key` `msg:` or `reaction:`.
+  - **Customer chats:** a customer's message.
+  - **Orders and money:** `order:`, `bill:`, `reminder:`, payments.
+  - **Approvals:** from the approvals channel.
+  - **Alerts:** the alerts and failed runs.
+  - **Anything else** falls under Alerts.
+- **The sender** waits on `LISTEN push_outbox`, with a poll every 5 s behind it:
+  - It claims rows (`FOR UPDATE SKIP LOCKED`, through a narrow definer, as the WhatsApp outbox does).
+  - It sends to the person's devices that take that kind, and deletes the row.
+  - A failure waits 5 s, then 30 s, then 2 min, and is dropped after 12 hours (TTL), as a push service would.
+  - A server restart loses nothing: the row is there when it comes back.
+- **The words and privacy are #173's:**
+  - no references, amounts or names in a document's line;
+  - with the preview off, the title is the business's name and the body "New message" (chat), or "Taskiem" and "Something needs you" (everything else);
+  - a link opens only a path inside the app.
+- **`pushMessage`** (the direct send from `tellLinkMessage`) goes, since the bell item now queues it. Its words, logo and tag move to the queue.
+
+### 4.3 N3: what a device takes, and which business (server and web)
+
+- **Kinds per device** (closes 2.6): a device row gains `kinds text[]`, by default all but Alerts for people who are not owners or admins. `PATCH /v1/me/push/{id}` sets them. The web's **Chat when Taskiem is closed** becomes **Notifications when Taskiem is closed**, with the five switches under each device.
+- **The business in the push** (closes 2.4): the payload carries `business` (the tenant).
+  - **The web:** the worker opens `/chat?with=…&business=…`, and the page switches to that business first when the person has a session for it, or asks them to sign in to it.
+  - **The app:** it switches business, then opens the conversation, as Settings' **Your businesses** does.
+- **A renewed browser subscription** (closes 2.5): the worker sends the old address with the new (`replaces`). The server moves the name, preview and kinds to the new row and drops the old.
+
+### 4.4 N4: notifications in the app
+
+- **Libraries:** `firebase_core` and `firebase_messaging` (BSD-3-Clause), checked by the licence gate.
+  - Firebase is started from the values `GET /v1/app/config` gives (§4.1).
+  - Nothing Firebase is in the build's files, so the app builds and runs with no Firebase project; Notifications then says nothing.
+- **Settings, Notifications on this phone** (the web's words, §6.6 of chat push):
+  - the switch, **Show what the message says**, and the five kinds;
+  - **Your other devices**, phones and browsers, with Remove;
+  - on a phone without Google's services, the line that WhatsApp or Telegram tells them instead.
+  - Android 13 and later asks for the permission when the switch is turned on; a refusal says how to allow it in the phone's settings.
+- **Asked once:** after signing in, a sheet like the web's banner asks "Get a notification when a business or customer writes?". **Yes** turns it on, **Not now** asks again only from Settings.
+- **The token:** registered with `PUT /v1/me/push` when the switch is on, renewed when Firebase rotates it, and removed when signing out or the session ends (before the token is forgotten).
+- **A tap** opens what the push is about:
+  - the conversation (`/chat?with=`);
+  - a customer's chat;
+  - an order, a bill or an approval, by the same links the bell uses (`Openers`).
+  - It works from a closed app (`getInitialMessage`), in the background (`onMessageOpenedApp`), and for the other business (switched first).
+- **With the app open:** no system notification.
+  - In the conversation it is about, nothing (it is on the screen).
+  - Anywhere else, a toast at the top with **Open** for a while, and the chime the app already has.
+- **The icon's count** is the server's number in each push. The app sets it again when it opens and when the chats' unread count changes, through Android's notification count and iOS's badge (`flutter_app_badger`'s replacement on the platform channel, or the platform's own API).
+- **Android channels:** one per kind, named in plain words ("Business chats", "Customer chats", "Orders and money", "Approvals", "Alerts"), so the phone's settings can quiet one.
+
+### 4.5 N5: links that open the app (S6)
+
+- **The server** serves `/.well-known/assetlinks.json` and `/.well-known/apple-app-site-association` from configuration:
+  - `TASKIEM_ANDROID_APP`: the package name and its signing certificates' SHA-256;
+  - `TASKIEM_IOS_APP`: the team and bundle id.
+  - Without the configuration both answer 404.
+- **The app:**
+  - **Declaring the links:** Android declares verified links (`autoVerify`) for its server's host, set at build time from `TASKIEM_URL`; iOS declares Associated Domains.
+  - **Receiving them:** the `app_links` package hands each link to the app's router.
+  - **The paths it opens:** `/chat`, `/chat?with=…`, `/invoices/{id}`, `/trade-orders/{id}`, `/storefront/orders/{ref}`, `/bills/{id}`, `/purchases/{id}` and `/approvals`.
+  - **Signed out:** the link waits behind signing in, then opens.
+- **The web** is unchanged: without the app, the same link opens the web.
+
+### 4.6 N6: passkeys in the app
+
+- **The server's WebAuthn origins** gain the Android app's origin (`android:apk-key-hash:<base64url of the signing certificate's SHA-256>`) from `TASKIEM_ANDROID_APP`, and the iOS app's through the associated domain. The relying party is the same host as the web, so a person's passkeys work in both.
+- **The app** uses the platform's passkey APIs through one package (`passkeys`, MIT, checked by the licence gate):
+  - **Signing in with a passkey** on the sign-in screen (the button is there);
+  - **Adding a passkey** in Settings;
+  - **Approving with a passkey** in the approval sheet, beside the authenticator code it has today. A rule that takes only a passkey then works in the app (M8's note).
+- **Off** where `GET /v1/app/config` says passkeys are off, or where the phone has none (Android below 9, no screen lock): the app says so and offers the other ways.
+
+### 4.7 N7: signing up as on WhatsApp
+
+- **The way in** (`tenant_onboarding.source = 'app'`):
+  - **Proving the phone:** the number gets a code by WhatsApp or Telegram, as signing in with a chat code does.
+  - **The conversation:** a new number is offered the sign-up conversation, in the app's own chat screen with Taskiem.
+  - **The rules are chat as the way in's:** off unless the operator turns it on, and limits per phone, hour and country.
+- **The server:**
+  - **The sign-up's steps** in `chat_signup.go` (terms with **Yes**, the business's name, theirs, what they sell, how customers pay, the three templates) are run by a third channel, `app`. Its "messages" are `POST /v1/signup/app/turn` with a short-lived sign-up token got from the proven phone, and its answers carry the same buttons.
+  - **The result:** a business made as on WhatsApp, the owner signed in on this phone with a device session, the phone's WhatsApp or Telegram bound as proven, and consent recorded.
+- **The app:**
+  - **Get started** on the sign-in screen opens the phone step.
+  - **The conversation** uses the chat screen's bubbles and buttons.
+  - **At the end**, it lands in the chats with Taskiem's first message.
+  - **The email form** (the web's sign-up) stays behind "Sign up with email instead".
+
+## 5. Order of the work
+
+| Part | What | Server | Web | App |
+| --- | --- | --- | --- | --- |
+| P1 | N1 the FCM transport and app rows; N2 the outbox, the trigger, approvals as a channel, customers' messages in the bell | ✓ | | |
+| P2 | N3 kinds per device, the business in the push, renewed subscriptions | ✓ | ✓ | |
+| P3 | N4 notifications in the app | | | ✓ |
+| P4 | N5 links | ✓ | | ✓ |
+| P5 | N6 passkeys | ✓ | | ✓ |
+| P6 | N7 signing up as on WhatsApp | ✓ | | ✓ |
+| P7 | The audit (three reviewers as before), the fixes, the owner's checklist for real phones | | | |
+
+**After P3, M4's done-when can be tried on a phone, once a Firebase project exists.**
+
+## 6. Tests
+
+**Go:**
+- The FCM transport against a fake FCM: the token request signed with the service account, the message's tag, collapse key, count and channel, `UNREGISTERED` dropping the device, 429 and 5xx retried.
+- The outbox:
+  - a bell item queues one push for a person with a device and none without;
+  - a repeat queues again;
+  - a restart between queueing and sending still sends;
+  - each kind honoured per device;
+  - the preview off.
+- **Approvals:** told once per approver.
+- **Customers' messages:** in the bell, grouped, and muted.
+- **The business in the payload;** a renewed subscription keeping its settings.
+- **The well-known files:** with and without configuration.
+- **The app origin** accepted for a passkey.
+- **The app sign-up:** start to business, limits, consent, a proven phone required.
+
+**The app:**
+- the switch, the permission refused, the five kinds, the device list;
+- a tap from closed, background and the other business;
+- the toast in the foreground and nothing in the open conversation;
+- the token removed on sign-out;
+- links opening each screen, and waiting behind sign-in;
+- passkey sign-in and approval with a fake platform;
+- the sign-up conversation;
+- large text and 360 px for each screen.
+
+**The web:**
+- the five kinds;
+- the business switch from a push;
+- a renewed subscription keeping its name;
+- the existing chat-push e2e unchanged in what it covers.
+
+**Not testable from the build machine:** a real FCM delivery, a real lock screen, a real passkey, a real verified link. Each is on the owner's checklist (P7).
+
+## 7. Needs from people
+
+| | | When |
+| --- | --- | --- |
+| A4 | A Firebase project: its Android (and later iOS) app registered with the package name, a service-account key with the Firebase Cloud Messaging role, and the client values | Before P3 can be tried on a phone |
+| A3 | The Apple account, for iPhone notifications (an APNs key in Firebase), Associated Domains and passkeys | iPhone only; Android does not wait for it |
+| — | The release signing key's SHA-256 (for verified links and passkeys) | P4, P5 on a phone; the debug key works for testing |
