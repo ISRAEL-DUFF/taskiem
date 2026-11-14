@@ -87,7 +87,8 @@ func (s *Server) appSignupOn() bool {
 
 func appAddr(number string) string { return "app:" + number }
 
-// appCode is a code's state, kept with the sign-ups.
+// appCode is a code's state, kept with the sign-ups; checked in the
+// database (taskiem_app_signup_code_check).
 type appCode struct {
 	Hash  string `json:"hash"`
 	Tries int    `json:"tries"`
@@ -217,29 +218,25 @@ func (s *Server) appSignupVerify(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// Guesses at one number from many addresses are counted too.
+	if !s.loginLimiter("app-signup-verify-number:" + number).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "too many tries; wait a little")
+		return
+	}
 	ctx := r.Context()
-	c, err := s.appCodeLoad(ctx, number)
-	if err != nil {
+	// Checked and counted in one step, so guesses sent together are each
+	// counted; the right code leaves the number proven for the binding.
+	var outcome string
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_app_signup_code_check($1, $2, $3)`,
+		number, digest(number+":"+strings.TrimSpace(req.Code)), appSignupCodeTries).Scan(&outcome); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if c == nil || c.Tries >= appSignupCodeTries {
+	if outcome != "ok" {
 		writeErr(w, http.StatusUnauthorized, chatCodeWrong)
 		return
 	}
-	if subtle.ConstantTimeCompare([]byte(c.Hash), []byte(digest(number+":"+strings.TrimSpace(req.Code)))) != 1 {
-		c.Tries++
-		if err := s.appCodeSave(ctx, number, c); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		writeErr(w, http.StatusUnauthorized, chatCodeWrong)
-		return
-	}
-	if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_chat_signup_drop($1)`, appCodeKey(number)); err != nil {
-		s.fail(w, r, err)
-		return
-	}
+	var err error
 	// A number already on an account signs in instead (now that it is
 	// proven, saying so tells nobody else anything).
 	var user uuid.UUID
@@ -312,10 +309,6 @@ func (s *Server) appSignupTurn(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.limiter("app-signup-turn:"+number, time.Minute, 30).Allow() {
-		writeErr(w, http.StatusTooManyRequests, "too many answers at once; wait a little")
-		return
-	}
 	ctx := r.Context()
 	addr := appAddr(number)
 	st, err := s.signupLoad(ctx, addr)
@@ -325,6 +318,11 @@ func (s *Server) appSignupTurn(w http.ResponseWriter, r *http.Request) {
 	}
 	if st == nil || st.Proof == "" || subtle.ConstantTimeCompare([]byte(st.Proof), []byte(digest(req.Token))) != 1 {
 		writeJSON(w, http.StatusNotFound, map[string]any{"error": "This sign-up has ended. Start again.", "ended": true})
+		return
+	}
+	// Counted once the token is known: nobody else uses up the person's turns.
+	if !s.limiter("app-signup-turn:"+req.Token, time.Minute, 30).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "too many answers at once; wait a little")
 		return
 	}
 	ch := &appChannel{}

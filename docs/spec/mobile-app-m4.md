@@ -284,6 +284,14 @@ What the build machine cannot try (a real FCM delivery, a lock screen, a real pa
 
 **iPhone (A3), later:** an APNs key in Firebase; `app_id_ios` in `TASKIEM_FCM_CLIENT`; `TASKIEM_IOS_APP=TEAMID.app.taskiem.chat`; `TASKIEM_HOST` in `ios/Flutter/*.xcconfig` set to the server's host; Push Notifications and Associated Domains on the App ID. Then 3–13 on an iPhone.
 
+## The audit (P7, 14 November 2026)
+
+Three reviewers (server, app, web) read M4's changes. Fixed:
+
+- **Server:** a sign-up code is checked and counted in one locked step (`taskiem_app_signup_code_check`), with a limit per number too, so guesses sent together cannot get past five; a wrong guess no longer makes the code live longer; the binding needs the proof the right code left (`taskiem_chat_bind_whatsapp_proven` checks it in the database); a sign-up's turns are limited by its token, not by a number anyone can name. A phone signed out from Your phones, or whose session ended, is no longer notified (`push_subscriptions.device_id`, `taskiem_push_device_live`). A customer's words and number are not copied into the bell or the push (the message stays sealed): "Ade wrote", or "A customer wrote". Telling the bell can no longer lose the customer's message (a savepoint). A claimed push's lease is five minutes, longer than a slow batch.
+- **Web:** a business switch only for a real tap (the worker writes the tap down; any other link asks "Switch to …?"); one switch at a time; a single-sign-on refusal no longer signs the tab out; the tap goes to the window in front; the browser's device kept per business and found again after a renewal.
+- **App:** see below.
+
 ## 6. Tests
 
 **Go:**

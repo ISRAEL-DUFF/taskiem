@@ -208,6 +208,10 @@ type Subscription struct {
 	// Known asks only to find the device (a page that lost which one it is):
 	// one the server does not have is not added again (ErrNotFound).
 	Known bool `json:"known"`
+	// DeviceID is the app's install, from the session registering it (not
+	// from the request's body): its pushes stop when that install has no
+	// session.
+	DeviceID uuid.UUID `json:"-"`
 }
 
 // address is where the device is reached: the browser's endpoint, or the
@@ -344,8 +348,12 @@ func AddTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, s Subscriptio
 		name = *label
 	}
 	var platform *string
+	var device *uuid.UUID
 	if s.Kind == App {
 		platform = &s.Platform
+		if s.DeviceID != uuid.Nil {
+			device = &s.DeviceID
+		}
 	}
 	var p256dh, auth *string
 	if s.Kind == Browser {
@@ -353,15 +361,16 @@ func AddTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, s Subscriptio
 	}
 	var d Device
 	addr := s.address()
-	err := scanDevice(tx.QueryRow(ctx, `INSERT INTO push_subscriptions (id, tenant_id, user_id, kind, platform, endpoint, endpoint_hash, p256dh, auth, label, preview, kinds)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11::boolean, true), COALESCE($12::text[], $13::text[]))
+	err := scanDevice(tx.QueryRow(ctx, `INSERT INTO push_subscriptions (id, tenant_id, user_id, kind, platform, endpoint, endpoint_hash, p256dh, auth, label, preview, kinds, device_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11::boolean, true), COALESCE($12::text[], $13::text[]), $15)
 		ON CONFLICT (tenant_id, user_id, endpoint_hash) DO UPDATE
 		   SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, platform = EXCLUDED.platform,
+		       device_id = COALESCE(EXCLUDED.device_id, push_subscriptions.device_id),
 		       label = CASE WHEN $14::boolean THEN EXCLUDED.label ELSE push_subscriptions.label END,
 		       preview = COALESCE($11::boolean, push_subscriptions.preview),
 		       kinds = COALESCE($12::text[], push_subscriptions.kinds), failed_since = NULL
 		RETURNING `+deviceCols,
-		uuid.Must(uuid.NewV7()), tenant, user, s.Kind, platform, addr, hashOf(addr), p256dh, auth, name, s.Preview, kinds, defaults, strings.TrimSpace(s.Label) != "" || label != nil), &d)
+		uuid.Must(uuid.NewV7()), tenant, user, s.Kind, platform, addr, hashOf(addr), p256dh, auth, name, s.Preview, kinds, defaults, strings.TrimSpace(s.Label) != "" || label != nil, device), &d)
 	if err != nil {
 		return Device{}, err
 	}
@@ -474,7 +483,10 @@ func TargetsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, users []uuid.UU
 		return nil, nil
 	}
 	rows, err := tx.Query(ctx, `SELECT id, user_id, kind, endpoint, COALESCE(p256dh, ''), COALESCE(auth, ''), preview, COALESCE(platform, ''), kinds
-		FROM push_subscriptions WHERE tenant_id = $1 AND user_id = ANY ($2) ORDER BY created_at, id`, tenant, users)
+		FROM push_subscriptions WHERE tenant_id = $1 AND user_id = ANY ($2)
+		  -- A phone signed out (from Your phones, or its session ended) is not notified.
+		  AND (device_id IS NULL OR taskiem_push_device_live(user_id, device_id))
+		ORDER BY created_at, id`, tenant, users)
 	if err != nil {
 		return nil, err
 	}
@@ -628,8 +640,10 @@ func DueTenantsTx(ctx context.Context, tx pgx.Tx, limit int) ([]uuid.UUID, error
 }
 
 // Lease is how long a claimed push is held for its sender: one that is not
-// done or put back by then (its sender stopped) is due again.
-const Lease = 90 * time.Second
+// done or put back by then (its sender stopped) is due again. Longer than a
+// batch takes at worst (a slow push service tried three times), so another
+// replica does not send it again meanwhile.
+const Lease = 5 * time.Minute
 
 // ClaimTx takes up to limit pushes due in the business in scope and leases
 // them (another sender skips them until Lease has passed), so nothing is

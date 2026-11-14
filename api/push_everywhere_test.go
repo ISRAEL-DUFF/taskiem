@@ -218,7 +218,9 @@ func TestPushEverywhere(t *testing.T) {
 		t.Fatalf("the cashier's phone after a customer wrote twice: %d", len(cg))
 	}
 	t1, b1 := wordsOf(cg[0])
-	if !strings.HasSuffix(t1, " wrote 2 messages") || b1 != "I want 2 bags" ||
+	// The customer's words and number stay in the sealed chat: not in the
+	// bell, nor the push.
+	if !strings.HasSuffix(t1, " wrote 2 messages") || b1 != "" || strings.Contains(t1, "8031112222") ||
 		dataOf(cg[0])["kind"] != "customers" || !strings.HasPrefix(dataOf(cg[0])["link"].(string), "/chat?with=c-") || dataOf(cg[0])["tag"] != strings.TrimPrefix(dataOf(cg[0])["link"].(string), "/chat?with=") {
 		t.Errorf("a customer's push: %q %q %v", t1, b1, dataOf(cg[0]))
 	}
@@ -227,7 +229,7 @@ func TestPushEverywhere(t *testing.T) {
 	pushSettle(t, w.srv)
 	if cg = fb.to(cashierPhone); len(cg) != 2 {
 		t.Fatalf("a third message: %d", len(cg))
-	} else if ti, b := wordsOf(cg[1]); !strings.HasSuffix(ti, " wrote 3 messages") || b != "And 3 cartons of oil" {
+	} else if ti, b := wordsOf(cg[1]); !strings.HasSuffix(ti, " wrote 3 messages") || b != "" {
 		t.Errorf("the third: %q %q", ti, b)
 	}
 	if n := len(cashier.must(200, "GET", "/v1/notifications", nil)["notifications"].([]any)); n != 1 {
@@ -296,5 +298,40 @@ func TestApprovalInTheBell(t *testing.T) {
 		if strings.HasPrefix(n.(map[string]any)["title"].(string), "Approval waiting") {
 			t.Error("the maker was told to approve their own run")
 		}
+	}
+}
+
+// A phone signed out from Your phones is no longer notified, though its
+// device row is still there (the app could not take it off itself).
+func TestPushPhoneSignedOut(t *testing.T) {
+	w := newWAWorld(t)
+	w.srv.LoginBurst = 1000
+	seller, buyer, _, _ := linkedPair(t, w)
+	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
+	fb := newFakeFirebase(t)
+	w.srv.Push = firebaseSender(t, fb)
+	anon := &client{t: t, base: w.base}
+	device := map[string]any{"id": uuid.NewString(), "name": "Ada’s Tecno", "platform": "android"}
+	s := anon.must(200, "POST", "/v1/auth/login", map[string]any{"email": "ada@bills.test", "password": "correct horse battery", "bearer": true, "device": device})
+	phone := &client{t: t, base: w.base, token: s["token"].(string)}
+	const token = "fGx1:APA91bH_signed-out-aaaaaaaaaaaaaa"
+	phone.must(200, "PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": token, "platform": "android", "label": "Tecno"})
+
+	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Rice is 45k"})
+	pushSettle(t, w.srv)
+	if n := len(fb.to(token)); n != 1 {
+		t.Fatalf("signed in: %d pushes", n)
+	}
+	// Signed out from the web's Your phones.
+	ds := buyer.must(200, "GET", "/v1/me/devices", nil)["devices"].([]any)
+	for _, d := range ds {
+		if d.(map[string]any)["name"] == "Ada’s Tecno" {
+			buyer.must(204, "DELETE", "/v1/me/devices/"+d.(map[string]any)["id"].(string), nil)
+		}
+	}
+	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "And beans"})
+	pushSettle(t, w.srv)
+	if n := len(fb.to(token)); n != 1 {
+		t.Errorf("signed out: %d pushes", n)
 	}
 }

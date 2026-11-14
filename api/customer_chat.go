@@ -255,7 +255,17 @@ func (s *Server) customerInbound(ctx context.Context, wa *whatsapp.Platform, num
 		if _, err = tx.Exec(ctx, `UPDATE customer_conversations SET last_inbound_at = now(), last_message_at = now(), archived = false WHERE id = $1`, id); err != nil {
 			return err
 		}
-		return s.tellCustomerMessageTx(ctx, tx, wa.Tenant, id, subject, in.ProfileName, number, text)
+		// The bell's notice in a savepoint: if telling fails, the message
+		// is kept all the same.
+		sp, err := tx.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		if err := s.tellCustomerMessageTx(ctx, sp, wa.Tenant, id, subject, in.ProfileName, number); err != nil {
+			s.Logger.Warn("customer chat: telling the bell", "err", err)
+			return sp.Rollback(ctx)
+		}
+		return sp.Commit(ctx)
 	})
 	if err == nil && kept != nil {
 		// Read for an order (phase 2), away from the webhook: a voice note
@@ -283,20 +293,22 @@ func (s *Server) customerInbound(ctx context.Context, wa *whatsapp.Platform, num
 // conversation while it is unread ("Ade wrote", then "Ade wrote 3 messages"),
 // in the message's own transaction, which also queues its push (migration
 // 00446). WhatsApp is not told: the customer's own chat is the business's.
-func (s *Server) tellCustomerMessageTx(ctx context.Context, tx pgx.Tx, tenant, chat uuid.UUID, subject, profile, number, text string) error {
+// Neither their words nor their number is copied: the message is kept
+// sealed, and the bell and the push would keep them in the clear.
+func (s *Server) tellCustomerMessageTx(ctx context.Context, tx pgx.Tx, tenant, chat uuid.UUID, subject, profile, number string) error {
 	users, err := holdersTx(ctx, tx, PermOrders)
 	if err != nil || len(users) == 0 {
 		return err
 	}
 	name, err := s.customerName(ctx, tx, tenant, subject, profile, number)
-	if err != nil || strings.TrimSpace(name) == "" {
+	if err != nil {
+		return err
+	}
+	if name = strings.TrimSpace(name); name == "" || strings.Contains(name, strings.TrimPrefix(number, "+")) || len([]rune(name)) > 60 {
 		name = "A customer"
 	}
-	if r := []rune(text); len(r) > 200 {
-		text = string(r[:199]) + "…"
-	}
 	return notices.AddTx(ctx, tx, tenant, users, notices.Notice{Kind: notices.Setup, Title: name + " wrote", Many: name + " wrote {n} messages",
-		Body: text, Link: "/chat?with=c-" + chat.String(), Group: "customer:" + chat.String()})
+		Link: "/chat?with=c-" + chat.String(), Group: "customer:" + chat.String()})
 }
 
 // --- the API ---

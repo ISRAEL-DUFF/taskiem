@@ -136,6 +136,17 @@ func (s *Server) putPush(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// A phone is the install its session is: notified only while signed in.
+	if in.Kind == push.App {
+		var dev *uuid.UUID
+		if err := s.Store.Pool.QueryRow(r.Context(), `SELECT taskiem_auth_session_device($1)`, hashToken(sessionToken(r))).Scan(&dev); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if dev != nil {
+			in.DeviceID = *dev
+		}
+	}
 	// Those who run the business take alerts too, unless they say otherwise.
 	defaults := push.DefaultKinds(p.HasRole("owner") || p.HasRole("admin"))
 	var added uuid.UUID
