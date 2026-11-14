@@ -96,6 +96,9 @@ type signupState struct {
 	Suggest string `json:"suggest,omitempty"`
 	// Agreed is when the person replied Yes to the terms.
 	Agreed *time.Time `json:"agreed,omitempty"`
+	// Proof is the digest of the app's sign-up token (app_signup.go): each
+	// answer in the app carries the token.
+	Proof string `json:"proof,omitempty"`
 }
 
 // signupChat is a message in a sign-up.
@@ -308,8 +311,12 @@ func (s *Server) signupOpen(ctx context.Context, sc *signupChat, number string) 
 // signupNumber is the number a sign-up is proven by, when the channel
 // gives one before the end: the WhatsApp number writing.
 func signupNumber(sc *signupChat) string {
-	if sc.ch.Name() == "whatsapp" {
+	switch sc.ch.Name() {
+	case "whatsapp":
 		return sc.addr
+	case "app":
+		// Proven by a code sent on WhatsApp (app_signup.go).
+		return strings.TrimPrefix(sc.addr, "app:")
 	}
 	return ""
 }
@@ -628,6 +635,9 @@ func (s *Server) signupMake(ctx context.Context, sc *signupChat, st *signupState
 				}
 			case "slack":
 				err = join(tx, tenant, owner)
+			case "app":
+				// Proven by the code the app's sign-up sent on WhatsApp.
+				err = tx.QueryRow(ctx, `SELECT taskiem_chat_bind_whatsapp_proven($1, $2)`, owner, number).Scan(&outcome)
 			default:
 				err = tx.QueryRow(ctx, `SELECT taskiem_chat_bind_whatsapp($1, $2)`, owner, number).Scan(&outcome)
 			}

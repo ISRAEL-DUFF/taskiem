@@ -411,12 +411,12 @@ func chatWayIn(c *config) error {
 	for _, ch := range strings.Split(os.Getenv("TASKIEM_CHAT_SIGNUP"), ",") {
 		switch ch = strings.ToLower(strings.TrimSpace(ch)); ch {
 		case "":
-		case "whatsapp", "telegram", "slack":
+		case "whatsapp", "telegram", "slack", "app":
 			if !slices.Contains(c.ChatSignup.Channels, ch) {
 				c.ChatSignup.Channels = append(c.ChatSignup.Channels, ch)
 			}
 		default:
-			return fmt.Errorf("TASKIEM_CHAT_SIGNUP: %q is not a channel that signs people up (whatsapp, telegram, slack)", ch)
+			return fmt.Errorf("TASKIEM_CHAT_SIGNUP: %q is not a channel that signs people up (whatsapp, telegram, slack, app)", ch)
 		}
 	}
 	var err error

@@ -83,6 +83,7 @@ taskiem_catalogue_submission(uuid)	@ISRAEL-DUFF (connectors)	part of: The public
 taskiem_catalogue_version(text,text)	@ISRAEL-DUFF (connectors)	One version that is or was in the catalogue (published or revoked), for details and upgrade diffs (00107)
 taskiem_chat_bind_telegram(uuid,bigint,text)	@ISRAEL-DUFF (onboarding)	Binds a Telegram account that just wrote, bound to no one, to a person a chat sign-up made (00266)
 taskiem_chat_bind_whatsapp(uuid,text)	@ISRAEL-DUFF (onboarding)	Binds a number that just wrote, bound to no one, to a person a chat sign-up made (00266)
+taskiem_chat_bind_whatsapp_proven(uuid,text)	@ISRAEL-DUFF (onboarding)	Binds a number the app proved with a WhatsApp code, bound to no one, to the owner its sign-up made (00447)
 taskiem_chat_invite(uuid,bytea)	@ISRAEL-DUFF (messaging)	One waiting invitation from chat, by its id or its Telegram link's token (00271)
 taskiem_chat_invites_for(text,text)	@ISRAEL-DUFF (messaging)	The invitations from chat waiting for an address, for the person invited (00271)
 taskiem_chat_link_bind(uuid,text,text,text)	@ISRAEL-DUFF (messaging)	Binds a WhatsApp number or Telegram account from an opened chat link, waking the person's own (00270)

@@ -35,6 +35,7 @@ import 'chat/explore.dart' show showExplore;
 import 'chat/profile_screen.dart';
 import 'chat/live.dart';
 import 'chat/taskiem.dart';
+import 'screens/app_sign_up.dart';
 import 'screens/home_tabs.dart';
 import 'screens/signed_in.dart';
 import 'screens/sign_in.dart';
@@ -202,8 +203,10 @@ class _SignedOut extends StatefulWidget {
 }
 
 class _SignedOutState extends State<_SignedOut> {
-  bool _signup = false;
+  // What is open: signing in, the email form, or Get started (as on WhatsApp).
+  String _at = 'in';
   bool _open = false;
+  bool _chat = false;
 
   @override
   void initState() {
@@ -211,19 +214,26 @@ class _SignedOutState extends State<_SignedOut> {
     widget.auth.api.signupOptions().then((o) {
       if (mounted) setState(() => _open = o.enabled);
     }, onError: (_) {});
+    // Signing up as on WhatsApp, where the server has it (M4 N7).
+    widget.auth.api.appConfig().then((c) {
+      if (mounted) setState(() => _chat = c.chatSignup ?? false);
+    }, onError: (_) {});
   }
 
   @override
   Widget build(BuildContext context) {
+    void go(String at) => setState(() => _at = at);
     // Android's back from signing up returns to signing in, not out of the app.
     return PopScope(
-      canPop: !_signup,
+      canPop: _at == 'in',
       onPopInvokedWithResult: (popped, _) {
-        if (!popped && _signup) setState(() => _signup = false);
+        if (!popped && _at != 'in') go('in');
       },
-      child: _signup
-          ? SignUpScreen(auth: widget.auth, onSignIn: () => setState(() => _signup = false))
-          : SignInScreen(auth: widget.auth, signup: _open, onSignUp: () => setState(() => _signup = true)),
+      child: switch (_at) {
+        'email' => SignUpScreen(auth: widget.auth, onSignIn: () => go('in')),
+        'app' => AppSignUpScreen(auth: widget.auth, onSignIn: () => go('in'), onEmail: _open ? () => go('email') : null),
+        _ => SignInScreen(auth: widget.auth, signup: _open || _chat, onSignUp: () => go(_chat ? 'app' : 'email')),
+      },
     );
   }
 }

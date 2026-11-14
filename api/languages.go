@@ -126,6 +126,9 @@ func (s *Server) numberLang(ctx context.Context, number string) (lang.Tag, strin
 }
 
 func (s *Server) setNumberLang(ctx context.Context, number string, t lang.Tag, source string) error {
+	if strings.HasPrefix(number, "app:") {
+		return nil // the app's sign-up: the phone's own language is the app's
+	}
 	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_lang_set($1, $2, $3)`, number, string(t), source)
 	return err
 }

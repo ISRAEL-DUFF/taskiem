@@ -245,6 +245,18 @@ Migration 00446. Nothing in the app yet: no phone registers until P3.
 - **Still on the web**: linking WhatsApp, Telegram and Slack, and the WhatsApp PIN, for a person whose only proof is a passkey (those requests take a code or the password).
 - **Tests**: `mobile/test/passkey_test.dart` (a stand-in for the phone's passkeys): sign-in, cancelled, off on the server, adding with a proof, an approval's passkey.
 
+## As built: P6, signing up as on WhatsApp (14 November 2026)
+
+Migration 00447.
+
+- **The server** (`api/app_signup.go`): a third channel into chat sign-up, `app`, on when the operator lists it in `TASKIEM_CHAT_SIGNUP` (with WhatsApp to send codes, and terms); `GET /v1/app/config` says so (`chat_signup`).
+  - `POST /v1/signup/app/code {phone}`: the countries and limits of chat sign-up, then a code by WhatsApp's authentication template from Taskiem's number (three a number while one lives, ten an hour from an address).
+  - `POST /v1/signup/app/verify {phone, code}`: five tries; a number already on an account is sent to sign in (409 `sign_in`, said only once the number is proven); else a sign-up token and the first question (the terms, with Yes and No).
+  - `POST /v1/signup/app/turn {phone, token, text | reply, device}`: the WhatsApp sign-up's own steps (`chat_signup.go`), its answers this request's (`appChannel`); cancelling ends it; the last answer makes the business as on WhatsApp (source `app`, terms recorded with channel `app`), its owner bound to the proven number (`taskiem_chat_bind_whatsapp_proven`: the code stands for WhatsApp's inbound message), and this phone signed in with a device session.
+- **The app**: **Create an account** on the sign-in screen opens **Get started** where the server has it (else the email form, as before; the form stays behind "Sign up with email instead"): the number, the code, then a chat with Taskiem, its questions with their buttons, a box to answer; at the end the app opens on the new business. A number already on an account is sent to sign in.
+- **Not as planned**: codes go by WhatsApp only (a Telegram bot cannot write to a number first); the templates the WhatsApp sign-up offers at the end are left out in the app, which opens Taskiem's conversation instead.
+- **Tests**: `TestAppSignup`, `TestAppSignupCancelled`; `mobile/test/app_sign_up_test.dart`.
+
 ## 6. Tests
 
 **Go:**

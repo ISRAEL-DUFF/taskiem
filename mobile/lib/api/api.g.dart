@@ -449,8 +449,11 @@ class TaskiemApi {
 }
 
 class AppConfig {
-  const AppConfig({required this.minVersion, required this.passkeys, this.push, required this.signup});
+  const AppConfig({this.chatSignup, required this.minVersion, required this.passkeys, this.push, required this.signup});
 
+  /// Whether the app may sign people up as on WhatsApp (`app` in
+  /// TASKIEM_CHAT_SIGNUP, with WhatsApp and terms).
+  final bool? chatSignup;
   /// The lowest app version this server serves (TASKIEM_APP_MIN_VERSION; 0.1.0
   /// when unset).
   final String minVersion;
@@ -464,6 +467,7 @@ class AppConfig {
   final bool signup;
 
   factory AppConfig.fromJson(Map<String, dynamic> j) => AppConfig(
+        chatSignup: j['chat_signup'] == null ? null : j['chat_signup'] as bool,
         minVersion: j['min_version'] as String,
         passkeys: j['passkeys'] as bool,
         push: j['push'] == null ? null : AppConfigPush.fromJson(j['push'] as Map<String, dynamic>),
@@ -471,6 +475,7 @@ class AppConfig {
       );
 
   Map<String, dynamic> toJson() => {
+        'chat_signup': ?chatSignup,
         'min_version': minVersion,
         'passkeys': passkeys,
         'push': ?push?.toJson(),
