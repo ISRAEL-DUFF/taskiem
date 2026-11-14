@@ -47,3 +47,11 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Firebase started when the phone starts the app for a notification
+    // (TaskiemApplication.kt): the version firebase_core's own (its
+    // FirebaseSDKVersion), so there is one Firebase in the app.
+    implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
+    implementation("com.google.firebase:firebase-common")
+}

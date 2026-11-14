@@ -244,8 +244,20 @@ func TestPushEverywhere(t *testing.T) {
 		t.Errorf("an unknown phone asked as known: %d", s)
 	}
 
+	// Firebase changes the phone's token: the new one replaces it, keeping
+	// its name and kinds.
+	cashier.must(200, "PATCH", "/v1/me/push/"+cd["id"].(string), map[string]any{"kinds": []string{"customers"}})
+	const renewed = "fGx1:APA91bH_cashier-renewed-aaaaaaaa"
+	rv := cashier.must(200, "PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": renewed, "platform": "android", "replaces": cashierPhone})
+	if ds := rv["devices"].([]any); len(ds) != 1 || ds[0].(map[string]any)["label"] != "Tecno Spark" || len(ds[0].(map[string]any)["kinds"].([]any)) != 1 {
+		t.Errorf("a renewed token: %v", rv)
+	}
+	if s, _ := cashier.do("PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": cashierPhone, "platform": "android", "known": true}); s != 404 {
+		t.Errorf("the old token is still a device: %d", s)
+	}
+
 	// Signing out takes the phone off (the app sends its token).
-	cashier.must(200, "DELETE", "/v1/me/push", map[string]any{"token": cashierPhone})
+	cashier.must(200, "DELETE", "/v1/me/push", map[string]any{"token": renewed})
 	if n := len(cashier.must(200, "GET", "/v1/me/push", nil)["devices"].([]any)); n != 0 {
 		t.Errorf("the cashier's phone after taking itself off: %d", n)
 	}

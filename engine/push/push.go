@@ -201,9 +201,9 @@ type Subscription struct {
 	// Kinds, when sent, are what the device takes; left out, a new device
 	// takes the defaults and a known one keeps its own.
 	Kinds *[]string `json:"kinds"`
-	// Replaces is the address of the same browser's previous subscription
-	// (it renewed it): its name, preview and kinds move to this one, and it
-	// goes.
+	// Replaces is the same device's previous address (a browser renewed its
+	// subscription, Firebase changed the app's token): its name, preview and
+	// kinds move to this one, and it goes.
 	Replaces string `json:"replaces"`
 	// Known asks only to find the device (a page that lost which one it is):
 	// one the server does not have is not added again (ErrNotFound).
@@ -316,12 +316,12 @@ func AddTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID, s Subscriptio
 			return Device{}, ErrNotFound
 		}
 	}
-	// A browser that renewed its subscription: the old one's choices carry
-	// over, and it goes.
+	// A browser that renewed its subscription, or an app whose token
+	// Firebase changed: the old one's choices carry over, and it goes.
 	var label *string
 	var preview *bool
 	var kept []string
-	if s.Kind == Browser && s.Replaces != "" && s.Replaces != s.Endpoint {
+	if s.Replaces != "" && s.Replaces != s.address() {
 		var l string
 		var p bool
 		err := tx.QueryRow(ctx, `DELETE FROM push_subscriptions WHERE tenant_id = $1 AND user_id = $2 AND endpoint_hash = $3

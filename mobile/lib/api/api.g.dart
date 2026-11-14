@@ -416,29 +416,108 @@ class TaskiemApi {
     final j = await _t.send('PUT', '/v1/settings/chat-tools', body: body.toJson());
     return ChatToolsSetting.fromJson(j as Map<String, dynamic>);
   }
+
+  /// The devices (browsers and phones) this person allowed to be notified when the app is closed (`GET /v1/me/push`)
+  Future<PushDevices> listPush() async {
+    final j = await _t.send('GET', '/v1/me/push');
+    return PushDevices.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Allow this browser or phone to be notified (`PUT /v1/me/push`)
+  Future<PushDevices> putPush({required PutPushRequest body}) async {
+    final j = await _t.send('PUT', '/v1/me/push', body: body.toJson());
+    return PushDevices.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Rename a device, switch its preview, or set the kinds of notification it takes (`PATCH /v1/me/push/{id}`)
+  Future<PushDevices> patchPush({required PatchPushRequest body, required String id}) async {
+    final j = await _t.send('PATCH', '/v1/me/push/${Uri.encodeComponent(id)}', body: body.toJson());
+    return PushDevices.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Take a browser off (`DELETE /v1/me/push/{id}`)
+  Future<PushDevices> deletePush({required String id}) async {
+    final j = await _t.send('DELETE', '/v1/me/push/${Uri.encodeComponent(id)}');
+    return PushDevices.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// This browser or phone takes itself off (`DELETE /v1/me/push`)
+  Future<PushDevices> deletePushEndpoint({required DeletePushEndpointRequest body}) async {
+    final j = await _t.send('DELETE', '/v1/me/push', body: body.toJson());
+    return PushDevices.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
-  const AppConfig({required this.minVersion, required this.passkeys, required this.signup});
+  const AppConfig({required this.minVersion, required this.passkeys, this.push, required this.signup});
 
   /// The lowest app version this server serves (TASKIEM_APP_MIN_VERSION; 0.1.0
   /// when unset).
   final String minVersion;
   /// Whether passkeys are on (a relying party and its origins are configured).
   final bool passkeys;
+  /// Present when phones can be notified (Firebase is set up). The app starts
+  /// Firebase with these public client values, so turning notifications on
+  /// needs no new build.
+  final AppConfigPush? push;
   /// Whether self-serve signup is open (TASKIEM_ALLOW_SIGNUP).
   final bool signup;
 
   factory AppConfig.fromJson(Map<String, dynamic> j) => AppConfig(
         minVersion: j['min_version'] as String,
         passkeys: j['passkeys'] as bool,
+        push: j['push'] == null ? null : AppConfigPush.fromJson(j['push'] as Map<String, dynamic>),
         signup: j['signup'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
         'min_version': minVersion,
         'passkeys': passkeys,
+        'push': ?push?.toJson(),
         'signup': signup,
+      };
+}
+
+/// Present when phones can be notified (Firebase is set up). The app starts
+/// Firebase with these public client values, so turning notifications on needs
+/// no new build.
+class AppConfigPush {
+  const AppConfigPush({required this.fcm});
+
+  final AppConfigPushFcm fcm;
+
+  factory AppConfigPush.fromJson(Map<String, dynamic> j) => AppConfigPush(
+        fcm: AppConfigPushFcm.fromJson(j['fcm'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'fcm': fcm.toJson(),
+      };
+}
+
+class AppConfigPushFcm {
+  const AppConfigPushFcm({required this.apiKey, required this.appIdAndroid, this.appIdIos, required this.projectId, required this.senderId});
+
+  final String apiKey;
+  final String appIdAndroid;
+  final String? appIdIos;
+  final String projectId;
+  final String senderId;
+
+  factory AppConfigPushFcm.fromJson(Map<String, dynamic> j) => AppConfigPushFcm(
+        apiKey: j['api_key'] as String,
+        appIdAndroid: j['app_id_android'] as String,
+        appIdIos: j['app_id_ios'] == null ? null : j['app_id_ios'] as String,
+        projectId: j['project_id'] as String,
+        senderId: j['sender_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'api_key': apiKey,
+        'app_id_android': appIdAndroid,
+        'app_id_ios': ?appIdIos,
+        'project_id': projectId,
+        'sender_id': senderId,
       };
 }
 
@@ -4203,5 +4282,181 @@ class PutChatToolsRequest {
 
   Map<String, dynamic> toJson() => {
         'chat_tools': chatTools,
+      };
+}
+
+class PushDevices {
+  const PushDevices({this.added, required this.browsers, required this.devices, required this.kinds, required this.max, required this.phones});
+
+  /// The browser a PUT just added or updated
+  final String? added;
+  /// Browsers can be notified on this server (its VAPID keys)
+  final bool browsers;
+  final List<PushDevice> devices;
+  /// The kinds of notification a device may take, in the order to show them
+  final List<String> kinds;
+  final int max;
+  /// Phones can be notified on this server (Firebase)
+  final bool phones;
+
+  factory PushDevices.fromJson(Map<String, dynamic> j) => PushDevices(
+        added: j['added'] == null ? null : j['added'] as String,
+        browsers: j['browsers'] as bool,
+        devices: (j['devices'] as List).map((e) => PushDevice.fromJson(e as Map<String, dynamic>)).toList(),
+        kinds: (j['kinds'] as List).map((e) => e as String).toList(),
+        max: (j['max'] as num).toInt(),
+        phones: j['phones'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'added': ?added,
+        'browsers': browsers,
+        'devices': devices.map((e) => e.toJson()).toList(),
+        'kinds': kinds.map((e) => e).toList(),
+        'max': max,
+        'phones': phones,
+      };
+}
+
+class PushDevice {
+  const PushDevice({required this.createdAt, required this.id, required this.kind, required this.kinds, required this.label, this.lastOkAt, this.lastSentAt, this.platform, required this.preview});
+
+  final DateTime createdAt;
+  final String id;
+  /// A browser (webpush) or the phone app (fcm)
+  final String kind;
+  /// The kinds of notification it takes
+  final List<String> kinds;
+  final String label;
+  final Object? lastOkAt;
+  final Object? lastSentAt;
+  final Object? platform;
+  final bool preview;
+
+  factory PushDevice.fromJson(Map<String, dynamic> j) => PushDevice(
+        createdAt: DateTime.parse(j['created_at'] as String),
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        kinds: (j['kinds'] as List).map((e) => e as String).toList(),
+        label: j['label'] as String,
+        lastOkAt: j['last_ok_at'],
+        lastSentAt: j['last_sent_at'],
+        platform: j['platform'],
+        preview: j['preview'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'id': id,
+        'kind': kind,
+        'kinds': kinds.map((e) => e).toList(),
+        'label': label,
+        'last_ok_at': ?lastOkAt,
+        'last_sent_at': ?lastSentAt,
+        'platform': ?platform,
+        'preview': preview,
+      };
+}
+
+class PutPushRequest {
+  const PutPushRequest({this.endpoint, this.keys, this.kind, this.kinds, this.known, this.label, this.platform, this.preview, this.replaces, this.token});
+
+  final String? endpoint;
+  final PutPushRequestKeys? keys;
+  final String? kind;
+  /// The kinds of notification the device takes; left out, a new device takes
+  /// the defaults (all for owners and admins, all but alerts for others)
+  final Object? kinds;
+  /// Only find this device (a page that lost which one it is); one the server
+  /// does not have is not added again (404)
+  final bool? known;
+  final String? label;
+  final String? platform;
+  /// Whether the notification says what the message says (default on)
+  final Object? preview;
+  /// The same device's previous address (a browser's renewed subscription, or
+  /// the app's token before Firebase changed it)
+  final String? replaces;
+  /// The app's Firebase registration token (kind fcm)
+  final String? token;
+
+  factory PutPushRequest.fromJson(Map<String, dynamic> j) => PutPushRequest(
+        endpoint: j['endpoint'] == null ? null : j['endpoint'] as String,
+        keys: j['keys'] == null ? null : PutPushRequestKeys.fromJson(j['keys'] as Map<String, dynamic>),
+        kind: j['kind'] == null ? null : j['kind'] as String,
+        kinds: j['kinds'],
+        known: j['known'] == null ? null : j['known'] as bool,
+        label: j['label'] == null ? null : j['label'] as String,
+        platform: j['platform'] == null ? null : j['platform'] as String,
+        preview: j['preview'],
+        replaces: j['replaces'] == null ? null : j['replaces'] as String,
+        token: j['token'] == null ? null : j['token'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'endpoint': ?endpoint,
+        'keys': ?keys?.toJson(),
+        'kind': ?kind,
+        'kinds': ?kinds,
+        'known': ?known,
+        'label': ?label,
+        'platform': ?platform,
+        'preview': ?preview,
+        'replaces': ?replaces,
+        'token': ?token,
+      };
+}
+
+class PutPushRequestKeys {
+  const PutPushRequestKeys({required this.auth, required this.p256dh});
+
+  final String auth;
+  final String p256dh;
+
+  factory PutPushRequestKeys.fromJson(Map<String, dynamic> j) => PutPushRequestKeys(
+        auth: j['auth'] as String,
+        p256dh: j['p256dh'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'auth': auth,
+        'p256dh': p256dh,
+      };
+}
+
+class PatchPushRequest {
+  const PatchPushRequest({this.kinds, this.label, this.preview});
+
+  final Object? kinds;
+  final Object? label;
+  final Object? preview;
+
+  factory PatchPushRequest.fromJson(Map<String, dynamic> j) => PatchPushRequest(
+        kinds: j['kinds'],
+        label: j['label'],
+        preview: j['preview'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kinds': ?kinds,
+        'label': ?label,
+        'preview': ?preview,
+      };
+}
+
+class DeletePushEndpointRequest {
+  const DeletePushEndpointRequest({this.endpoint, this.token});
+
+  final String? endpoint;
+  final String? token;
+
+  factory DeletePushEndpointRequest.fromJson(Map<String, dynamic> j) => DeletePushEndpointRequest(
+        endpoint: j['endpoint'] == null ? null : j['endpoint'] as String,
+        token: j['token'] == null ? null : j['token'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'endpoint': ?endpoint,
+        'token': ?token,
       };
 }

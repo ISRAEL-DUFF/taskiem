@@ -43,6 +43,10 @@ class Auth extends ChangeNotifier {
   /// this phone (Prefs.forgetPerson).
   Future<void> Function()? onForget;
 
+  /// Called on Sign out before the session ends, while the server still
+  /// takes it (this phone's notifications taken off: lib/app/notify.dart).
+  Future<void> Function()? beforeSignOut;
+
   /// This app's version, checked against the lowest the server serves.
   final String version;
 
@@ -239,6 +243,11 @@ class Auth extends ChangeNotifier {
 
   /// Signs this phone out: the server ends its session, the token goes.
   Future<void> signOut() async {
+    try {
+      await beforeSignOut?.call();
+    } on Object {
+      // Signing out goes on whatever happens there.
+    }
     try {
       await api.logout();
     } on Exception {

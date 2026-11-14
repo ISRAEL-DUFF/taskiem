@@ -9,15 +9,20 @@ import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/lock.dart';
+import '../app/notify.dart';
 import '../app/prefs.dart';
+import '../kit/forms.dart' show TkSwitchRow;
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'settings_more.dart';
 
 class SignedInScreen extends StatefulWidget {
-  const SignedInScreen({super.key, required this.auth, this.prefs, this.unlocker});
+  const SignedInScreen({super.key, required this.auth, this.prefs, this.unlocker, this.notify});
   final Auth auth;
   final Prefs? prefs;
+
+  /// Notifications on this phone; none where the app has none.
+  final PhoneNotifications? notify;
 
   /// The phone's own unlock: turning the app lock off asks for it.
   final Unlocker? unlocker;
@@ -162,6 +167,7 @@ class _SignedInScreenState extends State<SignedInScreen> {
                       ),
                 ],
               ),
+              if (widget.notify != null) NotificationsCard(notify: widget.notify!),
               if (prefs != null) LockCard(prefs: prefs, unlocker: widget.unlocker),
               if (prefs != null) ...[
                 const SizedBox(height: 16),
@@ -290,4 +296,107 @@ class _PhoneRow extends StatelessWidget {
     if (ago.inDays == 1) return 'yesterday';
     return '${ago.inDays} days ago';
   }
+}
+
+/// Notifications on this phone (docs/spec/mobile-app-m4.md N4): the web's
+/// ChatPush.tsx, its words. Shown once the server and the phone say they
+/// can, or that this phone cannot.
+class NotificationsCard extends StatelessWidget {
+  const NotificationsCard({super.key, required this.notify});
+  final PhoneNotifications notify;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: notify,
+    builder: (context, _) {
+      final t = TkTheme.tokens(context);
+      final n = notify;
+      if (n.available == null && !n.noGoogle) return const SizedBox.shrink();
+      if (n.available != true && !n.noGoogle) return const SizedBox.shrink();
+      final mine = n.mine;
+      final others = (n.view?.devices ?? const <PushDevice>[]).where((d) => d.id != mine?.id).toList();
+      final can = notify.auth.can;
+      final offered = (n.view?.kinds ?? pushKinds).where(
+        (k) => (k != 'business' || can('chat.trade')) && (k != 'customers' || can('storefront.manage|order.handle')),
+      );
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: _Card(
+          title: 'Notifications on this phone',
+          children: [
+            if (n.error != null) TkErrorBox(n.error!),
+            if (n.noGoogle)
+              Text(
+                'This phone cannot get Taskiem’s notifications (it has no Google services). WhatsApp or Telegram can tell you instead: link them below.',
+                style: tkHint(t),
+              )
+            else ...[
+              TkSwitchRow(
+                label: 'Notify me on this phone',
+                hint: 'Messages, orders and what needs you, even when Taskiem is closed.',
+                on: n.isOn,
+                onChanged: n.busy ? null : (v) => v ? n.turnOn() : n.turnOff(),
+              ),
+              if (n.blocked && !n.isOn)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Notifications are off for Taskiem in this phone’s settings. Turn them on there (Settings, Apps, Taskiem, Notifications), then try again.',
+                    style: tkHint(t),
+                  ),
+                ),
+              if (n.isOn && mine != null) ...[
+                const SizedBox(height: 12),
+                TkSwitchRow(
+                  label: 'Show what the message says',
+                  hint: mine.preview ? null : 'Off: the notification says only that something came, not what it says.',
+                  on: mine.preview,
+                  onChanged: n.busy ? null : n.setPreview,
+                ),
+                if (offered.length > 1) ...[
+                  const SizedBox(height: 16),
+                  Text('What this phone tells you', style: tkText(size: 14, weight: 600, color: t.text)),
+                  for (final k in offered)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: TkSwitchRow(
+                        label: kindWords[k]!.$1,
+                        hint: kindWords[k]!.$2,
+                        on: mine.kinds.contains(k),
+                        onChanged: n.busy ? null : (v) => n.setKind(k, v),
+                      ),
+                    ),
+                ],
+              ],
+              if (others.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text('Your other devices', style: tkText(size: 14, weight: 600, color: t.text)),
+                for (final d in others)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(d.label, style: tkText(size: 14, weight: 500, color: t.text)),
+                              Text(
+                                d.kind == 'fcm' ? (d.platform == 'ios' ? 'Taskiem app on an iPhone' : 'Taskiem app on Android') : 'Browser',
+                                style: tkHint(t),
+                              ),
+                            ],
+                          ),
+                        ),
+                        TkButton(label: 'Remove', onPressed: n.busy ? null : () => n.remove(d.id)),
+                      ],
+                    ),
+                  ),
+              ],
+            ],
+          ],
+        ),
+      );
+    },
+  );
 }

@@ -6,9 +6,12 @@
     <!-- Reaching Taskiem at all: only the debug and profile builds had it,
          so a release build could not sign in. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Notifications on this phone (lib/app/notify.dart): Android 13 and
+         later asks the person when they turn them on. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="Taskiem"
-        android:name="${applicationName}"
+        android:name=".TaskiemApplication"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
@@ -32,6 +35,16 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- A notification sent without a kind goes to Business chats. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="business" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

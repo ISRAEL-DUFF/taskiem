@@ -207,6 +207,26 @@ Migration 00446. Nothing in the app yet: no phone registers until P3.
   - `engine/push` (`TestFCMSend`, `TestFCMOutcomes`, `TestParseFCM`, `TestValidTokenAndKinds`): a fake Google checks the service account's signature.
   - `TestPushEverywhere`, `TestApprovalInTheBell`, and `TestChatPush` (unchanged in what it covers, now through the queue).
 
+## As built: P2, the web (14 November 2026)
+
+- **The worker** (`web/public/sw.js`) opens any page of the app a push names (one plain question at most, never another site), with `?business=` for the business it is for. A renewed subscription is sent with `replaces`, so the server keeps its name, words and kinds and drops the old one.
+- **The page** (`web/src/lib/pushOpen.ts`): `?business=` for another business switches to it (`POST /v1/me/switch`, the browser's own session) and opens the page afresh; one the person is not in, or cannot be moved to (single sign-on), is said on the page. A tap while a window is open goes wherever the push is for, from any page (it was the chat page only).
+- **Notifications when Taskiem is closed** (`ChatPush.tsx`): for everyone, not only those who chat; a switch per kind, for the kinds the person can get (business chats with `chat.trade`, customers with orders); other devices say whether they are a browser or the app.
+- **`known`** on `PUT /v1/me/push`: a page that lost which device it is (storage cleared, the worker renewed) finds it by its address, and one removed from another device is not added back. A PUT without a label keeps the device's own.
+
+## As built: P3, the app (14 November 2026)
+
+- **Firebase** (`firebase_core` 5.1.0, `firebase_messaging` 17.0.1, BSD-3-Clause; the licence gate passes) is started from `GET /v1/app/config`'s values; the build has no Firebase file. On Android the values are also kept for the app's process (`TaskiemApplication.kt`), so a notification that starts a closed app finds Firebase started. Without `push.fcm`, Notifications is not shown; on a phone without Google's services it says that WhatsApp or Telegram can tell them instead.
+- **The phone is a device per business** (`lib/app/notify.dart`): turned on in a business, it is registered there with its name; opened again, it is found by its token (`known`) and never added back if removed from another device; a token Firebase changes replaces the old one (`replaces`, now for the app too), keeping its choices.
+- **Settings, Notifications on this phone**: the switch, Show what the message says, the kinds, the other devices with Remove; a refusal in the phone's settings says where to allow it.
+- **Asked once** after signing in, per business ("Get a notification when a business or customer writes?"); Not now asks again only from Settings.
+- **Sign out** takes the phone off while the session still counts, then makes the token worthless (`deleteToken`), so no business keeps notifying it; the session ending elsewhere does the second.
+- **A tap** opens its page, by the bell's links: a business's or a customer's conversation, Taskiem's conversation for approvals, Orders, Money, else Today; for another business it switches first and the new home opens it. From closed (`getInitialMessage`) and from behind (`onMessageOpenedApp`).
+- **With the app open** nothing shows from the system (an iPhone too); a toast with Open does, except for the conversation on the screen.
+- **Android**: a channel per kind ("Business chats", "Customer chats", "Orders and money", "Approvals", "Alerts"), the brand's mark as the small icon on pine, `POST_NOTIFICATIONS` asked for on Android 13 and later.
+- **The icon's count** is the server's, in each push (Android's notification count, the iPhone's badge). The app does not set it itself yet.
+- **Tests**: `mobile/test/notify_test.dart` (a stand-in Firebase and server): off without Firebase, no Google services, on and off, refused, a changed token, opened again and removed elsewhere, signing out in order, taps in this and another business, the conversation on the screen, and the Settings card.
+
 ## 6. Tests
 
 **Go:**
