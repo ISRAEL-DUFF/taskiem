@@ -293,6 +293,27 @@ Three reviewers (server, app, web) read M4's changes. Fixed:
 - **App:** a tap that opens the app for another business switches first and is opened only there (it was opened in the old business while the switch ran); `start` waits for the business to be known and stops when the session changes; a toast's Open goes the way a tap does; a tap that could not switch is said; Android's first "no" is not taken as final; Firebase already started at the app's start is used, not reported as no Google services; a link given twice at start opens once; a tap waits for the ask-once question rather than closing it; a sign-up answer that did not go through is taken back with its buttons there again, and the typed words put back. A Gradle report committed by mistake is gone (`android/build/` ignored).
 - **Left as they are:** a push retried for one failed device is sent again to the others (one notification per tag, so it replaces itself); the iPhone's `TASKIEM_HOST` is set by hand in `ios/Flutter/*.xcconfig` (the checklist says so); the server's changed Firebase values take over at the app's next start.
 
+## The second audit (14 November 2026)
+
+Three fresh reviewers checked the first audit's fixes and looked for what was missed. Fixed:
+
+- **Server:**
+  - A phone row only from the app's own phone session (otherwise refused): one from any other session could never be stopped by signing the phone out.
+  - The end of the app's sign-up signs in the owner of the business that request made, in that business, never another account bound to the number. The number's proof lasts as long as the sign-up. A new code keeps the guesses already made.
+  - The queue: reactions are business chats (`react:` groups); a newer push for a conversation takes the place of an older one still waiting (in the trigger and in `EnqueueTx`), so a retried older one cannot replace it on the phone; a retry is not sent again to the devices that took it (`push_outbox.sent_to`).
+  - The outcomes: the push service or this server unable (down, busy, its credentials refused, unreachable) is `Later`, tried again and not counted against the device; a transport not set up is `Off`, neither. Only a device's own refusal counts toward dropping it. A 404 from FCM drops a phone only with `UNREGISTERED`.
+  - The access token is fetched once for all senders, without holding its lock; a batch ends well inside its lease.
+  - The approval bell sets aside, once, someone who may not decide an approval, so the same candidates do not fill every look.
+  - An empty name in a PATCH keeps the device's own; an iPhone-only Firebase setup is allowed.
+- **Web:** turning notifications off in one business keeps the browser's subscription for the others (signing out drops it); the tap's mark is read once per address and used up only by its own business's page; a failed name lookup still asks; a single-sign-on business offers to sign out and sign in there; the old browser-wide device id moves to the business; other devices get their own switches; the ask notice is a labelled region.
+- **App:** Android's "Don't allow" turns nothing on; one start at a time per session, from nothing of the last; signing out clears the tray and the waiting tap; a switch that lands elsewhere is said; the conversation on the screen belongs to its screen; the passkey button only where the server has passkeys, and approving without a passkey on the phone asks for the code; Get started keeps its conversation across back, never takes back a business made, and opens Taskiem's conversation after it; the chime with the toast.
+
+**Left, and why:**
+- A business chat's push is queued after its message commits, not in its transaction (as #173 did): a crash in between loses that push. The bell and the message are kept.
+- Customer-chat mute, push metrics by kind, the icon's count set by the app, Telegram codes for Get started: not built.
+- With the preview on, a bell title goes out as written (an invoice's number in it); the link is in a phone push's data either way.
+- Tests the build machine cannot run: a real FCM delivery, a real passkey with the app's origin, a verified link.
+
 ## 6. Tests
 
 **Go:**

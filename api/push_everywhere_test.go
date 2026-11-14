@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/push"
@@ -84,6 +86,8 @@ func TestPushEverywhere(t *testing.T) {
 	seller, buyer, _, buyerID := linkedPair(t, w)
 	link := buyer.must(200, "GET", "/v1/link-chats", nil)["conversations"].([]any)[0].(map[string]any)["link"].(string)
 	cashier := w.member(t, buyer, "cashier@bills.test", "cashier")
+	// The app turns notifications on signed in on the phone (a device session).
+	buyerApp, cashierApp := phoneSession(t, w, "ada@bills.test"), phoneSession(t, w, "cashier@bills.test")
 	fb := newFakeFirebase(t)
 	const ownerPhone, cashierPhone = "fGx1:APA91bH_owner-phone-aaaaaaaaaaaa", "fGx1:APA91bH_cashier-phone-aaaaaaaaaa"
 	phone := func(token string) map[string]any {
@@ -92,7 +96,7 @@ func TestPushEverywhere(t *testing.T) {
 
 	// Without Firebase a phone cannot be added, and the app is told nothing.
 	w.srv.Push = pushSender(t)
-	if s, _ := buyer.do("PUT", "/v1/me/push", phone(ownerPhone)); s != 404 {
+	if s, _ := buyerApp.do("PUT", "/v1/me/push", phone(ownerPhone)); s != 404 {
 		t.Errorf("a phone with no Firebase: %d", s)
 	}
 	if c := buyer.must(200, "GET", "/v1/app/config", nil); c["push"] != nil {
@@ -103,15 +107,15 @@ func TestPushEverywhere(t *testing.T) {
 		t.Errorf("the app's Firebase values: %v", c["push"])
 	}
 	// Firebase alone: no browser key, and the server says so.
-	if s, _ := buyer.do("GET", "/v1/me/push/key", nil); s != 404 {
+	if s, _ := buyerApp.do("GET", "/v1/me/push/key", nil); s != 404 {
 		t.Errorf("a browser key with Firebase only: %d", s)
 	}
 
 	// The owner's phone takes every kind; the cashier's all but alerts.
-	if s, _ := buyer.do("PUT", "/v1/me/push", phone("not a token")); s != 400 {
+	if s, _ := buyerApp.do("PUT", "/v1/me/push", phone("not a token")); s != 400 {
 		t.Errorf("a bad token: %d", s)
 	}
-	out := buyer.must(200, "PUT", "/v1/me/push", phone(ownerPhone))
+	out := buyerApp.must(200, "PUT", "/v1/me/push", phone(ownerPhone))
 	d := out["devices"].([]any)[0].(map[string]any)
 	if d["kind"] != "fcm" || d["platform"] != "android" || len(d["kinds"].([]any)) != 5 || out["phones"] != true || out["browsers"] != false {
 		t.Fatalf("the owner's phone: %v", out)
@@ -119,7 +123,7 @@ func TestPushEverywhere(t *testing.T) {
 	if strings.Contains(string(jsonOf(t, out)), ownerPhone) {
 		t.Error("the token came back")
 	}
-	cd := cashier.must(200, "PUT", "/v1/me/push", phone(cashierPhone))["devices"].([]any)[0].(map[string]any)
+	cd := cashierApp.must(200, "PUT", "/v1/me/push", phone(cashierPhone))["devices"].([]any)[0].(map[string]any)
 	if k := cd["kinds"].([]any); len(k) != 4 || strings.Contains(string(jsonOf(t, k)), "alerts") {
 		t.Errorf("the cashier's kinds: %v", k)
 	}
@@ -174,8 +178,8 @@ func TestPushEverywhere(t *testing.T) {
 	// Kinds: the owner turns orders off; a bill is then not pushed, and the
 	// queue lets it go.
 	id := d["id"].(string)
-	buyer.must(200, "PATCH", "/v1/me/push/"+id, map[string]any{"kinds": []string{"business", "customers", "approvals", "alerts"}})
-	if s, _ := buyer.do("PATCH", "/v1/me/push/"+id, map[string]any{"kinds": []string{"spam"}}); s != 400 {
+	buyerApp.must(200, "PATCH", "/v1/me/push/"+id, map[string]any{"kinds": []string{"business", "customers", "approvals", "alerts"}})
+	if s, _ := buyerApp.do("PATCH", "/v1/me/push/"+id, map[string]any{"kinds": []string{"spam"}}); s != 400 {
 		t.Errorf("an unknown kind: %d", s)
 	}
 	bell(owner, "setup", "bill:b2", "/bills", "Bill from Dangote: ₦9,000")
@@ -238,29 +242,29 @@ func TestPushEverywhere(t *testing.T) {
 
 	// A device that lost which one it is asks the server (known): found, it
 	// keeps its name; not found, it is not added again.
-	k := cashier.must(200, "PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": cashierPhone, "platform": "android", "known": true})
+	k := cashierApp.must(200, "PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": cashierPhone, "platform": "android", "known": true})
 	if k["added"] != cd["id"] || k["devices"].([]any)[0].(map[string]any)["label"] != "Tecno Spark" {
 		t.Errorf("a known phone: %v", k)
 	}
-	if s, _ := cashier.do("PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": "fGx1:APA91bH_never-seen-aaaaaaaaaaaaa", "platform": "android", "known": true}); s != 404 {
+	if s, _ := cashierApp.do("PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": "fGx1:APA91bH_never-seen-aaaaaaaaaaaaa", "platform": "android", "known": true}); s != 404 {
 		t.Errorf("an unknown phone asked as known: %d", s)
 	}
 
 	// Firebase changes the phone's token: the new one replaces it, keeping
 	// its name and kinds.
-	cashier.must(200, "PATCH", "/v1/me/push/"+cd["id"].(string), map[string]any{"kinds": []string{"customers"}})
+	cashierApp.must(200, "PATCH", "/v1/me/push/"+cd["id"].(string), map[string]any{"kinds": []string{"customers"}})
 	const renewed = "fGx1:APA91bH_cashier-renewed-aaaaaaaa"
-	rv := cashier.must(200, "PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": renewed, "platform": "android", "replaces": cashierPhone})
+	rv := cashierApp.must(200, "PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": renewed, "platform": "android", "replaces": cashierPhone})
 	if ds := rv["devices"].([]any); len(ds) != 1 || ds[0].(map[string]any)["label"] != "Tecno Spark" || len(ds[0].(map[string]any)["kinds"].([]any)) != 1 {
 		t.Errorf("a renewed token: %v", rv)
 	}
-	if s, _ := cashier.do("PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": cashierPhone, "platform": "android", "known": true}); s != 404 {
+	if s, _ := cashierApp.do("PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": cashierPhone, "platform": "android", "known": true}); s != 404 {
 		t.Errorf("the old token is still a device: %d", s)
 	}
 
 	// Signing out takes the phone off (the app sends its token).
-	cashier.must(200, "DELETE", "/v1/me/push", map[string]any{"token": renewed})
-	if n := len(cashier.must(200, "GET", "/v1/me/push", nil)["devices"].([]any)); n != 0 {
+	cashierApp.must(200, "DELETE", "/v1/me/push", map[string]any{"token": renewed})
+	if n := len(cashierApp.must(200, "GET", "/v1/me/push", nil)["devices"].([]any)); n != 0 {
 		t.Errorf("the cashier's phone after taking itself off: %d", n)
 	}
 }
@@ -271,11 +275,12 @@ func TestApprovalInTheBell(t *testing.T) {
 	w := newWAWorld(t)
 	owner := w.tenant(t, "Acme", "owner@acme.test")
 	owner.must(201, "POST", "/v1/members", map[string]any{"email": "owner@acme.test", "roles": []string{"credit_officer", "approver"}})
-	alice := w.member(t, owner, "alice@acme.test", "approver", "credit_officer")
+	w.member(t, owner, "alice@acme.test", "approver", "credit_officer")
+	aliceApp := phoneSession(t, w, "alice@acme.test")
 	fb := newFakeFirebase(t)
 	w.srv.Push = firebaseSender(t, fb)
 	const alicePhone = "fGx1:APA91bH_alice-phone-aaaaaaaaaaaaaa"
-	alice.must(200, "PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": alicePhone, "platform": "android"})
+	aliceApp.must(200, "PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": alicePhone, "platform": "android"})
 
 	wf := publishFlow(t, owner, waLoanFlow)
 	owner.must(201, "POST", "/v1/workflows/"+wf+"/runs", map[string]any{"input": map[string]any{"bvn": "22212345678", "amount": 5000, "account_number": "0123456789"}})
@@ -334,4 +339,87 @@ func TestPushPhoneSignedOut(t *testing.T) {
 	if n := len(fb.to(token)); n != 1 {
 		t.Errorf("signed out: %d pushes", n)
 	}
+}
+
+// phoneSession signs in as the app does on a phone: a device session.
+func phoneSession(t *testing.T, w *waWorld, email string) *client {
+	t.Helper()
+	anon := &client{t: t, base: w.base}
+	s := anon.must(200, "POST", "/v1/auth/login", map[string]any{"email": email, "password": testPassword, "bearer": true,
+		"device": map[string]any{"id": uuid.NewString(), "name": "Tecno Spark", "platform": "android"}})
+	return &client{t: t, base: w.base, token: s["token"].(string)}
+}
+
+// A phone row only from a phone's own session: one from any other session
+// could never be stopped by signing the phone out.
+func TestPushPhoneNeedsItsSession(t *testing.T) {
+	w := newWAWorld(t)
+	w.srv.LoginBurst = 1000
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	w.srv.Push = firebaseSender(t, newFakeFirebase(t))
+	if s, out := owner.do("PUT", "/v1/me/push", map[string]any{"kind": "fcm", "token": "fGx1:APA91bH_no-device-aaaaaaaaaaaa", "platform": "android"}); s != 400 {
+		t.Errorf("a phone from a session that is not one: %d %v", s, out)
+	}
+}
+
+// The queue: reactions are business chats; a newer push for a conversation
+// takes the place of an older one still waiting; a retry is not sent again
+// to the devices that took it.
+func TestPushQueue(t *testing.T) {
+	ctx := context.Background()
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Acme", "owner@acme.test")
+	tenant := uuid.MustParse(tenantOf(t, owner))
+	admin := w.env.DB.Admin
+	var kind string
+	if err := admin.QueryRow(ctx, `SELECT taskiem_push_kind('reaction', 'react:pair:👍', '/chat?with=abc')`).Scan(&kind); err != nil || kind != "business" {
+		t.Errorf("a reaction: %q %v", kind, err)
+	}
+	user := uuid.New()
+	q := push.Queued{Kind: push.KindBusiness, Title: "Dangote", Body: "first", Link: "/chat?with=abc", Tag: "abc"}
+	in := func(f func(tx pgx.Tx) error) {
+		t.Helper()
+		tx, err := admin.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := f(tx); err != nil {
+			t.Fatal(err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A device, so the queue takes pushes for this person.
+	in(func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO push_subscriptions (id, tenant_id, user_id, kind, endpoint, endpoint_hash, p256dh, auth, label)
+			VALUES (gen_random_uuid(), $1, $2, 'webpush', 'https://fcm.googleapis.com/x', 'h', 'p', 'a', 'B')`, tenant, user)
+		return err
+	})
+	in(func(tx pgx.Tx) error { return push.EnqueueTx(ctx, tx, tenant, []uuid.UUID{user}, q) })
+	q.Body = "second"
+	in(func(tx pgx.Tx) error { return push.EnqueueTx(ctx, tx, tenant, []uuid.UUID{user}, q) })
+	var bodies []string
+	if err := admin.QueryRow(ctx, `SELECT array_agg(body) FROM push_outbox WHERE tenant_id = $1`, tenant).Scan(&bodies); err != nil || len(bodies) != 1 || bodies[0] != "second" {
+		t.Fatalf("waiting for the conversation: %v %v", bodies, err)
+	}
+	took := uuid.New()
+	in(func(tx pgx.Tx) error {
+		got, err := push.ClaimTx(ctx, tx, 10)
+		if err != nil || len(got) != 1 {
+			return fmt.Errorf("claimed %d: %w", len(got), err)
+		}
+		_, err = push.RetryTx(ctx, tx, got[0], []uuid.UUID{took})
+		return err
+	})
+	if _, err := admin.Exec(ctx, `UPDATE push_outbox SET next_at = now()`); err != nil {
+		t.Fatal(err)
+	}
+	in(func(tx pgx.Tx) error {
+		got, err := push.ClaimTx(ctx, tx, 10)
+		if err != nil || len(got) != 1 || len(got[0].SentTo) != 1 || got[0].SentTo[0] != took || got[0].Attempts != 1 {
+			return fmt.Errorf("the retry: %+v %w", got, err)
+		}
+		return nil
+	})
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -143,9 +144,13 @@ func (s *Server) putPush(w http.ResponseWriter, r *http.Request) {
 			s.fail(w, r, err)
 			return
 		}
-		if dev != nil {
-			in.DeviceID = *dev
+		// Only from the app signed in on that phone: a row with no install
+		// behind it could never be stopped by signing the phone out.
+		if dev == nil {
+			s.fail(w, r, fmt.Errorf("%w: notifications on a phone are turned on in the Taskiem app, signed in on that phone", errBadRequest))
+			return
 		}
+		in.DeviceID = *dev
 	}
 	// Those who run the business take alerts too, unless they say otherwise.
 	defaults := push.DefaultKinds(p.HasRole("owner") || p.HasRole("admin"))
@@ -420,6 +425,10 @@ func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, e
 		newest[q.User.String()+"\x00"+q.Tag] = i // claimed oldest first
 	}
 	jobs := make([]*job, len(queued))
+	// A batch ends well inside its lease: another replica does not claim
+	// it again while it is still being sent.
+	sendCtx, cancel := context.WithTimeout(ctx, push.Lease-30*time.Second)
+	defer cancel()
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	gate := make(chan struct{}, pushMaxParallel)
@@ -432,7 +441,8 @@ func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, e
 		payload := push.Payload{Title: q.Title, Body: q.Body, Link: q.Link, Tag: q.Tag, Unread: unread, Icon: q.Icon,
 			Business: tenant.String(), Kind: q.Kind}
 		for _, t := range targets {
-			if t.User != q.User || !t.Takes(q.Kind) {
+			// A retry is not sent again to the devices that took it.
+			if t.User != q.User || !t.Takes(q.Kind) || slices.Contains(q.SentTo, t.ID) {
 				continue
 			}
 			wg.Add(1)
@@ -441,9 +451,9 @@ func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, e
 				defer wg.Done()
 				defer func() { <-gate }()
 				start := time.Now()
-				out, status, err := s.Push.Send(ctx, tenant, t, payload)
+				out, status, err := s.Push.Send(sendCtx, tenant, t, payload)
 				telemetry.PushSeconds.Observe(time.Since(start).Seconds())
-				telemetry.PushSent.WithLabelValues([]string{"sent", "gone", "failed"}[out]).Inc()
+				telemetry.PushSent.WithLabelValues(push.OutcomeNames[out]).Inc()
 				if err != nil {
 					// No address, no keys, no words: the status and what kind of error.
 					s.Logger.Warn("push: not sent", "tenant", tenant, "device", t.ID, "kind", t.Kind, "status", status, "gone", out == push.Gone)
@@ -459,12 +469,16 @@ func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, e
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		for _, j := range jobs {
 			failed, went := false, false
+			var took []uuid.UUID
 			for _, r := range j.results {
 				if err := push.RecordTx(ctx, tx, tenant, r.device, r.out); err != nil {
 					return err
 				}
-				failed = failed || r.out == push.Failed
+				failed = failed || r.out == push.Failed || r.out == push.Later
 				went = went || r.out == push.Sent
+				if r.out == push.Sent {
+					took = append(took, r.device)
+				}
 			}
 			if went {
 				sent++
@@ -478,7 +492,7 @@ func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, e
 				}
 				continue
 			}
-			if _, err := push.RetryTx(ctx, tx, j.q); err != nil {
+			if _, err := push.RetryTx(ctx, tx, j.q, took); err != nil {
 				return err
 			}
 		}

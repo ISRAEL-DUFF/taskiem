@@ -222,6 +222,18 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 			allowed[t.user] = p
 		}
 		if p == nil || !p.mayDecide(t.role) {
+			// In the bell, one who may not decide it is set aside once, so
+			// the same candidates do not fill every look (and crowd out
+			// those after them).
+			if t.channel == "bell" {
+				if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+					_, err := tx.Exec(ctx, `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id, channel) VALUES ($1, $2, $3, $4, $5, 'bell') ON CONFLICT DO NOTHING`,
+						tenant, t.run, t.step, t.level, t.user)
+					return err
+				}); err != nil {
+					errs = append(errs, err)
+				}
+			}
 			continue
 		}
 		if err := s.waQueueApproval(ctx, tenant, t); err != nil {

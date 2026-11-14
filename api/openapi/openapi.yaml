@@ -32876,7 +32876,7 @@ components:
             fcm:
               type: object
               additionalProperties: false
-              required: [api_key, app_id_android, project_id, sender_id]
+              required: [api_key, project_id, sender_id]
               properties:
                 api_key:
                   type: string

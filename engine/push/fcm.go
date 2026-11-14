@@ -55,7 +55,8 @@ type FCM struct {
 	// BaseURL is FCM's (tests point it at a fake).
 	BaseURL string
 
-	mu      sync.Mutex
+	mu      sync.Mutex // the token kept
+	fetch   sync.Mutex // one fetch at a time, without holding mu
 	access  string
 	expires time.Time
 }
@@ -96,8 +97,8 @@ func ParseFCM(credentials, client string) (*FCM, error) {
 		return nil, errors.New("push: the service account's private key is not an RSA key")
 	}
 	var c FCMClient
-	if err := json.Unmarshal([]byte(client), &c); err != nil || c.APIKey == "" || c.AppIDAndroid == "" || c.SenderID == "" {
-		return nil, errors.New("push: TASKIEM_FCM_CLIENT is the app's Firebase values as JSON: api_key, app_id_android, project_id, sender_id (app_id_ios for iPhones)")
+	if err := json.Unmarshal([]byte(client), &c); err != nil || c.APIKey == "" || (c.AppIDAndroid == "" && c.AppIDIOS == "") || c.SenderID == "" {
+		return nil, errors.New("push: TASKIEM_FCM_CLIENT is the app's Firebase values as JSON: api_key, project_id, sender_id, and app_id_android or app_id_ios (or both)")
 	}
 	if c.ProjectID == "" {
 		c.ProjectID = sa.ProjectID
@@ -151,13 +152,25 @@ func (f *FCM) assertion(now time.Time) (string, error) {
 // token is an access token, kept until a minute before it expires; forget
 // drops it (a 401 from FCM).
 func (f *FCM) token(ctx context.Context, client *http.Client, forget bool) (string, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if forget {
-		f.access = ""
+	kept := func() string {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		if forget {
+			f.access, forget = "", false
+		}
+		if f.access != "" && time.Now().Before(f.expires) {
+			return f.access
+		}
+		return ""
 	}
-	if f.access != "" && time.Now().Before(f.expires) {
-		return f.access, nil
+	if a := kept(); a != "" {
+		return a, nil
+	}
+	// One fetch for all the senders waiting; the others then find it kept.
+	f.fetch.Lock()
+	defer f.fetch.Unlock()
+	if a := kept(); a != "" {
+		return a, nil
 	}
 	a, err := f.assertion(time.Now())
 	if err != nil {
@@ -187,8 +200,10 @@ func (f *FCM) token(ctx context.Context, client *http.Client, forget bool) (stri
 	if out.ExpiresIn <= 0 {
 		out.ExpiresIn = 3600
 	}
+	f.mu.Lock()
 	f.access, f.expires = out.AccessToken, time.Now().Add(time.Duration(out.ExpiresIn)*time.Second-time.Minute)
-	return f.access, nil
+	f.mu.Unlock()
+	return out.AccessToken, nil
 }
 
 // Message is the FCM message for a device: a notification the phone shows
@@ -245,9 +260,8 @@ func fcmGone(status int, body []byte) bool {
 			return true
 		}
 	}
-	if status == http.StatusNotFound {
-		return true
-	}
+	// A 404 alone is not a device that is gone (a wrong project or address
+	// answers it for every device): only FCM's UNREGISTERED is.
 	// A token FCM does not take at all (not one of its own).
 	return status == http.StatusBadRequest && strings.Contains(strings.ToLower(e.Error.Message), "registration token")
 }
@@ -265,7 +279,7 @@ func (f *FCM) send(ctx context.Context, g *egress.Guard, tenant uuid.UUID, t Tar
 		if try > 0 && !forget {
 			select {
 			case <-ctx.Done():
-				return Failed, status, ctx.Err()
+				return Later, status, ctx.Err()
 			case <-time.After(retry):
 			}
 		}
@@ -305,5 +319,7 @@ func (f *FCM) send(ctx context.Context, g *egress.Guard, tenant uuid.UUID, t Tar
 			return Failed, status, fmt.Errorf("FCM answered %d", status)
 		}
 	}
-	return Failed, status, last
+	// The token not got, FCM unreachable or busy, or still refusing the
+	// token: this server's or Google's trouble, not the phone's.
+	return Later, status, last
 }

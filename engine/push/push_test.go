@@ -215,7 +215,7 @@ func TestSendOutcomes(t *testing.T) {
 		{"a 404 is gone, at once", []int{404}, Gone, 1},
 		{"a 400 fails, not retried", []int{400}, Failed, 1},
 		{"a 503 then a 201 is sent after a retry", []int{503, 201}, Sent, 2},
-		{"a 429 twice fails after one retry", []int{429, 429}, Failed, 2},
+		{"a 429 twice is tried later, after one retry", []int{429, 429}, Later, 2},
 		{"a 500 then a 410 is gone", []int{500, 410}, Gone, 2},
 	} {
 		svc := newService(t, c.status...)

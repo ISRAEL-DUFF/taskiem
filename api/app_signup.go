@@ -178,7 +178,8 @@ func (s *Server) appSignupCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	code := otpCode()
-	c.Hash, c.Tries, c.Sends = digest(number+":"+code), 0, c.Sends+1
+	// The tries so far are kept: a new code is not five more guesses.
+	c.Hash, c.Sends = digest(number+":"+code), c.Sends+1
 	if err := s.appCodeSave(ctx, number, c); err != nil {
 		s.fail(w, r, err)
 		return
@@ -338,23 +339,24 @@ func (s *Server) appSignupTurn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if after != nil {
+		// Still answering: the number's proof lasts as long as the sign-up.
+		if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_chat_signup_put($1, 'app', 'proven', '{}', $2::interval)`,
+			signupKey("app-proven:"+number), (chatSignupTTL + 10*time.Minute).String()); err != nil {
+			s.fail(w, r, err)
+			return
+		}
 		writeJSON(w, http.StatusOK, out)
 		return
 	}
-	// Ended: cancelled, declined, or the business made (its owner bound to
-	// this number now).
-	var user uuid.UUID
-	err = s.Store.Pool.QueryRow(ctx, `SELECT user_id FROM taskiem_auth_chat_user($1)`, number).Scan(&user)
-	if errors.Is(err, pgx.ErrNoRows) {
+	// Ended: the business made (this request made it: signupMake says
+	// which, and whose), else cancelled, declined or refused.
+	if sc.madeTenant == uuid.Nil || sc.madeOwner == uuid.Nil {
 		out["ended"] = true
 		writeJSON(w, http.StatusOK, out)
 		return
 	}
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	sess, err := s.createSession(r, user, uuid.Nil, "chat")
+	user := sc.madeOwner
+	sess, err := s.createSession(r, user, sc.madeTenant, "chat")
 	if err != nil {
 		// Made, but not signed in here: signing in with WhatsApp works.
 		s.Logger.Warn("app sign-up: signing the new owner in", "err", err)

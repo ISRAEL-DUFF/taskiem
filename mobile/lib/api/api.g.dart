@@ -501,17 +501,17 @@ class AppConfigPush {
 }
 
 class AppConfigPushFcm {
-  const AppConfigPushFcm({required this.apiKey, required this.appIdAndroid, this.appIdIos, required this.projectId, required this.senderId});
+  const AppConfigPushFcm({required this.apiKey, this.appIdAndroid, this.appIdIos, required this.projectId, required this.senderId});
 
   final String apiKey;
-  final String appIdAndroid;
+  final String? appIdAndroid;
   final String? appIdIos;
   final String projectId;
   final String senderId;
 
   factory AppConfigPushFcm.fromJson(Map<String, dynamic> j) => AppConfigPushFcm(
         apiKey: j['api_key'] as String,
-        appIdAndroid: j['app_id_android'] as String,
+        appIdAndroid: j['app_id_android'] == null ? null : j['app_id_android'] as String,
         appIdIos: j['app_id_ios'] == null ? null : j['app_id_ios'] as String,
         projectId: j['project_id'] as String,
         senderId: j['sender_id'] as String,
@@ -519,7 +519,7 @@ class AppConfigPushFcm {
 
   Map<String, dynamic> toJson() => {
         'api_key': apiKey,
-        'app_id_android': appIdAndroid,
+        'app_id_android': ?appIdAndroid,
         'app_id_ios': ?appIdIos,
         'project_id': projectId,
         'sender_id': senderId,

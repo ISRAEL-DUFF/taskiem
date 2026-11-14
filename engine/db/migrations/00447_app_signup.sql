@@ -102,7 +102,103 @@ ALTER FUNCTION taskiem_auth_session_device(bytea) OWNER TO taskiem_dispatch;
 REVOKE EXECUTE ON FUNCTION taskiem_auth_session_device(bytea) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION taskiem_auth_session_device(bytea) TO taskiem_app;
 
+-- The push queue, as the audit found it should be: reactions are business
+-- chats ('react:' groups), a newer push for a conversation takes the place
+-- of an older one still waiting, and a retried push is not sent again to
+-- the devices that took it (sent_to).
+ALTER TABLE push_outbox ADD COLUMN sent_to uuid[] NOT NULL DEFAULT '{}';
+GRANT SELECT (user_id, tag), DELETE ON push_outbox TO taskiem_dispatch;
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION taskiem_push_kind(p_kind text, p_group text, p_link text) RETURNS text
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE
+    WHEN p_group = 'changes' OR p_group LIKE 'changes:%' OR p_kind = 'run_finished' OR p_group LIKE 'msg:%' THEN NULL
+    WHEN p_group LIKE 'react:%' OR p_group LIKE 'reaction%' THEN 'business'
+    WHEN p_group LIKE 'customer:%' THEN 'customers'
+    WHEN p_group LIKE 'approval:%' THEN 'approvals'
+    WHEN p_group LIKE 'order:%' OR p_group LIKE 'bill:%' OR p_group LIKE 'reminder:%' OR p_group LIKE 'notice:%' OR p_group = 'money'
+      OR p_link LIKE '/bills%' OR p_link LIKE '/invoices%' OR p_link LIKE '/trade-orders%' OR p_link LIKE '/storefront/orders%' OR p_link LIKE '/purchases%' THEN 'orders'
+    ELSE 'alerts'
+  END
+$$;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION taskiem_push_from_notice() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_kind text;
+  v_tag text;
+BEGIN
+  IF NEW.read_at IS NOT NULL OR (TG_OP = 'UPDATE' AND NEW.count = OLD.count) THEN
+    RETURN NEW;
+  END IF;
+  v_kind := taskiem_push_kind(NEW.kind, NEW.group_key, NEW.link);
+  IF v_kind IS NULL OR NOT EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.tenant_id = NEW.tenant_id AND s.user_id = NEW.user_id) THEN
+    RETURN NEW;
+  END IF;
+  -- A conversation's own tag (one notification per chat), else the group's.
+  v_tag := COALESCE(substring(NEW.link FROM '^/chat\?with=([A-Za-z0-9-]{1,80})'), NEW.group_key);
+  BEGIN
+    -- A newer push for the same person and conversation takes the place of
+    -- one still waiting (a retried older one would replace it on the phone).
+    DELETE FROM push_outbox o WHERE o.tenant_id = NEW.tenant_id AND o.user_id = NEW.user_id AND o.tag = left(v_tag, 200);
+    INSERT INTO push_outbox (id, tenant_id, user_id, kind, title, body, link, tag)
+    VALUES (gen_random_uuid(), NEW.tenant_id, NEW.user_id, v_kind, left(NEW.title, 200), left(NEW.body, 1000),
+            CASE WHEN NEW.link LIKE '/%' AND NEW.link NOT LIKE '//%' THEN left(NEW.link, 500) ELSE '/' END, left(v_tag, 200));
+    PERFORM pg_notify('push_outbox', '');
+  EXCEPTION WHEN OTHERS THEN
+    RETURN NEW;
+  END;
+  RETURN NEW;
+END
+$$;
+-- +goose StatementEnd
+
 -- +goose Down
+REVOKE SELECT (user_id, tag), DELETE ON push_outbox FROM taskiem_dispatch;
+ALTER TABLE push_outbox DROP COLUMN sent_to;
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION taskiem_push_kind(p_kind text, p_group text, p_link text) RETURNS text
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE
+    WHEN p_group = 'changes' OR p_group LIKE 'changes:%' OR p_kind = 'run_finished' OR p_group LIKE 'msg:%' THEN NULL
+    WHEN p_group LIKE 'reaction%' THEN 'business'
+    WHEN p_group LIKE 'customer:%' THEN 'customers'
+    WHEN p_group LIKE 'approval:%' THEN 'approvals'
+    WHEN p_group LIKE 'order:%' OR p_group LIKE 'bill:%' OR p_group LIKE 'reminder:%' OR p_group LIKE 'notice:%' OR p_group = 'money'
+      OR p_link LIKE '/bills%' OR p_link LIKE '/invoices%' OR p_link LIKE '/trade-orders%' OR p_link LIKE '/storefront/orders%' OR p_link LIKE '/purchases%' THEN 'orders'
+    ELSE 'alerts'
+  END
+$$;
+-- +goose StatementEnd
+-- +goose StatementBegin
+CREATE OR REPLACE FUNCTION taskiem_push_from_notice() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+DECLARE
+  v_kind text;
+  v_tag text;
+BEGIN
+  IF NEW.read_at IS NOT NULL OR (TG_OP = 'UPDATE' AND NEW.count = OLD.count) THEN
+    RETURN NEW;
+  END IF;
+  v_kind := taskiem_push_kind(NEW.kind, NEW.group_key, NEW.link);
+  IF v_kind IS NULL OR NOT EXISTS (SELECT 1 FROM push_subscriptions s WHERE s.tenant_id = NEW.tenant_id AND s.user_id = NEW.user_id) THEN
+    RETURN NEW;
+  END IF;
+  -- A conversation's own tag (one notification per chat), else the group's.
+  v_tag := COALESCE(substring(NEW.link FROM '^/chat\?with=([A-Za-z0-9-]{1,80})'), NEW.group_key);
+  BEGIN
+    INSERT INTO push_outbox (id, tenant_id, user_id, kind, title, body, link, tag)
+    VALUES (gen_random_uuid(), NEW.tenant_id, NEW.user_id, v_kind, left(NEW.title, 200), left(NEW.body, 1000),
+            CASE WHEN NEW.link LIKE '/%' AND NEW.link NOT LIKE '//%' THEN left(NEW.link, 500) ELSE '/' END, left(v_tag, 200));
+    PERFORM pg_notify('push_outbox', '');
+  EXCEPTION WHEN OTHERS THEN
+    RETURN NEW;
+  END;
+  RETURN NEW;
+END
+$$;
+-- +goose StatementEnd
 DROP FUNCTION taskiem_auth_session_device(bytea);
 DROP FUNCTION taskiem_push_device_live(uuid, uuid);
 ALTER TABLE push_subscriptions DROP COLUMN device_id;

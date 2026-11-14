@@ -401,7 +401,8 @@ func ListTx(ctx context.Context, tx pgx.Tx, tenant, user uuid.UUID) ([]Device, e
 func UpdateTx(ctx context.Context, tx pgx.Tx, tenant, user, id uuid.UUID, label *string, preview *bool, kinds *[]string) (Device, error) {
 	var d Device
 	var l *string
-	if label != nil {
+	// An empty name keeps the device's own (not "A browser" for a phone).
+	if label != nil && strings.TrimSpace(*label) != "" {
 		c := cleanLabel(*label, "")
 		l = &c
 	}
@@ -503,13 +504,20 @@ type Outcome int
 const (
 	Sent   Outcome = iota // the push service took it
 	Gone                  // 404 or 410: the browser is gone for good
-	Failed                // anything else: it may come back
+	Failed                // the device refused it: counted against it, tried again
+	Later                 // the service or this server was not able (down, slow, credentials): tried again, not the device's fault
+	Off                   // this server cannot send to such a device now (its keys are not set): neither
 )
+
+// OutcomeNames label the outcomes in metrics.
+var OutcomeNames = []string{"sent", "gone", "failed", "later", "off"}
 
 // RecordTx writes what happened: a browser that is gone is deleted, one that
 // answered is marked, one that has failed for DropAfter is dropped.
 func RecordTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, o Outcome) error {
 	switch o {
+	case Later, Off:
+		return nil // not the device's doing
 	case Gone:
 		_, err := tx.Exec(ctx, `DELETE FROM push_subscriptions WHERE tenant_id = $1 AND id = $2`, tenant, id)
 		return err
@@ -595,7 +603,9 @@ func (p Payload) For(t Target) Payload {
 
 // Queued is a push waiting to be sent to a person's devices.
 type Queued struct {
-	ID       uuid.UUID
+	ID uuid.UUID
+	// SentTo are the devices that took it already (a retry skips them).
+	SentTo   []uuid.UUID
 	User     uuid.UUID
 	Kind     string
 	Title    string
@@ -616,6 +626,11 @@ func EnqueueTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, users []uuid.UU
 	var icon *string
 	if q.Icon != "" {
 		icon = &q.Icon
+	}
+	// A newer push for the same person and conversation takes the place of
+	// one still waiting: retried later, the older would replace it.
+	if _, err := tx.Exec(ctx, `DELETE FROM push_outbox WHERE tenant_id = $1 AND user_id = ANY ($2) AND tag = left($3, 200)`, tenant, users, q.Tag); err != nil {
+		return err
 	}
 	tag, err := tx.Exec(ctx, `INSERT INTO push_outbox (id, tenant_id, user_id, kind, title, body, link, tag, icon)
 		SELECT gen_random_uuid(), $1, u, $3, left($4, 200), left($5, 1000), $6, left($7, 200), $8
@@ -651,13 +666,13 @@ const Lease = 5 * time.Minute
 func ClaimTx(ctx context.Context, tx pgx.Tx, limit int) ([]Queued, error) {
 	rows, err := tx.Query(ctx, `UPDATE push_outbox SET next_at = now() + make_interval(secs => $2)
 		WHERE id IN (SELECT id FROM push_outbox WHERE next_at <= now() ORDER BY created_at LIMIT $1 FOR UPDATE SKIP LOCKED)
-		RETURNING id, user_id, kind, title, body, link, tag, COALESCE(icon, ''), attempts`, limit, Lease.Seconds())
+		RETURNING id, user_id, kind, title, body, link, tag, COALESCE(icon, ''), attempts, sent_to`, limit, Lease.Seconds())
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(r pgx.CollectableRow) (Queued, error) {
 		var q Queued
-		return q, r.Scan(&q.ID, &q.User, &q.Kind, &q.Title, &q.Body, &q.Link, &q.Tag, &q.Icon, &q.Attempts)
+		return q, r.Scan(&q.ID, &q.User, &q.Kind, &q.Title, &q.Body, &q.Link, &q.Tag, &q.Icon, &q.Attempts, &q.SentTo)
 	})
 }
 
@@ -673,12 +688,15 @@ func DoneTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) error {
 
 // RetryTx puts a push back for later, or drops it past the last wait or its
 // TTL; it answers whether it was dropped.
-func RetryTx(ctx context.Context, tx pgx.Tx, q Queued) (bool, error) {
+func RetryTx(ctx context.Context, tx pgx.Tx, q Queued, took []uuid.UUID) (bool, error) {
 	if q.Attempts >= len(Backoff) {
 		return true, DoneTx(ctx, tx, q.ID)
 	}
-	tag, err := tx.Exec(ctx, `UPDATE push_outbox SET attempts = attempts + 1, next_at = now() + make_interval(secs => $2)
-		WHERE id = $1 AND created_at > now() - make_interval(secs => $3)`, q.ID, Backoff[q.Attempts].Seconds(), float64(TTL))
+	if took == nil {
+		took = []uuid.UUID{}
+	}
+	tag, err := tx.Exec(ctx, `UPDATE push_outbox SET attempts = attempts + 1, next_at = now() + make_interval(secs => $2), sent_to = sent_to || $4::uuid[]
+		WHERE id = $1 AND created_at > now() - make_interval(secs => $3)`, q.ID, Backoff[q.Attempts].Seconds(), float64(TTL), took)
 	if err != nil {
 		return false, err
 	}
@@ -742,12 +760,12 @@ func (s *Sender) Send(ctx context.Context, tenant uuid.UUID, t Target, p Payload
 	}
 	if t.Kind == App {
 		if !s.FCMOn() {
-			return Failed, 0, errors.New("push: Firebase is not set up")
+			return Off, 0, errors.New("push: Firebase is not set up")
 		}
 		return s.FCM.send(ctx, s.Guard, tenant, t, p, retryFCM)
 	}
 	if !s.WebPushOn() {
-		return Failed, 0, errors.New("push: the VAPID keys are not set")
+		return Off, 0, errors.New("push: the VAPID keys are not set")
 	}
 	if err := s.Check(t.Endpoint); err != nil {
 		return Gone, 0, err // an address that should never have been kept
@@ -767,7 +785,7 @@ func (s *Sender) Send(ctx context.Context, tenant uuid.UUID, t Target, p Payload
 		if try > 0 {
 			select {
 			case <-ctx.Done():
-				return Failed, status, ctx.Err()
+				return Later, status, ctx.Err()
 			case <-time.After(retry):
 			}
 		}
@@ -800,5 +818,6 @@ func (s *Sender) Send(ctx context.Context, tenant uuid.UUID, t Target, p Payload
 			return Failed, status, fmt.Errorf("push service answered %d", status)
 		}
 	}
-	return Failed, status, last
+	// Unreachable, or busy (429, 5xx): the service's trouble, not the browser's.
+	return Later, status, last
 }

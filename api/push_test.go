@@ -281,13 +281,24 @@ func TestChatPush(t *testing.T) {
 		t.Errorf("a message pushed to its own sender: %d", svc.count("/owner"))
 	}
 
-	// A failure is recorded and tried again later; the browser is kept.
+	// The push service failing (a 500) is its trouble, not the browser's:
+	// the push waits to be tried again, and the browser is not marked.
 	svc.answer(500)
 	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Fourth"})
 	pushSettle(t, w.srv)
 	var failed bool
+	var waiting int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT failed_since IS NOT NULL, (SELECT count(*) FROM push_outbox WHERE attempts > 0) FROM push_subscriptions WHERE id = $1`, id).Scan(&failed, &waiting); err != nil || failed || waiting != 1 {
+		t.Errorf("a service failure: marked %v, waiting %d, %v", failed, waiting, err)
+	}
+	// The browser refusing it (a 400) is counted against the browser.
+	svc.answer(400)
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE push_outbox SET next_at = now()`); err != nil {
+		t.Fatal(err)
+	}
+	pushSettle(t, w.srv)
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT failed_since IS NOT NULL FROM push_subscriptions WHERE id = $1`, id).Scan(&failed); err != nil || !failed {
-		t.Errorf("a failure was not recorded: %v %v", failed, err)
+		t.Errorf("a refusal was not recorded: %v %v", failed, err)
 	}
 	// A browser that is gone (410) is taken off.
 	svc.answer(410)

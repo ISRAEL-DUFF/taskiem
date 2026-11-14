@@ -180,6 +180,7 @@ func TestFCMOutcomes(t *testing.T) {
 	f.answers["tok-gone-aaaaaaaaaaaaaaa"], f.bodies["tok-gone-aaaaaaaaaaaaaaa"] = []int{404}, unregistered
 	f.answers["tok-bad-aaaaaaaaaaaaaaaa"], f.bodies["tok-bad-aaaaaaaaaaaaaaaa"] = []int{400}, `{"error":{"code":400,"status":"INVALID_ARGUMENT","message":"The registration token is not a valid FCM registration token"}}`
 	f.answers["tok-busy-aaaaaaaaaaaaaaa"] = []int{503, 429}
+	f.answers["tok-404x-aaaaaaaaaaaaaaa"], f.bodies["tok-404x-aaaaaaaaaaaaaaa"] = []int{404}, `{"error":{"code":404,"status":"NOT_FOUND","message":"Requested entity was not found."}}`
 	f.answers["tok-stale-aaaaaaaaaaaaaa"] = []int{401}
 	f.answers["tok-nope-aaaaaaaaaaaaaaa"], f.bodies["tok-nope-aaaaaaaaaaaaaaa"] = []int{403, 403, 403}, `{"error":{"code":403,"status":"PERMISSION_DENIED","message":"SenderId mismatch"}}`
 	for token, want := range map[string]Outcome{
@@ -188,6 +189,7 @@ func TestFCMOutcomes(t *testing.T) {
 		"tok-busy-aaaaaaaaaaaaaaa":  Sent,   // a 503 and a 429, then taken
 		"tok-stale-aaaaaaaaaaaaaa":  Sent,   // a fresh access token after a 401
 		"tok-nope-aaaaaaaaaaaaaaa":  Failed, // the project is wrong: kept, not dropped
+		"tok-404x-aaaaaaaaaaaaaaa":  Failed, // a 404 that is not UNREGISTERED: kept
 		"tok-ok-aaaaaaaaaaaaaaaaaa": Sent,
 	} {
 		if out, _, _ := s.Send(ctx, tenant, phone(token, true), p); out != want {
@@ -198,7 +200,7 @@ func TestFCMOutcomes(t *testing.T) {
 		t.Errorf("a 401 asks for a new access token once: %d", f.tokens)
 	}
 	// Firebase not set up: a phone is not sent to, and is not dropped.
-	if out, _, err := (&Sender{Guard: s.Guard}).Send(ctx, tenant, phone("tok-ok-aaaaaaaaaaaaaaaaaa", true), p); out != Failed || err == nil {
+	if out, _, err := (&Sender{Guard: s.Guard}).Send(ctx, tenant, phone("tok-ok-aaaaaaaaaaaaaaaaaa", true), p); out != Off || err == nil {
 		t.Errorf("no Firebase: %v %v", out, err)
 	}
 }
