@@ -257,6 +257,33 @@ Migration 00447.
 - **Not as planned**: codes go by WhatsApp only (a Telegram bot cannot write to a number first); the templates the WhatsApp sign-up offers at the end are left out in the app, which opens Taskiem's conversation instead.
 - **Tests**: `TestAppSignup`, `TestAppSignupCancelled`; `mobile/test/app_sign_up_test.dart`.
 
+## The owner's checklist: trying M4 on real phones
+
+What the build machine cannot try (a real FCM delivery, a lock screen, a real passkey, a verified link), in order. Each line says what to set, then what to see.
+
+**Firebase (A4), for notifications on Android:**
+1. In the Firebase console, make a project; add an Android app with the package `app.taskiem.chat`; under Project settings, Service accounts, make a key (JSON).
+2. Set `TASKIEM_FCM_CREDENTIALS` to that JSON (a secret) and `TASKIEM_FCM_CLIENT` to `{"api_key", "app_id_android", "project_id", "sender_id"}` from the app's settings in the console. Restart the server; it refuses to start if either is wrong, and says which.
+3. Install the APK, sign in. **See:** the sheet "Get a notification when a business or customer writes?"; Yes asks Android's permission (Android 13+).
+4. Close the app. From another account, write to this business in a linked chat. **See:** a notification under "Business chats" with the sender's words; tap it: the conversation opens.
+5. Settings, Notifications on this phone: turn off "Show what the message says", write again. **See:** "New message", no words. Turn off Business chats: nothing comes.
+6. A customer writes on the business's WhatsApp. **See:** "Ade wrote" under "Customer chats" (owners and those who handle orders).
+7. Start an approval that waits for this person. **See:** "Approval waiting: …"; tap it: Taskiem's conversation with the card.
+8. In two businesses: a push from the other one. **See:** tapping it switches business, then opens it.
+9. Sign out. **See:** nothing more comes to that phone.
+
+**Links and passkeys (the signing key's SHA-256):**
+10. `keytool -list -v` on the release keystore (or Play Console, App signing) for the SHA-256; set `TASKIEM_ANDROID_APP={"package":"app.taskiem.chat","sha256":["AA:…"]}`. **See:** `https://<server>/.well-known/assetlinks.json` answers it.
+11. Reinstall the app (Android checks links at install). Tap a link to `https://<server>/chat?with=…` in WhatsApp. **See:** the app opens on that conversation, not the browser. Signed out: it opens after signing in.
+12. Settings, Passkeys, Add a passkey on this phone (the authenticator code or password first). **See:** the phone's own sheet; then "Passkey added". Sign out, then Sign in with a passkey.
+13. An approval rule that asks for a passkey: approve in the app. **See:** the phone's sheet, then Approved.
+
+**Get started (sign-up as on WhatsApp):**
+14. Add `app` to `TASKIEM_CHAT_SIGNUP` (the terms' versions set, WhatsApp on, the OTP template approved). **See:** Create an account on the sign-in screen opens Get started.
+15. A new Nigerian number: the code on WhatsApp, the questions, Yes to the terms. **See:** the app opens on the new business; WhatsApp sign-in works for that number afterwards.
+
+**iPhone (A3), later:** an APNs key in Firebase; `app_id_ios` in `TASKIEM_FCM_CLIENT`; `TASKIEM_IOS_APP=TEAMID.app.taskiem.chat`; `TASKIEM_HOST` in `ios/Flutter/*.xcconfig` set to the server's host; Push Notifications and Associated Domains on the App ID. Then 3–13 on an iPhone.
+
 ## 6. Tests
 
 **Go:**
