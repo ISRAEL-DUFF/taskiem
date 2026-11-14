@@ -20,6 +20,7 @@ import (
 
 	"golang.org/x/crypto/hkdf"
 
+	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/push"
 )
@@ -228,7 +229,7 @@ func TestChatPush(t *testing.T) {
 
 	// A message from the seller is pushed to the owner's browser, readable only by it.
 	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Rice is 45k a bag"})
-	w.srv.WaitBackground()
+	pushSettle(t, w.srv)
 	if svc.count("/owner") != 1 || svc.count("/viewer") != 0 {
 		t.Fatalf("pushes: owner %d, viewer %d", svc.count("/owner"), svc.count("/viewer"))
 	}
@@ -256,7 +257,7 @@ func TestChatPush(t *testing.T) {
 	}
 	buyer.must(200, "PATCH", "/v1/me/push/"+id, map[string]any{"preview": false})
 	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Second message"})
-	w.srv.WaitBackground()
+	pushSettle(t, w.srv)
 	if svc.count("/owner") != 2 {
 		t.Fatalf("pushes: %d", svc.count("/owner"))
 	}
@@ -267,7 +268,7 @@ func TestChatPush(t *testing.T) {
 	// A muted conversation is not pushed.
 	buyer.must(200, "PUT", "/v1/link-chats/"+link, map[string]any{"muted": true})
 	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Third"})
-	w.srv.WaitBackground()
+	pushSettle(t, w.srv)
 	if svc.count("/owner") != 2 {
 		t.Errorf("a muted conversation was pushed: %d", svc.count("/owner"))
 	}
@@ -275,7 +276,7 @@ func TestChatPush(t *testing.T) {
 
 	// The buyer's own message is not pushed to the buyer: the other side is told.
 	buyer.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Thanks"})
-	w.srv.WaitBackground()
+	pushSettle(t, w.srv)
 	if svc.count("/owner") != 2 {
 		t.Errorf("a message pushed to its own sender: %d", svc.count("/owner"))
 	}
@@ -283,7 +284,7 @@ func TestChatPush(t *testing.T) {
 	// A failure is recorded and tried again later; the browser is kept.
 	svc.answer(500)
 	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Fourth"})
-	w.srv.WaitBackground()
+	pushSettle(t, w.srv)
 	var failed bool
 	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT failed_since IS NOT NULL FROM push_subscriptions WHERE id = $1`, id).Scan(&failed); err != nil || !failed {
 		t.Errorf("a failure was not recorded: %v %v", failed, err)
@@ -291,7 +292,7 @@ func TestChatPush(t *testing.T) {
 	// A browser that is gone (410) is taken off.
 	svc.answer(410)
 	seller.must(201, "POST", "/v1/link-chats/"+link+"/messages", map[string]any{"text": "Fifth"})
-	w.srv.WaitBackground()
+	pushSettle(t, w.srv)
 	if d := buyer.must(200, "GET", "/v1/me/push", nil)["devices"].([]any); len(d) != 0 {
 		t.Errorf("a gone browser stayed: %v", d)
 	}
@@ -337,4 +338,14 @@ func jsonOf(t *testing.T, v any) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// pushSettle waits for what was queued in the background, then sends the
+// queued pushes (the server's own loop does both in a running server).
+func pushSettle(t *testing.T, srv *api.Server) {
+	t.Helper()
+	srv.WaitBackground()
+	if _, err := srv.DrainPush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 }

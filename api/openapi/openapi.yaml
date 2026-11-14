@@ -18956,8 +18956,8 @@ paths:
       operationId: listPush
       tags:
       - Notifications
-      summary: The browsers this person allowed to be notified when the app is closed
-      description: In the business they are in. Never the browsers' addresses or keys. Only for a person (not an API key); 404 when the feature is off.
+      summary: The devices (browsers and phones) this person allowed to be notified when the app is closed
+      description: In the business they are in. Never the devices' addresses, tokens or keys. Only for a person (not an API key); 404 when neither browsers nor phones can be notified on this server.
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -18975,8 +18975,8 @@ paths:
       operationId: putPush
       tags:
       - Notifications
-      summary: Allow this browser to be notified
-      description: The address must be a push service's (https, on Google's, Mozilla's, Apple's or Microsoft's host). The same browser again is updated, not added twice; at most 10 browsers a person in a business, the oldest replaced.
+      summary: Allow this browser or phone to be notified
+      description: A browser (kind webpush, the default) gives its subscription, whose address must be a push service's (https, on Google's, Mozilla's, Apple's or Microsoft's host); the phone app (kind fcm) gives its Firebase registration token and platform. The same device again is updated, not added twice; at most 10 devices a person in a business, the oldest replaced. A browser that renewed its subscription names the old address in replaces, and keeps its name, preview and kinds.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -18989,11 +18989,30 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [endpoint, keys]
               properties:
+                kind:
+                  type: string
+                  enum: [webpush, fcm]
                 endpoint:
                   type: string
                   maxLength: 2048
+                token:
+                  type: string
+                  maxLength: 4096
+                  description: The app's Firebase registration token (kind fcm)
+                platform:
+                  type: string
+                  enum: [android, ios]
+                kinds:
+                  type: [array, 'null']
+                  items:
+                    type: string
+                    enum: [business, customers, orders, approvals, alerts]
+                  description: The kinds of notification the device takes; left out, a new device takes the defaults (all for owners and admins, all but alerts for others)
+                replaces:
+                  type: string
+                  maxLength: 2048
+                  description: The same browser's previous subscription address
                 keys:
                   type: object
                   additionalProperties: false
@@ -19024,8 +19043,8 @@ paths:
       operationId: deletePushEndpoint
       tags:
       - Notifications
-      summary: This browser takes itself off
-      description: By its address, which only it knows. Nothing there is not an error.
+      summary: This browser or phone takes itself off
+      description: By its address or token, which only it knows. Nothing there is not an error.
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -19038,9 +19057,10 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [endpoint]
               properties:
                 endpoint:
+                  type: string
+                token:
                   type: string
       responses:
         '200':
@@ -19056,7 +19076,7 @@ paths:
       operationId: patchPush
       tags:
       - Notifications
-      summary: Rename a browser or switch its preview
+      summary: Rename a device, switch its preview, or set the kinds of notification it takes
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -19082,6 +19102,11 @@ paths:
                   maxLength: 80
                 preview:
                   type: [boolean, 'null']
+                kinds:
+                  type: [array, 'null']
+                  items:
+                    type: string
+                    enum: [business, customers, orders, approvals, alerts]
       responses:
         '200':
           description: This person's browsers
@@ -32647,6 +32672,27 @@ components:
         signup:
           type: boolean
           description: Whether self-serve signup is open (TASKIEM_ALLOW_SIGNUP).
+        push:
+          type: object
+          description: Present when phones can be notified (Firebase is set up). The app starts Firebase with these public client values, so turning notifications on needs no new build.
+          additionalProperties: false
+          required: [fcm]
+          properties:
+            fcm:
+              type: object
+              additionalProperties: false
+              required: [api_key, app_id_android, project_id, sender_id]
+              properties:
+                api_key:
+                  type: string
+                app_id_android:
+                  type: string
+                app_id_ios:
+                  type: string
+                project_id:
+                  type: string
+                sender_id:
+                  type: string
     SignupOptions:
       type: object
       required:
@@ -37685,11 +37731,24 @@ components:
     PushDevice:
       type: object
       additionalProperties: false
-      required: [id, label, preview, created_at, last_sent_at, last_ok_at]
+      required: [id, kind, platform, label, preview, kinds, created_at, last_sent_at, last_ok_at]
       properties:
         id:
           type: string
           format: uuid
+        kind:
+          type: string
+          enum: [webpush, fcm]
+          description: A browser (webpush) or the phone app (fcm)
+        platform:
+          type: [string, 'null']
+          enum: [android, ios, null]
+        kinds:
+          type: array
+          items:
+            type: string
+            enum: [business, customers, orders, approvals, alerts]
+          description: The kinds of notification it takes
         label:
           type: string
         preview:
@@ -37706,7 +37765,7 @@ components:
     PushDevices:
       type: object
       additionalProperties: false
-      required: [devices, max]
+      required: [devices, max, kinds, browsers, phones]
       properties:
         devices:
           type: array
@@ -37714,6 +37773,17 @@ components:
             $ref: '#/components/schemas/PushDevice'
         max:
           type: integer
+        kinds:
+          type: array
+          items:
+            type: string
+          description: The kinds of notification a device may take, in the order to show them
+        browsers:
+          type: boolean
+          description: Browsers can be notified on this server (its VAPID keys)
+        phones:
+          type: boolean
+          description: Phones can be notified on this server (Firebase)
         added:
           type: string
           format: uuid

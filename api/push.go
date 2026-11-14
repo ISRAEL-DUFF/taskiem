@@ -62,7 +62,7 @@ func (s *Server) pushPerson(w http.ResponseWriter, r *http.Request) (*Principal,
 }
 
 func (s *Server) pushKey(w http.ResponseWriter, r *http.Request) {
-	if !s.Push.Enabled() {
+	if !s.Push.WebPushOn() {
 		s.fail(w, r, pgx.ErrNoRows)
 		return
 	}
@@ -73,13 +73,18 @@ type pushOut struct {
 	Devices []push.Device `json:"devices"`
 	// Max is how many browsers a person may allow in a business.
 	Max int `json:"max"`
-	// Added is the browser a PUT just added or updated (so the browser knows
+	// Added is the device a PUT just added or updated (so the device knows
 	// which of the list it is).
 	Added *uuid.UUID `json:"added,omitempty"`
+	// Kinds are the kinds of notification a device may take, in order.
+	Kinds []string `json:"kinds"`
+	// Browsers and Phones say which devices this server can notify.
+	Browsers bool `json:"browsers"`
+	Phones   bool `json:"phones"`
 }
 
 func (s *Server) pushView(r *http.Request, p *Principal) (pushOut, error) {
-	out := pushOut{Max: push.MaxDevices}
+	out := pushOut{Max: push.MaxDevices, Kinds: push.Kinds, Browsers: s.Push.WebPushOn(), Phones: s.Push.FCMOn()}
 	err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
 		out.Devices, err = push.ListTx(r.Context(), tx, p.TenantID, p.UserID)
@@ -111,18 +116,36 @@ func (s *Server) putPush(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.Push.Check(in.Endpoint); err != nil {
-		s.fail(w, r, pushErr(err))
-		return
+	switch in.Kind {
+	case push.App:
+		if !s.Push.FCMOn() {
+			s.fail(w, r, pgx.ErrNoRows)
+			return
+		}
+		if err := push.ValidToken(in.Token); err != nil {
+			s.fail(w, r, pushErr(err))
+			return
+		}
+	default:
+		if !s.Push.WebPushOn() {
+			s.fail(w, r, pgx.ErrNoRows)
+			return
+		}
+		if err := s.Push.Check(in.Endpoint); err != nil {
+			s.fail(w, r, pushErr(err))
+			return
+		}
 	}
+	// Those who run the business take alerts too, unless they say otherwise.
+	defaults := push.DefaultKinds(p.HasRole("owner") || p.HasRole("admin"))
 	var added uuid.UUID
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		d, err := push.AddTx(r.Context(), tx, p.TenantID, p.UserID, in)
+		d, err := push.AddTx(r.Context(), tx, p.TenantID, p.UserID, in, defaults)
 		if err != nil {
 			return err
 		}
 		added = d.ID
-		return auditTx(r, tx, "push.add", d.ID.String(), map[string]any{"label": d.Label})
+		return auditTx(r, tx, "push.add", d.ID.String(), map[string]any{"label": d.Label, "kind": d.Kind})
 	}); err != nil {
 		s.fail(w, r, pushErr(err))
 		return
@@ -147,15 +170,16 @@ func (s *Server) patchPush(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Label   *string `json:"label"`
-		Preview *bool   `json:"preview"`
+		Label   *string   `json:"label"`
+		Preview *bool     `json:"preview"`
+		Kinds   *[]string `json:"kinds"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		_, err := push.UpdateTx(r.Context(), tx, p.TenantID, p.UserID, id, in.Label, in.Preview)
+		_, err := push.UpdateTx(r.Context(), tx, p.TenantID, p.UserID, id, in.Label, in.Preview, in.Kinds)
 		return err
 	}); err != nil {
 		s.fail(w, r, pushErr(err))
@@ -195,16 +219,22 @@ func (s *Server) deletePushEndpoint(w http.ResponseWriter, r *http.Request) {
 	}
 	var in struct {
 		Endpoint string `json:"endpoint"`
+		// Token is the app's (it took itself off).
+		Token string `json:"token"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	if err := s.tx(r, func(tx pgx.Tx) error {
-		if err := push.RemoveEndpointTx(r.Context(), tx, p.TenantID, p.UserID, in.Endpoint); err != nil {
+		addr, who := in.Endpoint, "this browser"
+		if in.Token != "" {
+			addr, who = in.Token, "this phone"
+		}
+		if err := push.RemoveEndpointTx(r.Context(), tx, p.TenantID, p.UserID, addr); err != nil {
 			return err
 		}
-		return auditTx(r, tx, "push.remove", "this browser", nil)
+		return auditTx(r, tx, "push.remove", who, nil)
 	}); err != nil {
 		s.fail(w, r, err)
 		return
@@ -212,15 +242,17 @@ func (s *Server) deletePushEndpoint(w http.ResponseWriter, r *http.Request) {
 	s.listPush(w, r)
 }
 
-// pushMaxParallel bounds the requests to push services for one message.
+// pushMaxParallel bounds the requests to push services at once.
 const pushMaxParallel = 8
 
-// pushMessage pushes a message that came from a linked business (fromTenant, named from) to the
-// browsers of the receiving business's members who write in its
-// conversations: the title is the sender's business, the body the same line
-// the phone messages carry (a browser that switched the preview off is sent
-// "New message"), the link the conversation. It does what the sender's
-// tellLinkMessage has decided is to be told (the mute is checked there).
+// pushMessage queues a message that came from a linked business (fromTenant,
+// named from) for the devices of the receiving business's members who write
+// in its conversations: the title is the sender's business as the chat list
+// shows it, the body the same line the phone messages carry without a
+// document's reference (a device that switched the preview off is sent
+// "New message"), the link the conversation. It does what tellLinkMessage has
+// decided is to be told (the mute is checked there); the bell item that
+// follows is not pushed again (migration 00446 skips a chat's).
 func (s *Server) pushMessage(ctx context.Context, to, link, fromTenant uuid.UUID, from string, m links.Message) {
 	if !s.Push.Enabled() {
 		return
@@ -229,21 +261,12 @@ func (s *Server) pushMessage(ctx context.Context, to, link, fromTenant uuid.UUID
 	if m.Kind == "card" {
 		body = "Sent you a document" // a document says only what it is
 	}
-	var targets []push.Target
-	var unread int
-	var icon string
 	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{to}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT DISTINCT user_id FROM memberships WHERE role = ANY ($1)`, holdingAll(PermChatTrade))
-		if err != nil {
+		users, err := holdersTx(ctx, tx, PermChatTrade)
+		if err != nil || len(users) == 0 {
 			return err
 		}
-		users, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-		if err != nil {
-			return err
-		}
-		if targets, err = push.TargetsTx(ctx, tx, to, users); err != nil || len(targets) == 0 {
-			return err
-		}
+		var icon string
 		// The business as the chat list shows it: the name and logo it chose.
 		if shown, err := links.ShownTx(ctx, tx); err == nil {
 			if sh, ok := shown[fromTenant]; ok {
@@ -255,48 +278,200 @@ func (s *Server) pushMessage(ctx context.Context, to, link, fromTenant uuid.UUID
 				}
 			}
 		}
-		return tx.QueryRow(ctx, `SELECT count(DISTINCT link_id)::int FROM link_messages WHERE tenant_id = $1 AND NOT mine AND read_at IS NULL AND hidden_at IS NULL`, to).Scan(&unread)
+		return push.EnqueueTx(ctx, tx, to, users, push.Queued{Kind: push.KindBusiness, Title: from, Body: body,
+			Link: "/chat?with=" + link.String(), Tag: link.String(), Icon: icon})
 	}); err != nil {
-		s.Logger.Warn("push: finding the browsers", "tenant", to, "err", err)
+		s.Logger.Warn("push: queueing a message", "tenant", to, "err", err)
+	}
+}
+
+// pushEvery is how often the queue is looked at without being told of a push
+// (LISTEN push_outbox tells at once).
+const pushEvery = 5 * time.Second
+
+// RunPush sends the queued pushes (migration 00446): at once when one is
+// queued, and every pushEvery for those waiting to be tried again.
+func (s *Server) RunPush(ctx context.Context) {
+	if !s.Push.Enabled() {
 		return
 	}
-	if len(targets) == 0 {
-		return
+	for ctx.Err() == nil {
+		if _, err := s.DrainPush(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Warn("push: sending the queue", "err", err)
+		}
+		s.waitForPush(ctx)
 	}
-	payload := push.Payload{Title: from, Body: body, Link: "/chat?with=" + link.String(), Tag: link.String(), Unread: unread, Icon: icon}
+}
+
+// waitForPush waits for a push to be queued (LISTEN), or pushEvery; it
+// answers whether it was told.
+func (s *Server) waitForPush(ctx context.Context) bool {
+	wait, cancel := context.WithTimeout(ctx, pushEvery)
+	defer cancel()
+	conn, err := s.Store.Pool.Acquire(wait)
+	if err != nil {
+		<-wait.Done()
+		return false
+	}
+	defer conn.Release()
+	if _, err := conn.Exec(wait, "LISTEN push_outbox"); err != nil {
+		<-wait.Done()
+		return false
+	}
+	_, err = conn.Conn().WaitForNotification(wait)
+	// Back in the pool, not listening.
+	_, _ = conn.Exec(context.Background(), "UNLISTEN push_outbox")
+	return err == nil
+}
+
+// DrainPush sends every push that is due, business by business, in each one's
+// own scope; it answers how many were sent to at least one device.
+func (s *Server) DrainPush(ctx context.Context) (int, error) {
+	if !s.Push.Enabled() {
+		return 0, nil
+	}
+	var tenants []uuid.UUID
+	rows, err := s.Store.Pool.Query(ctx, `SELECT taskiem_push_due(200)`)
+	if err != nil {
+		return 0, err
+	}
+	if tenants, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID]); err != nil {
+		return 0, err
+	}
+	sent := 0
+	var errs []error
+	for _, t := range tenants {
+		// A business with more than one batch due is drained to the end.
+		for round := 0; round < 20 && ctx.Err() == nil; round++ {
+			n, claimed, err := s.drainPushOf(ctx, t)
+			sent += n
+			if err != nil {
+				errs = append(errs, err)
+				break
+			}
+			if claimed < pushBatch {
+				break
+			}
+		}
+	}
+	return sent, errors.Join(errs...)
+}
+
+// pushBatch is how many pushes of one business are claimed at once.
+const pushBatch = 50
+
+// pushUnreadTx is the icon's count: the conversations with something unread,
+// from businesses and from customers.
+func pushUnreadTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (int, error) {
+	var n int
+	err := tx.QueryRow(ctx, `SELECT
+		(SELECT count(DISTINCT link_id) FROM link_messages WHERE tenant_id = $1 AND NOT mine AND read_at IS NULL AND hidden_at IS NULL)
+		+ (SELECT count(DISTINCT conversation_id) FROM customer_messages WHERE tenant_id = $1 AND NOT mine AND read_at IS NULL)`, tenant).Scan(&n)
+	return n, err
+}
+
+// drainPushOf sends one batch of a business's due pushes; it answers how
+// many reached at least one device, and how many were claimed.
+func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, error) {
+	var queued []push.Queued
+	var targets []push.Target
+	var unread int
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		var err error
+		if queued, err = push.ClaimTx(ctx, tx, pushBatch); err != nil || len(queued) == 0 {
+			return err
+		}
+		var users []uuid.UUID
+		for _, q := range queued {
+			users = append(users, q.User)
+		}
+		if targets, err = push.TargetsTx(ctx, tx, tenant, users); err != nil {
+			return err
+		}
+		unread, err = pushUnreadTx(ctx, tx, tenant)
+		return err
+	}); err != nil || len(queued) == 0 {
+		return 0, 0, err
+	}
 	type result struct {
-		id  uuid.UUID
-		out push.Outcome
+		device uuid.UUID
+		out    push.Outcome
 	}
-	results := make([]result, len(targets))
+	type job struct {
+		q       push.Queued
+		results []result
+	}
+	// One notification per conversation on a device: of several pushes for
+	// the same person and tag, only the newest is sent (sent at once, an
+	// older one could arrive last and replace it); the others are done.
+	newest := map[string]int{}
+	for i, q := range queued {
+		newest[q.User.String()+"\x00"+q.Tag] = i // claimed oldest first
+	}
+	jobs := make([]*job, len(queued))
+	var mu sync.Mutex
 	var wg sync.WaitGroup
 	gate := make(chan struct{}, pushMaxParallel)
-	for i, t := range targets {
-		wg.Add(1)
-		gate <- struct{}{}
-		go func() {
-			defer wg.Done()
-			defer func() { <-gate }()
-			start := time.Now()
-			out, status, err := s.Push.Send(ctx, to, t, payload)
-			telemetry.PushSeconds.Observe(time.Since(start).Seconds())
-			telemetry.PushSent.WithLabelValues([]string{"sent", "gone", "failed"}[out]).Inc()
-			if err != nil {
-				// No address, no keys, no words: the status and what kind of error.
-				s.Logger.Warn("push: not sent", "tenant", to, "device", t.ID, "status", status, "gone", out == push.Gone)
+	for i, q := range queued {
+		j := &job{q: q}
+		jobs[i] = j
+		if newest[q.User.String()+"\x00"+q.Tag] != i {
+			continue
+		}
+		payload := push.Payload{Title: q.Title, Body: q.Body, Link: q.Link, Tag: q.Tag, Unread: unread, Icon: q.Icon,
+			Business: tenant.String(), Kind: q.Kind}
+		for _, t := range targets {
+			if t.User != q.User || !t.Takes(q.Kind) {
+				continue
 			}
-			results[i] = result{t.ID, out}
-		}()
+			wg.Add(1)
+			gate <- struct{}{}
+			go func() {
+				defer wg.Done()
+				defer func() { <-gate }()
+				start := time.Now()
+				out, status, err := s.Push.Send(ctx, tenant, t, payload)
+				telemetry.PushSeconds.Observe(time.Since(start).Seconds())
+				telemetry.PushSent.WithLabelValues([]string{"sent", "gone", "failed"}[out]).Inc()
+				if err != nil {
+					// No address, no keys, no words: the status and what kind of error.
+					s.Logger.Warn("push: not sent", "tenant", tenant, "device", t.ID, "kind", t.Kind, "status", status, "gone", out == push.Gone)
+				}
+				mu.Lock()
+				j.results = append(j.results, result{t.ID, out})
+				mu.Unlock()
+			}()
+		}
 	}
 	wg.Wait()
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{to}, func(tx pgx.Tx) error {
-		for _, r := range results {
-			if err := push.RecordTx(ctx, tx, to, r.id, r.out); err != nil {
+	sent := 0
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		for _, j := range jobs {
+			failed, went := false, false
+			for _, r := range j.results {
+				if err := push.RecordTx(ctx, tx, tenant, r.device, r.out); err != nil {
+					return err
+				}
+				failed = failed || r.out == push.Failed
+				went = went || r.out == push.Sent
+			}
+			if went {
+				sent++
+			}
+			// Done when every device took it, was gone, or none takes it;
+			// tried again later when one failed (a device that took it
+			// already shows one notification per tag, so a second is the same).
+			if !failed {
+				if err := push.DoneTx(ctx, tx, j.q.ID); err != nil {
+					return err
+				}
+				continue
+			}
+			if _, err := push.RetryTx(ctx, tx, j.q); err != nil {
 				return err
 			}
 		}
 		return nil
-	}); err != nil {
-		s.Logger.Warn("push: recording what was sent", "tenant", to, "err", err)
-	}
+	})
+	return sent, len(queued), err
 }

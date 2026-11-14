@@ -1457,3 +1457,10 @@ explore_scores.business
 explore_scores.links
 explore_scores.scored_at
 explore_scores.trusted
+approvals.requested_at
+approvals.status
+approvals.tenant_id
+push_outbox.next_at
+push_outbox.tenant_id
+push_subscriptions.tenant_id
+push_subscriptions.user_id

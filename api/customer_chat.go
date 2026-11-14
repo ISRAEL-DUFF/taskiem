@@ -17,6 +17,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/lang"
+	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/voice"
@@ -251,8 +252,10 @@ func (s *Server) customerInbound(ctx context.Context, wa *whatsapp.Platform, num
 			kept = &keptMessage{chat: id, message: msg, subject: subject, voice: in.Media}
 		}
 		// A message after STOP is theirs to send; it does not undo STOP.
-		_, err = tx.Exec(ctx, `UPDATE customer_conversations SET last_inbound_at = now(), last_message_at = now(), archived = false WHERE id = $1`, id)
-		return err
+		if _, err = tx.Exec(ctx, `UPDATE customer_conversations SET last_inbound_at = now(), last_message_at = now(), archived = false WHERE id = $1`, id); err != nil {
+			return err
+		}
+		return s.tellCustomerMessageTx(ctx, tx, wa.Tenant, id, subject, in.ProfileName, number, text)
 	})
 	if err == nil && kept != nil {
 		// Read for an order (phase 2), away from the webhook: a voice note
@@ -273,6 +276,27 @@ func (s *Server) customerInbound(ctx context.Context, wa *whatsapp.Platform, num
 		}
 	}
 	return true, err
+}
+
+// tellCustomerMessageTx tells the people who answer customers' chats that a
+// customer wrote (docs/spec/mobile-app-m4.md N2): a bell item per
+// conversation while it is unread ("Ade wrote", then "Ade wrote 3 messages"),
+// in the message's own transaction, which also queues its push (migration
+// 00446). WhatsApp is not told: the customer's own chat is the business's.
+func (s *Server) tellCustomerMessageTx(ctx context.Context, tx pgx.Tx, tenant, chat uuid.UUID, subject, profile, number, text string) error {
+	users, err := holdersTx(ctx, tx, PermOrders)
+	if err != nil || len(users) == 0 {
+		return err
+	}
+	name, err := s.customerName(ctx, tx, tenant, subject, profile, number)
+	if err != nil || strings.TrimSpace(name) == "" {
+		name = "A customer"
+	}
+	if r := []rune(text); len(r) > 200 {
+		text = string(r[:199]) + "…"
+	}
+	return notices.AddTx(ctx, tx, tenant, users, notices.Notice{Kind: notices.Setup, Title: name + " wrote", Many: name + " wrote {n} messages",
+		Body: text, Link: "/chat?with=c-" + chat.String(), Group: "customer:" + chat.String()})
 }
 
 // --- the API ---

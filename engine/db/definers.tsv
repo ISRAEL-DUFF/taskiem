@@ -361,3 +361,5 @@ taskiem_ops_feature_end(uuid,text)	@ISRAEL-DUFF (operator-console)	Operators: en
 taskiem_ops_featured()	@ISRAEL-DUFF (operator-console)	Operators: the Featured picks (00427)
 taskiem_link_explore_rescore()	@ISRAEL-DUFF (business links)	Works out again, for every findable business, whether it is Trusted on Taskiem and its count of links in the last 90 days, for Explore's sections; run by the server every ten minutes, answers only a count (00430)
 taskiem_link_explore_known(uuid[])	@ISRAEL-DUFF (business links)	Recently viewed, checked: at most ten businesses the caller remembers, as they are now, only those findable or linked with it, not suspended or reported; any other is left out, as in a search (00431)
+taskiem_push_due(integer)	@ISRAEL-DUFF (chat push)	The businesses with pushes due, ids only; the queue itself is drained in each business's own scope (00446)
+taskiem_approval_tenants()	@ISRAEL-DUFF (chat push)	The businesses with an approval open in the last week, ids only; their approvers are told in the bell in each business's own scope (00446)

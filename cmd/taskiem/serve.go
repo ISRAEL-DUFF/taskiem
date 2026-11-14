@@ -112,7 +112,11 @@ type config struct {
 	// Push is the VAPID key pair for chat push (TASKIEM_VAPID_PUBLIC_KEY,
 	// TASKIEM_VAPID_PRIVATE_KEY, TASKIEM_VAPID_SUBJECT): with none, no push is
 	// sent (docs/spec/chat-push.md).
-	Push       push.Config
+	Push push.Config
+	// FCM is the phone app's notifications (TASKIEM_FCM_CREDENTIALS, the
+	// Firebase service account's key; TASKIEM_FCM_CLIENT, the app's client
+	// values): with neither, the app is not notified (docs/spec/mobile-app-m4.md).
+	FCM        *push.FCM
 	Queues     []string
 	Cloud      cloudConfig
 	Connectors builtin.Options
@@ -621,6 +625,9 @@ func loadConfig() (config, error) {
 	if err := c.Push.Validate(); err != nil {
 		return c, err
 	}
+	if c.FCM, err = push.ParseFCM(os.Getenv("TASKIEM_FCM_CREDENTIALS"), os.Getenv("TASKIEM_FCM_CLIENT")); err != nil {
+		return c, err
+	}
 	if c.AI, err = ai.ConfigFromEnv(os.LookupEnv); err != nil {
 		return c, err
 	}
@@ -876,8 +883,8 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	if e.email != nil {
 		emailOps.Set(e.email)
 	}
-	if cfg.Push.Enabled() {
-		e.push = &push.Sender{Config: cfg.Push, Guard: &egress.Guard{Logger: log}}
+	if cfg.Push.Enabled() || cfg.FCM != nil {
+		e.push = &push.Sender{Config: cfg.Push, FCM: cfg.FCM, Guard: &egress.Guard{Logger: log}}
 	}
 	if cfg.WhatsApp != nil {
 		// The templates' url buttons open the web app and the form host

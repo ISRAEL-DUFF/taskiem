@@ -36,7 +36,7 @@ These are the "make it better" of this plan; §4 closes each:
 5. **A browser that renews its subscription** comes back as a new device: its name and its preview switch are lost (chat push §13).
 6. **Nothing can be turned off by kind.** A device takes every push or none.
 
-## 3. Decisions to make (suggestions in bold)
+## 3. Decisions (settled 14 November 2026: each as suggested)
 
 | # | Question | Suggested |
 | --- | --- | --- |
@@ -181,6 +181,31 @@ This closes 2.1, 2.2 and 2.3 with one design: **a push is queued in the same tra
 | P7 | The audit (three reviewers as before), the fixes, the owner's checklist for real phones | | | |
 
 **After P3, M4's done-when can be tried on a phone, once a Firebase project exists.**
+
+## As built: P1, the server (14 November 2026)
+
+Migration 00446. Nothing in the app yet: no phone registers until P3.
+
+- **Devices** are browsers (`webpush`) or the app (`fcm`, its registration token in `endpoint`, no keys), each with the kinds it takes (`kinds`: business, customers, orders, approvals, alerts). A new device takes them all for owners and admins, all but alerts for the others. `PUT /v1/me/push` takes `{kind: "fcm", token, platform}`; `PATCH /v1/me/push/{id}` takes `kinds`; `DELETE /v1/me/push` takes `token`. `GET /v1/me/push` says whether browsers and phones can be notified on this server.
+- **The FCM transport** (`engine/push/fcm.go`):
+  - FCM HTTP v1 through the egress guard (purpose `fcm`), with an OAuth token from the service account, signed with the standard library and kept until a minute before it expires (a 401 asks for a new one).
+  - Each message carries the Android notification (tag per conversation, the kind's channel, the icon's count, high priority, 12 hours), the APNs headers (collapse id, badge) and the data the app reads (link, tag, kind, business, unread).
+  - `UNREGISTERED`, a 404, or a 400 about the registration token drops the device; a 429 or 5xx is tried again; a wrong project is kept and logged.
+  - `TASKIEM_FCM_CREDENTIALS` and `TASKIEM_FCM_CLIENT` (both or neither); `GET /v1/app/config` gives the app the client values (`push.fcm`).
+- **The queue** (`push_outbox`):
+  - **Filled two ways:** by a trigger on every bell item (new, or its group repeating) for a person with a device, and by the server for a business chat's message (#173's words, without a document's reference; that bell item is skipped).
+  - **Drained** by `RunPush`, on `LISTEN push_outbox` or every 5 seconds, business by business in each one's scope (`taskiem_push_due`).
+  - **Claimed by lease** (90 s), so nothing is held open while a push service answers.
+  - **Kinds:** each push goes to the person's devices that take its kind.
+  - **Failures:** a failed device waits 5 s, 30 s, 2 min, 10 min, 1 h, then the push is dropped, as anything older than 12 hours is.
+  - **A restart loses nothing queued.**
+  - **One per conversation:** of several pushes for the same person and conversation waiting together, only the newest is sent. Sent at once, an older one could arrive last and replace it on the phone (found by the test).
+- **The kind** of a bell item is read from what it is (`taskiem_push_kind`). Not pushed: a person's own changes, a run that finished.
+- **Customers' messages** are a bell item for those who handle orders: "Ade wrote", then "Ade wrote 3 messages", per conversation while unread, in the message's own transaction. With the preview off, a customer's push says only "A customer wrote" (their name or number is theirs).
+- **Approvals waiting** are a bell item for each approver who may decide them, once per level ("Approval waiting: Payroll"), by a loop of their own every 15 seconds whether or not a chat app is set up (`RunApprovalBell`, `taskiem_approval_tenants`); the maker is never told.
+- **Tests:**
+  - `engine/push` (`TestFCMSend`, `TestFCMOutcomes`, `TestParseFCM`, `TestValidTokenAndKinds`): a fake Google checks the service account's signature.
+  - `TestPushEverywhere`, `TestApprovalInTheBell`, and `TestChatPush` (unchanged in what it covers, now through the queue).
 
 ## 6. Tests
 

@@ -17,9 +17,15 @@ func (s *Server) appConfig(w http.ResponseWriter, _ *http.Request) {
 	if min == "" {
 		min = appMinVersionDefault
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	out := map[string]any{
 		"min_version": min,
 		"passkeys":    s.WebAuthn.RPID != "" && len(s.WebAuthn.Origins) > 0,
 		"signup":      s.AllowSignup,
-	})
+	}
+	// The app starts Firebase with these (public client values, as in any
+	// app's google-services.json), so notifications turn on with no new build.
+	if s.Push.FCMOn() {
+		out["push"] = map[string]any{"fcm": s.Push.FCM.Client}
+	}
+	writeJSON(w, http.StatusOK, out)
 }

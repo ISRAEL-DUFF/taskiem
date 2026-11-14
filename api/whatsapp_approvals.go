@@ -20,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
+	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/plain"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -188,6 +189,13 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 		for _, t := range targets {
 			users = append(users, t.user)
 		}
+		// The bell: every approver has one.
+		if channel == "bell" {
+			for i := range targets {
+				targets[i].channel = channel
+			}
+			return nil
+		}
 		addrs, err := chatAddrsTx(ctx, tx, channel, users)
 		if err != nil {
 			return err
@@ -223,6 +231,47 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 	return errors.Join(errs...)
 }
 
+// approvalBellEvery is how often the bell looks for approvals waiting.
+const approvalBellEvery = 15 * time.Second
+
+// RunApprovalBell tells approvers in the bell of an approval waiting for them
+// (once each, per level), whether or not a chat app is set up: the bell item
+// is what pushes it to their phone and browser (docs/spec/mobile-app-m4.md N2).
+func (s *Server) RunApprovalBell(ctx context.Context) {
+	tick := time.NewTicker(approvalBellEvery)
+	defer tick.Stop()
+	for {
+		if err := s.ApprovalBellTick(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Warn("approvals: the bell", "err", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
+}
+
+// ApprovalBellTick tells, in the bell, each approver who has not been told of
+// an approval waiting for them.
+func (s *Server) ApprovalBellTick(ctx context.Context) error {
+	rows, err := s.Store.Pool.Query(ctx, `SELECT taskiem_approval_tenants()`)
+	if err != nil {
+		return err
+	}
+	tenants, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, t := range tenants {
+		if err := s.notifyApprovalsOn(ctx, t, "bell"); err != nil {
+			errs = append(errs, fmt.Errorf("tenant %s: %w", t, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // waQueueApproval queues an approval request for an approver once: the
 // outbox sends it, and retries it if sending fails.
 func (s *Server) waQueueApproval(ctx context.Context, tenant uuid.UUID, t approvalTarget) error {
@@ -231,6 +280,16 @@ func (s *Server) waQueueApproval(ctx context.Context, tenant uuid.UUID, t approv
 			tenant, t.run, t.step, t.level, t.user, t.channel)
 		if err != nil || tag.RowsAffected() == 0 {
 			return err // another notifier has it
+		}
+		if t.channel == "bell" {
+			// In the bell, which also pushes it (migration 00446).
+			var name string
+			if err := tx.QueryRow(ctx, `SELECT w.name FROM runs r JOIN workflows w ON w.id = r.workflow_id WHERE r.id = $1`, t.run).Scan(&name); err != nil {
+				return err
+			}
+			return notices.AddTx(ctx, tx, tenant, []uuid.UUID{t.user}, notices.Notice{Kind: notices.Setup, Level: notices.Warning,
+				Title: "Approval waiting: " + name, Body: "Open it to approve or decline.", Link: "/approvals",
+				Group: fmt.Sprintf("approval:%s:%s:%d", t.run, t.step, t.level)})
 		}
 		run, step, level := t.run, t.step, t.level
 		_, err = whatsapp.Enqueue(ctx, tx, whatsapp.OutboxItem{Tenant: tenant, Channel: t.channel, Kind: whatsapp.OutboxApproval, User: t.user, Run: &run, Step: &step, Level: &level},
