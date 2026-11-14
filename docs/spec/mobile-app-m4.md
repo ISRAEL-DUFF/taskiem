@@ -314,6 +314,33 @@ Three fresh reviewers checked the first audit's fixes and looked for what was mi
 - With the preview on, a bell title goes out as written (an invoice's number in it); the link is in a phone push's data either way.
 - Tests the build machine cannot run: a real FCM delivery, a real passkey with the app's origin, a verified link.
 
+## The remaining gaps closed (15 November 2026)
+
+What the second audit left, and what the first build left out, done:
+
+- **Server:**
+  - A business chat's push is queued in the message's own transaction (the send already crosses into the receiver's business), in a savepoint so it can never lose the message.
+  - A customer's message says only "A customer wrote": nothing of theirs (words, number, the name kept for them, all sealed) is copied into the bell or the push.
+  - The icon's count is each person's: linked businesses' chats for those who chat, customers' for those who answer them.
+  - Pushes queued while none are sent expire after their life (`taskiem_push_expire`); one dropped after its tries is logged as an error and counted (`dropped`).
+  - A device never reached for a week is dropped (`unreached_since`); past the limit the least used device goes, not the oldest.
+  - Someone the approval bell set aside is looked at again hourly and told once they may decide.
+  - A customer's chat can be muted (`customer_conversations.muted`, `PUT /v1/customer-chats/{id}` `muted`): no bell item, no push.
+  - `taskiem_push_by_kind_total {kind, result}`.
+  - Migration 00447's Down and Up, with 00446's, checked in one transaction on a fresh database.
+- **Web:** Mute notifications in a customer chat's menu; the tap and switch notices in their own component, under the plain-words test.
+- **App:** Get started draws Taskiem's own bubbles (`TaskiemSignupBubble`); the Passkeys card says ahead when the phone cannot use passkeys; Mute notifications in a customer chat's menu; the routing of a notification or a link is one tested function (`lib/app/route.dart`); the iPhone's Release and Profile builds use Apple's production push service (`RunnerRelease.entitlements`).
+- **Tests added:**
+  - Server: the sign-up's limits (guesses sent at once, five, a new code keeping the tries, three codes, ten an hour); the binding without a proof, the proof expiring; the approval recheck; the lease, expiry, unreached and least-used devices; FCM's 400 not about the token and FCM down; every kind with the preview off; per-person counts; the chat push in its message's transaction, and muted; a customer chat muted.
+  - Web: a single-sign-on refusal not signing out; finding the device; the kinds offered by role; the switch asked (Stay here, Switch to, axe) and switched by a tap; the worker writing the tap down; mute in a customer thread.
+  - App: where every page opens; a link waiting behind sign-in to its screen; conversation, invoice and customer links; the question asked once and the toast with Open through the whole app; the Passkeys card (adding, and a phone that cannot); the approve sheet with a passkey and without; Notifications, Passkeys, the approve sheet, the question and Get started at twice the text on a 360 px phone.
+
+**Still not built, and why:**
+- The app setting the icon's count itself: Android shows it from the notifications, an iPhone from the push's badge; clearing it on opening needs the iPhone build (A3).
+- Telegram codes for Get started: a bot cannot write to a number that has not written to it first.
+- The iPhone's `TASKIEM_HOST` stays a setting in `ios/Flutter/*.xcconfig` (the checklist says to set it).
+- With the preview on, a bell title is pushed as written, as the person chose; the link is in a phone push's data either way (the app needs it to open the page).
+
 ## 6. Tests
 
 **Go:**

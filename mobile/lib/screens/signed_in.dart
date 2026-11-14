@@ -417,6 +417,8 @@ class PasskeysCard extends StatefulWidget {
 
 class _PasskeysCardState extends State<PasskeysCard> {
   List<Map<String, dynamic>>? _keys;
+  // Whether this phone can make or use a passkey; said ahead, not after.
+  bool _phoneCan = true;
   final _proof = TextEditingController();
   bool _busy = false;
   String? _error;
@@ -434,6 +436,8 @@ class _PasskeysCardState extends State<PasskeysCard> {
   }
 
   Future<void> _load() async {
+    final can = await passkeys.available();
+    if (mounted) setState(() => _phoneCan = can);
     try {
       final r = (await widget.auth.transport.send('GET', '/v1/me/passkeys') as Map)['passkeys'] as List;
       if (mounted) setState(() => _keys = [for (final k in r) (k as Map).cast<String, dynamic>()]);
@@ -496,7 +500,15 @@ class _PasskeysCardState extends State<PasskeysCard> {
               child: Text('${k['name']}${k['synced'] == true ? ' · synced' : ''}', style: tkText(size: 14, weight: 500, color: t.text)),
             ),
           if (_error != null) TkErrorBox(_error!),
-          if (asked == 'totp' || asked == 'password')
+          if (!_phoneCan)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'This phone cannot use passkeys (it needs a screen lock, and Android 9 or later). Your passkeys on other devices still work.',
+                style: tkHint(t),
+              ),
+            ),
+          if (_phoneCan && (asked == 'totp' || asked == 'password'))
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: TkField(
@@ -507,8 +519,10 @@ class _PasskeysCardState extends State<PasskeysCard> {
                 keyboard: asked == 'totp' ? TextInputType.number : null,
               ),
             ),
-          const SizedBox(height: 8),
-          TkButton(label: _busy ? 'Adding…' : 'Add a passkey on this phone', enabled: !_busy, onPressed: _add),
+          if (_phoneCan) ...[
+            const SizedBox(height: 8),
+            TkButton(label: _busy ? 'Adding…' : 'Add a passkey on this phone', enabled: !_busy, onPressed: _add),
+          ],
         ],
       ),
     );

@@ -925,6 +925,49 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
   }
 }
 
+/// A message of the app's sign-up conversation (lib/screens/app_sign_up.dart)
+/// in Taskiem's own bubble: the same name, words, time, ticks and buttons as
+/// its conversation once the business is made.
+class TaskiemSignupBubble extends StatelessWidget {
+  const TaskiemSignupBubble({
+    super.key,
+    required this.id,
+    required this.text,
+    required this.mine,
+    required this.first,
+    required this.at,
+    this.buttons = const [],
+    this.pressable = false,
+    this.onPress,
+  });
+  final String id;
+  final String text;
+  final bool mine;
+  final bool first;
+  final DateTime at;
+  final List<({String id, String title})> buttons;
+  final bool pressable;
+  final void Function(String id, String title)? onPress;
+
+  @override
+  Widget build(BuildContext context) => _TaskiemBubble(
+    x: TaskiemLine(TaskiemChatMessagesItem(
+      id: id,
+      inbound: mine,
+      channel: 'web',
+      kind: 'text',
+      text: text,
+      createdAt: at,
+      buttons: [for (final b in buttons) TaskiemChatMessagesItemButtonsItem(id: b.id, title: b.title)],
+    )),
+    first: first,
+    read: true,
+    choice: null,
+    pressable: pressable,
+    onPress: (b) => onPress?.call(b.id ?? '', b.title),
+  );
+}
+
 /// A message of Taskiem's conversation in its bubble: Taskiem's name on the
 /// first of its run, its words (*bold* marked, a long answer folded), the
 /// channel it came by, the time, the person's ticks, and reply buttons.

@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 
 import '../app/app_signup.dart';
 import '../app/auth.dart';
+import '../chat/taskiem.dart' show TaskiemSignupBubble;
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'sign_in.dart' show AuthCard, AuthSide, AuthTitle;
@@ -172,17 +173,19 @@ class _AppSignUpScreenState extends State<AppSignUpScreen> {
                 controller: _scroll,
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                 children: [
-                  for (final l in _s.lines) _Bubble(line: l),
-                  if (_s.buttons.isNotEmpty)
+                  // Taskiem's own bubbles and buttons, as its conversation draws them.
+                  for (final (i, l) in _s.lines.indexed)
                     Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final b in _s.buttons)
-                            TkButton(label: b.title, minHeight: 44, enabled: !_s.busy, onPressed: () => _s.answer(b.title, reply: b.id)),
-                        ],
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: TaskiemSignupBubble(
+                        id: '$i',
+                        text: l.text,
+                        mine: l.mine,
+                        first: i == 0 || _s.lines[i - 1].mine != l.mine,
+                        at: l.at,
+                        buttons: l.buttons,
+                        pressable: !_s.busy && i == _s.lines.length - 1 && !l.mine,
+                        onPress: (id, title) => _s.answer(title, reply: id),
                       ),
                     ),
                   if (_s.error != null) TkErrorBox(_s.error!),
@@ -209,33 +212,6 @@ class _AppSignUpScreenState extends State<AppSignUpScreen> {
                     ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Bubble extends StatelessWidget {
-  const _Bubble({required this.line});
-  final SignupLine line;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    final mine = line.mine;
-    return Align(
-      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.82),
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: mine ? t.chatOut : t.chatIn,
-            borderRadius: BorderRadius.circular(Tk.radius),
-          ),
-          // WhatsApp's *bold* shown as the words alone.
-          child: Text(line.text.replaceAll('*', ''), style: tkText(size: 15, lineHeight: 1.4, color: t.text)),
         ),
       ),
     );

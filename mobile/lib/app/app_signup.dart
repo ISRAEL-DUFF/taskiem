@@ -12,10 +12,13 @@ enum AppSignupStep { phone, code, chat, ended, signIn }
 
 /// A message of the conversation: Taskiem's, with its buttons, or the person's.
 class SignupLine {
-  const SignupLine({required this.text, this.mine = false, this.buttons = const []});
+  SignupLine({required this.text, this.mine = false, this.buttons = const [], DateTime? at}) : at = at ?? DateTime.now();
   final String text;
   final bool mine;
   final List<({String id, String title})> buttons;
+
+  /// When it was said (the bubble's time).
+  final DateTime at;
 }
 
 class AppSignup extends ChangeNotifier {

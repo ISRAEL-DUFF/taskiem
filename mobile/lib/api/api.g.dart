@@ -201,7 +201,7 @@ class TaskiemApi {
     await _t.send('POST', '/v1/customer-chats/${Uri.encodeComponent(id)}/read');
   }
 
-  /// Archive a customer's conversation, or bring it back (`PUT /v1/customer-chats/{id}`)
+  /// Archive or mute a customer's conversation, or undo either (`PUT /v1/customer-chats/{id}`)
   Future<void> putCustomerChat({required PutCustomerChatRequest body, required String id}) async {
     await _t.send('PUT', '/v1/customer-chats/${Uri.encodeComponent(id)}', body: body.toJson());
   }
@@ -1542,13 +1542,15 @@ class ListCustomerChatsResponse {
 }
 
 class CustomerChat {
-  const CustomerChat({required this.archived, required this.id, required this.last, required this.lastAt, required this.lastMine, required this.name, this.openInvoices, this.owesKobo, required this.phone, required this.stopped, required this.unread, required this.windowOpen, this.windowUntil});
+  const CustomerChat({required this.archived, required this.id, required this.last, required this.lastAt, required this.lastMine, this.muted, required this.name, this.openInvoices, this.owesKobo, required this.phone, required this.stopped, required this.unread, required this.windowOpen, this.windowUntil});
 
   final bool archived;
   final String id;
   final String last;
   final DateTime lastAt;
   final bool lastMine;
+  /// Nobody is told of its messages (no bell item, no push).
+  final bool? muted;
   /// The customer's name in the business's book, or their number.
   final String name;
   final int? openInvoices;
@@ -1570,6 +1572,7 @@ class CustomerChat {
         last: j['last'] as String,
         lastAt: DateTime.parse(j['last_at'] as String),
         lastMine: j['last_mine'] as bool,
+        muted: j['muted'] == null ? null : j['muted'] as bool,
         name: j['name'] as String,
         openInvoices: j['open_invoices'] == null ? null : (j['open_invoices'] as num).toInt(),
         owesKobo: j['owes_kobo'] == null ? null : (j['owes_kobo'] as num).toInt(),
@@ -1586,6 +1589,7 @@ class CustomerChat {
         'last': last,
         'last_at': lastAt.toUtc().toIso8601String(),
         'last_mine': lastMine,
+        'muted': ?muted,
         'name': name,
         'open_invoices': ?openInvoices,
         'owes_kobo': ?owesKobo,
@@ -2419,16 +2423,19 @@ class CustomerMessage {
 }
 
 class PutCustomerChatRequest {
-  const PutCustomerChatRequest({required this.archived});
+  const PutCustomerChatRequest({this.archived, this.muted});
 
-  final bool archived;
+  final bool? archived;
+  final bool? muted;
 
   factory PutCustomerChatRequest.fromJson(Map<String, dynamic> j) => PutCustomerChatRequest(
-        archived: j['archived'] as bool,
+        archived: j['archived'] == null ? null : j['archived'] as bool,
+        muted: j['muted'] == null ? null : j['muted'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
-        'archived': archived,
+        'archived': ?archived,
+        'muted': ?muted,
       };
 }
 

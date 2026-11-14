@@ -18,6 +18,7 @@ import 'app/applinks.dart';
 import 'app/notify.dart';
 import 'app/notify_firebase.dart';
 import 'app/prefs.dart';
+import 'app/route.dart';
 import 'app/session.dart';
 import 'app/sound.dart' show chime;
 import 'app/store.dart' show LocalStore;
@@ -452,62 +453,36 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     }
     final nav = Navigator.of(context);
     nav.popUntil((r) => r.isFirst);
-    final p = uri.path;
-    void tab(int i) => _tabs.currentState?.show(i);
-    if (p == '/chat') {
-      tab(0);
-      final with_ = uri.queryParameters['with'];
-      if (with_ == null) return;
-      if (with_.startsWith('c-')) {
-        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => _OpenCustomer(chats: _chats, id: with_.substring(2), notify: widget.notify)));
-        return;
-      }
-      var c = _chats.conversations.where((x) => x.link == with_).firstOrNull;
-      if (c == null) {
-        await _chats.load();
-        if (!mounted) return;
-        c = _chats.conversations.where((x) => x.link == with_).firstOrNull;
-      }
-      if (c != null) _openConv(context, c);
-      return;
-    }
-    if (p == '/approvals' || p.startsWith('/approvals/')) {
-      tab(0);
-      nav.push(TkRoute<void>(pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats)));
-      return;
-    }
-    // One thing's own page, over the tab it belongs to.
-    final one = RegExp(r'^/(invoices|bills|purchases|trade-orders|storefront/orders)/([^/]+)$').firstMatch(p);
+    final route = routeOf(path);
+    _tabs.currentState?.show(route.tab);
     final auth = _chats.auth;
-    if (one != null) {
-      final String id;
-      try {
-        id = Uri.decodeComponent(one[2]!);
-      } on FormatException {
-        return tab(one[1] == 'invoices' || one[1] == 'bills' ? 2 : 3);
-      }
-      switch (one[1]) {
-        case 'invoices':
-          tab(2);
-          openInvoice(context, auth, id);
-        case 'bills':
-          tab(2);
-          openBill(context, auth, id);
-        case 'purchases':
-          tab(3);
-          openPurchase(context, auth, id);
-        case 'trade-orders':
-          tab(3);
-          openTradeOrder(context, auth, id);
-        case 'storefront/orders':
-          tab(3);
-          openStorefrontOrder(context, auth, id);
-      }
-      return;
+    final id = route.id;
+    switch (route.screen) {
+      case RouteScreen.none:
+        return;
+      case RouteScreen.customer:
+        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => _OpenCustomer(chats: _chats, id: id, notify: widget.notify)));
+      case RouteScreen.conversation:
+        var c = _chats.conversations.where((x) => x.link == id).firstOrNull;
+        if (c == null) {
+          await _chats.load();
+          if (!mounted) return;
+          c = _chats.conversations.where((x) => x.link == id).firstOrNull;
+        }
+        if (c != null && mounted) _openConv(context, c);
+      case RouteScreen.taskiem:
+        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats)));
+      case RouteScreen.invoice:
+        openInvoice(context, auth, id);
+      case RouteScreen.bill:
+        openBill(context, auth, id);
+      case RouteScreen.purchase:
+        openPurchase(context, auth, id);
+      case RouteScreen.tradeOrder:
+        openTradeOrder(context, auth, id);
+      case RouteScreen.storefrontOrder:
+        openStorefrontOrder(context, auth, id);
     }
-    if (p.startsWith('/trade-orders') || p.startsWith('/storefront/orders') || p.startsWith('/purchases')) return tab(3);
-    if (p.startsWith('/bills') || p.startsWith('/invoices') || p.startsWith('/money')) return tab(2);
-    tab(1);
   }
 
   @override
