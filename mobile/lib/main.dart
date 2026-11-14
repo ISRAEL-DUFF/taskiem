@@ -11,13 +11,19 @@ import 'app/openers.dart';
 import 'app/config.dart';
 import 'kit/keyboard.dart';
 import 'app/lock.dart';
+import 'app/applinks.dart';
 import 'app/notify.dart';
 import 'app/notify_firebase.dart';
 import 'app/prefs.dart';
 import 'app/session.dart';
 import 'app/store.dart' show LocalStore;
 import 'api/api.g.dart';
+import 'chat/bills_page.dart' show openBill;
+import 'chat/invoices_page.dart' show openInvoice;
 import 'chat/money_page.dart' show MoneyPage;
+import 'chat/purchases_page.dart' show openPurchase;
+import 'chat/storefront_orders_page.dart' show openStorefrontOrder;
+import 'chat/trade_orders_page.dart' show openTradeOrder;
 import 'chat/order_sheet.dart' show showOrderSheet;
 import 'chat/orders_tab.dart' show OrdersTab;
 import 'chat/today_tab.dart' show TodayTab;
@@ -57,11 +63,13 @@ void main() {
     await notify.forgotten();
   };
   auth.start();
-  runApp(TaskiemApp(auth: auth, unlocker: PhoneUnlocker(), prefs: prefs, notify: notify));
+  // Links to this server's pages, opened in the app (lib/app/applinks.dart).
+  final links = LinkInbox();
+  runApp(TaskiemApp(auth: auth, unlocker: PhoneUnlocker(), prefs: prefs, notify: notify, links: links));
 }
 
 class TaskiemApp extends StatelessWidget {
-  const TaskiemApp({super.key, this.mode = TkMode.light, this.home, this.auth, this.unlocker, this.prefs, this.notify, this.now = DateTime.now});
+  const TaskiemApp({super.key, this.mode = TkMode.light, this.home, this.auth, this.unlocker, this.prefs, this.notify, this.links, this.now = DateTime.now});
 
   /// The theme when there are no [prefs] (tests show one theme).
   final TkMode mode;
@@ -80,6 +88,9 @@ class TaskiemApp extends StatelessWidget {
 
   /// Notifications on this phone (none in a test that gives none).
   final PhoneNotifications? notify;
+
+  /// Links that open the app; one that comes signed out waits.
+  final LinkInbox? links;
 
   /// The clock the lock counts time away by (a test's own).
   final DateTime Function() now;
@@ -121,7 +132,7 @@ class TaskiemApp extends StatelessWidget {
           ),
         ),
       ),
-      home: home ?? (auth == null ? const SignInScreen() : _Root(auth: auth!, prefs: prefs, unlocker: unlocker, notify: notify)),
+      home: home ?? (auth == null ? const SignInScreen() : _Root(auth: auth!, prefs: prefs, unlocker: unlocker, notify: notify, links: links)),
     );
   }
 }
@@ -131,11 +142,12 @@ class TaskiemApp extends StatelessWidget {
 /// or moved to another business, they are closed, and the chats start
 /// afresh for the new session.
 class _Root extends StatefulWidget {
-  const _Root({required this.auth, this.prefs, this.unlocker, this.notify});
+  const _Root({required this.auth, this.prefs, this.unlocker, this.notify, this.links});
   final Auth auth;
   final Prefs? prefs;
   final Unlocker? unlocker;
   final PhoneNotifications? notify;
+  final LinkInbox? links;
 
   @override
   State<_Root> createState() => _RootState();
@@ -174,7 +186,7 @@ class _RootState extends State<_Root> {
       AuthState.checking => ColoredBox(color: TkTheme.tokens(context).brand),
       AuthState.signedOut => _SignedOut(auth: auth),
       AuthState.outdated => const _Outdated(),
-      AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify),
+      AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify, links: widget.links),
     };
   }
 }
@@ -275,11 +287,12 @@ class _Outdated extends StatelessWidget {
 
 /// Signed in: the chats; the menu opens the app's settings.
 class _Home extends StatefulWidget {
-  const _Home({super.key, required this.auth, this.prefs, this.unlocker, this.notify});
+  const _Home({super.key, required this.auth, this.prefs, this.unlocker, this.notify, this.links});
   final Auth auth;
   final Prefs? prefs;
   final Unlocker? unlocker;
   final PhoneNotifications? notify;
+  final LinkInbox? links;
 
   @override
   State<_Home> createState() => _HomeState();
@@ -298,6 +311,10 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     // Notifications on this phone: started for this session's business; a
     // tapped one opens its page; one that comes with the app in front is a
     // toast; asked once after signing in.
+    // A link to one of this server's pages: opened now, or the one that
+    // waited behind signing in.
+    widget.links?.addListener(_linked);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _linked());
     final notify = widget.notify;
     if (notify != null) {
       notify.addListener(_notified);
@@ -343,6 +360,12 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     if (notify == null || !mounted) return;
     final link = notify.takePending();
     if (link != null) _openPath(link);
+  }
+
+  void _linked() {
+    if (!mounted) return;
+    final page = widget.links?.take();
+    if (page != null) _openPath(page);
   }
 
   void _arrived(PushNote n) {
@@ -398,6 +421,30 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
       nav.push(TkRoute<void>(pageBuilder: (_, _, _) => _OpenTaskiem(chats: _chats)));
       return;
     }
+    // One thing's own page, over the tab it belongs to.
+    final one = RegExp(r'^/(invoices|bills|purchases|trade-orders|storefront/orders)/([^/]+)$').firstMatch(p);
+    final auth = _chats.auth;
+    if (one != null) {
+      final id = Uri.decodeComponent(one[2]!);
+      switch (one[1]) {
+        case 'invoices':
+          tab(2);
+          openInvoice(context, auth, id);
+        case 'bills':
+          tab(2);
+          openBill(context, auth, id);
+        case 'purchases':
+          tab(3);
+          openPurchase(context, auth, id);
+        case 'trade-orders':
+          tab(3);
+          openTradeOrder(context, auth, id);
+        case 'storefront/orders':
+          tab(3);
+          openStorefrontOrder(context, auth, id);
+      }
+      return;
+    }
     if (p.startsWith('/trade-orders') || p.startsWith('/storefront/orders') || p.startsWith('/purchases')) return tab(3);
     if (p.startsWith('/bills') || p.startsWith('/invoices') || p.startsWith('/money')) return tab(2);
     tab(1);
@@ -406,6 +453,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   @override
   void dispose() {
     widget.notify?.removeListener(_notified);
+    widget.links?.removeListener(_linked);
     if (widget.notify?.onArrived == _arrived) widget.notify?.onArrived = null;
     WidgetsBinding.instance.removeObserver(this);
     Openers.linkedBusinesses = null;

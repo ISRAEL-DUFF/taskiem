@@ -34,6 +34,24 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Links to the server's pages open the app (lib/app/applinks.dart),
+                 verified against its /.well-known/assetlinks.json; the rest
+                 of its site stays in the browser. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https" android:host="${taskiemHost}"/>
+                <data android:path="/chat"/>
+                <data android:path="/approvals"/>
+                <data android:pathPrefix="/invoices/"/>
+                <data android:pathPrefix="/trade-orders/"/>
+                <data android:pathPrefix="/storefront/orders/"/>
+                <data android:pathPrefix="/bills/"/>
+                <data android:pathPrefix="/purchases/"/>
+            </intent-filter>
+            <!-- The links go to app_links, not Flutter's own router. -->
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false"/>
         </activity>
         <!-- A notification sent without a kind goes to Business chats. -->
         <meta-data

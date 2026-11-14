@@ -1,1 +1,4 @@
 #include "Generated.xcconfig"
+// The server the links and passkeys are for (Runner/Runner.entitlements):
+// the host of TASKIEM_URL the app is built with.
+TASKIEM_HOST = staging.ispend.name.ng

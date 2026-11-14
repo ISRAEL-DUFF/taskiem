@@ -116,7 +116,10 @@ type config struct {
 	// FCM is the phone app's notifications (TASKIEM_FCM_CREDENTIALS, the
 	// Firebase service account's key; TASKIEM_FCM_CLIENT, the app's client
 	// values): with neither, the app is not notified (docs/spec/mobile-app-m4.md).
-	FCM        *push.FCM
+	FCM *push.FCM
+	// AppLinks is the phone apps this server's links and passkeys belong to
+	// (TASKIEM_ANDROID_APP, TASKIEM_IOS_APP; docs/spec/mobile-app-m4.md N5).
+	AppLinks   api.AppLinks
 	Queues     []string
 	Cloud      cloudConfig
 	Connectors builtin.Options
@@ -626,6 +629,9 @@ func loadConfig() (config, error) {
 		return c, err
 	}
 	if c.FCM, err = push.ParseFCM(os.Getenv("TASKIEM_FCM_CREDENTIALS"), os.Getenv("TASKIEM_FCM_CLIENT")); err != nil {
+		return c, err
+	}
+	if c.AppLinks, err = api.ParseAppLinks(os.Getenv("TASKIEM_ANDROID_APP"), os.Getenv("TASKIEM_IOS_APP")); err != nil {
 		return c, err
 	}
 	if c.AI, err = ai.ConfigFromEnv(os.LookupEnv); err != nil {
@@ -1252,6 +1258,7 @@ func serve(ctx context.Context, args []string) error {
 			return err
 		}
 		srv.WebAuthn, srv.RequireAdminPasskeys = rp, cfg.RequireAdminPasskeys && rp.RPID != ""
+		srv.AppLinks = cfg.AppLinks
 		srv.PublicURL = cfg.PublicURL
 		srv.HooksURL = cfg.HooksURL
 		if srv.OAuthClients, err = oauthClients(e.registry, log); err != nil {
@@ -1801,7 +1808,10 @@ func (c config) relyingParty() (webauthn.Config, error) {
 	if u.Hostname() != rp && !strings.HasSuffix(u.Hostname(), "."+rp) {
 		return webauthn.Config{}, fmt.Errorf("TASKIEM_PASSKEY_RP_ID %q must be the host of TASKIEM_PUBLIC_URL or a domain above it", rp)
 	}
-	return webauthn.Config{RPID: rp, RPName: "Taskiem", Origins: []string{u.Scheme + "://" + u.Host}}, nil
+	// The Android app's passkeys come from its own origin; an iPhone app's
+	// from the web's (its associated domain).
+	origins := append([]string{u.Scheme + "://" + u.Host}, c.AppLinks.PasskeyOrigins()...)
+	return webauthn.Config{RPID: rp, RPName: "Taskiem", Origins: origins}, nil
 }
 
 // chat gives a server the chat channels: the Telegram bot, and the key

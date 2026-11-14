@@ -4,6 +4,17 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// The server's host, from --dart-define=TASKIEM_URL (lib/app/config.dart's
+// default otherwise): the links to it that open the app (AndroidManifest.xml).
+val taskiemHost: String = run {
+    val defines = (project.findProperty("dart-defines") as String?)
+        ?.split(",")
+        ?.mapNotNull { runCatching { String(java.util.Base64.getDecoder().decode(it)) }.getOrNull() }
+        .orEmpty()
+    val url = defines.firstOrNull { it.startsWith("TASKIEM_URL=") }?.substringAfter("=") ?: "https://staging.ispend.name.ng"
+    runCatching { java.net.URI(url).host }.getOrNull() ?: "staging.ispend.name.ng"
+}
+
 android {
     namespace = "app.taskiem.taskiem"
     compileSdk = flutter.compileSdkVersion
@@ -27,6 +38,7 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["taskiemHost"] = taskiemHost
     }
 
     buildTypes {
