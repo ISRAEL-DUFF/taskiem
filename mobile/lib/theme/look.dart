@@ -25,6 +25,7 @@ class TkLook {
     required this.orangeInk,
     required this.redInk,
     required this.blueInk,
+    required this.violetInk,
     required this.glow,
     required this.ground,
     required this.card,
@@ -39,7 +40,7 @@ class TkLook {
   final Color ground, card, line, bar, on;
 
   final Color lime, teal, orange, red, blue, violet;
-  final Color limeInk, tealInk, orangeInk, redInk, blueInk;
+  final Color limeInk, tealInk, orangeInk, redInk, blueInk, violetInk;
 
   /// The top card's light, at its top left (dark only; none in light).
   final Color glow;
@@ -60,6 +61,7 @@ const tkLookLight = TkLook(
   orangeInk: Color(0xFFB4510E),
   redInk: Color(0xFFC81E3C),
   blueInk: Color(0xFF2559C9),
+  violetInk: Color(0xFF5B45C9),
   glow: Color(0x00000000),
   ground: Color(0xFFF2F3F0),
   card: Color(0xFFFFFFFF),
@@ -80,6 +82,7 @@ const tkLookDark = TkLook(
   orangeInk: Color(0xFFFF9A52),
   redInk: Color(0xFFFF7A8E),
   blueInk: Color(0xFF8DB6FF),
+  violetInk: Color(0xFFBDB2FF),
   glow: Color(0x14B6F23A),
   ground: Color(0xFF000000),
   card: Color(0xFF1A1B1A),

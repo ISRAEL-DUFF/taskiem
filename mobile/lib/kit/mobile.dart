@@ -280,21 +280,30 @@ class TkScreen extends StatelessWidget {
 
 /// An icon button in a screen's head.
 class TkHeadButton extends StatelessWidget {
-  const TkHeadButton({super.key, required this.icon, required this.label, required this.onTap});
+  const TkHeadButton({super.key, required this.icon, required this.label, required this.onTap, this.primary = false, this.onCard = false});
+
+  /// On a card rather than the page: the ground's colour, so it shows.
+  final bool onCard;
   final String icon;
   final String label;
   final VoidCallback onTap;
 
+  /// The page's main button (New): pine with a lime icon, lime with pine
+  /// in the dark.
+  final bool primary;
+
   @override
   Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
     return ChatHeadBar.iconButton(
       label,
       Container(
         width: 38,
         height: 38,
-        decoration: BoxDecoration(color: TkLook.of(context).card, shape: BoxShape.circle),
+        decoration: BoxDecoration(color: primary ? TkLook.of(context).on : (onCard ? TkLook.of(context).ground : TkLook.of(context).card), shape: BoxShape.circle),
         alignment: Alignment.center,
-        child: TkIcon(icon, size: 19, stroke: 2, color: _ink(context)),
+        child: TkIcon(icon, size: 19, stroke: primary ? 2.4 : 2, color: primary ? (dark ? t.brandDarkText : t.brandDark) : _ink(context)),
       ),
       onTap,
     );

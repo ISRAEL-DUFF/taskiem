@@ -40,6 +40,27 @@ Map<String, dynamic> _bill({String status = 'open', bool disputed = false}) => {
 void main() {
   setUpAll(loadFonts);
 
+  test('when bills fall due: in days, in words, the week ahead', () {
+    // Saturday 14 November 2026, 10:00 in Lagos.
+    final now = DateTime.utc(2026, 11, 14, 9);
+    expect(daysUntil('2026-11-14', now), 0);
+    expect(daysUntil('2026-11-15', now), 1);
+    expect(daysUntil('2026-11-10', now), -4);
+    expect(daysUntil('', now), isNull);
+    expect(dueWords('2026-11-14', now), 'today');
+    expect(dueWords('2026-11-15', now), 'tomorrow');
+    expect(dueWords('2026-11-17', now), 'Tue');
+    expect(dueWords('2026-11-10', now), startsWith('late since '));
+    final week = weekDue([
+      {'due_on': '2026-11-10', 'due_kobo': 5000},
+      {'due_on': '2026-11-15', 'due_kobo': 7000},
+      {'due_on': '2026-11-20', 'due_kobo': 9000},
+      {'due_on': '2026-11-30', 'due_kobo': 1000},
+    ], now);
+    expect(week.map((d) => d.label), ['Today', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+    expect(week.map((d) => d.kobo), [5000, 7000, 0, 0, 0, 0, 9000], reason: 'what is late counted today; past the week left out');
+  });
+
   test('what is left to pay on the bills', () {
     expect(billsDue([_bill(), _bill(status: 'void'), _bill()]), 20000000);
     expect(billPath('B 1', '/pay'), '/v1/bills/B%201/pay');
@@ -97,7 +118,7 @@ void main() {
   testWidgets('a bill paid from Taskiem: sent for approval', (t) async {
     final sent = await open(t, (c) => BillPage(auth: c.auth, id: 'B1', follow: false));
     expect(find.textContaining('once someone with the owner role approves it'), findsOneWidget);
-    expect(find.textContaining('9900000001'), findsOneWidget);
+    expect(find.text('9900 000 001'), findsOneWidget, reason: 'read out in groups');
     expect(find.text('Rice 50kg'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Pay ₦100,000'));
     await settle(t);

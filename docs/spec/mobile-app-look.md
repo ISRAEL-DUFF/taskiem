@@ -115,8 +115,37 @@ day's figures and "See the figures" for a screen reader; Orders has no
 "Delivered" stage (a customer's order keeps no time it was delivered) and
 no search or + in its head (the tab has neither yet).
 
+### Invoices and bills
+
+Drawn and agreed with the founder, 15 November 2026, in the same look.
+
+- **The head of a pushed page** (`TkPageScreen`'s `titleSize`): Back as a
+  link naming the page it goes back to ("‹ Money"), the buttons at its
+  end, the title large under them (30 for a list, 22 for one document).
+- **Invoices.** The filters, the owed ones first (All, Sent, Part-paid,
+  Overdue, Paid, Draft, Recorded, Notebook debts, Void). On All, a top card
+  of what customers still owe, split into not due yet and overdue, and the
+  payments waiting to be matched with Match; then the invoices grouped:
+  overdue, waiting for payment, drafts, paid, void. Statuses: overdue red,
+  part-paid orange, sent blue, paid lime, draft and void grey.
+- **One invoice.** Its number as the title; Share (once its page is known)
+  and ⋯ (Edit, Void) in the head. The top card: what is left large, how much
+  is paid as a bar, and the next step (Send, Send again, Its page). Then the
+  customer on one card with Call and Email, the lines with their total, and
+  the rest as before.
+- **Bills** (also from Money's "Go to"). A top card of what is left to pay,
+  the week ahead as bars of what falls due each day (what is late counted
+  today), and the next bill with Pay; then to pay, by due date, and paid.
+  Statuses: late red, due within two days or queried orange, being paid
+  violet, paid lime.
+- **One bill.** The top card: what is left, how much is paid, and Pay from
+  Taskiem with what happens next under it. The supplier's account read out
+  in groups, with Copy; the lines; paid outside Taskiem and a query as a
+  short list; the messages.
+
 ## Order
 
 1. Orders and Money, and the chat's motion. Done.
 2. Today, Money and Orders in Direction B. **Done; waiting for the founder's word.**
-3. Then invoices and bills, stock, suppliers, riders, tables, Team, and the settings-like pages, the same way.
+3. Invoices and bills. **Done; waiting for the founder's word.**
+4. Then stock, suppliers, riders, tables, Team, and the settings-like pages, the same way.

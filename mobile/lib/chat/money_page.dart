@@ -30,6 +30,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'attachments.dart' show handOffFile;
+import 'bills_page.dart' show BillsPage;
 import 'invoice_match.dart' show InvoiceMatchPage, channelWords, unmatchedPath;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'money_sheets.dart' show dateLabel;
@@ -501,10 +502,11 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
           title: 'Go to',
           inset: 56,
           children: [
-            TkListRow(title: 'Invoices', icon: 'b-receipt', square: look.blue, onTap: () => _push(context, InvoicesPage(auth: widget.auth))),
+            TkListRow(title: 'Invoices', sub: 'What customers owe you', icon: 'b-receipt', square: look.blue, onTap: () => _push(context, InvoicesPage(auth: widget.auth, backLabel: 'Back to Money'))),
+            TkListRow(title: 'Bills', sub: 'What you owe linked suppliers', icon: 'b-receipt', square: look.orange, onTap: () => _push(context, BillsPage(auth: widget.auth, backLabel: 'Back to Money', now: widget.now))),
             TkListRow(title: 'Bank statement', sub: 'Upload one, see what waits', icon: 'b-bank', square: look.violet, onTap: () => _push(context, MoneyStatementsPage(auth: widget.auth))),
-            TkListRow(title: 'Cash and expenses', icon: 'b-cash', square: look.orange, onTap: () => _push(context, MoneyEntriesPage(auth: widget.auth))),
-            TkListRow(title: 'Fees', sub: 'What each payments account charges', icon: 'b-card', square: look.teal, onTap: () => _push(context, MoneyFeesPage(auth: widget.auth))),
+            TkListRow(title: 'Cash and expenses', icon: 'b-cash', square: look.teal, onTap: () => _push(context, MoneyEntriesPage(auth: widget.auth))),
+            TkListRow(title: 'Fees', sub: 'What each payments account charges', icon: 'b-card', square: look.lime, onTap: () => _push(context, MoneyFeesPage(auth: widget.auth))),
           ],
         ),
         if (s != null)

@@ -82,7 +82,7 @@ class TkEyebrow extends StatelessWidget {
         // The label first: three parts of the room to the trailing words' two.
         Expanded(
           flex: 3,
-          child: Text(label.toUpperCase(), maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 11.5, weight: 700, lineHeight: 1.3, letterSpacing: 0.4, color: color)),
+          child: Text(label.toUpperCase(), semanticsLabel: label, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 11.5, weight: 700, lineHeight: 1.3, letterSpacing: 0.4, color: color)),
         ),
         if (trailing != null) ...[
           const SizedBox(width: 6),
@@ -541,8 +541,12 @@ class TkFlow extends StatelessWidget {
 /// A whole cut into shares: one bar, a gap between each share, and the key
 /// under it.
 class TkSplitBar extends StatelessWidget {
-  const TkSplitBar({super.key, required this.parts});
+  const TkSplitBar({super.key, required this.parts, this.percent = true});
   final List<({String label, int share, Color color})> parts;
+
+  /// Each share's percent after its label in the key (false: the label
+  /// says it, as an amount).
+  final bool percent;
 
   @override
   Widget build(BuildContext context) {
@@ -580,7 +584,7 @@ class TkSplitBar extends StatelessWidget {
                   children: [
                     Container(width: 8, height: 8, decoration: BoxDecoration(color: p.color, shape: BoxShape.circle)),
                     const SizedBox(width: 5),
-                    Flexible(child: Text('${p.label} ${p.share}%', style: tkText(size: 12, weight: 500, lineHeight: 1.3, color: t.muted))),
+                    Flexible(child: Text(percent ? '${p.label} ${p.share}%' : p.label, style: tkText(size: 12, weight: 500, lineHeight: 1.3, color: t.muted))),
                   ],
                 ),
               ),
@@ -593,9 +597,12 @@ class TkSplitBar extends StatelessWidget {
 
 /// Initials on a warm gradient, as the head shows the person.
 class TkFace extends StatelessWidget {
-  const TkFace(this.initials, {super.key, this.size = 40});
+  const TkFace(this.initials, {super.key, this.size = 40, this.colors});
   final String initials;
   final double size;
+
+  /// The gradient (a name's own, [tkFaceFor]); else a warm one.
+  final List<Color>? colors;
 
   @override
   Widget build(BuildContext context) => ExcludeSemantics(
@@ -603,9 +610,9 @@ class TkFace extends StatelessWidget {
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFFFFB199), Color(0xFFE8634A)]),
+        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: colors ?? const [Color(0xFFFFB199), Color(0xFFE8634A)]),
       ),
       child: Text(initials, maxLines: 1, textScaler: TextScaler.noScaling, style: tkText(size: size * 0.34, weight: 700, color: const Color(0xFFFFFFFF))),
     ),
@@ -615,8 +622,11 @@ class TkFace extends StatelessWidget {
 /// Small bars, one a stretch (an hour), the one picked out full and the
 /// rest soft: a tile's chart.
 class TkMiniBars extends StatelessWidget {
-  const TkMiniBars({super.key, required this.values, required this.color, this.picked, this.height = 46});
+  const TkMiniBars({super.key, required this.values, required this.color, this.picked, this.height = 46, this.labels});
   final List<double> values;
+
+  /// A word under each bar (the days of a week), the picked one bold.
+  final List<String>? labels;
   final Color color;
   final int? picked;
   final double height;
@@ -624,7 +634,8 @@ class TkMiniBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final top = values.fold<double>(0, math.max);
-    return ExcludeSemantics(
+    final t = TkTheme.tokens(context);
+    final bars = ExcludeSemantics(
       child: SizedBox(
         height: height,
         child: Row(
@@ -643,6 +654,133 @@ class TkMiniBars extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+    final l = labels;
+    if (l == null) return bars;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        bars,
+        const SizedBox(height: 4),
+        ExcludeSemantics(
+          child: Row(
+            children: [
+              for (var i = 0; i < l.length; i++) ...[
+                if (i > 0) const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    l[i],
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                    style: tkText(size: 10.5, weight: 600, color: i == picked ? t.text : t.muted),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A soft band in an accent's colour inside a top card: what to see to
+/// next (payments to match, the order that has waited longest, the next
+/// bill), a leading tile, two lines, and its button.
+class TkCallout extends StatelessWidget {
+  const TkCallout({super.key, required this.leading, required this.title, this.sub, required this.color, this.button, this.semantics, this.onPressed});
+  final Widget leading;
+  final String title;
+  final String? sub;
+  final Color color;
+  final String? button;
+  final String? semantics;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        children: [
+          leading,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 14, weight: 600, lineHeight: 1.3, color: t.text)),
+                if (sub != null && sub!.isNotEmpty) Text(sub!, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.3, color: t.muted)),
+              ],
+            ),
+          ),
+          if (button != null && onPressed != null) ...[
+            const SizedBox(width: 8),
+            TkSmallButton(label: button!, semantics: semantics, primary: true, onPressed: onPressed),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// An icon white on a small square of an accent, as a row's or a
+/// callout's tile.
+class TkSquare extends StatelessWidget {
+  const TkSquare(this.icon, {super.key, required this.color, this.size = 34});
+  final String icon;
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(size * 0.32)),
+      alignment: Alignment.center,
+      child: TkIcon(icon, size: size * 0.55, stroke: 2.2, color: const Color(0xFFFFFFFF)),
+    ),
+  );
+}
+
+/// A bar of how much of a whole is done (an invoice paid), in an accent.
+class TkProgress extends StatelessWidget {
+  const TkProgress(this.value, {super.key, required this.color, required this.semanticsLabel});
+  final double value;
+  final Color color;
+  final String semanticsLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Semantics(
+      label: semanticsLabel,
+      excludeSemantics: true,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: SizedBox(
+          height: 8,
+          child: Stack(
+            children: [
+              Container(color: t.tkSoft),
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: _still(context) ? value : 0, end: value.clamp(0.0, 1.0)),
+                duration: _still(context) ? Duration.zero : const Duration(milliseconds: 700),
+                curve: Curves.easeOutCubic,
+                builder: (context, w, _) => FractionallySizedBox(
+                  widthFactor: w,
+                  heightFactor: 1,
+                  child: DecoratedBox(decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(4))),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
