@@ -3,6 +3,8 @@
 // today's sales (Record a sale, a terminal's sale said), what is low, each
 // item with Record stock, Change and its History, and every change kept.
 
+import 'dart:math' as math;
+
 import 'package:flutter/widgets.dart';
 
 import '../api/transport.dart';
@@ -12,13 +14,16 @@ import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/page.dart';
 import '../kit/sheet.dart' show TkKitField;
+import '../kit/look.dart';
+import '../kit/mobile.dart' show TkCountUp, TkHeadButton, TkListRow, TkRoute, TkSection;
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show whenLabel;
 import 'chats.dart' show LinkSection;
 import 'sizes_forms.dart' show choicesOf, sizesOf, variantLabel, variantOf;
 import 'product_form.dart' show hasSizes, sizesLine, sizesWords;
-import 'purchases_page.dart' show PurchasesCard;
+import 'purchases_page.dart' show PurchasesCard, SuppliesPage;
 import 'words.dart' show Tone, naira;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
@@ -131,6 +136,30 @@ String feeInput(int kobo) => kobo % 100 == 0 ? '${kobo ~/ 100}' : '${kobo ~/ 100
 
 int? _whole(String v) => RegExp(r'^\d+$').hasMatch(v.trim()) ? int.parse(v.trim()) : null;
 
+/// What the stock is worth at cost: each counted item's count by its cost
+/// price (sizes counted on their own rows).
+int stockValue(List<Map<String, dynamic>> items) =>
+    items.fold(0, (n, i) => n + ((_int(i['stock']) ?? 0) > 0 && (_int(i['cost_kobo']) ?? 0) > 0 ? _int(i['stock'])! * _int(i['cost_kobo'])! : 0));
+
+/// An amount short, for a tile: "₦1.24M", "₦86.5k", else as it is.
+String compactNaira(int kobo) {
+  final n = kobo / 100;
+  if (n >= 1000000) return '₦${(n / 1000000).toStringAsFixed(n >= 10000000 ? 1 : 2).replaceAll(RegExp(r'\.?0+$'), '')}M';
+  if (n >= 100000) return '₦${(n / 1000).toStringAsFixed(0)}k';
+  return naira(kobo);
+}
+
+/// Today's sales by the hour they were sold (Lagos), 24 of them.
+List<double> salesByHour(List<Map<String, dynamic>> sales) {
+  final out = List<double>.filled(24, 0);
+  for (final x in sales) {
+    final d = DateTime.tryParse(x['sold_at'] as String? ?? '');
+    if (d == null) continue;
+    out[d.toUtc().add(const Duration(hours: 1)).hour] += (_int(x['amount_kobo']) ?? 0).toDouble();
+  }
+  return out;
+}
+
 /// StorefrontStock.tsx deskRows: each product once; one sold in sizes
 /// with their count together, its sizes after it.
 List<({Map<String, dynamic> it, Map<String, dynamic>? size, ({int count, int low, int? stock})? sizes})> deskRows(List<Map<String, dynamic>> items) {
@@ -150,8 +179,11 @@ List<({Map<String, dynamic> it, Map<String, dynamic>? size, ({int count, int low
 }
 
 class StockPage extends StatefulWidget {
-  const StockPage({super.key, required this.auth});
+  const StockPage({super.key, required this.auth, this.backLabel = 'Back'});
   final Auth auth;
+
+  /// "Back to Orders": the head's link says where it goes back to.
+  final String backLabel;
 
   @override
   State<StockPage> createState() => _StockPageState();
@@ -161,6 +193,9 @@ class _StockPageState extends State<StockPage> {
   Map<String, dynamic>? _view;
   Map<String, dynamic>? _sales;
   List<Map<String, dynamic>>? _moves;
+
+  /// The latest shelf count, for its tile.
+  Map<String, dynamic>? _lastCount;
   String? _error;
   String _item = '';
   String _reason = '';
@@ -187,6 +222,12 @@ class _StockPageState extends State<StockPage> {
       if (v['keeps_stock'] == true) {
         final s = await _t.send('GET', '/v1/stock/sales');
         if (mounted) setState(() => _sales = (s as Map?)?.cast<String, dynamic>());
+        try {
+          final c = (await _t.send('GET', '/v1/stock/counts') as Map).cast<String, dynamic>();
+          if (mounted) setState(() => _lastCount = _maps(c['counts']).firstOrNull);
+        } on Object {
+          // No tile; the counts card says why.
+        }
       }
     } on Object catch (e) {
       if (mounted) setState(() => _error = _why(e));
@@ -237,18 +278,22 @@ class _StockPageState extends State<StockPage> {
     final low = items.where((i) => i['low'] == true).toList();
     final stuck = (v?['stuck'] as List?)?.length ?? 0;
     final sales = _sales;
+    final look = TkLook.of(context);
     return TkPageScreen(
       title: 'Stock',
+      titleSize: 30,
+      backLabel: widget.backLabel,
       description: 'Your items and how many are left. Every change is kept, so a count can always be explained.',
       onRefresh: () async {
         setState(() => _round++);
         await _reload();
       },
       action: keeps
-          ? TkSmallButton(
+          ? TkHeadButton(
+              icon: 'b-plus',
               label: 'Add items',
               primary: true,
-              onPressed: () => _open((c) => _ItemForm(auth: widget.auth), 'Add an item'),
+              onTap: () => _open((c) => _ItemForm(auth: widget.auth), 'Add an item'),
             )
           : null,
       children: [
@@ -275,92 +320,86 @@ class _StockPageState extends State<StockPage> {
           if (stuck > 0)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-              decoration: BoxDecoration(
-                color: cssMix(t.info, t.panel, 0.06),
-                border: Border.all(color: t.info.withValues(alpha: 0.22)),
-                borderRadius: BorderRadius.circular(10),
-              ),
+              decoration: BoxDecoration(color: look.blue.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(14)),
               child: Text(
                 '${stuck == 1 ? '1 change has' : '$stuck changes have'} not reached your ${v!['catalogue']} table yet. Taskiem sends ${stuck == 1 ? 'it' : 'them'} again by itself.',
                 style: tkText(size: 14, color: t.text),
               ),
             ),
-          TkPageCard(
-            title: 'Low on stock',
-            children: [
-              if (low.isEmpty)
-                Text(
-                  items.any((i) => i['reorder_level'] != null)
-                      ? 'Nothing is at or below its reorder level.'
-                      : 'Give your items a reorder level, and they show here when they run low.',
-                  style: tkHint(t),
-                )
-              else
-                LinkSection(
-                  top: 0,
-                  rows: [
-                    for (final it in low)
-                      (
-                        letter: it['name'] as String? ?? '',
-                        icon: null,
-                        tone: null,
-                        title: it['name'] as String? ?? '',
-                        badge: stockLine(it),
-                        badgeTone: Tone.warn,
-                        sub: itemSub(it),
-                        actions: _actions([_recordStock(it)]),
-                      ),
-                  ],
+          TkHighlights(
+            tiles: [
+              TkHighlight(
+                label: 'Low',
+                icon: 'b-box',
+                color: look.orangeInk,
+                trailing: low.isEmpty ? null : (low.length == 1 ? '1 item' : '${low.length} items'),
+                value: low.isEmpty ? 'None' : 'Order ${low.length}',
+                line: low.isEmpty ? 'nothing at its reorder level' : 'to reach your levels',
+                semanticsLabel: low.isEmpty ? 'Low on stock: none' : 'Low on stock: ${low.length}. Order them',
+                onTap: low.isEmpty ? null : () => _supplies(items),
+              ),
+              TkHighlight(
+                label: 'At cost',
+                icon: 'b-bars',
+                color: look.tealInk,
+                value: compactNaira(stockValue(items)),
+                line: 'on your shelves',
+                semanticsLabel: 'Your stock at cost: ${naira(stockValue(items))}',
+              ),
+              if (_lastCount case final c?)
+                TkHighlight(
+                  wide: true,
+                  label: 'Last count',
+                  icon: 'b-check',
+                  color: (_int(c['lost_kobo']) ?? 0) > 0 ? look.redInk : look.limeInk,
+                  trailing: whenLabel(c['counted_at'] as String? ?? ''),
+                  value: (_int(c['lost_kobo']) ?? 0) > 0 ? '${naira(_int(c['lost_kobo'])!)} missing' : 'Nothing missing',
+                  line: '${_maps(c['lines']).length == 1 ? '1 item' : '${_maps(c['lines']).length} items'} counted${(c['reason'] as String? ?? '').isNotEmpty ? ' · ${c['reason']}' : ''}',
+                  semanticsLabel: 'Last count: ${(_int(c['lost_kobo']) ?? 0) > 0 ? '${naira(_int(c['lost_kobo'])!)} missing' : 'nothing missing'}',
                 ),
             ],
+          ),
+          TkSection(
+            title: 'Running low',
+            count: low.length,
+            trailing: low.isEmpty ? null : TkSmallButton(label: 'Order them', semantics: 'Order what is low', onPressed: () => _supplies(items)),
+            empty: items.any((i) => i['reorder_level'] != null)
+                ? 'Nothing is at or below its reorder level.'
+                : 'Give your items a reorder level, and they show here when they run low.',
+            children: [for (final it in low) _itemRow(look, it)],
           ),
           PurchasesCard(key: const ValueKey('purchases'), auth: widget.auth, items: items, onChanged: _reload, round: _round),
-          _CountsCard(key: const ValueKey('counts'), auth: widget.auth, items: items, onChanged: _reload),
-          TkPageCard(
+          if (sales != null) ..._salesLists(t, sales, items),
+          TkSection(
             key: const ValueKey('items'),
             title: 'Your items',
+            empty: 'No items yet. Add what you sell, and how many you have.',
             children: [
-              if (items.isEmpty)
-                Text('No items yet. Add what you sell, and how many you have.', style: tkHint(t))
-              else
-                LinkSection(
-                  top: 0,
-                  rows: [
-                    for (final r in deskRows(items))
-                      (
-                        letter: r.size == null ? r.it['name'] as String? ?? '' : null,
-                        icon: r.size == null ? null : 'tag',
-                        tone: null,
-                        title: r.size != null ? variantLabel(variantOf(r.it), choicesOf(r.size!)) : r.it['name'] as String? ?? '',
-                        badge: r.sizes != null
-                            ? '${sizesWords(r.sizes!.count)}${r.sizes!.stock != null ? ' · ${r.sizes!.stock} in stock' : ''}${r.sizes!.low > 0 ? ' · ${r.sizes!.low} low' : ''}'
-                            : stockLine(r.it),
-                        badgeTone: r.it['low'] == true || (r.sizes?.low ?? 0) > 0
-                            ? Tone.warn
-                            : (_int(r.it['stock']) == null && r.sizes == null ? Tone.muted : Tone.ok),
-                        sub: r.size != null ? 'Of ${r.size!['name']}' : itemSub(r.it),
-                        actions: _actions([
-                          if (r.sizes == null) _recordStock(r.it),
-                          if (r.size == null)
-                            TkSmallButton(
-                              label: 'Change',
-                              semantics: 'Change ${r.it['name']}',
-                              onPressed: () => _open((c) => _ItemForm(auth: widget.auth, item: r.it), 'Change ${r.it['name']}'),
-                            ),
-                          TkSmallButton(
-                            label: 'History',
-                            semantics: 'History of ${r.it['name']}',
-                            onPressed: () {
-                              setState(() => _item = r.it['id'] as String);
-                              _loadMoves();
-                            },
-                          ),
-                        ]),
-                      ),
-                  ],
-                ),
+              for (final r in deskRows(items))
+                r.size != null
+                    ? TkListRow(
+                        title: variantLabel(variantOf(r.it), choicesOf(r.size!)),
+                        sub: 'Of ${r.size!['name']}',
+                        icon: 'tag',
+                        amount: stockLine(r.it),
+                        status: r.it['low'] == true ? 'Low' : null,
+                        statusAccent: (fill: look.orange, ink: look.orangeInk),
+                        onTap: () => _itemActions(r.it, sized: true),
+                      )
+                    : (r.sizes != null
+                          ? TkListRow(
+                              title: r.it['name'] as String? ?? '',
+                              letters: r.it['name'] as String? ?? '',
+                              sub: '${sizesWords(r.sizes!.count)}${r.sizes!.low > 0 ? ' · ${r.sizes!.low} low' : ''}',
+                              amount: r.sizes!.stock != null ? '${r.sizes!.stock} in stock' : null,
+                              status: r.sizes!.low > 0 ? 'Low' : null,
+                              statusAccent: (fill: look.orange, ink: look.orangeInk),
+                              onTap: () => _itemActions(r.it, sizes: true),
+                            )
+                          : _itemRow(look, r.it)),
             ],
           ),
+          _CountsCard(key: const ValueKey('counts'), auth: widget.auth, items: items, onChanged: _reload),
           TkPageCard(
             title: _item.isNotEmpty ? '${items.where((i) => i['id'] == _item).map((i) => i['name']).firstOrNull ?? 'The item'}: every change' : 'Every change',
             children: [
@@ -419,84 +458,170 @@ class _StockPageState extends State<StockPage> {
     );
   }
 
-  Widget _recordStock(Map<String, dynamic> it) => TkSmallButton(
-    label: 'Record stock',
-    semantics: 'Record stock of ${it['name']}',
-    onPressed: () => _open((c) => _MoveForm(auth: widget.auth, item: it), 'Record stock of ${it['name']}'),
-  );
+  Future<void> _supplies(List<Map<String, dynamic>> items) async {
+    await Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => SuppliesPage(auth: widget.auth, items: items, backLabel: 'Back to Stock')));
+    setState(() => _round++);
+    await _reload();
+  }
 
-  Widget _actions(List<Widget> buttons) => Wrap(spacing: 8, runSpacing: 8, children: buttons);
+  /// An item: its letters, its levels and price, how many are left (a bar
+  /// of it against its order-up-to level, or twice its reorder level), and
+  /// Low when it is; pressed, what can be done to it.
+  Widget _itemRow(TkLook look, Map<String, dynamic> it) {
+    final stock = _int(it['stock']);
+    final full = _int(it['target_level']) ?? ((_int(it['reorder_level']) ?? 0) * 2);
+    final low = it['low'] == true;
+    return TkListRow(
+      title: it['name'] as String? ?? '',
+      letters: it['name'] as String? ?? '',
+      sub: itemSub(it),
+      amount: stockLine(it),
+      status: low ? 'Low' : null,
+      statusAccent: (fill: look.orange, ink: look.orangeInk),
+      level: stock == null || full <= 0 ? null : stock / full,
+      levelColor: low ? look.orange : look.lime,
+      onTap: () => _itemActions(it),
+    );
+  }
+
+  /// What can be done to an item, in a modal: record stock, change it,
+  /// its history.
+  Future<void> _itemActions(Map<String, dynamic> it, {bool sized = false, bool sizes = false}) async {
+    final name = it['name'] as String? ?? '';
+    final pick = await showTkModalChoices(
+      context,
+      title: name,
+      choices: [
+        if (!sizes) ('stock', 'Record stock'),
+        if (!sized) ('change', 'Change'),
+        ('history', 'History'),
+      ],
+    );
+    if (!mounted) return;
+    switch (pick) {
+      case 'stock':
+        await _open((c) => _MoveForm(auth: widget.auth, item: it), 'Record stock of $name');
+      case 'change':
+        await _open((c) => _ItemForm(auth: widget.auth, item: it), 'Change $name');
+      case 'history':
+        setState(() => _item = it['id'] as String);
+        await _loadMoves();
+    }
+  }
+
 
   /// StorefrontStock.tsx SalesToday: the total in a pine hero with Record
   /// a sale, the terminal's sales with no items, then each sale.
   List<Widget> _salesToday(TkTokens t, Map<String, dynamic> day, List<Map<String, dynamic>> items) {
+    final look = TkLook.of(context);
     final by = byHowLine(day);
     final count = _int(day['count']) ?? 0;
     final unsold = _maps(day['unsold']);
     final sales = _maps(day['sales']);
     final canSell = items.isNotEmpty;
+    final waiting = _int(day['waiting']) ?? 0;
+    final perHour = salesByHour(sales);
+    final first = perHour.indexWhere((x) => x > 0), last = perHour.lastIndexWhere((x) => x > 0);
+    final from = first < 0 ? 8 : math.min(8, first), to = math.max(19, last);
+    final unsoldKobo = unsold.fold(0, (n, u) => n + (_int(u['amount_kobo']) ?? 0));
     return [
-      TkHero(
-        label: 'Today’s sales',
+      TkTopCard(
         semanticsLabel: 'Today’s sales',
-        tag: (_int(day['waiting']) ?? 0) > 0 ? '${day['waiting']} waiting for money' : null,
-        amount: naira(_int(day['total_kobo']) ?? 0),
-        sub: count == 0 ? 'No sales recorded today.' : '${count == 1 ? '1 sale' : '$count sales'}${by.isNotEmpty ? ' · $by' : ''}',
-        action: TkSmallButton(
-          label: 'Record a sale',
-          primary: true,
-          onPressed: canSell ? () => _open((c) => _SaleForm(auth: widget.auth, items: items), 'Record a sale') : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TkEyebrow('Today’s sales', color: look.limeInk, trailing: count == 1 ? '1 sale' : '$count sales'),
+            const SizedBox(height: 6),
+            FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: TkCountUp(_int(day['total_kobo']) ?? 0, style: tkFigure(context, size: 40))),
+            Text(
+              count == 0
+                  ? 'No sales recorded today.'
+                  : [if (by.isNotEmpty) by, if (waiting > 0) '$waiting waiting for money'].join(' · '),
+              style: tkText(size: 13, lineHeight: 1.4, color: t.muted),
+            ),
+            if (first >= 0) ...[
+              const SizedBox(height: 12),
+              TkMiniBars(values: perHour.sublist(from, to + 1), color: look.lime, picked: perHour.indexOf(perHour.reduce(math.max)) - from, height: 44),
+            ],
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: TkSmallButton(
+                    label: 'Record a sale',
+                    primary: true,
+                    onPressed: canSell ? () => _open((c) => _SaleForm(auth: widget.auth, items: items), 'Record a sale') : null,
+                  ),
+                ),
+              ],
+            ),
+            if (unsold.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              TkCallout(
+                leading: TkSquare('b-cash', color: look.orange),
+                title: unsold.length == 1 ? '1 terminal sale to explain' : '${unsold.length} terminal sales to explain',
+                sub: '${naira(unsoldKobo)} · say what was sold, and it comes off your stock',
+                color: look.orange,
+              ),
+            ],
+          ],
         ),
       ),
+    ];
+  }
+
+  /// The terminal's sales nobody explained, each with Say; then today's
+  /// sales, newest first.
+  List<Widget> _salesLists(TkTokens t, Map<String, dynamic> day, List<Map<String, dynamic>> items) {
+    final look = TkLook.of(context);
+    final unsold = _maps(day['unsold']);
+    final sales = _maps(day['sales']);
+    final canSell = items.isNotEmpty;
+    return [
       if (unsold.isNotEmpty)
-        TkPageCard(
+        TkSection(
           title: 'Terminal sales with no items',
+          inset: 56,
           children: [
-            Text('Your terminal reported these, but nobody said what was sold. Say it, and the items come off your stock.', style: tkHint(t)),
-            LinkSection(
-              top: 8,
-              rows: [
-                for (final u in unsold)
-                  (
-                    letter: '₦',
-                    icon: null,
-                    tone: null,
-                    title: naira(_int(u['amount_kobo']) ?? 0),
-                    badge: null,
-                    badgeTone: null,
-                    sub: 'On the terminal · ${whenLabel(u['at'] as String? ?? '')}',
-                    actions: TkSmallButton(
-                      label: 'Say what was sold',
+            for (final u in unsold)
+              Row(
+                children: [
+                  Expanded(
+                    child: TkListRow(
+                      title: naira(_int(u['amount_kobo']) ?? 0),
+                      sub: 'On the terminal · ${whenLabel(u['at'] as String? ?? '')}',
+                      icon: 'b-cash',
+                      square: look.orange,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: TkSmallButton(
+                      label: 'Say',
                       semantics: 'Say what was sold for ${naira(_int(u['amount_kobo']) ?? 0)}',
+                      primary: true,
                       onPressed: canSell
                           ? () => _open((c) => _SaleForm(auth: widget.auth, items: items, entry: u), 'What was sold for ${naira(_int(u['amount_kobo']) ?? 0)}')
                           : null,
                     ),
                   ),
-              ],
-            ),
+                ],
+              ),
           ],
         ),
       if (sales.isNotEmpty)
-        TkPageCard(
+        TkSection(
           title: 'Sold today',
           children: [
-            LinkSection(
-              top: 0,
-              rows: [
-                for (final x in sales)
-                  (
-                    letter: _maps(x['lines']).firstOrNull?['item'] as String? ?? '₦',
-                    icon: null,
-                    tone: null,
-                    title: saleTitle(x),
-                    badge: naira(_int(x['amount_kobo']) ?? 0),
-                    badgeTone: x['status'] == 'waiting' ? Tone.warn : Tone.ok,
-                    sub: saleSub(x),
-                    actions: null,
-                  ),
-              ],
-            ),
+            for (final x in sales)
+              TkListRow(
+                title: saleTitle(x),
+                letters: _maps(x['lines']).firstOrNull?['item'] as String? ?? '₦',
+                sub: saleSub(x),
+                amount: naira(_int(x['amount_kobo']) ?? 0),
+                status: x['status'] == 'waiting' ? 'Waiting' : null,
+                statusAccent: (fill: look.orange, ink: look.orangeInk),
+              ),
           ],
         ),
     ];

@@ -143,9 +143,39 @@ Drawn and agreed with the founder, 15 November 2026, in the same look.
   in groups, with Copy; the lines; paid outside Taskiem and a query as a
   short list; the messages.
 
+### Stock and supplies
+
+Drawn and agreed with the founder, 15 November 2026, keeping the split: the
+orders to suppliers leave the Stock screen for one of their own, Supplies.
+
+- **Stock.** A top card of today's sales: the total, how it was paid, bars
+  by the hour, Record a sale, and the terminal's sales nobody explained.
+  Tiles: what is low (opens Supplies), the stock at cost, the last shelf
+  count and what went missing. Running low, each item with a bar of what is
+  left against its level, and Order them. One row to Supplies (how many are
+  open, how many need you). The terminal's sales to say, today's sales,
+  your items (a row opens Record stock, Change, History), the counts and
+  every change.
+- **Supplies** (from Stock and from Orders' "To suppliers"). Open, Received
+  or Cancelled. A top card of what is on order and still owed, the orders as
+  a flow (draft, sent, confirmed, coming in; violet, blue, teal, orange),
+  and Order what is low. Those that need you first, then those on the way;
+  each order keeps its buttons under its row.
+- **Suppliers.** Current or Retired. A top card of what you owe, bills from
+  linked suppliers and unpaid orders apart. Each supplier with what is open
+  and what you owe, On Taskiem when linked; a row opens Change, Prices,
+  Statement, On Taskiem, Send the link again, Retire. The approval limit
+  and the delivery address stay as cards to fill in.
+- **One order to a supplier.** Its total and what to do now (say what came,
+  answer their change, confirm their draft), how far it has gone (sent,
+  confirmed, delivered, received), All came or Not all came; the supplier on
+  one card with what they last said; the lines with their amounts and the
+  total; Cancel as a row.
+
 ## Order
 
 1. Orders and Money, and the chat's motion. Done.
 2. Today, Money and Orders in Direction B. **Done; waiting for the founder's word.**
 3. Invoices and bills. **Done; waiting for the founder's word.**
-4. Then stock, suppliers, riders, tables, Team, and the settings-like pages, the same way.
+4. Stock, Supplies, Suppliers and an order to a supplier. **Done; waiting for the founder's word.**
+5. Then riders, tables, Team, and the settings-like pages, the same way.

@@ -641,7 +641,14 @@ class TkListRow extends StatelessWidget {
     this.semanticsLabel,
     this.square,
     this.statusAccent,
+    this.level,
+    this.levelColor,
   });
+
+  /// How full it is (an item's stock against its level), as a thin bar
+  /// under the line; null for none.
+  final double? level;
+  final Color? levelColor;
   final String title;
   final String sub;
   final String? letters;
@@ -773,6 +780,29 @@ class TkListRow extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted),
+                        ),
+                      if (level != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6, right: 12),
+                          child: ExcludeSemantics(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: SizedBox(
+                                height: 4,
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    ColoredBox(color: t.tkSoft),
+                                    FractionallySizedBox(
+                                      alignment: Alignment.centerLeft,
+                                      widthFactor: level!.clamp(0.02, 1.0),
+                                      child: ColoredBox(color: levelColor ?? look.lime),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                     ],
                   ),

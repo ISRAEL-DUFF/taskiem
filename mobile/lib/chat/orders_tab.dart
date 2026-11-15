@@ -4,7 +4,7 @@
 // has waited longest; then a section for each kind, a few compact rows in
 // each (who, what, the amount and its status) and "See all ›" to its full
 // screen: orders from customers (/storefront/orders), from linked
-// businesses (/trade-orders), and to suppliers (the Stock screen and an
+// businesses (/trade-orders), and to suppliers (Supplies and an
 // order's own screen). Those waiting come first, a dot on them. Read again
 // while the tab is open.
 
@@ -25,8 +25,7 @@ import '../theme/theme.dart';
 import 'book_sheet.dart' show lagosTime;
 import 'bookings_page.dart' show orderStatus;
 import 'money_page.dart' show hourWords;
-import 'purchases_page.dart' show openPurchase, purchaseStatus, sellerLine;
-import 'stock_page.dart' show StockPage;
+import 'purchases_page.dart' show SuppliesPage, openPurchase, purchaseStatus, sellerLine;
 import 'storefront_orders_page.dart' show StorefrontOrderPage, StorefrontOrdersPage, orderTotal, orderWhat, relativeAge;
 import 'trade_orders_page.dart' show TradeOrderPage, TradeOrdersPage, linesWords, tradeStatus;
 import 'words.dart' show CardTone, Tone, naira;
@@ -472,7 +471,7 @@ class _OrdersTabState extends State<OrdersTab> with Polling {
     loading: 'Loading your orders to suppliers…',
     waiting: shown.where(purchaseWaiting).length,
     seeAll: 'See all your orders to suppliers',
-    onSeeAll: () => _go(StockPage(auth: _auth)),
+    onSeeAll: () => _go(SuppliesPage(auth: _auth, backLabel: 'Back to Orders')),
     rows: [
       for (final p in shown.take(ordersShown))
         () {
@@ -488,8 +487,8 @@ class _OrdersTabState extends State<OrdersTab> with Polling {
             statusAccent: _accent(context, buyStage(p)),
             waiting: purchaseWaiting(p),
             // A linked supplier's order has its own screen; the rest are
-            // sent, received and paid on the Stock screen.
-            onTap: linked ? () => _then(openPurchase(context, _auth, _str(p['id']))) : () => _go(StockPage(auth: _auth)),
+            // sent, received and paid on Supplies.
+            onTap: linked ? () => _then(openPurchase(context, _auth, _str(p['id']))) : () => _go(SuppliesPage(auth: _auth, backLabel: 'Back to Orders')),
           );
         }(),
     ],

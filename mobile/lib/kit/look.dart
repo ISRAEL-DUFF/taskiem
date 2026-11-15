@@ -786,3 +786,55 @@ class TkProgress extends StatelessWidget {
     );
   }
 }
+
+/// The steps something goes through, side by side on a line: each a dot
+/// (filled once done), its word, and when.
+class TkSteps extends StatelessWidget {
+  const TkSteps({super.key, required this.steps});
+  final List<({String label, String when, bool done})> steps;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    return Semantics(
+      container: true,
+      label: steps.map((s) => '${s.label}${s.done ? (s.when.isEmpty ? ', done' : ', ${s.when}') : ', not yet'}').join('; '),
+      excludeSemantics: true,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 6,
+            child: FractionallySizedBox(widthFactor: 1 - 1 / steps.length, child: Container(height: 2, color: look.line)),
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final s in steps)
+                Expanded(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: s.done ? look.lime : look.card,
+                          border: s.done ? null : Border.all(color: t.muted, width: 2),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(s.label, textAlign: TextAlign.center, maxLines: 2, style: tkText(size: 11.5, weight: 600, lineHeight: 1.2, color: t.text)),
+                      if (s.when.isNotEmpty) Text(s.when, textAlign: TextAlign.center, maxLines: 2, style: tkText(size: 10.5, lineHeight: 1.2, color: t.muted)),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

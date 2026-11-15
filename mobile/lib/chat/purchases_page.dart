@@ -15,7 +15,7 @@ import '../app/auth.dart';
 import '../app/openers.dart';
 import '../kit/forms.dart' show errorWords;
 import '../kit/kit.dart';
-import '../kit/list.dart' show TkEmpty, TkLoading, TkPill, TkRow;
+import '../kit/list.dart' show TkEmpty, TkLoading, TkRow;
 import '../kit/modal.dart';
 import '../kit/page.dart';
 import '../kit/polling.dart';
@@ -32,7 +32,11 @@ import 'stock_page.dart' show StockPage, feeInput, feeKobo;
 import 'tags.dart' show quantity;
 import 'trade_orders_page.dart' show linesWords;
 import 'words.dart' show CardTone, naira;
-import '../kit/mobile.dart' show TkRoute;
+import '../kit/look.dart';
+import '../kit/mobile.dart' show TkCountUp, TkHeadButton, TkListRow, TkPanel, TkRoute, TkSection, TkSkeleton, TkChips, tkInitials;
+import '../theme/look.dart';
+import 'invoices_page.dart' show shortDay;
+import 'orders_tab.dart' show purchaseWaiting;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -43,7 +47,8 @@ String _purchasePath(String id, [String rest = '']) => '/v1/stock/purchases/${Ur
 Future<void> _push(BuildContext context, Widget page) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
 
 /// Opens an order to a supplier.
-Future<void> openPurchase(BuildContext context, Auth auth, String id) => _push(context, PurchasePage(auth: auth, id: id));
+Future<void> openPurchase(BuildContext context, Auth auth, String id, {String backLabel = 'Back'}) =>
+    _push(context, PurchasePage(auth: auth, id: id, backLabel: backLabel));
 
 /// Opens Suppliers.
 void openSuppliers(BuildContext context, Auth auth) => _push(context, SuppliersPage(auth: auth));
@@ -247,10 +252,13 @@ class _ModalFormState extends State<_ModalForm> {
 /// An order to a supplier: its total, what the supplier says, its lines,
 /// their change, and the buyer's steps.
 class PurchasePage extends StatefulWidget {
-  const PurchasePage({super.key, required this.auth, required this.id, this.follow = true});
+  const PurchasePage({super.key, required this.auth, required this.id, this.follow = true, this.backLabel = 'Back'});
   final Auth auth;
   final String id;
   final bool follow;
+
+  /// "Back to Supplies": the head's link says where it goes back to.
+  final String backLabel;
 
   @override
   State<PurchasePage> createState() => _PurchasePageState();
@@ -312,7 +320,8 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
     final p = _p;
     return TkPageScreen(
       title: p == null ? 'Order' : '${p['reference']} to ${p['supplier']}',
-      backLabel: 'Back',
+      titleSize: 22,
+      backLabel: widget.backLabel,
       onRefresh: _load,
       children: [
         if (_error != null) TkErrorBox(_error!),
@@ -334,16 +343,38 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
     final answer = answersDelivery(p);
     final delivered = _str(p['delivered_at']).isNotEmpty;
     final asking = const {'accepted', 'ready', 'dispatched'}.contains(p['seller_status']);
-    final shown = (manage && (steps.acceptChange || steps.cancel)) || (receive && answer);
     return [
-      TkHero(
-        label: 'Order total',
-        tag: purchaseStatus(_str(p['status'])).label,
-        amount: naira(_int(p['total_kobo'])),
-        sub: 'To $supplier\nReceived ${naira(_int(p['received_kobo']))} · Owed ${naira(_int(p['owed_kobo']))}',
-        semanticsLabel: 'The order',
+      _top(context, p, steps, manage, receive, answer),
+      // The supplier: on one card, with what they last said.
+      TkPanel(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        children: [
+          Row(
+            children: [
+              TkFace(tkInitials(supplier), size: 40, colors: tkFaceFor(supplier)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: MergeSemantics(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(supplier, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 16, weight: 600, color: t.text)),
+                      Text(
+                        seller.isNotEmpty
+                            ? '$seller${_str(p['seller_note']).isNotEmpty ? ' “${p['seller_note']}”' : ''}'
+                            : (_str(p['link_id']).isNotEmpty ? 'On Taskiem' : 'Gets your orders on WhatsApp or by text'),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
-      if (seller.isNotEmpty) _notice(t, '$seller${_str(p['seller_note']).isNotEmpty ? ' “${p['seller_note']}”' : ''}'),
       if (_str(p['cancel_asked_at']).isNotEmpty) Text('You asked $supplier to cancel it; they cancel it or keep it.', style: tkHint(t)),
       TkPageCard(
         title: 'What you ordered',
@@ -355,7 +386,14 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_str(l['item']), style: tkText(size: 15, weight: 600, color: t.text)),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: Text(_str(l['item']), style: tkText(size: 15, weight: 600, color: t.text))),
+                        const SizedBox(width: 12),
+                        Text(naira(_int(l['quantity']) * _int(l['cost_kobo'])), style: tkText(size: 15, weight: 600, color: t.text)),
+                      ],
+                    ),
                     Text(
                       [
                         'Ordered ${quantity(_int(l['quantity']), l['unit'] as String?)} at ${naira(_int(l['cost_kobo']))} each',
@@ -368,6 +406,16 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
                 ),
               ),
             ),
+          Container(height: 1, color: TkLook.of(context).line),
+          const SizedBox(height: 10),
+          MergeSemantics(
+            child: Row(
+              children: [
+                Expanded(child: Text('Total', style: tkText(size: 15, weight: 700, color: t.text))),
+                Text(naira(_int(p['total_kobo'])), style: tkDisplay(size: 19, letterSpacing: -0.4, color: t.text)),
+              ],
+            ),
+          ),
         ],
       ),
       if (change.isNotEmpty && p['seller_status'] == 'changed')
@@ -444,50 +492,101 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
             ],
           ],
         ),
-      if (shown)
-        TkPageCard(
-          title: 'Answer $supplier',
+      if (manage && steps.cancel)
+        TkSection(
+          inset: 56,
           children: [
-            if (receive && answer)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text('Within a day of the delivery; after that, $supplier’s count is taken.', style: tkHint(t)),
-              ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (manage && steps.acceptChange)
-                  TkSmallButton(label: 'Accept the change', primary: true, onPressed: _busy ? null : () => _go('accept-change', 'Change accepted')),
-                if (receive && answer) ...[
-                  TkSmallButton(label: 'All came', primary: true, onPressed: _busy ? null : () => _go('all-came', 'Received, and your stock is up')),
-                  TkSmallButton(label: 'Not all came', onPressed: _busy ? null : () => _short(p)),
-                ],
-                if (manage && steps.cancel)
-                  TkSmallButton(
-                    label: 'Cancel the order',
-                    danger: true,
-                    onPressed: _busy
-                        ? null
-                        : () async {
-                            final yes = await showTkConfirm(
-                              context,
-                              title: asking ? 'Ask $supplier to cancel $ref?' : 'Cancel $ref?',
-                              body: '$supplier is told.',
-                              ok: asking ? 'Ask to cancel' : 'Cancel the order',
-                              cancel: 'Keep it',
-                              danger: true,
-                            );
-                            if (yes) await _go('cancel', 'Done, and the supplier is told');
-                          },
-                  ),
-              ],
+            TkListRow(
+              title: 'Cancel the order',
+              sub: asking ? '$supplier has it: you ask them to cancel it' : '$supplier is told',
+              icon: 'b-query',
+              square: TkLook.of(context).red,
+              onTap: _busy
+                  ? null
+                  : () async {
+                      final yes = await showTkConfirm(
+                        context,
+                        title: asking ? 'Ask $supplier to cancel $ref?' : 'Cancel $ref?',
+                        body: '$supplier is told.',
+                        ok: asking ? 'Ask to cancel' : 'Cancel the order',
+                        cancel: 'Keep it',
+                        danger: true,
+                      );
+                      if (yes) await _go('cancel', 'Done, and the supplier is told');
+                    },
             ),
           ],
         ),
       if (_actError != null) TkErrorBox(_actError!),
       if (_str(p['link_id']).isNotEmpty) DocThread(key: ValueKey('thread $ref'), auth: _auth, doc: 'purchase', reference: ref, follow: widget.follow),
     ];
+  }
+
+  /// The top card: what the order is now (and so what to do), its total,
+  /// how far it has gone, and its answer: All came or Not all came, or
+  /// Accept their change.
+  Widget _top(BuildContext context, Map<String, dynamic> p, ({bool confirmProposed, bool acceptChange, bool cancel}) steps, bool manage, bool receive, bool answer) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final supplier = _str(p['supplier']);
+    final status = _str(p['status']);
+    final linked = _str(p['link_id']).isNotEmpty;
+    final (words, ink) = receive && answer
+        ? ('Say what came', look.orangeInk)
+        : manage && steps.acceptChange
+        ? ('They ask to change it', look.orangeInk)
+        : manage && steps.confirmProposed
+        ? ('Confirm their draft', look.violetInk)
+        : (purchaseStatus(status).label, switch (status) {
+            'received' => look.limeInk,
+            'part_received' => look.orangeInk,
+            'cancelled' => t.muted,
+            'confirmed' => look.tealInk,
+            _ => look.blueInk,
+          });
+    String when(String k) => _str(p[k]).isEmpty ? '' : shortDay(_str(p[k]));
+    final latest = ['received_at', 'delivered_at', 'confirmed_at', 'sent_at'].firstWhere((k) => _str(p[k]).isNotEmpty, orElse: () => '');
+    final buttons = <Widget>[
+      if (receive && answer) ...[
+        TkSmallButton(label: 'All came', primary: true, onPressed: _busy ? null : () => _go('all-came', 'Received, and your stock is up')),
+        TkSmallButton(label: 'Not all came', onPressed: _busy ? null : () => _short(p)),
+      ],
+      if (manage && steps.acceptChange) TkSmallButton(label: 'Accept the change', primary: true, onPressed: _busy ? null : () => _go('accept-change', 'Change accepted')),
+    ];
+    return TkTopCard(
+      semanticsLabel: 'The order',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TkEyebrow(words, color: ink, trailing: latest.isEmpty ? purchaseStatus(status).label : '${latest.replaceAll('_at', '')} ${when(latest)}'),
+          const SizedBox(height: 6),
+          FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: TkCountUp(_int(p['total_kobo']), style: tkFigure(context, size: 40))),
+          Text(
+            'To $supplier · received ${naira(_int(p['received_kobo']))} · owed ${naira(_int(p['owed_kobo']))}',
+            style: tkText(size: 13, lineHeight: 1.4, color: t.muted),
+          ),
+          if (status != 'cancelled') ...[
+            const SizedBox(height: 14),
+            TkSteps(
+              steps: [
+                (label: 'Sent', when: when('sent_at'), done: _str(p['sent_at']).isNotEmpty || status != 'drafted'),
+                (label: 'Confirmed', when: when('confirmed_at'), done: _str(p['confirmed_at']).isNotEmpty || const {'confirmed', 'part_received', 'received'}.contains(status)),
+                if (linked) (label: 'Delivered', when: when('delivered_at'), done: _str(p['delivered_at']).isNotEmpty),
+                (label: 'Received', when: when('received_at'), done: status == 'received'),
+              ],
+            ),
+          ],
+          if (buttons.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Row(children: [for (var i = 0; i < buttons.length; i++) ...[if (i > 0) const SizedBox(width: 8), Expanded(child: buttons[i])]]),
+          ],
+          if (receive && answer) ...[
+            const SizedBox(height: 8),
+            Text('Within a day of the delivery; after that, $supplier’s count is taken.', style: tkText(size: 12.5, lineHeight: 1.4, color: t.muted)),
+          ],
+        ],
+      ),
+    );
   }
 
   Future<void> _short(Map<String, dynamic> p) async {
@@ -533,9 +632,19 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
 
 /// Orders to suppliers, on the Stock screen: order what is low, approve
 /// and send, mark confirmed, goods in, a payment, cancel.
+/// The orders to suppliers: on Stock, one row that opens Supplies (and
+/// says how many are open and wait for the business); on Supplies, all of
+/// them ([full]): what is on order, its flow, Order what is low, and each
+/// order with what can be done to it.
 class PurchasesCard extends StatefulWidget {
-  const PurchasesCard({super.key, required this.auth, required this.items, required this.onChanged, this.round = 0});
+  const PurchasesCard({super.key, required this.auth, required this.items, required this.onChanged, this.round = 0, this.full = false, this.show = 'open'});
   final Auth auth;
+
+  /// All of them, as Supplies' body; else Stock's row.
+  final bool full;
+
+  /// Supplies' filter: open, received or cancelled.
+  final String show;
 
   /// The business's own items (a product's sizes are told together).
   final List<Map<String, dynamic>> items;
@@ -600,132 +709,204 @@ class _PurchasesCardState extends State<PurchasesCard> {
 
   /// An order opened on its screen; the card read again on return.
   Future<void> _open(String id) async {
-    await openPurchase(context, widget.auth, id);
+    await openPurchase(context, widget.auth, id, backLabel: widget.full ? 'Back to Supplies' : 'Back to Stock');
     await _reload();
   }
 
   void _step(Map<String, dynamic> p, String what, String done) =>
       _run(() => _auth.transport.send('POST', _purchasePath(_str(p['id']), '/$what'), body: const {}), done);
 
+  /// Where an order stands, as Supplies' flow shows it.
+  static String? stage(Map<String, dynamic> p) {
+    final s = _str(p['status']);
+    final seller = _str(p['seller_status']);
+    if (s == 'part_received' || (s != 'received' && s != 'cancelled' && (seller == 'dispatched' || seller == 'delivered'))) return 'coming';
+    if (s == 'drafted') return 'draft';
+    if (s == 'sent') return 'sent';
+    if (s == 'confirmed') return 'confirmed';
+    return null;
+  }
+
+  ({Color fill, Color ink})? _accent(TkLook look, Map<String, dynamic> p) => switch (p['status'] == 'received' ? 'received' : stage(p)) {
+    'draft' => (fill: look.violet, ink: look.violetInk),
+    'sent' => (fill: look.blue, ink: look.blueInk),
+    'confirmed' => (fill: look.teal, ink: look.tealInk),
+    'coming' => (fill: look.orange, ink: look.orangeInk),
+    'received' => (fill: look.lime, ink: look.limeInk),
+    _ => null,
+  };
+
+  Future<void> _orderLow() => _run(() async {
+    final out = (await _auth.transport.send('POST', '/v1/stock/purchases/low', body: const {}, headers: {'Idempotency-Key': _lowKey}) as Map).cast<String, dynamic>();
+    if (mounted) setState(() => (_lowKey = formKey(), _skipped = ((out['no_supplier'] as List?) ?? const []).whereType<String>().toList()));
+  }, 'Drafted what is low');
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    if (_off) return const SizedBox.shrink();
+    final look = TkLook.of(context);
+    final list = _list ?? const <Map<String, dynamic>>[];
+    bool open(Map<String, dynamic> p) => const {'drafted', 'sent', 'confirmed', 'part_received'}.contains(p['status']);
+    final opened = list.where(open).toList();
+    final waiting = opened.where(purchaseWaiting).toList();
+    if (!widget.full) {
+      if (_off) return const SizedBox.shrink();
+      return TkPanel(
+        inset: 56,
+        children: [
+          TkListRow(
+            title: 'Orders to suppliers',
+            sub: _list == null
+                ? (_error ?? 'Loading…')
+                : [opened.length == 1 ? '1 open' : '${opened.length} open', if (waiting.isNotEmpty) waiting.length == 1 ? '1 needs you' : '${waiting.length} need you'].join(' · '),
+            icon: 'b-truck',
+            square: look.blue,
+            waiting: waiting.isNotEmpty,
+            onTap: () async {
+              await Navigator.of(context).push(
+                TkRoute<void>(pageBuilder: (_, _, _) => SuppliesPage(auth: widget.auth, items: widget.items, backLabel: 'Back to Stock')),
+              );
+              await _reload();
+            },
+          ),
+        ],
+      );
+    }
+    if (_off) return const TkEmpty(icon: 'members', title: 'Suppliers need text messages', line: 'Text messages are not set up on this Taskiem yet.');
     final parents = {
       for (final i in widget.items)
         if (_str(i['variant_of']).isNotEmpty) _str(i['id']): _str(i['variant_of']),
     };
-    final shown = (_list ?? const <Map<String, dynamic>>[]).take(20).toList();
-    return TkPageCard(
-      title: 'Orders to suppliers',
+    final low = widget.items.where((i) => i['low'] == true).length;
+    final onOrder = opened.fold(0, (n, p) => n + _int(p['total_kobo']));
+    final owed = list.where((p) => p['status'] != 'cancelled').fold(0, (n, p) => n + _int(p['owed_kobo']));
+    final shown = switch (widget.show) {
+      'received' => list.where((p) => p['status'] == 'received').toList(),
+      'cancelled' => list.where((p) => p['status'] == 'cancelled').toList(),
+      _ => opened,
+    };
+    final parts = <Widget>[
+      if (widget.show == 'open' && _list != null)
+        TkTopCard(
+          semanticsLabel: 'On order: ${naira(onOrder)}',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TkEyebrow('On order', color: look.blueInk, trailing: opened.length == 1 ? '1 order' : '${opened.length} orders'),
+              const SizedBox(height: 6),
+              FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: TkCountUp(onOrder, style: tkFigure(context, size: 40))),
+              Text(owed > 0 ? '${naira(owed)} still owed on what came' : 'Nothing owed on what came', style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
+              const SizedBox(height: 14),
+              TkFlow(
+                stages: [
+                  (label: 'Draft', count: opened.where((p) => stage(p) == 'draft').length, ink: look.violetInk, dot: look.violet),
+                  (label: 'Sent', count: opened.where((p) => stage(p) == 'sent').length, ink: look.blueInk, dot: look.blue),
+                  (label: 'Confirmed', count: opened.where((p) => stage(p) == 'confirmed').length, ink: look.tealInk, dot: look.teal),
+                  (label: 'Coming in', count: opened.where((p) => stage(p) == 'coming').length, ink: look.orangeInk, dot: look.orange),
+                ],
+              ),
+              const SizedBox(height: 14),
+              TkCallout(
+                leading: TkSquare('b-cart', color: look.orange),
+                title: low > 0 ? (low == 1 ? '1 item is low' : '$low items are low') : 'Low items',
+                sub: 'Each becomes an order to its supplier, enough to reach its order-up-to level',
+                color: look.orange,
+                button: 'Order',
+                semantics: 'Order what is low',
+                onPressed: _busy ? null : _orderLow,
+              ),
+            ],
+          ),
+        ),
+      if (_skipped.isNotEmpty)
+        _notice(t, '${_skipped.join(', ')} ${_skipped.length == 1 ? 'has' : 'have'} no supplier Taskiem knows. Add the supplier, then give the item their name.'),
+      if (_error != null) TkErrorBox(_error!),
+      if (_actError != null) TkErrorBox(_actError!),
+      if (_list == null && _error == null) const TkSkeleton(rows: 3, label: 'Loading your orders to suppliers…'),
+      if (_list != null && shown.isEmpty)
+        TkSection(empty: widget.show == 'open' ? 'No open orders. Order what is low, and the drafts show here.' : 'None yet.', children: const []),
+      if (widget.show == 'open') ...[
+        if (waiting.isNotEmpty) TkSection(title: 'Needs you', count: waiting.length, children: [for (final p in waiting) _row(t, p, parents)]),
+        if (opened.length > waiting.length)
+          TkSection(title: 'On the way', children: [for (final p in opened.where((p) => !purchaseWaiting(p))) _row(t, p, parents)]),
+      ] else if (shown.isNotEmpty)
+        TkSection(children: [for (final p in shown.take(50)) _row(t, p, parents)]),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Each low item becomes an order to its supplier, for enough to reach its order-up-to level. Approve and send it, and the supplier confirms on WhatsApp.',
-          style: tkHint(t),
-        ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            TkSmallButton(
-              label: 'Order what is low',
-              primary: true,
-              onPressed: _busy
-                  ? null
-                  : () => _run(() async {
-                      final out = (await _auth.transport.send('POST', '/v1/stock/purchases/low', body: const {}, headers: {'Idempotency-Key': _lowKey}) as Map)
-                          .cast<String, dynamic>();
-                      if (mounted) setState(() => (_lowKey = formKey(), _skipped = ((out['no_supplier'] as List?) ?? const []).whereType<String>().toList()));
-                    }, 'Drafted what is low'),
-            ),
-            TkSmallButton(label: 'Suppliers', onPressed: () => openSuppliers(context, widget.auth)),
-          ],
-        ),
-        if (_skipped.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: _notice(
-              t,
-              '${_skipped.join(', ')} ${_skipped.length == 1 ? 'has' : 'have'} no supplier Taskiem knows. Add the supplier, then give the item their name.',
-            ),
-          ),
-        if (_error != null) TkErrorBox(_error!),
-        if (_actError != null) TkErrorBox(_actError!),
-        if (_list != null && shown.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Text('No orders yet.', style: tkHint(t)),
-          ),
-        for (final p in shown) _row(t, p, parents),
+        for (var i = 0; i < parts.length; i++) ...[if (i > 0) const SizedBox(height: 14), parts[i]],
       ],
     );
   }
 
   Widget _row(TkTokens t, Map<String, dynamic> p, Map<String, String> parents) {
+    final look = TkLook.of(context);
     final can = purchaseActions(p);
     final ref = _str(p['reference']);
     final supplier = _str(p['supplier']);
     final st = purchaseStatus(_str(p['status']));
     final seller = sellerLine(p);
     final linked = _str(p['link_id']).isNotEmpty;
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TkRow(
-            name: '$ref · $supplier · ${naira(_int(p['total_kobo']))}',
-            letters: supplier,
-            sub: [purchaseSub(p, parents), if (_str(p['counter']).isNotEmpty) '$supplier asked: “${p['counter']}”', if (seller.isNotEmpty) seller].join('\n'),
-            pill: TkPill(st.label, tone: st.tone),
-            onTap: linked ? () => _open(_str(p['id'])) : null,
+    final note = [if (_str(p['counter']).isNotEmpty) '$supplier asked: “${p['counter']}”', if (seller.isNotEmpty) seller].join(' ');
+    final buttons = <Widget>[
+      if (linked) TkSmallButton(label: 'Open', semantics: 'Open $ref', onPressed: () => _open(_str(p['id']))),
+      if (can.send)
+        TkSmallButton(
+          label: 'Approve and send',
+          semantics: 'Approve and send $ref',
+          primary: true,
+          onPressed: _busy ? null : () => _step(p, 'send', '$ref sent to $supplier'),
+        ),
+      if (can.confirm)
+        TkSmallButton(label: 'Mark confirmed', semantics: 'Mark confirmed $ref', onPressed: _busy ? null : () => _step(p, 'confirm', '$ref marked confirmed')),
+      if (can.receive) TkSmallButton(label: 'Goods came in', semantics: 'Goods came in on $ref', primary: true, onPressed: () => _receive(p)),
+      if (can.answerDelivery) TkSmallButton(label: 'Goods came in', semantics: 'Goods came in on $ref', primary: true, onPressed: () => _open(_str(p['id']))),
+      if (can.pay && _int(p['owed_kobo']) > 0) TkSmallButton(label: 'Record a payment', semantics: 'Record a payment for $ref', onPressed: () => _pay(p)),
+      if (can.cancel)
+        TkSmallButton(
+          label: 'Cancel',
+          semantics: 'Cancel $ref',
+          danger: true,
+          onPressed: _busy
+              ? null
+              : () async {
+                  final yes = await showTkConfirm(
+                    context,
+                    title: 'Cancel $ref to $supplier?',
+                    body: '$supplier is told.',
+                    ok: 'Cancel it',
+                    cancel: 'Keep it',
+                    danger: true,
+                  );
+                  if (yes) _step(p, 'cancel', '$ref cancelled');
+                },
+        ),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TkListRow(
+          title: supplier,
+          letters: supplier,
+          sub: '$ref · ${purchaseSub(p, parents)}',
+          amount: naira(_int(p['total_kobo'])),
+          status: st.label,
+          statusAccent: _accent(look, p),
+          waiting: purchaseWaiting(p),
+          onTap: linked ? () => _open(_str(p['id'])) : null,
+        ),
+        if (note.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(66, 0, 14, 8),
+            child: Text(note, maxLines: 3, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted)),
           ),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (linked) TkSmallButton(label: 'Open', semantics: 'Open $ref', onPressed: () => _open(_str(p['id']))),
-              if (can.send)
-                TkSmallButton(
-                  label: 'Approve and send',
-                  semantics: 'Approve and send $ref',
-                  primary: true,
-                  onPressed: _busy ? null : () => _step(p, 'send', '$ref sent to $supplier'),
-                ),
-              if (can.confirm)
-                TkSmallButton(
-                  label: 'Mark confirmed',
-                  semantics: 'Mark confirmed $ref',
-                  onPressed: _busy ? null : () => _step(p, 'confirm', '$ref marked confirmed'),
-                ),
-              if (can.receive) TkSmallButton(label: 'Goods came in', semantics: 'Goods came in on $ref', onPressed: () => _receive(p)),
-              if (can.answerDelivery) TkSmallButton(label: 'Goods came in', semantics: 'Goods came in on $ref', onPressed: () => _open(_str(p['id']))),
-              if (can.pay && _int(p['owed_kobo']) > 0)
-                TkSmallButton(label: 'Record a payment', semantics: 'Record a payment for $ref', onPressed: () => _pay(p)),
-              if (can.cancel)
-                TkSmallButton(
-                  label: 'Cancel',
-                  semantics: 'Cancel $ref',
-                  danger: true,
-                  onPressed: _busy
-                      ? null
-                      : () async {
-                          final yes = await showTkConfirm(
-                            context,
-                            title: 'Cancel $ref to $supplier?',
-                            body: '$supplier is told.',
-                            ok: 'Cancel it',
-                            cancel: 'Keep it',
-                            danger: true,
-                          );
-                          if (yes) _step(p, 'cancel', '$ref cancelled');
-                        },
-                ),
-            ],
+        if (buttons.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(66, 0, 14, 12),
+            child: Wrap(spacing: 8, runSpacing: 8, children: buttons),
           ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -816,6 +997,65 @@ class _PurchasesCardState extends State<PurchasesCard> {
       ),
     );
   }
+}
+
+// --- supplies ---
+
+/// Supplies: the orders to suppliers on a screen of their own (docs/spec/
+/// mobile-app-look.md), opened from Stock's row and from Orders' "To
+/// suppliers". It reads the business's items itself when not handed them,
+/// to say what is low.
+class SuppliesPage extends StatefulWidget {
+  const SuppliesPage({super.key, required this.auth, this.items, this.backLabel = 'Back'});
+  final Auth auth;
+  final List<Map<String, dynamic>>? items;
+  final String backLabel;
+
+  @override
+  State<SuppliesPage> createState() => _SuppliesPageState();
+}
+
+class _SuppliesPageState extends State<SuppliesPage> {
+  String _show = 'open';
+  int _round = 0;
+  late List<Map<String, dynamic>> _items = widget.items ?? const [];
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.items == null) _loadItems();
+  }
+
+  Future<void> _loadItems() async {
+    try {
+      final v = (await widget.auth.transport.send('GET', '/v1/stock') as Map).cast<String, dynamic>();
+      if (mounted) setState(() => _items = _maps(v['items']));
+    } on Object {
+      // Order what is low still works; it just cannot say how many.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => TkPageScreen(
+    title: 'Supplies',
+    titleSize: 30,
+    backLabel: widget.backLabel,
+    description: 'Your orders to suppliers. Each low item becomes an order to its supplier, for enough to reach its order-up-to level. Approve and send it, and the supplier confirms on WhatsApp.',
+    onRefresh: () async {
+      setState(() => _round++);
+      await _loadItems();
+    },
+    action: TkHeadButton(icon: 'b-people', label: 'Suppliers', onTap: () => openSuppliers(context, widget.auth)),
+    under: TkChips<String>(
+      label: 'Show',
+      chips: const [('open', 'Open'), ('received', 'Received'), ('cancelled', 'Cancelled')],
+      on: _show,
+      onPick: (v) => setState(() => _show = v),
+    ),
+    children: [
+      PurchasesCard(key: const ValueKey('supplies'), auth: widget.auth, items: _items, onChanged: _loadItems, round: _round, full: true, show: _show),
+    ],
+  );
 }
 
 // --- suppliers ---
@@ -938,12 +1178,29 @@ class _SuppliersPageState extends State<SuppliersPage> {
       final was = owedLinked[k];
       owedLinked[k] = (name: _str(b['supplier_name']), due: (was?.due ?? 0) + _int(b['due_kobo']), bills: (was?.bills ?? 0) + 1);
     }
+    final look = TkLook.of(context);
+    final owedBills = owedLinked.values.fold(0, (n, o) => n + o.due);
+    final owedOrders = list.where((s) => _str(s['link_id']).isEmpty).fold(0, (n, s) => n + _int(s['owed_kobo']));
+    final owing = list.where((s) => _owed(s) > 0).length;
     return TkPageScreen(
       title: 'Suppliers',
       description: 'Who you buy your stock from. Your orders reach them on WhatsApp, and they confirm with one tap.',
       backLabel: 'Back to Stock',
       onRefresh: _load,
-      action: v == null ? null : TkSmallButton(label: 'Add', semantics: 'Add a supplier', primary: true, onPressed: () => _edit(null)),
+      titleSize: 30,
+      action: v == null ? null : TkHeadButton(icon: 'b-plus', label: 'Add a supplier', primary: true, onTap: () => _edit(null)),
+      under: _off
+          ? null
+          : TkChips<bool>(
+              label: 'Show',
+              chips: const [(false, 'Current'), (true, 'Retired')],
+              on: _retired,
+              onPick: (r) {
+                if (r == _retired) return;
+                setState(() => (_retired = r, _view = null));
+                _load();
+              },
+            ),
       children: [
         if (_off)
           const TkEmpty(icon: 'members', title: 'Suppliers need text messages', line: 'Text messages are not set up on this Taskiem yet.')
@@ -952,21 +1209,29 @@ class _SuppliersPageState extends State<SuppliersPage> {
         if (v == null && _error == null) const TkLoading(rows: 3, label: 'Loading your suppliers…'),
         if (_actError != null) TkErrorBox(_actError!),
         if (v != null) ...[
-          TkPageCard(
-            title: _retired ? 'Retired suppliers' : 'Your suppliers',
-            trailing: TkSmallButton(
-              label: _retired ? 'Show current' : 'Show retired',
-              semantics: _retired ? 'Show current suppliers' : 'Show retired suppliers',
-              onPressed: () {
-                setState(() => (_retired = !_retired, _view = null));
-                _load();
-              },
+          if (!_retired && (owedBills > 0 || owedOrders > 0))
+            TkTopCard(
+              semanticsLabel: 'You owe your suppliers ${naira(owedBills + owedOrders)}',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TkEyebrow('You owe them', color: look.orangeInk, trailing: owing == 1 ? '1 supplier' : '$owing suppliers'),
+                  const SizedBox(height: 6),
+                  FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: TkCountUp(owedBills + owedOrders, style: tkFigure(context, size: 40))),
+                  const SizedBox(height: 12),
+                  TkSplitBar(
+                    percent: false,
+                    parts: [
+                      (label: 'Bills on Taskiem ${naira(owedBills)}', share: (100 * owedBills / (owedBills + owedOrders)).round(), color: look.orange),
+                      (label: 'Unpaid orders ${naira(owedOrders)}', share: (100 * owedOrders / (owedBills + owedOrders)).round(), color: look.blue),
+                    ],
+                  ),
+                ],
+              ),
             ),
-            children: [
-              if (list.isEmpty)
-                Text(_retired ? 'No retired suppliers.' : 'No suppliers yet. Add who you buy from, and the items they supply.', style: tkHint(t)),
-              for (final s in list) _supplier(t, s),
-            ],
+          TkSection(
+            empty: _retired ? 'No retired suppliers.' : 'No suppliers yet. Add who you buy from, and the items they supply.',
+            children: [for (final s in list) _supplier(t, s)],
           ),
           if (!_retired)
             TkPageCard(
@@ -1054,78 +1319,71 @@ class _SuppliersPageState extends State<SuppliersPage> {
     );
   }
 
+  /// A supplier: their letters, how orders reach them and what is open,
+  /// what you owe them, On Taskiem when linked; pressed, what can be done.
   Widget _supplier(TkTokens t, Map<String, dynamic> s) {
+    final look = TkLook.of(context);
     final name = _str(s['name']);
     final owed = _owed(s);
     final link = _str(s['link_id']);
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TkRow(
-            name: name,
-            letters: name,
-            sub: supplierSub(s, owed),
-            pill: owed > 0 ? TkPill('Owed ${naira(owed)}', tone: CardTone.warn) : null,
-          ),
-          if (!_retired)
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                TkSmallButton(label: 'Change', semantics: 'Change $name', onPressed: () => _edit(s)),
-                if (link.isNotEmpty)
-                  TkSmallButton(
-                    label: 'Prices',
-                    semantics: 'Prices from $name',
-                    // Their prices, ordered from: their shop in the order sheet.
-                    onPressed: () {
-                      final open = Openers.orderFrom;
-                      if (open == null) return showComingSoon(context);
-                      open(context, link, name);
-                    },
-                  ),
-                if (link.isNotEmpty) TkSmallButton(label: 'Statement', semantics: 'Statement with $name', onPressed: () => openStatement(context, _auth, link)),
-                TkSmallButton(label: 'On Taskiem', semantics: 'On Taskiem for $name', onPressed: () => _link(s)),
-                if (s['reached'] == 'sms')
-                  TkSmallButton(
-                    label: 'Send the link again',
-                    semantics: 'Send the link again to $name',
-                    onPressed: _busy
-                        ? null
-                        : () => _run(
-                            () => _auth.transport.send('POST', '/v1/stock/suppliers/${Uri.encodeComponent(_str(s['id']))}/invite', body: const {}),
-                            'Link sent to $name',
-                          ),
-                  ),
-                TkSmallButton(
-                  label: 'Retire',
-                  semantics: 'Retire $name',
-                  danger: true,
-                  onPressed: _busy
-                      ? null
-                      : () async {
-                          final yes = await showTkConfirm(
-                            context,
-                            title: 'Retire $name?',
-                            body: 'Their orders stay, and you can add them again.',
-                            ok: 'Retire',
-                            cancel: 'Keep them',
-                            danger: true,
-                          );
-                          if (!yes) return;
-                          await _run(
-                            () => _auth.transport.send('POST', '/v1/stock/suppliers/${Uri.encodeComponent(_str(s['id']))}/retire', body: const {}),
-                            '$name retired',
-                          );
-                        },
-                ),
-              ],
-            ),
-        ],
-      ),
+    return TkListRow(
+      title: name,
+      letters: name,
+      sub: [
+        _str(s['phone']),
+        if (link.isEmpty) reachedLine(s),
+        if (_int(s['open']) > 0) _int(s['open']) == 1 ? '1 open order' : '${_int(s['open'])} open orders',
+      ].where((x) => x.isNotEmpty).join(' · '),
+      amount: owed > 0 ? naira(owed) : null,
+      status: link.isNotEmpty ? 'On Taskiem' : null,
+      statusAccent: (fill: look.lime, ink: look.limeInk),
+      semanticsLabel: owed > 0 ? '$name, you owe ${naira(owed)}' : name,
+      onTap: _retired ? null : () => _menu(s),
     );
+  }
+
+  /// What can be done to a supplier, in a modal.
+  Future<void> _menu(Map<String, dynamic> s) async {
+    final name = _str(s['name']);
+    final link = _str(s['link_id']);
+    final pick = await showTkModalChoices(
+      context,
+      title: name,
+      choices: [
+        ('change', 'Change'),
+        if (link.isNotEmpty) ('prices', 'Prices'),
+        if (link.isNotEmpty) ('statement', 'Statement'),
+        ('link', 'On Taskiem'),
+        if (s['reached'] == 'sms') ('invite', 'Send the link again'),
+        ('retire', 'Retire'),
+      ],
+    );
+    if (!mounted || pick == null) return;
+    switch (pick) {
+      case 'change':
+        await _edit(s);
+      case 'prices':
+        final open = Openers.orderFrom;
+        if (open == null) return showComingSoon(context);
+        open(context, link, name);
+      case 'statement':
+        openStatement(context, _auth, link);
+      case 'link':
+        await _link(s);
+      case 'invite':
+        await _run(() => _auth.transport.send('POST', '/v1/stock/suppliers/${Uri.encodeComponent(_str(s['id']))}/invite', body: const {}), 'Link sent to $name');
+      case 'retire':
+        final yes = await showTkConfirm(
+          context,
+          title: 'Retire $name?',
+          body: 'Their orders stay, and you can add them again.',
+          ok: 'Retire',
+          cancel: 'Keep them',
+          danger: true,
+        );
+        if (!yes) return;
+        await _run(() => _auth.transport.send('POST', '/v1/stock/suppliers/${Uri.encodeComponent(_str(s['id']))}/retire', body: const {}), '$name retired');
+    }
   }
 
   Future<void> _edit(Map<String, dynamic>? s) async {
