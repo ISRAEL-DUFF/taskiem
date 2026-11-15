@@ -336,18 +336,18 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
       updating: widget.auth.transport.updating,
       counted: _chats,
       tabs: [
-        (label: 'Chats', icon: 'chat', build: _chatsTab),
+        (label: 'Chats', icon: 'b-chat', build: _chatsTab),
         // Today (the web's Home); Updates as WhatsApp's (status and
         // channels) is planned for later: docs/spec/mobile-app-updates.md.
-        (label: 'Today', icon: 'home', build: (_) => TodayTab(auth: _chats.auth)),
+        (label: 'Today', icon: 'b-home', build: (_) => TodayTab(auth: _chats.auth)),
         (
           label: 'Money',
-          icon: 'money',
+          icon: 'b-money',
           build: (_) => MoneyPage(auth: _chats.auth, tab: true),
         ),
         (
           label: 'Orders',
-          icon: 'orders',
+          icon: 'b-box',
           build: (_) => OrdersTab(auth: _chats.auth),
         ),
       ],

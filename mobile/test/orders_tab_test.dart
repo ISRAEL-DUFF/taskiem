@@ -97,6 +97,13 @@ void main() {
     expect(waitedWords('2026-11-12T11:20:00Z', now), '40 min');
     expect(waitedWords('2026-11-12T11:00:00Z', now), '1 hour');
     expect(waitedWords('2026-11-10T11:00:00Z', now), '2 days');
+    expect(busiestHour([
+      {'created_at': '2026-11-12T09:10:00Z'},
+      {'created_at': '2026-11-12T11:00:00Z'},
+      {'created_at': '2026-11-12T11:40:00Z'},
+      {'created_at': '2026-11-11T11:40:00Z'},
+    ], now), (hour: 12, count: 2), reason: 'Lagos hours; yesterday left out');
+    expect(busiestHour([{'created_at': '2026-11-11T11:40:00Z'}], now), isNull);
   });
 
   Future<ChatsData> chats({List<String> permissions = const [], bool noShop = false}) async {
@@ -146,6 +153,7 @@ void main() {
     expect(t.getTopLeft(find.textContaining('Tunde').last).dy, lessThan(t.getTopLeft(find.textContaining('Ngozi')).dy));
     expect(find.bySemanticsLabel('New: 2, Getting ready: 1, On the way: 0'), findsOneWidget, reason: 'Tunde and Rivers Foods new, Ngozi paid');
     expect(find.text('Tunde has waited 2 hours'), findsOneWidget, reason: 'the oldest of those waiting with a time');
+    expect(find.bySemanticsLabel('Busiest today: 10 am, 1 order'), findsOneWidget, reason: 'Ngozi at 10 am and Tunde at 11, Lagos: the earlier on a tie');
     await t.tap(find.textContaining('Rivers Foods'));
     await t.pumpAndSettle();
     expect(find.byType(TradeOrderPage), findsOneWidget);

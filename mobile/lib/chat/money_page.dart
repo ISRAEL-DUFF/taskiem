@@ -187,6 +187,15 @@ int openBucket(List<Map<String, dynamic>> buckets, DateTime now) {
   }
 }
 
+/// The headline's words: "Kept in November", "Kept this week".
+String keptWords(String choice, Period p) => switch (choice) {
+  'today' => 'Kept today',
+  'yesterday' => 'Kept yesterday',
+  'week' => 'Kept this week',
+  'month' || 'last_month' => 'Kept in ${_monthsLong[int.parse(p.from.substring(5, 7)) - 1]}',
+  _ => 'Kept · ${periodWords(p)}',
+};
+
 /// The money kept against what was kept then: "₦196,000 more than
 /// October, same days", up; null when nothing moved then.
 ({String words, bool? up})? keptAgainst(Map<String, dynamic> now, Map<String, dynamic>? then, String thenWords) {
@@ -422,7 +431,7 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
                 TkEyebrow(
                   'In and out',
                   color: t.muted,
-                  icon: 'activity',
+                  icon: 'b-bars',
                   trailing: _str(s['unit']).isEmpty || buckets.length < 2 ? null : (_str(s['unit']) == 'hour' ? 'Hour by hour' : 'Day by day'),
                 ),
                 if (_str(s['unit']).isNotEmpty && buckets.length > 1) ...[
@@ -445,7 +454,7 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
           tiles: [
             TkHighlight(
               label: 'To match',
-              icon: 'split',
+              icon: 'b-check',
               color: look.tealInk,
               trailing: _waiting.isEmpty ? null : '${_waiting.length}',
               value: naira(unmatched),
@@ -455,7 +464,7 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
             ),
             TkHighlight(
               label: 'Leaks',
-              icon: 'alerts',
+              icon: 'b-bolt',
               color: look.redInk,
               trailing: _int(s?['leaks_open']) > 0 ? '${_int(s?['leaks_open'])} open' : null,
               value: naira(_int(s?['leaks_open_kobo'])),
@@ -475,10 +484,9 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
                 return TkHighlight(
                   wide: true,
                   label: 'Where it came from',
-                  icon: 'money',
+                  icon: 'b-bank',
                   color: look.orangeInk,
-                  value: channelWords(_str(top.first['channel'])),
-                  line: '${share(_int(top.first['in_settled_kobo']))}% of the money in',
+                  semanticsLabel: 'Where the money came from',
                   chart: TkSplitBar(
                     parts: [
                       for (var i = 0; i < top.length; i++) (label: channelWords(_str(top[i]['channel'])), share: share(_int(top[i]['in_settled_kobo'])), color: colours[i]),
@@ -491,11 +499,12 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
         ),
         TkSection(
           title: 'Go to',
+          inset: 56,
           children: [
-            TkListRow(title: 'Invoices', icon: 'invoices', square: look.blue, onTap: () => _push(context, InvoicesPage(auth: widget.auth))),
-            TkListRow(title: 'Bank statement', sub: 'Upload one, see what waits', icon: 'file', square: look.violet, onTap: () => _push(context, MoneyStatementsPage(auth: widget.auth))),
-            TkListRow(title: 'Cash and expenses', icon: 'note', square: look.orange, onTap: () => _push(context, MoneyEntriesPage(auth: widget.auth))),
-            TkListRow(title: 'Fees', sub: 'What each payments account charges', icon: 'card', square: look.teal, onTap: () => _push(context, MoneyFeesPage(auth: widget.auth))),
+            TkListRow(title: 'Invoices', icon: 'b-receipt', square: look.blue, onTap: () => _push(context, InvoicesPage(auth: widget.auth))),
+            TkListRow(title: 'Bank statement', sub: 'Upload one, see what waits', icon: 'b-bank', square: look.violet, onTap: () => _push(context, MoneyStatementsPage(auth: widget.auth))),
+            TkListRow(title: 'Cash and expenses', icon: 'b-cash', square: look.orange, onTap: () => _push(context, MoneyEntriesPage(auth: widget.auth))),
+            TkListRow(title: 'Fees', sub: 'What each payments account charges', icon: 'b-card', square: look.teal, onTap: () => _push(context, MoneyFeesPage(auth: widget.auth))),
           ],
         ),
         if (s != null)
@@ -582,7 +591,7 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
       padding: const EdgeInsets.only(top: 4),
       child: Column(
         children: [
-          Text('Kept · ${periodWords(p)}', textAlign: TextAlign.center, style: tkText(size: 13.5, weight: 500, color: t.muted)),
+          Text(keptWords(_choice, p), textAlign: TextAlign.center, style: tkText(size: 13.5, weight: 500, color: t.muted)),
           FittedBox(
             fit: BoxFit.scaleDown,
             child: TkCountUp(

@@ -1,0 +1,27 @@
+// The icons of the pages away from the chat in their Direction B look
+// (docs/spec/mobile-app-look.md), drawn by hand on the web's 24-unit grid
+// as single paths, and named "b-…" beside the web's own (icons.g.dart).
+// They are drawn with a stroke of 2, a little heavier than the web's 1.7.
+
+const tkLookIcons = <String, String>{
+  'b-box': 'M4 8l8-4 8 4v8l-8 4-8-4zM4 8l8 4 8-4M12 12v8',
+  'b-receipt': 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6',
+  'b-money': 'M6 6h12a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V9a3 3 0 0 1 3-3zM14.5 12a2.5 2.5 0 1 1-5 0a2.5 2.5 0 1 1 5 0z',
+  'b-cash': 'M5 7h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2zM14 12a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM6 10v4M18 10v4',
+  'b-bars': 'M4 20V10M10 20V4M16 20v-8M21 20H3',
+  'b-bank': 'M3 10l9-6 9 6M5 10v8M10 10v8M14 10v8M19 10v8M3 20h18',
+  'b-bolt': 'M13 3L5 14h6l-1 7 8-11h-6z',
+  'b-truck': 'M3 6h11v10H3zM14 9h4l3 3v4h-7M8.6 18a1.6 1.6 0 1 1-3.2 0a1.6 1.6 0 1 1 3.2 0zM18.6 18a1.6 1.6 0 1 1-3.2 0a1.6 1.6 0 1 1 3.2 0z',
+  'b-chat': 'M5 5h14v10H10l-5 4z',
+  'b-home': 'M4 11l8-7 8 7v8.5H4z',
+  'b-search': 'M17.5 11a6.5 6.5 0 1 1-13 0a6.5 6.5 0 1 1 13 0zM20 20l-4-4',
+  'b-bell': 'M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5h4',
+  'b-refund': 'M9 14l-5-5 5-5M4 9h11a5 5 0 0 1 0 10h-3',
+  'b-check': 'M5 12.5l4.5 4.5L19 7',
+  'b-cart': 'M3 5h3l2 11h10l2-8H7M11 20a1 1 0 1 1-2 0a1 1 0 1 1 2 0zM18 20a1 1 0 1 1-2 0a1 1 0 1 1 2 0z',
+  'b-card': 'M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM3 10h18',
+  'b-people': 'M16 8a4 4 0 1 1-8 0a4 4 0 1 1 8 0zM4 20a8 8 0 0 1 16 0',
+  'b-flow': 'M5 6h6v4H5zM13 14h6v4h-6zM8 10v4h8M16 10V6h3',
+  'b-up': 'M12 4.5l8.5 14h-17z',
+  'b-start': 'M6 4v16M6 5h11l-2 4 2 4H6',
+};

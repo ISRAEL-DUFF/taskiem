@@ -34,6 +34,11 @@ Future<void> loadFonts() async {
       ..addFont(Future.value(ByteData.sublistView(File('assets/fonts/${e.value}').readAsBytesSync())));
     await loader.load();
   }
+  final tight = FontLoader('InterTight');
+  for (final w in const [500, 600, 700]) {
+    tight.addFont(Future.value(ByteData.sublistView(File('assets/fonts/InterTight-$w.ttf').readAsBytesSync())));
+  }
+  await tight.load();
 }
 
 /// A parity fixture (`test/parity/fixtures/NAME`, recorded from the demo

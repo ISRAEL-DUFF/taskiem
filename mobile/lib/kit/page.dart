@@ -7,6 +7,7 @@ import 'package:flutter/material.dart' show RefreshIndicator;
 import 'package:flutter/widgets.dart';
 
 import '../chat/thread.dart' show ChatHeadBar;
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'icon.dart';
 import 'kit.dart';
@@ -50,7 +51,7 @@ class TkPageScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (var i = 0; i < children.length; i++) ...[
-            if (i > 0) const SizedBox(height: 20),
+            if (i > 0) const SizedBox(height: 14),
             TkEnter(index: i, child: children[i]),
           ],
         ],
@@ -61,7 +62,7 @@ class TkPageScreen extends StatelessWidget {
       value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: TkAppLook(
         child: ColoredBox(
-        color: t.bg,
+        color: TkLook.of(context).ground,
         child: Column(
           children: [
             Padding(
@@ -79,7 +80,7 @@ class TkPageScreen extends StatelessWidget {
                         title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: tkText(size: back ? 19 : 28, weight: 700, lineHeight: 1.2, letterSpacing: back ? -0.2 : -0.6, color: t.text),
+                        style: tkDisplay(size: back ? 20 : 30, lineHeight: 1.2, letterSpacing: back ? -0.4 : -1.1, color: t.text),
                       ),
                     ),
                   ),
@@ -133,7 +134,7 @@ class TkPageCard extends StatelessWidget {
                   Expanded(
                     child: Semantics(
                       header: true,
-                      child: Text(title!, style: tkText(size: 17, weight: 700, lineHeight: 1.3, letterSpacing: -0.2, color: t.text)),
+                      child: Text(title!, style: tkDisplay(size: 20, lineHeight: 1.3, letterSpacing: -0.4, color: t.text)),
                     ),
                   ),
                   ?trailing,
@@ -143,8 +144,7 @@ class TkPageCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             decoration: BoxDecoration(
-              color: t.panel,
-              border: Border.all(color: t.border),
+              color: TkLook.of(context).card,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),

@@ -1,6 +1,7 @@
-// The bottom bar of the app's home (as WhatsApp's): Chats, Today, Money
-// and Orders, the open one's icon in a pill (the web's `.tabbar`: lime on
-// pine, pine on lime in the dark theme). Each is the app's own; a tab not
+// The bottom bar of the app's home: Chats, Today, Money and Orders, as a
+// phone's own bar (docs/spec/mobile-app-look.md, Direction B): no pill, the
+// open one's icon and word in pine (lime in the dark theme). Each is the
+// app's own; a tab not
 // built yet says it is coming (ComingTab). The bar shows on the home only: an open
 // conversation takes the whole screen, as it does on WhatsApp.
 
@@ -11,6 +12,7 @@ import 'package:flutter/widgets.dart';
 
 import '../chat/chats.dart' show UnreadCount;
 import '../kit/icon.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 
 /// A tab of the home: its name, its icon (theme/icons.g.dart), and what it
@@ -102,11 +104,12 @@ class HomeTabsState extends State<HomeTabs> {
           ),
         if (widget.updating != null)
           _Updating(updating: widget.updating!, offline: widget.offline),
-        // `.tabbar { background: color-mix(panel 94%); border-top: 1px solid var(--border) }`
+        // As a phone's own bar (docs/spec/mobile-app-look.md, Direction B):
+        // the ground's colour, a hairline over it, no pill.
         DecoratedBox(
           decoration: BoxDecoration(
-            color: t.panel,
-            border: Border(top: BorderSide(color: t.border)),
+            color: Color.alphaBlend(TkLook.of(context).bar, TkLook.of(context).ground),
+            border: Border(top: BorderSide(color: TkLook.of(context).line)),
           ),
           child: Padding(
             padding: EdgeInsets.only(left: pad.left, right: pad.right, bottom: pad.bottom),
@@ -204,10 +207,8 @@ class _Tab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    final dark = TkTheme.of(context).mode == TkMode.dark;
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    final pill = on ? (dark ? t.brandDark : t.brand) : const Color(0x00000000);
-    final ink = on ? (dark ? t.brandDarkText : t.brandDark) : t.muted;
+    final ink = on ? TkLook.of(context).on : t.muted;
     return Semantics(
       button: true,
       selected: on,
@@ -218,40 +219,35 @@ class _Tab extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: Padding(
-          // Room above the icons and under the words, as WhatsApp's bar has.
-          padding: const EdgeInsets.only(top: 10, bottom: 12),
+          padding: const EdgeInsets.only(top: 9, bottom: 8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // The open tab's icon in its pill (`.tabbar .tab-icon`), a
-                  // little larger, as WhatsApp's.
-                  AnimatedContainer(
-                    duration: still ? Duration.zero : const Duration(milliseconds: 220),
-                    curve: Curves.easeOut,
-                    width: 64,
-                    height: 32,
-                    decoration: BoxDecoration(color: pill, borderRadius: BorderRadius.circular(16)),
-                    alignment: Alignment.center,
-                    child: AnimatedScale(
-                      scale: on ? 1 : 0.88,
-                      duration: still ? Duration.zero : const Duration(milliseconds: 260),
-                      curve: Curves.easeOutBack,
-                      child: TkIcon(tab.icon, size: 24, color: ink),
+                  // The open tab's icon a little larger, in the open colour.
+                  SizedBox(
+                    width: 48,
+                    height: 26,
+                    child: Center(
+                      child: AnimatedScale(
+                        scale: on ? 1.08 : 1,
+                        duration: still ? Duration.zero : const Duration(milliseconds: 260),
+                        curve: Curves.easeOutBack,
+                        child: TkIcon(tab.icon, size: 24, stroke: 2, color: ink),
+                      ),
                     ),
                   ),
-                  // `.tab-count { top: -3px; right: 5px }`
-                  if (count != null) Positioned(top: -4, right: 6, child: count!),
+                  if (count != null) Positioned(top: -4, right: 2, child: count!),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 tab.label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: tkText(size: 12.5, weight: on ? 700 : 500, color: on ? t.text : t.muted),
+                style: tkText(size: 10.5, weight: 600, lineHeight: 1.2, color: ink),
               ),
             ],
           ),

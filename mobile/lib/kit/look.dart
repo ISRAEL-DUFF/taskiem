@@ -44,7 +44,6 @@ class TkTopCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
     return _pressable(
       onTap: onTap,
@@ -53,12 +52,11 @@ class TkTopCard extends StatelessWidget {
       child: Container(
         padding: padding,
         decoration: BoxDecoration(
-          color: look.glow.a == 0 ? t.panel : null,
+          color: look.glow.a == 0 ? look.card : null,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: t.border),
           gradient: look.glow.a == 0
               ? null
-              : RadialGradient(center: const Alignment(-0.8, -1), radius: 1.2, colors: [Color.alphaBlend(look.glow, t.panel), t.panel], stops: const [0, 0.6]),
+              : RadialGradient(center: const Alignment(-0.8, -1), radius: 1.2, colors: [Color.alphaBlend(look.glow, look.card), look.card], stops: const [0, 0.6]),
         ),
         child: child,
       ),
@@ -80,7 +78,7 @@ class TkEyebrow extends StatelessWidget {
     final t = TkTheme.tokens(context);
     return Row(
       children: [
-        if (icon != null) ...[ExcludeSemantics(child: TkIcon(icon!, size: 15, stroke: 2.2, color: color)), const SizedBox(width: 6)],
+        if (icon != null) ...[ExcludeSemantics(child: TkIcon(icon!, size: 15, stroke: 2.4, color: color)), const SizedBox(width: 6)],
         // The label first: three parts of the room to the trailing words' two.
         Expanded(
           flex: 3,
@@ -100,7 +98,7 @@ class TkEyebrow extends StatelessWidget {
 
 /// A figure large, as the top card and the tiles set it.
 TextStyle tkFigure(BuildContext context, {double size = 40, Color? color}) =>
-    tkText(size: size, weight: 700, lineHeight: 1.12, letterSpacing: -size * 0.035, color: color ?? TkTheme.tokens(context).text);
+    tkDisplay(size: size, lineHeight: 1.1, letterSpacing: -size * 0.04, color: color ?? TkTheme.tokens(context).text);
 
 /// A highlight: its label in an accent's colour, a figure, a line under it,
 /// and a small chart if it has one; pressed, it opens its page.
@@ -109,20 +107,25 @@ class TkHighlight extends StatelessWidget {
     super.key,
     required this.label,
     required this.color,
-    required this.value,
+    this.value,
     this.icon,
     this.trailing,
     this.line,
     this.chart,
     this.wide = false,
+    this.beside = false,
     this.onTap,
     this.semanticsLabel,
   });
   final String label;
+
+  /// On a wide tile, the chart beside the figure rather than under it.
+  final bool beside;
   final Color color;
   final String? icon;
   final String? trailing;
-  final String value;
+  /// The figure; none for a tile that is all chart.
+  final String? value;
   final String? line;
 
   /// Under the figure (a meter, a split bar), or beside it on a wide tile.
@@ -136,26 +139,45 @@ class TkHighlight extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final figure = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (value != null)
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(value!, maxLines: 1, style: tkFigure(context, size: 20)),
+          ),
+        if (line != null && line!.isNotEmpty)
+          Text(line!, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted)),
+      ],
+    );
     return _pressable(
       onTap: onTap,
       label: semanticsLabel,
       scale: 0.97,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
-        decoration: BoxDecoration(color: t.panel, borderRadius: BorderRadius.circular(20), border: Border.all(color: t.border)),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(20)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TkEyebrow(label, color: color, icon: icon, trailing: trailing),
             const SizedBox(height: 8),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(value, maxLines: 1, style: tkFigure(context, size: 21)),
-            ),
-            if (line != null && line!.isNotEmpty)
-              Text(line!, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted)),
-            if (chart != null) ...[const SizedBox(height: 10), chart!],
+            if (beside && chart != null)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Flexible(child: figure),
+                  const SizedBox(width: 12),
+                  Expanded(child: chart!),
+                ],
+              )
+            else ...[
+              if (value != null || (line != null && line!.isNotEmpty)) figure,
+              if (chart != null) ...[if (value != null) const SizedBox(height: 10) else const SizedBox(height: 4), chart!],
+            ],
           ],
         ),
       ),
@@ -229,7 +251,7 @@ class TkTrend extends StatelessWidget {
               alignment: PlaceholderAlignment.middle,
               child: Padding(
                 padding: const EdgeInsets.only(right: 4),
-                child: RotatedBox(quarterTurns: up! ? 0 : 2, child: TkIcon('arrow-up', size: 13, stroke: 2.6, color: ink)),
+                child: RotatedBox(quarterTurns: up! ? 0 : 2, child: TkIcon('b-up', size: 13, fill: true, color: ink)),
               ),
             ),
           TextSpan(text: words),
@@ -588,4 +610,41 @@ class TkFace extends StatelessWidget {
       child: Text(initials, maxLines: 1, textScaler: TextScaler.noScaling, style: tkText(size: size * 0.34, weight: 700, color: const Color(0xFFFFFFFF))),
     ),
   );
+}
+
+/// Small bars, one a stretch (an hour), the one picked out full and the
+/// rest soft: a tile's chart.
+class TkMiniBars extends StatelessWidget {
+  const TkMiniBars({super.key, required this.values, required this.color, this.picked, this.height = 46});
+  final List<double> values;
+  final Color color;
+  final int? picked;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final top = values.fold<double>(0, math.max);
+    return ExcludeSemantics(
+      child: SizedBox(
+        height: height,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (var i = 0; i < values.length; i++) ...[
+              if (i > 0) const SizedBox(width: 4),
+              Expanded(
+                child: Container(
+                  height: top <= 0 ? 3 : math.max(3, height * values[i] / top),
+                  decoration: BoxDecoration(
+                    color: i == picked ? color : color.withValues(alpha: 0.35),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(3), bottom: Radius.circular(1)),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }

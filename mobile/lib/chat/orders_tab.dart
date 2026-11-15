@@ -22,7 +22,9 @@ import '../kit/mobile.dart';
 import '../kit/polling.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
+import 'book_sheet.dart' show lagosTime;
 import 'bookings_page.dart' show orderStatus;
+import 'money_page.dart' show hourWords;
 import 'purchases_page.dart' show openPurchase, purchaseStatus, sellerLine;
 import 'stock_page.dart' show StockPage;
 import 'storefront_orders_page.dart' show StorefrontOrderPage, StorefrontOrdersPage, orderTotal, orderWhat, relativeAge;
@@ -90,6 +92,21 @@ String? buyStage(Map<String, dynamic> p) {
   if (p['status'] == 'part_received' || seller == 'dispatched') return 'coming';
   if (const {'sent', 'confirmed'}.contains(p['status'])) return 'sent';
   return null;
+}
+
+/// The hour of today (Lagos) the most orders came in, and how many: null
+/// with none today.
+({int hour, int count})? busiestHour(List<Map<String, dynamic>> orders, DateTime now) {
+  final per = <int, int>{};
+  final today = now.toUtc().add(const Duration(hours: 1));
+  for (final o in orders) {
+    final d = DateTime.tryParse(_str(o['created_at']))?.toUtc().add(const Duration(hours: 1));
+    if (d == null || d.year != today.year || d.month != today.month || d.day != today.day) continue;
+    per[d.hour] = (per[d.hour] ?? 0) + 1;
+  }
+  if (per.isEmpty) return null;
+  final best = per.entries.reduce((a, b) => b.value > a.value || (b.value == a.value && b.key < a.key) ? b : a);
+  return (hour: best.key, count: best.value);
 }
 
 /// How long an order has waited: "2 hours", "3 days".
@@ -255,7 +272,7 @@ class _OrdersTabState extends State<OrdersTab> with Polling {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TkEyebrow(buying ? 'Orders to suppliers' : 'Orders to you', color: t.muted, icon: 'orders', trailing: open == 1 ? '1 order open' : '$open orders open'),
+                TkEyebrow(buying ? 'Orders to suppliers' : 'Orders to you', color: t.muted, icon: 'b-box', trailing: open == 1 ? '1 order open' : '$open orders open'),
                 const SizedBox(height: 14),
                 TkFlow(stages: stages),
                 if (waiting == 0 && open > 0) ...[
@@ -269,11 +286,62 @@ class _OrdersTabState extends State<OrdersTab> with Polling {
               ],
             ),
           ),
+        if (!none && loaded && !buying) ?_tiles(context, now, kind),
         if (_seesCustomers && shows('customers')) _customersSection(customers),
         if (_seesTrade && shows('businesses')) _tradeSection(trade),
         if (_seesPurchases && !_noSuppliers && shows('suppliers')) _purchasesSection(purchases),
       ],
     );
+  }
+
+  /// The day so far: the next booking to come, and the busiest hour.
+  Widget? _tiles(BuildContext context, DateTime now, String kind) {
+    final look = TkLook.of(context);
+    final all = [if (kind == 'all' || kind == 'customers') ...?_customers, if (kind == 'all' || kind == 'businesses') ...?_trade];
+    final busy = busiestHour(all, now);
+    final next = [
+      for (final o in _customers ?? const <Map<String, dynamic>>[])
+        if (o['kind'] == 'booking' && _open(_str(o['status'])) && (DateTime.tryParse(_str(o['starts_at']))?.isAfter(now) ?? false)) o,
+    ]..sort((a, b) => _str(a['starts_at']).compareTo(_str(b['starts_at'])));
+    final tiles = [
+      if (next.isNotEmpty && (kind == 'all' || kind == 'customers'))
+        () {
+          final o = next.first;
+          final c = _map(o['customer']);
+          final who = [_str(o['service_name']), _str(c['name'])].where((x) => x.isNotEmpty).join(' · ');
+          return TkHighlight(
+            label: 'Next booking',
+            icon: 'b-truck',
+            color: look.tealInk,
+            value: lagosTime(_str(o['starts_at'])),
+            line: who,
+            semanticsLabel: 'Next booking at ${lagosTime(_str(o['starts_at']))}${who.isEmpty ? '' : ', $who'}',
+            onTap: () => _go(StorefrontOrderPage(auth: _auth, reference: _str(o['reference']), now: widget.now, backLabel: 'Back to Orders')),
+          );
+        }(),
+      if (busy != null)
+        TkHighlight(
+          label: 'Busiest',
+          icon: 'b-bars',
+          color: look.limeInk,
+          value: hourWords(busy.hour),
+          line: busy.count == 1 ? '1 order that hour' : '${busy.count} orders that hour',
+          semanticsLabel: 'Busiest today: ${hourWords(busy.hour)}, ${busy.count == 1 ? '1 order' : '${busy.count} orders'}',
+        ),
+    ];
+    return tiles.isEmpty ? null : TkHighlights(tiles: tiles);
+  }
+
+  /// An order's stage, in its accent: new orange, getting ready teal, on
+  /// the way blue.
+  ({Color fill, Color ink})? _accent(BuildContext context, String? stage) {
+    final look = TkLook.of(context);
+    return switch (stage) {
+      'new' || 'answer' => (fill: look.orange, ink: look.orangeInk),
+      'ready' || 'sent' => (fill: look.teal, ink: look.tealInk),
+      'way' || 'coming' => (fill: look.blue, ink: look.blueInk),
+      _ => null,
+    };
   }
 
   /// The order that has waited longest: who, for how long, and Open.
@@ -365,6 +433,7 @@ class _OrdersTabState extends State<OrdersTab> with Polling {
               amount: orderTotal(o),
               status: st.label,
               statusTone: _tone(st.tone),
+              statusAccent: _accent(context, sellStage(o, trade: false)),
               waiting: customerWaiting(o),
               onTap: () => _go(StorefrontOrderPage(auth: _auth, reference: _str(o['reference']), now: widget.now, backLabel: 'Back to Orders')),
             );
@@ -389,6 +458,7 @@ class _OrdersTabState extends State<OrdersTab> with Polling {
           amount: naira(_int(o['total_kobo'])),
           status: tradeStatus(_str(o['status'])).label,
           statusTone: tradeStatus(_str(o['status'])).tone,
+          statusAccent: _accent(context, sellStage(o, trade: true)),
           waiting: tradeWaiting(o),
           onTap: () => _go(TradeOrderPage(auth: _auth, id: _str(o['id']))),
         ),
@@ -415,6 +485,7 @@ class _OrdersTabState extends State<OrdersTab> with Polling {
             amount: naira(_int(p['total_kobo'])),
             status: st.label,
             statusTone: st.tone,
+            statusAccent: _accent(context, buyStage(p)),
             waiting: purchaseWaiting(p),
             // A linked supplier's order has its own screen; the rest are
             // sent, received and paid on the Stock screen.

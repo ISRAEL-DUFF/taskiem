@@ -84,6 +84,37 @@ The parts (`lib/kit/look.dart`):
 (Money); `TkListRow` takes a `square` colour, its icon white on a rounded
 square, for lists of places to go.
 
+### Matched to the mockup
+
+Asked by the founder after the first build, 15 November 2026: the details
+of the mockup, on every page away from the chat, not only these three.
+
+- **Type.** Titles, section titles and figures in **Inter Tight** (bundled
+  from Google Fonts, 500, 600 and 700; `tkDisplay` in `theme.dart`), set
+  tight; the rest stays Inter.
+- **Surfaces.** A ground of #F2F3F0 (light) or black (dark), cards white or
+  #1A1B1A on it **with no border**, a faint hairline between rows.
+- **Spacing.** 14 px between a page's parts; section titles 20 px.
+- **Rows.** A place to go has its icon white on a 30 px square of an
+  accent; a person or a business has their letters white on a 40 px
+  gradient, the same name always the same colour. A status is in its
+  stage's accent (an order: new orange, getting ready teal, on the way
+  blue). "See all" in the muted colour.
+- **Icons.** The mockup's own ("b-…", `theme/look_icons.dart`), a stroke of 2.
+- **Switches.** Periods and kinds as a phone's segmented switch: a soft
+  track, the one chosen on a card; wider than the screen, it scrolls.
+- **The bottom bar.** As a phone's own: the ground's colour and a hairline,
+  no pill, the open tab's icon and word in pine (lime in the dark).
+- **Tiles.** Today has the day's sales by hour, its best hour picked out;
+  Orders the next booking and the busiest hour.
+
+Left as they were, on purpose: words in an accent use its darker ink in
+the light theme (the mockup's bright lime and teal are under 3:1 on
+white); Money keeps its six periods and its bar chart keeps the picked
+day's figures and "See the figures" for a screen reader; Orders has no
+"Delivered" stage (a customer's order keeps no time it was delivered) and
+no search or + in its head (the tab has neither yet).
+
 ## Order
 
 1. Orders and Money, and the chat's motion. Done.

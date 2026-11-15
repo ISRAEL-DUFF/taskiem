@@ -27,7 +27,7 @@ import 'alerts.dart' show subjectWords;
 import 'approve.dart' show ApproveSheet;
 import 'invoice_match.dart' show InvoiceMatchPage, channelWords, unmatchedPath;
 import 'bookings_page.dart' show addDays;
-import 'money_page.dart' show MoneyPage, lagosDate;
+import 'money_page.dart' show MoneyPage, hourWords, lagosDate;
 import 'storefront_orders_page.dart' show StorefrontOrderPage, StorefrontOrdersPage;
 import 'team_pages.dart' show StaffPage, TasksPage;
 import 'words.dart' show naira;
@@ -479,20 +479,13 @@ class _TodayTabState extends State<TodayTab> with Polling {
       final line = day != null ? hourTotals(_maps(day['buckets'])) : paidHourTotals(orders!, now);
       final usual = day != null ? _usual : null;
       final vs = versusUsual(kobo, usual, hour);
-      final sub = day != null
-          ? [
-              payments == 1 ? '1 payment' : '$payments payments',
-              'Money out ${naira(_int(day['out_settled_kobo']))}',
-              if (_toMatch != null) 'To match: ${toMatch.length == 1 ? '1 payment' : '${toMatch.length} payments'}',
-            ].join(' · ')
-          : (shopMoney!.count == 1 ? '1 payment' : '${shopMoney.count} payments');
       top = TkTopCard(
         semanticsLabel: day != null ? 'Money in today. Open Money' : 'Money in today. Open orders',
         onTap: () => _go(day != null ? MoneyPage(auth: _auth, now: widget.now) : StorefrontOrdersPage(auth: _auth, now: widget.now)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TkEyebrow('Money in today', color: look.limeInk, icon: 'money', trailing: 'Now $clock'),
+            TkEyebrow('Money in today', color: look.limeInk, icon: 'b-money', trailing: 'Now $clock'),
             const SizedBox(height: 6),
             FittedBox(
               fit: BoxFit.scaleDown,
@@ -514,18 +507,42 @@ class _TodayTabState extends State<TodayTab> with Polling {
                 if (usual != null) (words: 'A usual $weekday, last 4 weeks', color: t.muted, dashed: true),
               ],
             ),
-            const SizedBox(height: 10),
-            Text(sub, style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
           ],
         ),
       );
     }
 
+    // Money in hour by hour today, the best hour picked out.
+    final dayTotals = day == null ? null : hourTotals(_maps(day['buckets']));
+    final perHour = dayTotals == null ? null : [for (var h = 0; h < 24; h++) dayTotals[h + 1] - dayTotals[h]];
+    TkHighlight? byHour;
+    if (perHour != null && perHour.any((x) => x > 0)) {
+      final first = perHour.indexWhere((x) => x > 0), last = perHour.lastIndexWhere((x) => x > 0);
+      final from = math.min(8, first), to = math.max(19, math.max(last, _lagos(now).hour));
+      var best = first;
+      for (var h = first; h <= last; h++) {
+        if (perHour[h] > perHour[best]) best = h;
+      }
+      byHour = TkHighlight(
+        wide: true,
+        beside: true,
+        label: 'Sales by hour',
+        icon: 'b-bars',
+        color: look.limeInk,
+        trailing: payments == 1 ? '1 payment' : '$payments payments',
+        value: naira(perHour[best].round()),
+        line: 'best hour, ${hourWords(best)}',
+        semanticsLabel: 'Best hour today: ${hourWords(best)}, ${naira(perHour[best].round())}',
+        chart: TkMiniBars(values: perHour.sublist(from, math.min(24, to + 1)), color: look.lime, picked: best - from),
+      );
+    }
+
     final tiles = <TkHighlight>[
+      ?byHour,
       if (counts != null)
         TkHighlight(
           label: 'Orders today',
-          icon: 'orders',
+          icon: 'b-box',
           color: look.tealInk,
           value: '${counts.count}',
           line: counts.waiting > 0 ? '${counts.waiting} waiting for you' : 'None waiting for you',
@@ -535,7 +552,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
       if (week != null)
         TkHighlight(
           label: 'Jobs this week',
-          icon: 'runs',
+          icon: 'b-bolt',
           color: _int(week['failed']) > 0 ? look.orangeInk : look.blueInk,
           value: '${_int(week['total'])}',
           line: _int(week['failed']) > 0
@@ -547,7 +564,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
       if (_workflows != null && counts == null)
         TkHighlight(
           label: 'Working for you',
-          icon: 'workflows',
+          icon: 'b-flow',
           color: look.limeInk,
           value: '${live.length}',
           line: live.length == 1 ? 'workflow is live' : 'workflows are live',
@@ -570,7 +587,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
                   '${greeting(now)}${first.isNotEmpty ? ', $first' : ''}',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: tkText(size: 26, weight: 700, lineHeight: 1.15, letterSpacing: -0.9, color: t.text),
+                  style: tkDisplay(size: 27, lineHeight: 1.1, letterSpacing: -1, color: t.text),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -582,7 +599,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
               ],
             ),
           ),
-          if (name.isNotEmpty) ...[const SizedBox(width: 10), TkFace(tkInitials(name))],
+          if (name.isNotEmpty) ...[const SizedBox(width: 10), TkFace(tkInitials(name), size: 38)],
         ],
       ),
       children: [
@@ -590,6 +607,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
         if (tiles.isNotEmpty) TkHighlights(tiles: tiles),
         TkSection(
           title: 'Needs you',
+          inset: 56,
           count: needs,
           empty: _approvalsError == null ? 'Nothing needs you right now.' : null,
           children: [
@@ -605,7 +623,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
                       child: TkListRow(
                         title: w.amount != null ? '$step ${w.amount}' : step,
                         sub: '${firstPay ? 'First payment to this account' : _str(a['workflow'])} · asked ${shortWhen(_str(a['requested_at']), now)}',
-                        icon: 'approvals',
+                        icon: 'b-receipt',
                         square: firstPay ? look.orange : look.violet,
                         onTap: () => _web('/approvals'),
                       ),
@@ -617,7 +635,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
                   ],
                 );
               }(),
-            if (approvals.length > 5) TkListRow(title: 'See all approvals', icon: 'approvals', square: look.violet, onTap: () => _web('/approvals')),
+            if (approvals.length > 5) TkListRow(title: 'See all approvals', icon: 'b-receipt', square: look.violet, onTap: () => _web('/approvals')),
             for (final f in _forms.take(3))
               TkListRow(
                 title: _str(f['title']),
@@ -630,7 +648,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
               TkListRow(
                 title: 'Match ${p['amount_kobo'] == null ? 'a payment' : naira(p['left_kobo'] is num ? _int(p['left_kobo']) : _int(p['amount_kobo']))}',
                 sub: '${channelWords(_str(p['channel']))} · ${shortWhen(_str(p['received_at']), now)} · no invoice found yet',
-                icon: 'money',
+                icon: 'b-cash',
                 square: look.orange,
                 onTap: () => _go(InvoiceMatchPage(auth: _auth)),
               ),
@@ -642,7 +660,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
                 return TkListRow(
                   title: '${refund ? 'Refund' : 'Order'} from $who',
                   sub: '#${o['reference']} · ${naira(_int(o['total_kobo']))} · ${shortWhen(_str(o['created_at']), now)}',
-                  icon: refund ? 'refund' : 'orders',
+                  icon: refund ? 'b-refund' : 'b-box',
                   square: refund ? look.orange : look.teal,
                   onTap: () => _go(StorefrontOrderPage(auth: _auth, reference: _str(o['reference']), now: widget.now, backLabel: 'Back to Today')),
                 );
@@ -652,6 +670,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
         if (_runsOK)
           TkSection(
             title: 'Activity',
+          inset: 56,
             onSeeAll: () => _web('/runs'),
             seeAllLabel: 'See all runs',
             empty: _runs != null ? 'Nothing has run yet. Publish a workflow and its runs show here.' : null,
@@ -662,7 +681,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
                 TkListRow(
                   title: '${r['workflow']} ${runWords(_str(r['status']))}',
                   sub: shortWhen(_str(r['started_at']), now),
-                  icon: 'runs',
+                  icon: 'b-bolt',
                   square: r['status'] == 'failed' || r['status'] == 'needs_reconciliation' ? look.red : look.blue,
                   onTap: () => _web('/runs/${Uri.encodeComponent(_str(r['id']))}'),
                 ),
@@ -671,6 +690,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
         if (_clock != null || (_tasks != null && _tasks!.any((x) => x['state'] == 'open')))
           TkSection(
             title: 'Your team',
+          inset: 56,
             children: [
               if (_clock case final c?)
                 () {
@@ -678,7 +698,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
                   return TkListRow(
                     title: 'Staff',
                     sub: ['$inNow in', if (late > 0) '$late late'].join(' · '),
-                    icon: 'members',
+                    icon: 'b-people',
                     square: late > 0 ? look.orange : look.teal,
                     onTap: () => _go(StaffPage(auth: _auth)),
                   );
@@ -690,7 +710,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
                   return TkListRow(
                     title: 'Your tasks',
                     sub: open.isEmpty ? 'None open' : '${open.length} open${late > 0 ? ' · $late late' : ''}',
-                    icon: 'check',
+                    icon: 'b-check',
                     square: late > 0 ? look.orange : look.lime,
                     onTap: () => _go(TasksPage(auth: _auth, now: widget.now)),
                   );
@@ -700,6 +720,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
         if (setup != null)
           TkSection(
             title: 'Finish setting up',
+          inset: 56,
             trailing: Padding(
               padding: const EdgeInsets.only(right: 6),
               child: Text('${setup.done} of ${setup.total}', style: tkHint(t)),
@@ -727,13 +748,14 @@ class _TodayTabState extends State<TodayTab> with Polling {
                 ),
               ),
               for (final id in setup.left.take(3))
-                if (checklist[id] case final c?) TkListRow(title: c.$1, sub: 'On the web', icon: 'check', square: look.lime, onTap: () => _web(c.$2)),
-              TkListRow(title: 'See every step', icon: 'start', square: look.blue, onTap: () => _web('/start')),
+                if (checklist[id] case final c?) TkListRow(title: c.$1, sub: 'On the web', icon: 'b-check', square: look.lime, onTap: () => _web(c.$2)),
+              TkListRow(title: 'See every step', icon: 'b-start', square: look.blue, onTap: () => _web('/start')),
             ],
           ),
         if (_workflows != null)
           TkSection(
             title: 'Running for you',
+          inset: 56,
             onSeeAll: () => _web('/workflows'),
             seeAllLabel: 'See all workflows',
             empty: 'Nothing yet. Pick a template on the web to get started.',
@@ -745,7 +767,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
                     title: _str(w['name']),
                     sub:
                         '${triggerWords(w['trigger'] is Map ? _map(w['trigger']) : null)} · ${n == 0 ? 'no runs in 2 weeks' : (n == 1 ? 'ran once in 2 weeks' : 'ran $n times in 2 weeks')}',
-                    icon: 'workflows',
+                    icon: 'b-flow',
                     square: look.teal,
                     onTap: () => _web('/workflows/${Uri.encodeComponent(_str(w['id']))}'),
                   );

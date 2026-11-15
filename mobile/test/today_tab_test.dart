@@ -210,8 +210,9 @@ void main() {
     expect(find.textContaining('₦25,000 ahead of a usual Thursday'), findsOneWidget);
     expect(find.text('A usual Thursday, last 4 weeks'), findsOneWidget);
     expect(find.textContaining('Good afternoon'), findsOneWidget);
-    expect(find.text('₦45,000'), findsOneWidget);
-    expect(find.textContaining('3 payments'), findsOneWidget);
+    expect(find.text('₦45,000'), findsNWidgets(2), reason: 'money in today, and its best hour: all of it came in one');
+    expect(find.text('best hour, 9 am'), findsOneWidget);
+    expect(find.text('3 payments'), findsOneWidget, reason: 'on the sales-by-hour tile');
     expect(find.bySemanticsLabel(RegExp('^Orders today: 1, 1 waiting for you')), findsOneWidget);
     expect(find.text('1 waiting for you'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('^Jobs done this week: 12')), findsOneWidget);

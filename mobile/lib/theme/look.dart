@@ -26,7 +26,17 @@ class TkLook {
     required this.redInk,
     required this.blueInk,
     required this.glow,
+    required this.ground,
+    required this.card,
+    required this.line,
+    required this.bar,
+    required this.on,
   });
+
+  /// The page's ground, the cards on it (no border: the ground sets them
+  /// apart), the hairline between rows, the bottom bar's frosted colour,
+  /// and the open tab's colour.
+  final Color ground, card, line, bar, on;
 
   final Color lime, teal, orange, red, blue, violet;
   final Color limeInk, tealInk, orangeInk, redInk, blueInk;
@@ -51,6 +61,11 @@ const tkLookLight = TkLook(
   redInk: Color(0xFFC81E3C),
   blueInk: Color(0xFF2559C9),
   glow: Color(0x00000000),
+  ground: Color(0xFFF2F3F0),
+  card: Color(0xFFFFFFFF),
+  line: Color(0x12000000),
+  bar: Color(0xDBF8F9F7),
+  on: Color(0xFF0D3B2E),
 );
 
 const tkLookDark = TkLook(
@@ -66,4 +81,21 @@ const tkLookDark = TkLook(
   redInk: Color(0xFFFF7A8E),
   blueInk: Color(0xFF8DB6FF),
   glow: Color(0x14B6F23A),
+  ground: Color(0xFF000000),
+  card: Color(0xFF1A1B1A),
+  line: Color(0x14FFFFFF),
+  bar: Color(0xDB121212),
+  on: Color(0xFFC8F169),
 );
+
+/// A person's or a business's letters on one of these, chosen by the name,
+/// so the same name always has the same colour.
+const tkFaces = <List<Color>>[
+  [Color(0xFFFFB199), Color(0xFFE8634A)],
+  [Color(0xFF9BE7C4), Color(0xFF2EA37A)],
+  [Color(0xFFB9B4FF), Color(0xFF6B5BD6)],
+  [Color(0xFFFFD98A), Color(0xFFE3A21A)],
+  [Color(0xFFA8C8FF), Color(0xFF4C7FE0)],
+];
+
+List<Color> tkFaceFor(String name) => tkFaces[name.codeUnits.fold<int>(0, (a, c) => (a * 31 + c) & 0x7fffffff) % tkFaces.length];

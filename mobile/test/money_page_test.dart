@@ -115,6 +115,10 @@ void main() {
     expect(keptAgainst(kept(1000000, 0), kept(1005000, 0), 'last Thursday'), (words: 'About the same as last Thursday', up: null));
     expect(keptAgainst(kept(1000000, 0), kept(0, 0), 'last Thursday'), isNull, reason: 'nothing moved then');
     expect(keptAgainst(kept(1000000, 0), null, 'last Thursday'), isNull);
+    expect(keptWords('month', periodFor('month', _now)), 'Kept in November');
+    expect(keptWords('last_month', periodFor('last_month', _now)), 'Kept in October');
+    expect(keptWords('week', periodFor('week', _now)), 'Kept this week');
+    expect(keptWords('custom', (from: '2026-11-03', to: '2026-11-05')), startsWith('Kept · '));
   });
 
   test('leaks, statements, entries and fees in words', () {

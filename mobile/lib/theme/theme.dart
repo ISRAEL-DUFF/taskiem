@@ -75,6 +75,21 @@ TextStyle tkText({
   );
 }
 
+/// Headings and figures on the pages away from the chat: Inter Tight, a
+/// narrower cut of Inter (docs/spec/mobile-app-look.md, Direction B), set
+/// tight; letters it lacks fall back to Inter.
+TextStyle tkDisplay({required double size, double weight = 700, double lineHeight = 1.12, double? letterSpacing, Color? color}) => TextStyle(
+  fontFamily: 'InterTight',
+  fontFamilyFallback: const ['Inter', ...tkFallback],
+  fontSize: size,
+  fontWeight: _weight(weight),
+  height: lineHeight,
+  leadingDistribution: TextLeadingDistribution.even,
+  letterSpacing: letterSpacing ?? -size * 0.035,
+  color: color,
+  decoration: TextDecoration.none,
+);
+
 FontWeight _weight(double w) {
   final i = ((w / 100).round().clamp(1, 9)) - 1;
   return FontWeight.values[i];
