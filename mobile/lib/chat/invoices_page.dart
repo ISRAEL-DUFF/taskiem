@@ -10,6 +10,7 @@ import 'dart:typed_data';
 import 'package:flutter/widgets.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../app/lock.dart' show stepOut;
 import '../app/auth.dart';
 import '../app/links.dart';
 import '../kit/forms.dart' show TkSwitchRow, errorWords, nairaKobo;
@@ -502,7 +503,7 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
                 TkLink(label: 'Its page', onTap: () => openOrSay(context, () => openInBrowser(Uri.parse(link)), 'Its page could not be opened.')),
                 TkLink(
                   label: 'Share its page',
-                  onTap: () => SharePlus.instance.share(ShareParams(text: link, subject: 'Invoice $number')),
+                  onTap: () => stepOut(() => SharePlus.instance.share(ShareParams(text: link, subject: 'Invoice $number'))),
                 ),
               ],
             ),

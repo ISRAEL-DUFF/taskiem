@@ -10,6 +10,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import '../api/transport.dart' show ApiError, Offline;
+import '../kit/motion.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart';
@@ -376,7 +377,8 @@ class _Grid extends StatelessWidget {
         return Wrap(
           spacing: gap,
           runSpacing: gap,
-          children: [for (final c in children) SizedBox(width: w, child: c)],
+          // chat.css `.tk-tools-grid > *`: each tile rises 40 ms after the last.
+          children: [for (final (i, c) in children.indexed) SizedBox(width: w, child: TkIn.tile(index: i, child: c))],
         );
       },
     );
@@ -427,7 +429,12 @@ class _Tile extends StatelessWidget {
                       children: [
                         // A button's own line height (about 1.2), not the page's.
                         Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14, weight: 700, lineHeight: 1.2, color: t.text)),
-                        Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 12, lineHeight: 1.2, color: t.muted)),
+                        // ChatTools.tsx `.tk-tile-line.tk-roll`: a new line rolls up.
+                        TkRoll(
+                          value: line,
+                          onShow: false,
+                          child: Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 12, lineHeight: 1.2, color: t.muted)),
+                        ),
                       ],
                     ),
                   ),
@@ -461,9 +468,10 @@ class _ToolsAnchorState extends State<ToolsAnchor> with SingleTickerProviderStat
   final _link = LayerLink();
   final _at = GlobalKey();
 
-  /// chat.css: `.tk-tools { animation: tk-spring-up var(--t-picker)
-  /// var(--spring) }`, leaving `tk-leave-down 180ms var(--ease-out)`.
-  late final _motion = AnimationController(vsync: this, duration: Tk.tPicker, reverseDuration: const Duration(milliseconds: 180));
+  /// chat.css (over motion.css): `.tk-tools { animation: tkd-rise 0.36s
+  /// cubic-bezier(0.2, 0.9, 0.25, 1.12) }`, leaving `tk-leave-down 180ms
+  /// var(--ease-out)`.
+  late final _motion = AnimationController(vsync: this, duration: const Duration(milliseconds: 360), reverseDuration: const Duration(milliseconds: 180));
 
   @override
   void initState() {
@@ -527,12 +535,12 @@ class _ToolsAnchorState extends State<ToolsAnchor> with SingleTickerProviderStat
           final room = (top - pad.top - 12).clamp(160.0, double.infinity);
           final v = _motion.value;
           final leaving = _motion.status == AnimationStatus.reverse;
-          // In: up 14 px and from 98%, on the spring, seen by 70% of it.
+          // In (tkd-rise): up 18 px and from 97%, with a little spring.
           // Out: down 12 px as it fades.
-          final rise = leaving ? 0.0 : Tk.spring.transform(v);
-          final dy = leaving ? 12 * (1 - Tk.easeOut.transform(v)) : 14 * (1 - rise);
-          final scale = leaving ? 1.0 : 0.98 + 0.02 * rise;
-          final opacity = leaving ? Tk.easeOut.transform(v) : (v / 0.7).clamp(0.0, 1.0);
+          final rise = leaving ? 0.0 : const Cubic(0.2, 0.9, 0.25, 1.12).transform(v);
+          final dy = leaving ? 12 * (1 - Tk.easeOut.transform(v)) : 18 * (1 - rise);
+          final scale = leaving ? 1.0 : 0.97 + 0.03 * rise;
+          final opacity = leaving ? Tk.easeOut.transform(v) : rise.clamp(0.0, 1.0);
           return Stack(
             children: [
               if (shown)

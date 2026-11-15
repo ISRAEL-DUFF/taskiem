@@ -1,7 +1,21 @@
+import java.net.URI
+import java.util.Base64
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// The server's host, from --dart-define=TASKIEM_URL (lib/app/config.dart's
+// default otherwise): the links to it that open the app (AndroidManifest.xml).
+val taskiemHost: String = run {
+    val defines = (project.findProperty("dart-defines") as String?)
+        ?.split(",")
+        ?.mapNotNull { d -> runCatching { String(Base64.getDecoder().decode(d)) }.getOrNull() }
+        .orEmpty()
+    val url = defines.firstOrNull { it.startsWith("TASKIEM_URL=") }?.substringAfter("=") ?: "https://staging.ispend.name.ng"
+    runCatching { URI(url).host }.getOrNull() ?: "staging.ispend.name.ng"
 }
 
 android {
@@ -27,6 +41,7 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["taskiemHost"] = taskiemHost
     }
 
     buildTypes {
@@ -46,4 +61,12 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Firebase started when the phone starts the app for a notification
+    // (TaskiemApplication.kt): the version firebase_core's own (its
+    // FirebaseSDKVersion), so there is one Firebase in the app.
+    implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
+    implementation("com.google.firebase:firebase-common")
 }

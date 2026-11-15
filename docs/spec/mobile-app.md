@@ -299,9 +299,16 @@ means signing in again every morning, which no one will do twice.
   the same things that end a session today (a role ending, a password
   changed, signing out everywhere). Audited like a sign-in.
 - **The token** is kept in the phone's secure storage, never in plain files
-  or logs. The app locks itself after 5 minutes away and opens with the
-  phone's own fingerprint, face or PIN; that lock is on the phone and is not
-  the server's step-up. The lock covers every screen, whatever is open on
+  or logs. **The app lock** is as WhatsApp's: off until the person turns
+  it on in Settings (with the phone's own unlock), then **Immediately**,
+  **After 1 minute** or **After 30 minutes** away it asks for the phone's
+  own fingerprint, face or PIN, and on opening the app with a kept session.
+  Changing it or turning it off asks for the phone's unlock too. A dialog,
+  the notification shade, the fingerprint prompt, or the phone's own camera,
+  photo or file picker or share sheet opened from the app is not being away
+  (decided 14 November 2026, after the always-on lock and cover were found
+  annoying on a real phone). That lock is on the phone and is not the
+  server's step-up. The lock covers every screen, whatever is open on
   top of the chats, and keeps them as they were underneath. Signing out, or
   the session ending, closes every screen; switching business closes them
   and starts the chats afresh for the other business.
@@ -406,13 +413,13 @@ WebAuthn origins gain the Android app's signing-key origin.
 - No analytics or crash reporting library that sends data to a third party
   in the first release. Crashes are reported to Taskiem's own server
   (`POST /v1/app/crash`, no message content), with the person's consent.
-- **The app switcher.** As soon as the app is not in front (the app
-  switcher, a call, the notification shade), its screens are covered with
-  the mark on pine, whether or not the app lock is on, and shown again when
-  the person comes back; the lock itself still waits its 5 minutes. This is
-  done in the app's own code on both platforms. Some Android phones take
-  the switcher's picture before the cover is drawn, so it is not a
-  guarantee there.
+- **The app switcher.** With the app lock off nothing is covered, as on
+  WhatsApp. With it on, the switcher shows no picture of the screens: on
+  Android the phone leaves it out (`setRecentsScreenshotEnabled`, Android 13
+  and later; older phones show it), and nothing in the app is covered while
+  it is in front; on an iPhone the screens are covered with the mark on pine
+  as the app stops being in front, and shown again when the person comes
+  back.
 - **Still to do: screenshots.** Nothing stops a screenshot or a screen
   recording while the app is in use: there is no `FLAG_SECURE` under
   `mobile/android` yet. The plan is to set it on Android while a payout

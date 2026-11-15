@@ -10,6 +10,7 @@ import 'package:flutter/rendering.dart' show RenderDecoratedBox;
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/widgets.dart';
 
+import '../kit/motion.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/tap_area.dart';
@@ -309,7 +310,12 @@ class ThreadView<T> extends StatefulWidget {
     this.focus,
     this.detached = false,
     this.onLatest,
+    this.arrival,
   });
+
+  /// How a message arriving while the thread is open comes in: a bubble
+  /// by default.
+  final TkArrival Function(T m)? arrival;
 
   /// Opened at this message (a search's hit, a starred message): placed in
   /// the middle and flashed, as useThread's jump does.
@@ -633,6 +639,7 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
               key: ValueKey('arrive $id'),
               animate: fresh,
               mine: of.mine(m),
+              kind: widget.arrival?.call(m) ?? TkArrival.bubble,
               child: RepaintBoundary(child: widget.focus == id ? KeyedSubtree(key: _focusKey, child: w) : w),
             ),
           );
@@ -717,58 +724,30 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   }
 }
 
-/// A message arriving: it rises from below its place and grows from its
-/// own side (the right for one's own), as a messaging app's do. Drawn as it
-/// is when it was already there, or when the phone asks for less motion.
-class MessageArrive extends StatefulWidget {
-  const MessageArrive({super.key, required this.child, required this.animate, required this.mine});
+/// A message arriving (chat.css): a bubble slides in from its own side
+/// (`tkd-in-l` 0.4 s for theirs, `tkd-in-r` 0.45 s with a little spring for
+/// one's own), a card arrives with a bounce (`tkd-bounce`), a diary line
+/// lands itself ([TkLand], told it is fresh). Drawn as it is when it was
+/// already there, or when the phone asks for less motion.
+class MessageArrive extends StatelessWidget {
+  const MessageArrive({super.key, required this.child, required this.animate, required this.mine, this.kind = TkArrival.bubble});
   final Widget child;
   final bool animate;
   final bool mine;
-
-  @override
-  State<MessageArrive> createState() => _MessageArriveState();
-}
-
-class _MessageArriveState extends State<MessageArrive> with SingleTickerProviderStateMixin {
-  AnimationController? _a;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    if (widget.animate && !still && _a == null) {
-      _a = AnimationController(vsync: this, duration: const Duration(milliseconds: 340))..forward();
-    }
-  }
-
-  @override
-  void dispose() {
-    _a?.dispose();
-    super.dispose();
-  }
+  final TkArrival kind;
 
   @override
   Widget build(BuildContext context) {
-    final a = _a;
-    if (a == null) return widget.child;
-    final rise = CurvedAnimation(parent: a, curve: Curves.easeOutCubic);
-    final grow = CurvedAnimation(parent: a, curve: Curves.easeOutBack);
-    return AnimatedBuilder(
-      animation: a,
-      builder: (context, child) => Opacity(
-              alwaysIncludeSemantics: true,
-              opacity: Curves.easeOut.transform(a.value.clamp(0, 1)),
-              child: Transform.translate(
-                offset: Offset(0, 22 * (1 - rise.value)),
-                child: Transform.scale(
-                  scale: 0.86 + 0.14 * grow.value,
-                  alignment: widget.mine ? Alignment.bottomRight : Alignment.bottomLeft,
-                  child: child,
-                ),
-              ),
-      ),
-      child: widget.child,
+    final w = TkFresh(fresh: animate, child: child);
+    if (!animate || kind == TkArrival.diary) return w;
+    if (kind == TkArrival.card) return TkIn.card(child: w);
+    return TkIn(
+      duration: Duration(milliseconds: mine ? 450 : 400),
+      curve: mine ? const Cubic(0.2, 0.9, 0.25, 1.12) : Curves.ease,
+      dx: mine ? 14 : -14,
+      scale: 0.98,
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: w,
     );
   }
 }
@@ -794,7 +773,8 @@ class _PopInState extends State<PopIn> with SingleTickerProviderStateMixin {
     super.didChangeDependencies();
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     if (_a == null && !still && DateTime.now().difference(PopIn.openedAt) > const Duration(milliseconds: 1500)) {
-      _a = AnimationController(vsync: this, duration: const Duration(milliseconds: 420))..forward();
+      // styles.css `.reaction-chip { animation: chip-pop 0.22s ease-out }`.
+      _a = AnimationController(vsync: this, duration: const Duration(milliseconds: 220))..forward();
     }
   }
 
@@ -808,10 +788,14 @@ class _PopInState extends State<PopIn> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) {
     final a = _a;
     if (a == null) return widget.child;
-    final pop = CurvedAnimation(parent: a, curve: Curves.elasticOut);
+    // chip-pop: 0.6, 1.15 at 60%, then 1, along ease-out.
     return AnimatedBuilder(
       animation: a,
-      builder: (context, child) => Transform.scale(scale: pop.value, child: child),
+      builder: (context, child) {
+        final v = Curves.easeOut.transform(a.value);
+        final scale = v < 0.6 ? 0.6 + (1.15 - 0.6) * v / 0.6 : 1.15 - 0.15 * (v - 0.6) / 0.4;
+        return Transform.scale(scale: scale, child: child);
+      },
       child: widget.child,
     );
   }

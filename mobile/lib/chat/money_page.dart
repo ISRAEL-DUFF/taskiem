@@ -14,6 +14,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 
+import '../app/lock.dart' show stepOut;
 import '../api/transport.dart' show ApiError;
 import '../app/auth.dart';
 import '../kit/forms.dart' show errorWords, nairaKobo;
@@ -1401,7 +1402,7 @@ const _columnFields = [
 typedef StatementPick = Future<({String name, Uint8List bytes})?> Function();
 
 StatementPick pickStatement = () async {
-  final x = await openFile(
+  final x = await stepOut(() => openFile(
     acceptedTypeGroups: const [
       XTypeGroup(
         label: 'CSV',
@@ -1410,7 +1411,7 @@ StatementPick pickStatement = () async {
         uniformTypeIdentifiers: ['public.comma-separated-values-text'],
       ),
     ],
-  );
+  ));
   if (x == null) return null;
   return (name: x.name, bytes: await x.readAsBytes());
 };

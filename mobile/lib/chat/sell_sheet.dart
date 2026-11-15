@@ -11,6 +11,7 @@ import 'package:flutter/widgets.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/session.dart' show uuid4;
+import '../kit/motion.dart';
 import '../kit/forms.dart' show CloseSoon, errorWords, nairaKobo;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
@@ -235,12 +236,13 @@ class _SellSheetState extends State<SellSheet> with CloseSoon {
       padding: const EdgeInsets.only(bottom: 96),
       children: [
         TkSearchBox(key: const ValueKey('search'), controller: _search, hint: 'Search what you sell'),
-        for (final it in shown)
+        // ChatStaff.tsx `.tk-order-list.tk-stagger`: rows follow the sheet up.
+        for (final (i, it) in shown.indexed)
           Padding(
             key: ValueKey(it['id']),
             // `.tk-order-list { padding: 0 20px 96px }`.
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: hasSizes(it) ? _sizedRow(t, it, items) : _row(t, it),
+            child: TkIn.sheetRow(index: i, child: hasSizes(it) ? _sizedRow(t, it, items) : _row(t, it)),
           ),
       ],
     );

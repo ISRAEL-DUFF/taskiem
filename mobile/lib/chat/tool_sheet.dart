@@ -7,6 +7,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../app/auth.dart';
+import '../kit/motion.dart';
 import '../kit/list.dart';
 import '../kit/modal.dart' show showComingSoon;
 import '../kit/sheet.dart';
@@ -131,6 +132,9 @@ class ToolSheet extends StatefulWidget {
 }
 
 class _ToolSheetState extends State<ToolSheet> {
+  /// When the list was first shown: its rows rise only then.
+  DateTime? _listedAt;
+
   final _search = TextEditingController();
   late String? _chip = widget.chip;
   ToolRow? _open;
@@ -337,6 +341,10 @@ class _ToolSheetState extends State<ToolSheet> {
         ],
       );
     }
+    // ChatTools.tsx `.tk-stagger`: the rows follow the sheet up as it
+    // opens; ones scrolled to later are simply there.
+    final listedAt = _listedAt ??= DateTime.now();
+    final rising = DateTime.now().difference(listedAt) < const Duration(milliseconds: 300);
     return ListView.builder(
       padding: pad,
       itemCount: shown.length + 1,
@@ -347,7 +355,7 @@ class _ToolSheetState extends State<ToolSheet> {
         }
         final r = shown[i];
         if (_picking) return _pickRow(context, r);
-        return TkRow(
+        final row = TkRow(
           name: r.name,
           sub: r.sub,
           letters: tool.rowIcon == null ? tileLetters(r.name) : null,
@@ -359,6 +367,7 @@ class _ToolSheetState extends State<ToolSheet> {
               ? widget.onRow!(context, r)
               : showComingSoon(context),
         );
+        return rising ? TkIn.sheetRow(key: ValueKey('rise ${r.id}'), index: i, child: row) : row;
       },
     );
   }

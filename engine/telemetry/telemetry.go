@@ -65,8 +65,13 @@ var (
 		Name: "taskiem_chat_stream_events_total", Help: "Events sent on chat streams, by event (message, gone, conversation, taskiem, typing, ping).",
 	}, []string{"event"})
 	PushSent = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "taskiem_push_total", Help: "Chat pushes by result (sent, gone: the browser is off for good, failed).",
+		Name: "taskiem_push_total", Help: "Pushes by result (sent; gone: the device is off for good; failed: it refused; later: the service was not able; off: not set up; dropped: given up after its tries).",
 	}, []string{"result"})
+	// PushByKind is the same by the kind of push (business, customers,
+	// orders, approvals, alerts), to see which a failure is in.
+	PushByKind = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_push_by_kind_total", Help: "Pushes by kind (business, customers, orders, approvals, alerts) and result (sent, gone, failed, later, off, dropped).",
+	}, []string{"kind", "result"})
 	PushSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name: "taskiem_push_seconds", Help: "How long a push service took to answer a push.",
 		Buckets: []float64{.05, .1, .25, .5, 1, 2.5, 5, 10},

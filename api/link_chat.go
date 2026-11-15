@@ -527,7 +527,7 @@ func (s *Server) sendLinkAs(ctx context.Context, p *Principal, link uuid.UUID, t
 	o.MaxPerDay = lim.LinkMessagesDaily
 	var m links.Message
 	var other uuid.UUID
-	var from string
+	var tenantName string
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		var name string
 		if p.UserID != uuid.Nil {
@@ -535,7 +535,7 @@ func (s *Server) sendLinkAs(ctx context.Context, p *Principal, link uuid.UUID, t
 				return err
 			}
 		}
-		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&from); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&tenantName); err != nil {
 			return err
 		}
 		from := links.Sender{ID: p.Actor(), FirstName: firstWord(name)}
@@ -543,13 +543,27 @@ func (s *Server) sendLinkAs(ctx context.Context, p *Principal, link uuid.UUID, t
 			from = *as
 		}
 		var err error
-		m, other, err = links.SendWithTx(ctx, tx, p.TenantID, link, text, from, actorOf(p), o)
-		return err
+		if m, other, err = links.SendWithTx(ctx, tx, p.TenantID, link, text, from, actorOf(p), o); err != nil {
+			return err
+		}
+		// Its push, queued in the message's own transaction (now in the
+		// receiver's scope: SendWithTx crossed to it): it is sent once this
+		// commits, and a restart loses nothing.
+		// In a savepoint: a push that cannot be queued never loses the message.
+		sp, err := tx.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		if err := s.pushMessageTx(ctx, sp, other, link, p.TenantID, tenantName, m); err != nil {
+			s.Logger.Warn("push: queueing a message", "tenant", other, "err", err)
+			return sp.Rollback(ctx)
+		}
+		return sp.Commit(ctx)
 	})
 	if err != nil {
 		return m, err
 	}
-	s.tellLinkMessage(ctx, other, link, p.TenantID, from, m)
+	s.tellLinkMessage(ctx, other, link, tenantName, m)
 	return m, nil
 }
 
@@ -584,7 +598,8 @@ func linkMessageLine(l lang.Tag, m links.Message, withRef bool) string {
 // tellLinkMessage tells the people of the business a message went to who
 // write in its conversations, on their phones, unless it muted the
 // conversation: "[Dangote Stores] Musa: …".
-func (s *Server) tellLinkMessage(ctx context.Context, to, link, fromTenant uuid.UUID, from string, m links.Message) {
+// Its push was queued with the message (pushMessageTx).
+func (s *Server) tellLinkMessage(ctx context.Context, to, link uuid.UUID, from string, m links.Message) {
 	s.background(ctx, "link message", func(ctx context.Context) {
 		var muted bool
 		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{to}, func(tx pgx.Tx) error {
@@ -597,8 +612,6 @@ func (s *Server) tellLinkMessage(ctx context.Context, to, link, fromTenant uuid.
 		words := func(l lang.Tag) (string, string) {
 			return "[" + whatsapp.SafeText(from) + "]", whatsapp.SafeText(linkMessageLine(l, m, true))
 		}
-		// A push first (it is quick and goes to each browser at once), then the phones.
-		s.pushMessage(ctx, to, link, fromTenant, from, m)
 		s.tellHoldersSent(ctx, to, []string{PermChatTrade}, "msg:"+m.PairID.String(), "/chat?with="+link.String(), words, nil, s.keepSent(ctx, to, link, m.PairID))
 	})
 }

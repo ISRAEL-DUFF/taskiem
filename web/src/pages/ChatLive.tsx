@@ -350,17 +350,6 @@ export function ChatLiveProvider({ children }: { children: ReactNode }) {
     };
   }, []);
   useEffect(() => unlockAudio(), []);
-  // A tap on a notification of the service worker (the app was open behind
-  // it) says which conversation to go to.
-  useEffect(() => {
-    if (!("serviceWorker" in navigator)) return;
-    const go = (e: MessageEvent) => {
-      const d = e.data as { type?: string; link?: string } | null;
-      if (d?.type === "taskiem-go" && typeof d.link === "string" && d.link.startsWith("/chat")) navigate(d.link);
-    };
-    navigator.serviceWorker.addEventListener("message", go);
-    return () => navigator.serviceWorker.removeEventListener("message", go);
-  }, [navigate]);
   const answer = useCallback((yes: boolean) => {
     setAsking(false);
     const prefs = readPrefs();

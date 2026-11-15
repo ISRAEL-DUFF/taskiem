@@ -11,6 +11,7 @@ import 'package:flutter/widgets.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/session.dart' show uuid4;
+import '../kit/motion.dart';
 import '../kit/forms.dart' show CloseSoon, errorWords;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
@@ -289,13 +290,17 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
                 padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
                 child: Text(data['closed'] as String? ?? '', style: tkFormNow(t)),
               ),
-            for (final s in services)
-              TkRow(
-                name: s['name'] as String? ?? '',
-                sub: [_serviceLine(s), if ((s['description'] as String? ?? '').isNotEmpty) s['description'] as String].join('\n'),
-                icon: 'calendar',
-                trailing: open ? TkIcon('chevron', size: 18, color: t.muted) : null,
-                onTap: open ? () => _pick(s) : null,
+            // ChatBook.tsx `.tk-stagger`: the services follow the sheet up.
+            for (final (i, s) in services.indexed)
+              TkIn.sheetRow(
+                index: i,
+                child: TkRow(
+                  name: s['name'] as String? ?? '',
+                  sub: [_serviceLine(s), if ((s['description'] as String? ?? '').isNotEmpty) s['description'] as String].join('\n'),
+                  icon: 'calendar',
+                  trailing: open ? TkIcon('chevron', size: 18, color: t.muted) : null,
+                  onTap: open ? () => _pick(s) : null,
+                ),
               ),
           ],
         );
