@@ -8,6 +8,7 @@
 // expenses; the fees agreed with each connection.
 
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
@@ -20,14 +21,17 @@ import '../app/auth.dart';
 import '../kit/forms.dart' show errorWords, nairaKobo;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty, TkLoading, TkPill, TkRow;
+import '../kit/look.dart';
 import '../kit/mobile.dart';
 import '../kit/modal.dart';
 import '../kit/page.dart';
 import '../kit/polling.dart';
 import '../kit/sheet.dart' show TkKitField;
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'attachments.dart' show handOffFile;
+import 'bills_page.dart' show BillsPage;
 import 'invoice_match.dart' show InvoiceMatchPage, channelWords, unmatchedPath;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'money_sheets.dart' show dateLabel;
@@ -159,6 +163,52 @@ int openBucket(List<Map<String, dynamic>> buckets, DateTime now) {
   return buckets.length - 1;
 }
 
+/// What a period is set against, and its words: a day against the same
+/// weekday a week before, a week against last week's same days, this month
+/// against last month's same days, last month against the month before,
+/// chosen dates against as many days just before them.
+({Period period, String words})? comparedWith(String choice, Period p) {
+  if (periodProblem(p) != null) return null;
+  final days = DateTime.parse('${p.to}T00:00:00Z').difference(DateTime.parse('${p.from}T00:00:00Z')).inDays + 1;
+  String monthOf(String day) => _monthsLong[int.parse(day.substring(5, 7)) - 1];
+  switch (choice) {
+    case 'today' || 'yesterday':
+      final d = _addDays(p.from, -7);
+      return (period: (from: d, to: d), words: 'last ${_weekdaysLong[DateTime.parse('${p.from}T00:00:00Z').weekday - 1]}');
+    case 'week':
+      return (period: (from: _addDays(p.from, -7), to: _addDays(p.to, -7)), words: 'last week, same days');
+    case 'month':
+      final end = _addDays(p.from, -1);
+      final day = math.min(int.parse(p.to.substring(8)), int.parse(end.substring(8)));
+      return (period: (from: '${end.substring(0, 8)}01', to: '${end.substring(0, 8)}${day.toString().padLeft(2, '0')}'), words: '${monthOf(end)}, same days');
+    case 'last_month':
+      final end = _addDays(p.from, -1);
+      return (period: (from: '${end.substring(0, 8)}01', to: end), words: monthOf(end));
+    default:
+      return (period: (from: _addDays(p.from, -days), to: _addDays(p.from, -1)), words: days == 1 ? 'the day before' : 'the $days days before');
+  }
+}
+
+/// The headline's words: "Kept in November", "Kept this week".
+String keptWords(String choice, Period p) => switch (choice) {
+  'today' => 'Kept today',
+  'yesterday' => 'Kept yesterday',
+  'week' => 'Kept this week',
+  'month' || 'last_month' => 'Kept in ${_monthsLong[int.parse(p.from.substring(5, 7)) - 1]}',
+  _ => 'Kept · ${periodWords(p)}',
+};
+
+/// The money kept against what was kept then: "₦196,000 more than
+/// October, same days", up; null when nothing moved then.
+({String words, bool? up})? keptAgainst(Map<String, dynamic> now, Map<String, dynamic>? then, String thenWords) {
+  if (then == null || (_int(then['in_settled_kobo']) == 0 && _int(then['out_settled_kobo']) == 0)) return null;
+  final a = _int(now['in_settled_kobo']) - _int(now['out_settled_kobo']);
+  final b = _int(then['in_settled_kobo']) - _int(then['out_settled_kobo']);
+  final diff = a - b;
+  if (diff.abs() < math.max(10000, (b.abs() * 0.03).round())) return (words: 'About the same as $thenWords', up: null);
+  return diff > 0 ? (words: '${naira(diff)} more than $thenWords', up: true) : (words: '${naira(-diff)} less than $thenWords', up: false);
+}
+
 /// money.ts EXPORTS.
 const moneyExports = [
   ('log', 'Money log', 'Every movement of money in the period, as the log holds it.'),
@@ -207,6 +257,10 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
   final _from = TextEditingController();
   final _to = TextEditingController();
   Map<String, dynamic>? _sum;
+
+  /// What the period is set against ([comparedWith]), and which it was.
+  Map<String, dynamic>? _then;
+  String? _thenFor;
   String? _error;
   List<Map<String, dynamic>> _waiting = const [];
   Map<String, dynamic>? _receive;
@@ -253,6 +307,17 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
     } on Object catch (e) {
       if (mounted && asked == _asked) setState(() => _error = errorWords(e));
     }
+    // What it is set against: read once for each period, not each time
+    // the page reads again.
+    final c = comparedWith(_choice, p);
+    final key = c == null ? null : '${c.period.from} ${c.period.to}';
+    if (c == null || key == _thenFor) return;
+    try {
+      final r = (await widget.auth.transport.send('GET', '/v1/money/summary', query: {'from': c.period.from, 'to': c.period.to}) as Map).cast<String, dynamic>();
+      if (mounted && asked == _asked) setState(() => (_then = r, _thenFor = key));
+    } on Object {
+      // No comparison said.
+    }
   }
 
   Future<void> _loadSide() async {
@@ -279,7 +344,7 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
       _from.text = p.from;
       _to.text = p.to;
     }
-    setState(() => (_choice = v, _sum = null));
+    setState(() => (_choice = v, _sum = null, _then = null, _thenFor = null));
     _load();
   }
 
@@ -305,6 +370,7 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final p = _period;
     final problem = _periodProblem;
     final s = problem == null ? _sum : null;
@@ -318,6 +384,7 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
     return TkScreen(
       title: 'Money',
       back: !widget.tab,
+      compact: true,
       actions: [if (problem == null) TkHeadButton(icon: 'file', label: 'Download as a spreadsheet', onTap: _exports)],
       under: TkChips<String>(
         label: 'Period',
@@ -357,77 +424,92 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
           ),
         if (_error != null) TkErrorBox(_error!),
         if (problem == null && s == null && _error == null) const TkSkeleton(rows: 3, label: 'Loading the period’s money…'),
+        if (s != null) _headline(context, p, s, inPending, outPending),
         if (s != null)
-          TkSummary(
-            key: ValueKey('sum ${p.from} ${p.to}'),
-            label: 'Kept · ${periodWords(p)}',
-            kobo: _int(s['in_settled_kobo']) - _int(s['out_settled_kobo']),
-            figures: [
-              (label: 'Money in', value: naira(_int(s['in_settled_kobo'])), dot: t.chartIn),
-              (label: 'Money out', value: naira(_int(s['out_settled_kobo'])), dot: t.chartOut),
-            ],
-            foot: inPending > 0 || outPending > 0
-                ? [if (inPending > 0) '${naira(inPending)} more coming in', if (outPending > 0) '${naira(outPending)} more going out'].join(' · ')
-                : null,
-          ),
-        TkTiles(
-          tiles: [
-            (icon: 'split', label: 'Match payments', badge: _waiting.length, onTap: () => _push(context, InvoiceMatchPage(auth: widget.auth)), semantics: null),
-            (icon: 'alerts', label: 'Leaks', badge: _int(s?['leaks_open']), onTap: () => _push(context, MoneyLeaksPage(auth: widget.auth)), semantics: null),
-            (icon: 'invoices', label: 'Invoices', badge: 0, onTap: () => _push(context, InvoicesPage(auth: widget.auth)), semantics: null),
-            (icon: 'file', label: 'Bank statement', badge: 0, onTap: () => _push(context, MoneyStatementsPage(auth: widget.auth)), semantics: 'Upload statement'),
-            (icon: 'note', label: 'Cash and expenses', badge: 0, onTap: () => _push(context, MoneyEntriesPage(auth: widget.auth)), semantics: null),
-            (icon: 'card', label: 'Fees', badge: 0, onTap: () => _push(context, MoneyFeesPage(auth: widget.auth)), semantics: null),
-          ],
-        ),
-        if (s != null && _str(s['unit']).isNotEmpty && buckets.length > 1)
-          TkSection(
-            title: _str(s['unit']) == 'hour' ? 'Hour by hour' : 'Day by day',
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-                child: MoneyBars(key: ValueKey('${p.from} ${p.to}'), buckets: buckets, unit: _str(s['unit']), now: _now),
-              ),
-            ],
-          ),
-        if (s != null && (_waiting.isNotEmpty || _int(s['leaks_open']) > 0))
-          TkSection(
-            title: 'Needs a look',
-            children: [
-              if (_waiting.isNotEmpty)
-                TkListRow(
-                  title: _waiting.length == 1 ? '1 payment not matched' : '${_waiting.length} payments not matched',
-                  sub: 'No invoice for it yet',
-                  icon: 'split',
-                  tone: CardTone.warn,
-                  amount: naira(unmatched),
-                  onTap: () => _push(context, InvoiceMatchPage(auth: widget.auth)),
+          TkTopCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TkEyebrow(
+                  'In and out',
+                  color: t.muted,
+                  icon: 'b-bars',
+                  trailing: _str(s['unit']).isEmpty || buckets.length < 2 ? null : (_str(s['unit']) == 'hour' ? 'Hour by hour' : 'Day by day'),
                 ),
-              if (_int(s['leaks_open']) > 0)
-                TkListRow(
-                  title: '${counted(_int(s['leaks_open']), 'leak')} open',
-                  sub: 'Recovered so far: ${naira(_int(s['recovered_kobo']))}',
-                  icon: 'alerts',
-                  tone: CardTone.warn,
-                  amount: naira(_int(s['leaks_open_kobo'])),
-                  onTap: () => _push(context, MoneyLeaksPage(auth: widget.auth)),
-                ),
-            ],
-          ),
-        if (s != null && _int(s['in_settled_kobo']) > 0 && channels.any((c) => _int(c['in_settled_kobo']) > 0))
-          TkSection(
-            title: 'Where it came from',
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-                child: Column(
+                if (_str(s['unit']).isNotEmpty && buckets.length > 1) ...[
+                  const SizedBox(height: 12),
+                  MoneyBars(key: ValueKey('${p.from} ${p.to}'), buckets: buckets, unit: _str(s['unit']), now: _now),
+                ],
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (final c in channels.where((c) => _int(c['in_settled_kobo']) > 0)) _share(t, c, _int(s['in_settled_kobo'])),
+                    Expanded(child: _side(context, look.lime, 'Money in', _int(s['in_settled_kobo']))),
+                    const SizedBox(width: 12),
+                    Expanded(child: _side(context, look.orange, 'Money out', _int(s['out_settled_kobo']))),
                   ],
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+        TkHighlights(
+          tiles: [
+            TkHighlight(
+              label: 'To match',
+              icon: 'b-check',
+              color: look.tealInk,
+              trailing: _waiting.isEmpty ? null : '${_waiting.length}',
+              value: naira(unmatched),
+              line: _waiting.isEmpty ? 'Nothing to match' : (_waiting.length == 1 ? '1 payment not matched' : '${_waiting.length} payments not matched'),
+              semanticsLabel: _waiting.isEmpty ? 'Match payments, none waiting' : 'Match payments, ${_waiting.length} waiting',
+              onTap: () => _push(context, InvoiceMatchPage(auth: widget.auth)),
+            ),
+            TkHighlight(
+              label: 'Leaks',
+              icon: 'b-bolt',
+              color: look.redInk,
+              trailing: _int(s?['leaks_open']) > 0 ? '${_int(s?['leaks_open'])} open' : null,
+              value: naira(_int(s?['leaks_open_kobo'])),
+              line: _int(s?['leaks_open']) > 0 ? 'At risk. Recovered so far: ${naira(_int(s?['recovered_kobo']))}' : 'None open',
+              semanticsLabel: _int(s?['leaks_open']) > 0 ? 'Leaks, ${_int(s?['leaks_open'])} open' : 'Leaks, none open',
+              onTap: () => _push(context, MoneyLeaksPage(auth: widget.auth)),
+            ),
+            if (s != null && _int(s['in_settled_kobo']) > 0 && channels.any((c) => _int(c['in_settled_kobo']) > 0))
+              () {
+                final total = _int(s['in_settled_kobo']);
+                final by = channels.where((c) => _int(c['in_settled_kobo']) > 0).toList()
+                  ..sort((x, y) => _int(y['in_settled_kobo']).compareTo(_int(x['in_settled_kobo'])));
+                final colours = [look.lime, look.teal, look.orange, look.blue];
+                final top = by.take(3).toList();
+                final rest = by.skip(3).fold(0, (n, c) => n + _int(c['in_settled_kobo']));
+                int share(int k) => (100 * k / total).round();
+                return TkHighlight(
+                  wide: true,
+                  label: 'Where it came from',
+                  icon: 'b-bank',
+                  color: look.orangeInk,
+                  semanticsLabel: 'Where the money came from',
+                  chart: TkSplitBar(
+                    parts: [
+                      for (var i = 0; i < top.length; i++) (label: channelWords(_str(top[i]['channel'])), share: share(_int(top[i]['in_settled_kobo'])), color: colours[i]),
+                      if (rest > 0) (label: 'Other', share: share(rest), color: colours[3]),
+                    ],
+                  ),
+                );
+              }(),
+          ],
+        ),
+        TkSection(
+          title: 'Go to',
+          inset: 56,
+          children: [
+            TkListRow(title: 'Invoices', sub: 'What customers owe you', icon: 'b-receipt', square: look.blue, onTap: () => _push(context, InvoicesPage(auth: widget.auth, backLabel: 'Back to Money'))),
+            TkListRow(title: 'Bills', sub: 'What you owe linked suppliers', icon: 'b-receipt', square: look.orange, onTap: () => _push(context, BillsPage(auth: widget.auth, backLabel: 'Back to Money', now: widget.now))),
+            TkListRow(title: 'Bank statement', sub: 'Upload one, see what waits', icon: 'b-bank', square: look.violet, onTap: () => _push(context, MoneyStatementsPage(auth: widget.auth))),
+            TkListRow(title: 'Cash and expenses', icon: 'b-cash', square: look.teal, onTap: () => _push(context, MoneyEntriesPage(auth: widget.auth))),
+            TkListRow(title: 'Fees', sub: 'What each payments account charges', icon: 'b-card', square: look.lime, onTap: () => _push(context, MoneyFeesPage(auth: widget.auth))),
+          ],
+        ),
         if (s != null)
           TkSection(
             title: 'In this period',
@@ -502,52 +584,61 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
     );
   }
 
-  /// A channel's share of the money in, as a bar.
-  Widget _share(TkTokens t, Map<String, dynamic> c, int total) {
-    final share = (100 * _int(c['in_settled_kobo']) / total).round();
+  /// The period's figure as the page's headline: what was kept, counting
+  /// up, what it is set against, and what is still on its way.
+  Widget _headline(BuildContext context, Period p, Map<String, dynamic> s, int inPending, int outPending) {
+    final t = TkTheme.tokens(context);
+    final c = comparedWith(_choice, p);
+    final vs = c == null || _thenFor != '${c.period.from} ${c.period.to}' ? null : keptAgainst(s, _then, c.words);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: MergeSemantics(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(channelWords(_str(c['channel'])), maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14.5, weight: 600, color: t.text)),
-                ),
-                Text('$share%  ', style: tkText(size: 13, color: t.muted)),
-                Text(naira(_int(c['in_settled_kobo'])), style: tkText(size: 14.5, weight: 700, color: t.text)),
-              ],
+      padding: const EdgeInsets.only(top: 4),
+      child: Column(
+        children: [
+          Text(keptWords(_choice, p), textAlign: TextAlign.center, style: tkText(size: 13.5, weight: 500, color: t.muted)),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: TkCountUp(
+              _int(s['in_settled_kobo']) - _int(s['out_settled_kobo']),
+              key: ValueKey('sum ${p.from} ${p.to}'),
+              textAlign: TextAlign.center,
+              style: tkFigure(context, size: 46),
             ),
-            const SizedBox(height: 6),
-            Semantics(
-              label: '$share% of the money in',
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: SizedBox(
-                  height: 8,
-                  child: Stack(
-                    children: [
-                      Container(color: t.tkSoft),
-                      TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0, end: (share < 2 ? 2 : share) / 100),
-                        duration: (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ? Duration.zero : const Duration(milliseconds: 700),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, w, _) => FractionallySizedBox(
-                          widthFactor: w,
-                          child: Container(
-                            decoration: BoxDecoration(color: t.chartIn, borderRadius: BorderRadius.circular(6)),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+          ),
+          if (vs != null) TkTrend(vs.words, up: vs.up, pill: false),
+          if (inPending > 0 || outPending > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                [if (inPending > 0) '${naira(inPending)} more coming in', if (outPending > 0) '${naira(outPending)} more going out'].join(' · '),
+                textAlign: TextAlign.center,
+                style: tkText(size: 13, color: t.muted),
               ),
             ),
-          ],
-        ),
+        ],
+      ),
+    );
+  }
+
+  /// One side of the money: its colour's stroke, its word, the amount.
+  Widget _side(BuildContext context, Color colour, String words, int kobo) {
+    final t = TkTheme.tokens(context);
+    return MergeSemantics(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(width: 14, height: 3, decoration: BoxDecoration(color: colour, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(width: 7),
+              Flexible(child: Text(words, style: tkText(size: 12.5, color: t.muted))),
+            ],
+          ),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(naira(kobo), maxLines: 1, style: tkFigure(context, size: 19)),
+          ),
+        ],
       ),
     );
   }
@@ -668,16 +759,26 @@ class _MoneyBarsState extends State<MoneyBars> {
     final t = TkTheme.tokens(context);
     final b = widget.buckets;
     if (b.isEmpty) return const SizedBox.shrink();
-    final max = b.fold<int>(1, (m, x) => [m, _int(x['in_settled_kobo']), _int(x['out_settled_kobo'])].reduce((a, c) => a > c ? a : c));
+    final look = TkLook.of(context);
+    // One scale for both: money in rises from the line, money out drops
+    // from it; each side as tall as its largest bar needs, at least a
+    // little, so a quiet side still shows.
+    final maxIn = b.fold<int>(0, (m, x) => math.max(m, _int(x['in_settled_kobo'])));
+    final maxOut = b.fold<int>(0, (m, x) => math.max(m, _int(x['out_settled_kobo'])));
+    final scale = math.max(1, maxIn + maxOut);
+    const room = 120.0;
+    final upRoom = (room * maxIn / scale).clamp(28.0, room - 24);
+    final downRoom = room - upRoom;
     final pressable = b.length <= 14;
     final at = b[_picked.clamp(0, b.length - 1)];
-    double h(int k) => k <= 0 ? 0 : (112 * k / max).clamp(3, 112).toDouble();
-    Widget bar(int k, Color c) => Container(
-      width: 6,
-      height: h(k),
+    double h(int k, double side) => k <= 0 ? 0 : (room * k / scale).clamp(3.0, side - 2);
+    Widget bar(int k, bool up) => Container(
+      width: double.infinity,
+      height: h(k, up ? upRoom : downRoom),
+      margin: EdgeInsets.symmetric(horizontal: b.length > 20 ? 0.5 : 1.5),
       decoration: BoxDecoration(
-        color: c,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+        color: up ? look.lime : look.orange,
+        borderRadius: up ? const BorderRadius.vertical(top: Radius.circular(3), bottom: Radius.circular(1)) : const BorderRadius.vertical(bottom: Radius.circular(3), top: Radius.circular(1)),
       ),
     );
     return Column(
@@ -702,9 +803,9 @@ class _MoneyBarsState extends State<MoneyBars> {
         ExcludeSemantics(
           excluding: !pressable,
           child: SizedBox(
-            height: 132,
+            height: room + 10,
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 for (var i = 0; i < b.length; i++)
                   Expanded(
@@ -719,10 +820,10 @@ class _MoneyBarsState extends State<MoneyBars> {
                             child: GestureDetector(
                               behavior: HitTestBehavior.opaque,
                               onTap: () => setState(() => _picked = i),
-                              child: _barPair(t, b[i], i, bar),
+                              child: _barPair(t, b[i], i, bar, upRoom),
                             ),
                           )
-                        : _barPair(t, b[i], i, bar),
+                        : _barPair(t, b[i], i, bar, upRoom),
                   ),
               ],
             ),
@@ -767,15 +868,22 @@ class _MoneyBarsState extends State<MoneyBars> {
     );
   }
 
-  Widget _barPair(TkTokens t, Map<String, dynamic> x, int i, Widget Function(int, Color) bar) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 4),
-    decoration: BoxDecoration(color: i == _picked && widget.buckets.length <= 14 ? t.tkSoft : null, borderRadius: BorderRadius.circular(6)),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [bar(_int(x['in_settled_kobo']), t.chartIn), const SizedBox(width: 1), bar(_int(x['out_settled_kobo']), t.chartOut)],
-    ),
-  );
+  /// A day's (or an hour's) pair: money in up from the line, money out
+  /// down from it; the one picked ringed.
+  Widget _barPair(TkTokens t, Map<String, dynamic> x, int i, Widget Function(int, bool) bar, double upRoom) {
+    final picked = i == _picked && widget.buckets.length <= 14;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(color: picked ? t.tkSoft : null, borderRadius: BorderRadius.circular(6)),
+      child: Column(
+        children: [
+          SizedBox(height: upRoom, child: Align(alignment: Alignment.bottomCenter, child: bar(_int(x['in_settled_kobo']), true))),
+          const SizedBox(height: 2),
+          Expanded(child: Align(alignment: Alignment.topCenter, child: bar(_int(x['out_settled_kobo']), false))),
+        ],
+      ),
+    );
+  }
 }
 
 // --- leaks ---

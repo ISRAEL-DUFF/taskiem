@@ -85,3 +85,14 @@ flutter:
     - family: InterCyrillicExt
       fonts:
         - asset: assets/fonts/Inter-cyrillic-ext.ttf
+    # Inter Tight for the headings and figures of the pages away from the
+    # chat (docs/spec/mobile-app-look.md, Direction B): Google Fonts' files,
+    # by hand, not the web's (licence: assets/fonts/LICENSE-OFL-InterTight.txt).
+    - family: InterTight
+      fonts:
+        - asset: assets/fonts/InterTight-500.ttf
+          weight: 500
+        - asset: assets/fonts/InterTight-600.ttf
+          weight: 600
+        - asset: assets/fonts/InterTight-700.ttf
+          weight: 700

@@ -172,7 +172,8 @@ void main() {
     await settle(t);
     expect(sent.last, 'POST /v1/stock/purchases/P1/accept-change {}');
     await t.pump(const Duration(seconds: 5));
-    await t.tap(find.bySemanticsLabel('Cancel the order'));
+    await t.ensureVisible(find.bySemanticsLabel(RegExp('^Cancel the order')).first);
+    await t.tap(find.bySemanticsLabel(RegExp('^Cancel the order')).first);
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Cancel the order').last);
     await settle(t);
@@ -198,13 +199,10 @@ void main() {
     await t.pump(const Duration(seconds: 5));
   });
 
-  testWidgets('the Stock screen’s orders: what is low ordered; goods in; a payment', (t) async {
+  testWidgets('Supplies: what is low ordered; goods in; a payment', (t) async {
     final sent = await open(
       t,
-      (c) => TkPageScreen(
-        title: 'Stock',
-        children: [PurchasesCard(auth: c.auth, items: const [], onChanged: () {})],
-      ),
+      (c) => SuppliesPage(auth: c.auth, items: const []),
       purchase: _purchase(link: '', owed: 15600000),
     );
     await t.tap(find.bySemanticsLabel('Order what is low'));
@@ -232,17 +230,27 @@ void main() {
 
   testWidgets('suppliers: owed, linked, retired; the limit', (t) async {
     final sent = await open(t, (c) => SuppliersPage(auth: c.auth));
-    expect(find.text('Owed ₦20,000'), findsOneWidget, reason: 'a linked supplier is owed its open bills');
-    expect(find.text('Owed ₦3,000'), findsOneWidget);
-    expect(find.bySemanticsLabel('Statement with Bayo Rice Mills'), findsOneWidget);
-    expect(find.bySemanticsLabel('Statement with Dangote Depot'), findsNothing, reason: 'not linked');
-    await t.tap(find.bySemanticsLabel('On Taskiem for Dangote Depot'));
+    expect(find.bySemanticsLabel(RegExp(r'^Bayo Rice Mills, you owe ₦20,000')), findsOneWidget, reason: 'a linked supplier is owed its open bills');
+    expect(find.bySemanticsLabel(RegExp(r'^Dangote Depot, you owe ₦3,000')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'^You owe your suppliers ₦23,000')), findsOneWidget);
+    // A supplier's row opens what can be done to them.
+    await t.tap(find.text('Bayo Rice Mills').first);
+    await t.pumpAndSettle();
+    expect(find.bySemanticsLabel('Statement'), findsOneWidget);
+    await t.tapAt(const Offset(20, 20));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Dangote Depot'));
+    await t.pumpAndSettle();
+    expect(find.bySemanticsLabel('Statement'), findsNothing, reason: 'not linked');
+    await t.tap(find.bySemanticsLabel('On Taskiem'));
     await t.pumpAndSettle();
     await t.tap(find.text('Dangote Depot Ltd'));
     await settle(t);
     expect(sent.last, 'PUT /v1/stock/suppliers/S2/link {"link_id":"L9"}');
     await t.pump(const Duration(seconds: 5));
-    await t.tap(find.bySemanticsLabel('Retire Dangote Depot'));
+    await t.tap(find.text('Dangote Depot'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Retire'));
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Retire').last);
     await settle(t);
@@ -286,7 +294,9 @@ void main() {
 
   testWidgets('M8 fixes 3: the links failing to read is said, not "not linked"', (t) async {
     await open(t, (c) => SuppliersPage(auth: c.auth), linksFail: true);
-    await t.tap(find.bySemanticsLabel('On Taskiem for Dangote Depot'));
+    await t.tap(find.text('Dangote Depot'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('On Taskiem'));
     await settle(t);
     expect(find.text('Something broke.'), findsOneWidget);
     expect(find.textContaining('You are not linked'), findsNothing);
@@ -297,15 +307,15 @@ void main() {
     final sent = await open(
       t,
       (c) => TkPageScreen(
-        title: 'Stock',
-        children: [PurchasesCard(auth: c.auth, items: const [], onChanged: () => f.add('changed'))],
+        title: 'Supplies',
+        children: [PurchasesCard(auth: c.auth, items: const [], onChanged: () => f.add('changed'), full: true)],
       ),
       purchase: _purchase(seller: 'accepted'),
     );
     await t.tap(find.bySemanticsLabel('Open PO-0012'));
     await t.pumpAndSettle();
     await settle(t);
-    await t.tap(find.bySemanticsLabel('Back').first);
+    await t.tap(find.bySemanticsLabel(RegExp('^Back')).first);
     await t.pumpAndSettle();
     await settle(t);
     expect(f, contains('changed'), reason: 'the card and the screen read again');
@@ -347,10 +357,7 @@ void main() {
       t,
       TaskiemApp(
         mode: TkMode.dark,
-        home: TkPageScreen(
-          title: 'Stock',
-          children: [PurchasesCard(auth: chats.auth, items: const [], onChanged: () {})],
-        ),
+        home: SuppliesPage(auth: chats.auth, items: const []),
       ),
       drive: settle,
     );

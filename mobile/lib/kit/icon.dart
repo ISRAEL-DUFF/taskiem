@@ -1,11 +1,13 @@
 // The web's icons (web/src/icons.tsx), drawn from the same paths
 // (theme/icons.g.dart): a 24-unit grid, a 1.7 stroke, round caps and joins,
-// in the colour around them.
+// in the colour around them; and the "b-…" icons of the pages away from
+// the chat (theme/look_icons.dart).
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../theme/icons.g.dart';
+import '../theme/look_icons.dart';
 
 class TkIcon extends StatelessWidget {
   const TkIcon(this.name, {super.key, this.size = 18, this.color, this.stroke = 1.7, this.fill = false});
@@ -22,7 +24,7 @@ class TkIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final d = tkIconPaths[name];
+    final d = tkIconPaths[name] ?? tkLookIcons[name];
     if (d == null) return SizedBox(width: size, height: size);
     final c = color ?? DefaultTextStyle.of(context).style.color ?? const Color(0xFF000000);
     return SvgPicture.string(

@@ -7,19 +7,38 @@ import 'package:flutter/material.dart' show RefreshIndicator;
 import 'package:flutter/widgets.dart';
 
 import '../chat/thread.dart' show ChatHeadBar;
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'icon.dart';
 import 'kit.dart';
 import 'mobile.dart' show TkEnter, TkHeadButton;
 import 'modal.dart' show showTkModal;
+import 'tap_area.dart';
 
 /// A page as a screen, in the app's own look (mobile.dart): the head
 /// (Back, the title, its buttons; on a tab the title large), and its parts
 /// rising in one after another. The page's description is not a paragraph
 /// at the top: it is behind the head's (i), for whoever wants it.
 class TkPageScreen extends StatelessWidget {
-  const TkPageScreen({super.key, required this.title, required this.children, this.description, this.backLabel = 'Back', this.action, this.onRefresh, this.back = true, this.under});
+  const TkPageScreen({
+    super.key,
+    required this.title,
+    required this.children,
+    this.description,
+    this.backLabel = 'Back',
+    this.action,
+    this.onRefresh,
+    this.back = true,
+    this.under,
+    this.titleSize,
+  });
   final String title;
+
+  /// Direction B's head (docs/spec/mobile-app-look.md): Back as a link with
+  /// the page it goes back to ("‹ Money", from [backLabel] "Back to Money"),
+  /// the buttons at its end, and the title under them at this size (30 for
+  /// a list, 22 for one document). Null: the head of before, all on a row.
+  final double? titleSize;
 
   /// Stays under the head as the page scrolls (chips to filter by).
   final Widget? under;
@@ -50,7 +69,7 @@ class TkPageScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (var i = 0; i < children.length; i++) ...[
-            if (i > 0) const SizedBox(height: 20),
+            if (i > 0) const SizedBox(height: 14),
             TkEnter(index: i, child: children[i]),
           ],
         ],
@@ -61,10 +80,10 @@ class TkPageScreen extends StatelessWidget {
       value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: TkAppLook(
         child: ColoredBox(
-        color: t.bg,
+        color: TkLook.of(context).ground,
         child: Column(
           children: [
-            Padding(
+            if (titleSize != null) _bigHead(context, pad) else Padding(
               padding: EdgeInsets.fromLTRB(back ? 6 : 20, 8 + pad.top, 12, back ? 6 : 4),
               child: Row(
                 children: [
@@ -79,7 +98,7 @@ class TkPageScreen extends StatelessWidget {
                         title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: tkText(size: back ? 19 : 28, weight: 700, lineHeight: 1.2, letterSpacing: back ? -0.2 : -0.6, color: t.text),
+                        style: tkDisplay(size: back ? 20 : 30, lineHeight: 1.2, letterSpacing: back ? -0.4 : -1.1, color: t.text),
                       ),
                     ),
                   ),
@@ -103,6 +122,75 @@ class TkPageScreen extends StatelessWidget {
         ),
       ),
       )
+    );
+  }
+
+  Widget _bigHead(BuildContext context, EdgeInsets pad) {
+    final t = TkTheme.tokens(context);
+    final ink = TkLook.of(context).on;
+    final words = backLabel.startsWith('Back to ') ? backLabel.substring(8) : (backLabel == 'Back' ? 'Back' : '');
+    return Padding(
+      padding: EdgeInsets.fromLTRB(back ? 4 : 20, 6 + pad.top, 12, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              if (back)
+                TapArea(
+                  child: Semantics(
+                    button: true,
+                    label: backLabel,
+                    excludeSemantics: true,
+                    onTap: () => Navigator.of(context).maybePop(),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => Navigator.of(context).maybePop(),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TkIcon('back', size: 24, stroke: 2, color: ink),
+                            if (words.isNotEmpty)
+                              ConstrainedBox(
+                                constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.4),
+                                child: Text(words, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 15.5, weight: 500, color: ink)),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              const Spacer(),
+              if (description != null)
+                TkHeadButton(
+                  icon: 'info',
+                  label: 'About this page',
+                  onTap: () => showTkModal<void>(
+                    context,
+                    title: title,
+                    builder: (context) => Text(description!, style: tkText(size: 15, lineHeight: 1.45, color: TkTheme.tokens(context).text)),
+                  ),
+                ),
+              if (action != null) ...[const SizedBox(width: 6), Flexible(child: action!)],
+            ],
+          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(back ? 12 : 0, 2, 0, 0),
+            child: Semantics(
+              header: true,
+              child: Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: tkDisplay(size: titleSize!, lineHeight: 1.15, letterSpacing: -titleSize! * 0.036, color: t.text),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -133,7 +221,7 @@ class TkPageCard extends StatelessWidget {
                   Expanded(
                     child: Semantics(
                       header: true,
-                      child: Text(title!, style: tkText(size: 17, weight: 700, lineHeight: 1.3, letterSpacing: -0.2, color: t.text)),
+                      child: Text(title!, style: tkDisplay(size: 20, lineHeight: 1.3, letterSpacing: -0.4, color: t.text)),
                     ),
                   ),
                   ?trailing,
@@ -143,8 +231,7 @@ class TkPageCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
             decoration: BoxDecoration(
-              color: t.panel,
-              border: Border.all(color: t.border),
+              color: TkLook.of(context).card,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),

@@ -18,6 +18,25 @@ import 'support.dart';
 void main() {
   setUpAll(loadFonts);
 
+  test('the stock at cost, short; the sales by the hour', () {
+    expect(stockValue([
+      {'stock': 4, 'cost_kobo': 850000},
+      {'stock': 20},
+      {'stock': -1, 'cost_kobo': 100},
+    ]), 3400000);
+    expect(compactNaira(124000000), '₦1.24M');
+    expect(compactNaira(200000000), '₦2M');
+    expect(compactNaira(86500000), '₦865k');
+    expect(compactNaira(8650000), '₦86,500', reason: 'under ₦100,000, as it is');
+    expect(compactNaira(950000), '₦9,500');
+    final h = salesByHour([
+      {'sold_at': '2026-11-12T09:00:00Z', 'amount_kobo': 1900000},
+      {'sold_at': '2026-11-12T09:40:00Z', 'amount_kobo': 100000},
+    ]);
+    expect(h[10], 2000000, reason: '9:00 UTC is 10 am in Lagos');
+    expect(h.where((x) => x > 0).length, 1);
+  });
+
   test('the words for an item and a change', () {
     expect(plural('box'), 'boxes');
     expect(plural('battery'), 'batteries');
@@ -125,10 +144,12 @@ void main() {
   testWidgets('what the page shows', (t) async {
     await open(t);
     expect(find.text('₦19,000'), findsNWidgets(2), reason: 'today’s sales, and the sale');
-    expect(find.text('1 sale · Cash ₦19,000'), findsOneWidget);
+    expect(find.text('1 sale'), findsOneWidget);
+    expect(find.text('Cash ₦19,000'), findsOneWidget);
     expect(find.text('Terminal sales with no items'), findsOneWidget);
     expect(find.text('2 cartons Indomie'), findsOneWidget);
-    expect(find.text('Low on stock'), findsOneWidget);
+    expect(find.text('Running low'), findsOneWidget);
+    expect(find.text('Order 1'), findsOneWidget, reason: 'the Low tile');
     expect(find.text('4 cartons'), findsNWidgets(2), reason: 'low, and among the items');
     expect(find.text('Rice: received +20'), findsOneWidget);
   });
@@ -136,7 +157,10 @@ void main() {
   testWidgets('stock recorded: some spoilt, taken off, with why', (t) async {
     final sent = await open(t);
     sent.clear();
-    await t.tap(find.bySemanticsLabel('Record stock of Indomie').first);
+    // An item's row opens what can be done to it.
+    await t.tap(find.text('Indomie').first);
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Record stock'));
     await t.pumpAndSettle();
     await t.tap(find.text('Some were spoilt, lost or found'));
     await t.pump();
@@ -172,7 +196,9 @@ void main() {
   testWidgets('an item changed: only what changed sent; History filters every change', (t) async {
     final sent = await open(t);
     sent.clear();
-    await t.tap(find.bySemanticsLabel('Change Rice'));
+    await t.tap(find.text('Rice').first);
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Change'));
     await t.pumpAndSettle();
     // Name, unit, cost, price, reorder at, order up to, supplier.
     await t.enterText(find.descendant(of: find.byType(TkModal), matching: find.byType(EditableText)).at(4), '5');
@@ -181,7 +207,9 @@ void main() {
     await settle(t);
     expect(sent.first, 'PATCH /v1/stock/items/rice {"reorder_level":5}');
     sent.clear();
-    await t.tap(find.bySemanticsLabel('History of Rice'));
+    await t.tap(find.text('Rice').first);
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('History'));
     await settle(t);
     expect(sent.single, 'GET /v1/stock/movements limit=50&item=rice');
     expect(find.text('Rice: every change'), findsOneWidget);
@@ -192,7 +220,7 @@ void main() {
     final sent = await open(t);
     expect(find.text('This month: 40 in, 30 sold, 3 lost (₦25,500 at cost). Lost most: Indomie (3, ₦25,500).'), findsOneWidget);
     expect(find.text('CT-1 · 2 items, every item'), findsOneWidget);
-    expect(find.text('₦25,500 missing'), findsOneWidget);
+    expect(find.text('₦25,500 missing'), findsNWidgets(2), reason: 'the last count’s tile, and the count');
     sent.clear();
     await t.tap(find.bySemanticsLabel('Count the shelf'));
     await t.pumpAndSettle();

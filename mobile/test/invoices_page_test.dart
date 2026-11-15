@@ -193,6 +193,7 @@ void main() {
     expect(sent.first, 'LIST ');
     expect(find.text('Bisi Ade'), findsOneWidget);
     expect(find.text('INV-0007 · ₦22,000 still due'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'^Still due: ₦')), findsOneWidget, reason: 'what customers still owe, on top');
     expect(find.text('₦32,000'), findsOneWidget);
     await t.ensureVisible(find.bySemanticsLabel('Overdue'));
     await t.tap(find.bySemanticsLabel('Overdue'));
@@ -200,12 +201,12 @@ void main() {
     expect(sent.last, 'LIST status=overdue');
     await t.tap(find.text('Bisi Ade'));
     await settle(t);
-    expect(find.text('Invoice INV-0007'), findsOneWidget);
+    expect(find.text('INV-0007'), findsOneWidget, reason: 'its number, the title');
   });
 
   testWidgets('an invoice sent again: what was sent, its page to share', (t) async {
     final sent = await open(t, (c) => InvoicePage(auth: c.auth, id: 'INV-0007', follow: false));
-    expect(find.text('Still due'), findsOneWidget);
+    expect(find.bySemanticsLabel('Still due'), findsOneWidget);
     expect(find.text('Jollof rice tray'), findsOneWidget);
     expect(find.text('₦30,000'), findsOneWidget);
     expect(find.text('Sent by SMS.'), findsNothing);
@@ -213,14 +214,17 @@ void main() {
     await settle(t);
     expect(sent.last, 'POST /v1/invoices/I1/send {} key');
     expect(find.text('Sent by SMS.'), findsOneWidget);
-    expect(find.text('Share its page'), findsOneWidget);
+    expect(find.bySemanticsLabel('Share its page'), findsOneWidget, reason: 'in the head, once the page is known');
+    expect(find.bySemanticsLabel('Its page'), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
   });
 
   testWidgets('void needs a reason; a payment undone after yes; the customer shown', (t) async {
     final sent = await open(t, (c) => InvoicePage(auth: c.auth, id: 'INV-0007', follow: false));
+    await t.tap(find.bySemanticsLabel('More about this invoice'));
+    await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Void'));
-    await t.pump();
+    await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Void invoice'));
     await t.pump();
     expect(find.text('Say why it is void. The customer’s page shows the reason.'), findsOneWidget);
@@ -240,7 +244,7 @@ void main() {
     await t.tap(find.bySemanticsLabel('Show customer details'));
     await settle(t);
     expect(sent.last, 'REVEAL');
-    expect(find.text('Call +2348031234567'), findsOneWidget);
+    expect(find.bySemanticsLabel('Call +2348031234567'), findsOneWidget);
     await t.pump(const Duration(seconds: 5));
   });
 
@@ -354,8 +358,10 @@ void main() {
 
   testWidgets('M8 fixes 8: a void that fails says so in its own card; Keep it clears it', (t) async {
     await open(t, (c) => InvoicePage(auth: c.auth, id: 'INV-0007', follow: false), voidFails: true);
+    await t.tap(find.bySemanticsLabel('More about this invoice'));
+    await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Void'));
-    await t.pump();
+    await t.pumpAndSettle();
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Reason')), matching: find.byType(EditableText)), 'Wrong customer');
     await t.pump();
     await t.tap(find.bySemanticsLabel('Void invoice'));
@@ -393,6 +399,8 @@ void main() {
       (c) => InvoicePage(auth: c.auth, id: 'INV-0007', follow: false),
       invoice: _invoice(status: 'draft'),
     );
+    await t.tap(find.bySemanticsLabel('More about this invoice'));
+    await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Edit'));
     await t.pumpAndSettle();
     await settle(t);

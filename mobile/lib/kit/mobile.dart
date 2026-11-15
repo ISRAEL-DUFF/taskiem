@@ -14,11 +14,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../chat/thread.dart' show ChatHeadBar;
-import '../chat/words.dart' show CardTone, naira, toneOf;
+import '../chat/words.dart' show CardTone, naira;
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'icon.dart';
 import 'kit.dart';
-import 'list.dart' show TkLoading, tkTone;
+import 'list.dart' show TkLoading;
 import 'tap_area.dart';
 
 bool _still(BuildContext context) => MediaQuery.maybeDisableAnimationsOf(context) ?? false;
@@ -152,9 +153,18 @@ class TkScreen extends StatelessWidget {
     this.actions = const [],
     this.under,
     this.onRefresh,
+    this.head,
+    this.compact = false,
   });
   final String title;
   final bool back;
+
+  /// The head's own words in the title's place (Today's greeting); the
+  /// title is still what a screen reader hears as the screen's name.
+  final Widget? head;
+
+  /// A tab whose first part is its figure (Money): the title small.
+  final bool compact;
   final String backLabel;
 
   /// The head's icon buttons ([TkHeadButton]).
@@ -176,7 +186,7 @@ class TkScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 22), TkEnter(index: i, child: children[i])],
+          for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 14), TkEnter(index: i, child: children[i])],
         ],
       ),
     );
@@ -185,7 +195,7 @@ class TkScreen extends StatelessWidget {
       value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: TkAppLook(
         child: ColoredBox(
-        color: t.bg,
+        color: TkLook.of(context).ground,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -198,15 +208,21 @@ class TkScreen extends StatelessWidget {
                     const SizedBox(width: 4),
                   ],
                   Expanded(
-                    child: Semantics(
-                      header: true,
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: tkText(size: back ? 19 : 28, weight: 700, letterSpacing: back ? -0.2 : -0.6, color: t.text),
-                      ),
-                    ),
+                    child: head != null
+                        ? Semantics(header: true, label: title, child: head)
+                        : Semantics(
+                            header: true,
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: tkDisplay(
+                                size: back || compact ? 20 : 30,
+                                letterSpacing: back || compact ? -0.4 : -1.1,
+                                color: t.text,
+                              ),
+                            ),
+                          ),
                   ),
                   ...actions,
                 ],
@@ -224,22 +240,30 @@ class TkScreen extends StatelessWidget {
 
 /// An icon button in a screen's head.
 class TkHeadButton extends StatelessWidget {
-  const TkHeadButton({super.key, required this.icon, required this.label, required this.onTap});
+  const TkHeadButton({super.key, required this.icon, required this.label, required this.onTap, this.primary = false, this.onCard = false});
+
+  /// On a card rather than the page: the ground's colour, so it shows.
+  final bool onCard;
   final String icon;
   final String label;
   final VoidCallback onTap;
 
+  /// The page's main button (New): pine with a lime icon, lime with pine
+  /// in the dark.
+  final bool primary;
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
     return ChatHeadBar.iconButton(
       label,
       Container(
         width: 38,
         height: 38,
-        decoration: BoxDecoration(color: t.tkSoft, shape: BoxShape.circle),
+        decoration: BoxDecoration(color: primary ? TkLook.of(context).on : (onCard ? TkLook.of(context).ground : TkLook.of(context).card), shape: BoxShape.circle),
         alignment: Alignment.center,
-        child: TkIcon(icon, size: 19, color: t.text),
+        child: TkIcon(icon, size: 19, stroke: primary ? 2.4 : 2, color: primary ? (dark ? t.brandDarkText : t.brandDark) : _ink(context)),
       ),
       onTap,
     );
@@ -257,43 +281,63 @@ class TkChips<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
+    // As a phone's segmented switch: a soft track, the one chosen on a card
+    // of its own; wider than the screen, it scrolls sideways.
     return Semantics(
       container: true,
       label: label,
       explicitChildNodes: true,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
+      child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-        child: Row(
-          children: [
-            for (final (v, words) in chips) ...[
-              if (v != chips.first.$1) const SizedBox(width: 8),
-              TapArea(
-                child: Semantics(
-                  button: true,
-                  selected: v == on,
-                  label: words,
-                  excludeSemantics: true,
-                  onTap: () => onPick(v),
-                  child: TkPress(
-                    onTap: () => onPick(v),
-                    scale: 0.95,
-                    child: AnimatedContainer(
-                      duration: _still(context) ? Duration.zero : const Duration(milliseconds: 200),
-                      curve: Curves.easeOut,
-                      constraints: const BoxConstraints(minHeight: 38),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(color: v == on ? (dark ? t.brandDark : t.brand) : t.tkSoft, borderRadius: BorderRadius.circular(999)),
-                      child: Text(words, style: tkText(size: 14, weight: 600, color: v == on ? (dark ? t.brandDarkText : const Color(0xFFFFFFFF)) : t.text)),
-                    ),
-                  ),
+        child: LayoutBuilder(
+          builder: (context, box) => Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: dark ? const Color(0x1AFFFFFF) : const Color(0x0F000000),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: box.maxWidth - 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    for (final (v, words) in chips)
+                      TapArea(
+                        child: Semantics(
+                          button: true,
+                          selected: v == on,
+                          label: words,
+                          excludeSemantics: true,
+                          onTap: () => onPick(v),
+                          child: TkPress(
+                            onTap: () => onPick(v),
+                            scale: 0.95,
+                            child: AnimatedContainer(
+                              duration: _still(context) ? Duration.zero : const Duration(milliseconds: 200),
+                              curve: Curves.easeOut,
+                              constraints: const BoxConstraints(minHeight: 34),
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: v == on ? (dark ? const Color(0xFF3A3B3A) : look.card) : const Color(0x00000000),
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: v == on && !dark ? const [BoxShadow(color: Color(0x1F000000), blurRadius: 3, offset: Offset(0, 1))] : null,
+                              ),
+                              child: Text(words, style: tkText(size: 13.5, weight: 600, color: t.text)),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            ],
-          ],
+            ),
+          ),
         ),
       ),
     );
@@ -407,8 +451,12 @@ class TkSummary extends StatelessWidget {
 /// A section: its title (and a count), "See all ›" at its end, and its
 /// rows on a rounded panel, a hairline between them.
 class TkSection extends StatelessWidget {
-  const TkSection({super.key, this.title, this.count, this.onSeeAll, this.seeAllLabel, this.children = const [], this.empty, this.trailing});
+  const TkSection({super.key, this.title, this.count, this.onSeeAll, this.seeAllLabel, this.children = const [], this.empty, this.trailing, this.inset = 66});
   final String? title;
+
+  /// Where the hairline between rows starts: after a 40 px face (66), or a
+  /// 30 px square icon (56).
+  final double inset;
 
   /// Beside the title, amber (how many wait).
   final int? count;
@@ -443,7 +491,7 @@ class TkSection extends StatelessWidget {
         children: [
           if (title != null)
             Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 6),
+              padding: const EdgeInsets.only(left: 4, bottom: 8),
               child: Row(
                 children: [
                   Expanded(
@@ -452,7 +500,7 @@ class TkSection extends StatelessWidget {
                         Flexible(
                           child: Semantics(
                             header: true,
-                            child: Text(title!, style: tkText(size: 17, weight: 700, letterSpacing: -0.2, color: t.text)),
+                            child: Text(title!, style: tkDisplay(size: 20, lineHeight: 1.25, letterSpacing: -0.4, color: t.text)),
                           ),
                         ),
                         if (count != null && count! > 0) ...[
@@ -487,8 +535,7 @@ class TkSection extends StatelessWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text('See all', style: tkText(size: 14, weight: 600, color: _ink(context))),
-                                TkIcon('chevron', size: 16, color: _ink(context)),
+                                Text('See all', style: tkText(size: 14, weight: 600, color: t.muted)),
                               ],
                             ),
                           ),
@@ -498,7 +545,7 @@ class TkSection extends StatelessWidget {
                 ],
               ),
             ),
-          if (rows.isNotEmpty) TkPanel(children: rows),
+          if (rows.isNotEmpty) TkPanel(inset: inset, children: rows),
         ],
       ),
     );
@@ -512,25 +559,24 @@ Color _ink(BuildContext context) {
 
 /// A rounded panel, a hairline between what it holds.
 class TkPanel extends StatelessWidget {
-  const TkPanel({super.key, required this.children, this.padding = EdgeInsets.zero});
+  const TkPanel({super.key, required this.children, this.padding = EdgeInsets.zero, this.inset = 66});
   final List<Widget> children;
   final EdgeInsets padding;
 
+  /// Where the hairline between what it holds starts.
+  final double inset;
+
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     return Container(
       padding: padding,
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: t.panel,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: t.border),
-      ),
+      decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (var i = 0; i < children.length; i++) ...[if (i > 0) Container(height: 1, margin: const EdgeInsets.only(left: 70), color: t.border), children[i]],
+          for (var i = 0; i < children.length; i++) ...[if (i > 0) Container(height: 1, margin: EdgeInsets.only(left: inset), color: look.line), children[i]],
         ],
       ),
     );
@@ -553,11 +599,28 @@ class TkListRow extends StatelessWidget {
     this.waiting = false,
     this.onTap,
     this.semanticsLabel,
+    this.square,
+    this.statusAccent,
+    this.level,
+    this.levelColor,
   });
+
+  /// How full it is (an item's stock against its level), as a thin bar
+  /// under the line; null for none.
+  final double? level;
+  final Color? levelColor;
   final String title;
   final String sub;
   final String? letters;
   final String? icon;
+
+  /// The icon white on a rounded square of this colour (a list of places
+  /// to go, as a phone's settings), in place of the round tile.
+  final Color? square;
+
+  /// The status in an accent of its own (an order's stage), in place of
+  /// [statusTone]'s.
+  final ({Color fill, Color ink})? statusAccent;
 
   /// The tile's tone; else the letters' own, or lime for an icon.
   final CardTone? tone;
@@ -573,17 +636,54 @@ class TkListRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
-    final (bg, ink) = switch (tone) {
-      CardTone.warn => (t.tintWarn, t.tintWarnText),
-      CardTone.danger => (t.tkDangerBg, t.tkDangerInk),
-      _ => icon != null ? (t.tkLimeSoft, dark ? t.brandDark : t.brand) : tkTone(t, toneOf(letters ?? title)),
-    };
-    final initials = tkInitials(letters ?? title);
-    final (pillBg, pillInk) = switch (statusTone) {
-      CardTone.lime => (t.brandDark, t.brandDarkText),
-      CardTone.warn => (t.tkWarnBg, t.tkWarnInk),
-      CardTone.danger => (t.tkDangerBg, t.tkDangerInk),
+    final small = square != null && icon != null;
+    final size = small ? 30.0 : 40.0;
+    // The tile: an icon white on a small coloured square (a place to go);
+    // an icon on a soft round tile; or the letters on a face's gradient
+    // (warm or red when the row warns).
+    final Widget face;
+    if (small) {
+      face = Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(color: square, borderRadius: BorderRadius.circular(9)),
+        alignment: Alignment.center,
+        child: TkIcon(icon!, size: 17, stroke: 2.2, color: const Color(0xFFFFFFFF)),
+      );
+    } else if (icon != null || tone == CardTone.warn || tone == CardTone.danger) {
+      final (bg, ink) = switch (tone) {
+        CardTone.warn => (look.orange.withValues(alpha: 0.16), look.orangeInk),
+        CardTone.danger => (look.red.withValues(alpha: 0.16), look.redInk),
+        _ => (t.tkLimeSoft, dark ? t.brandDark : t.brand),
+      };
+      face = Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+        alignment: Alignment.center,
+        child: icon != null
+            ? TkIcon(icon!, size: 20, stroke: 2, color: ink)
+            : Text(tkInitials(letters ?? title), maxLines: 1, textScaler: TextScaler.noScaling, style: tkText(size: 13.5, weight: 700, color: ink)),
+      );
+    } else {
+      final g = tkFaceFor(letters ?? title);
+      face = Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: g),
+        ),
+        alignment: Alignment.center,
+        child: Text(tkInitials(letters ?? title), maxLines: 1, textScaler: TextScaler.noScaling, style: tkText(size: 13.5, weight: 700, color: const Color(0xFFFFFFFF))),
+      );
+    }
+    final (pillBg, pillInk) = statusAccent != null ? (statusAccent!.fill.withValues(alpha: 0.16), statusAccent!.ink) : switch (statusTone) {
+      CardTone.lime => (look.lime.withValues(alpha: 0.18), look.limeInk),
+      CardTone.warn => (look.orange.withValues(alpha: 0.16), look.orangeInk),
+      CardTone.danger => (look.red.withValues(alpha: 0.16), look.redInk),
       CardTone.plain => (t.tkSoft, t.muted),
     };
     return MergeSemantics(
@@ -594,41 +694,28 @@ class TkListRow extends StatelessWidget {
           onTap: onTap,
           scale: 0.985,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: small ? 11 : 10),
             child: Row(
               children: [
                 ExcludeSemantics(
                   child: SizedBox(
-                    width: 44,
-                    height: 44,
+                    width: size,
+                    height: size,
                     child: Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
-                          alignment: Alignment.center,
-                          child: icon != null
-                              ? TkIcon(icon!, size: 21, color: ink)
-                              : Text(
-                                  initials,
-                                  maxLines: 1,
-                                  textScaler: TextScaler.noScaling,
-                                  style: tkText(size: 15, weight: 800, color: ink),
-                                ),
-                        ),
+                        face,
                         if (waiting)
                           Positioned(
-                            right: -1,
-                            top: -1,
+                            right: -2,
+                            top: -2,
                             child: Container(
-                              width: 13,
-                              height: 13,
+                              width: 12,
+                              height: 12,
                               decoration: BoxDecoration(
-                                color: t.warn,
+                                color: look.orange,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: t.panel, width: 2),
+                                border: Border.all(color: look.card, width: 2),
                               ),
                             ),
                           ),
@@ -645,17 +732,38 @@ class TkListRow extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: tkText(size: 15.5, weight: 600, color: t.text),
+                        style: tkText(size: 15.5, weight: 500, lineHeight: 1.3, color: t.text),
                       ),
-                      if (sub.isNotEmpty) ...[
-                        const SizedBox(height: 1),
+                      if (sub.isNotEmpty)
                         Text(
                           sub,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: tkText(size: 13.5, color: t.muted),
+                          style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted),
                         ),
-                      ],
+                      if (level != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6, right: 12),
+                          child: ExcludeSemantics(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: SizedBox(
+                                height: 4,
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    ColoredBox(color: t.tkSoft),
+                                    FractionallySizedBox(
+                                      alignment: Alignment.centerLeft,
+                                      widthFactor: level!.clamp(0.02, 1.0),
+                                      child: ColoredBox(color: levelColor ?? look.lime),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -671,12 +779,12 @@ class TkListRow extends StatelessWidget {
                             amount!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: tkText(size: 15, weight: 700, color: t.text),
+                            style: tkText(size: 15, weight: 650, color: t.text),
                           ),
                         if (status != null) ...[
-                          if (amount != null) const SizedBox(height: 3),
+                          if (amount != null) const SizedBox(height: 4),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
                             decoration: BoxDecoration(color: pillBg, borderRadius: BorderRadius.circular(999)),
                             child: Text(
                               status!,
@@ -692,7 +800,7 @@ class TkListRow extends StatelessWidget {
                 ],
                 if (onTap != null && amount == null && status == null) ...[
                   const SizedBox(width: 6),
-                  ExcludeSemantics(child: TkIcon('chevron', size: 18, color: t.muted)),
+                  ExcludeSemantics(child: TkIcon('chevron', size: 16, color: t.muted.withValues(alpha: 0.6))),
                 ],
               ],
             ),
@@ -735,11 +843,7 @@ class TkTiles extends StatelessWidget {
           scale: 0.95,
           child: Container(
             padding: const EdgeInsets.fromLTRB(8, 14, 8, 12),
-            decoration: BoxDecoration(
-              color: t.panel,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: t.border),
-            ),
+            decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(20)),
             child: Column(
               children: [
                 Stack(
@@ -762,7 +866,7 @@ class TkTiles extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: t.warn,
                             borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: t.panel, width: 2),
+                            border: Border.all(color: TkLook.of(context).card, width: 2),
                           ),
                           alignment: Alignment.center,
                           child: Text(

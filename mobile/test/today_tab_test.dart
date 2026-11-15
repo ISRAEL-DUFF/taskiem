@@ -67,6 +67,35 @@ void main() {
     expect(triggerWords(null), 'Not set up yet');
   });
 
+  test('a usual day: running totals by the hour, averaged, compared at the same time', () {
+    final day = hourTotals([
+      {'from': '2026-11-12T08:00:00Z', 'in_settled_kobo': 300000},
+      {'from': '2026-11-12T08:00:00Z', 'in_settled_kobo': 200000},
+      {'from': '2026-11-12T11:00:00Z', 'in_settled_kobo': 100000},
+    ]);
+    expect(day.length, 25);
+    expect(day[9], 0, reason: '8:00 UTC is 9 am in Lagos: counted from 10 am on');
+    expect(day[10], 500000);
+    expect(day[13], 600000);
+    expect(day[24], 600000);
+    expect(usualDay([List.filled(25, 0), const []]), isNull, reason: 'no history');
+    final usual = usualDay([day, List.filled(25, 0), [for (var h = 0; h < 25; h++) h < 10 ? 0 : 300000]])!;
+    expect(usual[10], 400000, reason: 'the days that took money, averaged');
+    expect(lagosHour(_now), 13);
+    expect(versusUsual(450000, usual, 13), (kobo: 0, up: null));
+    expect(versusUsual(600000, usual, 13), (kobo: 150000, up: true));
+    expect(versusUsual(100000, usual, 13), (kobo: -350000, up: false));
+    expect(versusUsual(100000, null, 13), isNull);
+    expect(usualWords((kobo: 150000, up: true), _now), '₦1,500 ahead of a usual Thursday');
+    expect(usualWords((kobo: -350000, up: false), _now), '₦3,500 behind a usual Thursday');
+    expect(usualWords((kobo: 2000, up: null), _now), 'About the same as a usual Thursday');
+    expect(paidHourTotals([
+      {'status': 'paid', 'paid_at': '2026-11-12T09:30:00Z', 'total_kobo': 500000},
+      {'status': 'refunded', 'paid_at': '2026-11-12T09:30:00Z', 'total_kobo': 900000},
+      {'status': 'paid', 'paid_at': '2026-11-11T09:30:00Z', 'total_kobo': 700000},
+    ], _now)[11], 500000);
+  });
+
   Future<List<String>> open(WidgetTester t) async {
     await t.pumpWidget(const SizedBox());
     t.view.physicalSize = const Size(390, 3000);
@@ -81,6 +110,14 @@ void main() {
           asked.add('${req.method} ${req.url.path}${req.url.query.isEmpty ? '' : '?${req.url.query}'}');
           if (req.method != 'GET') return ok({'ok': true});
           return switch (req.url.path) {
+            // The same weekday in the weeks before: ₦20,000 by 9 am.
+            '/v1/money/summary' when req.url.queryParameters['from'] != '2026-11-12' => ok({
+              'in_settled_kobo': 2000000,
+              'out_settled_kobo': 0,
+              'buckets': [
+                {'from': '${req.url.queryParameters['from']}T08:00:00Z', 'in_settled_kobo': 2000000, 'out_settled_kobo': 0, 'payments': 1},
+              ],
+            }),
             '/v1/money/summary' => ok({
               'in_settled_kobo': 4500000,
               'out_settled_kobo': 1000000,
@@ -167,12 +204,18 @@ void main() {
     addTearDown(() => openInBrowser = was);
     final asked = await open(t);
     expect(asked, contains('GET /v1/money/summary?from=2026-11-12&to=2026-11-12'));
+    for (final d in ['2026-11-05', '2026-10-29', '2026-10-22', '2026-10-15']) {
+      expect(asked, contains('GET /v1/money/summary?from=$d&to=$d'), reason: 'a usual Thursday: the last four');
+    }
+    expect(find.textContaining('₦25,000 ahead of a usual Thursday'), findsOneWidget);
+    expect(find.text('A usual Thursday, last 4 weeks'), findsOneWidget);
     expect(find.textContaining('Good afternoon'), findsOneWidget);
-    expect(find.text('₦45,000'), findsOneWidget);
-    expect(find.textContaining('3 payments'), findsOneWidget);
-    expect(find.text('Orders today: 1'), findsOneWidget);
+    expect(find.text('₦45,000'), findsNWidgets(2), reason: 'money in today, and its best hour: all of it came in one');
+    expect(find.text('best hour, 9 am'), findsOneWidget);
+    expect(find.text('3 payments'), findsOneWidget, reason: 'on the sales-by-hour tile');
+    expect(find.bySemanticsLabel(RegExp('^Orders today: 1, 1 waiting for you')), findsOneWidget);
     expect(find.text('1 waiting for you'), findsOneWidget);
-    expect(find.text('Jobs done this week: 12'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^Jobs done this week: 12')), findsOneWidget);
     expect(find.text('1 needs a look'), findsOneWidget);
     expect(find.text('Pay Bayo Rice Mills ₦156,000'), findsOneWidget);
     expect(find.text('3'), findsOneWidget, reason: 'needs you: an approval, a payment to match, an order');
@@ -219,5 +262,6 @@ Future<void> settle(WidgetTester t) async {
     await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));
     await t.pump();
   }
-  await t.pump(const Duration(milliseconds: 400));
+  // The figure counts up and the day's line grows in: let both finish.
+  await t.pump(const Duration(milliseconds: 1000));
 }

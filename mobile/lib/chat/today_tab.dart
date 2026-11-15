@@ -7,6 +7,7 @@
 // runs and forms are the web's pages: they open in the browser (§3.5).
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 
@@ -16,20 +17,22 @@ import '../app/auth.dart';
 import '../app/links.dart';
 import '../kit/forms.dart' show errorWords;
 import '../kit/kit.dart';
-import '../kit/list.dart' show TkEmpty, TkLoading, TkPill, TkRow;
+import '../kit/list.dart' show TkEmpty, TkLoading;
+import '../kit/look.dart';
 import '../kit/modal.dart' show openOrSay;
-import '../kit/page.dart';
 import '../kit/polling.dart';
 import '../kit/sheet.dart' show showTkSheet;
 import '../theme/theme.dart';
 import 'alerts.dart' show subjectWords;
 import 'approve.dart' show ApproveSheet;
 import 'invoice_match.dart' show InvoiceMatchPage, channelWords, unmatchedPath;
-import 'money_page.dart' show MoneyPage, lagosDate;
+import 'bookings_page.dart' show addDays;
+import 'money_page.dart' show MoneyPage, hourWords, lagosDate;
 import 'storefront_orders_page.dart' show StorefrontOrderPage, StorefrontOrdersPage;
 import 'team_pages.dart' show StaffPage, TasksPage;
-import 'words.dart' show CardTone, naira;
-import '../kit/mobile.dart' show TkRoute;
+import 'words.dart' show naira;
+import '../kit/mobile.dart' show TkCountUp, TkListRow, TkRoute, TkScreen, TkSection, tkInitials;
+import '../theme/look.dart';
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 Map<String, dynamic> _map(Object? v) => (v as Map?)?.cast<String, dynamic>() ?? const {};
@@ -179,6 +182,69 @@ const checklist = {
   'invite': ('Invite a teammate', '/members'),
 };
 
+/// Money in by the hour as running totals: the total at the start of each
+/// hour of a Lagos day, midnight to midnight (25 points), from a day's
+/// hourly buckets (/v1/money/summary for one day).
+List<double> hourTotals(List<Map<String, dynamic>> buckets) {
+  final per = List<double>.filled(24, 0);
+  for (final b in buckets) {
+    final d = DateTime.tryParse(_str(b['from']));
+    if (d == null) continue;
+    per[_lagos(d).hour] += _int(b['in_settled_kobo']);
+  }
+  final out = List<double>.filled(25, 0);
+  for (var h = 0; h < 24; h++) {
+    out[h + 1] = out[h] + per[h];
+  }
+  return out;
+}
+
+/// The same from orders paid today (a shop without Money): each order in
+/// the hour it was paid.
+List<double> paidHourTotals(List<Map<String, dynamic>> orders, DateTime now) => hourTotals([
+  for (final o in orders)
+    if (_str(o['paid_at']).isNotEmpty && o['status'] != 'refunded' && _sameLagosDay(_str(o['paid_at']), now))
+      {'from': o['paid_at'], 'in_settled_kobo': o['total_kobo']},
+]);
+
+/// A usual day: the days' running totals averaged, hour by hour; null when
+/// none of them took any money (no history yet).
+List<double>? usualDay(List<List<double>> days) {
+  final some = days.where((d) => d.length == 25 && d.last > 0).toList();
+  if (some.isEmpty) return null;
+  return [for (var h = 0; h < 25; h++) some.fold<double>(0, (n, d) => n + d[h]) / some.length];
+}
+
+/// The hour of a moment in Lagos, its minutes as a fraction (13:30 is 13.5).
+double lagosHour(DateTime now) {
+  final l = _lagos(now);
+  return l.hour + l.minute / 60;
+}
+
+/// Today against a usual day at the same time: how far ahead (positive)
+/// or behind, in kobo, and up, down or about the same (within ₦100 or 3%);
+/// null with no usual day to compare with.
+({int kobo, bool? up})? versusUsual(int todayKobo, List<double>? usual, double hour) {
+  if (usual == null) return null;
+  final i = hour.floor().clamp(0, 23);
+  final at = usual[i] + (usual[i + 1] - usual[i]) * (hour - i);
+  if (at <= 0 && todayKobo <= 0) return null;
+  // In whole naira, as the figure itself is said.
+  final diff = ((todayKobo - at) / 100).round() * 100;
+  final same = diff.abs() < math.max(10000, at * 0.03);
+  return (kobo: diff, up: same ? null : diff > 0);
+}
+
+/// "₦16,200 ahead of a usual Thursday".
+String usualWords(({int kobo, bool? up}) v, DateTime now) {
+  final day = _weekdays[_lagos(now).weekday - 1];
+  return switch (v.up) {
+    true => '${naira(v.kobo)} ahead of a usual $day',
+    false => '${naira(-v.kobo)} behind a usual $day',
+    null => 'About the same as a usual $day',
+  };
+}
+
 class TodayTab extends StatefulWidget {
   const TodayTab({super.key, required this.auth, this.now});
   final Auth auth;
@@ -190,6 +256,12 @@ class TodayTab extends StatefulWidget {
 
 class _TodayTabState extends State<TodayTab> with Polling {
   Map<String, dynamic>? _day;
+
+  /// The same weekday's money over the last four weeks, averaged hour by
+  /// hour, and the day it was worked out for (read once a day, not each
+  /// time the tab reads again).
+  List<double>? _usual;
+  String? _usualFor;
   List<Map<String, dynamic>>? _toMatch;
   List<Map<String, dynamic>>? _orders;
   List<Map<String, dynamic>>? _runs;
@@ -232,6 +304,7 @@ class _TodayTabState extends State<TodayTab> with Polling {
           } on Object {
             // The orders' money stands in.
           }
+          if (_usualFor != today) await _loadUsual(today);
           try {
             final u = await _get(unmatchedPath);
             if (mounted) setState(() => _toMatch = _maps(u?['payments']));
@@ -320,6 +393,23 @@ class _TodayTabState extends State<TodayTab> with Polling {
     ]);
   }
 
+  /// A usual day like today: the same weekday, each of the last four weeks.
+  Future<void> _loadUsual(String today) async {
+    final days = await Future.wait([
+      for (var w = 1; w <= 4; w++)
+        () async {
+          final d = addDays(today, -7 * w);
+          try {
+            final s = await _get('/v1/money/summary', {'from': d, 'to': d});
+            return hourTotals(_maps(s?['buckets']));
+          } on Object {
+            return const <double>[];
+          }
+        }(),
+    ]);
+    if (mounted) setState(() => (_usual = usualDay(days), _usualFor = today));
+  }
+
   /// One of the web's pages, in the browser (§3.5).
   void _web(String path) {
     final u = Uri.parse('${_auth.transport.base}$path');
@@ -358,8 +448,10 @@ class _TodayTabState extends State<TodayTab> with Polling {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final now = _now;
-    final first = _str(_auth.me?.user?.name).split(' ').first;
+    final name = _str(_auth.me?.user?.name);
+    final first = name.split(' ').first;
     final tenant = _str(_auth.me?.tenantName);
     final orders = _orders;
     final day = _day;
@@ -375,174 +467,239 @@ class _TodayTabState extends State<TodayTab> with Polling {
         .toList();
     final setup = _toSetUp;
     final week = _week;
-    return TkPageScreen(
+    final hour = lagosHour(now);
+    final weekday = _weekdays[_lagos(now).weekday - 1];
+    final clock = '${_lagos(now).hour.toString().padLeft(2, '0')}:${_lagos(now).minute.toString().padLeft(2, '0')}';
+
+    // The top card: money in today, its line through the day and a usual
+    // day's under it (Money's figures, else the shop's paid orders).
+    Widget? top;
+    if (day != null || shopMoney != null) {
+      final kobo = day != null ? _int(day['in_settled_kobo']) : shopMoney!.kobo;
+      final line = day != null ? hourTotals(_maps(day['buckets'])) : paidHourTotals(orders!, now);
+      final usual = day != null ? _usual : null;
+      final vs = versusUsual(kobo, usual, hour);
+      top = TkTopCard(
+        semanticsLabel: day != null ? 'Money in today. Open Money' : 'Money in today. Open orders',
+        onTap: () => _go(day != null ? MoneyPage(auth: _auth, now: widget.now) : StorefrontOrdersPage(auth: _auth, now: widget.now)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TkEyebrow('Money in today', color: look.limeInk, icon: 'b-money', trailing: 'Now $clock'),
+            const SizedBox(height: 6),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: TkCountUp(kobo, style: tkFigure(context, size: 42)),
+            ),
+            if (vs != null) ...[const SizedBox(height: 6), TkTrend(usualWords(vs, now), up: vs.up)],
+            const SizedBox(height: 12),
+            TkDayLine(
+              today: line,
+              usual: usual,
+              nowHour: hour,
+              semanticsLabel: vs == null ? 'Money in through the day so far' : 'Money in through the day so far, against a usual $weekday',
+            ),
+            const SizedBox(height: 8),
+            TkChartKey(
+              items: [
+                (words: 'Today', color: look.lime, dashed: false),
+                if (usual != null) (words: 'A usual $weekday, last 4 weeks', color: t.muted, dashed: true),
+              ],
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Money in hour by hour today, the best hour picked out.
+    final dayTotals = day == null ? null : hourTotals(_maps(day['buckets']));
+    final perHour = dayTotals == null ? null : [for (var h = 0; h < 24; h++) dayTotals[h + 1] - dayTotals[h]];
+    TkHighlight? byHour;
+    if (perHour != null && perHour.any((x) => x > 0)) {
+      final first = perHour.indexWhere((x) => x > 0), last = perHour.lastIndexWhere((x) => x > 0);
+      final from = math.min(8, first), to = math.max(19, math.max(last, _lagos(now).hour));
+      var best = first;
+      for (var h = first; h <= last; h++) {
+        if (perHour[h] > perHour[best]) best = h;
+      }
+      byHour = TkHighlight(
+        wide: true,
+        beside: true,
+        label: 'Sales by hour',
+        icon: 'b-bars',
+        color: look.limeInk,
+        trailing: payments == 1 ? '1 payment' : '$payments payments',
+        value: naira(perHour[best].round()),
+        line: 'best hour, ${hourWords(best)}',
+        semanticsLabel: 'Best hour today: ${hourWords(best)}, ${naira(perHour[best].round())}',
+        chart: TkMiniBars(values: perHour.sublist(from, math.min(24, to + 1)), color: look.lime, picked: best - from),
+      );
+    }
+
+    final tiles = <TkHighlight>[
+      ?byHour,
+      if (counts != null)
+        TkHighlight(
+          label: 'Orders today',
+          icon: 'b-box',
+          color: look.tealInk,
+          value: '${counts.count}',
+          line: counts.waiting > 0 ? '${counts.waiting} waiting for you' : 'None waiting for you',
+          semanticsLabel: 'Orders today: ${counts.count}, ${counts.waiting > 0 ? '${counts.waiting} waiting for you' : 'none waiting for you'}',
+          onTap: () => _go(StorefrontOrdersPage(auth: _auth, now: widget.now)),
+        ),
+      if (week != null)
+        TkHighlight(
+          label: 'Jobs this week',
+          icon: 'b-bolt',
+          color: _int(week['failed']) > 0 ? look.orangeInk : look.blueInk,
+          value: '${_int(week['total'])}',
+          line: _int(week['failed']) > 0
+              ? (_int(week['failed']) == 1 ? '1 needs a look' : '${_int(week['failed'])} need a look')
+              : (_int(week['total']) > 0 ? 'All went well' : 'Nothing yet'),
+          semanticsLabel: 'Jobs done this week: ${_int(week['total'])}',
+          onTap: () => _web('/runs'),
+        ),
+      if (_workflows != null && counts == null)
+        TkHighlight(
+          label: 'Working for you',
+          icon: 'b-flow',
+          color: look.limeInk,
+          value: '${live.length}',
+          line: live.length == 1 ? 'workflow is live' : 'workflows are live',
+          semanticsLabel: 'Working for you: ${live.length} live',
+          onTap: () => _web('/workflows'),
+        ),
+    ];
+
+    return TkScreen(
       title: 'Today',
       back: false,
       onRefresh: _load,
+      head: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${greeting(now)}${first.isNotEmpty ? ', $first' : ''}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: tkDisplay(size: 27, lineHeight: 1.1, letterSpacing: -1, color: t.text),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${todayWords(now)}${tenant.isNotEmpty ? ' · $tenant' : ''}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tkText(size: 13.5, lineHeight: 1.3, color: t.muted),
+                ),
+              ],
+            ),
+          ),
+          if (name.isNotEmpty) ...[const SizedBox(width: 10), TkFace(tkInitials(name), size: 38)],
+        ],
+      ),
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('${greeting(now)}${first.isNotEmpty ? ', $first' : ''}', style: tkText(size: 17, weight: 600, color: t.text)),
-              Text('${todayWords(now)}${tenant.isNotEmpty ? ' · $tenant' : ''}', style: tkText(size: 14, color: t.muted)),
-            ],
-          ),
-        ),
-        if (day != null)
-          TkHero(
-            label: 'Money in today',
-            amount: naira(_int(day['in_settled_kobo'])),
-            sub: [
-              payments == 1 ? '1 payment' : '$payments payments',
-              'Money out ${naira(_int(day['out_settled_kobo']))}',
-              if (_toMatch != null) 'To match: ${toMatch.length == 1 ? '1 payment' : '${toMatch.length} payments'}',
-            ].join(' · '),
-            semanticsLabel: 'Money in today',
-            action: TkSmallButton(
-              label: 'Money',
-              semantics: 'Open Money',
-              onPressed: () => _go(MoneyPage(auth: _auth, now: widget.now)),
-            ),
-          )
-        else if (shopMoney != null)
-          TkHero(
-            label: 'Money in today',
-            amount: naira(shopMoney.kobo),
-            sub: shopMoney.count == 1 ? '1 payment' : '${shopMoney.count} payments',
-            semanticsLabel: 'Money in today',
-            action: TkSmallButton(
-              label: 'Orders',
-              semantics: 'Open orders',
-              onPressed: () => _go(StorefrontOrdersPage(auth: _auth, now: widget.now)),
-            ),
-          ),
-        if (counts != null || week != null || (_workflows != null && counts == null))
-          TkPageCard(
-            title: 'At a glance',
-            children: [
-              if (counts != null)
-                TkRow(
-                  name: 'Orders today: ${counts.count}',
-                  icon: 'orders',
-                  sub: counts.waiting > 0 ? '${counts.waiting} waiting for you' : 'None waiting for you',
-                  tone: counts.waiting > 0 ? CardTone.warn : null,
-                  onTap: () => _go(StorefrontOrdersPage(auth: _auth, now: widget.now)),
-                ),
-              if (week != null)
-                TkRow(
-                  name: 'Jobs done this week: ${_int(week['total'])}',
-                  icon: 'runs',
-                  sub: _int(week['failed']) > 0
-                      ? (_int(week['failed']) == 1 ? '1 needs a look' : '${_int(week['failed'])} need a look')
-                      : (_int(week['total']) > 0 ? 'All went well' : 'Nothing yet'),
-                  tone: _int(week['failed']) > 0 ? CardTone.warn : null,
-                  onTap: () => _web('/runs'),
-                ),
-              if (_workflows != null && counts == null)
-                TkRow(
-                  name: 'Working for you: ${live.length}',
-                  icon: 'workflows',
-                  sub: live.length == 1 ? 'workflow is live' : 'workflows are live',
-                  onTap: () => _web('/workflows'),
-                ),
-            ],
-          ),
-        TkPageCard(
+        ?top,
+        if (tiles.isNotEmpty) TkHighlights(tiles: tiles),
+        TkSection(
           title: 'Needs you',
-          trailing: needs > 0 ? TkPill('$needs', tone: CardTone.warn) : null,
+          inset: 56,
+          count: needs,
+          empty: _approvalsError == null ? 'Nothing needs you right now.' : null,
           children: [
-            if (_approvalsError != null) TkErrorBox(_approvalsError!),
-            if (needs == 0) Text('Nothing needs you right now.', style: tkHint(t)),
+            if (_approvalsError != null) Padding(padding: const EdgeInsets.all(12), child: TkErrorBox(_approvalsError!)),
             for (final a in approvals.take(5))
               () {
                 final w = subjectWords(a['subject']);
                 final step = _str(a['step_name']);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: TkRow(
-                          name: w.amount != null ? '$step ${w.amount}' : step,
-                          icon: 'approvals',
-                          tone: a['first_payment'] == true ? CardTone.warn : null,
-                          sub:
-                              '${a['first_payment'] == true ? 'First payment to this account' : _str(a['workflow'])} · asked ${shortWhen(_str(a['requested_at']), now)}',
-                          onTap: () => _web('/approvals'),
-                        ),
+                final firstPay = a['first_payment'] == true;
+                return Row(
+                  children: [
+                    Expanded(
+                      child: TkListRow(
+                        title: w.amount != null ? '$step ${w.amount}' : step,
+                        sub: '${firstPay ? 'First payment to this account' : _str(a['workflow'])} · asked ${shortWhen(_str(a['requested_at']), now)}',
+                        icon: 'b-receipt',
+                        square: firstPay ? look.orange : look.violet,
+                        onTap: () => _web('/approvals'),
                       ),
-                      const SizedBox(width: 8),
-                      TkSmallButton(label: 'Approve', semantics: 'Approve $step', primary: true, onPressed: () => _approve(a)),
-                    ],
-                  ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: TkSmallButton(label: 'Approve', semantics: 'Approve $step', primary: true, onPressed: () => _approve(a)),
+                    ),
+                  ],
                 );
               }(),
-            if (approvals.length > 5)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TkLink(label: 'See all approvals', onTap: () => _web('/approvals')),
-              ),
+            if (approvals.length > 5) TkListRow(title: 'See all approvals', icon: 'b-receipt', square: look.violet, onTap: () => _web('/approvals')),
             for (final f in _forms.take(3))
-              TkRow(
-                name: _str(f['title']),
-                icon: 'forms',
+              TkListRow(
+                title: _str(f['title']),
                 sub: 'To fill in · ${shortWhen(_str(f['created_at']), now)}',
+                icon: 'forms',
+                square: look.blue,
                 onTap: () => _web('/forms/requests/${Uri.encodeComponent(_str(f['id']))}'),
               ),
             for (final p in toMatch.take(3))
-              TkRow(
-                name: 'Match ${p['amount_kobo'] == null ? 'a payment' : naira(p['left_kobo'] is num ? _int(p['left_kobo']) : _int(p['amount_kobo']))}',
-                icon: 'money',
-                tone: CardTone.warn,
+              TkListRow(
+                title: 'Match ${p['amount_kobo'] == null ? 'a payment' : naira(p['left_kobo'] is num ? _int(p['left_kobo']) : _int(p['amount_kobo']))}',
                 sub: '${channelWords(_str(p['channel']))} · ${shortWhen(_str(p['received_at']), now)} · no invoice found yet',
+                icon: 'b-cash',
+                square: look.orange,
                 onTap: () => _go(InvoiceMatchPage(auth: _auth)),
               ),
             for (final o in waitingOrders.take(3))
               () {
                 final c = _map(o['customer']);
                 final who = [_str(c['name']), _str(c['phone'])].firstWhere((x) => x.isNotEmpty, orElse: () => 'a customer');
-                return TkRow(
-                  name: '${o['status'] == 'refund_due' ? 'Refund' : 'Order'} from $who',
-                  icon: o['status'] == 'refund_due' ? 'refund' : 'orders',
-                  tone: o['status'] == 'refund_due' ? CardTone.warn : null,
+                final refund = o['status'] == 'refund_due';
+                return TkListRow(
+                  title: '${refund ? 'Refund' : 'Order'} from $who',
                   sub: '#${o['reference']} · ${naira(_int(o['total_kobo']))} · ${shortWhen(_str(o['created_at']), now)}',
+                  icon: refund ? 'b-refund' : 'b-box',
+                  square: refund ? look.orange : look.teal,
                   onTap: () => _go(StorefrontOrderPage(auth: _auth, reference: _str(o['reference']), now: widget.now, backLabel: 'Back to Today')),
                 );
               }(),
           ],
         ),
         if (_runsOK)
-          TkPageCard(
+          TkSection(
             title: 'Activity',
-            trailing: TkLink(label: 'See all', onTap: () => _web('/runs')),
+          inset: 56,
+            onSeeAll: () => _web('/runs'),
+            seeAllLabel: 'See all runs',
+            empty: _runs != null ? 'Nothing has run yet. Publish a workflow and its runs show here.' : null,
             children: [
-              if (_runsError != null) TkErrorBox(_runsError!),
-              if (_runs == null && _runsError == null) const TkLoading(rows: 3, label: 'Loading the latest runs…'),
-              if (_runs != null && _runs!.isEmpty) Text('Nothing has run yet. Publish a workflow and its runs show here.', style: tkHint(t)),
+              if (_runsError != null) Padding(padding: const EdgeInsets.all(12), child: TkErrorBox(_runsError!)),
+              if (_runs == null && _runsError == null) const Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: TkLoading(rows: 3, label: 'Loading the latest runs…')),
               for (final r in _runs ?? const <Map<String, dynamic>>[])
-                TkRow(
-                  name: '${r['workflow']} ${runWords(_str(r['status']))}',
-                  icon: 'runs',
-                  tone: r['status'] == 'failed' || r['status'] == 'needs_reconciliation' ? CardTone.danger : null,
+                TkListRow(
+                  title: '${r['workflow']} ${runWords(_str(r['status']))}',
                   sub: shortWhen(_str(r['started_at']), now),
+                  icon: 'b-bolt',
+                  square: r['status'] == 'failed' || r['status'] == 'needs_reconciliation' ? look.red : look.blue,
                   onTap: () => _web('/runs/${Uri.encodeComponent(_str(r['id']))}'),
                 ),
             ],
           ),
         if (_clock != null || (_tasks != null && _tasks!.any((x) => x['state'] == 'open')))
-          TkPageCard(
+          TkSection(
             title: 'Your team',
+          inset: 56,
             children: [
               if (_clock case final c?)
                 () {
                   final inNow = _maps(c['in']).length, late = _maps(c['late']).length;
-                  return TkRow(
-                    name: 'Staff',
-                    icon: 'members',
-                    tone: late > 0 ? CardTone.warn : null,
+                  return TkListRow(
+                    title: 'Staff',
                     sub: ['$inNow in', if (late > 0) '$late late'].join(' · '),
+                    icon: 'b-people',
+                    square: late > 0 ? look.orange : look.teal,
                     onTap: () => _go(StaffPage(auth: _auth)),
                   );
                 }(),
@@ -550,62 +707,68 @@ class _TodayTabState extends State<TodayTab> with Polling {
                 () {
                   final open = ts.where((x) => x['state'] == 'open').toList();
                   final late = open.where((x) => x['late'] == true).length;
-                  return TkRow(
-                    name: 'Your tasks',
-                    icon: 'check',
-                    tone: late > 0 ? CardTone.warn : null,
+                  return TkListRow(
+                    title: 'Your tasks',
                     sub: open.isEmpty ? 'None open' : '${open.length} open${late > 0 ? ' · $late late' : ''}',
+                    icon: 'b-check',
+                    square: late > 0 ? look.orange : look.lime,
                     onTap: () => _go(TasksPage(auth: _auth, now: widget.now)),
                   );
                 }(),
             ],
           ),
         if (setup != null)
-          TkPageCard(
+          TkSection(
             title: 'Finish setting up',
-            trailing: Text('${setup.done} of ${setup.total}', style: tkHint(t)),
+          inset: 56,
+            trailing: Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: Text('${setup.done} of ${setup.total}', style: tkHint(t)),
+            ),
             children: [
-              Semantics(
-                label: 'Set-up progress: ${setup.done} of ${setup.total}',
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: SizedBox(
-                    height: 8,
-                    child: Stack(
-                      children: [
-                        Container(color: t.tkSoft),
-                        FractionallySizedBox(
-                          widthFactor: setup.total == 0 ? 0 : setup.done / setup.total,
-                          child: Container(color: t.brand),
-                        ),
-                      ],
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                child: Semantics(
+                  label: 'Set-up progress: ${setup.done} of ${setup.total}',
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: SizedBox(
+                      height: 8,
+                      child: Stack(
+                        children: [
+                          Container(color: t.tkSoft),
+                          FractionallySizedBox(
+                            widthFactor: setup.total == 0 ? 0 : setup.done / setup.total,
+                            child: Container(color: look.lime),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
               for (final id in setup.left.take(3))
-                if (checklist[id] case final c?) TkRow(name: c.$1, icon: 'check', sub: 'On the web', onTap: () => _web(c.$2)),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TkLink(label: 'See every step', onTap: () => _web('/start')),
-              ),
+                if (checklist[id] case final c?) TkListRow(title: c.$1, sub: 'On the web', icon: 'b-check', square: look.lime, onTap: () => _web(c.$2)),
+              TkListRow(title: 'See every step', icon: 'b-start', square: look.blue, onTap: () => _web('/start')),
             ],
           ),
         if (_workflows != null)
-          TkPageCard(
+          TkSection(
             title: 'Running for you',
-            trailing: TkLink(label: 'All', onTap: () => _web('/workflows')),
+          inset: 56,
+            onSeeAll: () => _web('/workflows'),
+            seeAllLabel: 'See all workflows',
+            empty: 'Nothing yet. Pick a template on the web to get started.',
             children: [
-              if (live.isEmpty) Text('Nothing yet. Pick a template on the web to get started.', style: tkHint(t)),
               for (final w in live.take(5))
                 () {
                   final n = ((w['recent'] as List?) ?? const []).whereType<num>().fold<num>(0, (a, b) => a + b).toInt();
-                  return TkRow(
-                    name: _str(w['name']),
-                    icon: 'workflows',
+                  return TkListRow(
+                    title: _str(w['name']),
                     sub:
                         '${triggerWords(w['trigger'] is Map ? _map(w['trigger']) : null)} · ${n == 0 ? 'no runs in 2 weeks' : (n == 1 ? 'ran once in 2 weeks' : 'ran $n times in 2 weeks')}',
+                    icon: 'b-flow',
+                    square: look.teal,
                     onTap: () => _web('/workflows/${Uri.encodeComponent(_str(w['id']))}'),
                   );
                 }(),

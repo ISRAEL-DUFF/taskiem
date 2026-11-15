@@ -20,12 +20,14 @@ import '../kit/modal.dart';
 import '../kit/page.dart';
 import '../kit/polling.dart';
 import '../kit/sheet.dart' show TkKitField;
+import '../kit/look.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'attachments.dart' show handOffFile;
 import 'doc_thread.dart' show DocThread;
 import 'invoice_match.dart' show CustomerMatching, InvoiceMatchPage, groupSuggestions, suggestionsPath;
-import 'money_sheets.dart' show dateLabel, invoiceActions, invoicePath, invoiceStatus;
+import 'money_sheets.dart' show InvoiceActions, dateLabel, invoiceActions, invoicePath, invoiceStatus, owing;
 import 'product_form.dart' show SaveKey, formKey;
 import 'storefront_orders_page.dart' show isMasked;
 import 'words.dart' show CardTone, naira;
@@ -44,18 +46,30 @@ Future<void> openInvoice(BuildContext context, Auth auth, String id) => _push(co
 /// Opens Invoices.
 Future<void> openInvoices(BuildContext context, Auth auth) => _push(context, InvoicesPage(auth: auth));
 
-/// invoices.ts INVOICE_FILTERS: "" is all; credit, the notebook debts.
+/// invoices.ts INVOICE_FILTERS: "" is all; credit, the notebook debts. In
+/// the app those owed come first (docs/spec/mobile-app-look.md).
 const invoiceFilters = [
   ('', 'All'),
-  ('credit', 'Notebook debts'),
-  ('draft', 'Draft'),
-  ('recorded', 'Recorded'),
   ('sent', 'Sent'),
   ('part_paid', 'Part-paid'),
-  ('paid', 'Paid'),
   ('overdue', 'Overdue'),
+  ('paid', 'Paid'),
+  ('draft', 'Draft'),
+  ('recorded', 'Recorded'),
+  ('credit', 'Notebook debts'),
   ('void', 'Void'),
 ];
+
+const _mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/// A date short, as a phone says it: "12 Nov", with the year only when it
+/// is not this one.
+String shortDay(String ymd, [DateTime? now]) {
+  final d = DateTime.tryParse('${ymd.length >= 10 ? ymd.substring(0, 10) : ymd}T00:00:00Z');
+  if (d == null) return '';
+  final year = (now ?? DateTime.now()).toUtc().add(const Duration(hours: 1)).year;
+  return '${d.day} ${_mon[d.month - 1]}${d.year == year ? '' : ' ${d.year}'}';
+}
 
 /// invoices.ts invoicesPath, as the query.
 Map<String, String> invoicesQuery(String status) => status == 'credit' ? {'kind': 'credit'} : (status.isEmpty ? const {} : {'status': status});
@@ -159,6 +173,17 @@ String fmtTime(String iso) {
   return '${l.day} ${_months[l.month - 1]} ${l.year}, ${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
 }
 
+/// An invoice's status in the accents of the pages away from the chat:
+/// overdue red, part-paid orange, sent blue, paid lime; draft and void
+/// grey (null).
+({Color fill, Color ink})? invoiceAccent(TkLook look, String status) => switch (status) {
+  'overdue' => (fill: look.red, ink: look.redInk),
+  'part_paid' => (fill: look.orange, ink: look.orangeInk),
+  'sent' || 'recorded' => (fill: look.blue, ink: look.blueInk),
+  'paid' => (fill: look.lime, ink: look.limeInk),
+  _ => null,
+};
+
 CardTone _tone(String status) => switch (status) {
   'paid' => CardTone.lime,
   'overdue' || 'part_paid' => CardTone.warn,
@@ -210,8 +235,11 @@ Widget _text(TkTokens t, String s, {bool hint = false}) => Text(s, style: hint ?
 
 /// Invoices: newest first, by status, read again while seen.
 class InvoicesPage extends StatefulWidget {
-  const InvoicesPage({super.key, required this.auth});
+  const InvoicesPage({super.key, required this.auth, this.backLabel = 'Back'});
   final Auth auth;
+
+  /// "Back to Money": the head's link says where it goes back to.
+  final String backLabel;
 
   @override
   State<InvoicesPage> createState() => _InvoicesPageState();
@@ -255,20 +283,62 @@ class _InvoicesPageState extends State<InvoicesPage> with Polling {
 
   @override
   Widget build(BuildContext context) {
+    final look = TkLook.of(context);
     final list = _list;
     final manage = widget.auth.can('invoice.manage');
+    final all = _status.isEmpty;
+    // What customers still owe, across the list, overdue or not yet due.
+    final owed = list == null ? const <Map<String, dynamic>>[] : list.where(owing).toList();
+    final overdue = owed.where((x) => x['status'] == 'overdue').fold(0, (n, x) => n + _int(x['due_kobo']));
+    final due = owed.fold(0, (n, x) => n + _int(x['due_kobo']));
+    Widget row(Map<String, dynamic> x) {
+      final c = _map(x['customer']);
+      final name = _str(c['name']).isNotEmpty ? _str(c['name']) : (_str(c['phone']).isNotEmpty ? _str(c['phone']) : _str(c['email']));
+      final st = invoiceStatus(_str(x['status']));
+      final part = x['status'] != 'void' && x['status'] != 'paid' && _int(x['due_kobo']) != _int(x['total_kobo']);
+      return TkListRow(
+        title: name.isEmpty ? '—' : name,
+        letters: name.isEmpty ? '?' : name,
+        sub: [
+          '${x['number']}',
+          if (part) '${naira(_int(x['due_kobo']))} still due' else if (_str(x['due_on']).isNotEmpty) 'due ${shortDay(_str(x['due_on']))}',
+        ].join(' · '),
+        amount: naira(_int(x['total_kobo'])),
+        status: st.label,
+        statusTone: _tone(_str(x['status'])),
+        statusAccent: invoiceAccent(look, _str(x['status'])),
+        waiting: x['status'] == 'overdue',
+        onTap: () async {
+          await Navigator.of(context).push(
+            TkRoute<void>(pageBuilder: (_, _, _) => InvoicePage(auth: widget.auth, id: _str(x['number']), backLabel: 'Back to Invoices')),
+          );
+          await _load();
+        },
+      );
+    }
+
+    // On All, the invoices by what they wait for; a filter, as they come.
+    final groups = !all || list == null
+        ? [('', list ?? const <Map<String, dynamic>>[])]
+        : [
+            ('Overdue', list.where((x) => x['status'] == 'overdue').toList()),
+            ('Waiting for payment', list.where((x) => const {'sent', 'part_paid', 'recorded'}.contains(x['status'])).toList()),
+            ('Drafts', list.where((x) => x['status'] == 'draft').toList()),
+            ('Paid', list.where((x) => x['status'] == 'paid').toList()),
+            ('Void', list.where((x) => x['status'] == 'void').toList()),
+            ('Other', list.where((x) => !const {'overdue', 'sent', 'part_paid', 'recorded', 'draft', 'paid', 'void'}.contains(x['status'])).toList()),
+          ];
     return TkPageScreen(
       title: 'Invoices',
+      titleSize: 30,
+      backLabel: widget.backLabel,
       description: 'What you ask your customers to pay, newest first. Each one is marked paid only by the payments counted towards it.',
       onRefresh: _load,
       action: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           TkHeadButton(icon: 'settings', label: 'Invoice settings', onTap: () => _push(context, InvoiceSettingsPage(auth: widget.auth))),
-          if (manage) ...[
-            const SizedBox(width: 6),
-            Flexible(child: TkSmallButton(label: 'New', semantics: 'New invoice', primary: true, onPressed: _new)),
-          ],
+          if (manage) ...[const SizedBox(width: 2), TkHeadButton(icon: 'b-plus', label: 'New invoice', primary: true, onTap: _new)],
         ],
       ),
       under: TkChips<String>(
@@ -282,24 +352,45 @@ class _InvoicesPageState extends State<InvoicesPage> with Polling {
         },
       ),
       children: [
-        if (_waiting > 0)
-          TkPanel(
-            children: [
-              TkListRow(
-                title: _waiting == 1 ? '1 payment to match' : '$_waiting payments to match',
-                sub: 'Money in with no invoice yet',
-                icon: 'split',
-                tone: CardTone.warn,
-                semanticsLabel: 'To match: $_waiting ${_waiting == 1 ? 'payment waiting' : 'payments waiting'}',
-                onTap: () async {
-                  await Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => InvoiceMatchPage(auth: widget.auth)));
-                  await _load();
-                },
-              ),
-            ],
-          ),
         if (_error != null) TkErrorBox(_error!),
         if (list == null && _error == null) const TkSkeleton(rows: 4, label: 'Loading invoices…'),
+        if (list != null && all && (owed.isNotEmpty || _waiting > 0))
+          TkTopCard(
+            semanticsLabel: 'Still due: ${naira(due)}',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TkEyebrow('Still due', color: look.orangeInk, trailing: owed.length == 1 ? '1 invoice' : '${owed.length} invoices'),
+                const SizedBox(height: 6),
+                FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: TkCountUp(due, style: tkFigure(context, size: 40))),
+                if (due > 0) ...[
+                  const SizedBox(height: 12),
+                  TkSplitBar(
+                    parts: [
+                      (label: 'Not due yet ${naira(due - overdue)}', share: due == 0 ? 0 : (100 * (due - overdue) / due).round(), color: look.teal),
+                      (label: 'Overdue ${naira(overdue)}', share: due == 0 ? 0 : (100 * overdue / due).round(), color: look.red),
+                    ],
+                    percent: false,
+                  ),
+                ],
+                if (_waiting > 0) ...[
+                  const SizedBox(height: 14),
+                  TkCallout(
+                    leading: TkSquare('b-cash', color: look.orange),
+                    title: _waiting == 1 ? '1 payment to match' : '$_waiting payments to match',
+                    sub: 'Money in with no invoice yet',
+                    color: look.orange,
+                    button: 'Match',
+                    semantics: 'To match: $_waiting ${_waiting == 1 ? 'payment waiting' : 'payments waiting'}',
+                    onPressed: () async {
+                      await Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => InvoiceMatchPage(auth: widget.auth)));
+                      await _load();
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
         if (list != null && list.isEmpty)
           TkEmpty(
             icon: 'invoices',
@@ -307,38 +398,13 @@ class _InvoicesPageState extends State<InvoicesPage> with Polling {
             line: _status.isNotEmpty ? null : 'Make one, send it to your customer by SMS and email, and see it marked paid as the money comes in.',
             action: _status.isEmpty && manage ? TkSmallButton(label: 'New invoice', primary: true, onPressed: _new) : null,
           ),
-        if (list != null && list.isNotEmpty)
-          TkPanel(
-            children: [
-              for (final x in list)
-                () {
-                  final c = _map(x['customer']);
-                  final name = _str(c['name']).isNotEmpty ? _str(c['name']) : (_str(c['phone']).isNotEmpty ? _str(c['phone']) : _str(c['email']));
-                  final st = invoiceStatus(_str(x['status']));
-                  final owing = x['status'] != 'void' && x['status'] != 'paid' && _int(x['due_kobo']) != _int(x['total_kobo']);
-                  return TkListRow(
-                    title: name.isEmpty ? '—' : name,
-                    icon: 'invoices',
-                    tone: x['status'] == 'overdue' ? CardTone.danger : null,
-                    sub: [
-                      '${x['number']}',
-                      if (owing) '${naira(_int(x['due_kobo']))} still due' else if (_str(x['due_on']).isNotEmpty) 'due ${dateLabel(_str(x['due_on']))}',
-                    ].join(' · '),
-                    amount: naira(_int(x['total_kobo'])),
-                    status: st.label,
-                    statusTone: _tone(_str(x['status'])),
-                    onTap: () async {
-                      await Navigator.of(context).push(
-                        TkRoute<void>(
-                          pageBuilder: (_, _, _) => InvoicePage(auth: widget.auth, id: _str(x['number']), backLabel: 'Back to Invoices'),
-                        ),
-                      );
-                      await _load();
-                    },
-                  );
-                }(),
-            ],
-          ),
+        for (final (title, rows) in groups)
+          if (rows.isNotEmpty)
+            TkSection(
+              title: title.isEmpty ? null : title,
+              count: title == 'Overdue' ? rows.length : null,
+              children: [for (final x in rows) row(x)],
+            ),
       ],
     );
   }
@@ -453,15 +519,101 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final x = _view == null ? null : _map(_view!['invoice']);
+    final may = x == null ? null : invoiceActions(_str(x['status']), _auth.can);
+    final link = _str(_sent?['link']);
     return TkPageScreen(
-      title: 'Invoice ${x == null ? widget.id : _str(x['number'])}',
+      title: x == null ? widget.id : _str(x['number']),
+      titleSize: 22,
       backLabel: widget.backLabel,
       onRefresh: _load,
+      action: x == null
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (link.isNotEmpty)
+                  TkHeadButton(
+                    icon: 'b-share',
+                    label: 'Share its page',
+                    onTap: () => stepOut(() => SharePlus.instance.share(ShareParams(text: link, subject: 'Invoice ${x['number']}'))),
+                  ),
+                if (may!.edit || (may.voids && !_voiding)) TkHeadButton(icon: 'b-more', label: 'More about this invoice', onTap: () => _more(x, may)),
+              ],
+            ),
       children: [
         if (_error != null) TkErrorBox(_error!),
         if (x == null && _error == null) Text('Loading the invoice…', style: tkHint(t)),
         if (x != null) ..._invoice(t, x),
       ],
+    );
+  }
+
+  Future<void> _edit(Map<String, dynamic> x) async {
+    final out = await Navigator.of(context).push<({Map<String, dynamic>? sent})>(
+      TkRoute(pageBuilder: (_, _, _) => InvoiceEditorPage(auth: _auth, existing: x)),
+    );
+    if (out?.sent != null && mounted) setState(() => _sent = out!.sent);
+    await _load();
+  }
+
+  /// The head's ⋯: what is done to the invoice less often (Edit, Void).
+  Future<void> _more(Map<String, dynamic> x, InvoiceActions may) async {
+    final pick = await showTkModalChoices(
+      context,
+      title: 'Invoice ${x['number']}',
+      choices: [if (may.edit) ('edit', 'Edit'), if (may.voids && !_voiding) ('void', 'Void')],
+    );
+    if (!mounted) return;
+    if (pick == 'edit') await _edit(x);
+    if (pick == 'void') setState(() => _voiding = true);
+  }
+
+  /// The top card: what is left (or paid, or to ask for) large, how much
+  /// is paid as a bar, and the next thing to do.
+  Widget _top(BuildContext context, Map<String, dynamic> x, ({String label, int kobo, String sub, double paid}) h, InvoiceActions may, String link) {
+    final look = TkLook.of(context);
+    final t = TkTheme.tokens(context);
+    final status = _str(x['status']);
+    final colour = switch (status) {
+      'overdue' => look.redInk,
+      'paid' => look.limeInk,
+      'draft' || 'void' => t.muted,
+      _ => look.orangeInk,
+    };
+    final due = shortDay(_str(x['due_on']));
+    final when = due.isEmpty ? null : (status == 'overdue' ? 'was due $due' : (status == 'paid' || status == 'void' ? null : 'due $due'));
+    final buttons = <Widget>[
+      if (may.send) TkSmallButton(label: 'Send', primary: true, onPressed: _busy ? null : () => _send(x)),
+      if (may.sendAgain) TkSmallButton(label: 'Send again', primary: true, onPressed: _busy ? null : () => _send(x)),
+      if (may.edit && !may.send) TkSmallButton(label: 'Edit', onPressed: () => _edit(x)),
+      if (link.isNotEmpty) TkSmallButton(label: 'Its page', onPressed: () => openOrSay(context, () => openInBrowser(Uri.parse(link)), 'Its page could not be opened.')),
+    ];
+    return TkTopCard(
+      semanticsLabel: 'What is due',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TkEyebrow(h.label, color: colour, trailing: when ?? invoiceStatus(status).label),
+          const SizedBox(height: 6),
+          FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: TkCountUp(h.kobo, style: tkFigure(context, size: 40))),
+          Text(
+            '${h.sub}${_str(_map(x['customer'])['name']).isEmpty ? '' : ' · ${_map(x['customer'])['name']}'}',
+            style: tkText(size: 13, lineHeight: 1.4, color: t.muted),
+          ),
+          if (status != 'draft' && status != 'void') ...[
+            const SizedBox(height: 12),
+            TkProgress(h.paid, color: look.lime, semanticsLabel: '${(h.paid * 100).round()}% paid'),
+          ],
+          if (buttons.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                for (var i = 0; i < buttons.length; i++) ...[if (i > 0) const SizedBox(width: 8), Expanded(child: buttons[i])],
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -476,13 +628,79 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
     final link = _str(sent?['link']);
     final reasonProblem = voidProblem(_reason.text);
     return [
-      TkHero(
-        label: h.label,
-        tag: invoiceStatus(_str(x['status'])).label,
-        amount: naira(h.kobo),
-        sub:
-            '${h.sub}${x['status'] != 'draft' && x['status'] != 'void' ? ' · ${(h.paid * 100).round()}% paid' : ''}\nCustomer ${_str(_map(x['customer'])['name']).isEmpty ? '—' : _map(x['customer'])['name']} · Due ${dateLabel(_str(x['due_on'])).isEmpty ? 'no date set' : dateLabel(_str(x['due_on']))}',
-        semanticsLabel: 'What is due',
+      _top(context, x, h, may, link),
+      // The customer: one card, the name with how to reach them, and Call.
+      TkPanel(
+        padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  TkFace(tkInitials(_str(c['name']).isEmpty ? '?' : _str(c['name'])), size: 40, colors: tkFaceFor(_str(c['name']))),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: MergeSemantics(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_str(c['name']).isEmpty ? '—' : _str(c['name']), maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 16, weight: 600, color: t.text)),
+                          if (_str(c['phone']).isNotEmpty || _str(c['email']).isNotEmpty)
+                            Text(
+                              [_str(c['phone']), _str(c['email'])].where((x) => x.isNotEmpty).join(' · '),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: tkText(size: 12.5, color: t.muted),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_str(c['email']).isNotEmpty && !isMasked(_str(c['email'])))
+                    TkHeadButton(
+                      icon: 'mail',
+                      onCard: true,
+                      label: 'Email ${c['email']}',
+                      onTap: () => openOrSay(context, () => mailTo(_str(c['email'])), 'Your mail app could not be opened.'),
+                    ),
+                  if (_str(c['phone']).isNotEmpty && !isMasked(_str(c['phone'])))
+                    TkHeadButton(
+                      icon: 'b-phone',
+                      onCard: true,
+                      label: 'Call ${c['phone']}',
+                      onTap: () => openOrSay(context, () => callPhone(_str(c['phone'])), 'That number could not be called.'),
+                    ),
+                ],
+              ),
+              if (_revealed == null && may.reveal) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    TkSmallButton(
+                      label: 'Show customer details',
+                      onPressed: _busy
+                          ? null
+                          : () => _run(() async {
+                              final r = (await _auth.transport.send('GET', invoicePath(_str(x['id'])), query: {'reveal': 'true'}) as Map).cast<String, dynamic>();
+                              if (mounted) setState(() => _revealed = _map(_map(r['invoice'])['customer']));
+                            }, ''),
+                    ),
+                    Text('Showing them is recorded in the audit log.', style: tkHint(t)),
+                  ],
+                ),
+              ],
+              if (_revealed == null && !may.reveal && (isMasked(_str(c['phone'])) || isMasked(_str(c['email']))))
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text('The customer’s details are hidden. Someone who may see personal data can show them.', style: tkHint(t)),
+                ),
+            ],
+          ),
+        ],
       ),
       if (x['disputed'] == true) _SettleQuery(auth: _auth, number: number, onDone: _load),
       if (key.startsWith('link:')) DocThread(key: ValueKey('thread $number'), auth: _auth, doc: 'invoice', reference: number, follow: widget.follow),
@@ -494,44 +712,7 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
       if (sent != null)
         _Notice([
           for (final l in sentLines(sent)) _text(t, l),
-          if (link.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 12,
-              runSpacing: 4,
-              children: [
-                TkLink(label: 'Its page', onTap: () => openOrSay(context, () => openInBrowser(Uri.parse(link)), 'Its page could not be opened.')),
-                TkLink(
-                  label: 'Share its page',
-                  onTap: () => stepOut(() => SharePlus.instance.share(ShareParams(text: link, subject: 'Invoice $number'))),
-                ),
-              ],
-            ),
-          ],
         ]),
-      if (may.edit || may.send || may.sendAgain || may.voids)
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            if (may.edit)
-              TkSmallButton(
-                label: 'Edit',
-                onPressed: () async {
-                  final out = await Navigator.of(context).push<({Map<String, dynamic>? sent})>(
-                    TkRoute(
-                      pageBuilder: (_, _, _) => InvoiceEditorPage(auth: _auth, existing: x),
-                    ),
-                  );
-                  if (out?.sent != null && mounted) setState(() => _sent = out!.sent);
-                  await _load();
-                },
-              ),
-            if (may.send) TkSmallButton(label: 'Send', primary: true, onPressed: _busy ? null : () => _send(x)),
-            if (may.sendAgain) TkSmallButton(label: 'Send again', onPressed: _busy ? null : () => _send(x)),
-            if (may.voids && !_voiding) TkSmallButton(label: 'Void', danger: true, onPressed: () => setState(() => _voiding = true)),
-          ],
-        ),
       if (_actError != null) TkErrorBox(_actError!),
       if (_voiding && may.voids)
         TkPageCard(
@@ -615,7 +796,7 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
                 Expanded(
                   child: Text('Total', style: tkText(size: 15, weight: 700, color: t.text)),
                 ),
-                Text(naira(_int(x['total_kobo'])), style: tkText(size: 15, weight: 700, color: t.text)),
+                Text(naira(_int(x['total_kobo'])), style: tkDisplay(size: 19, letterSpacing: -0.4, color: t.text)),
               ],
             ),
           ),
@@ -644,59 +825,6 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
             ('Transfer fee', _text(t, x['fee_paid_by'] == 'customer' ? 'Paid by the customer' : 'Paid by the business')),
             ('Part payments', _text(t, x['allow_part_payments'] == true ? 'Allowed' : 'Not allowed')),
           ]),
-        ],
-      ),
-      TkPageCard(
-        title: 'Customer',
-        children: [
-          _kv(t, [
-            ('Name', _text(t, _str(c['name']).isEmpty ? '—' : _str(c['name']))),
-            (
-              'Phone',
-              _str(c['phone']).isEmpty
-                  ? _text(t, '—', hint: true)
-                  : (isMasked(_str(c['phone']))
-                        ? _text(t, _str(c['phone']))
-                        : Align(
-                            alignment: Alignment.centerLeft,
-                            child: TkLink(
-                              label: 'Call ${c['phone']}',
-                              onTap: () => openOrSay(context, () => callPhone(_str(c['phone'])), 'That number could not be called.'),
-                            ),
-                          )),
-            ),
-            (
-              'Email',
-              _str(c['email']).isEmpty
-                  ? _text(t, '—', hint: true)
-                  : (isMasked(_str(c['email']))
-                        ? _text(t, _str(c['email']))
-                        : Align(
-                            alignment: Alignment.centerLeft,
-                            child: TkLink(
-                              label: _str(c['email']),
-                              onTap: () => openOrSay(context, () => mailTo(_str(c['email'])), 'Your mail app could not be opened.'),
-                            ),
-                          )),
-            ),
-          ]),
-          if (_revealed == null && may.reveal) ...[
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TkSmallButton(
-                label: 'Show customer details',
-                onPressed: _busy
-                    ? null
-                    : () => _run(() async {
-                        final r = (await _auth.transport.send('GET', invoicePath(_str(x['id'])), query: {'reveal': 'true'}) as Map).cast<String, dynamic>();
-                        if (mounted) setState(() => _revealed = _map(_map(r['invoice'])['customer']));
-                      }, ''),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text('Showing them is recorded in the audit log.', style: tkHint(t)),
-          ],
-          if (_revealed == null && !may.reveal) Text('The customer’s details are hidden. Someone who may see personal data can show them.', style: tkHint(t)),
         ],
       ),
       if (x['status'] != 'draft') CustomerMatching(key: ValueKey('money $number'), auth: _auth, invoice: x),

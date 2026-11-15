@@ -80,6 +80,32 @@ void main() {
     expect(purchaseWaiting({'status': 'sent', 'seller_status': 'accepted'}), isFalse);
   });
 
+  test('where an order stands, and how long it has waited', () {
+    expect(sellStage({'status': 'received'}, trade: false), 'new');
+    expect(sellStage({'status': 'paid'}, trade: false), 'ready');
+    expect(sellStage({'status': 'on_the_way'}, trade: false), 'way');
+    expect(sellStage({'status': 'completed'}, trade: false), isNull);
+    expect(sellStage({'status': 'ready'}, trade: true), 'ready');
+    expect(sellStage({'status': 'dispatched'}, trade: true), 'way');
+    expect(sellStage({'status': 'delivered', 'short_at': '2026-11-12T09:00:00Z'}, trade: true), 'new', reason: 'their count to agree');
+    expect(buyStage({'status': 'drafted'}), 'answer');
+    expect(buyStage({'status': 'sent'}), 'sent');
+    expect(buyStage({'status': 'confirmed', 'seller_status': 'dispatched'}), 'coming');
+    expect(buyStage({'status': 'received'}), isNull);
+    final now = DateTime.utc(2026, 11, 12, 12);
+    expect(waitedWords('2026-11-12T11:59:40Z', now), 'a moment');
+    expect(waitedWords('2026-11-12T11:20:00Z', now), '40 min');
+    expect(waitedWords('2026-11-12T11:00:00Z', now), '1 hour');
+    expect(waitedWords('2026-11-10T11:00:00Z', now), '2 days');
+    expect(busiestHour([
+      {'created_at': '2026-11-12T09:10:00Z'},
+      {'created_at': '2026-11-12T11:00:00Z'},
+      {'created_at': '2026-11-12T11:40:00Z'},
+      {'created_at': '2026-11-11T11:40:00Z'},
+    ], now), (hour: 12, count: 2), reason: 'Lagos hours; yesterday left out');
+    expect(busiestHour([{'created_at': '2026-11-11T11:40:00Z'}], now), isNull);
+  });
+
   Future<ChatsData> chats({List<String> permissions = const [], bool noShop = false}) async {
     final f = Fixture('chats');
     http.Response ok(Object b) => http.Response(jsonEncode(b), 200, headers: {'content-type': 'application/json'});
@@ -124,7 +150,10 @@ void main() {
     expect(find.text('4 orders open'), findsOneWidget);
     expect(find.text('₦3,000'), findsOneWidget, reason: 'the amount at the row’s end');
     expect(find.textContaining('Bisi'), findsNothing, reason: 'delivered: on its screen, not here');
-    expect(t.getTopLeft(find.textContaining('Tunde')).dy, lessThan(t.getTopLeft(find.textContaining('Ngozi')).dy));
+    expect(t.getTopLeft(find.textContaining('Tunde').last).dy, lessThan(t.getTopLeft(find.textContaining('Ngozi')).dy));
+    expect(find.bySemanticsLabel('New: 2, Getting ready: 1, On the way: 0'), findsOneWidget, reason: 'Tunde and Rivers Foods new, Ngozi paid');
+    expect(find.text('Tunde has waited 2 hours'), findsOneWidget, reason: 'the oldest of those waiting with a time');
+    expect(find.bySemanticsLabel('Busiest today: 10 am, 1 order'), findsOneWidget, reason: 'Ngozi at 10 am and Tunde at 11, Lagos: the earlier on a tie');
     await t.tap(find.textContaining('Rivers Foods'));
     await t.pumpAndSettle();
     expect(find.byType(TradeOrderPage), findsOneWidget);
@@ -138,6 +167,25 @@ void main() {
     await t.tap(find.bySemanticsLabel('See all orders from your customers'));
     await t.pumpAndSettle();
     expect(find.byType(StorefrontOrdersPage), findsOneWidget);
+  });
+
+  testWidgets('one kind chosen: its section alone, and its own flow', (t) async {
+    await show(t, await chats());
+    expect(find.bySemanticsLabel('All · 4'), findsOneWidget, reason: 'the delivered one is left to its screen');
+    await t.ensureVisible(find.bySemanticsLabel('Suppliers · 1'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Suppliers · 1'));
+    await settle(t);
+    expect(find.text('To suppliers'), findsOneWidget);
+    expect(find.text('From customers'), findsNothing);
+    expect(find.text('From businesses'), findsNothing);
+    expect(find.bySemanticsLabel('To answer: 1, Sent: 0, Coming: 0'), findsOneWidget);
+    expect(find.textContaining('has waited'), findsNothing);
+    await t.ensureVisible(find.bySemanticsLabel('All · 4'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('All · 4'));
+    await settle(t);
+    expect(find.text('From customers'), findsOneWidget);
   });
 
   testWidgets('only what the person may see; no storefront said', (t) async {
