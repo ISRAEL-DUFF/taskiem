@@ -112,7 +112,14 @@ type config struct {
 	// Push is the VAPID key pair for chat push (TASKIEM_VAPID_PUBLIC_KEY,
 	// TASKIEM_VAPID_PRIVATE_KEY, TASKIEM_VAPID_SUBJECT): with none, no push is
 	// sent (docs/spec/chat-push.md).
-	Push       push.Config
+	Push push.Config
+	// FCM is the phone app's notifications (TASKIEM_FCM_CREDENTIALS, the
+	// Firebase service account's key; TASKIEM_FCM_CLIENT, the app's client
+	// values): with neither, the app is not notified (docs/spec/mobile-app-m4.md).
+	FCM *push.FCM
+	// AppLinks is the phone apps this server's links and passkeys belong to
+	// (TASKIEM_ANDROID_APP, TASKIEM_IOS_APP; docs/spec/mobile-app-m4.md N5).
+	AppLinks   api.AppLinks
 	Queues     []string
 	Cloud      cloudConfig
 	Connectors builtin.Options
@@ -404,12 +411,12 @@ func chatWayIn(c *config) error {
 	for _, ch := range strings.Split(os.Getenv("TASKIEM_CHAT_SIGNUP"), ",") {
 		switch ch = strings.ToLower(strings.TrimSpace(ch)); ch {
 		case "":
-		case "whatsapp", "telegram", "slack":
+		case "whatsapp", "telegram", "slack", "app":
 			if !slices.Contains(c.ChatSignup.Channels, ch) {
 				c.ChatSignup.Channels = append(c.ChatSignup.Channels, ch)
 			}
 		default:
-			return fmt.Errorf("TASKIEM_CHAT_SIGNUP: %q is not a channel that signs people up (whatsapp, telegram, slack)", ch)
+			return fmt.Errorf("TASKIEM_CHAT_SIGNUP: %q is not a channel that signs people up (whatsapp, telegram, slack, app)", ch)
 		}
 	}
 	var err error
@@ -619,6 +626,12 @@ func loadConfig() (config, error) {
 		Subject:    strings.TrimSpace(os.Getenv("TASKIEM_VAPID_SUBJECT")),
 	}
 	if err := c.Push.Validate(); err != nil {
+		return c, err
+	}
+	if c.FCM, err = push.ParseFCM(os.Getenv("TASKIEM_FCM_CREDENTIALS"), os.Getenv("TASKIEM_FCM_CLIENT")); err != nil {
+		return c, err
+	}
+	if c.AppLinks, err = api.ParseAppLinks(os.Getenv("TASKIEM_ANDROID_APP"), os.Getenv("TASKIEM_IOS_APP")); err != nil {
 		return c, err
 	}
 	if c.AI, err = ai.ConfigFromEnv(os.LookupEnv); err != nil {
@@ -876,8 +889,8 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	if e.email != nil {
 		emailOps.Set(e.email)
 	}
-	if cfg.Push.Enabled() {
-		e.push = &push.Sender{Config: cfg.Push, Guard: &egress.Guard{Logger: log}}
+	if cfg.Push.Enabled() || cfg.FCM != nil {
+		e.push = &push.Sender{Config: cfg.Push, FCM: cfg.FCM, Guard: &egress.Guard{Logger: log}}
 	}
 	if cfg.WhatsApp != nil {
 		// The templates' url buttons open the web app and the form host
@@ -1245,6 +1258,7 @@ func serve(ctx context.Context, args []string) error {
 			return err
 		}
 		srv.WebAuthn, srv.RequireAdminPasskeys = rp, cfg.RequireAdminPasskeys && rp.RPID != ""
+		srv.AppLinks = cfg.AppLinks
 		srv.PublicURL = cfg.PublicURL
 		srv.HooksURL = cfg.HooksURL
 		if srv.OAuthClients, err = oauthClients(e.registry, log); err != nil {
@@ -1794,7 +1808,10 @@ func (c config) relyingParty() (webauthn.Config, error) {
 	if u.Hostname() != rp && !strings.HasSuffix(u.Hostname(), "."+rp) {
 		return webauthn.Config{}, fmt.Errorf("TASKIEM_PASSKEY_RP_ID %q must be the host of TASKIEM_PUBLIC_URL or a domain above it", rp)
 	}
-	return webauthn.Config{RPID: rp, RPName: "Taskiem", Origins: []string{u.Scheme + "://" + u.Host}}, nil
+	// The Android app's passkeys come from its own origin; an iPhone app's
+	// from the web's (its associated domain).
+	origins := append([]string{u.Scheme + "://" + u.Host}, c.AppLinks.PasskeyOrigins()...)
+	return webauthn.Config{RPID: rp, RPName: "Taskiem", Origins: origins}, nil
 }
 
 // chat gives a server the chat channels: the Telegram bot, and the key

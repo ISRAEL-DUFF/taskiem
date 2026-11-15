@@ -97,3 +97,10 @@ getSlack
 startSlackLink
 unlinkSlack
 putChatTools
+
+# Notifications on this phone (docs/spec/mobile-app-m4.md N4)
+listPush
+putPush
+patchPush
+deletePush
+deletePushEndpoint

@@ -20,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/invoicing"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
+	"github.com/israel-duff/taskiem/engine/notices"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/plain"
 	"github.com/israel-duff/taskiem/engine/runtime"
@@ -167,7 +168,10 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 			SELECT DISTINCT c.run_id, c.step_id, c.level, c.user_id, c.role FROM cand c
 			  JOIN runs r ON r.id = c.run_id JOIN workflow_versions wv ON wv.workflow_id = r.workflow_id AND wv.version = r.version
 			 WHERE NOT EXISTS (SELECT 1 FROM whatsapp_notices n WHERE n.run_id = c.run_id AND n.step_id = c.step_id AND n.level = c.level AND n.user_id = c.user_id
-			                     AND n.channel = $1)
+			                     AND n.channel = $1
+			                     -- Set aside as not able to decide it: looked at again
+			                     -- after an hour (a role given since).
+			                     AND (n.error IS DISTINCT FROM 'may_not_decide' OR n.sent_at > now() - interval '1 hour'))
 			   AND NOT EXISTS (SELECT 1 FROM approval_decisions d WHERE d.run_id = c.run_id AND d.step_id = c.step_id
 			                     AND (d.level = c.level OR c.distinct_ap) AND (d.user_id = c.user_id OR d.on_behalf_of = c.user_id))
 			   AND NOT (c.forbid_self AND c.user_id::text IN (COALESCE(taskiem_actor_human(r.started_by), ''),
@@ -187,6 +191,13 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 		users := make([]uuid.UUID, 0, len(targets))
 		for _, t := range targets {
 			users = append(users, t.user)
+		}
+		// The bell: every approver has one.
+		if channel == "bell" {
+			for i := range targets {
+				targets[i].channel = channel
+			}
+			return nil
 		}
 		addrs, err := chatAddrsTx(ctx, tx, channel, users)
 		if err != nil {
@@ -214,6 +225,19 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 			allowed[t.user] = p
 		}
 		if p == nil || !p.mayDecide(t.role) {
+			// In the bell, one who may not decide it is set aside once, so
+			// the same candidates do not fill every look (and crowd out
+			// those after them).
+			if t.channel == "bell" {
+				if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+					_, err := tx.Exec(ctx, `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id, channel, error) VALUES ($1, $2, $3, $4, $5, 'bell', 'may_not_decide')
+						ON CONFLICT (run_id, step_id, level, user_id, channel) DO UPDATE SET sent_at = now() WHERE whatsapp_notices.error = 'may_not_decide'`,
+						tenant, t.run, t.step, t.level, t.user)
+					return err
+				}); err != nil {
+					errs = append(errs, err)
+				}
+			}
 			continue
 		}
 		if err := s.waQueueApproval(ctx, tenant, t); err != nil {
@@ -223,14 +247,68 @@ func (s *Server) notifyApprovalsOn(ctx context.Context, tenant uuid.UUID, channe
 	return errors.Join(errs...)
 }
 
+// approvalBellEvery is how often the bell looks for approvals waiting.
+const approvalBellEvery = 15 * time.Second
+
+// RunApprovalBell tells approvers in the bell of an approval waiting for them
+// (once each, per level), whether or not a chat app is set up: the bell item
+// is what pushes it to their phone and browser (docs/spec/mobile-app-m4.md N2).
+func (s *Server) RunApprovalBell(ctx context.Context) {
+	tick := time.NewTicker(approvalBellEvery)
+	defer tick.Stop()
+	for {
+		if err := s.ApprovalBellTick(ctx); err != nil && ctx.Err() == nil {
+			s.Logger.Warn("approvals: the bell", "err", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
+}
+
+// ApprovalBellTick tells, in the bell, each approver who has not been told of
+// an approval waiting for them.
+func (s *Server) ApprovalBellTick(ctx context.Context) error {
+	rows, err := s.Store.Pool.Query(ctx, `SELECT taskiem_approval_tenants()`)
+	if err != nil {
+		return err
+	}
+	tenants, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, t := range tenants {
+		if err := s.notifyApprovalsOn(ctx, t, "bell"); err != nil {
+			errs = append(errs, fmt.Errorf("tenant %s: %w", t, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
 // waQueueApproval queues an approval request for an approver once: the
 // outbox sends it, and retries it if sending fails.
 func (s *Server) waQueueApproval(ctx context.Context, tenant uuid.UUID, t approvalTarget) error {
 	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id, channel) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING`,
+		// A row that only set this person aside (they may decide it now) is
+		// taken over; any other means another notifier has it.
+		tag, err := tx.Exec(ctx, `INSERT INTO whatsapp_notices (tenant_id, run_id, step_id, level, user_id, channel) VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (run_id, step_id, level, user_id, channel) DO UPDATE SET error = NULL, sent_at = now() WHERE whatsapp_notices.error = 'may_not_decide'`,
 			tenant, t.run, t.step, t.level, t.user, t.channel)
 		if err != nil || tag.RowsAffected() == 0 {
 			return err // another notifier has it
+		}
+		if t.channel == "bell" {
+			// In the bell, which also pushes it (migration 00446).
+			var name string
+			if err := tx.QueryRow(ctx, `SELECT w.name FROM runs r JOIN workflows w ON w.id = r.workflow_id WHERE r.id = $1`, t.run).Scan(&name); err != nil {
+				return err
+			}
+			return notices.AddTx(ctx, tx, tenant, []uuid.UUID{t.user}, notices.Notice{Kind: notices.Setup, Level: notices.Warning,
+				Title: "Approval waiting: " + name, Body: "Open it to approve or decline.", Link: "/approvals",
+				Group: fmt.Sprintf("approval:%s:%s:%d", t.run, t.step, t.level)})
 		}
 		run, step, level := t.run, t.step, t.level
 		_, err = whatsapp.Enqueue(ctx, tx, whatsapp.OutboxItem{Tenant: tenant, Channel: t.channel, Kind: whatsapp.OutboxApproval, User: t.user, Run: &run, Step: &step, Level: &level},

@@ -12,6 +12,7 @@ import 'package:flutter/widgets.dart';
 
 import '../theme/theme.dart';
 import 'kit.dart';
+import 'motion.dart';
 import 'tap_area.dart';
 
 /// Opens the web's Modal: [builder] gives what it holds under its title;
@@ -21,14 +22,16 @@ Future<T?> showTkModal<T>(BuildContext context, {required String title, required
   return Navigator.of(context).push<T>(
     PageRouteBuilder<T>(
       opaque: false,
-      // `.modal-backdrop { animation: fade-in 0.12s ease-out }`
-      transitionDuration: still ? Duration.zero : const Duration(milliseconds: 120),
-      reverseTransitionDuration: still ? Duration.zero : const Duration(milliseconds: 120),
+      // motion.css on a phone: the veil fades in over var(--t-sheet) as the
+      // dialog springs up from the bottom (tk-sheet-up, var(--spring-settle)),
+      // what it holds rising after 120 ms; leaving, it drops in 200 ms as
+      // the veil lifts. TkModal moves itself by the route's animation.
+      transitionDuration: still ? Duration.zero : Tk.tSheet,
+      reverseTransitionDuration: still ? Duration.zero : const Duration(milliseconds: 200),
       pageBuilder: (context, _, _) => TkModal(
         title: title,
         child: Builder(builder: builder),
       ),
-      transitionsBuilder: (context, a, _, child) => FadeTransition(opacity: a, child: child),
     ),
   );
 }
@@ -68,20 +71,59 @@ Future<bool> showTkConfirm(
 }
 
 /// ui.tsx Modal, as a phone shows it.
-class TkModal extends StatelessWidget {
+class TkModal extends StatefulWidget {
   const TkModal({super.key, required this.title, required this.child});
   final String title;
   final Widget child;
 
   @override
+  State<TkModal> createState() => _TkModalState();
+}
+
+class _TkModalState extends State<TkModal> {
+  Animation<double>? _route;
+  late CurvedAnimation _veil, _up, _rise;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final a = ModalRoute.of(context)?.animation ?? kAlwaysCompleteAnimation;
+    if (identical(a, _route)) return;
+    if (_route != null) _dispose();
+    _route = a;
+    // Leaving, everything goes along var(--ease-out); arriving, the veil
+    // fades along it, the dialog springs, and its contents rise after 120 ms.
+    _veil = CurvedAnimation(parent: a, curve: Tk.easeOut, reverseCurve: Tk.easeOut.flipped);
+    _up = CurvedAnimation(parent: a, curve: Tk.springSettle, reverseCurve: Tk.easeOut.flipped);
+    _rise = CurvedAnimation(parent: a, curve: const Interval(120 / 360, 1, curve: Tk.easeOut), reverseCurve: const Threshold(0));
+  }
+
+  void _dispose() {
+    _veil.dispose();
+    _up.dispose();
+    _rise.dispose();
+  }
+
+  @override
+  void dispose() {
+    if (_route != null) _dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final title = widget.title;
+    final child = widget.child;
     final t = TkTheme.tokens(context);
     final pad = MediaQuery.paddingOf(context);
+    final veil = _veil, up = _up, rise = _rise;
     return Stack(
       children: [
         // `.modal-backdrop { background: rgba(14, 15, 12, 0.32); backdrop-filter: blur(2px) }`
         Positioned.fill(
-          child: Backdrop(
+          child: FadeTransition(
+            opacity: veil,
+            child: Backdrop(
             behavior: HitTestBehavior.deferToChild,
             onClose: () => Navigator.of(context).maybePop(),
             child: BackdropFilter(
@@ -89,13 +131,16 @@ class TkModal extends StatelessWidget {
               child: const ColoredBox(color: Color(0x520E0F0C)),
             ),
           ),
+          ),
         ),
         Positioned(
           left: 0,
           right: 0,
           bottom: 0,
           // `.modal { max-height: 92dvh }` on a phone.
-          child: ConstrainedBox(
+          child: SlideTransition(
+            position: Tween(begin: const Offset(0, 1), end: Offset.zero).animate(up),
+            child: ConstrainedBox(
             constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.92),
             child: Semantics(
               scopesRoute: true,
@@ -146,11 +191,23 @@ class TkModal extends StatelessWidget {
                       child: Text(title, style: tkText(size: 15, weight: 600, lineHeight: 1.35, color: t.text)),
                     ),
                     const SizedBox(height: 12),
-                    Flexible(child: SingleChildScrollView(child: child)),
+                    // `.modal > * { animation: tk-rise var(--t-picker) 120ms }`
+                    Flexible(
+                      child: AnimatedBuilder(
+                        animation: rise,
+                        builder: (context, child) => Opacity(
+                          alwaysIncludeSemantics: true,
+                          opacity: rise.value.clamp(0.0, 1.0),
+                          child: Transform.translate(offset: Offset(0, 8 * (1 - rise.value)), child: child),
+                        ),
+                        child: SingleChildScrollView(child: child),
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
+          ),
           ),
         ),
       ],
@@ -218,7 +275,9 @@ void showTkToast(BuildContext context, String text, {bool error = false, String?
         left: 16,
         right: 16,
         bottom: 76 + pad.bottom,
-        child: Semantics(
+        // motion.css `.toast { animation: tk-arrive var(--t-arrive) var(--spring-bounce) }`.
+        child: TkIn.arrive(
+          child: Semantics(
           liveRegion: true,
           // `.toast { border: 1px solid; border-left: 4px solid }`, rounded:
           // Flutter draws no rounded border of two colours, so the line is
@@ -298,6 +357,7 @@ void showTkToast(BuildContext context, String text, {bool error = false, String?
               ),
             ),
           ),
+        ),
         ),
       );
     },

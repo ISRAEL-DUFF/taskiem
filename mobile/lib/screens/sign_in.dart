@@ -10,11 +10,12 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../api/transport.dart';
 import '../app/auth.dart';
+import '../app/passkey.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 
 class SignInScreen extends StatefulWidget {
-  const SignInScreen({super.key, this.auth, this.signup = true, this.onSignUp, this.onForgot, this.onPasskey});
+  const SignInScreen({super.key, this.auth, this.signup = true, this.onSignUp, this.onForgot, this.onPasskey, this.passkeys = true});
 
   /// Signing in; none in a picture of the screen alone.
   final Auth? auth;
@@ -24,6 +25,10 @@ class SignInScreen extends StatefulWidget {
   final VoidCallback? onSignUp;
   final VoidCallback? onForgot;
   final VoidCallback? onPasskey;
+
+  /// Whether the server has passkeys on (GET /v1/app/config): off, the
+  /// passkey button is not offered.
+  final bool passkeys;
 
   @override
   State<SignInScreen> createState() => _SignInScreenState();
@@ -53,6 +58,7 @@ class _SignInScreenState extends State<SignInScreen> {
                     onChat: () => setState(() => _withChat = true),
                     onForgot: widget.onForgot,
                     onPasskey: widget.onPasskey,
+                    passkeys: widget.passkeys,
                   ),
                 if (widget.signup)
                   Padding(
@@ -93,6 +99,8 @@ mixin _Acting<T extends StatefulWidget> on State<T> {
     });
     try {
       await f();
+    } on PasskeyCancelled {
+      // Closed the phone's passkey sheet: nothing to say.
     } on ApiError catch (e) {
       error = e.message;
       passkeyRequired = e.has('passkey_required');
@@ -108,11 +116,12 @@ mixin _Acting<T extends StatefulWidget> on State<T> {
 }
 
 class _EmailSignIn extends StatefulWidget {
-  const _EmailSignIn({this.auth, this.onChat, this.onForgot, this.onPasskey});
+  const _EmailSignIn({this.auth, this.onChat, this.onForgot, this.onPasskey, this.passkeys = true});
   final Auth? auth;
   final VoidCallback? onChat;
   final VoidCallback? onForgot;
   final VoidCallback? onPasskey;
+  final bool passkeys;
 
   @override
   State<_EmailSignIn> createState() => _EmailSignInState();
@@ -168,15 +177,16 @@ class _EmailSignInState extends State<_EmailSignIn> with _Acting {
           padding: const EdgeInsets.only(bottom: 12),
           child: Text('or', textAlign: TextAlign.center, style: tkHint(t)),
         ),
-        TkButton(
-          label: 'Sign in with a passkey',
-          minHeight: 44,
-          // Passkeys in the app need its link to Taskiem's address and its
-          // signing key (docs/spec/mobile-app.md §5.6, M4); until then, said.
-          onPressed: widget.onPasskey ??
-              () => setState(() => error = 'Signing in with a passkey comes to the app soon. For now, sign in with your email or with WhatsApp or Telegram.'),
-        ),
-        const SizedBox(height: 8),
+        if (widget.passkeys) ...[
+          TkButton(
+            label: 'Sign in with a passkey',
+            minHeight: 44,
+            // The phone's own passkey (lib/app/passkey.dart; M4 N6).
+            onPressed: widget.onPasskey ??
+                (widget.auth == null || busy ? null : () => act(() => signInWithPasskey(widget.auth!))),
+          ),
+          const SizedBox(height: 8),
+        ],
         TkButton(label: 'Sign in with WhatsApp or Telegram', minHeight: 44, onPressed: widget.onChat),
         if (passkeyRequired)
           Padding(

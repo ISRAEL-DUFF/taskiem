@@ -10,6 +10,7 @@ import 'dart:typed_data';
 import 'package:flutter/widgets.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../app/lock.dart' show stepOut;
 import '../app/auth.dart';
 import '../app/links.dart';
 import '../kit/forms.dart' show TkSwitchRow, errorWords, nairaKobo;
@@ -534,7 +535,7 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
                   TkHeadButton(
                     icon: 'b-share',
                     label: 'Share its page',
-                    onTap: () => SharePlus.instance.share(ShareParams(text: link, subject: 'Invoice ${x['number']}')),
+                    onTap: () => stepOut(() => SharePlus.instance.share(ShareParams(text: link, subject: 'Invoice ${x['number']}'))),
                   ),
                 if (may!.edit || (may.voids && !_voiding)) TkHeadButton(icon: 'b-more', label: 'More about this invoice', onTap: () => _more(x, may)),
               ],

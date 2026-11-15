@@ -13,6 +13,7 @@ import 'package:file_selector/file_selector.dart';
 
 import 'package:flutter/widgets.dart';
 
+import '../app/lock.dart' show stepOut;
 import '../app/auth.dart';
 import '../kit/forms.dart' show TkToolForm, errorWords;
 import '../kit/kit.dart';
@@ -880,7 +881,7 @@ class _TablePageState extends State<TablePage> {
 typedef TableFilePick = Future<({String name, Uint8List bytes})?> Function();
 
 TableFilePick pickTableFile = () async {
-  final x = await openFile(
+  final x = await stepOut(() => openFile(
     acceptedTypeGroups: const [
       XTypeGroup(
         label: 'CSV',
@@ -889,7 +890,7 @@ TableFilePick pickTableFile = () async {
         uniformTypeIdentifiers: ['public.comma-separated-values-text'],
       ),
     ],
-  );
+  ));
   if (x == null) return null;
   return (name: x.name, bytes: await x.readAsBytes());
 };

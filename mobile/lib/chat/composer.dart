@@ -18,6 +18,7 @@ import 'package:image_picker/image_picker.dart' show ImagePicker, ImageSource;
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
+import '../app/lock.dart' show stepOut;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart' show showComingSoon;
@@ -48,12 +49,12 @@ class Pickers {
       final one = await photo(side: side);
       return one == null ? const [] : [one];
     }
-    final xs = await ImagePicker().pickMultiImage(imageQuality: 85, requestFullMetadata: false, limit: limit, maxWidth: side, maxHeight: side);
+    final xs = await stepOut(() => ImagePicker().pickMultiImage(imageQuality: 85, requestFullMetadata: false, limit: limit, maxWidth: side, maxHeight: side));
     return [for (final x in xs.take(limit)) await _file(x)];
   }
 
   Future<PickedFile?> _image(ImageSource from, {double? side}) async {
-    final x = await ImagePicker().pickImage(source: from, imageQuality: 85, requestFullMetadata: false, maxWidth: side, maxHeight: side);
+    final x = await stepOut(() => ImagePicker().pickImage(source: from, imageQuality: 85, requestFullMetadata: false, maxWidth: side, maxHeight: side));
     return x == null ? null : _file(x);
   }
 
@@ -65,11 +66,11 @@ class Pickers {
 
   /// A PDF from the phone's files.
   Future<PickedFile?> document() async {
-    final x = await openFile(
+    final x = await stepOut(() => openFile(
       acceptedTypeGroups: const [
         XTypeGroup(label: 'PDF', extensions: ['pdf'], mimeTypes: ['application/pdf'], uniformTypeIdentifiers: ['com.adobe.pdf']),
       ],
-    );
+    ));
     if (x == null) return null;
     return PickedFile(bytes: await x.readAsBytes(), name: x.name, type: 'application/pdf');
   }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' show TextField, InputDecoration, Material
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'motion.dart';
 import '../theme/theme.dart';
 import 'tap_area.dart';
 
@@ -22,7 +23,7 @@ class TkAppLook extends InheritedWidget {
 }
 
 class TkPress extends StatefulWidget {
-  const TkPress({super.key, required this.child, this.onTap, this.scale = 0.98});
+  const TkPress({super.key, required this.child, this.onTap, this.scale = Tk.pressScale});
 
   final Widget child;
   final VoidCallback? onTap;
@@ -50,9 +51,11 @@ class _TkPressState extends State<TkPress> {
       onTapCancel: () => _set(false),
       onTap: widget.onTap,
       child: AnimatedScale(
+        // motion.css: `transform: scale(var(--press-scale))` over
+        // var(--t-press), var(--ease-out).
         scale: _down && !still ? widget.scale : 1,
-        duration: still ? Duration.zero : const Duration(milliseconds: 80),
-        curve: Curves.ease,
+        duration: still ? Duration.zero : Tk.tPress,
+        curve: Tk.easeOut,
         child: widget.child,
       ),
     );
@@ -263,7 +266,9 @@ class TkErrorBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Padding(
+    // styles.css `.error { animation: rise-in 0.24s }`.
+    return TkIn.notice(
+      child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Semantics(
         liveRegion: true,
@@ -276,6 +281,7 @@ class TkErrorBox extends StatelessWidget {
           ),
           child: Text(message, style: tkText(size: 14, color: cssMix(t.danger, t.text, 0.82))),
         ),
+      ),
       ),
     );
   }

@@ -25,6 +25,7 @@ import (
 var notInSpec = []struct{ route, why string }{
 	{"/healthz", "liveness probe for load balancers and orchestrators (docs/operations.md)"},
 	{"/readyz", "readiness probe (docs/operations.md)"},
+	{"/.well-known/", "the files phones read to open links in the app and share its passkeys, in Google's and Apple's formats (docs/spec/mobile-app-m4.md N5)"},
 	{"/hooks/", "inbound webhooks (role edge): each trigger's URL and auth are shown with the workflow (GET /v1/workflows/{wf}/triggers)"},
 	{"/channels/", "provider callbacks for WhatsApp and USSD (role edge), signed by the provider (docs/whatsapp.md, docs/ussd.md)"},
 	{"/git-hooks/", "push notifications from Git hosts, signed per connection (docs/git.md)"},

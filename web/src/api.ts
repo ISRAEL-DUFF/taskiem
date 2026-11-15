@@ -175,7 +175,13 @@ async function request<T>(
     data = { error: text };
   }
   if (!res.ok) {
-    if (res.status === 401 && !path.startsWith("/v1/auth/"))
+    // Moving to another business refused (it signs in with single sign-on)
+    // is not this session ending.
+    if (
+      res.status === 401 &&
+      !path.startsWith("/v1/auth/") &&
+      !(path === "/v1/me/switch" && data.sso_required)
+    )
       window.dispatchEvent(new Event("taskiem:unauthorised"));
     noteEnded(res.status, data);
     throw new ApiError(

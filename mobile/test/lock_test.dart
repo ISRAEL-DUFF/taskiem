@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskiem/app/lock.dart';
@@ -59,43 +62,121 @@ void main() {
     expect(find.text('The chats'), findsOneWidget);
   });
 
-  testWidgets('away 5 minutes or more locks; a moment away does not', (t) async {
+  void away(WidgetTester t) {
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+  }
+
+  void back(WidgetTester t) {
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+  }
+
+  testWidgets('away the time chosen or more locks; less does not', (t) async {
     var now = DateTime(2026, 11, 11, 9);
     final u = FakeUnlocker();
     await t.pumpWidget(app(u, () => now));
     await t.pumpAndSettle();
     expect(u.asked, 1);
 
-    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-    now = now.add(const Duration(minutes: 4));
-    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    away(t);
+    now = now.add(const Duration(seconds: 50));
+    back(t);
     await t.pumpAndSettle();
     expect(u.asked, 1);
 
     u.answer = false;
-    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-    now = now.add(const Duration(minutes: 5));
-    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    away(t);
+    now = now.add(const Duration(minutes: 1));
+    back(t);
     await t.pumpAndSettle();
     expect(u.asked, 2);
     expect(find.text('The chats'), findsNothing);
   });
 
-  testWidgets('not in front: the screens are covered at once, and shown again on coming back', (t) async {
+  testWidgets('Immediately: any time in another app locks', (t) async {
+    var now = DateTime(2026, 11, 11, 9);
+    final u = FakeUnlocker();
+    await t.pumpWidget(TaskiemApp(home: AppLock(active: true, unlocker: u, startLocked: false, after: Duration.zero, now: () => now, child: const Text('The chats'))));
+    await t.pumpAndSettle();
+    away(t);
+    now = now.add(const Duration(seconds: 2));
+    back(t);
+    await t.pumpAndSettle();
+    expect(u.asked, 1);
+  });
+
+  testWidgets('a dialog, the notification shade or the fingerprint prompt over the app covers nothing and locks nothing', (t) async {
+    var now = DateTime(2026, 11, 11, 9);
+    final u = FakeUnlocker();
+    await t.pumpWidget(TaskiemApp(home: AppLock(active: true, unlocker: u, startLocked: false, after: Duration.zero, now: () => now, child: const Text('The chats'))));
+    await t.pumpAndSettle();
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await t.pump();
+    expect(find.text('The chats'), findsOneWidget, reason: 'not covered while still in the app');
+    now = now.add(const Duration(minutes: 40));
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await t.pumpAndSettle();
+    expect(find.text('The chats'), findsOneWidget);
+    expect(u.asked, 0);
+  });
+
+  testWidgets('picking a photo or a file (the phone\'s own screen over the app) is not being away', (t) async {
+    var now = DateTime(2026, 11, 11, 9);
+    final u = FakeUnlocker();
+    await t.pumpWidget(TaskiemApp(home: AppLock(active: true, unlocker: u, startLocked: false, after: Duration.zero, now: () => now, child: const Text('The chats'))));
+    await t.pumpAndSettle();
+    final picked = Completer<String>();
+    final pick = stepOut(() => picked.future);
+    away(t);
+    await t.pump();
+    expect(find.text('The chats'), findsOneWidget, reason: 'not covered');
+    now = now.add(const Duration(minutes: 3));
+    back(t);
+    picked.complete('photo.jpg');
+    expect(await pick, 'photo.jpg');
+    await t.pumpAndSettle();
+    expect(u.asked, 0);
+    expect(find.text('The chats'), findsOneWidget);
+
+    // Afterwards, going to another app counts again.
+    away(t);
+    back(t);
+    await t.pumpAndSettle();
+    expect(u.asked, 1);
+  });
+
+  testWidgets('Android: with the lock on the switcher shows no picture of the screens, and nothing in the app is covered', (t) async {
+    final hidden = <bool>[];
+    final was = hideFromRecents;
+    hideFromRecents = (h) async => hidden.add(h);
+    addTearDown(() => hideFromRecents = was);
+    final u = FakeUnlocker();
+    Widget at(bool on) => TaskiemApp(home: AppLock(active: on, signedIn: true, startLocked: false, unlocker: u, child: const Text('The chats')));
+    await t.pumpWidget(at(false));
+    await t.pumpAndSettle();
+    expect(hidden, [false]);
+    await t.pumpWidget(at(true));
+    await t.pumpAndSettle();
+    expect(hidden, [false, true]);
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await t.pump();
+    expect(find.text('The chats'), findsOneWidget, reason: 'the notification shade over the app covers nothing');
+    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await t.pumpWidget(at(false));
+    await t.pumpAndSettle();
+    expect(hidden, [false, true, false]);
+  });
+
+  testWidgets('iPhone: with the lock on the screens are covered as the switcher opens, and shown again on coming back', (t) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     final u = FakeUnlocker();
     await t.pumpWidget(app(u, DateTime.now));
     await t.pumpAndSettle();
     expect(find.text('The chats'), findsOneWidget);
 
-    // The app switcher, a call coming in: before any time has passed.
     t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     await t.pump();
     expect(find.text('The chats'), findsNothing);
@@ -105,19 +186,37 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('The chats'), findsOneWidget);
     expect(u.asked, 1, reason: 'a moment away does not ask for the lock');
+    debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('with the lock turned off, the screens are still covered when not in front', (t) async {
+  testWidgets('with the lock off (as it is until turned on), nothing is ever covered, as on WhatsApp', (t) async {
     final u = FakeUnlocker();
-    await t.pumpWidget(TaskiemApp(home: AppLock(active: false, hideWhenAway: true, unlocker: u, child: const Text('The chats'))));
+    await t.pumpWidget(TaskiemApp(home: AppLock(active: false, signedIn: true, unlocker: u, child: const Text('The chats'))));
     await t.pumpAndSettle();
-    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    away(t);
     await t.pump();
-    expect(find.text('The chats'), findsNothing);
-    t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    expect(find.text('The chats'), findsOneWidget);
+    back(t);
     await t.pumpAndSettle();
     expect(find.text('The chats'), findsOneWidget);
     expect(u.asked, 0);
+  });
+
+  testWidgets('turning the lock on in Settings does not ask at once; signing in with a kept session does', (t) async {
+    final u = FakeUnlocker();
+    Widget at({required bool on, required bool signedIn}) =>
+        TaskiemApp(home: AppLock(active: signedIn && on, signedIn: signedIn, unlocker: u, child: const Text('The chats')));
+    await t.pumpWidget(at(on: false, signedIn: true));
+    await t.pumpAndSettle();
+    await t.pumpWidget(at(on: true, signedIn: true));
+    await t.pumpAndSettle();
+    expect(u.asked, 0);
+    expect(find.text('The chats'), findsOneWidget);
+    await t.pumpWidget(at(on: true, signedIn: false));
+    await t.pumpAndSettle();
+    await t.pumpWidget(at(on: true, signedIn: true));
+    await t.pumpAndSettle();
+    expect(u.asked, 1);
   });
 
   testWidgets('the keyboard coming up does not build the app afresh (typing in a search box locked it)', (t) async {
