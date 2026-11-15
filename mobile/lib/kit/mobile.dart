@@ -192,9 +192,18 @@ class TkScreen extends StatelessWidget {
     this.actions = const [],
     this.under,
     this.onRefresh,
+    this.head,
+    this.compact = false,
   });
   final String title;
   final bool back;
+
+  /// The head's own words in the title's place (Today's greeting); the
+  /// title is still what a screen reader hears as the screen's name.
+  final Widget? head;
+
+  /// A tab whose first part is its figure (Money): the title small.
+  final bool compact;
   final String backLabel;
 
   /// The head's icon buttons ([TkHeadButton]).
@@ -238,15 +247,22 @@ class TkScreen extends StatelessWidget {
                     const SizedBox(width: 4),
                   ],
                   Expanded(
-                    child: Semantics(
-                      header: true,
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: tkText(size: back ? 19 : 28, weight: 700, letterSpacing: back ? -0.2 : -0.6, color: t.text),
-                      ),
-                    ),
+                    child: head != null
+                        ? Semantics(header: true, label: title, child: head)
+                        : Semantics(
+                            header: true,
+                            child: Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: tkText(
+                                size: back ? 19 : (compact ? 20 : 30),
+                                weight: 700,
+                                letterSpacing: back ? -0.2 : (compact ? -0.3 : -1),
+                                color: t.text,
+                              ),
+                            ),
+                          ),
                   ),
                   ...actions,
                 ],
@@ -593,11 +609,16 @@ class TkListRow extends StatelessWidget {
     this.waiting = false,
     this.onTap,
     this.semanticsLabel,
+    this.square,
   });
   final String title;
   final String sub;
   final String? letters;
   final String? icon;
+
+  /// The icon white on a rounded square of this colour (a list of places
+  /// to go, as a phone's settings), in place of the round tile.
+  final Color? square;
 
   /// The tile's tone; else the letters' own, or lime for an icon.
   final CardTone? tone;
@@ -647,10 +668,12 @@ class TkListRow extends StatelessWidget {
                         Container(
                           width: 44,
                           height: 44,
-                          decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+                          decoration: square != null
+                              ? BoxDecoration(color: square, borderRadius: BorderRadius.circular(13))
+                              : BoxDecoration(color: bg, shape: BoxShape.circle),
                           alignment: Alignment.center,
                           child: icon != null
-                              ? TkIcon(icon!, size: 21, color: ink)
+                              ? TkIcon(icon!, size: 21, stroke: square != null ? 2 : 1.7, color: square != null ? const Color(0xFFFFFFFF) : ink)
                               : Text(
                                   initials,
                                   maxLines: 1,

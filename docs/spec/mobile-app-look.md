@@ -44,7 +44,48 @@ In the app and the web chat alike (13 November 2026, the founder):
 - **Pulled.** By its grab bar or head, a sheet pulled up takes the whole screen; pulled down from there, its own height; thrown down, or pulled past a third of its height, it closes; let go early, it springs back.
 - **Back, one level at a time.** Back (and Esc on the web, the phone's own back in the app) comes back from the deepest step open inside first (a product's sizes to the product, a bill's "paid outside" to the bill: `TkSheetStep`, `useSheetStep`), then a row to its list, then from a tool's list to the tools panel. Close still closes the whole sheet.
 
+## Direction B: Today, Money and Orders
+
+Chosen with the founder, 15 November 2026, from three directions drawn as
+mockups (a glowing money header, rings, a wallet of passes): the calm of
+Apple's Health and Fitness pages. Two changes asked on the rings version:
+**no goals** (a business sets no target; each page compares the business
+with itself or says where things stand), and **a head of its own on each
+page**, fitted to what the page holds.
+
+Each page is: its head, a top card that answers "how is it going?",
+highlight tiles two across, then grouped lists of what to do or where to
+go. The accents are hand-written in `lib/theme/look.dart` (not generated
+from the web's CSS) and mean the same on every page: lime is the page's
+main figure, teal what moves along, orange what goes out or waits, red a
+leak, blue what is on its way. Each has a graphic colour and an ink colour
+for words that keeps 4.5:1 on a card.
+
+| Page | Head | Top card |
+| --- | --- | --- |
+| Today | The greeting, the date and the business; the person's initials | Money in today counting up, its line through the day over a dashed usual day (the same weekday, the last four weeks, averaged hour by hour from `/v1/money/summary`), and how far ahead or behind that is at the same time of day. With no history, today's line alone. A shop without Money draws its paid orders |
+| Money | "Money" small, the period's chips; then the kept figure as the page's headline, set against an earlier stretch (a day against the same weekday a week before, this week and this month against last week's and last month's same days, last month against the month before, chosen dates against as many days before them) | Money in rising and money out dropping from one line, a pair a day (or an hour), on one scale; pressed, a pair's figures |
+| Orders | "Orders" large; chips for All, Customers, Businesses, Suppliers when the person sees more than one | The open orders to the business in three stages, New, Getting ready, On the way (orders to suppliers: To answer, Sent, Coming), and the order that has waited longest, with Open |
+
+The parts (`lib/kit/look.dart`):
+
+| Part | What it is |
+| --- | --- |
+| `TkTopCard` | The card a page opens with; in the dark a faint lime light at its top left |
+| `TkEyebrow` | A small label in capitals in an accent's colour, its icon, words at its end |
+| `TkHighlight`, `TkHighlights` | A tile with an eyebrow, a figure, a line and an optional chart; two across, a wide one on its own row |
+| `TkDayLine`, `TkChartKey` | A day's running total against a usual day's, and the key under a chart |
+| `TkFlow` | Stages side by side with their counts and a dot for each order |
+| `TkTrend` | Up, down or about the same, an arrow before the words |
+| `TkSplitBar` | A whole in shares, one bar and its key |
+| `TkFace` | Initials on a warm gradient |
+
+`TkScreen` takes a `head` in the title's place (Today) and a `compact` title
+(Money); `TkListRow` takes a `square` colour, its icon white on a rounded
+square, for lists of places to go.
+
 ## Order
 
-1. Orders and Money, and the chat's motion. **Done; waiting for the founder's word.**
-2. Then Today, invoices and bills, stock, suppliers, riders, tables, Team, and the settings-like pages, the same way.
+1. Orders and Money, and the chat's motion. Done.
+2. Today, Money and Orders in Direction B. **Done; waiting for the founder's word.**
+3. Then invoices and bills, stock, suppliers, riders, tables, Team, and the settings-like pages, the same way.

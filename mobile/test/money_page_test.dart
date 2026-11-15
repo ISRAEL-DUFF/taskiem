@@ -95,6 +95,28 @@ void main() {
     );
   });
 
+  test('what a period is set against, and the money kept against it', () {
+    String at(String choice, [Period custom = (from: '', to: '')]) {
+      final c = comparedWith(choice, periodFor(choice, _now, custom))!;
+      return '${c.period.from} ${c.period.to} ${c.words}';
+    }
+
+    expect(at('today'), '2026-11-05 2026-11-05 last Thursday');
+    expect(at('yesterday'), '2026-11-04 2026-11-04 last Wednesday');
+    expect(at('week'), '2026-11-02 2026-11-05 last week, same days');
+    expect(at('month'), '2026-10-01 2026-10-12 October, same days');
+    expect(at('last_month'), '2026-09-01 2026-09-30 September');
+    expect(at('custom', (from: '2026-11-03', to: '2026-11-05')), '2026-10-31 2026-11-02 the 3 days before');
+    expect(comparedWith('month', periodFor('month', DateTime.utc(2026, 3, 31, 12)))!.period, (from: '2026-02-01', to: '2026-02-28'), reason: 'a shorter month: to its end');
+    expect(comparedWith('custom', (from: '2026-11-05', to: '2026-11-01')), isNull);
+    Map<String, dynamic> kept(int inK, int outK) => {'in_settled_kobo': inK, 'out_settled_kobo': outK};
+    expect(keptAgainst(kept(5000000, 1000000), kept(2000000, 500000), 'October, same days'), (words: '₦25,000 more than October, same days', up: true));
+    expect(keptAgainst(kept(1000000, 0), kept(3000000, 0), 'last Thursday'), (words: '₦20,000 less than last Thursday', up: false));
+    expect(keptAgainst(kept(1000000, 0), kept(1005000, 0), 'last Thursday'), (words: 'About the same as last Thursday', up: null));
+    expect(keptAgainst(kept(1000000, 0), kept(0, 0), 'last Thursday'), isNull, reason: 'nothing moved then');
+    expect(keptAgainst(kept(1000000, 0), null, 'last Thursday'), isNull);
+  });
+
   test('leaks, statements, entries and fees in words', () {
     expect(leakKindWords('rider_owes'), 'Cash a rider owes');
     expect(whoWords('system:matcher', const {}, null), 'Taskiem');
@@ -195,6 +217,7 @@ void main() {
     expect(find.text('₦50,000'), findsWidgets);
     expect(find.text('₦1,000 more coming in'), findsOneWidget);
     expect(find.text('₦38,000'), findsOneWidget, reason: 'kept');
+    expect(find.text('About the same as last Thursday'), findsOneWidget, reason: 'the same figures came back for 5 November');
     expect(find.text('9900 000 001'), findsOneWidget);
     expect(find.text('1 payment not matched'), findsOneWidget);
     expect(find.text('Fees taken'), findsOneWidget);
@@ -209,7 +232,8 @@ void main() {
     expect(find.text('9 am to 10 am  In ₦0 · Out ₦0'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('This week'));
     await settle(t);
-    expect(sent.where((s) => s.startsWith('GET /v1/money/summary')).last, 'GET /v1/money/summary from=2026-11-09&to=2026-11-12');
+    expect(sent, contains('GET /v1/money/summary from=2026-11-09&to=2026-11-12'));
+    expect(sent, contains('GET /v1/money/summary from=2026-11-02&to=2026-11-05'), reason: 'set against last week, same days');
     await t.tap(find.bySemanticsLabel('Download as a spreadsheet'));
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel(RegExp('^Download money log')));
