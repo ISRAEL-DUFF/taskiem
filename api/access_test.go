@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"strings"
 	"sync"
@@ -334,7 +335,15 @@ func TestAccessChatPasswordFollowsChatSignin(t *testing.T) {
 	if m == nil {
 		t.Fatal("no sign-in link")
 	}
-	out := anon.must(200, "POST", "/v1/auth/chat/link", map[string]any{"token": m[1], "bearer": true})
+	// A phone that proved itself before (a second proof, §5.4): the chat
+	// link opens the business, not only Bisi's own side.
+	const dev = "0192f000-0000-7000-8000-0000000c0772"
+	devHash := sha256.Sum256([]byte("app:" + dev))
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO user_devices (user_id, device_hash, proved_at, proved_by)
+		SELECT user_id, $2, now(), 'email' FROM whatsapp_bindings WHERE number = $1`, bisi, devHash[:]); err != nil {
+		t.Fatal(err)
+	}
+	out := anon.must(200, "POST", "/v1/auth/chat/link", map[string]any{"token": m[1], "bearer": true, "device": appDevice(dev)})
 	web := &client{t: t, base: w.base, token: out["token"].(string)}
 	w.srv.WaitBackground()
 	web.must(200, "PUT", "/v1/me/chat-signin", map[string]any{"on": false})
