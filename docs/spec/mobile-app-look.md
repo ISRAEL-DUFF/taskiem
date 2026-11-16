@@ -314,6 +314,46 @@ web's pictures (the parity test still builds and drives them).
   under the picture, the fields one under another) in the new colours; the
   documents named in a message (`RefCard`).
 
+## Settings
+
+Settings is one list on the ground (`lib/screens/signed_in.dart`):
+
+- You at the top: your face, name, email, and your role in the business. An
+  account made in a chat adds its email there.
+- Your businesses, with Switch, when there is more than one.
+- This phone:
+  - notifications on or off, and whether they show what the message says,
+    as switches;
+  - What this phone tells you, which opens the rest;
+  - App lock, which opens its page, since it has a choice of times rather
+    than on or off.
+- Appearance as a switch of three.
+- Signing in: Passkeys and Your phones, each with its count.
+- The chats you work from: WhatsApp, Telegram and Slack, each with
+  whether it is linked.
+- For everyone here: Chat tools, a switch, for owners and admins.
+- Sign out of this phone.
+
+Every row that has more opens its own page (`SettingsPage`, Back to
+Settings), with its groups as headings over cards (`SettingsCard`).
+
+WhatsApp's page has the number linked large on the top card, with Unlink.
+Under it are Link another number, opened when asked for, and the approval
+PIN: PIN set with Remove, then Change the PIN, which opens its form.
+
+The other pages from Settings:
+
+- **Linked businesses:** being found on the top card, with your card as
+  others see it, Edit your card and Share your link; the QR code is on
+  the head's button. Your links follow as rows with their state. A
+  request is answered on its row, and the rest (End link, Block, Withdraw,
+  Unblock) is a tap on the row.
+- **Your business in Explore:** your card as others see it, Be found in
+  Explore as a switch, then the card's words and the photos.
+- **Invoice settings:** the next invoice's number large, from the prefix
+  and the next number. Then Getting paid (the connection, who pays the
+  fee, part payments and automatic matching) and Credit terms.
+
 ## Order
 
 1. Orders and Money, and the chat's motion. Done.
@@ -323,4 +363,4 @@ web's pictures (the parity test still builds and drives them).
 5. One order: a customer's, a booking, a business's, a rider's delivery. **Done; waiting for the founder's word.**
 6. Team, riders and tables. **Done; waiting for the founder's word.**
 7. The chat: the conversation, the chats list, the tools. **Done; waiting for the founder's word.**
-8. Then the settings-like pages, the same way.
+8. The settings pages: done ("Settings" above).

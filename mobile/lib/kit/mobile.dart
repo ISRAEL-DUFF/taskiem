@@ -22,6 +22,7 @@ import 'kit.dart';
 import 'look.dart' show tkTabular;
 import 'list.dart' show TkLoading;
 import 'tap_area.dart';
+import 'forms.dart' show TkSwitch;
 
 bool _still(BuildContext context) => MediaQuery.maybeDisableAnimationsOf(context) ?? false;
 
@@ -273,7 +274,10 @@ class TkHeadButton extends StatelessWidget {
 
 /// Chips across, scrolling sideways: one on (a period, a filter).
 class TkChips<T> extends StatelessWidget {
-  const TkChips({super.key, required this.chips, required this.on, required this.onPick, this.label = 'Show'});
+  const TkChips({super.key, required this.chips, required this.on, required this.onPick, this.label = 'Show', this.padding = const EdgeInsets.fromLTRB(16, 4, 16, 10)});
+
+  /// Round the switch: the page's edge; none inside a card.
+  final EdgeInsets padding;
   final List<(T, String)> chips;
   final T on;
   final ValueChanged<T> onPick;
@@ -292,7 +296,7 @@ class TkChips<T> extends StatelessWidget {
       label: label,
       explicitChildNodes: true,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+        padding: padding,
         child: LayoutBuilder(
           builder: (context, box) => Container(
             padding: const EdgeInsets.all(2),
@@ -604,7 +608,12 @@ class TkListRow extends StatelessWidget {
     this.statusAccent,
     this.level,
     this.levelColor,
+    this.trailing,
   });
+
+  /// At the row's end in place of an amount: a switch, or quiet words
+  /// ("Linked") before the chevron.
+  final Widget? trailing;
 
   /// How full it is (an item's stock against its level), as a thin bar
   /// under the line; null for none.
@@ -731,14 +740,16 @@ class TkListRow extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        maxLines: 1,
+                        // A setting's words wrap beside its switch, as drawn.
+                        maxLines: trailing is TkSwitch ? 2 : 1,
                         overflow: TextOverflow.ellipsis,
                         style: tkText(size: 15.5, weight: 500, lineHeight: 1.3, color: t.text),
                       ),
                       if (sub.isNotEmpty)
+                        // Up to two lines, as drawn.
                         Text(
                           sub,
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted),
                         ),
@@ -799,8 +810,9 @@ class TkListRow extends StatelessWidget {
                     ),
                   ),
                 ],
+                if (trailing != null) ...[const SizedBox(width: 10), trailing!],
                 // A row that opens has its chevron, after its amount too (as drawn).
-                if (onTap != null && status == null) ...[
+                if (onTap != null && status == null && trailing is! TkSwitch) ...[
                   const SizedBox(width: 6),
                   ExcludeSemantics(child: TkIcon('chevron', size: 16, color: t.muted.withValues(alpha: 0.6))),
                 ],

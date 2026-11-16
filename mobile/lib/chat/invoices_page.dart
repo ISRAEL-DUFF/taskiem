@@ -13,7 +13,7 @@ import 'package:share_plus/share_plus.dart';
 import '../app/lock.dart' show stepOut;
 import '../app/auth.dart';
 import '../app/links.dart';
-import '../kit/forms.dart' show TkSwitchRow, errorWords, nairaKobo;
+import '../kit/forms.dart' show TkSwitch, TkSwitchRow, errorWords, nairaKobo;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty, TkPill;
 import '../kit/modal.dart';
@@ -1855,63 +1855,103 @@ class _InvoiceSettingsPageState extends State<InvoiceSettingsPage> {
     final t = TkTheme.tokens(context);
     final s = _saved;
     final manage = widget.auth.can('invoice.manage');
+    final look = TkLook.of(context);
+    Widget heading(String words) => Padding(
+      padding: const EdgeInsets.fromLTRB(4, 6, 4, 0),
+      child: Semantics(header: true, child: Text(words, style: tkDisplay(size: 20, letterSpacing: -0.4, color: t.text))),
+    );
+    Widget card(List<Widget> children) => Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+    );
+    final fee = feeChoices.where((f) => f.$1 == _fee).firstOrNull;
+    // As drawn (docs/spec/mobile-app-look.md, "Settings"): the next
+    // invoice's number large, from the prefix and the next number; getting
+    // paid; credit terms.
     return TkPageScreen(
       title: 'Invoice settings',
+      titleSize: 26,
       description: 'How new invoices are numbered, their usual payment options, and how money is matched to them. Each invoice can change the payment options for itself.',
       backLabel: 'Back to Invoices',
       children: [
         if (_error != null) TkErrorBox(_error!),
         if (s == null && _error == null) Text('Loading the settings…', style: tkHint(t)),
         if (s != null) ...[
-          TkPageCard(
-            children: [
-              if (!manage)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Text('You can see these settings. Someone who manages invoices can change them.', style: tkHint(t)),
-                ),
-              IgnorePointer(
-                ignoring: !manage,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TkKitField(
-                      label: 'Number prefix',
-                      hint: 'Up to 12 letters, digits, -, _ or /.',
-                      child: TkTextBox(controller: _prefix, max: 12, plain: true, enabled: manage),
-                    ),
-                    const SizedBox(height: 10),
-                    TkKitField(
-                      label: 'Next number',
-                      hint:
-                          'Can move forward, never back, so no number is given twice. The next invoice is ${numberPreview(_prefix.text, int.tryParse(_next.text.trim()))}.',
-                      child: TkTextBox(controller: _next, digits: 9, enabled: manage),
-                    ),
-                    const SizedBox(height: 10),
-                    TkKitField(
-                      label: 'Payments connection',
-                      hint: 'The connection (Paystack, Flutterwave, OPay, …) that takes payments for invoices.',
-                      child: TkTextBox(controller: _connection, hint: 'main', plain: true, enabled: manage),
-                    ),
-                    const SizedBox(height: 10),
-                    Text('Who pays the transfer fee', style: tkText(size: 13, weight: 600, color: t.muted)),
-                    const SizedBox(height: 6),
-                    for (final (v, words, help) in feeChoices)
-                      TkChoiceRow(
-                        control: TkRadio(checked: _fee == v),
-                        label: Text('$words. $help', style: tkText(size: 14, color: t.text)),
-                        onTap: manage ? () => setState(() => _fee = v) : null,
-                      ),
-                    TkSwitchRow(label: 'Customers may pay part of an invoice', on: _part, onChanged: manage ? (v) => setState(() => _part = v) : null),
-                    TkSwitchRow(
-                      label: 'Match strong suggestions automatically',
-                      hint: 'Off by default. A payment that clearly fits one invoice is matched without asking; each automatic match lists its reasons on the invoice and can be undone there.',
-                      on: _auto,
-                      onChanged: manage ? (v) => setState(() => _auto = v) : null,
-                    ),
-                  ],
-                ),
+          if (!manage) Text('You can see these settings. Someone who manages invoices can change them.', style: tkHint(t)),
+          IgnorePointer(
+            ignoring: !manage,
+            child: TkTopCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TkEyebrow('Your next invoice', color: look.blueInk, trailing: 'numbered in order'),
+                  const SizedBox(height: 6),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(numberPreview(_prefix.text, int.tryParse(_next.text.trim())), maxLines: 1, style: tkFigure(context, size: 26)),
+                  ),
+                  const SizedBox(height: 10),
+                  TkButtonRow([
+                    TkKitField(label: 'Number prefix', child: TkTextBox(controller: _prefix, max: 12, plain: true, enabled: manage)),
+                    TkKitField(label: 'Next number', child: TkTextBox(controller: _next, digits: 9, enabled: manage)),
+                  ]),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Up to 12 letters, digits, -, _ or /. The number moves forward, never back, so none is given twice. The next invoice is ${numberPreview(_prefix.text, int.tryParse(_next.text.trim()))}.',
+                    style: tkText(size: 12, lineHeight: 1.35, color: t.muted),
+                  ),
+                ],
               ),
+            ),
+          ),
+          heading('Getting paid'),
+          IgnorePointer(
+            ignoring: !manage,
+            child: card([
+              TkKitField(
+                label: 'Payments connection',
+                hint: 'Paystack, Flutterwave, OPay … that takes payments for invoices.',
+                child: TkTextBox(controller: _connection, hint: 'main', plain: true, enabled: manage),
+              ),
+              const SizedBox(height: 10),
+              Text('Who pays the transfer fee', style: tkText(size: 12.5, weight: 600, color: t.muted)),
+              const SizedBox(height: 6),
+              TkChips<String>(
+                label: 'Who pays the transfer fee',
+                chips: [for (final (v, words, _) in feeChoices) (v, words)],
+                on: _fee,
+                onPick: (v) => setState(() => _fee = v),
+                padding: EdgeInsets.zero,
+              ),
+              if (fee != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(fee.$3, style: tkText(size: 12, lineHeight: 1.35, color: t.muted))),
+            ]),
+          ),
+          IgnorePointer(
+            ignoring: !manage,
+            child: TkSection(
+              inset: 56,
+              children: [
+                TkListRow(
+                  title: 'Customers may pay part of an invoice',
+                  icon: 'b-clock',
+                  square: look.lime,
+                  trailing: TkSwitch(label: 'Customers may pay part of an invoice', on: _part, onChanged: manage ? (v) => setState(() => _part = v) : null),
+                  onTap: manage ? () => setState(() => _part = !_part) : null,
+                ),
+                TkListRow(
+                  title: 'Match strong suggestions automatically',
+                  sub: 'Each automatic match lists its reasons on the invoice, and can be undone there.',
+                  icon: 'b-bolt',
+                  square: look.violet,
+                  trailing: TkSwitch(label: 'Match strong suggestions automatically', on: _auto, onChanged: manage ? (v) => setState(() => _auto = v) : null),
+                  onTap: manage ? () => setState(() => _auto = !_auto) : null,
+                ),
+              ],
+            ),
+          ),
+          card([
               if (_tried && _problem != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -1960,30 +2000,28 @@ class _InvoiceSettingsPageState extends State<InvoiceSettingsPage> {
                     ),
                   ),
                 ),
-            ],
-          ),
-          TkPageCard(
-            title: 'Credit terms',
-            children: [
+          ]),
+          heading('Credit terms'),
+          card([
               Text(
                 'How long customers have to pay a debt you write down in chat (Ada owes 5,000). A debt is due that many days after it is recorded, and reminders go only once it is overdue. Now: ${creditTermsWords(s)}',
                 style: tkHint(t),
               ),
               const SizedBox(height: 10),
-              Text('Customers have', style: tkText(size: 13, weight: 600, color: t.muted)),
+              Text('Customers have', style: tkText(size: 12.5, weight: 600, color: t.muted)),
               const SizedBox(height: 6),
-              for (final (v, words) in const [
-                ('7', '7 days'),
-                ('14', '14 days'),
-                ('30', '30 days'),
-                ('none', 'No fixed time (no reminders)'),
-                ('other', 'Another number of days'),
-              ])
-                TkChoiceRow(
-                  control: TkRadio(checked: _choice == v),
-                  label: Text(words, style: tkText(size: 15, color: t.text)),
-                  onTap: manage ? () => setState(() => _choice = v) : null,
+              IgnorePointer(
+                ignoring: !manage,
+                child: TkChips<String>(
+                  label: 'Customers have',
+                  chips: const [('7', '7 days'), ('14', '14 days'), ('30', '30 days'), ('none', 'No fixed time'), ('other', 'Other')],
+                  on: _choice,
+                  onPick: (v) => setState(() => _choice = v),
+                  padding: EdgeInsets.zero,
                 ),
+              ),
+              if (_choice == 'none') Padding(padding: const EdgeInsets.only(top: 6), child: Text('No reminders go.', style: tkText(size: 12, color: t.muted))),
+              const SizedBox(height: 6),
               if (_choice == 'other') ...[
                 TkKitField(
                   label: 'Days',

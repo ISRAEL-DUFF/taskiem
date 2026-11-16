@@ -14,6 +14,7 @@ import '../api/transport.dart' show ApiError, Offline;
 import 'kit.dart';
 import 'sheet.dart';
 import 'tap_area.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 
 /// toolforms.ts nairaKobo: naira as typed ("78,000"), in kobo; null when
@@ -394,7 +395,8 @@ class TkSwitch extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    final track = !on ? t.borderStrong : (onPine || dark ? t.brandDark : t.brand);
+    // In the app's own look, lime when on (as a phone's switch).
+    final track = !on ? t.borderStrong : (TkAppLook.on(context) && !onPine ? TkLook.of(context).lime : (onPine || dark ? t.brandDark : t.brand));
     final knob = on && onPine ? t.tkOnPine : const Color(0xFFFFFFFF);
     return TapArea(
       child: Semantics(
@@ -408,16 +410,17 @@ class TkSwitch extends StatelessWidget {
             opacity: onChanged == null ? 0.6 : 1,
             child: AnimatedContainer(
               duration: still ? Duration.zero : const Duration(milliseconds: 200),
-              width: 52,
-              height: 32,
+              // The app's own look: a phone's switch, a little smaller.
+              width: TkAppLook.on(context) ? 46 : 52,
+              height: TkAppLook.on(context) ? 28 : 32,
               decoration: BoxDecoration(color: track, borderRadius: BorderRadius.circular(999)),
               child: AnimatedAlign(
                 duration: still ? Duration.zero : const Duration(milliseconds: 250),
                 curve: Curves.easeOutBack,
                 alignment: on ? Alignment.centerRight : Alignment.centerLeft,
                 child: Container(
-                  width: 26,
-                  height: 26,
+                  width: TkAppLook.on(context) ? 22 : 26,
+                  height: TkAppLook.on(context) ? 22 : 26,
                   margin: const EdgeInsets.all(3),
                   decoration: BoxDecoration(
                     color: knob,
