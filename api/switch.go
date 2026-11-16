@@ -34,7 +34,7 @@ func (s *Server) listBusinesses(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]map[string]any, 0, len(ts))
 	for _, t := range ts {
-		b := map[string]any{"id": t.ID, "name": t.Name}
+		b := map[string]any{"id": t.ID, "name": t.Name, "kind": t.Kind}
 		if t.ID == p.TenantID {
 			b["current"] = true
 		}

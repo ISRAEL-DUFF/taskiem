@@ -95,6 +95,12 @@ class TaskiemApi {
     return Session.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Start a business or workflows (`POST /v1/me/start`)
+  Future<StartSomethingResponse> startSomething({required StartSomethingRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/start', body: body.toJson());
+    return StartSomethingResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Conversations with linked businesses (`GET /v1/link-chats`)
   Future<ListLinkChatsResponse> listLinkChats() async {
     final j = await _t.send('GET', '/v1/link-chats');
@@ -933,7 +939,7 @@ class SignupResult {
 }
 
 class Me {
-  const Me({this.advanced, this.areas, required this.authMethod, this.delivers, this.enrolPasskey, this.factors, this.fieldAgent, this.gateOnly, this.invitationsOnly, required this.permissions, this.roles, this.schools, this.tenantId, this.tenantName, this.terms, this.totp, this.user});
+  const Me({this.advanced, this.areas, required this.authMethod, this.delivers, this.enrolPasskey, this.factors, this.fieldAgent, this.gateOnly, this.invitationsOnly, required this.permissions, this.roles, this.schools, this.tenantId, this.tenantKind, this.tenantName, this.terms, this.totp, this.user});
 
   /// Whether the business sees the web app's technical parts (the Advanced
   /// switch).
@@ -967,6 +973,11 @@ class Me {
   /// Whether the business has the Schools area on (docs/schools.md).
   final bool? schools;
   final Object? tenantId;
+  /// What the tenant is (taskiem-for-everyone §18.2). A workflows workspace
+  /// has every area off and is never listed for other businesses to find;
+  /// turning any area on makes it a business, and turning every area off makes
+  /// a business workflows again.
+  final String? tenantKind;
   /// The business's name, as the web app's sidebar shows it.
   final String? tenantName;
   /// Terms the person has not answered yet; answer with POST /v1/me/terms.
@@ -989,6 +1000,7 @@ class Me {
         roles: j['roles'],
         schools: j['schools'] == null ? null : j['schools'] as bool,
         tenantId: j['tenant_id'],
+        tenantKind: j['tenant_kind'] == null ? null : j['tenant_kind'] as String,
         tenantName: j['tenant_name'] == null ? null : j['tenant_name'] as String,
         terms: j['terms'] == null ? null : TermsAsked.fromJson(j['terms'] as Map<String, dynamic>),
         totp: j['totp'] == null ? null : j['totp'] as bool,
@@ -1009,6 +1021,7 @@ class Me {
         'roles': ?roles,
         'schools': ?schools,
         'tenant_id': ?tenantId,
+        'tenant_kind': ?tenantKind,
         'tenant_name': ?tenantName,
         'terms': ?terms?.toJson(),
         'totp': ?totp,
@@ -1103,21 +1116,25 @@ class ListBusinessesResponse {
 }
 
 class ListBusinessesResponseBusinessesItem {
-  const ListBusinessesResponseBusinessesItem({this.current, required this.id, required this.name});
+  const ListBusinessesResponseBusinessesItem({this.current, required this.id, this.kind, required this.name});
 
   final bool? current;
   final String id;
+  /// A business, or a workflows workspace.
+  final String? kind;
   final String name;
 
   factory ListBusinessesResponseBusinessesItem.fromJson(Map<String, dynamic> j) => ListBusinessesResponseBusinessesItem(
         current: j['current'] == null ? null : j['current'] as bool,
         id: j['id'] as String,
+        kind: j['kind'] == null ? null : j['kind'] as String,
         name: j['name'] as String,
       );
 
   Map<String, dynamic> toJson() => {
         'current': ?current,
         'id': id,
+        'kind': ?kind,
         'name': name,
       };
 }
@@ -1133,6 +1150,60 @@ class SwitchBusinessRequest {
 
   Map<String, dynamic> toJson() => {
         'tenant_id': tenantId,
+      };
+}
+
+class StartSomethingRequest {
+  const StartSomethingRequest({required this.kind, this.kinds, this.name});
+
+  final String kind;
+  final List<String>? kinds;
+  final String? name;
+
+  factory StartSomethingRequest.fromJson(Map<String, dynamic> j) => StartSomethingRequest(
+        kind: j['kind'] as String,
+        kinds: j['kinds'] == null ? null : (j['kinds'] as List).map((e) => e as String).toList(),
+        name: j['name'] == null ? null : j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind,
+        'kinds': ?kinds?.map((e) => e).toList(),
+        'name': ?name,
+      };
+}
+
+class StartSomethingResponse {
+  const StartSomethingResponse({required this.kind, required this.name, required this.tenantId, this.tenants, this.token, required this.userId});
+
+  final String kind;
+  /// Its name, as given or as made for a workflows workspace.
+  final String name;
+  /// What was started, which this session is now in.
+  final String tenantId;
+  /// The tenants the person can sign in to, the new one among them.
+  final List<String>? tenants;
+  /// The new session token, only for a bearer session; otherwise the session is
+  /// the `taskiem_session` cookie.
+  final String? token;
+  final String userId;
+
+  factory StartSomethingResponse.fromJson(Map<String, dynamic> j) => StartSomethingResponse(
+        kind: j['kind'] as String,
+        name: j['name'] as String,
+        tenantId: j['tenant_id'] as String,
+        tenants: j['tenants'] == null ? null : (j['tenants'] as List).map((e) => e as String).toList(),
+        token: j['token'] == null ? null : j['token'] as String,
+        userId: j['user_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind,
+        'name': name,
+        'tenant_id': tenantId,
+        'tenants': ?tenants?.map((e) => e).toList(),
+        'token': ?token,
+        'user_id': userId,
       };
 }
 

@@ -615,9 +615,10 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		var business string
-		if err := tx.QueryRow(r.Context(), `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&business); err == nil {
+		var business, kind string
+		if err := tx.QueryRow(r.Context(), `SELECT name, kind FROM tenants WHERE id = $1`, p.TenantID).Scan(&business, &kind); err == nil {
 			out["tenant_name"] = business
+			out["tenant_kind"] = kind // a business or workflows (taskiem-for-everyone §18.2)
 		}
 		// The Schools area, when the business turned it on (schools.go).
 		out["schools"] = s.schoolsOn(r.Context(), tx, p.TenantID)
@@ -653,15 +654,16 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 // passkey or authenticator (F9), and no one else could have chosen it.
 // Signup goes through createTenant and confirms the email by link.
 func CreateTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName, password string) (tenant, user uuid.UUID, err error) {
-	return createTenant(ctx, pool, name, email, userName, password, func(tx pgx.Tx, _, user uuid.UUID) error {
+	return createTenant(ctx, pool, name, areas.TenantBusiness, email, userName, password, func(tx pgx.Tx, _, user uuid.UUID) error {
 		_, err := tx.Exec(ctx, `UPDATE users SET email_verified_at = now() WHERE id = $1`, user)
 		return err
 	})
 }
 
-// createTenant is CreateTenant; then, when given, runs in the same
-// transaction (signup records its onboarding and verification link).
-func createTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName, password string, then func(tx pgx.Tx, tenant, user uuid.UUID) error) (tenant, user uuid.UUID, err error) {
+// createTenant is CreateTenant, of a kind (areas.TenantBusiness or
+// TenantWorkflows); then, when given, runs in the same transaction
+// (signup records its onboarding and verification link).
+func createTenant(ctx context.Context, pool *pgxpool.Pool, name, kind, email, userName, password string, then func(tx pgx.Tx, tenant, user uuid.UUID) error) (tenant, user uuid.UUID, err error) {
 	if name == "" || !strings.Contains(email, "@") || len(password) < 12 {
 		return uuid.Nil, uuid.Nil, fmt.Errorf("%w: tenant, a valid email, and a password of at least 12 characters are required", errBadRequest)
 	}
@@ -674,20 +676,11 @@ func createTenant(ctx context.Context, pool *pgxpool.Pool, name, email, userName
 		if exists {
 			return fmt.Errorf("%w: email already registered", errConflict)
 		}
-		stmts := []struct {
-			q    string
-			args []any
-		}{
-			{`INSERT INTO tenants (id, name, plan_id) VALUES ($1, $2, $3)`, []any{tenant, name, uuid.Nil}},
-			{`INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)`, []any{user, email, userName, hashPassword(password)}},
-			{`INSERT INTO memberships (tenant_id, user_id, role) VALUES ($1, $2, 'owner')`, []any{tenant, user}},
-			{`INSERT INTO workspaces (id, tenant_id, name) VALUES ($1, $2, 'Default')`, []any{uuid.Must(uuid.NewV7()), tenant}},
-			{`INSERT INTO environments (tenant_id, name) VALUES ($1, 'dev'), ($1, 'prod')`, []any{tenant}},
+		if _, err := tx.Exec(ctx, `INSERT INTO users (id, email, name, password_hash) VALUES ($1, $2, $3, $4)`, user, email, userName, hashPassword(password)); err != nil {
+			return err
 		}
-		for _, st := range stmts {
-			if _, err := tx.Exec(ctx, st.q, st.args...); err != nil {
-				return err
-			}
+		if _, err := insertTenantTx(ctx, tx, tenant, user, name, kind); err != nil {
+			return err
 		}
 		if _, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'tenant.create', $3, '{}')`, tenant, user.String(), tenant.String()); err != nil {
 			return err

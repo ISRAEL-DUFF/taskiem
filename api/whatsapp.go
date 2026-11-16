@@ -280,6 +280,8 @@ func (s *Server) unbindWhatsApp(w http.ResponseWriter, r *http.Request) {
 type tenantRef struct {
 	ID   uuid.UUID
 	Name string
+	// Kind is business or workflows (start.go).
+	Kind string
 }
 
 // tenantsOf lists a person's active tenants, by name.
@@ -290,13 +292,13 @@ func (s *Server) tenantsOf(ctx context.Context, user uuid.UUID) ([]tenantRef, er
 	}
 	var out []tenantRef
 	err := db.InTenantTx(ctx, s.Store.Pool, ids, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id, name FROM tenants WHERE id = ANY ($1) ORDER BY lower(name), id`, ids)
+		rows, err := tx.Query(ctx, `SELECT id, name, kind FROM tenants WHERE id = ANY ($1) ORDER BY lower(name), id`, ids)
 		if err != nil {
 			return err
 		}
 		out, err = pgx.CollectRows(rows, func(r pgx.CollectableRow) (tenantRef, error) {
 			var t tenantRef
-			return t, r.Scan(&t.ID, &t.Name)
+			return t, r.Scan(&t.ID, &t.Name, &t.Kind)
 		})
 		return err
 	})

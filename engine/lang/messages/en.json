@@ -5354,6 +5354,31 @@
       "reviewed": true,
       "context": "Button, at most 20 characters: the stock-count-reminder template"
     },
+    "signup.ask_kind": {
+      "text": "Is this for a business, or for workflows?\n\n*A business*: sell, take orders and bookings, send invoices, with your staff.\n*Workflows*: get work done for you or your team: forms, reminders, approvals, your other apps.",
+      "reviewed": true,
+      "context": "Asked first when starting something from chat: a business or workflows. Two buttons follow (signup.button_business, signup.button_workflows); 1 and 2 also answer"
+    },
+    "signup.button_business": {
+      "text": "A business",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: start a business"
+    },
+    "signup.button_workflows": {
+      "text": "Workflows",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: start workflows (no shop, orders or money)"
+    },
+    "signup.starters_workflows": {
+      "text": "Here are two things to start with:",
+      "reviewed": true,
+      "context": "Before the two templates offered to new workflows (not a business)"
+    },
+    "signup.tpl.leave-request": {
+      "text": "Leave requests",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the leave-request template"
+    },
     "dormant.form_title": {
       "text": "Prove it is you",
       "reviewed": true,

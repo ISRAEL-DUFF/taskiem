@@ -18,6 +18,8 @@ listDevices
 removeDevice
 listBusinesses
 switchBusiness
+# Start a business or workflows (taskiem-for-everyone §18)
+startSomething
 
 # The chats list (M3)
 listLinkChats

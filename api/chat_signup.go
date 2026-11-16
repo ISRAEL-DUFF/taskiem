@@ -71,6 +71,7 @@ const (
 	defaultChatSignupPerHour = 60
 
 	suTerms    = "terms"
+	suKind     = "kind" // a business, or workflows (taskiem-for-everyone §18.3)
 	suBusiness = "business"
 	suName     = "name"
 	suSells    = "sells"
@@ -87,7 +88,10 @@ var (
 
 // signupState is a sign-up's answers so far.
 type signupState struct {
-	Step     string   `json:"-"`
+	Step string `json:"-"`
+	// Kind is what is being started: areas.TenantBusiness or
+	// TenantWorkflows (start.go). Slack starts workflows without asking.
+	Kind     string   `json:"kind,omitempty"`
 	Business string   `json:"business,omitempty"`
 	Name     string   `json:"name,omitempty"`
 	Sells    string   `json:"sells,omitempty"`
@@ -332,20 +336,50 @@ func (s *Server) signupBegin(ctx context.Context, sc *signupChat) error {
 		return s.suSay(ctx, sc, msg)
 	}
 	st := &signupState{Step: suTerms}
-	if sc.user != uuid.Nil {
-		st.Step = suBusiness
-	}
 	if ss := sc.slack; ss != nil {
 		// Slack names the workspace and, for a new person, who they are.
+		// A Slack workspace is a team wanting workflows and approvals: it
+		// starts as workflows, and its owner turns areas on if it sells.
 		st.Suggest = ss.teamName
+		st.Kind = areas.TenantWorkflows
 		if sc.user == uuid.Nil {
 			st.Name = ss.person
 		}
+	}
+	if sc.user != uuid.Nil {
+		st.Step = signupAfterTerms(st)
 	}
 	if err := s.signupSave(ctx, sc, st); err != nil {
 		return err
 	}
 	return s.signupAsk(ctx, sc, st)
+}
+
+// signupAfterTerms is the first question after the terms (or the first
+// of all, for a person with an account): whether this is a business or
+// workflows, unless the door already says.
+func signupAfterTerms(st *signupState) string {
+	if st.Kind != "" {
+		return suBusiness
+	}
+	return suKind
+}
+
+// signupKindAnswer reads the answer to "a business, or workflows?".
+func signupKindAnswer(word, reply string) string {
+	switch {
+	case reply == "su:kind:business":
+		return areas.TenantBusiness
+	case reply == "su:kind:workflows":
+		return areas.TenantWorkflows
+	}
+	switch word {
+	case "1", "business", "a business", "my business":
+		return areas.TenantBusiness
+	case "2", "workflows", "workflow", "just workflows":
+		return areas.TenantWorkflows
+	}
+	return ""
 }
 
 // signupAsk asks the step's question.
@@ -354,6 +388,10 @@ func (s *Server) signupAsk(ctx context.Context, sc *signupChat, st *signupState)
 	case suTerms:
 		return s.suSay(ctx, sc, sc.t("signup.terms", "link", s.termsLink(), "languages", langNames(s.operatorLangs())),
 			whatsapp.Button{ID: "su:yes", Title: sc.t("button.yes")}, whatsapp.Button{ID: "su:no", Title: sc.t("button.no")})
+	case suKind:
+		return s.suSay(ctx, sc, sc.t("signup.ask_kind"),
+			whatsapp.Button{ID: "su:kind:business", Title: sc.t("signup.button_business")},
+			whatsapp.Button{ID: "su:kind:workflows", Title: sc.t("signup.button_workflows")})
 	case suBusiness:
 		if n, ok := plainName(st.Suggest, 2, 80); ok {
 			return s.suSay(ctx, sc, sc.t("signup.ask_business"), whatsapp.Button{ID: "su:suggest", Title: n})
@@ -422,6 +460,13 @@ func (s *Server) signupStep(ctx context.Context, sc *signupChat, st *signupState
 		}
 		return s.signupAsk(ctx, sc, st)
 	}
+	// The answers are in: Telegram asks for the person's own number last.
+	finish := func() error {
+		if sc.ch.Name() == "telegram" && sc.user == uuid.Nil {
+			return next(suContact)
+		}
+		return s.signupMake(ctx, sc, st, signupNumber(sc))
+	}
 	switch st.Step {
 	case suTerms:
 		if reply != "su:yes" && !yesWord(word) {
@@ -429,7 +474,22 @@ func (s *Server) signupStep(ctx context.Context, sc *signupChat, st *signupState
 		}
 		now := time.Now().UTC()
 		st.Agreed = &now
-		return next(suBusiness)
+		return next(signupAfterTerms(st))
+	case suKind:
+		kind := signupKindAnswer(word, reply)
+		if kind == "" {
+			return s.signupAsk(ctx, sc, st)
+		}
+		st.Kind = kind
+		if kind == areas.TenantBusiness {
+			return next(suBusiness)
+		}
+		// Workflows: no name for it (it is called after its owner), and
+		// nothing about selling.
+		if sc.user != uuid.Nil || st.Name != "" {
+			return finish()
+		}
+		return next(suName)
 	case suBusiness:
 		if reply == "su:suggest" && st.Suggest != "" {
 			text = st.Suggest
@@ -441,6 +501,9 @@ func (s *Server) signupStep(ctx context.Context, sc *signupChat, st *signupState
 		st.Business = name
 		if sc.user != uuid.Nil || st.Name != "" {
 			// Their name is known: the account's, or Slack's.
+			if st.Kind == areas.TenantWorkflows {
+				return finish()
+			}
 			return next(suSells)
 		}
 		return next(suName)
@@ -450,6 +513,9 @@ func (s *Server) signupStep(ctx context.Context, sc *signupChat, st *signupState
 			return s.suSay(ctx, sc, sc.t("signup.name_bad"))
 		}
 		st.Name = name
+		if st.Kind == areas.TenantWorkflows {
+			return finish()
+		}
 		return next(suSells)
 	case suSells:
 		picked := signupPicks(word, signupSells)
@@ -464,10 +530,7 @@ func (s *Server) signupStep(ctx context.Context, sc *signupChat, st *signupState
 			return s.signupAsk(ctx, sc, st)
 		}
 		st.Pays = picked
-		if sc.ch.Name() == "telegram" && sc.user == uuid.Nil {
-			return next(suContact)
-		}
-		return s.signupMake(ctx, sc, st, signupNumber(sc))
+		return finish()
 	case suContact:
 		return s.signupAsk(ctx, sc, st)
 	case suEmail:
@@ -556,8 +619,13 @@ func (s *Server) signupMake(ctx context.Context, sc *signupChat, st *signupState
 	if id == "" {
 		id = sc.addr
 	}
+	workflows := st.Kind == areas.TenantWorkflows
 	nb := newBusiness{Name: st.Business, OwnerName: st.Name, Owner: sc.user, Source: channel, ChannelHash: identityHash(id), ActorType: "user",
-		Detail: map[string]any{"channel": channel, "sells": st.Sells, "pays": st.Pays}}
+		Kind: areas.TenantBusiness, Detail: map[string]any{"channel": channel, "sells": st.Sells, "pays": st.Pays}}
+	if workflows {
+		nb.Kind = areas.TenantWorkflows
+		nb.Detail = map[string]any{"channel": channel, "kind": nb.Kind}
+	}
 	if number != "" {
 		nb.Detail["number"] = whatsapp.MaskNumber(number)
 	}
@@ -572,20 +640,26 @@ func (s *Server) signupMake(ctx context.Context, sc *signupChat, st *signupState
 		join = func(tx pgx.Tx, tenant, owner uuid.UUID) error { return s.slackJoinTx(ctx, tx, tenant, owner, ss) }
 		nb.Then = join
 	}
-	// A business whose service is delivery (docs/spec/chat-riders.md): it
-	// starts with its orders and links, its chat tools on.
+	// The areas it starts with: none for workflows; for a business, those
+	// of what it sells (a delivery business, docs/spec/chat-riders.md, also
+	// its chat tools). "Something else" says nothing, so every area but
+	// Schools stays on, as before the question. The name it was given (a
+	// workflows workspace's is its owner's) is what the last message says.
 	setup := func(tx pgx.Tx, tenant uuid.UUID) error {
-		if st.Sells != "delivery" {
-			return nil
+		kinds := signupSellsKinds(st.Sells)
+		if workflows {
+			kinds = []string{}
 		}
-		start, err := areas.FromKinds([]string{"delivery"})
-		if err != nil {
-			return err
+		if kinds != nil {
+			start, err := areas.FromKinds(kinds)
+			if err != nil {
+				return err
+			}
+			if err := startAreasTx(ctx, tx, tenant, start, kinds, "signup"); err != nil {
+				return err
+			}
 		}
-		if err := areas.SaveAll(ctx, tx, tenant, start, "signup"); err != nil {
-			return err
-		}
-		return startDeliveryBusinessTx(ctx, tx, tenant, "system:signup")
+		return tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenant).Scan(&st.Business)
 	}
 	then := nb.Then
 	nb.Then = func(tx pgx.Tx, tenant, owner uuid.UUID) error {
@@ -681,17 +755,36 @@ func (s *Server) signupMake(ctx context.Context, sc *signupChat, st *signupState
 	}
 	// The sign-up's last message asks whether other businesses find it
 	// (business links §5.1): asked once, here, so the web does not ask
-	// again. Until it answers, the default holds.
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		_, err := links.SetFindableTx(ctx, tx, tenant, nil, "system:signup")
-		return err
-	}); err != nil {
-		s.Logger.Warn("chat sign-up: asking about being found", "err", err)
+	// again. Until it answers, the default holds. Workflows are never found.
+	if !workflows {
+		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			_, err := links.SetFindableTx(ctx, tx, tenant, nil, "system:signup")
+			return err
+		}); err != nil {
+			s.Logger.Warn("chat sign-up: asking about being found", "err", err)
+		}
 	}
 	signupCount(channel, "created")
 	// What was made, for the app's sign-up to sign its owner in (app_signup.go).
 	sc.madeTenant, sc.madeOwner = tenant, owner
 	return s.signupDone(ctx, sc, st)
+}
+
+// signupSellsKinds are the kinds of business (areas.Kinds) that what it
+// sells starts it with; nil (something else) keeps every area but Schools,
+// as before the question.
+func signupSellsKinds(sells string) []string {
+	switch sells {
+	case "food", "provisions", "fashion", "phones":
+		return []string{"shop"}
+	case "salon", "services":
+		return []string{"service"}
+	case "delivery":
+		return []string{"delivery"}
+	case "school":
+		return []string{"school"}
+	}
+	return nil
 }
 
 // telegramPlaceholderEmail is the sign-in name of a person who signed up
@@ -727,7 +820,13 @@ func (s *Server) termsAcceptTx(ctx context.Context, tx pgx.Tx, tenant, user uuid
 func (s *Server) signupDone(ctx context.Context, sc *signupChat, st *signupState) error {
 	var list strings.Builder
 	var buttons []whatsapp.Button
-	for i, id := range signupTemplates(st.Sells, st.Pays) {
+	workflows := st.Kind == areas.TenantWorkflows
+	ids, starters := signupTemplates(st.Sells, st.Pays), "signup.starters"
+	if workflows {
+		// Nothing of selling: work for a person or a team.
+		ids, starters = []string{"daily-reminder", "leave-request"}, "signup.starters_workflows"
+	}
+	for i, id := range ids {
 		tpl, ok := templates.Default().Get(id)
 		if !ok {
 			continue
@@ -739,8 +838,10 @@ func (s *Server) signupDone(ctx context.Context, sc *signupChat, st *signupState
 	if s.Billing.On() && s.Billing.Config.TrialDays > 0 {
 		head = sc.t("signup.done_trial", "business", whatsapp.SafeText(st.Business), "days", strconv.Itoa(s.Billing.Config.TrialDays))
 	}
-	text := head + "\n\n" + sc.t("signup.starters") + "\n\n" + strings.TrimSpace(list.String()) + "\n\n" + sc.t("signup.own_words") +
-		"\n\n" + sc.t("signup.findable")
+	text := head + "\n\n" + sc.t(starters) + "\n\n" + strings.TrimSpace(list.String()) + "\n\n" + sc.t("signup.own_words")
+	if !workflows {
+		text += "\n\n" + sc.t("signup.findable")
+	}
 	if sc.ch.Name() == "whatsapp" && sc.user == uuid.Nil {
 		text += "\n\n" + sc.t("signup.pin_hint")
 	}
@@ -852,6 +953,13 @@ type newBusiness struct {
 	// Then runs last in the same transaction (the agent's session, the
 	// chat's binding and terms).
 	Then func(tx pgx.Tx, tenant, owner uuid.UUID) error
+	// Kind is what the tenant starts as (areas.TenantBusiness, the
+	// default, or TenantWorkflows, whose Name may be empty: it is then
+	// named after its owner).
+	Kind string
+	// Scope adds tenants to the transaction's scope, for Then (the session
+	// a person starting something moves out of, start.go).
+	Scope []uuid.UUID
 }
 
 // makeBusiness makes the business, its default workspace and
@@ -867,27 +975,25 @@ func (s *Server) makeBusiness(ctx context.Context, nb newBusiness) (tenant, owne
 	if actor == "" {
 		actor = owner.String()
 	}
-	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+	scope := []uuid.UUID{tenant}
+	for _, t := range nb.Scope {
+		if t != uuid.Nil && !slices.Contains(scope, t) {
+			scope = append(scope, t)
+		}
+	}
+	err = db.InTenantTx(ctx, s.Store.Pool, scope, func(tx pgx.Tx) error {
 		if newOwner {
 			// No password: the owner works through the channel that proved them.
 			if _, err := tx.Exec(ctx, `INSERT INTO users (id, email, name) VALUES ($1, $2, $3)`, owner, nb.OwnerEmail, nb.OwnerName); err != nil {
 				return err
 			}
 		}
-		stmts := []struct {
-			q    string
-			args []any
-		}{
-			{`INSERT INTO tenants (id, name, plan_id) VALUES ($1, $2, $3)`, []any{tenant, nb.Name, uuid.Nil}},
-			{`INSERT INTO memberships (tenant_id, user_id, role) VALUES ($1, $2, 'owner')`, []any{tenant, owner}},
-			{`INSERT INTO workspaces (id, tenant_id, name) VALUES ($1, $2, 'Default')`, []any{uuid.Must(uuid.NewV7()), tenant}},
-			{`INSERT INTO environments (tenant_id, name) VALUES ($1, 'dev'), ($1, 'prod')`, []any{tenant}},
-			{`INSERT INTO tenant_onboarding (tenant_id, source, signed_up_by, channel_hash) VALUES ($1, $2, $3, $4)`, []any{tenant, nb.Source, owner, nb.ChannelHash}},
+		if _, err := insertTenantTx(ctx, tx, tenant, owner, nb.Name, nb.Kind); err != nil {
+			return err
 		}
-		for _, st := range stmts {
-			if _, err := tx.Exec(ctx, st.q, st.args...); err != nil {
-				return err
-			}
+		if _, err := tx.Exec(ctx, `INSERT INTO tenant_onboarding (tenant_id, source, signed_up_by, channel_hash) VALUES ($1, $2, $3, $4)`,
+			tenant, nb.Source, owner, nb.ChannelHash); err != nil {
+			return err
 		}
 		detail := map[string]any{}
 		for k, v := range nb.Detail {

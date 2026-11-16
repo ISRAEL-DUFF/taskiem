@@ -19426,6 +19426,10 @@ paths:
                           format: uuid
                         name:
                           type: string
+                        kind:
+                          type: string
+                          enum: [business, workflows]
+                          description: A business, or a workflows workspace.
                         current:
                           type: boolean
         default:
@@ -19465,6 +19469,79 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Session'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/start:
+    post:
+      operationId: startSomething
+      tags:
+      - Authentication
+      summary: Start a business or workflows
+      description: 'The signed-in person starts a business or a workflows workspace (taskiem-for-everyone §18), as its
+        owner, with the same account. `workflows` needs no name (it is then called "{name}''s workflows", or "My
+        workflows") and starts with every area off; `kinds` is refused for it. `business` needs a name (2 to 80
+        characters, no links or email addresses) and takes `kinds` as signing up does (shop, service, delivery, school;
+        left out, every area but Schools is on; an empty list is refused: start workflows instead). The tenant gets its
+        default workspace, the dev and prod environments and its trial; audited as `tenant.create`. Then this session
+        ends and its twin in the new tenant is answered, as switching does (the token with a bearer session, the cookie
+        with a cookie one; audited as `auth.switch`). Five a day per person (429). 409 for a session that signed in
+        with single sign-on; 403 for an API key or a field agent''s session.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind:
+                  type: string
+                  enum: [business, workflows]
+                name:
+                  type: string
+                  maxLength: 200
+                kinds:
+                  type: array
+                  items:
+                    type: string
+                    enum: [shop, service, delivery, school]
+      responses:
+        '201':
+          description: Started, and this session moved into it
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tenant_id, kind, name, user_id]
+                properties:
+                  tenant_id:
+                    type: string
+                    format: uuid
+                    description: What was started, which this session is now in.
+                  kind:
+                    type: string
+                    enum: [business, workflows]
+                  name:
+                    type: string
+                    description: Its name, as given or as made for a workflows workspace.
+                  user_id:
+                    type: string
+                    format: uuid
+                  tenants:
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                    description: The tenants the person can sign in to, the new one among them.
+                  token:
+                    type: string
+                    description: 'The new session token, only for a bearer session; otherwise the session is the
+                      `taskiem_session` cookie.'
         default:
           $ref: '#/components/responses/Error'
   /v1/me/devices:
@@ -30805,6 +30882,12 @@ components:
         tenant_name:
           type: string
           description: The business's name, as the web app's sidebar shows it.
+        tenant_kind:
+          type: string
+          enum: [business, workflows]
+          description: What the tenant is (taskiem-for-everyone §18.2). A workflows workspace has every area off and
+            is never listed for other businesses to find; turning any area on makes it a business, and turning every
+            area off makes a business workflows again.
         schools:
           type: boolean
           description: Whether the business has the Schools area on (docs/schools.md).

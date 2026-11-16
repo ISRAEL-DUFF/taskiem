@@ -1338,6 +1338,7 @@ tenants.agent_id
 tenants.brand
 tenants.created_at
 tenants.id
+tenants.kind
 tenants.name
 tenants.parent_id
 tenants.plan_id
