@@ -1,6 +1,6 @@
 # Taskiem for everyone: one chat app for people and the businesses they deal with
 
-Status: **draft for review** (2026-11-16). Nothing here is built. It replaces the earlier draft "Customers at the door" (both its parts).
+Status: **draft for review** (2026-11-16; its questions settled the same day, §22). Nothing here is built. It replaces the earlier draft "Customers at the door" (both its parts).
 
 It needs a new decision, **0068**, before any of it is built (§4). Builds on: [the phone app](mobile-app.md) ([0066](../decisions/0066-a-flutter-phone-app.md)), [chat push](chat-push.md), [chat as the way in](chat-way-in.md), [chat sign-in](chat-sign-in.md), [customers' conversations](chat-five-more-flows.md#as-built-phase-1-customers-conversations), [business links](business-links.md), [storefronts](storefronts.md).
 
@@ -83,7 +83,7 @@ The app's first screen and the web's `/signup` and `/login` become one way in:
 2. **The code.**
    - A number that already belongs to an account signs in to it: chat-born owners and staff, and any account with that number bound (§5.3).
    - A new number makes a **personal account**, with a name (required) and a photo (optional).
-   - Agreeing to the terms and privacy notice is recorded, as for every way in today.
+   - Agreeing to the terms and privacy notice, and confirming they are 18 or over (§15), is recorded, as for every way in today.
 3. **Then the app's home** (§7), on **You**. A **Start a business** button is always there. It leads to today's sign-up (the form, or the conversation with Taskiem), and the business it makes is attached to this person.
 
 **Email and password stay** for people who have them: **Sign in with email** under the phone box, passkeys, and single sign-on for businesses that require it. An account can add an email later in Settings, as chat-born owners do today.
@@ -140,7 +140,7 @@ A person starts a conversation with a business from:
 - **its chat link** (§8.2), shared on its storefront, Instagram, a flyer or a receipt;
 - **Discover** (§10), or the business's profile there;
 - **an order or booking** they made on its storefront with the same phone: "Chat with Mama's Kitchen about this order";
-- **a message from the business** in the app: a reply, an order card, a reminder. A business can write first only to a person who has an order, booking or invoice with it, and only about that (§15).
+- **a message from the business** in the app: a reply, an order card, a reminder, an offer. A business can write first to anyone who has chatted or ordered with it, within §15's limits.
 
 ### 8.2 The chat link
 
@@ -193,13 +193,10 @@ The business can block a customer too.
 
 ## 10. Discover: finding businesses
 
-- **The setting.** A business chooses to be **found by the public in the Taskiem app** in Settings (default off). Turning it on asks for:
-  - a category;
-  - an area;
-  - a photo;
-  - hours.
-
-  Most of these come from its storefront.
+- **The setting.** **Found by the public in the Taskiem app**, in Settings.
+  - **On by default for a business with a published storefront,** since its page is already public. It can turn Discover off. Businesses with a published storefront when this ships are told once in their chat, with the switch: "Your shop is now listed in Taskiem's Discover, where customers find businesses. Turn it off here."
+  - **Off for every other business** until it turns it on.
+  - Being listed needs a category, an area, a photo and hours. Most of these come from the storefront; a listing missing them is not shown until they are added.
 - **What a person sees.** Search by name, what they want (rice, hair, cakes) and area. Each business shows its name, photo, category, area, open now, and a **Chat** button. Results near the person come first, when they share their location; that location is never kept.
 - **A business's profile** in Discover: its photos, hours, address, **Their shop**, **Book**, **Chat**.
 - **Kept apart from Explore.** Explore (businesses finding businesses) keeps its own setting and its own list. A business may be in either, both or neither.
@@ -251,11 +248,15 @@ They stay one-way for outsiders (0039). What they say changes:
 
 ## 15. Safety and limits
 
-- **Businesses writing first.** Only to a person with an order, booking or invoice with it, and only about it. At most 3 messages until the person answers. No broadcasts to customers in stages 1 to 4.
+- **Businesses writing first.** A business may message anyone who has chatted or ordered with it, for any reason (settled in review). Two kinds of message are told apart:
+  - **About something of theirs**: an order, a booking, an invoice, a delivery. No limit beyond the ordinary sending limits.
+  - **Anything else** (an offer, news, "we're open today"): at most **2 per customer per week**. Each is marked **Offer** in the conversation, with **Mute offers from {business}** under it. A business may also send one such message to many customers at once (a broadcast), counted against each customer's 2.
+  - **Mute offers** keeps order messages and silences the rest. **Block** stops everything.
+  - A business whose offers are muted or blocked far above the norm has its offers paused for review.
 - **A person writing to businesses.** New conversations limited per hour and per day. Messages per conversation per minute limited. New accounts get lower limits for their first week.
 - **Reporting.** **Report** on every conversation and in Discover, sending the last 20 messages to Taskiem's moderators with the person's consent. Apple and Google require this of apps where people message each other.
 - **Fraud.** A business's verification status (phone verified, payments connected, trading for N months) shows on its profile and in the conversation's header. Paying is only ever through Taskiem's pay links, and the app warns on a message that asks for a transfer to a personal account.
-- **Age.** Sixteen and over in the terms. No age check in stages 1 to 4.
+- **Age.** **Eighteen and over** in the terms (settled in review), in line with Nigeria's data protection rules, under which a person under 18 needs a parent's consent, and because the app takes payments. Making an account asks the person to confirm they are 18 or over. There is no parental-consent flow. Legal review confirms this before stage 1.
 - **Phone codes cost money** (SMS). They go by WhatsApp first; SMS limits are as in §5.1. The operator dashboard shows code sends and failures by country.
 
 ## 16. People chatting with people (a later stage, its own spec)
@@ -341,7 +342,7 @@ Each stage ships on its own, Android, iPhone and web together:
   - a reply landing in the person's copy;
   - order, booking and pay cards on both sides;
   - Mute and Block both ways;
-  - a business writing first refused without an order, and allowed with one up to 3 times;
+  - a business writing first to a past customer: order messages unlimited; offers marked **Offer**, refused past 2 per customer per week, broadcasts counted per customer; **Mute offers** silencing offers but not orders;
   - deleting an account leaving the business's copy.
 - **Browser:**
   - signed in by code with no install;
@@ -361,18 +362,21 @@ Each stage ships on its own, Android, iPhone and web together:
 | Customers won't install another app | The browser chat (§9) needs nothing installed; the app is the better way for people who come back |
 | Businesses keep sending customers to their personal WhatsApp | The chat link on the storefront, receipts and updates; orders and payments that work better in Taskiem's chat than on a personal WhatsApp |
 | People expect WhatsApp's privacy | Business conversations are plainly marked as readable by Taskiem (§14); chats between people get their own decision (§16) |
-| Fraud and spam once anyone can sign up | Writing-first rules, limits, reporting, verification marks, Taskiem-only payments (§15) |
+| Fraud and spam once anyone can sign up | Limits, reporting, verification marks, Taskiem-only payments (§15) |
+| Businesses' offers make customers mute the app | Offers marked as such, 2 per customer per week, **Mute offers** in one tap, offers paused for businesses muted far above the norm (§15) |
 | Taskiem becomes a controller of consumers' personal data | Legal review before stage 1; the person's side kept apart from businesses' data (§14) |
 | The app becomes two products in one | One look; the switcher; a customer never sees business tools (§6) |
 | Phone codes by SMS cost money and are abused | WhatsApp first; limits per number, device and IP; the dashboard (§15) |
 
-## 22. Questions for review
+## 22. Settled in review (2026-11-16)
 
-1. **The first screen's line.** "Chat with the businesses you buy from, and run your own": the right words for the store listing and the first screen?
-2. **Email sign-in's place.** A small **Sign in with email** link under the phone box, or two equal buttons?
-3. **`@Taskiem` on You.** A help conversation (§7), or nothing until there is more for it to do?
-4. **Businesses writing first** (§15). Is "only about an order, booking or invoice, at most 3 until answered" right for stage 2, or do businesses need broadcasts to customers sooner?
-5. **The browser's fallback by SMS** (§9). Worth its cost, or only push and the app?
-6. **One thread across WhatsApp and the app** (§11). Is merging by phone right, or should a business see the two lines as two threads?
-7. **Discover's default** (§10). Off until a business turns it on, or on for businesses with a published storefront?
-8. **Age.** Sixteen, as in the terms here, or thirteen, as WhatsApp's minimum in many countries?
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | The first screen's line | "Chat with the businesses you buy from, and run your own." (§5.1) |
+| 2 | Email sign-in's place | A small **Sign in with email** link under the phone box (§5.1) |
+| 3 | `@Taskiem` on You | A help conversation: a person's own orders and Taskiem's help, and **Start a business**. It never acts in a business (§7) |
+| 4 | Businesses writing first | To anyone who has chatted or ordered with them, for any reason. Order messages are unlimited; offers are marked, limited to 2 per customer per week, and can be muted (§15). The limit of 2 is this spec's default, open to change |
+| 5 | The browser's fallback by SMS | Yes: an SMS when the business answers and the browser cannot be notified, at most one per conversation per hour (§9) |
+| 6 | One customer on WhatsApp and the app | One thread with both lines; each message marked; replies go where the customer last wrote, and staff can switch (§11) |
+| 7 | Discover's default | On for businesses with a published storefront, which can turn it off; off for the rest (§10) |
+| 8 | Minimum age | 18, confirmed when making an account; no parental-consent flow; legal review to confirm (§15) |
