@@ -6,6 +6,14 @@ settled). Nothing here is built. Decision [0066](../decisions/0066-a-flutter-pho
 [chat tools](chat-tools.md), [chat as the way in](chat-way-in.md) and
 [chat sign-in](chat-sign-in.md).
 
+**Amended 2026-11-16 by decision [0068](../decisions/0068-taskiem-for-everyone.md):**
+the app is for everyone, not only owners and staff. A person signs up with a
+phone number and chats with businesses (and later with other people); running
+or working in a business is something a person does in it. What that adds
+(a person's own side, the switcher, customer conversations, Discover, a
+person's orders) is planned in [Taskiem for everyone](taskiem-for-everyone.md).
+The audience lines below (§1, §2) are kept as written and read with this note.
+
 ## 1. Summary
 
 A native app for Android and iPhone, written in Flutter, for owners and their
@@ -58,6 +66,7 @@ moment, on every change.
 | Owner | Everything above: runs the business from `@Taskiem` and the conversations |
 | Staff | The same within their role (`cashier`, `shift_manager`, and the roles a business gives): sell, stock, orders, handover, their tasks |
 | A business that delivers | Its deliveries and availability, which are chat orders and a tool ([decision 0065](../decisions/0065-riders-are-organisations.md)) |
+| A customer, or anyone (added 2026-11-16, [0068](../decisions/0068-taskiem-for-everyone.md)) | Their own side: chats with businesses, ordering, booking and paying in them, their orders, Discover ([Taskiem for everyone](taskiem-for-everyone.md)) |
 
 ## 3. What the app does: what the web chat does
 

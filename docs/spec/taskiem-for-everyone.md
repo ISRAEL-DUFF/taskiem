@@ -2,7 +2,7 @@
 
 Status: **draft for review** (2026-11-16; its first questions settled the same day, §23; revised after a review of gaps the same day, and that review's questions settled too, §24). Nothing here is built. It replaces the earlier draft "Customers at the door" (both its parts).
 
-It needs a new decision, [**0068**](../decisions/0068-taskiem-for-everyone.md) (proposed), before any of it is built (§4). Builds on: [the phone app](mobile-app.md) ([0066](../decisions/0066-a-flutter-phone-app.md)), [chat push](chat-push.md), [chat as the way in](chat-way-in.md), [chat sign-in](chat-sign-in.md), [customers' conversations](chat-five-more-flows.md#as-built-phase-1-customers-conversations), [business links](business-links.md), [storefronts](storefronts.md).
+Decision [**0068**](../decisions/0068-taskiem-for-everyone.md) is **accepted** (16 November 2026), amending [0039](../decisions/0039-reaching-people-outside.md) and [0066](../decisions/0066-a-flutter-phone-app.md). Builds on: [the phone app](mobile-app.md) ([0066](../decisions/0066-a-flutter-phone-app.md)), [chat push](chat-push.md), [chat as the way in](chat-way-in.md), [chat sign-in](chat-sign-in.md), [customers' conversations](chat-five-more-flows.md#as-built-phase-1-customers-conversations), [business links](business-links.md), [storefronts](storefronts.md).
 
 ## 1. Summary
 
@@ -59,7 +59,7 @@ The work comes in stages (§20):
 
 ## 4. The decision this needs (0068)
 
-The decision is written as [0068](../decisions/0068-taskiem-for-everyone.md) (proposed). It also records the review's answers (§23) and Start something (§18); the points below are its core.
+The decision is [0068](../decisions/0068-taskiem-for-everyone.md), accepted on 16 November 2026. It also records the review's answers (§23) and Start something (§18); the points below are its core.
 
 1. **Taskiem is a chat app for everyone.** Anyone may make a personal account with a phone number and use the app and the web chat with no business. This replaces three earlier rules:
    - [mobile-app.md](mobile-app.md) §1–2: "for owners and their staff", "does not replace WhatsApp";
@@ -467,7 +467,7 @@ Each stage ships on its own, Android, iPhone and web together:
 5. **People chatting with people:** its own spec and decision (§16).
 
 **Before stage 1:**
-- decision 0068 accepted;
+- ~~decision 0068 accepted~~ (done, 16 November 2026);
 - the privacy notice and terms rewritten for personal accounts (legal review);
 - the store listings changed;
 - the SMS provider's cost per code agreed.

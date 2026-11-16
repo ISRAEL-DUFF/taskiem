@@ -41,10 +41,10 @@ The first users are **new street businesses and SMEs**: Taskiem is not launched 
 **Non-goals**
 
 - A website builder: free layout, arbitrary pages, blogs, themes, or custom HTML, CSS or JavaScript.
-- A marketplace or directory of businesses (later, perhaps; not in this spec).
+- A marketplace or directory of businesses (later, perhaps; not in this spec). *Amended 2026-11-16:* Discover, the public's way to find businesses in the Taskiem app, comes with [Taskiem for everyone](taskiem-for-everyone.md) §10 ([0068](../decisions/0068-taskiem-for-everyone.md)); a published storefront is listed by default.
 - Holding customers' money. Payments go through the business's own provider account (Paystack, Moniepoint, OPay, iswallet) or a transfer to the business. Taskiem never holds funds.
 - Delivery logistics, beyond a delivery address and the owner's own notes.
-- Accounts for customers. A customer is a phone number on an order, never a Taskiem user.
+- ~~Accounts for customers. A customer is a phone number on an order, never a Taskiem user.~~ *Superseded 2026-11-16 by [0068](../decisions/0068-taskiem-for-everyone.md):* anyone may have a personal Taskiem account and chat, order, book and pay in the app or the browser ([Taskiem for everyone](taskiem-for-everyone.md)). Ordering from a storefront still needs no account.
 
 ## 4. Concepts
 

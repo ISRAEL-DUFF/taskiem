@@ -1,6 +1,6 @@
 # 0068 — Taskiem for everyone: a chat app for people and the businesses they deal with
 
-Date: 2026-11-16 (revised the same day after a review of the plan's gaps) · Status: **Proposed** · Plan: [Taskiem for everyone](../spec/taskiem-for-everyone.md)
+Date: 2026-11-16 (revised the same day after a review of the plan's gaps) · Status: **Accepted** (16 November 2026; not built) · Plan: [Taskiem for everyone](../spec/taskiem-for-everyone.md)
 
 ## Context
 
