@@ -85,27 +85,36 @@ String bookPayWords(String business) => 'You pay $business at the appointment, o
 /// linkbook.ts linkServices: their services, read once a minute at most:
 /// the panel's tile and the sheet share the answer.
 final _cache = <String, ({DateTime at, Future<Map<String, dynamic>> got})>{};
-Future<Map<String, dynamic>> linkServices(Transport t, String link) {
-  final hit = _cache[link];
+Future<Map<String, dynamic>> linkServices(Transport t, String link) => servicesAt(t, '/v1/link-chats/${Uri.encodeComponent(link)}');
+
+/// The services of the conversation at [base] (a linked business's, or a
+/// customer's chat on You: /v1/me/chats/{id}).
+Future<Map<String, dynamic>> servicesAt(Transport t, String base) {
+  final hit = _cache[base];
   if (hit != null && DateTime.now().difference(hit.at) < const Duration(minutes: 1)) return hit.got;
-  final got = t.send('GET', '/v1/link-chats/${Uri.encodeComponent(link)}/services').then((r) => r is Map ? r.cast<String, dynamic>() : <String, dynamic>{});
+  final got = t.send('GET', '$base/services').then((r) => r is Map ? r.cast<String, dynamic>() : <String, dynamic>{});
   got.catchError((Object _) {
-    _cache.remove(link);
+    _cache.remove(base);
     return <String, dynamic>{};
   });
-  _cache[link] = (at: DateTime.now(), got: got);
+  _cache[base] = (at: DateTime.now(), got: got);
   return got;
 }
 
 /// Opens Book; the future ends with what was booked, said.
-Future<String?> showBookSheet(BuildContext context, {required Auth auth, required String link, required String business, ValueChanged<String>? onBooked}) =>
-    showTkSheet<String>(context, (_) => BookSheet(auth: auth, link: link, business: business, onBooked: onBooked));
+Future<String?> showBookSheet(BuildContext context, {required Auth auth, required String link, required String business, ValueChanged<String>? onBooked, String? customer}) =>
+    showTkSheet<String>(context, (_) => BookSheet(auth: auth, link: link, business: business, onBooked: onBooked, customer: customer));
 
 class BookSheet extends StatefulWidget {
-  const BookSheet({super.key, required this.auth, required this.link, required this.business, this.onBooked});
+  const BookSheet({super.key, required this.auth, required this.link, required this.business, this.onBooked, this.customer});
   final Auth auth;
   final String link;
   final String business;
+
+  /// Booking as a customer, in the person's chat with the business
+  /// (taskiem-for-everyone §8.3): its path, /v1/me/chats/{id}. The
+  /// business has the person's phone already, so none is asked.
+  final String? customer;
 
   /// Booked: its words, at once (the sheet may be closed before it closes
   /// itself).
@@ -137,12 +146,14 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
 
   Transport get _t => widget.auth.transport;
   String get _biz => widget.business;
-  bool get _mayBook => widget.auth.can('chat.trade');
+  bool get _mayBook => widget.customer != null || widget.auth.can('chat.trade');
+  String get _base => widget.customer ?? '/v1/link-chats/${Uri.encodeComponent(widget.link)}';
+  bool get _asks => widget.customer == null;
 
   @override
   void initState() {
     super.initState();
-    linkServices(_t, widget.link).then(
+    servicesAt(_t, _base).then(
       (d) {
         if (!mounted) return;
         setState(() {
@@ -173,7 +184,7 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
     try {
       final r = await _t.send(
         'GET',
-        '/v1/link-chats/${Uri.encodeComponent(widget.link)}/services/${Uri.encodeComponent(s['id'] as String)}/times',
+        '$_base/services/${Uri.encodeComponent(s['id'] as String)}/times',
         query: {'day': ?_day},
       );
       if (mounted && asked == _asked) setState(() => _times = (r as Map).cast<String, dynamic>());
@@ -202,8 +213,8 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
     try {
       final out = await _t.send(
         'POST',
-        '/v1/link-chats/${Uri.encodeComponent(widget.link)}/bookings',
-        body: {'service_id': s['id'], 'start': start, 'note': _note.text.trim(), 'phone': _phone?.text.trim() ?? ''},
+        '$_base/bookings',
+        body: {'service_id': s['id'], 'start': start, 'note': _note.text.trim(), if (_asks) 'phone': _phone?.text.trim() ?? ''},
         headers: {'Idempotency-Key': key},
       ) as Map<String, dynamic>;
       final b = (out['booking'] as Map).cast<String, dynamic>();
@@ -255,7 +266,7 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
               onTap: () => setState(() => _step = _Step.confirm),
             )
           : _step == _Step.confirm && _mayBook
-          ? TkCta(label: _busy ? 'Booking…' : 'Book', onTap: _busy || (_phone?.text.trim() ?? '').isEmpty ? null : _book)
+          ? TkCta(label: _busy ? 'Booking…' : 'Book', onTap: _busy || (_asks && (_phone?.text.trim() ?? '').isEmpty) ? null : _book)
           : null,
       body: _body(t),
     );
@@ -356,6 +367,7 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
             TkLines([(s['name'] as String? ?? '', servicePrice(s)), ('When', whenLabel(_start!)), ('How long', formatDuration(_int(s['minutes'])))]),
             Text(bookPayWords(_biz), style: tkFormNow(t)),
             if (_mayBook) ...[
+              if (_asks)
               TkKitField(
                 label: 'Phone number they can reach you on',
                 hint: 'Given to $_biz with the booking.',

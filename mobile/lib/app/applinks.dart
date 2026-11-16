@@ -26,6 +26,10 @@ String? appPageOf(Uri uri, {String server = taskiemUrl}) {
     final token = Uri.splitQueryString(uri.fragment)['token'];
     return token != null && RegExp(r'^[A-Za-z0-9_\-]{10,200}$').hasMatch(token) ? '/second-proof?token=$token' : null;
   }
+  // A business's chat link (taskiem-for-everyone §8.2): its card, then the
+  // chat with it.
+  final m = RegExp(r'^/m/([A-Za-z0-9]{4,40})/?$').firstMatch(uri.path);
+  if (m != null) return '/m/${m[1]}';
   if (!_opens.hasMatch(uri.path)) return null;
   final with_ = uri.queryParameters['with'];
   if (uri.path == '/chat' && with_ != null) {
@@ -50,6 +54,13 @@ class LinkInbox extends ChangeNotifier {
   }
 
   bool get waiting => _pending != null;
+
+  /// The page waiting, left waiting (a chat link shown while signed out).
+  String? get peek => _pending;
+
+  /// The waiting chat link's card was shown on the way in: once signed in,
+  /// its chat starts without asking again.
+  bool shownSignedOut = false;
 
   Uri? _last;
   DateTime _lastAt = DateTime(2000);

@@ -182,6 +182,7 @@ class Composer extends StatefulWidget {
     this.replying,
     this.onCancelReply,
     this.tools,
+    this.onTools,
   });
 
   final TextEditingController text;
@@ -192,6 +193,9 @@ class Composer extends StatefulWidget {
 
   /// The tools panel this composer's button opens (with chat tools).
   final ToolsController? tools;
+
+  /// The tools button opens a sheet of its own (a customer's tools on You).
+  final VoidCallback? onTools;
 
   /// Sends the words, with the file waiting for its caption if there is one.
   final void Function(String text, PickedFile? file) onSend;
@@ -419,7 +423,7 @@ class ComposerState extends State<Composer> {
                 label: widget.tools == null ? 'Chat tools' : (open ? 'Close tools' : 'Open tools'),
                 child: TkPress(
                   // Without chat tools, the tools are not here yet.
-                  onTap: widget.tools?.toggle ?? () => showComingSoon(context),
+                  onTap: widget.tools?.toggle ?? widget.onTools ?? () => showComingSoon(context),
                   child: Container(
                     width: 46,
                     height: 46,

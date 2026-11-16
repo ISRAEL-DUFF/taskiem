@@ -40,6 +40,7 @@ import 'chat/explore.dart' show showExplore;
 import 'chat/profile_screen.dart';
 import 'chat/live.dart';
 import 'chat/taskiem.dart';
+import 'screens/chat_link.dart';
 import 'screens/home_tabs.dart';
 import 'screens/signed_in.dart';
 import 'screens/sign_in.dart';
@@ -47,7 +48,7 @@ import 'screens/switcher.dart' show showSwitcher;
 import 'screens/welcome.dart';
 import 'screens/you.dart';
 import 'theme/theme.dart';
-import 'kit/mobile.dart' show TkRoute;
+import 'kit/mobile.dart' show TkRoute, tkPush;
 import 'kit/modal.dart' show showTkConfirm, showTkToast;
 
 void main() {
@@ -229,7 +230,7 @@ class _RootState extends State<_Root> {
     if (auth.state == AuthState.checking || !(widget.prefs?.loaded ?? true)) return const _Opening();
     return switch (auth.state) {
       AuthState.checking => const _Opening(),
-      AuthState.signedOut => _SignedOut(auth: auth),
+      AuthState.signedOut => _SignedOut(auth: auth, links: widget.links),
       AuthState.outdated => const _Outdated(),
       // A personal session: the person's own side (taskiem-for-everyone §7).
       AuthState.signedIn when auth.personal => YouHome(key: ValueKey(auth.session), auth: auth, links: widget.links),
@@ -243,8 +244,11 @@ class _RootState extends State<_Root> {
 /// sign-in. Nobody starts a business here any more: a person makes their
 /// own account, and starts one from **You** (§17, §18).
 class _SignedOut extends StatefulWidget {
-  const _SignedOut({required this.auth});
+  const _SignedOut({required this.auth, this.links});
   final Auth auth;
+
+  /// A business's chat link that opened the app: its card over the way in.
+  final LinkInbox? links;
 
   @override
   State<_SignedOut> createState() => _SignedOutState();
@@ -261,6 +265,17 @@ class _SignedOutState extends State<_SignedOut> {
     widget.auth.api.appConfig().then((c) {
       if (mounted) setState(() => _passkeys = c.passkeys);
     }, onError: (_) {});
+    widget.links?.addListener(_linked);
+  }
+
+  @override
+  void dispose() {
+    widget.links?.removeListener(_linked);
+    super.dispose();
+  }
+
+  void _linked() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -275,7 +290,13 @@ class _SignedOutState extends State<_SignedOut> {
       },
       child: _email
           ? SignInScreen(auth: widget.auth, signup: false, passkeys: _passkeys, onPhone: () => go(false))
-          : WelcomeScreen(auth: widget.auth, onEmail: () => go(true)),
+          : Builder(
+              builder: (context) {
+                final code = chatCodeOf(widget.links?.peek);
+                if (code != null) widget.links!.shownSignedOut = true;
+                return WelcomeScreen(key: ValueKey('welcome $code'), auth: widget.auth, onEmail: () => go(true), chatCode: code);
+              },
+            ),
     );
   }
 }
@@ -475,6 +496,13 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     }
     final nav = Navigator.of(context);
     nav.popUntil((r) => r.isFirst);
+    // A business's chat link: its card, and the person's own chat with it
+    // (a business session is its person too, taskiem-for-everyone §8.4).
+    final code = chatCodeOf(path);
+    if (code != null) {
+      unawaited(tkPush<void>(context, ChatLinkScreen(auth: _chats.auth, code: code)));
+      return;
+    }
     final route = routeOf(path);
     _tabs.currentState?.show(route.tab);
     final auth = _chats.auth;

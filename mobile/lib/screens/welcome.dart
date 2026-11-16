@@ -15,13 +15,19 @@ import '../app/links.dart';
 import '../app/phone.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
+import 'chat_link.dart';
 import 'sign_in.dart';
 
 /// Where the phone way in is.
 enum WelcomeStep { phone, code, create }
 
 class WelcomeScreen extends StatefulWidget {
-  const WelcomeScreen({super.key, this.auth, this.onEmail, this.step = WelcomeStep.phone, this.phone = '', this.sentVia = 'whatsapp'});
+  const WelcomeScreen({super.key, this.auth, this.onEmail, this.step = WelcomeStep.phone, this.phone = '', this.sentVia = 'whatsapp', this.chatCode});
+
+  /// A business's chat link opened while signed out (taskiem-for-everyone
+  /// §8.2): its card shows over the way in, the code goes with the phone
+  /// code (`chat_code`), and the chat starts once signed in.
+  final String? chatCode;
 
   /// Signing in; none in a picture of the screen alone.
   final Auth? auth;
@@ -71,6 +77,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
     });
   }
 
+  /// The business of the chat link that opened the app, or why there is none.
+  CardAnswer? _link;
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +87,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
     widget.auth?.api.signupOptions().then((o) {
       if (mounted) setState(() => _termsAsked = o.terms);
     }, onError: (_) {});
+    final code = widget.chatCode;
+    if (code != null && widget.auth != null) {
+      readChatLinkCard(widget.auth!.api, code).then((a) {
+        if (mounted) setState(() => _link = a);
+      }, onError: (_) {});
+    }
   }
 
   @override
@@ -102,7 +117,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
       return;
     }
     act(() async {
-      final via = await a.sendPhoneCode(number, sms: sms);
+      final via = await a.sendPhoneCode(number, sms: sms, chatCode: _link?.card == null ? null : widget.chatCode);
       if (!mounted) return;
       setState(() {
         _e164 = number;
@@ -185,7 +200,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const AuthSide(line: 'Chat with the businesses you buy from, and run your own.'),
+            AuthSide(line: _link?.card != null ? 'Sign in to chat with ${_link!.card!.name}.' : 'Chat with the businesses you buy from, and run your own.'),
             AuthCard(
               children: switch (_step) {
                 WelcomeStep.phone => _phoneStep(t),
@@ -200,6 +215,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
   }
 
   List<Widget> _phoneStep(TkTokens t) => [
+        if (_link?.card != null) ...[ChatLinkCardView(card: _link!.card!), const SizedBox(height: 20)],
+        if (_link?.gone != null) ...[LinkGone(words: _link!.gone!), const SizedBox(height: 16)],
         const AuthTitle('Welcome to Taskiem', bottom: 8),
         Padding(
           padding: const EdgeInsets.only(bottom: 18),
