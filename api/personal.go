@@ -220,7 +220,7 @@ func (s *Server) businessesWithLocks(r *http.Request, p *Principal, proof proofS
 	}
 	out := make([]map[string]any, 0, len(ts))
 	for _, t := range ts {
-		b := map[string]any{"id": t.ID, "name": t.Name, "locked": false, "lock": nil}
+		b := map[string]any{"id": t.ID, "name": t.Name, "kind": t.Kind, "locked": false, "lock": nil}
 		if !p.Personal && t.ID == p.TenantID {
 			b["current"] = true
 		} else {

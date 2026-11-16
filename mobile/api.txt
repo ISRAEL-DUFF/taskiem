@@ -18,6 +18,8 @@ listDevices
 removeDevice
 listBusinesses
 switchBusiness
+# Start a business or workflows (taskiem-for-everyone §18)
+startSomething
 
 # Personal accounts: the phone way in, second proofs, changing a phone
 # (docs/spec/taskiem-for-everyone.md §5, stage 1)

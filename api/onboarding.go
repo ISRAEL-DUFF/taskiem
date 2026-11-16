@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/mail"
-	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -20,7 +19,6 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/links"
-	"github.com/israel-duff/taskiem/engine/schools"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 )
 
@@ -261,9 +259,15 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// "Just workflows" (no kinds) starts a workflows workspace; any kind,
+	// or none said, a business (taskiem-for-everyone §18).
+	kind := areas.TenantBusiness
+	if start != nil {
+		kind = areas.TenantKind(start)
+	}
 	var token string
 	mailOn := s.mailOn()
-	tenant, user, err := createTenant(r.Context(), s.Store.Pool, tenantName, email, userName, req.Password, func(tx pgx.Tx, tenant, user uuid.UUID) error {
+	tenant, user, err := createTenant(r.Context(), s.Store.Pool, tenantName, kind, email, userName, req.Password, func(tx pgx.Tx, tenant, user uuid.UUID) error {
 		if _, err := tx.Exec(r.Context(), `INSERT INTO tenant_onboarding (tenant_id, source, signed_up_by) VALUES ($1, 'signup', $2)`, tenant, user); err != nil {
 			return err
 		}
@@ -272,18 +276,8 @@ func (s *Server) signup(w http.ResponseWriter, r *http.Request) {
 		}
 		// What the business said it does decides which parts it starts with.
 		if start != nil {
-			if err := areas.SaveAll(r.Context(), tx, tenant, start, "signup"); err != nil {
+			if err := startAreasTx(r.Context(), tx, tenant, start, *req.Kinds, "signup"); err != nil {
 				return err
-			}
-			if start.On(areas.Schools) {
-				if _, err := schools.SetEnabled(r.Context(), tx, tenant, true, "signup"); err != nil {
-					return err
-				}
-			}
-			if slices.Contains(*req.Kinds, "delivery") {
-				if err := startDeliveryBusinessTx(r.Context(), tx, tenant, "system:signup"); err != nil {
-					return err
-				}
 			}
 		}
 		if !mailOn {

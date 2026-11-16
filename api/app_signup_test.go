@@ -69,7 +69,12 @@ func TestAppSignup(t *testing.T) {
 	if s, out := anon.do("POST", "/v1/signup/app/turn", map[string]any{"phone": ada, "token": "nope", "reply": "su:yes"}); s != 404 || out["ended"] != true {
 		t.Errorf("a wrong token: %d %v", s, out)
 	}
-	turn("", "su:yes")
+	// A business, or workflows: the same question as on WhatsApp.
+	kind := turn("", "su:yes")["messages"].([]any)[0].(map[string]any)
+	if !strings.Contains(kind["text"].(string), "a business, or for workflows") || len(kind["buttons"].([]any)) != 2 {
+		t.Fatalf("the kind: %v", kind)
+	}
+	turn("", "su:kind:business")
 	turn("Ada Kitchen", "")
 	turn("Ada Obi", "")
 	turn("food", "")
@@ -84,8 +89,12 @@ func TestAppSignup(t *testing.T) {
 	// Signed in on this phone, in the new business, as its owner.
 	owner := &client{t: t, base: w.base, token: done["token"].(string)}
 	me := owner.must(200, "GET", "/v1/me", nil)
-	if me["tenant_name"] != "Ada Kitchen" || !strings.Contains(fmt.Sprint(me["roles"]), "owner") {
+	if me["tenant_name"] != "Ada Kitchen" || me["tenant_kind"] != "business" || !strings.Contains(fmt.Sprint(me["roles"]), "owner") {
 		t.Errorf("me: %v", me)
+	}
+	// Food is a shop: its parts on, Schools off.
+	if a := me["areas"].(map[string]any); a["storefront"] != true || a["stock"] != true || a["schools"] != false {
+		t.Errorf("areas: %v", a)
 	}
 	if ds := owner.must(200, "GET", "/v1/me/devices", nil)["devices"].([]any); len(ds) != 1 || ds[0].(map[string]any)["name"] != "Ada’s Tecno" {
 		t.Errorf("the phone: %v", ds)
@@ -105,6 +114,39 @@ func TestAppSignup(t *testing.T) {
 	again := codeRe.FindString(w.graph.Last(t, ada).Text)
 	if s, out := anon.do("POST", "/v1/signup/app/verify", map[string]any{"phone": ada, "code": again}); s != 409 || out["sign_in"] != true {
 		t.Errorf("a number on an account: %d %v", s, out)
+	}
+}
+
+// Workflows in the app's sign-up: the person's name, and nothing about
+// selling; every area off, named after them.
+func TestAppSignupWorkflows(t *testing.T) {
+	w := newWAWorld(t)
+	chatSignupOn(w.world, "app", "whatsapp")
+	anon := &client{t: t, base: w.base}
+	const bayo = "+2348031239903"
+	anon.must(202, "POST", "/v1/signup/app/code", map[string]any{"phone": bayo})
+	v := anon.must(200, "POST", "/v1/signup/app/verify", map[string]any{"phone": bayo, "code": codeRe.FindString(w.graph.Last(t, bayo).Text)})
+	turn := func(text, reply string) map[string]any {
+		t.Helper()
+		return anon.must(200, "POST", "/v1/signup/app/turn", map[string]any{"phone": bayo, "token": v["token"], "text": text, "reply": reply, "bearer": true})
+	}
+	turn("", "su:yes")
+	if m := turn("", "su:kind:workflows")["messages"].([]any)[0].(map[string]any); !strings.Contains(m["text"].(string), "your name") {
+		t.Fatalf("after workflows: %v", m)
+	}
+	done := turn("Bayo Ade", "")
+	if done["done"] != true || done["token"] == nil {
+		t.Fatalf("the end: %v", done)
+	}
+	owner := &client{t: t, base: w.base, token: done["token"].(string)}
+	me := owner.must(200, "GET", "/v1/me", nil)
+	if me["tenant_name"] != "Bayo Ade's workflows" || me["tenant_kind"] != "workflows" {
+		t.Errorf("me: %v %v", me["tenant_name"], me["tenant_kind"])
+	}
+	for a, on := range me["areas"].(map[string]any) {
+		if on != false {
+			t.Errorf("%s is on in workflows", a)
+		}
 	}
 }
 

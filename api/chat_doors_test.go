@@ -131,7 +131,7 @@ func TestTelegramWithAWhatsAppNumber(t *testing.T) {
 	}
 	bornID := uuid.MustParse(born.must(200, "GET", "/v1/me", nil)["user"].(map[string]any)["id"].(string))
 	signUp := func(acct int64, phone string) []telegramtest.Call {
-		for _, s := range []string{"start", "yes", "Another Shop", "Me", "2", "1"} {
+		for _, s := range []string{"start", "yes", "business", "Another Shop", "Me", "2", "1"} {
 			w.say(t, acct, s)
 		}
 		return w.update(t, acct, func(id int64) []byte { return telegramtest.ContactMessage(id, acct, phone, acct) })
@@ -211,7 +211,7 @@ func TestEmailAndPlanFromChat(t *testing.T) {
 		Providers: map[string]billing.Provider{"paystack": &billing.Paystack{SecretKey: "sk_test", BaseURL: ps.URL}}}
 
 	const ada = "+2348031239101"
-	for _, s := range []string{"start", "yes", "Ada Foods", "Ada Obi", "1", "1"} {
+	for _, s := range []string{"start", "yes", "business", "Ada Foods", "Ada Obi", "1", "1"} {
 		w.say(t, ada, s)
 	}
 	if got := w.send(t, ada, whatsapptest.Text("plan")); len(got) != 1 || !strings.Contains(got[0].Text, "free for") || fmt.Sprint(buttonIDs(got[0].Buttons)) != "[plan:pay]" {

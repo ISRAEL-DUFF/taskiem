@@ -234,7 +234,10 @@ func (s *Server) putAreas(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 		}
-		return auditTx(r, tx, "settings.areas", p.TenantID.String(), map[string]any{"changes": changes})
+		if err := auditTx(r, tx, "settings.areas", p.TenantID.String(), map[string]any{"changes": changes}); err != nil {
+			return err
+		}
+		return followKindTx(r, tx, p.TenantID, after)
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -357,4 +360,22 @@ func (s *Server) templatesOfAreasOn(ctx context.Context, tenant uuid.UUID, list 
 		}
 	}
 	return kept
+}
+
+// followKindTx keeps what the tenant is in step with its areas
+// (taskiem-for-everyone §18.2): any area on makes a workflows workspace a
+// business; every area off makes a business a workflows workspace. Nothing
+// else changes, and the change is audited.
+func followKindTx(r *http.Request, tx pgx.Tx, tenant uuid.UUID, st areas.State) error {
+	kind := areas.TenantKind(st)
+	var was string
+	err := tx.QueryRow(r.Context(), `UPDATE tenants t SET kind = $2 FROM (SELECT kind FROM tenants WHERE id = $1 FOR UPDATE) old
+		WHERE t.id = $1 AND t.kind <> $2 RETURNING old.kind`, tenant, kind).Scan(&was)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return auditTx(r, tx, "tenant.kind", tenant.String(), map[string]any{"from": was, "to": kind})
 }

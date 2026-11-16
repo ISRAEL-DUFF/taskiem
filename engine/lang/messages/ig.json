@@ -4284,6 +4284,26 @@
       "text": "Gụọ ngwaahịa m",
       "reviewed": false
     },
+    "signup.ask_kind": {
+      "text": "Is this for a business, or for workflows?\n\n*A business*: sell, take orders and bookings, send invoices, with your staff.\n*Workflows*: get work done for you or your team: forms, reminders, approvals, your other apps.",
+      "reviewed": false
+    },
+    "signup.button_business": {
+      "text": "A business",
+      "reviewed": false
+    },
+    "signup.button_workflows": {
+      "text": "Workflows",
+      "reviewed": false
+    },
+    "signup.starters_workflows": {
+      "text": "Here are two things to start with:",
+      "reviewed": false
+    },
+    "signup.tpl.leave-request": {
+      "text": "Leave requests",
+      "reviewed": false
+    },
     "dormant.form_title": {
       "text": "Gosi na ọ bụ gị",
       "reviewed": false

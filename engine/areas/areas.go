@@ -93,6 +93,33 @@ type State map[Area]bool
 // On reports whether the area is on.
 func (s State) On(a Area) bool { return s[a] }
 
+// None reports whether every area is off: a workflows workspace
+// (docs/spec/taskiem-for-everyone.md §18.2).
+func (s State) None() bool {
+	for _, a := range All {
+		if s[a] {
+			return false
+		}
+	}
+	return true
+}
+
+// What a tenant is (tenants.kind, §18.2): a business, or a workflows
+// workspace with every area off. The kind follows the areas: any area on is
+// a business.
+const (
+	TenantBusiness  = "business"
+	TenantWorkflows = "workflows"
+)
+
+// TenantKind is the kind a tenant with these areas is.
+func TenantKind(s State) string {
+	if s.None() {
+		return TenantWorkflows
+	}
+	return TenantBusiness
+}
+
 // BlockedError is a change refused because it would leave an area on
 // without something it needs.
 type BlockedError struct{ Area, Needed Area }
