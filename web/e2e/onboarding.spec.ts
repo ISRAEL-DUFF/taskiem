@@ -8,14 +8,14 @@ test("sign up, set up a template, and run it once", async ({ page }) => {
   const started = Date.now();
   const email = `ada-${started}@stores.test`;
 
-  await page.goto("/login?with=email");
-  await page.getByRole("link", { name: "Create an account" }).click();
-  await page.getByLabel("I sell things").check();
-  await page.getByLabel("Business or organisation name").fill("Ada Stores");
-  await page.getByLabel("Your name").fill("Ada Obi");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill("correct horse battery");
-  await page.getByRole("button", { name: "Create account" }).click();
+  // The web form's sign-up (POST /v1/signup): the screens now start a
+  // business from You (you.spec.ts); this is the same business.
+  const up = await page.request.post("/v1/signup", {
+    headers: { "X-Taskiem-Request": "1" },
+    data: { tenant: "Ada Stores", name: "Ada Obi", email, password: "correct horse battery", kinds: ["shop"], accept_terms: true },
+  });
+  expect(up.status(), await up.text()).toBe(201);
+  await page.goto("/start");
 
   // Signed in, on Get started, with nothing done yet.
   await expect(page.getByRole("heading", { name: "Get started" })).toBeVisible();

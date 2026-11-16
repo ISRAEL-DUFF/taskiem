@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { ApiError, post, switchStep, type Business, type Lock, type Me, type ProofWays } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
@@ -117,6 +118,10 @@ export function Switcher({ onStart, testid = "switcher" }: { onStart?: () => voi
         <Icon name="down" />
         <span className="sr-only">: switch</span>
       </button>
+      {/* On the body: the bars it sits in blur what is under them, which
+          would hold a fixed sheet inside the bar. */}
+      {createPortal(
+        <>
       {open && !sw.asked && (
         <Modal title="Switch to" onClose={() => setOpen(false)}>
           <SwitchList me={me} onPick={sw.go} busy={sw.busy} />
@@ -144,6 +149,9 @@ export function Switcher({ onStart, testid = "switcher" }: { onStart?: () => voi
             setOpen(false);
           }}
         />
+      )}
+        </>,
+        document.body,
       )}
     </>
   );

@@ -172,7 +172,7 @@ test("an owner signs in with their phone on a new device, proves it is them, swi
   await owner.getByRole("button", { name: "Add a phone" }).click();
   let before = sent.length;
   await owner.getByLabel("New phone number").fill(n.typed);
-  await owner.getByRole("button", { name: "Send a code" }).click();
+  await owner.getByTestId("change-number").getByRole("button", { name: "Send a code" }).click();
   await owner.getByLabel("Code sent to your new number").fill(await codeFor(n.e164, before));
   await owner.getByRole("button", { name: "Confirm the new number" }).click();
   await expect(owner.getByTestId("my-phone")).toContainText("+234");
@@ -198,7 +198,7 @@ test("an owner signs in with their phone on a new device, proves it is them, swi
   let link = "";
   await expect
     .poll(() => {
-      link = inbox.find((x) => x.includes(`To: ${email}`))?.match(/(http\S+\/second-proof#token=[\w.-]+)/)?.[1] ?? "";
+      link = inbox.filter((x) => x.includes(`To: ${email}`)).map((x) => x.match(/(http\S+\/second-proof#token=[\w.-]+)/)?.[1]).find(Boolean) ?? "";
       return link;
     })
     .not.toBe("");
@@ -220,7 +220,7 @@ test("an owner signs in with their phone on a new device, proves it is them, swi
   await page.getByRole("button", { name: "Change number" }).click();
   before = sent.length;
   await page.getByLabel("New phone number").fill(m.typed);
-  await page.getByRole("button", { name: "Send a code" }).click();
+  await page.getByTestId("change-number").getByRole("button", { name: "Send a code" }).click();
   await page.getByLabel("Code sent to your new number").fill("111111");
   await page.getByRole("button", { name: "Confirm the new number" }).click();
   await expect(page.getByRole("alert")).toContainText("not right");
