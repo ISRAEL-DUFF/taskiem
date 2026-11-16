@@ -562,3 +562,54 @@ Each stage ships on its own, Android, iPhone and web together:
 | 3 | Digital goods | **No special handling**: sold and paid in the app like everything else. The store risk is accepted (§15, §22) |
 | 4 | The closed reply and unanswered times | **On by default**: the closed reply once a day, **Needs you** after 30 minutes, the owner told after 2 hours. Each business can change or turn off each (§8.6) |
 | 5 | Set-aside accounts | **90 days** to claim with a second proof, then deleted (§5.4) |
+
+## As built: stage 1, stream A (accounts)
+
+Built on branch `stage1-accounts`: the server side of §5 and the personal session of §6. The web and app screens, and **Start something** (§18, stream B), are not part of it.
+
+**Migration `00448_personal_accounts.sql`:**
+- `user_phones` (one phone per account, unique), filled from live (not dormant) `whatsapp_bindings`, then Telegram's shared numbers where free;
+- `phone_codes` (per number and purpose `sign_in`, `change_new`, `change_old`: hashed code, sends per hour, failures, lock, the new-account ticket, proof of a change code);
+- `user_devices` (a device per account, when it last signed in, its second proof) and `second_proof_links`;
+- `sessions.tenant_id` nullable (a personal session), `auth_method` `phone`; `users.adult_confirmed_at`;
+- `taskiem_person_scope()` and a policy letting a person's own transaction (`db.InPersonTx`) read their `users` row;
+- the definers that reach all of it (listed in `engine/db/definers.tsv`); `taskiem_auth_session` returns personal sessions, and a business session's tenant must still be active.
+
+**Endpoints** (all in `api/openapi/openapi.yaml`, the app's in `mobile/api.txt`):
+
+| Endpoint | Body | Answer |
+| --- | --- | --- |
+| `POST /v1/auth/phone/start` | `{phone, via?: whatsapp\|sms}` | 202 `{sent_via, expires_in}`; 429 (`locked`), 503 (`sms_unavailable`), 502 |
+| `POST /v1/auth/phone/verify` | `{phone, code, bearer?, device?}` | 200 `{status: signed_in, user_id, tenant_id: null, personal: true, tenants, token?}` or `{status: new, ticket, expires_in}`; 401, 401 `phone_signin_off`, 429 `locked` |
+| `POST /v1/auth/phone/create` | `{ticket, name, adult: true, terms: true, bearer?, device?}` | 201 `{status: created, …}` as signed in; 400 without name, adult or terms; 401 ticket used or expired; 409 number taken |
+| `POST /v1/me/switch` | `{tenant_id}`, or `{tenant_id: null}` / `{personal: true}` for **You** | 200 as signing in, with `personal`; 401 `sso_required`, `passkey_required`, `second_proof_required` (with `ways`); 409 |
+| `GET /v1/me`, `GET /v1/me/businesses` | | `personal`, `businesses: [{id, name, current?, locked, lock}]`, `second_proof: {required, device_proved, ways: {passkey, email, pin}}`, `user.phone` |
+| `POST /v1/auth/second-proof/email/start` | | 202 `{sent_to, expires_in}` (a link to the confirmed email) |
+| `POST /v1/auth/second-proof/email/verify` | `{token}` | 200 `{device_proved: true}` |
+| `POST /v1/auth/second-proof/pin` | `{pin}` | 200 `{device_proved: true}`; 401 with `tries_left`; 429 `locked` |
+| `POST /v1/me/phone/start` | `{phone, via?, confirm_old?}` | 202 `{sent_via, old_sent_via?, expires_in, needs_old_code}` |
+| `POST /v1/me/phone/verify` | `{code, old_code?, phone?}` | 200 `{phone}`; 403 `old_code_required` |
+
+**How it behaves:**
+- A personal session reaches only `GET /v1/me`, `POST /v1/me/terms`, `GET /v1/me/businesses`, `POST /v1/me/switch`, `POST /v1/me/start` (stream B), `/v1/me/phone/*`, `/v1/auth/second-proof/*`, the invitation routes and sign-out; anything else is 403 `{personal_only: true}`. A business session reaches all of these too.
+- Password, passkey and chat sign-in of someone in no business now give a personal session (`invitations_only` still says when invitations wait). Invitee sessions are no longer started; those already given are still read. Accepting an invitation from a personal session moves it into the business, under its sign-in rules (no second proof: §5.4 asks for one to be set up on joining instead).
+- Codes go by WhatsApp from Taskiem's number, else by SMS through the platform's providers (`sender.CodeSender`, no tenant, no outbox). Five codes per number an hour, 20 starts per address an hour, sign-in limits on checking; five wrong codes lock the number for an hour.
+- The phone way in respects "sign in with WhatsApp or Telegram" turned off (`users.chat_signin`).
+- **Switching into a business** checks, in order: single sign-on (a session made by single sign-on still switches to no other business; it may go to **You**); passkeys, the same test a password sign-in meets (held with a passkey: only a session made with the passkey enters; held without one: enters to add one, as on signing in); a **second proof** for a session made by a phone code on a device without one.
+- **Devices** are the app's install id, or a browser's `taskiem_device` cookie (set when it signs in by phone or passkey). An API or CLI token is no device and is never proved. A passkey sign-in proves its device. A device that has not signed in for 90 days, or any device when the account's phone has not signed in for 90 days, is new again.
+- **An account with no second proof to give** (a chat-born owner with no confirmed email, passkey or chat PIN) is let into its business from a new device, and the switch is audited with `second_proof: none_possible`, so no real owner is locked out. `/v1/me` tells the app which proofs exist, so it can ask them to set one up.
+- **Changing a phone** needs the old number's code only for a session made by a phone or chat code on an unproved device; an account with no phone yet adds one with the new number's code alone (email users adding a phone, §5.3). WhatsApp and Telegram bindings are not moved. A number found only through a binding signs in its account only while that account has no phone of its own, so the old number signs in no one after a change.
+
+**Deviations from the spec:**
+- **`users.email` stays required** (§5.2, §19 said optional). It is assumed non-null in about 40 places; accounts made by phone get a placeholder that receives no mail, `person+<hash of the account id>@phone.taskiem.invalid`, as chat-born owners have one (`ownerPlaceholderEmail`), and `/v1/me` reports `email_placeholder`. Making it optional is left for a later change.
+- **Numbers are kept as `whatsapp_bindings` keeps them** (E.164 text), not as a keyed hash with the number sealed under the person's subject (§5.2, §19).
+- A number bound to two accounts cannot occur in `whatsapp_bindings` (unique); a Telegram number is copied only where free, and dormant bindings are not copied.
+- A new account on a number still bound to another account's WhatsApp is refused (409), even when that account has changed its phone.
+- People in no business have no audit chain of their own; phone sign-ins, second proofs and phone changes are audited in each business the person belongs to.
+
+**Left for later:**
+- the 180-day "Is this a new number for you?" question and set-aside accounts (§5.4);
+- asking existing accounts (email, Slack, Telegram owners) to add a phone (§5.3), and telling a person of a new phone sign-in on their chat or email;
+- listing a phone's personal session under **Your phones** (`/v1/me/devices` is a business route and lists business sessions; signing a phone out there, a password reset, a passkey reset and "sign out everywhere" end personal sessions too);
+- limits per device on sending codes; counting codes' costs (§24 point 2);
+- the web and app screens: the first screen, **You**, the switcher's locks and the second-proof prompts (the web app does not yet handle a personal session with no invitations).

@@ -185,11 +185,10 @@ func (s *Server) removeDevice(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var ended int64
 	err = s.inPersonsTenants(ctx, p.UserID, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND device_id = $2 AND revoked_at IS NULL`, p.UserID, id)
-		if err != nil {
+		// In every business and on their own side (taskiem_auth_device_end).
+		if err := tx.QueryRow(ctx, `SELECT taskiem_auth_device_end($1, $2)`, p.UserID, id).Scan(&ended); err != nil {
 			return err
 		}
-		ended = tag.RowsAffected()
 		if ended == 0 {
 			return errNoPhone
 		}

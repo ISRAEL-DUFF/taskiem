@@ -501,7 +501,9 @@ func (s *Server) resetPasskeys(w http.ResponseWriter, r *http.Request) {
 		if err := passkeysGone(r.Context(), tx, user); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(r.Context(), `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, user); err != nil {
+		// Every session, their own side's included (no business scope
+		// reaches it).
+		if _, err := tx.Exec(r.Context(), `SELECT taskiem_auth_revoke_sessions($1, NULL)`, user); err != nil {
 			return err
 		}
 		return auditTx(r, tx, "passkey.reset", user.String(), map[string]any{"removed": tag.RowsAffected()})
@@ -923,7 +925,7 @@ func ResetPasskeys(ctx context.Context, pool *pgxpool.Pool, email, operator stri
 		if err := passkeysGone(ctx, tx, user); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL`, user); err != nil {
+		if _, err := tx.Exec(ctx, `SELECT taskiem_auth_revoke_sessions($1, NULL)`, user); err != nil {
 			return err
 		}
 		for _, t := range tenants {

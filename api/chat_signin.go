@@ -622,6 +622,11 @@ func (s *Server) waSignOutEverywhere(ctx context.Context, c *chat) error {
 			return err
 		}
 		n = tag.RowsAffected()
+		// Their own side's sessions too, which no business scope reaches
+		// (not counted: the count is of their businesses' sessions).
+		if _, err := tx.Exec(ctx, `SELECT taskiem_auth_revoke_sessions($1, NULL)`, c.p.UserID); err != nil {
+			return err
+		}
 		return waAudit(ctx, tx, c.ch.Name(), c.p, "auth.signout_everywhere", c.p.UserID.String(), map[string]any{"sessions": n})
 	}); err != nil {
 		return err
