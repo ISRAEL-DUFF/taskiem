@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"net/http"
 	"slices"
@@ -157,6 +158,11 @@ func (s *Server) listDevices(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 			ph.This = ph.ID == this
+			// Listed by a stand-in, never the app's own id: that id is
+			// chosen by the app and is not a secret, and a person who learnt
+			// it could present it when signing in (taskiem-for-everyone
+			// §5.4). Removing a phone takes the stand-in.
+			ph.ID = deviceListID(p.UserID, ph.ID)
 			out = append(out, ph)
 		}
 		return rows.Err()
@@ -177,12 +183,37 @@ func (s *Server) removeDevice(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "only a person has phones")
 		return
 	}
-	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	listed, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeErr(w, http.StatusNotFound, "no such phone")
 		return
 	}
 	ctx := r.Context()
+	id := uuid.Nil
+	if err := s.inPersonsTenants(ctx, p.UserID, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT DISTINCT device_id FROM sessions WHERE user_id = $1 AND device_id IS NOT NULL`, p.UserID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var d uuid.UUID
+			if err := rows.Scan(&d); err != nil {
+				return err
+			}
+			if deviceListID(p.UserID, d) == listed {
+				id = d
+			}
+		}
+		return rows.Err()
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if id == uuid.Nil {
+		writeErr(w, http.StatusNotFound, "no such phone")
+		return
+	}
 	var ended int64
 	err = s.inPersonsTenants(ctx, p.UserID, func(tx pgx.Tx) error {
 		// In every business and on their own side (taskiem_auth_device_end).
@@ -220,4 +251,15 @@ func (s *Server) inPersonsTenants(ctx context.Context, user uuid.UUID, fn func(p
 		return errNoMembership
 	}
 	return db.InTenantTx(ctx, s.Store.Pool, tenants, fn)
+}
+
+// deviceListID is how Your phones names a phone: a stand-in made from the
+// person and the app's device id, the same each time, from which the
+// device id cannot be read back.
+func deviceListID(user, device uuid.UUID) uuid.UUID {
+	h := sha256.Sum256([]byte("taskiem-device-list:" + user.String() + ":" + device.String()))
+	id, _ := uuid.FromBytes(h[:16])
+	id[6] = (id[6] & 0x0f) | 0x40 // a version 4 uuid, as a client expects
+	id[8] = (id[8] & 0x3f) | 0x80
+	return id
 }

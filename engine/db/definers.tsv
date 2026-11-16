@@ -381,7 +381,7 @@ taskiem_auth_phone_ticket_use(bytea)	@ISRAEL-DUFF (identity)	Uses a new-account 
 taskiem_auth_phone_taken(text)	@ISRAEL-DUFF (identity)	Whether a number belongs to any account, across people (00448)
 taskiem_auth_phone_change(uuid,text)	@ISRAEL-DUFF (identity)	Changes a person's phone to a number they just proved by code and no one else has (00448)
 taskiem_auth_phone_old_proven(uuid)	@ISRAEL-DUFF (identity)	Whether a person just proved a code to their own old number, for changing it; used up (00448)
-taskiem_auth_device_signin(uuid,bytea,boolean)	@ISRAEL-DUFF (identity)	Records a sign-in on a device and answers whether it holds a second proof, forgetting it after 90 days unused (00448)
+taskiem_auth_device_signin(uuid,bytea,boolean)	@ISRAEL-DUFF (identity)	Records a sign-in by code on a device; a sign-in by code starts unproved, keeping no earlier proof (00448, 00451)
 taskiem_auth_device_proved(uuid,bytea)	@ISRAEL-DUFF (identity)	Whether a person's device holds a second proof (00448)
 taskiem_auth_device_prove(uuid,bytea,text)	@ISRAEL-DUFF (identity)	Records a second proof (passkey, email link, chat PIN) for a person's device (00448)
 taskiem_auth_proof_link_issue(uuid,bytea,bytea,interval,integer)	@ISRAEL-DUFF (identity)	Issues a second-proof email link for a device, kept as a hash; hourly cap (00448)

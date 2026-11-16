@@ -224,3 +224,35 @@ func TestSecondProofByPasskeyAndPassword(t *testing.T) {
 	two.must(200, "POST", "/v1/auth/second-proof/password", map[string]any{"password": testPassword})
 	two.must(200, "POST", "/v1/me/switch", map[string]any{"tenant_id": acme})
 }
+
+// A proved app phone's device id is not a key (review of the review fixes,
+// taskiem-for-everyone §5.4): the app chooses that id, so whoever holds a
+// reissued number and learns it must not inherit the phone's proof. Your
+// phones lists a stand-in, never the id; and a sign-in by code starts
+// unproved even on a device that was proved.
+func TestDeviceIdIsNotASecondProof(t *testing.T) {
+	ctx := context.Background()
+	w, sms := phoneWorld(t)
+	owner := w.tenant(t, "Acme", "owner@replay.test")
+	acme := tenantOf(t, owner)
+	const num = "+2348031230377"
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO user_phones (user_id, number) SELECT id, $1 FROM users WHERE email = 'owner@replay.test'`, num); err != nil {
+		t.Fatal(err)
+	}
+	// The owner's own phone, proved with their password.
+	mine := appDevice("0192f000-0000-7000-8000-00000000f001")
+	theirs, _ := phoneIn(t, w, sms, num, mine)
+	theirs.must(200, "POST", "/v1/auth/second-proof/password", map[string]any{"password": testPassword})
+	in := theirs.must(200, "POST", "/v1/me/switch", map[string]any{"tenant_id": acme})
+	owned := &client{t: t, base: w.base, token: in["token"].(string)}
+	for _, d := range owned.must(200, "GET", "/v1/me/devices", nil)["devices"].([]any) {
+		if d.(map[string]any)["id"] == mine["id"] {
+			t.Fatalf("Your phones shows the device id: %v", d)
+		}
+	}
+	// Whoever holds the number presents that same device id: no proof.
+	thief, _ := phoneIn(t, w, sms, num, mine)
+	if st, o := thief.do("POST", "/v1/me/switch", map[string]any{"tenant_id": acme}); st != 401 || o["second_proof_required"] != true {
+		t.Fatalf("a replayed device id entered the business: %d %v", st, o)
+	}
+}
