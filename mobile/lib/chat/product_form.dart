@@ -24,6 +24,7 @@ import '../kit/modal.dart' show showTkModalChoices;
 import '../kit/sheet.dart';
 import '../kit/tap_area.dart';
 import '../kit/mobile.dart' show TkFormGroup;
+import '../theme/look.dart' show TkLook;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'attachments.dart' show PickedFile;
@@ -455,8 +456,8 @@ class PhotoFailures extends StatelessWidget {
   }
 }
 
-/// `.tk-photos`: the main one 112 square (or its letters on its tone), the
-/// rest 72; each with its links under it.
+/// As drawn: the photos centred on their card, the main one 96 square (or
+/// its letters on its tone), the rest 72; each with its links under it.
 class _PhotoStrip extends StatelessWidget {
   const _PhotoStrip({required this.name, required this.tiles, this.label});
   final String name;
@@ -468,11 +469,11 @@ class _PhotoStrip extends StatelessWidget {
     container: true,
     label: label,
     explicitChildNodes: true,
-    child: Wrap(spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.end, children: tiles),
+    child: Wrap(alignment: WrapAlignment.center, spacing: 10, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.end, children: tiles),
   );
 }
 
-/// `.tk-photo-none`: a product's letters, 112 square, on its name's tone.
+/// `.tk-photo-none`: a product's letters, 96 square, on its name's tone.
 class PhotoNone extends StatelessWidget {
   const PhotoNone({super.key, required this.name});
   final String name;
@@ -485,9 +486,9 @@ class PhotoNone extends StatelessWidget {
       label: 'No photo yet',
       excludeSemantics: true,
       child: Container(
-        width: 112,
-        height: 112,
-        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(18)),
+        width: 96,
+        height: 96,
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
         alignment: Alignment.center,
         child: Text(tileLetters(name), style: tkText(size: 28, weight: 800, color: ink)),
       ),
@@ -639,8 +640,8 @@ class _ProductPhotosState extends State<ProductPhotos> {
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(i == 0 ? 18 : 14),
                       child: _thumb(shots[i]) == null
-                          ? Container(width: i == 0 ? 112 : 72, height: i == 0 ? 112 : 72, color: t.tkLimeSoft)
-                          : ApiImage(transport: _t, path: _thumb(shots[i])!, width: i == 0 ? 112 : 72, height: i == 0 ? 112 : 72),
+                          ? Container(width: i == 0 ? 96 : 72, height: i == 0 ? 96 : 72, color: t.tkLimeSoft)
+                          : ApiImage(transport: _t, path: _thumb(shots[i])!, width: i == 0 ? 96 : 72, height: i == 0 ? 96 : 72),
                     ),
                   ),
                   if (may && i < ids.length) ...[
@@ -720,8 +721,8 @@ class PendingPhotos extends StatelessWidget {
                       child: picks[i].file != null
                           ? Image.memory(
                               picks[i].file!.bytes,
-                              width: i == 0 ? 112 : 72,
-                              height: i == 0 ? 112 : 72,
+                              width: i == 0 ? 96 : 72,
+                              height: i == 0 ? 96 : 72,
                               fit: BoxFit.cover,
                               semanticLabel: 'Photo ${i + 1} to add',
                             )
@@ -745,6 +746,20 @@ class PendingPhotos extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+        ] else ...[
+          // As drawn: no photo yet, a camera on violet where it will go.
+          Center(
+            child: ExcludeSemantics(
+              child: Container(
+                width: 96,
+                height: 96,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: TkLook.of(context).violet.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(20)),
+                child: TkIcon('b-camera', size: 26, stroke: 2, color: TkLook.of(context).violetInk),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
         ],
         PhotoAdd(pickers: pickers, room: maxGallery + 1 - picks.length, busy: busy, onPick: (more) => onChange([...picks, ...more]), onError: onError),
       ],
@@ -941,17 +956,10 @@ class _ProductFormState extends State<ProductForm> {
           floorKobo != null,
       children: [
         // As drawn (docs/spec/mobile-app-look.md, "The remaining screens"):
-        // the photo on its card, then Details and Prices as headed cards,
-        // then who sees it, its sizes and whether it shows, as rows.
+        // the photo on its card, then Prices, then who sees it, its sizes
+        // and whether it shows, as rows; then Details.
         TkFormGroup(children: [
   ProductPhotos(auth: widget.auth, row: _id, name: _it['name'] as String? ?? '', canEdit: widget.canEdit, pickers: widget.pickers),
-        ]),
-        TkFormGroup(title: 'Details', children: [
-        TkKitField(
-          label: 'Name',
-          child: TkTextBox(controller: _name, max: 120),
-        ),
-        CategoryField(transport: _t, controller: _category),
         ]),
         TkFormGroup(title: 'Prices', children: [
           if (chosen != null) ...[
@@ -1094,6 +1102,15 @@ class _ProductFormState extends State<ProductForm> {
               : const SizedBox.shrink(),
         ),
         TkSwitchRow(label: 'Show on your storefront', hint: 'And on price lists you share', on: _shown, onChanged: (v) => setState(() => _shown = v)),
+        // As drawn, the prices come first under the photo; the name (in the
+        // title already) and the category to change, after them.
+        TkFormGroup(title: 'Details', children: [
+        TkKitField(
+          label: 'Name',
+          child: TkTextBox(controller: _name, max: 120),
+        ),
+        CategoryField(transport: _t, controller: _category),
+        ]),
         if (chosen != null)
           // `.tk-share-note`: dashed, on the green tone.
           Container(

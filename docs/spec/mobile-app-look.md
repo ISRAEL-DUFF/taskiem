@@ -457,6 +457,19 @@ Checked again against the drawings, in both themes:
 - **Approve:** carries no "needs your passkey" pill or line; the
   fingerprint on the button says it.
 
+- **A product:**
+  - its main photo is centred, 96 px; with none yet, a camera on violet
+    where it goes;
+  - editing one, Prices come first and Details (name, category) after the
+    rows;
+  - a tool form's Cancel is white.
+- **Sizes and colours:** with two choices and up to three across, the
+  boxes are one table: the last choice across the top, the one before it
+  down the side. Same number for all and Fill sit at its foot.
+- **A price list's items, and who sees it:** sheets, with Cancel and Save
+  at the foot. A tick in the app's own look is a rounded lime square;
+  "+ Lower price for more" is bold words.
+
 Left different on purpose:
 
 - Featured businesses keep a small Connect: it is how one links from

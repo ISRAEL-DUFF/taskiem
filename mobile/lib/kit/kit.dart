@@ -234,10 +234,13 @@ TextStyle tkHint(TkTokens t) => tkText(size: 13, color: t.muted);
 /// A link in words (`a`, underlined on the sign-in card), with the web's
 /// 4 px above and below so it is easy to press.
 class TkLink extends StatelessWidget {
-  const TkLink({super.key, required this.label, this.onTap});
+  const TkLink({super.key, required this.label, this.onTap, this.bold = false});
 
   final String label;
   final VoidCallback? onTap;
+
+  /// As drawn in the app's own sheets: bold pine words, no line under them.
+  final bool bold;
 
   @override
   Widget build(BuildContext context) {
@@ -252,7 +255,12 @@ class TkLink extends StatelessWidget {
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(label, style: tkText(size: 13, color: t.accent, decoration: TextDecoration.underline)),
+            child: Text(
+              label,
+              style: bold
+                  ? tkText(size: 14, weight: 700, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand)
+                  : tkText(size: 13, color: t.accent, decoration: TextDecoration.underline),
+            ),
           ),
         ),
       ),
@@ -388,6 +396,22 @@ class TkCheckbox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = TkTheme.of(context).mode == TkMode.dark;
+    // In the app's own look, as drawn: a rounded square, lime with a white
+    // tick when on, a ring when off.
+    if (TkAppLook.on(context)) {
+      final t = TkTheme.tokens(context);
+      return Container(
+        width: 26,
+        height: 26,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: checked ? const Color(0xFF7ED321) : const Color(0x00000000),
+          borderRadius: BorderRadius.circular(7),
+          border: checked ? null : Border.all(color: t.muted, width: 1.8),
+        ),
+        child: checked ? const TkIcon('b-check', size: 16, stroke: 2.6, color: Color(0xFFFFFFFF)) : null,
+      );
+    }
     return SizedBox(width: 16, height: 16, child: CustomPaint(painter: _CheckPainter(checked: checked, dark: dark)));
   }
 }

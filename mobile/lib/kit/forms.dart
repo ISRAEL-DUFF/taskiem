@@ -158,8 +158,9 @@ class TkFormButton extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 56),
           padding: const EdgeInsets.symmetric(horizontal: 22),
           alignment: Alignment.center,
-          decoration: BoxDecoration(color: t.tkSoft, borderRadius: BorderRadius.circular(999)),
-          child: Text(label, style: tkText(size: 16, weight: 700, color: dark ? t.text : t.brand)),
+          // As drawn: filled with the card (white; near black in the dark).
+          decoration: BoxDecoration(color: dark ? const Color(0xFF1A1B1A) : const Color(0xFFFFFFFF), borderRadius: BorderRadius.circular(999)),
+          child: Text(label, style: tkText(size: 15, weight: 700, color: t.text)),
         ),
       ),
     );

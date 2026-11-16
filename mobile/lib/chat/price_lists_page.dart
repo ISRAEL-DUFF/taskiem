@@ -13,7 +13,7 @@ import '../app/auth.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/page.dart';
-import '../kit/sheet.dart' show TkKitField;
+import '../kit/sheet.dart' show TkKitField, showTkSheet;
 import '../kit/look.dart';
 import '../kit/mobile.dart';
 import '../theme/look.dart';
@@ -111,6 +111,13 @@ class _PriceListsPageState extends State<PriceListsPage> with Polling {
     if (saved == true) await _load();
   }
 
+  /// As drawn: a list's items, or who sees it, as a sheet with Cancel and
+  /// Save at its foot.
+  Future<void> _sheet(Widget Function(BuildContext) form) async {
+    final saved = await showTkSheet<bool>(context, form);
+    if (saved == true) await _load();
+  }
+
 
   /// How many businesses see one of the lists.
   int _sharedWith(List<Map<String, dynamic>> lists) => {for (final l in lists) ...((l['links'] as List?) ?? const []).whereType<String>()}.length;
@@ -133,10 +140,10 @@ class _PriceListsPageState extends State<PriceListsPage> with Polling {
               icon: 'tag',
               square: look.blue,
               semanticsLabel: 'Items of ${l['name']}',
-              onTap: () => _modal('Items of ${l['name']}', (_) => _ListItems(auth: widget.auth, list: l)),
+              onTap: () => _sheet((_) => _ListItems(auth: widget.auth, list: l)),
             ),
           ),
-          TkHeadButton(icon: 'b-share', label: 'Share ${l['name']}', onCard: true, onTap: () => _modal('Share ${l['name']}', (_) => _Share(auth: widget.auth, list: l, links: _active))),
+          TkHeadButton(icon: 'b-share', label: 'Share ${l['name']}', onCard: true, onTap: () => _sheet((_) => _Share(auth: widget.auth, list: l, links: _active))),
           const SizedBox(width: 8),
           TkHeadButton(
             icon: 'b-more',
@@ -382,7 +389,15 @@ class _ListItemsState extends State<_ListItems> {
         .map((r) => (r: r, why: breaksProblem(int.parse(r.min.text), feeKobo(r.price.text)!, r.typedBreaks)))
         .where((x) => x.why.isNotEmpty)
         .firstOrNull;
-    return Column(
+    final n = _maps(widget.list['items']).length;
+    return TkFormSheet(
+      title: 'Items of ${widget.list['name']}',
+      crumb: '$n on the list',
+      action: _busy ? 'Saving…' : 'Save',
+      onAction: _busy || rows == null || bad != null || badBreaks != null ? null : _save,
+      second: 'Cancel',
+      onSecond: () => Navigator.of(context).pop(false),
+      children: [TkFormGroup(children: [Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -499,13 +514,23 @@ class _ListItemsState extends State<_ListItems> {
                               padding: const EdgeInsets.only(top: 8),
                               child: Align(
                                 alignment: Alignment.centerLeft,
-                                child: TkSmallButton(
-                                  label: '+ Lower price for more',
-                                  semantics: '+ Lower price for more of ${r.item['name']}',
-                                  onPressed: () => setState(() {
+                                // As drawn: bold pine words, not a button.
+                                child: Semantics(
+                                  button: true,
+                                  label: '+ Lower price for more of ${r.item['name']}',
+                                  excludeSemantics: true,
+                                  onTap: () => setState(() {
                                     final b = (qty: TextEditingController()..addListener(_changed), price: TextEditingController()..addListener(_changed));
                                     r.breaks.add(b);
                                   }),
+                                  child: TkLink(
+                                    label: '+ Lower price for more',
+                                    bold: true,
+                                    onTap: () => setState(() {
+                                      final b = (qty: TextEditingController()..addListener(_changed), price: TextEditingController()..addListener(_changed));
+                                      r.breaks.add(b);
+                                    }),
+                                  ),
                                 ),
                               ),
                             ),
@@ -525,8 +550,8 @@ class _ListItemsState extends State<_ListItems> {
             padding: const EdgeInsets.only(bottom: 8),
             child: Semantics(liveRegion: true, child: Text('${badBreaks.r.item['name']}: ${badBreaks.why}', style: tkHint(t))),
           ),
-        _saveCancel(context, busy: _busy, save: rows == null || bad != null || badBreaks != null ? null : _save),
       ],
+    )])],
     );
   }
 }
@@ -564,12 +589,19 @@ class _ShareState extends State<_Share> {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Column(
+    return TkFormSheet(
+      title: 'Share ${widget.list['name']}',
+      crumb: 'Who sees it',
+      action: _busy ? 'Saving…' : 'Save',
+      onAction: _busy ? null : _save,
+      second: 'Cancel',
+      onSecond: () => Navigator.of(context).pop(false),
+      children: [
+        Text('A business sees one price list: sharing this one with a business replaces the one it had.', style: tkHint(t)),
+        TkFormGroup(children: [Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('A business sees one price list: sharing this one with a business replaces the one it had.', style: tkHint(t)),
-        const SizedBox(height: 12),
         if (widget.links.isEmpty)
           Text('No linked businesses yet. Link with them on the Chat page.', style: tkHint(t))
         else
@@ -580,8 +612,9 @@ class _ShareState extends State<_Share> {
               label: Text(l['name'] as String? ?? '', style: tkText(size: 15, color: t.text)),
               onTap: () => setState(() => _picked.contains(l['id']) ? _picked.remove(l['id']) : _picked.add(l['id'] as String)),
             ),
-        if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 10), child: TkErrorBox(_error!)),
-        _saveCancel(context, busy: _busy, save: _save),
+      ],
+    )]),
+        if (_error != null) TkErrorBox(_error!),
       ],
     );
   }

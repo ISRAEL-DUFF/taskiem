@@ -251,7 +251,11 @@ class GridCell extends StatefulWidget {
     this.hint = '',
     this.low = false,
     this.price,
+    this.bare = false,
   });
+
+  /// In a table (as drawn): the box alone, no frame or name over it.
+  final bool bare;
   final String name;
   final String? small;
   final String label;
@@ -328,6 +332,18 @@ class _GridCellState extends State<GridCell> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final ink = widget.low ? t.tkWarnInk : t.text;
+    if (widget.bare) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _box(t, _count, _countFocus, widget.label, widget.hint, widget.onChanged),
+          if (widget.price != null) ...[
+            const SizedBox(height: 4),
+            _box(t, _price, _priceFocus, widget.price!.label, widget.price!.hint, widget.price!.onChanged, money: true),
+          ],
+        ],
+      );
+    }
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
@@ -619,6 +635,7 @@ class _SizesEditorState extends State<SizesEditor> {
               alignment: Alignment.centerLeft,
               child: TkLink(
                 label: '+ Add a choice',
+                bold: true,
                 onTap: () {
                   setState(() => _drafts.add(_draft(_drafts.length == 1 ? 'Colour' : '', '')));
                   _editChoice(_drafts.length - 1);
@@ -631,21 +648,128 @@ class _SizesEditorState extends State<SizesEditor> {
             padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
             child: Semantics(header: true, child: Text('How many of each', style: tkDisplay(size: 20, letterSpacing: -0.4, color: t.text))),
           ),
-          // `.tk-grid-tools`: the number and Fill, side by side.
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: TkKitField(
-                  label: 'Same number for all',
-                  hint: 'Then change the ones that differ.',
-                  child: TkTextBox(controller: _fill, digits: 6),
-                ),
+          TkChoiceRow(
+            radio: false,
+            control: TkCheckbox(checked: _own),
+            label: Text('Some cost more or less than ${price != null ? naira(price) : 'the product'}', style: tkText(size: 15, weight: 600, color: t.text)),
+            onTap: () => setState(() => _own = !_own),
+          ),
+          // As drawn: one card, the last choice across the top (Black,
+          // White), the one before it down the side (40, 41…), a box for
+          // each; then the same number for all, and Fill. More than three
+          // across, or three choices, keep the boxes in groups.
+          if (cs.length == 2 && cs.last.values.length <= 3)
+            TkFormGroup(children: [
+              Row(
+                children: [
+                  const SizedBox(width: 44),
+                  for (final c in cs.last.values)
+                    Expanded(child: ExcludeSemantics(child: Text(c, textAlign: TextAlign.center, style: tkText(size: 13, weight: 600, color: t.text)))),
+                ],
               ),
-              const SizedBox(width: 10),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 25),
-                child: TkSoftButton(
+              for (final g in gridGroups(cells, cs))
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 44,
+                      height: 40,
+                      child: Align(alignment: Alignment.centerLeft, child: ExcludeSemantics(child: Text(g.label, style: tkText(size: 14, weight: 600, color: t.text)))),
+                    ),
+                    for (final (i, c) in cs.last.values.indexed) ...[
+                      if (i > 0) const SizedBox(width: 8),
+                      Expanded(
+                        child: Builder(builder: (context) {
+                          final v = g.cells.where((x) => x[cs.last.name] == c).firstOrNull;
+                          if (v == null) return const SizedBox.shrink();
+                          return GridCell(
+                            key: ValueKey(keyOf(v)),
+                            bare: true,
+                            name: c,
+                            label: '${variantLabel(v, cs)}: how many',
+                            hint: '–',
+                            value: _countOf(v, cs),
+                            onChanged: (x) => setState(() => _counts[keyOf(v)] = x),
+                            price: _own
+                                ? (
+                                    value: _priceOf(v, cs),
+                                    hint: price != null ? nairaText(price) : '₦',
+                                    label: '${variantLabel(v, cs)}: its own price in naira',
+                                    onChanged: (x) => setState(() => _prices[keyOf(v)] = x),
+                                  )
+                                : null,
+                          );
+                        }),
+                      ),
+                    ],
+                  ],
+                ),
+            // As drawn: under the boxes, the same number for all, and Fill.
+            Row(
+              children: [
+                Expanded(
+                  child: Semantics(
+                    label: 'Same number for all',
+                    hint: 'Then change the ones that differ.',
+                    container: true,
+                    child: TkTextBox(controller: _fill, digits: 6, hint: 'Same number for all', size: 15, height: 46),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: TkSoftButton(
+                  label: 'Fill',
+                  onTap: RegExp(r'^\d+$').hasMatch(_fill.text.trim())
+                      ? () => setState(() {
+                          for (final v in cells) {
+                            _counts[keyOf(v)] = _fill.text.trim();
+                          }
+                        })
+                      : null,
+                )),
+              ],
+            ),
+            ])
+          else ...[
+            for (final g in gridGroups(cells, cs))
+              TkFieldset(
+                legend: g.label.isEmpty ? 'How many' : g.label,
+                children: [
+                  GridCells(
+                    children: [
+                      for (final v in g.cells)
+                        GridCell(
+                          key: ValueKey(keyOf(v)),
+                          name: v[cs.last.name] ?? '',
+                          label: '${variantLabel(v, cs)}: how many',
+                          hint: '–',
+                          value: _countOf(v, cs),
+                          onChanged: (x) => setState(() => _counts[keyOf(v)] = x),
+                          price: _own
+                              ? (
+                                  value: _priceOf(v, cs),
+                                  hint: price != null ? nairaText(price) : '₦',
+                                  label: '${variantLabel(v, cs)}: its own price in naira',
+                                  onChanged: (x) => setState(() => _prices[keyOf(v)] = x),
+                                )
+                              : null,
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            // As drawn: under the boxes, the same number for all, and Fill.
+            Row(
+              children: [
+                Expanded(
+                  child: Semantics(
+                    label: 'Same number for all',
+                    hint: 'Then change the ones that differ.',
+                    container: true,
+                    child: TkTextBox(controller: _fill, digits: 6, hint: 'Same number for all', size: 15, height: 46),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                TkSoftButton(
                   label: 'Fill',
                   onTap: RegExp(r'^\d+$').hasMatch(_fill.text.trim())
                       ? () => setState(() {
@@ -655,43 +779,10 @@ class _SizesEditorState extends State<SizesEditor> {
                         })
                       : null,
                 ),
-              ),
-            ],
-          ),
-          TkChoiceRow(
-            radio: false,
-            control: TkCheckbox(checked: _own),
-            label: Text('Some cost more or less than ${price != null ? naira(price) : 'the product'}', style: tkText(size: 15, weight: 600, color: t.text)),
-            onTap: () => setState(() => _own = !_own),
-          ),
-          Text('How many of each. Empty a box for one you do not sell.', style: tkHint(t)),
-          for (final g in gridGroups(cells, cs))
-            TkFieldset(
-              legend: g.label.isEmpty ? 'How many' : g.label,
-              children: [
-                GridCells(
-                  children: [
-                    for (final v in g.cells)
-                      GridCell(
-                        key: ValueKey(keyOf(v)),
-                        name: v[cs.last.name] ?? '',
-                        label: '${variantLabel(v, cs)}: how many',
-                        hint: '–',
-                        value: _countOf(v, cs),
-                        onChanged: (x) => setState(() => _counts[keyOf(v)] = x),
-                        price: _own
-                            ? (
-                                value: _priceOf(v, cs),
-                                hint: price != null ? nairaText(price) : '₦',
-                                label: '${variantLabel(v, cs)}: its own price in naira',
-                                onChanged: (x) => setState(() => _prices[keyOf(v)] = x),
-                              )
-                            : null,
-                      ),
-                  ],
-                ),
               ],
             ),
+          ],
+          Text('Empty a box for one you do not sell.', style: tkHint(t)),
           Semantics(liveRegion: true, child: Text('${sizesWords(sold.length)} on sale', style: tkFormNow(t))),
           if (shelf > 0)
             Text(
