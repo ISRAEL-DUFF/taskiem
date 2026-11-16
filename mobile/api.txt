@@ -67,6 +67,37 @@ readCustomerChat
 putCustomerChat
 replyCustomer
 
+# Customers in the app, the business's side (taskiem-for-everyone §8, stage 2)
+openAppCustomerChat
+blockCustomer
+unblockCustomer
+customerChatTyping
+broadcastOffer
+getCustomerChatSettings
+putCustomerChatSettings
+
+# You: a person's chats with businesses, through the customer door
+# (taskiem-for-everyone §7, §8, stage 2). Files go as multipart forms and
+# come as bytes, outside the generated client, as linked businesses' do.
+listMyChats
+startMyChat
+getMyChat
+putMyChat
+listMyChatMessages
+sendMyChatMessage
+readMyChat
+typingInMyChat
+blockBusiness
+unblockBusiness
+reportBusiness
+myChatShop
+myChatServices
+myChatServiceTimes
+myChatOrders
+placeMyChatOrder
+bookInMyChat
+payMyChatOrder
+
 # The message menu (M3)
 reactLinkMessage
 unreactLinkMessage

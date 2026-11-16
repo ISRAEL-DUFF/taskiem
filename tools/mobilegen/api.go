@@ -123,6 +123,15 @@ func (g *apiGen) response(r any) js {
 
 var pathParam = regexp.MustCompile(`\{([a-zA-Z_]+)\}`)
 
+// headerArg is a header's argument name: Idempotency-Key is idempotencyKey.
+func headerArg(h string) string {
+	parts := strings.Split(strings.ToLower(h), "-")
+	for i := 1; i < len(parts); i++ {
+		parts[i] = upperFirst(parts[i])
+	}
+	return strings.Join(parts, "")
+}
+
 func (g *apiGen) method(o operation) (string, error) {
 	name := lowerFirst(o.id)
 	var args []string
@@ -132,7 +141,7 @@ func (g *apiGen) method(o operation) (string, error) {
 			return "${Uri.encodeComponent(" + camelJSON(m[1:len(m)-1]) + ")}"
 		}) + "'"
 	}
-	var query []string
+	var query, headers []string
 	for _, p := range o.params {
 		pm, _ := p.(js)
 		if ref, ok := pm["$ref"].(string); ok {
@@ -148,6 +157,17 @@ func (g *apiGen) method(o operation) (string, error) {
 		case "query":
 			args = append(args, "String? "+camelJSON(n))
 			query = append(query, fmt.Sprintf("'%s': ?%s", n, camelJSON(n)))
+		case "header":
+			// A header the operation takes (Idempotency-Key): an argument
+			// named after it, required as the document says.
+			arg := headerArg(n)
+			if req, _ := pm["required"].(bool); req {
+				args = append(args, "required String "+arg)
+				headers = append(headers, fmt.Sprintf("'%s': %s", n, arg))
+			} else {
+				args = append(args, "String? "+arg)
+				headers = append(headers, fmt.Sprintf("'%s': ?%s", n, arg))
+			}
 		}
 	}
 	body := ""
@@ -185,6 +205,9 @@ func (g *apiGen) method(o operation) (string, error) {
 	q := ""
 	if len(query) > 0 {
 		q = ", query: {" + strings.Join(query, ", ") + "}"
+	}
+	if len(headers) > 0 {
+		q += ", headers: {" + strings.Join(headers, ", ") + "}"
 	}
 	sig := ""
 	if len(args) > 0 {
