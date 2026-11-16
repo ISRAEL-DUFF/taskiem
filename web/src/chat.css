@@ -508,3 +508,62 @@ img.tk-live-tile { object-fit: cover; }
 .tk-ref-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); }
 .tk-ref-foot .tk-btn { min-height: 40px; padding: 0 16px; font-size: 14px; }
 .tk-refs { display: flex; flex-direction: column; }
+
+/* --- A person's chats with businesses (taskiem-for-everyone §8.3, §9) --- */
+.you-shell.you-chat { height: 100dvh; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.you-chat .you-main { flex: 1; min-height: 0; width: 100%; max-width: 960px; padding: 0; display: flex; flex-direction: column; }
+.you-chat .person-pane { flex: 1; min-height: 0; height: 100%; border: 0; border-radius: 0; background: var(--chat-pattern), var(--chat-wallpaper); }
+.you-chat .person-pane .chat-back { display: inline-flex; }
+.you-chat .person-pane .chat-stream { max-height: none; min-height: 0; background: none; gap: 2px; padding: 8px 10px; }
+.you-chat .person-pane .chat-head { position: relative; z-index: 3; }
+@media (max-width: 860px) {
+  /* A conversation takes the whole screen on a phone; Back returns. */
+  .you-chat .you-top { display: none; }
+}
+.pc-notice { display: flex; align-items: center; gap: 10px; margin: 8px 10px 0; }
+.pc-notice .grow { flex: 1; min-width: 0; }
+.pc-offer-mark { display: block; margin-bottom: 4px; }
+.pc-stop-offers { display: block; margin-top: 4px; font-size: 13px; }
+.pc-app-line { margin: 0; padding: 4px 16px 10px; text-align: center; font-size: 13px; color: var(--muted); background: var(--tk-soft); }
+.pc-app-line a { color: var(--muted); }
+.pc-offers { margin: 8px auto; max-width: 420px; }
+.pc-tiles, .pc-items, .pc-orders, .pc-lines { list-style: none; margin: 0; padding: 0; }
+.pc-tile { width: 100%; text-align: left; background: none; border: 0; box-shadow: none; cursor: pointer; font: inherit; }
+.pc-tile:disabled { opacity: 0.55; cursor: not-allowed; }
+.pc-item { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
+.pc-item:last-child { border-bottom: 0; }
+.pc-item-photo { flex: none; width: 52px; height: 52px; border-radius: 14px; object-fit: cover; }
+.pc-size { margin-top: 6px; max-width: 100%; }
+.pc-check { display: flex; flex-direction: column; gap: 12px; }
+.pc-lines li { display: flex; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.pc-lines li .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pc-lines .pc-total { font-weight: 700; border-bottom: 0; }
+.pc-choice { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pc-choice legend { font-weight: 600; margin-bottom: 4px; }
+.pc-done { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.pc-days, .pc-times { padding: 0 0 10px; flex-wrap: wrap; overflow-x: visible; }
+.pc-order { display: flex; flex-direction: column; gap: 8px; padding: 12px 4px; border-bottom: 1px solid var(--border); }
+.pc-order-top { display: flex; align-items: flex-start; gap: 10px; }
+.pc-consent { align-items: flex-start; }
+.person-chats .toolbar { margin-bottom: 8px; }
+.app-card .app-card-figure { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
+.app-card .tk-ref-foot { flex-wrap: wrap; }
+.line-mark { font-weight: 400; color: var(--muted); font-size: 13px; }
+.customer-offer-line { margin: 0; padding: 6px 12px 0; font-size: 13px; }
+
+/* The chat link's page, /m/{code}. */
+.chat-link-who { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+.chat-link-who h1 { margin: 0; overflow-wrap: anywhere; }
+.chat-link-who .way-in-line, .chat-link-who .hint { margin: 2px 0 0; }
+.chat-link-avatar { flex: none; width: 64px; height: 64px; font-size: 22px; }
+.chat-link-hours { margin: 4px 0 14px; }
+.chat-link-hours ul { margin: 6px 0 0; padding-left: 18px; font-size: 14px; }
+.chat-link-page > .primary, .chat-link-page > .button { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: center; margin-top: 10px; }
+
+/* Your chat link, for the business: the QR code stays dark on white to scan. */
+.chat-link-box { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.chat-link-box > .grow { flex: 1 1 260px; min-width: 0; }
+.chat-link-qr { flex: none; width: 160px; height: 160px; background: #ffffff; border-radius: 12px; padding: 8px; border: 1px solid var(--border); }
+.chat-link-url { margin: 0 0 10px; overflow-wrap: anywhere; font-weight: 600; }
+.pc-done-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 700; }
+.pc-done-tick { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; background: var(--brand); color: var(--brand-dark); }

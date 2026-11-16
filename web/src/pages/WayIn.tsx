@@ -165,11 +165,26 @@ export function WayIn() {
   const nextParam = q.get("next");
   const next = safeNext(nextParam, "");
   const start = q.get("start");
+  // Came through a business's chat link (§8.2, §9): the code goes with
+  // the phone, so the business pays for it, and its name is said.
+  const chatCode = q.get("chat") ?? "";
+  const [chatWith, setChatWith] = useState<string>();
+  useEffect(() => {
+    if (!chatCode) return;
+    get<{ name: string }>(`/v1/chat-links/${encodeURIComponent(chatCode)}`).then(
+      (c) => setChatWith(c.name),
+      () => undefined,
+    );
+  }, [chatCode]);
   const emailLink = `/login?with=email${nextParam ? `&next=${encodeURIComponent(nextParam)}` : ""}`;
 
   const send = (number: string, how?: "whatsapp" | "sms") =>
     plainly(async () => {
-      const r = await post<{ sent_via: string }>("/v1/auth/phone/start", how === "sms" ? { phone: number, via: "sms" } : { phone: number });
+      const r = await post<{ sent_via: string }>("/v1/auth/phone/start", {
+        phone: number,
+        ...(how === "sms" ? { via: "sms" } : {}),
+        ...(chatCode ? { chat_code: chatCode } : {}),
+      });
       setVia(r.sent_via);
       setCode("");
       wait(RESEND_AFTER);
@@ -208,8 +223,17 @@ export function WayIn() {
   if (step === "phone")
     return (
       <div className="login card way-in">
-        <h1>Welcome to Taskiem</h1>
-        <p className="way-in-line">Chat with the businesses you buy from, and run your own.</p>
+        <h1>{chatCode ? `Chat with ${chatWith ?? "the business"}` : "Welcome to Taskiem"}</h1>
+        <p className="way-in-line">
+          {chatCode
+            ? "Your phone number is all you need: we send it a code, and the chat opens here in your browser."
+            : "Chat with the businesses you buy from, and run your own."}
+        </p>
+        {chatCode && (
+          <p className="warning" role="note" data-testid="shared-phone">
+            Is this your phone? If not, don't stay signed in: choose Sign out in the chat's menu when you are done.
+          </p>
+        )}
         <form
           key="phone"
           onSubmit={(e) => {

@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { post, type Business, type InvitationAccepted, type Lock } from "../api";
 import { useAuth } from "../auth";
 import { brandFile } from "../brand";
 import { Icon } from "../icons";
-import { EmptyState, ErrorBox, PageHeader, Skeleton, useAction } from "../ui";
+import { ErrorBox, PageHeader, Skeleton, useAction } from "../ui";
 import { Appearance, Invitations } from "./Account";
 import { PhoneSetting } from "./ChangeNumber";
+import { ChatLinkPage } from "./ChatLinkPage";
+import { MyShopOrders, PersonChatList, PersonChatPage, StartChat } from "./PersonChats";
 import { TermsBanner } from "./Signup";
 import { StartSomething } from "./StartSomething";
 import { ProofStep, SwitchList, Switcher, SwitchStep as SwitchStepHere, useSwitch } from "./Switch";
@@ -20,10 +22,13 @@ import { ProofStep, SwitchList, Switcher, SwitchStep as SwitchStepHere, useSwitc
 export function YouApp() {
   const { me } = useAuth();
   const nav = useNavigate();
+  const loc = useLocation();
   if (!me) return null;
   const inBusiness = (me.businesses?.length ?? 0) > 0;
+  // A conversation fills the window, as the chat does (§9).
+  const inChat = /^\/you\/chats\/(?!new\b)[^/]+/.test(loc.pathname);
   return (
-    <div className="you-shell">
+    <div className={`you-shell${inChat ? " you-chat" : ""}`}>
       <a className="skip-link" href="#main">
         Skip to content
       </a>
@@ -43,6 +48,9 @@ export function YouApp() {
           <Route path="/you" element={<YouHome />} />
           <Route path="/you/settings" element={<YouSettings />} />
           <Route path="/you/start" element={<StartSomething />} />
+          <Route path="/you/chats/new" element={<StartChat />} />
+          <Route path="/you/chats/:id" element={<PersonChatPage />} />
+          <Route path="/m/:code" element={<ChatLinkPage />} />
           <Route path="/second-proof" element={<SecondProofPage />} />
           <Route path="*" element={<Navigate to="/you" replace />} />
         </Routes>
@@ -106,10 +114,8 @@ function YouHome() {
           onClose={() => setJoining(null)}
         />
       )}
-      <section className="card" aria-labelledby="you-chats">
-        <h2 id="you-chats">Chats</h2>
-        <EmptyState icon="chat">Chats with businesses will show here.</EmptyState>
-      </section>
+      <PersonChatList />
+      <MyShopOrders />
       <YourBusinesses />
     </>
   );

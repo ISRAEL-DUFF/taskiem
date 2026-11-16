@@ -6,6 +6,7 @@ import {
   useState,
   type DragEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import { Icon } from "../icons";
 import { toast } from "../toast";
@@ -399,6 +400,7 @@ export function ComposerView<R>({
   prefix,
   textId,
   textLabel,
+  lead,
 }: {
   c: ReturnType<typeof useComposer<R>>;
   busy: boolean;
@@ -406,6 +408,8 @@ export function ComposerView<R>({
   prefix: string;
   textId: string;
   textLabel: string;
+  /** Before the box: a conversation's own tools button (a customer's). */
+  lead?: ReactNode;
 }) {
   const { voice, file, text, reply } = c;
   const toolsP = usePresence(c.toolsShown);
@@ -587,6 +591,7 @@ export function ComposerView<R>({
               <Icon name="grid" />
             </button>
           )}
+          {lead}
           <div className="composer-pill">
             {/* The designs have no emoji button: keyboards have emoji. */}
             {!c.o.tools && (
