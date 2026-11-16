@@ -70,11 +70,25 @@ func TestChatSignupOnWhatsApp(t *testing.T) {
 	const other = "+2348031230002"
 	offer := w.send(t, other, whatsapptest.Text("hello"))
 	if len(offer) != 1 || !strings.Contains(offer[0].Text, "Do you want to start, for free?") ||
-		fmt.Sprint(buttonIDs(offer[0].Buttons)) != "[su:start su:have su:no]" {
+		fmt.Sprint(buttonIDs(offer[0].Buttons)) != "[su:start su:have su:customer]" || !strings.Contains(offer[0].Text, "Type *no* for not now") {
 		t.Fatalf("offer: %+v", offer)
 	}
-	if got := w.press(t, other, "su:no"); len(got) != 1 || !strings.Contains(got[0].Text, "Send *start* any time") {
+	// WhatsApp allows three buttons: Not now is typed (taskiem-for-everyone §12).
+	if got := w.send(t, other, whatsapptest.Text("No")); len(got) != 1 || !strings.Contains(got[0].Text, "Send *start* any time") {
 		t.Fatalf("not now: %+v", got)
+	}
+	// A button pressed on an older offer still works.
+	if got := w.press(t, other, "su:no"); len(got) != 1 || !strings.Contains(got[0].Text, "Send *start* any time") {
+		t.Fatalf("not now, pressed: %+v", got)
+	}
+	// I'm a customer: where to chat with a business.
+	if got := w.press(t, other, "su:customer"); len(got) != 1 || got[0].Text != "To chat with a business, open its Taskiem link: the business shares it on its page, its receipts and its messages." {
+		t.Fatalf("a customer, with no app link: %+v", got)
+	}
+	w.srv.AppGetURL = "https://taskiem.test/app"
+	if got := w.press(t, other, "su:customer"); len(got) != 1 ||
+		got[0].Text != "To chat with a business, open its Taskiem link, or find it in the Taskiem app: https://taskiem.test/app" {
+		t.Fatalf("a customer: %+v", got)
 	}
 	// No to the terms makes nothing; nor does cancel later on.
 	terms := w.press(t, other, "su:start")
@@ -605,12 +619,12 @@ func TestSignupInOwnWords(t *testing.T) {
 	}
 	// Anything else: the offer, as before.
 	answer = `{"intent":"unknown","argument":""}`
-	if got := w.send(t, "+2348031239503", whatsapptest.Text("abeg who una be")); len(got) != 1 || fmt.Sprint(buttonIDs(got[0].Buttons)) != "[su:start su:have su:no]" {
+	if got := w.send(t, "+2348031239503", whatsapptest.Text("abeg who una be")); len(got) != 1 || fmt.Sprint(buttonIDs(got[0].Buttons)) != "[su:start su:have su:customer]" {
 		t.Fatalf("not routed: %+v", got)
 	}
 	// What the model may not answer for a stranger is not acted on.
 	answer = `{"intent":"status","argument":""}`
-	if got := w.send(t, "+2348031239504", whatsapptest.Text("wetin don fail today o")); len(got) != 1 || fmt.Sprint(buttonIDs(got[0].Buttons)) != "[su:start su:have su:no]" {
+	if got := w.send(t, "+2348031239504", whatsapptest.Text("wetin don fail today o")); len(got) != 1 || fmt.Sprint(buttonIDs(got[0].Buttons)) != "[su:start su:have su:customer]" {
 		t.Fatalf("a command for a stranger: %+v", got)
 	}
 }

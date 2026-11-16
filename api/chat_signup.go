@@ -254,8 +254,33 @@ func (s *Server) chatSignupMessage(ctx context.Context, sc *signupChat, text, re
 		return true, s.chatLinkAsk(ctx, sc)
 	case reply == "su:no":
 		return true, s.suSay(ctx, sc, sc.t("signup.later"))
+	case reply == "su:customer" && sc.user == uuid.Nil:
+		// A customer, not a business (docs/spec/taskiem-for-everyone.md §12).
+		if s.AppGetURL == "" {
+			return true, s.suSay(ctx, sc, sc.t("signup.customer_no_app"))
+		}
+		return true, s.suSay(ctx, sc, sc.t("signup.customer", "link", s.AppGetURL))
+	case sc.user == uuid.Nil && offersCustomer(sc.ch) && notNow(text):
+		// Not now is typed: the offer's three buttons are its others.
+		return true, s.suSay(ctx, sc, sc.t("signup.later"))
 	}
 	return false, nil
+}
+
+// offersCustomer reports whether a channel's sign-up offer has "I'm a
+// customer" in place of "Not now": Taskiem's shared WhatsApp number and
+// Telegram bot, where customers of businesses on Taskiem write (§12).
+func offersCustomer(ch chatChannel) bool {
+	return ch.Name() == "whatsapp" || ch.Name() == "telegram"
+}
+
+// notNow reads a stranger's "no" to the offer.
+func notNow(text string) bool {
+	switch strings.Join(strings.Fields(strings.ToLower(strings.Trim(strings.TrimSpace(text), ".!"))), " ") {
+	case "no", "not now", "no thanks", "no thank you", "nope":
+		return true
+	}
+	return false
 }
 
 // signupOffer answers a stranger nothing else claimed: what Taskiem is,
@@ -269,6 +294,13 @@ func (s *Server) signupOffer(ctx context.Context, sc *signupChat, text string) e
 		sc.lang = info.Tag
 	} else if s.signupModelRoute(ctx, sc, text) {
 		return s.signupBegin(ctx, sc)
+	}
+	if offersCustomer(sc.ch) {
+		// WhatsApp allows three buttons: Not now is typing "no" (§12).
+		return s.suSay(ctx, sc, sc.t("signup.offer_everyone", "languages", langNames(s.operatorLangs())),
+			whatsapp.Button{ID: "su:start", Title: sc.t("signup.button_start")},
+			whatsapp.Button{ID: "su:have", Title: sc.t("signup.button_have")},
+			whatsapp.Button{ID: "su:customer", Title: sc.t("signup.button_customer")})
 	}
 	return s.suSay(ctx, sc, sc.t("signup.offer", "languages", langNames(s.operatorLangs())),
 		whatsapp.Button{ID: "su:start", Title: sc.t("signup.button_start")},
