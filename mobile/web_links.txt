@@ -46,3 +46,4 @@
 /pro | not a page
 /send | not a page
 /void | not a page
+/you/chats/new | app lib/screens/chat_link.dart
