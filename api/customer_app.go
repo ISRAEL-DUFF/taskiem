@@ -90,7 +90,9 @@ type CustomerAnswer struct {
 // conversation, after it is committed: the person told where the app
 // cannot reach them (taskiem-for-everyone §9: the browser chat's SMS,
 // "Mama's Kitchen answered you on Taskiem: {link}", at most one per
-// conversation per hour). Stream B fills it; nil tells no one.
+// conversation per hour). Stream B fills it; nil tells no one. It is
+// called on the request's goroutine once the message is kept: it must not
+// block (queue what it sends).
 type CustomerAnswerHook interface {
 	BusinessAnswered(ctx context.Context, a CustomerAnswer)
 }
@@ -160,12 +162,7 @@ type appMessage struct {
 // the person are in scope): the business's sealed under the customer's
 // subject, the person's in their own rows. It answers when it was kept,
 // and the person's conversation.
-func (s *Server) writeAppMessageTx(ctx context.Context, tx pgx.Tx, m appMessage) (time.Time, uuid.UUID, error) {
-	at, conv, err := s.writeBothTx(ctx, tx, m)
-	return at, conv, err
-}
-
-func (s *Server) writeBothTx(ctx context.Context, tx pgx.Tx, m appMessage) (at time.Time, conv uuid.UUID, err error) {
+func (s *Server) writeAppMessageTx(ctx context.Context, tx pgx.Tx, m appMessage) (at time.Time, conv uuid.UUID, err error) {
 	body, err := pii.SealText(ctx, s.Store.PII, tx, m.tenant, m.subject, "other", m.text)
 	if err != nil {
 		return at, conv, err

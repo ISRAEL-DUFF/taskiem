@@ -351,7 +351,7 @@ func (s *Server) startPersonChat(w http.ResponseWriter, r *http.Request) {
 	}
 	var out personChat
 	fresh := false
-	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+	start := func(tx pgx.Tx) error {
 		var id uuid.UUID
 		err := tx.QueryRow(ctx, `SELECT id FROM person_conversations WHERE person_id = $1 AND tenant_id = $2`, person, tenant).Scan(&id)
 		if err == nil {
@@ -411,7 +411,13 @@ func (s *Server) startPersonChat(w http.ResponseWriter, r *http.Request) {
 		out.Name = bname
 		out.Notice = bname + " will see your name and phone number, for your orders and deliveries. Messages with businesses can be read by Taskiem to help with your orders."
 		return nil
-	})
+	}
+	err = db.InPersonTx(ctx, s.Store.Pool, person, start)
+	if isUnique(err) {
+		// Started twice at once: the other start made it; answer it.
+		fresh = false
+		err = db.InPersonTx(ctx, s.Store.Pool, person, start)
+	}
 	if err != nil {
 		s.personFail(w, r, err)
 		return
