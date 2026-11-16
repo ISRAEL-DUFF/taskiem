@@ -2001,11 +2001,14 @@ class _Customers extends StatelessWidget {
         children: [
           Semantics(
             header: true,
-            child: Row(
+            // Wrapping with large text: the count goes under the title.
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Padding(padding: const EdgeInsets.only(left: 4), child: Text(head, style: tkDisplay(size: 20, lineHeight: 1.25, letterSpacing: -0.4, color: t.text))),
                 if (waiting > 0 && !archived) ...[
-                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(color: t.tkWarnBg, borderRadius: BorderRadius.circular(999)),

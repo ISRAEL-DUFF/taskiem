@@ -524,7 +524,7 @@ class _VoicePlayerState extends State<VoicePlayer> {
         scale: 1,
         child: SizedBox(
           width: widget.width,
-          height: 44,
+          height: 48,
           child: Row(
             children: [
               Container(
