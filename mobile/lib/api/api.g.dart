@@ -149,6 +149,23 @@ class TaskiemApi {
     return PhoneChangeVerifyResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// List the caller's invitations (`GET /v1/me/invitations`)
+  Future<InvitationList> myInvitations() async {
+    final j = await _t.send('GET', '/v1/me/invitations');
+    return InvitationList.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Accept an invitation (`POST /v1/me/invitations/{tenant}/accept`)
+  Future<InvitationAccepted> acceptInvitation({required String tenant}) async {
+    final j = await _t.send('POST', '/v1/me/invitations/${Uri.encodeComponent(tenant)}/accept');
+    return InvitationAccepted.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Decline an invitation (`POST /v1/me/invitations/{tenant}/decline`)
+  Future<void> declineInvitation({required String tenant}) async {
+    await _t.send('POST', '/v1/me/invitations/${Uri.encodeComponent(tenant)}/decline');
+  }
+
   /// Conversations with linked businesses (`GET /v1/link-chats`)
   Future<ListLinkChatsResponse> listLinkChats() async {
     final j = await _t.send('GET', '/v1/link-chats');
@@ -1605,6 +1622,82 @@ class PhoneChangeVerifyResponse {
 
   Map<String, dynamic> toJson() => {
         'phone': phone,
+      };
+}
+
+class InvitationList {
+  const InvitationList({required this.invitations});
+
+  final List<Invitation> invitations;
+
+  factory InvitationList.fromJson(Map<String, dynamic> j) => InvitationList(
+        invitations: (j['invitations'] as List).map((e) => Invitation.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'invitations': invitations.map((e) => e.toJson()).toList(),
+      };
+}
+
+class Invitation {
+  const Invitation({required this.invitedAt, required this.roles, required this.tenant, required this.tenantId});
+
+  final DateTime invitedAt;
+  final List<String> roles;
+  /// The organisation's name.
+  final String tenant;
+  final String tenantId;
+
+  factory Invitation.fromJson(Map<String, dynamic> j) => Invitation(
+        invitedAt: DateTime.parse(j['invited_at'] as String),
+        roles: (j['roles'] as List).map((e) => e as String).toList(),
+        tenant: j['tenant'] as String,
+        tenantId: j['tenant_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'invited_at': invitedAt.toUtc().toIso8601String(),
+        'roles': roles.map((e) => e).toList(),
+        'tenant': tenant,
+        'tenant_id': tenantId,
+      };
+}
+
+class InvitationAccepted {
+  const InvitationAccepted({this.personal, required this.roles, this.signIn, required this.tenantId, this.tenants, this.token});
+
+  /// False when a personal session moved into the organisation.
+  final bool? personal;
+  /// The roles now held, including those single sign-on provisioning gives.
+  final List<String> roles;
+  /// The organisation needs another sign-in first: its single sign-on, or (a
+  /// personal session) the person's passkey. A personal session stays on the
+  /// person's own side.
+  final String? signIn;
+  final String tenantId;
+  /// An invitee or personal session became a member's session; the
+  /// organisations it can switch to.
+  final List<String>? tenants;
+  /// The new session token, when the invitee or personal session was a bearer
+  /// token.
+  final String? token;
+
+  factory InvitationAccepted.fromJson(Map<String, dynamic> j) => InvitationAccepted(
+        personal: j['personal'] == null ? null : j['personal'] as bool,
+        roles: (j['roles'] as List).map((e) => e as String).toList(),
+        signIn: j['sign_in'] == null ? null : j['sign_in'] as String,
+        tenantId: j['tenant_id'] as String,
+        tenants: j['tenants'] == null ? null : (j['tenants'] as List).map((e) => e as String).toList(),
+        token: j['token'] == null ? null : j['token'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'personal': ?personal,
+        'roles': roles.map((e) => e).toList(),
+        'sign_in': ?signIn,
+        'tenant_id': tenantId,
+        'tenants': ?tenants?.map((e) => e).toList(),
+        'token': ?token,
       };
 }
 

@@ -20,6 +20,12 @@ final _opens = RegExp(r'^/(chat|approvals|invoices/[^/]+|trade-orders/[^/]+|stor
 String? appPageOf(Uri uri, {String server = taskiemUrl}) {
   final home = Uri.tryParse(server);
   if (home == null || uri.scheme != 'https' || uri.host.toLowerCase() != home.host.toLowerCase()) return null;
+  // The email's link that confirms this phone (a second proof,
+  // docs/spec/taskiem-for-everyone.md §5.4): its token is after the #.
+  if (uri.path == '/second-proof') {
+    final token = Uri.splitQueryString(uri.fragment)['token'];
+    return token != null && RegExp(r'^[A-Za-z0-9_\-]{10,200}$').hasMatch(token) ? '/second-proof?token=$token' : null;
+  }
   if (!_opens.hasMatch(uri.path)) return null;
   final with_ = uri.queryParameters['with'];
   if (uri.path == '/chat' && with_ != null) {

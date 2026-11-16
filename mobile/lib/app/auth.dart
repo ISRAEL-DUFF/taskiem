@@ -85,6 +85,18 @@ class Auth extends ChangeNotifier {
   /// permissions read offline.
   Future<void> _keepMe() async {
     final m = me;
+    // The person's own side keeps no business's chats: what was kept of a
+    // business is not opened on it (the next start asks the server).
+    if (m?.personal == true) {
+      local?.close();
+      local = null;
+      try {
+        await store.keys.write('scope', null);
+      } on Object {
+        // Read again from the server next time.
+      }
+      return;
+    }
     final tenant = m?.tenantId?.toString();
     final user = m?.user?.id;
     if (m == null || tenant == null || user == null) return;
@@ -227,6 +239,55 @@ class Auth extends ChangeNotifier {
   Future<void> signInWithCode(String phone, String code) async {
     final s = await api.chatSigninVerify(body: ChatSigninVerifyRequest(phone: phone, code: code, bearer: true, device: await store.device()));
     await _signedIn(s.token);
+  }
+
+  /// The person's own side (docs/spec/taskiem-for-everyone.md §6, §7): a
+  /// session in no business.
+  bool get personal => me?.personal == true;
+
+  /// The phone way in (§5.1): a 6-digit code to [phone], by WhatsApp where
+  /// the number is on it, else by SMS; [sms] asks for SMS. Answers how it
+  /// went (`whatsapp` or `sms`).
+  Future<String> sendPhoneCode(String phone, {bool sms = false}) async {
+    final r = await api.phoneStart(body: PhoneStartRequest(phone: phone, via: sms ? 'sms' : null));
+    return r.sentVia;
+  }
+
+  /// Checks the code: a number with an account signs in to it (null comes
+  /// back); a new number answers the ticket that makes its account.
+  Future<String?> verifyPhoneCode(String phone, String code) async {
+    final r = await api.phoneVerify(body: PhoneVerifyRequest(phone: phone, code: code, bearer: true, device: await store.device()));
+    if (r.status == 'new') {
+      final ticket = r.ticket;
+      if (ticket == null) throw ApiError(500, {'error': 'Something went wrong. Try again.'});
+      return ticket;
+    }
+    await _signedIn(r.token);
+    return null;
+  }
+
+  /// A personal account on a new number: its name, 18 or over, the terms.
+  Future<void> createPersonal(String ticket, String name) async {
+    final r = await api.phoneCreate(
+      body: PhoneCreateRequest(ticket: ticket, name: name, adult: true, terms: true, bearer: true, device: await store.device()),
+    );
+    await _signedIn(r.token);
+  }
+
+  /// Back to the person's own side, **You** (POST /v1/me/switch).
+  Future<void> switchToYou() async {
+    final s = await api.switchBusiness(body: const SwitchBusinessRequest(personal: true));
+    final restoredBefore = restored;
+    await _signedIn(s.token);
+    restored = restoredBefore;
+  }
+
+  /// Start something (§18): a business ([kind] `business`, a [name] and
+  /// what it does) or workflows (an optional name). The session moves into
+  /// it (POST /v1/me/start, answered with its token).
+  Future<void> startSomething({required String kind, String? name, List<String>? kinds}) async {
+    final r = await api.startSomething(body: StartSomethingRequest(kind: kind, name: name == null || name.isEmpty ? null : name, kinds: kinds));
+    await _signedIn(r.token);
   }
 
   /// Moves this phone's session to another of the person's businesses: the

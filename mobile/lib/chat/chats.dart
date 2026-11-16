@@ -494,9 +494,13 @@ class ChatsScreen extends StatefulWidget {
     this.onOpenAt,
     this.onLinks,
     this.onProfile,
+    this.onSwitch,
   });
 
   final ChatsData data;
+
+  /// The ⋯ menu's Switch: You and the person's other businesses.
+  final VoidCallback? onSwitch;
   final VoidCallback? onMenu;
   final VoidCallback? onFind;
 
@@ -821,6 +825,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
       items: [
         if (widget.onLinks != null) ('Linked businesses', widget.onLinks!),
         if (widget.onProfile != null) ('Your business in Explore', widget.onProfile!),
+        if (widget.onSwitch != null) ('Switch to You or a business', widget.onSwitch!),
         if (widget.onMenu != null) ('Settings', widget.onMenu!),
         if (d.chatTools && p != null) ('Sound for new orders and payments: ${p.sound ? 'on' : 'off'}', () => p.setSound(!p.sound)),
       ],

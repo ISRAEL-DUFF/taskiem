@@ -372,9 +372,14 @@ class Transport {
       }
     }
     if (status >= 200 && status < 300) return json;
-    if (status == 401 && sentWith != null && token == sentWith) onSessionEnded?.call();
+    if (status == 401 && sentWith != null && token == sentWith && !(json is Map && stillSignedIn.any(json.containsKey))) onSessionEnded?.call();
     throw ApiError(status, json is Map<String, dynamic> ? json : {'error': 'The server answered $status.'});
   }
+
+  /// A 401 that asks for another step (a business's sign-in rules on
+  /// switching, a wrong chat PIN as a second proof) while the session goes
+  /// on: it signs nobody out (docs/spec/taskiem-for-everyone.md §5.4).
+  static const stillSignedIn = {'sso_required', 'passkey_required', 'second_proof_required', 'tries_left'};
 
   // Plain http only to a server on this machine or the emulator's host,
   // for development.
