@@ -522,8 +522,9 @@ class TkSmallButton extends StatelessWidget {
       child: TkPress(
         onTap: onPressed ?? () {},
         child: Container(
-          constraints: const BoxConstraints(minHeight: 36),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          // 40 tall, and room above and below words on two lines (as drawn).
+          constraints: const BoxConstraints(minHeight: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             color: primary ? t.primary : (danger ? t.tkDangerBg : t.tkSoft),
             borderRadius: BorderRadius.circular(999),
@@ -534,7 +535,7 @@ class TkSmallButton extends StatelessWidget {
             heightFactor: 1,
             child: () {
               final ink = primary ? t.primaryText : (danger ? t.tkDangerInk : t.text);
-              final words = Text(label, style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: ink));
+              final words = Text(label, textAlign: TextAlign.center, style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: ink));
               if (icon == null) return words;
               return Row(
                 mainAxisSize: MainAxisSize.min,

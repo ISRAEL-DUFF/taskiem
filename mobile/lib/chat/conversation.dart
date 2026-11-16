@@ -1769,6 +1769,8 @@ class _Bubble extends StatelessWidget {
     final card = msg.kind == 'card' ? msg.card : null;
     final inline = card == null && body.isNotEmpty && msg.preview == null && !failed;
     final reacted = (msg.reactions?.isNotEmpty ?? false) && out == null;
+    // A voice note alone: its time ends its row (as drawn).
+    final voiceOnly = msg.attachment?.kind == 'voice' && body.isEmpty && msg.preview == null;
     final stamp = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1848,12 +1850,12 @@ class _Bubble extends StatelessWidget {
                 // (on the baseline, Flutter cannot size it in a bubble sized
                 // to its content).
                 alignment: PlaceholderAlignment.bottom,
-                child: SizedBox(width: mine ? 74 : 52, height: 1),
+                child: SizedBox(width: mine ? 62 : 42, height: 1),
               ),
           ],
         ),
         // White on your own pine bubble in the light.
-        style: tkText(size: 16, lineHeight: 23 / 16, color: mine && TkTheme.of(context).mode == TkMode.light ? const Color(0xFFFFFFFF) : t.text),
+        style: tkText(size: 15, lineHeight: 1.38, color: mine && TkTheme.of(context).mode == TkMode.light ? const Color(0xFFFFFFFF) : t.text),
       ),
     );
     if (fold.folded) {
@@ -1874,7 +1876,7 @@ class _Bubble extends StatelessWidget {
     final bubble = LayoutBuilder(
       builder: (context, box) {
         // `max-width: min(84%, 560px)`; a card's bubble is `min(86%, 420px)` wide.
-        final max = card != null ? (box.maxWidth * 0.86).clamp(0.0, 420.0) : (box.maxWidth * 0.84).clamp(0.0, 560.0);
+        final max = card != null ? (box.maxWidth * 0.86).clamp(0.0, 420.0) : (box.maxWidth * 0.86).clamp(0.0, 560.0);
         return Align(
           alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
           child: ConstrainedBox(
@@ -1944,7 +1946,7 @@ class _Bubble extends StatelessWidget {
                               // Chrome's 22.69 (exact for two lines; a thread
                               // otherwise drifts a pixel every three lines).
                               // `.bubble.has-reactions { padding-bottom: 13px }` more.
-                              padding: EdgeInsets.fromLTRB(12, 8 - _lineDrift, 11.5, 6 - _lineDrift + (reacted ? 13 : 0)),
+                              padding: EdgeInsets.fromLTRB(12, 8 - _lineDrift, 11.5, 7 - _lineDrift),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 mainAxisSize: MainAxisSize.min,
@@ -1955,7 +1957,7 @@ class _Bubble extends StatelessWidget {
                                       style: tkText(size: 12, color: t.muted).copyWith(fontStyle: FontStyle.italic),
                                     ),
                                   if (msg.reply != null) _Quote(reply: msg.reply!, mine: mine, other: other),
-                                  if (msg.attachment != null) AttachmentView(m: msg, files: files, other: other, room: max - 24, local: out?.file),
+                                  if (msg.attachment != null) AttachmentView(m: msg, files: files, other: other, room: max - 24, local: out?.file, stamp: voiceOnly ? stamp : null),
                                   if (body.isNotEmpty) text,
                                   // Conversation.tsx: the invoices, bills and orders it
                                   // names, each as its card, read now.
@@ -1968,7 +1970,7 @@ class _Bubble extends StatelessWidget {
                                         load: () => refs!.auth.api.linkChatCard(link: refs!.link, kind: x.kind, name: x.name),
                                       ),
                                   if (msg.preview != null) _PreviewCard(p: msg.preview!),
-                                  if (!inline)
+                                  if (!inline && !voiceOnly)
                                     Padding(
                                       // `.stamp { margin-top: 1px }`, which collapses
                                       // into an attachment's larger bottom margin.
@@ -1980,7 +1982,7 @@ class _Bubble extends StatelessWidget {
                             ),
                           // `.stamp.inline { position: absolute; right: 9px; bottom: 5px }`
                           // (14 px with reactions under it).
-                          if (inline) Positioned(right: 9, bottom: reacted ? 14 : 5, child: stamp),
+                          if (inline) Positioned(right: 12, bottom: 6, child: stamp),
                           // `.bubble-chevron`, shown while its menu is open.
                           if (menuOpen)
                             Positioned(
@@ -2170,7 +2172,7 @@ class _Quote extends StatelessWidget {
           const SizedBox(height: 1),
           Text(
             line,
-            maxLines: 3,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: tkText(size: 13, color: mine ? t.chatOutMeta : cssMix(t.text, t.muted, 0.75)),
           ),
@@ -2201,8 +2203,9 @@ class _Overhung extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Padding(padding: const EdgeInsets.only(bottom: 11), child: child),
-        Positioned(bottom: -1, left: mine ? null : 6, right: mine ? 6 : null, child: below!),
+        // The chips hang from the bubble's foot, 6 px over it, as drawn.
+        Padding(padding: const EdgeInsets.only(bottom: 18), child: child),
+        Positioned(bottom: 0, left: 10, child: below!),
       ],
     );
   }
@@ -2236,7 +2239,7 @@ class _Reactions extends StatelessWidget {
                   onTap: onReact == null ? null : () => onReact!(r.emoji),
                   child: Container(
                     constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     decoration: BoxDecoration(
                       color: r.mine == true
                           ? Color.alphaBlend(TkLook.of(context).lime.withValues(alpha: 0.22), TkLook.of(context).card)
@@ -2248,11 +2251,10 @@ class _Reactions extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(r.emoji, style: tkText(size: 14, lineHeight: 1)),
-                        if (r.count > 1) ...[
-                          const SizedBox(width: 3),
-                          Text('${r.count}', style: tkText(size: 11.5, weight: 600, lineHeight: 1, color: r.mine == true ? t.tintText : t.muted)),
-                        ],
+                        Text(r.emoji, style: tkText(size: 13, lineHeight: 1)),
+                        // "👍 1", as drawn (docs/spec/mobile-app-look.md, "The chat").
+                        const SizedBox(width: 4),
+                        Text('${r.count}', style: tkText(size: 12, weight: 600, lineHeight: 1, color: r.mine == true ? t.tintText : t.text)),
                       ],
                     ),
                   ),
@@ -2323,18 +2325,14 @@ class TagChip extends StatelessWidget {
                 name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: tkText(size: 15, weight: 600, lineHeight: 1.3, color: t.text),
+                style: tkText(size: 14.5, weight: 600, lineHeight: 1.3, color: t.text),
               ),
             ),
             if (price != null) ...[
-              const SizedBox(width: 4),
+              const SizedBox(width: 5),
+              // The name gives way first; the price keeps up to half the chip.
               Flexible(
-                child: Text(
-                  price,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: tkText(size: 12, weight: 500, lineHeight: 1.3, color: t.muted),
-                ),
+                child: Text(price, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 12, weight: 500, lineHeight: 1.3, color: t.muted)),
               ),
             ],
           ],

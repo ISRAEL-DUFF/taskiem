@@ -36,6 +36,16 @@ Future<bool> Function(String phone) callPhone = (phone) async {
   }
 };
 
+/// Writes a text to [phone] from the phone's messages app (`sms:`); false
+/// when nothing could. A test stands in for it.
+Future<bool> Function(String phone) textPhone = (phone) async {
+  try {
+    return await launchUrl(Uri(scheme: 'sms', path: phone.replaceAll(RegExp(r'[^\d+]'), '')));
+  } on Object {
+    return false;
+  }
+};
+
 /// Writes to [email] from the phone's mail app (`mailto:`); false when
 /// nothing could. A test stands in for it.
 Future<bool> Function(String email) mailTo = (email) async {

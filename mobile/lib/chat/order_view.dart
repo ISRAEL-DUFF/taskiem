@@ -285,7 +285,6 @@ class _DeliveryViewState extends State<DeliveryView> {
     final status = _str(_o['status']);
     final d = _d;
     final c = (d['customer'] as Map?)?.cast<String, dynamic>() ?? const {};
-    final step = deliveryStep[status];
     final area = _str(d['drop_area']);
     final address = _str(c['address']);
     final next = switch (status) {
@@ -384,9 +383,17 @@ class _DeliveryViewState extends State<DeliveryView> {
                         pin,
                         'Open the customer’s map',
                       ),
-                      if (step != null) ...[
+                      if (deliveryStep[status] != null) ...[
                         const SizedBox(height: 14),
-                        TkSteps(steps: [for (final (i, s) in deliverySteps.indexed) (label: s, when: '', done: i <= step)]),
+                        TkSteps(steps: [for (final (i, s) in deliverySteps.indexed) (label: s, when: '', done: i <= deliveryStep[status]!)]),
+                      ],
+                      // The next step in the card, as drawn.
+                      if (widget.canEdit && next != null) ...[
+                        const SizedBox(height: 14),
+                        TkButtonRow([
+                          TkSmallButton(label: next.$2, primary: true, onPressed: _busy || needsPhoto ? null : () => _act(next.$1)),
+                          if (status == 'received') TkSmallButton(label: 'Can’t', onPressed: _busy ? null : () => _act('cant')),
+                        ]),
                       ],
                     ],
                   ),
@@ -402,6 +409,13 @@ class _DeliveryViewState extends State<DeliveryView> {
                           label: 'Call',
                           semantics: 'Call ${phoneWords(phone)}',
                           onTap: () => openOrSay(context, () => callPhone(phone), 'That number could not be called.'),
+                        ),
+                      if (phone.isNotEmpty)
+                        (
+                          icon: 'b-chat',
+                          label: 'Text',
+                          semantics: 'Text ${phoneWords(phone)}',
+                          onTap: () => openOrSay(context, () => textPhone(phone), 'That number could not be texted.'),
                         ),
                     ],
                   ),
@@ -440,11 +454,6 @@ class _DeliveryViewState extends State<DeliveryView> {
             ),
           ),
         ),
-        if (widget.canEdit && next != null)
-          _foot(context, [
-            if (status == 'received') TkGhostButton(label: 'Can’t', onTap: _busy ? null : () => _act('cant')),
-            TkCta(label: next.$2, onTap: _busy || needsPhoto ? null : () => _act(next.$1)),
-          ]),
       ],
     );
   }

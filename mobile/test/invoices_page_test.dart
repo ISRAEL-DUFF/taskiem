@@ -207,7 +207,7 @@ void main() {
   testWidgets('an invoice sent again: what was sent, its page to share', (t) async {
     final sent = await open(t, (c) => InvoicePage(auth: c.auth, id: 'INV-0007', follow: false));
     expect(find.bySemanticsLabel('Still due'), findsOneWidget);
-    expect(find.text('Jollof rice tray'), findsOneWidget);
+    expect(find.text('Jollof rice tray × 2'), findsOneWidget);
     expect(find.text('₦30,000'), findsOneWidget);
     expect(find.text('Sent by SMS.'), findsNothing);
     await t.tap(find.bySemanticsLabel('Send again'));

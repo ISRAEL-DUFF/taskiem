@@ -163,19 +163,31 @@ class TkPageScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-              const Spacer(),
-              if (description != null)
-                TkHeadButton(
-                  icon: 'info',
-                  label: 'About this page',
-                  onTap: () => showTkModal<void>(
-                    context,
-                    title: title,
-                    builder: (context) => Text(description!, style: tkText(size: 15, lineHeight: 1.45, color: TkTheme.tokens(context).text)),
+              // At the head's end, together, 8 apart (as drawn): the page's
+              // about, then its own buttons.
+              const SizedBox(width: 6),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (description != null)
+                        TkHeadButton(
+                          icon: 'info',
+                          label: 'About this page',
+                          onTap: () => showTkModal<void>(
+                            context,
+                            title: title,
+                            builder: (context) => Text(description!, style: tkText(size: 15, lineHeight: 1.45, color: TkTheme.tokens(context).text)),
+                          ),
+                        ),
+                      if (description != null && action != null) const SizedBox(width: 8),
+                      if (action != null) Flexible(child: action!),
+                    ],
                   ),
                 ),
-              // At the head's end: given the spacer's share, set at its right.
-              if (action != null) ...[const SizedBox(width: 6), Expanded(child: Align(alignment: Alignment.centerRight, child: action!))],
+              ),
             ],
           ),
           Padding(

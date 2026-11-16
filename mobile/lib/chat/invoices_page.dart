@@ -338,7 +338,7 @@ class _InvoicesPageState extends State<InvoicesPage> with Polling {
         mainAxisSize: MainAxisSize.min,
         children: [
           TkHeadButton(icon: 'settings', label: 'Invoice settings', onTap: () => _push(context, InvoiceSettingsPage(auth: widget.auth))),
-          if (manage) ...[const SizedBox(width: 2), TkHeadButton(icon: 'b-plus', label: 'New invoice', primary: true, onTap: _new)],
+          if (manage) ...[const SizedBox(width: 8), TkHeadButton(icon: 'b-plus', label: 'New invoice', primary: true, onTap: _new)],
         ],
       ),
       under: TkChips<String>(
@@ -674,14 +674,14 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
                 ],
               ),
               if (_revealed == null && may.reveal) ...[
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+                // As the order's card: the whole width, then the note under it.
+                const SizedBox(height: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     TkSmallButton(
                       label: 'Show customer details',
+                      icon: 'b-eye',
                       onPressed: _busy
                           ? null
                           : () => _run(() async {
@@ -689,7 +689,8 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
                               if (mounted) setState(() => _revealed = _map(_map(r['invoice'])['customer']));
                             }, ''),
                     ),
-                    Text('Showing them is recorded in the audit log.', style: tkHint(t)),
+                    const SizedBox(height: 6),
+                    Text('Showing them is recorded in the audit log.', textAlign: TextAlign.center, style: tkText(size: 12, color: t.muted)),
                   ],
                 ),
               ],
@@ -757,51 +758,29 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
             if (_voidError != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_voidError!)),
           ],
         ),
-      TkPageCard(
+      // As drawn: "Ankara fabric × 2 … ₦36,000" on a card, the total large.
+      TkSection(
         title: 'What it is for',
         children: [
           if (lines.isEmpty)
-            _text(t, 'No items.', hint: true)
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: _text(t, 'No items.', hint: true))
           else
-            for (final l in lines)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: MergeSemantics(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _text(t, _str(l['description'])),
-                            Text(
-                              '${l['quantity'] ?? 1}${_str(l['kind']).isEmpty ? ' × ${naira(_int(l['unit_kobo']))}' : ''}${lineNote(l).isNotEmpty ? ' · ${lineNote(l)}' : ''}',
-                              style: tkHint(t),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(naira(((l['quantity'] as num? ?? 1) * _int(l['unit_kobo'])).round()), style: tkText(size: 15, weight: 600, color: t.text)),
-                    ],
+            TkBill(
+              lines: [
+                for (final l in lines)
+                  (
+                    name: '${_str(l['description'])}${_str(l['kind']).isEmpty && (l['quantity'] as num? ?? 1) != 1 ? ' × ${_qty(l['quantity'])}' : ''}',
+                    sub: lineNote(l),
+                    under: null,
+                    amount: naira(((l['quantity'] as num? ?? 1) * _int(l['unit_kobo'])).round()),
                   ),
-                ),
-              ),
-          Container(height: 1, color: t.border),
-          const SizedBox(height: 10),
-          MergeSemantics(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text('Total', style: tkText(size: 15, weight: 700, color: t.text)),
-                ),
-                Text(naira(_int(x['total_kobo'])), style: tkDisplay(size: 19, letterSpacing: -0.4, color: t.text)),
               ],
+              total: naira(_int(x['total_kobo'])),
             ),
-          ),
         ],
       ),
+      // The payments under what it is for (as drawn).
+      TkPageCard(title: 'Payments', children: [_payments(t, x, may.undo)]),
       if (may.amend) _Amend(key: ValueKey('amend $number'), auth: _auth, invoice: x, onDone: _load),
       TkPageCard(
         title: 'Details',
@@ -828,7 +807,6 @@ class _InvoicePageState extends State<InvoicePage> with Polling {
         ],
       ),
       if (x['status'] != 'draft') CustomerMatching(key: ValueKey('money $number'), auth: _auth, invoice: x),
-      TkPageCard(title: 'Payments', children: [_payments(t, x, may.undo)]),
     ];
   }
 
@@ -2070,4 +2048,10 @@ class _InvoiceSettingsPageState extends State<InvoiceSettingsPage> {
       ],
     );
   }
+}
+
+/// A quantity as written: 2, or 1.5.
+String _qty(Object? q) {
+  final n = q as num? ?? 1;
+  return n == n.roundToDouble() ? '${n.toInt()}' : '$n';
 }

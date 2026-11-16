@@ -285,7 +285,8 @@ class TkChips<T> extends StatelessWidget {
     final look = TkLook.of(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
     // As a phone's segmented switch: a soft track, the one chosen on a card
-    // of its own; wider than the screen, it scrolls sideways.
+    // of its own, each as wide as its words from the left (`.seg.sc`, as
+    // drawn); wider than the screen, it scrolls sideways.
     return Semantics(
       container: true,
       label: label,
@@ -305,7 +306,6 @@ class TkChips<T> extends StatelessWidget {
               child: ConstrainedBox(
                 constraints: BoxConstraints(minWidth: box.maxWidth - 4),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     for (final (v, words) in chips)
                       TapArea(
@@ -322,14 +322,14 @@ class TkChips<T> extends StatelessWidget {
                               duration: _still(context) ? Duration.zero : const Duration(milliseconds: 200),
                               curve: Curves.easeOut,
                               constraints: const BoxConstraints(minHeight: 34),
-                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
                                 color: v == on ? (dark ? const Color(0xFF3A3B3A) : look.card) : const Color(0x00000000),
                                 borderRadius: BorderRadius.circular(10),
                                 boxShadow: v == on && !dark ? const [BoxShadow(color: Color(0x1F000000), blurRadius: 3, offset: Offset(0, 1))] : null,
                               ),
-                              child: Text(words, style: tkText(size: 13.5, weight: 600, color: t.text)),
+                              child: Text(words, style: tkText(size: 13, weight: 600, color: t.text)),
                             ),
                           ),
                         ),
@@ -799,7 +799,8 @@ class TkListRow extends StatelessWidget {
                     ),
                   ),
                 ],
-                if (onTap != null && amount == null && status == null) ...[
+                // A row that opens has its chevron, after its amount too (as drawn).
+                if (onTap != null && status == null) ...[
                   const SizedBox(width: 6),
                   ExcludeSemantics(child: TkIcon('chevron', size: 16, color: t.muted.withValues(alpha: 0.6))),
                 ],

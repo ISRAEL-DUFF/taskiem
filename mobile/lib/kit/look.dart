@@ -76,18 +76,19 @@ class TkEyebrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    // The label takes what the trailing words leave; they keep their own
+    // width, up to two fifths of the screen ("LEAKS   2 open", as drawn).
+    // (No LayoutBuilder: tiles in a row are measured for their height.)
     return Row(
       children: [
         if (icon != null) ...[ExcludeSemantics(child: TkIcon(icon!, size: 15, stroke: 2.4, color: color)), const SizedBox(width: 6)],
-        // The label first: three parts of the room to the trailing words' two.
         Expanded(
-          flex: 3,
           child: Text(label.toUpperCase(), semanticsLabel: label, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 11.5, weight: 700, lineHeight: 1.3, letterSpacing: 0.4, color: color)),
         ),
         if (trailing != null) ...[
           const SizedBox(width: 6),
-          Flexible(
-            flex: 2,
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.4),
             child: Text(trailing!, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.end, style: tkText(size: 12, weight: 500, lineHeight: 1.3, color: t.muted)),
           ),
         ],
@@ -518,7 +519,11 @@ class TkFlow extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     child: Text('${stages[i].count}', maxLines: 1, style: tkFigure(context, size: 30, color: stages[i].count == 0 ? t.muted : stages[i].ink)),
                   ),
-                  Text(stages[i].label, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12, weight: 600, lineHeight: 1.25, color: t.muted)),
+                  // One word is never broken ("Confirme-d"): it is made a little smaller.
+                  if (!stages[i].label.contains(' '))
+                    FittedBox(fit: BoxFit.scaleDown, child: Text(stages[i].label, maxLines: 1, style: tkText(size: 12, weight: 600, lineHeight: 1.25, color: t.muted)))
+                  else
+                    Text(stages[i].label, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12, weight: 600, lineHeight: 1.25, color: t.muted)),
                   const SizedBox(height: 6),
                   SizedBox(
                     height: 7,

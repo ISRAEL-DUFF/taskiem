@@ -454,6 +454,17 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
           ),
         TkHighlights(
           tiles: [
+            // Leaks first, then what is to match (as drawn).
+            TkHighlight(
+              label: 'Leaks',
+              icon: 'b-bolt',
+              color: look.redInk,
+              trailing: _int(s?['leaks_open']) > 0 ? '${_int(s?['leaks_open'])} open' : null,
+              value: naira(_int(s?['leaks_open_kobo'])),
+              line: _int(s?['leaks_open']) > 0 ? (_int(s?['recovered_kobo']) > 0 ? 'at risk · ${naira(_int(s?['recovered_kobo']))} back' : 'at risk') : 'None open',
+              semanticsLabel: _int(s?['leaks_open']) > 0 ? 'Leaks, ${_int(s?['leaks_open'])} open' : 'Leaks, none open',
+              onTap: () => _push(context, MoneyLeaksPage(auth: widget.auth)),
+            ),
             TkHighlight(
               label: 'To match',
               icon: 'b-check',
@@ -463,16 +474,6 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
               line: _waiting.isEmpty ? 'Nothing to match' : (_waiting.length == 1 ? '1 payment not matched' : '${_waiting.length} payments not matched'),
               semanticsLabel: _waiting.isEmpty ? 'Match payments, none waiting' : 'Match payments, ${_waiting.length} waiting',
               onTap: () => _push(context, InvoiceMatchPage(auth: widget.auth)),
-            ),
-            TkHighlight(
-              label: 'Leaks',
-              icon: 'b-bolt',
-              color: look.redInk,
-              trailing: _int(s?['leaks_open']) > 0 ? '${_int(s?['leaks_open'])} open' : null,
-              value: naira(_int(s?['leaks_open_kobo'])),
-              line: _int(s?['leaks_open']) > 0 ? 'At risk. Recovered so far: ${naira(_int(s?['recovered_kobo']))}' : 'None open',
-              semanticsLabel: _int(s?['leaks_open']) > 0 ? 'Leaks, ${_int(s?['leaks_open'])} open' : 'Leaks, none open',
-              onTap: () => _push(context, MoneyLeaksPage(auth: widget.auth)),
             ),
             if (s != null && _int(s['in_settled_kobo']) > 0 && channels.any((c) => _int(c['in_settled_kobo']) > 0))
               () {

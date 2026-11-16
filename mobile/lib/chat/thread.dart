@@ -5,6 +5,8 @@
 // under it; where the unread begin; the round button over the corner; the
 // view placed on opening and following what comes only at the bottom).
 
+import 'dart:async';
+
 import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/rendering.dart' show RenderDecoratedBox;
 import 'package:flutter/services.dart' show HapticFeedback;
@@ -391,6 +393,12 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   /// The day chip held at the top while scrolling: its own listener, so a
   /// frame of scrolling redraws the chip, not every message.
   final _stuck = ValueNotifier<({String label, double top})?>(null);
+
+  /// The held day shows while the thread moves and fades a moment after it
+  /// stops: at rest the day is in its place, as drawn
+  /// (docs/spec/mobile-app-look.md, "The chat").
+  final _moving = ValueNotifier<bool>(false);
+  Timer? _rest;
   bool _loadingOlder = false;
   final _focusKey = GlobalKey();
 
@@ -422,6 +430,8 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
   void dispose() {
     _flash.dispose();
     _stuck.dispose();
+    _rest?.cancel();
+    _moving.dispose();
     _jump.dispose();
     scroll.dispose();
     super.dispose();
@@ -523,6 +533,11 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
     _atEnd = end;
     final away = !near;
     final stuck = _sticky();
+    if (stuck != null && (stuck.label != _stuck.value?.label || stuck.top != _stuck.value?.top)) {
+      _moving.value = true;
+      _rest?.cancel();
+      _rest = Timer(const Duration(milliseconds: 1200), () => _moving.value = false);
+    }
     _stuck.value = stuck;
     if (away != _away || (!away && _newCount > 0)) _jump.value = (away: away, count: away ? _newCount : 0);
   }
@@ -633,9 +648,9 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
           prev = null;
           group.add(
             Center(
-              child: ValueListenableBuilder(
-                valueListenable: _stuck,
-                builder: (context, stuck, chip) => Opacity(opacity: stuck?.label == label ? 0 : 1, child: chip),
+              child: ListenableBuilder(
+                listenable: Listenable.merge([_stuck, _moving]),
+                builder: (context, chip) => Opacity(opacity: _stuck.value?.label == label && _moving.value ? 0 : 1, child: chip),
                 child: DayChip(label, chipKey: _chipKeys.putIfAbsent(label, GlobalKey.new)),
               ),
             ),
@@ -703,7 +718,18 @@ class ThreadViewState<T> extends State<ThreadView<T>> with SingleTickerProviderS
                   ? const SizedBox.shrink()
                   : Stack(
                       children: [
-                        Positioned(top: stuck.top, left: 0, right: 0, child: Center(child: DayChip(stuck.label, margin: false))),
+                        Positioned(
+                          top: stuck.top,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: ValueListenableBuilder(
+                              valueListenable: _moving,
+                              builder: (context, moving, chip) => AnimatedOpacity(opacity: moving ? 1 : 0, duration: const Duration(milliseconds: 200), child: chip),
+                              child: DayChip(stuck.label, margin: false),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
             ),

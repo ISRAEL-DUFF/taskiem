@@ -266,7 +266,7 @@ class _PhotoView extends StatelessWidget {
 
 /// The attachment in its bubble.
 class AttachmentView extends StatelessWidget {
-  const AttachmentView({super.key, required this.m, required this.files, required this.other, required this.room, this.local});
+  const AttachmentView({super.key, required this.m, required this.files, required this.other, required this.room, this.local, this.stamp});
 
   final LinkMessage m;
 
@@ -278,6 +278,9 @@ class AttachmentView extends StatelessWidget {
 
   /// The width the bubble's content may take.
   final double room;
+
+  /// A voice note's time and ticks, at the end of its row (as drawn).
+  final Widget? stamp;
 
   @override
   Widget build(BuildContext context) {
@@ -344,7 +347,7 @@ class AttachmentView extends StatelessWidget {
       case 'voice':
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
-          child: VoicePlayer(m: m, files: files, label: m.mine ? 'Your voice note' : 'Voice note from $other', width: room < 260 ? room : 260),
+          child: VoicePlayer(m: m, files: files, label: m.mine ? 'Your voice note' : 'Voice note from $other', width: room, trailing: stamp),
         );
       default:
         return _fileRow(t, a, onTap: (from) => _open(context, a, from));
@@ -448,11 +451,14 @@ class _LocalPhotoState extends State<_LocalPhoto> {
 
 /// A voice note: play, its bars filling as it plays, and how long it is.
 class VoicePlayer extends StatefulWidget {
-  const VoicePlayer({super.key, required this.m, required this.files, required this.label, this.width = 260});
+  const VoicePlayer({super.key, required this.m, required this.files, required this.label, this.width = 260, this.trailing});
   final LinkMessage m;
   final ChatFiles files;
   final String label;
   final double width;
+
+  /// The message's time and ticks, last in the row.
+  final Widget? trailing;
 
   @override
   State<VoicePlayer> createState() => _VoicePlayerState();
@@ -528,8 +534,8 @@ class _VoicePlayerState extends State<VoicePlayer> {
           child: Row(
             children: [
               Container(
-                width: 38,
-                height: 38,
+                width: 36,
+                height: 36,
                 decoration: const BoxDecoration(color: Color(0xFFC8F169), shape: BoxShape.circle),
                 alignment: Alignment.center,
                 child: TkIcon(_playing ? 'pause' : 'play', size: 16, fill: true, color: const Color(0xFF0D3B2E)),
@@ -542,7 +548,11 @@ class _VoicePlayerState extends State<VoicePlayer> {
                 ),
               ),
               const SizedBox(width: 10),
-              Text(_clock(_at > Duration.zero ? _at : _length), style: tkText(size: 12, lineHeight: 1, color: t.muted).copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+              Text(_clock(_at > Duration.zero ? _at : _length), style: tkText(size: 12, lineHeight: 1, color: widget.m.mine ? t.chatOutMeta : t.muted).copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+              if (widget.trailing != null) ...[
+                const SizedBox(width: 10),
+                Padding(padding: const EdgeInsets.only(top: 18), child: widget.trailing),
+              ],
             ],
           ),
         ),

@@ -350,9 +350,11 @@ class _TableRowsState extends State<TableRows> {
     final page = _page;
     final title = _str(widget.table['title']).isNotEmpty ? _str(widget.table['title']) : _str(widget.table['name']);
     final textCols = _textCols;
+    final inWords = _in.isEmpty ? 'Everything' : (cols.where((c) => c['name'] == _in).map((c) => _str(c['title']).isEmpty ? _str(c['name']) : _str(c['title'])).firstOrNull ?? _in);
+    // On the table's screen, short, so both sit on one line under the box.
     final Widget searchIn = TkSmallButton(
-      label:
-          'Search in: ${_in.isEmpty ? 'Everything' : (cols.where((c) => c['name'] == _in).map((c) => _str(c['title']).isEmpty ? _str(c['name']) : _str(c['title'])).firstOrNull ?? _in)}',
+      label: widget.cards ? 'In: $inWords' : 'Search in: $inWords',
+      semantics: 'Search in: $inWords',
       onPressed: () async {
         final pick = await showTkModalChoices(
           context,
@@ -371,7 +373,8 @@ class _TableRowsState extends State<TableRows> {
       },
     );
     final Widget sortBtn = TkSmallButton(
-      label: 'Sort: $sortWords',
+      label: widget.cards ? sortWords : 'Sort: $sortWords',
+      semantics: 'Sort: $sortWords',
       onPressed: () async {
         final pick = await showTkModalChoices(
           context,
@@ -890,7 +893,7 @@ class _TablesPageState extends State<TablesPage> {
               for (final (i, x) in list.indexed)
                 (
                   name: _str(x['title']).isNotEmpty ? _str(x['title']) : _str(x['name']),
-                  icon: isKept(x) ? 'b-money' : const ['b-people', 'b-box', 'b-bars', 'b-check', 'b-receipt'][i % 5],
+                  icon: isKept(x) ? 'b-money' : const ['b-group', 'b-box', 'b-table', 'b-checkbox', 'b-receipt'][i % 5],
                   color: isKept(x) ? look.blue : colours[i % colours.length],
                   rows: x['row_count'] == null ? '' : '${numberWords(x['row_count'] as num)} ${x['row_count'] == 1 ? 'row' : 'rows'}',
                   line: [if (_str(x['description']).isNotEmpty) _str(x['description']), if (isKept(x)) 'Kept by Taskiem · read only'].join(' · '),
@@ -931,27 +934,27 @@ class _TableTiles extends StatelessWidget {
           scale: 0.97,
           child: Container(
             padding: const EdgeInsets.all(14),
-            constraints: const BoxConstraints(minHeight: 118),
+            constraints: const BoxConstraints(minHeight: 140),
             decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
             child: MergeSemantics(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   TkSquare(x.icon, color: x.color, size: 30),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 16),
                   Text(
                     x.name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: tkDisplay(size: 17, letterSpacing: -0.3, color: t.text),
                   ),
-                  if (x.rows.isNotEmpty) Text(x.rows, style: tkText(size: 12.5, weight: 600, lineHeight: 1.35, color: t.text)),
+                  if (x.rows.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 2), child: Text(x.rows, style: tkText(size: 13, weight: 600, lineHeight: 1.35, color: t.text))),
                   if (x.line.isNotEmpty)
                     Text(
                       x.line,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: tkText(size: 12, lineHeight: 1.35, color: t.muted),
+                      style: tkText(size: 13, lineHeight: 1.35, color: t.muted),
                     ),
                 ],
               ),

@@ -376,7 +376,7 @@ class _TradeOrderPageState extends State<TradeOrderPage> {
               ),
       ),
       TkSection(
-        title: 'What $buyer ordered',
+        title: 'What they ordered',
         children: [_bill(t, _maps(o['lines']), short: (o['short'] as List?)?.whereType<num>().toList())],
       ),
       if (manage && status == 'received' && _own.isNotEmpty) _OwnItems(auth: _auth, order: o, own: _own, onDone: _load),
