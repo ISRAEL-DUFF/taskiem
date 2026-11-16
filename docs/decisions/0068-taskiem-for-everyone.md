@@ -1,6 +1,6 @@
 # 0068 — Taskiem for everyone: a chat app for people and the businesses they deal with
 
-Date: 2026-11-16 · Status: **Proposed** · Plan: [Taskiem for everyone](../spec/taskiem-for-everyone.md)
+Date: 2026-11-16 (revised the same day after a review of the plan's gaps) · Status: **Proposed** · Plan: [Taskiem for everyone](../spec/taskiem-for-everyone.md)
 
 ## Context
 
@@ -24,14 +24,17 @@ The founder's direction: make the Taskiem app a full app for customers too, and 
    - Anyone may make a personal account with a phone number, proved by a code sent by WhatsApp or SMS, and use the app and the web chat without belonging to a business.
    - Every account is a person's. Running a business, or working in one, is something a person does in Taskiem, not what they must be to use it.
    - Email and password, passkeys and single sign-on remain for those who have them.
+   - **A phone code opens only the person's own side.** Entering a business still follows that business's sign-in rules: single sign-on where required, passkeys for passkey-only people and for administrators where the business requires them, and step-up for money.
+   - **A phone code is never enough to reach what an earlier holder of the number built,** since numbers are reissued. An account in any business needs a second proof (a passkey, a link to its email, or the chat PIN) the first time it signs in by phone on a new device, and reaches only its own side without one. A personal account unused for 180 days is asked whether the number is new to its holder before anything is shown.
    - The minimum age is **18**, confirmed when the account is made, with no parental-consent flow.
 2. **A person's own side is separate from every business.** On their own side (**You**), a person has their chats with businesses, their orders and bookings, Discover and their settings. No business sees what a person does with other businesses, or later with other people, unless the person sends it that business. What a person does inside a business stays the business's, as today.
 3. **Customers chat with businesses in the app, or in the phone's browser with nothing to install.**
+   - A person reaches a business's data only through one audited **customer door** (`taskiem_customer_enter`), one business at a time, for a fixed list: the published catalogue, free times, their own orders, bookings and invoices with it, placing and paying, and their conversation. It is narrower than the door between linked businesses.
    - Each business is its own conversation, under its own name and photo, with its own notifications.
    - Shopping, booking and paying are tools and cards in the conversation. There is no 24-hour window and no template.
    - A business's chat link opens the app when installed, else the browser.
    - A browser chat that cannot be notified is told by SMS when the business answers, at most once per conversation per hour.
-4. **A customer conversation has two copies,** the business's and the person's, as conversations between linked businesses do ([0061](0061-business-links.md)). Each side keeps, archives and deletes its own. The business's copy is its customer thread, sealed under the customer's subject and kept under the business's retention.
+4. **A customer conversation has two copies,** the business's and the person's, as conversations between linked businesses do ([0061](0061-business-links.md)). Each side keeps, archives and deletes its own, photos, voice notes and files included. The business's copy is its customer thread, sealed under the customer's subject and kept under the business's retention. **Blocking deletes nothing:** it stops new messages, and the business's copy stays for disputes until its retention ends or the person asks that business for erasure. STOP on a business's own WhatsApp number keeps today's meaning there.
 5. **A business may write first to anyone who has chatted or ordered with it, for any reason,** in two kinds of message:
    - **About something of the customer's** (an order, a booking, an invoice, a delivery): no limit beyond the ordinary sending limits.
    - **Anything else** (an offer, news, a broadcast): marked as an offer, at most 2 per customer per week, and mutable by the customer in one tap.
@@ -40,7 +43,7 @@ The founder's direction: make the Taskiem app a full app for customers too, and 
 6. **Businesses with their own WhatsApp number keep it.** A customer who uses both WhatsApp and the app with the same verified phone is **one customer, in one thread**. Each message is marked with where it came from, and replies go where the customer last wrote. Matching needs the phone proved on both sides; a typed phone matches nothing.
 7. **Taskiem's shared WhatsApp number and Telegram bot stay one-way for outsiders.** 0039 stands there: updates, STOP and START. They gain a link to chat with the business in the app or the browser.
 8. **Discover is the public's way to find businesses,** kept apart from Explore (businesses finding businesses). A business with a published storefront is listed by default and can turn it off. Every other business is listed only when it turns Discover on.
-9. **A person's own orders across businesses** are theirs to see. This covers orders made while signed in, and storefront orders made with the same verified phone once the person confirms them. They are read through one narrow function that returns a verified phone's own orders and nothing else. It is the only read across businesses this decision adds.
+9. **A person's own orders across businesses** are theirs to see. This covers orders made while signed in, and storefront orders made with the same verified phone once the person confirms them. A phone's personal-data subject differs in every business, so they are found through a **phone index**: a hash of the phone made with a platform key, with the business and the order, written with each order and filled once for existing ones. It is read through one narrow function that returns a verified phone's own orders, a few columns each, and nothing else. It is the only read across businesses this decision adds.
 10. **Starting something is deliberate: a business, or workflows.**
     - **Start something** asks "A business, or workflows?", the same at every door: the web, the app, WhatsApp and Telegram sign-up, and Slack.
     - **Workflows** makes a *workflows workspace*: a tenant with every business area off, no business questions, never listed in Discover or Explore, opening on the workflows. Turning an area on makes it a business, with nothing moved or lost.
@@ -74,13 +77,17 @@ The founder's direction: make the Taskiem app a full app for customers too, and 
   - The invitee-only session becomes an ordinary personal session.
   - Phone codes go by WhatsApp or SMS, with limits per number, device and IP.
 - **New data:**
-  - the person's copies of conversations;
+  - the person's copies of conversations, media included;
+  - the customer door's functions, and storefront orders of the kind `app`;
+  - the phone index;
+  - devices per account and second proofs;
   - a line and a person on customer threads;
   - chat codes per business;
   - Discover's listings and search;
   - `tenants.kind` (`business` or `workflows`);
   - the one read of a verified phone's orders across businesses.
 - **Taskiem becomes responsible for consumers' personal data,** not only businesses'. The terms, the privacy notice and the minimum age are reviewed by a lawyer before the first stage ships.
+- **Open, for the legal review and the founder** ([plan §24](../spec/taskiem-for-everyone.md#24-still-open-from-the-review-of-gaps-2026-11-16)): whether offers need customers' opt-in, who pays for codes and SMS, and how digital goods are kept out of the iPhone app's payments.
 - **Safety at the scale of the public:**
   - reporting on every conversation and listing, which Apple and Google require of apps where people message each other;
   - limits on new conversations and on offers;
