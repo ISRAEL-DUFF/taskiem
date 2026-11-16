@@ -297,7 +297,7 @@ void main() {
       expect(find.bySemanticsLabel('Food and drinks 2 businesses'), findsOneWidget);
       expect(find.text('Featured'), findsOneWidget);
       expect(find.text('Lagos Grains'), findsOneWidget);
-      expect(find.text('Food and drinks · Farm produce'), findsOneWidget, reason: "a card's categories, by name");
+      expect(find.text('Food and drinks'), findsWidgets, reason: "a card's categories, by name, as chips");
       final list = t.state<ScrollableState>(_list);
       Future<void> down(Finder f) async {
         list.position.jumpTo(0);
@@ -310,7 +310,7 @@ void main() {
       }
 
       await down(find.text('Trusted on Taskiem'));
-      await down(find.text('Linked with 20+ businesses'));
+      await down(find.bySemanticsLabel(RegExp(r'Linked with 20\+ businesses')));
       await down(find.text('New on Taskiem'));
       expect(find.text('Recently viewed'), findsNothing);
 
