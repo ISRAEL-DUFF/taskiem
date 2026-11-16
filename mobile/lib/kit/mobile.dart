@@ -21,6 +21,7 @@ import 'icon.dart';
 import 'kit.dart';
 import 'look.dart' show tkTabular;
 import 'list.dart' show TkLoading;
+import 'sheet.dart' show TkCta, TkGhostButton, TkSheet, TkSheetFoot;
 import 'tap_area.dart';
 import 'forms.dart' show TkSwitch;
 
@@ -938,5 +939,51 @@ class TkSkeleton extends StatelessWidget {
   Widget build(BuildContext context) => TkPanel(
     padding: const EdgeInsets.symmetric(horizontal: 6),
     children: [TkLoading(rows: rows, label: label)],
+  );
+}
+
+/// A form over a page (docs/spec/mobile-app-look.md, "The remaining
+/// screens"): the sheet's title large, what it is about over it, the form
+/// on the ground, and its buttons at the foot: the main one last, wide.
+class TkFormSheet extends StatelessWidget {
+  const TkFormSheet({super.key, required this.title, this.crumb, required this.children, required this.action, this.onAction, this.second, this.onSecond, this.secondDanger = false, this.overlay});
+  final String title;
+  final String? crumb;
+  final List<Widget> children;
+
+  /// The main button.
+  final String action;
+  final VoidCallback? onAction;
+
+  /// A quieter one beside it (Cancel booking).
+  final String? second;
+  final VoidCallback? onSecond;
+  final bool secondDanger;
+
+  /// The saved tick, over everything.
+  final Widget? overlay;
+
+  @override
+  Widget build(BuildContext context) => TkAppLook(
+    child: TkSheet(
+      title: title,
+      crumb: crumb,
+      overlay: overlay,
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        children: [
+          for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 12), children[i]],
+        ],
+      ),
+      footer: TkSheetFoot(
+        bare: true,
+        child: Row(
+          children: [
+            if (second != null) ...[Expanded(child: TkGhostButton(label: second!, danger: secondDanger, onTap: onSecond)), const SizedBox(width: 10)],
+            Expanded(child: TkCta(label: action, onTap: onAction)),
+          ],
+        ),
+      ),
+    ),
   );
 }

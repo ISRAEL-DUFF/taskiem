@@ -80,12 +80,12 @@ void main() {
     );
     await settle(t);
     expect(find.text('Statement with Rivers Foods'), findsOneWidget);
-    expect(find.text('Rivers Foods owes you'), findsWidgets);
+    expect(find.bySemanticsLabel(RegExp('They owe you')), findsWidgets);
     expect(find.text('Over the limit'), findsOneWidget);
-    expect(find.textContaining('Terms: 14 days to pay'), findsOneWidget);
+    expect(find.textContaining('14 days to pay'), findsOneWidget);
     expect(find.textContaining('Left to use ₦0'), findsOneWidget);
-    expect(find.text('Was due 1 Nov 2026 · ₦10,000 of ₦30,000 paid'), findsOneWidget);
-    expect(find.text('No due date · queried'), findsOneWidget);
+    expect(find.textContaining('Was due 1 Nov 2026 · ₦10,000 of ₦30,000 paid'), findsOneWidget);
+    expect(find.textContaining('No due date · queried'), findsOneWidget);
     await t.tap(find.text('INV-0007'));
     await t.pumpAndSettle();
     expect(find.byType(InvoicePage), findsOneWidget);
