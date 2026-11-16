@@ -36,6 +36,7 @@ var areaPaths = []struct {
 	{"/v1/storefront/orders", areas.Orders},
 	{"/v1/trade-orders", areas.Orders},
 	{"/v1/customer-chats", areas.Orders},
+	{"/v1/customers", areas.Orders}, // the chat link customers start conversations from (customer_links.go)
 	{"/v1/order-drafts", areas.Orders},
 
 	{"/v1/storefront", areas.Storefront},

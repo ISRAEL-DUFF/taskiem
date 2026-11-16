@@ -67,6 +67,9 @@ func init() {
 		alwaysOn[r] = "the Schools area, which the schools package refuses itself when off"
 	}
 	alwaysOn["POST /v1/forms/{id}/links"] = "links to a form, not business links"
+	alwaysOn["GET /v1/chat-links/{code}"] = "a business's public card for its chat link, read by anyone; whether it takes chats is its own setting"
+	alwaysOn["GET /v1/me/storefront-orders"] = "a person's own orders across businesses, found by their phone, not a business's storefront"
+	alwaysOn["POST /v1/me/storefront-orders/confirm"] = "a person's own orders across businesses, found by their phone, not a business's storefront"
 	alwaysOn["POST /v1/me/chat-link"] = "links a person's own chat account"
 	alwaysOn["POST /v1/me/chat-link/preview"] = "links a person's own chat account"
 	alwaysOn["POST /v1/me/chat-link/refuse"] = "links a person's own chat account"

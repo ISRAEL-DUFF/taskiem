@@ -277,7 +277,11 @@ func (w *Worker) logger() *slog.Logger {
 // for plan allowances (S8) and the tenant's own view.
 func Usage(ctx context.Context, pool *pgxpool.Pool, tenant uuid.UUID, since time.Time) (smsSegments, emails int, err error) {
 	err = db.InTenantTx(ctx, pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT COALESCE(sum(segments) FILTER (WHERE channel = 'sms'), 0), count(*) FILTER (WHERE channel = 'email')
+		// With the sign-in codes sent to its customers by SMS
+		// (customer_message_charges, docs/spec/taskiem-for-everyone.md §15).
+		return tx.QueryRow(ctx, `SELECT COALESCE(sum(segments) FILTER (WHERE channel = 'sms'), 0)
+			  + (SELECT COALESCE(sum(c.segments), 0) FROM customer_message_charges c WHERE c.tenant_id = $1 AND c.channel = 'sms' AND c.created_at >= $2),
+			  count(*) FILTER (WHERE channel = 'email')
 			FROM platform_messages WHERE tenant_id = $1 AND status = 'sent' AND finished_at >= $2`, tenant, since).Scan(&smsSegments, &emails)
 	})
 	return smsSegments, emails, err

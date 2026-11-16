@@ -8,6 +8,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/egress"
 	"github.com/israel-duff/taskiem/engine/invoicing"
+	"github.com/israel-duff/taskiem/engine/phoneindex"
 	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -39,10 +40,18 @@ func storefrontOrders(cfg config, e *engine, log *slog.Logger) (*storefront.Orde
 	}
 	if len(cfg.Messages.HashKey) == 32 {
 		o.Messages = &sender.Queue{Vault: e.vault, HashKey: cfg.Messages.HashKey, Countries: cfg.Messages.Countries, Allowance: e.smsAllowance}
+		// Which phone made each order, across businesses (§13 of
+		// docs/spec/taskiem-for-everyone.md).
+		o.PhoneIndex = newPhoneIndex(cfg, e)
 	} else {
 		log.Warn("TASKIEM_MESSAGE_HASH_KEY is unset: storefront customers get no SMS or email")
 	}
 	return o, nil
+}
+
+// newPhoneIndex is the phone index, keyed with TASKIEM_MESSAGE_HASH_KEY.
+func newPhoneIndex(cfg config, e *engine) *phoneindex.Index {
+	return &phoneindex.Index{Pool: e.pool, Key: cfg.Messages.HashKey, Vault: e.vault, Countries: cfg.Messages.Countries}
 }
 
 // wireOrderTransfers lets storefront orders be paid by bank transfer (N3):

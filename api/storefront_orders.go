@@ -203,6 +203,15 @@ func (s *Server) RunStorefrontOrders(ctx context.Context) error {
 			s.Logger.Error("staff: the job", "err", err)
 		}
 	})
+	// The phone index's one-time fill: orders made before it, a few
+	// businesses at a time (docs/spec/taskiem-for-everyone.md §13).
+	if s.PhoneIndex.Ready() {
+		go every(ctx, 10*time.Minute, func() {
+			if _, err := s.PhoneIndex.Backfill(ctx, 20); err != nil && ctx.Err() == nil {
+				s.Logger.Error("phone index: filling it", "err", err)
+			}
+		})
+	}
 	if s.Orders == nil {
 		<-ctx.Done()
 		return nil

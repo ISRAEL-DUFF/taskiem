@@ -1516,3 +1516,12 @@ user_phones.number
 user_phones.user_id
 user_phones.verified_at
 users.email_verified_at
+customer_chat_codes.code_hash
+customer_chat_codes.replaced_at
+customer_chat_codes.tenant_id
+phone_codes.came_from
+customer_phone_index.order_id
+customer_phone_index.phone_hash
+customer_phone_index.tenant_id
+phone_index_backfill.tenant_id
+user_phones.orders_confirmed_at

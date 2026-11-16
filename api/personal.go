@@ -31,7 +31,9 @@ var personalRoutes = regexp.MustCompile(`^(GET /v1/me|POST /v1/me/terms|GET /v1/
 	`GET /v1/me/invitations|POST /v1/me/invitations/[^/]+/(accept|decline)|POST /v1/auth/logout|` +
 	// A person's chats with businesses (customer_door.go, stage 2).
 	`(GET|POST) /v1/me/chats|(GET|PUT) /v1/me/chats/[^/]+|GET /v1/me/chats/[^/]+/(messages|files/[^/]+|shop|services|services/[^/]+/times|orders|orders/[^/]+/pay)|` +
-	`POST /v1/me/chats/[^/]+/(messages|files|read|typing|block|report|orders|bookings)|DELETE /v1/me/chats/[^/]+/block)$`)
+	`POST /v1/me/chats/[^/]+/(messages|files|read|typing|block|report|orders|bookings)|DELETE /v1/me/chats/[^/]+/block|` +
+
+	`GET /v1/me/storefront-orders|POST /v1/me/storefront-orders/confirm)$`)
 
 func personalAllowed(method, path string) bool {
 	return personalRoutes.MatchString(method + " " + strings.TrimSuffix(path, "/"))

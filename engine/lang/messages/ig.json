@@ -6098,6 +6098,30 @@
     "link.ended_open.invoices_more": {
       "text": "invoices {refs} and {more} more",
       "reviewed": false
+    },
+    "reach.reply_in_app": {
+      "text": "Reply in the Taskiem app: {link}",
+      "reviewed": false
+    },
+    "reach.chat_link": {
+      "text": "To chat with {business}, open {link}",
+      "reviewed": false
+    },
+    "signup.offer_everyone": {
+      "text": "Hello! Taskiem runs your business's errands from this chat: payments, invoices, stock, reminders, your shop page. Do you want to start, for free? If you buy from a business on Taskiem, tap *I'm a customer*. Type *no* for not now.\n\nTo chat in another language, type its name: {languages}.",
+      "reviewed": false
+    },
+    "signup.button_customer": {
+      "text": "I'm a customer",
+      "reviewed": false
+    },
+    "signup.customer": {
+      "text": "To chat with a business, open its Taskiem link, or find it in the Taskiem app: {link}",
+      "reviewed": false
+    },
+    "signup.customer_no_app": {
+      "text": "To chat with a business, open its Taskiem link: the business shares it on its page, its receipts and its messages.",
+      "reviewed": false
     }
   }
 }

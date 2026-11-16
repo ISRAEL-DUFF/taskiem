@@ -822,3 +822,75 @@ Built on branch `stage2-core`, on stage 1 as merged (`ccr-87497aa3-gf060z`): the
 **Left for later.** Push notifications to a person (their side has no push yet; the hook carries what is needed); deleting a chat; the warning on a message asking for a transfer to a personal account (§15); offers paused for businesses muted or blocked far above the norm (§15); counting offers and messages against the business's plan (stream B); the web and app screens.
 
 **Tests.** `TestCustomerDoor` (both copies, sealing, notices, typing, read marks, offers and broadcasts, cards, the shop, an `app` order through the order workflow and its card, pay refused when nothing is due, files and malware, blocks both ways, a report, mute, the closed reply once, Needs you, the owner told once, an area off, the audit entries); `TestCustomerDoorIsolation` (another person's chat, another business's thread, the door and the way back refusing another person, a business with no chat, an action not on the list, a business not in scope, a workflows workspace; through the door only that business's rows and only that person's chat with it; a business session is its person, an API key is refused); `TestCustomerDoorBookingAndLimits` (Book, the booking's card and repeat, a booking offer card, the first week's limits); `engine/media` `TestCheckChatFile`.
+
+
+## As built: stage 2, stream B
+
+Built on branch `stage2-links`, on stage 1 as merged (`ccr-87497aa3-gf060z` at 5fdb3fca): chat links and the storefront's **Chat with us** (§8.2), the phone index (§13), the shared number's new words (§12), the browser chat's SMS (§9) and who pays for codes and that SMS (§15). The conversations, the customer door, offers and blocks are stream A's (migration 00452); this stream's migrations are 00453 and 00454.
+
+**Data.**
+- `00453_chat_links.sql`:
+  - `customer_chat_codes`: one live code per business (a partial unique index), the code kept only as a keyed hash beside the random nonce it is made from (the code is HMAC of the nonce with a key derived from `TASKIEM_MESSAGE_HASH_KEY`, spelt in an alphabet with no look-alikes, `23456789abcdefghjkmnpqrstwxyz`, ten characters), so the owner reads the link back and a copy of the database alone gives no one the codes. A replaced code keeps its row, `replaced_at` set, for 30 days.
+  - `customer_chat_settings`: `takes_chats` (on), `storefront_button` (`whatsapp`, `taskiem` or `both`, the default), `link_in_updates` (null: on exactly when the business has no WhatsApp number of its own).
+  - `customer_chat_notices`: "at most once per …" for the browser's SMS (per conversation per hour) and the answer to an outsider (per business per day), claimed in one statement.
+  - `customer_message_charges`: sign-in codes sent by SMS to people who came through a business's link; `phone_codes.came_from`: the business a code was asked for through.
+  - Definers: `taskiem_chat_code_find` (a code's hash → its business, and `replaced_at` within 30 days; only an active business, never a workflows workspace), `taskiem_reach_business_list` (`taskiem_reach_businesses` with the ids), `taskiem_auth_phone_code_came_from`.
+- `00454_customer_phone_index.sql`:
+  - `customer_phone_index (order_id, tenant_id, phone_hash, created_at)`: no number, name or amount. The order's foreign key deletes its row with it; a trigger on `subject_keys` deletes the rows of an erased customer's orders (in the business's own transaction); a trigger on `storefront_orders.forgotten_at` deletes the row of an order whose customer retention forgot.
+  - `phone_index_backfill` marks the businesses the one-time job finished; `taskiem_phone_index_backfill_due` lists the others, ids only.
+  - `taskiem_customer_phone_orders(person, index key, limit)`: given a person, never a phone, it reads their verified phone from `user_phones`, makes its hash and returns for each indexed order only `reference, state, total_kobo, made_at, business, business_id, waiting`. `waiting` is an order made before the phone was verified on the account and not yet confirmed (`taskiem_customer_phone_orders_confirm`, "These are mine", `user_phones.orders_confirmed_at`, forgotten when the number changes).
+  - The hash is `sha256(index key || 'phone-index:' || E.164)`, where the index key is HMAC(`TASKIEM_MESSAGE_HASH_KEY`, "taskiem phone index"): the database is given that narrowed key, never the platform key, and the hashes match nothing else.
+
+**Engine.**
+- `engine/chatlinks`: `Links` (`CurrentTx`, made the first time; `ReplaceTx`; `Resolve`; `LinkFor`; `URL`), `SettingsTx`/`SaveSettingsTx`, `CardTx` (the business's card: the profile's name, tagline, area and logo over the published storefront's, its hours and whether open now, its shop's address, whether it takes chats; a rejected photo left out), `TakeNoticeTx`, and the browser chat's SMS (`Tell`).
+- `engine/phoneindex`: `Index.WriteTx` (in the order's transaction), `Backfill` (business by business, each order's sealed phone opened in its own business; trade orders and forgotten or erased customers left out), `Orders`, `Confirm`.
+- Storefront orders and bookings (`Orders.record`) and chat orders (`PlaceChatTx`) write the index in their own transaction (`storefront.Orders.PhoneIndex`). Orders between businesses (`trade`) are not indexed.
+
+**Endpoints** (in `api/openapi/openapi.yaml`; the app's in `mobile/api.txt`, regenerated):
+
+| Endpoint | Who | What |
+| --- | --- | --- |
+| `GET /v1/chat-links/{code}` | anyone (60 a minute per address) | The business's card: `name, tagline?, area?, photo?, hours?, open_now?, takes_chats, shop?, code, link, words`. 410 `{gone: true, error: "This link no longer works. …"}` for a code replaced in the last 30 days; 404 for any other |
+| `GET /v1/customers/chat-link` | `storefront.manage` or `order.handle` | The link (made the first time): `code, url, created_at, words` ("Chat with {business} on Taskiem: {link}"), `qr` (where its QR code is), `settings`. 503 without a message hash key |
+| `GET /v1/customers/chat-link/qr` | the same | The link's QR code, SVG or `?format=png` (the storefront's QR code maker) |
+| `POST /v1/customers/chat-link` | `storefront.manage` | **Make a new link**: audited `chat_link.replaced`; a published storefront is published again with it |
+| `PUT /v1/customers/chat-settings` | `storefront.manage` | `{takes_chats?, storefront_button?, link_in_updates?, link_in_updates_default?}`; audited `chat_link.settings`; the storefront is published again when its button or `takes_chats` changes |
+| `GET /v1/me/storefront-orders` | the person (a personal session too) | `{orders: [{reference, state, total_kobo, made_at, business, business_id, waiting}], waiting}`, `?business=` one business's, `?limit=` up to 200 |
+| `POST /v1/me/storefront-orders/confirm` | the person | "These are mine": `{confirmed: true}`; 409 with no phone |
+| `POST /v1/auth/phone/start` | anyone | Gains `chat_code`: the link the person came through |
+| `GET /m/{code}` | anyone | A page with the business's name, photo, hours and open now, **Chat here in your browser** (to `<public URL>/login?next=/m/{code}`) and **Get the Taskiem app** (`TASKIEM_APP_GET_URL`); 410 "This link no longer works", 404. Only where this server serves no web app: where it does, `/m/{code}` is the web app's (the browser chat, a later stream), which reads `GET /v1/chat-links/{code}` |
+
+`/m/*` is in the app's links (`appPaths`), so a chat link opens the app where it is installed. `/v1/customers/*` belongs to the Orders area (`areaPaths`), with customer chats: off, the owner has no link to read or replace.
+
+**The storefront.** Publishing (`publishGated`) passes the chat link and the button to `storefront.PublishWith`: the published model gains `chat_link`; `taskiem` takes WhatsApp's link off the page, `whatsapp` leaves the chat link out, and a business not taking chats offers only WhatsApp. Every look shows **Chat with us** where it shows WhatsApp (the shared contact line too). Replacing the link, or changing the button, publishes a published page again, in its own transaction after the change (a page that cannot be published now keeps its old button; the change stands).
+
+**The shared number and bot (§12).**
+- An update to an outsider ends "Reply in the Taskiem app: {link}" when the business offers it (default on with no number of its own) and takes chats. It is in the message's text, which goes inside WhatsApp's 24 hours and always on Telegram; outside the window `taskiem_update` goes as before, without it. `taskiem_update_chat` (the same words, "Reply in the Taskiem app.", and a **Reply in Taskiem** button opening `/m/{code}`) is in the template library and `docs/whatsapp.md`, and goes in its place only with `TASKIEM_WA_UPDATE_CHAT_TEMPLATE=on`, once Meta approves it.
+- A stranger on the shared number or bot gets `signup.offer_everyone` with **Start my business**, **I use Taskiem** and **I'm a customer** (`su:customer`); "no", "not now" or "no thanks" typed is Not now (`su:no` pressed on an older offer still is). **I'm a customer** answers "To chat with a business, open its Taskiem link, or find it in the Taskiem app: {app link}" (`TASKIEM_APP_GET_URL`), or without an app link where the business shares its link. Slack's offer is unchanged.
+- An outsider writing to the number that sends them updates gets "To chat with {business}, open {link}", one line for each business reaching them that takes chats and has not said so in the last day, within the existing limit (two answers in ten minutes); otherwise the fixed answer, as before. The same on Telegram.
+- New words in `engine/lang/messages` (`reach.reply_in_app`, `reach.chat_link`, `signup.offer_everyone`, `signup.button_customer`, `signup.customer`, `signup.customer_no_app`), the English copied unreviewed into the other languages.
+
+**Who pays (§15).** A code asked for with a `chat_code` that names a business is recorded with it (`phone_codes.came_from`) and counts against it: by WhatsApp as one of its templates (`SendTemplate` with the business, the usage meter), by SMS in `customer_message_charges`, which the SMS allowance and `sender.Usage` now count with `platform_messages`. A code with no link, or an old link, is Taskiem's. The browser chat's SMS goes from the business's own outbox (`sender.Queue`, its allowance).
+
+**For stream A** (the conversations and the customer door):
+- `s.ChatLinks.Resolve(ctx, code) (uuid.UUID, error)`, behind `chatlinks.Resolver`: `ErrNotFound`, `ErrReplaced` (say "This link no longer works"), `ErrOff`. A business that set `takes_chats` off should not be offered a new conversation: `chatlinks.SettingsTx`.
+- `s.tellAnswered(ctx, chatlinks.Answer{Tenant, Conversation, Person})` after a business's reply is kept, outside its transaction (`chatlinks.Teller`, `s.Answered`; `chatlinks.NoTell` tells no one). It pushes through `chatlinks.Pusher` where one is set, else texts once per conversation per hour. There are no person-scoped browser push subscriptions yet: `Tell.Push` is nil, so every answer to a person with a verified phone goes by SMS; give `Tell` a `Pusher` when the browser chat registers one.
+- `s.PhoneIndex.WriteTx(ctx, tx, tenant, order, phone)` in the transaction that makes an `app` order (`storefront.PhoneIndexer`).
+- `chatlinks.TakeNoticeTx` for any other "once per …".
+
+**Deviations.**
+- The narrow function also returns `business_id` (to open "Chat with {business} about this order") and `waiting`, which is not an order's column but the confirmation's; nothing else.
+- The function is given a key: the narrowed index key, not the platform key, so that it, not its caller, makes the hash of the person's own phone.
+- The storefront's button is a chat setting (`customer_chat_settings.storefront_button`), not a field of the storefront's card, so it sits with the link and its other settings; the page takes it at publishing.
+- `GET /v1/me/storefront-orders` returns every order, the waiting ones marked, rather than leaving the waiting ones out until confirmed: "These are mine" is asked on that list.
+- The chat link's page is served by the API only where it serves no web app; elsewhere it is the web app's.
+- Codes counted against a business by SMS are kept in their own table, not `platform_messages` (they go straight to the provider, outside the outbox, as stage 1 sends them).
+
+**Tests.** `engine/chatlinks` (`TestCodesHaveNoLookAlikes`: 200 businesses, every code ten characters of the alphabet, none twice; `TestLinkLifecycle`: one live code, only its hash kept, the old code `ErrReplaced` at 29 days and gone at 31, cleared by a later new link, workspaces and suspended businesses resolve to nothing, one business never reads another's codes; `TestLinkMadeOnceAtOnce`; `TestNoticesOncePerPeriod`; `TestSettings`; `TestTellAnswered`: one SMS per conversation per hour, each conversation its own, a push instead of the SMS, nobody without a phone). `engine/phoneindex` (`TestBackfill`, `TestOrdersOfAPerson`: only the person's own verified phone, only the listed columns, nothing under another key or for a disabled account; `TestTheseAreMine`). `engine/storefront` `TestOrdersWritePhoneIndex` (written with a storefront order and a chat order; removed at retention, on erasure and when the order is deleted). `engine/publicweb` `TestStorefrontChatButton` (every look, both, alone, none). `api`: `TestChatLinks`, `TestPhoneCodeThroughChatLink`, `TestMyStorefrontOrders`, `TestSharedNumberChatWords` (WhatsApp inside and outside the window, the template behind its flag, turned off, the outsider's answer once a day, Telegram), and `TestChatSignupOnWhatsApp` for the three buttons.
+
+**Left over.**
+- The web's `/m/{code}` (the browser chat and its page) and the app's screens: Tools > Customers > Your chat link, Settings, **Chat with us** on You, "These are mine".
+- Meta's approval of `taskiem_update_chat`, then `TASKIEM_WA_UPDATE_CHAT_TEMPLATE=on`; `TASKIEM_APP_GET_URL` set where the app is listed.
+- Push to a person's browser for the browser chat (a `chatlinks.Pusher`).
+- The full Orders list on You (stage 3); re-making the index when a person changes phone is not needed (it is keyed by the order's phone, and the function reads the person's phone now), but orders made with the old number then stop being listed.
+- The operator dashboard's code costs by country (§15).

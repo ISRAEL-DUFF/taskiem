@@ -680,6 +680,42 @@ class TaskiemApi {
     final j = await _t.send('DELETE', '/v1/me/push', body: body.toJson());
     return PushDevices.fromJson(j as Map<String, dynamic>);
   }
+
+  /// A business's card, by its chat link (`GET /v1/chat-links/{code}`)
+  Future<ChatLinkCard> getChatLinkCard({required String code}) async {
+    final j = await _t.send('GET', '/v1/chat-links/${Uri.encodeComponent(code)}');
+    return ChatLinkCard.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The business's chat link (`GET /v1/customers/chat-link`)
+  Future<ChatLink> getChatLink() async {
+    final j = await _t.send('GET', '/v1/customers/chat-link');
+    return ChatLink.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a new chat link (`POST /v1/customers/chat-link`)
+  Future<ChatLink> newChatLink() async {
+    final j = await _t.send('POST', '/v1/customers/chat-link');
+    return ChatLink.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change the chat link's settings (`PUT /v1/customers/chat-settings`)
+  Future<ChatSettings> putChatSettings({required PutChatSettingsRequest body}) async {
+    final j = await _t.send('PUT', '/v1/customers/chat-settings', body: body.toJson());
+    return ChatSettings.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your storefront orders, found by your phone (`GET /v1/me/storefront-orders`)
+  Future<MyStorefrontOrdersResponse> myStorefrontOrders({String? business, String? limit}) async {
+    final j = await _t.send('GET', '/v1/me/storefront-orders', query: {'business': ?business, 'limit': ?limit});
+    return MyStorefrontOrdersResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// These are mine (`POST /v1/me/storefront-orders/confirm`)
+  Future<ConfirmStorefrontOrdersResponse> confirmStorefrontOrders() async {
+    final j = await _t.send('POST', '/v1/me/storefront-orders/confirm');
+    return ConfirmStorefrontOrdersResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -1529,19 +1565,25 @@ class StartSomethingResponse {
 }
 
 class PhoneStartRequest {
-  const PhoneStartRequest({required this.phone, this.via});
+  const PhoneStartRequest({this.chatCode, required this.phone, this.via});
 
+  /// The chat link the person came through (taskiem-for-everyone §8.2), when
+  /// they did. The code is then counted against that business's plan (§15),
+  /// and recorded with it; a link that names no business counts against no one.
+  final String? chatCode;
   /// The number, in any usual form; the deployment's default country when it
   /// has none.
   final String phone;
   final String? via;
 
   factory PhoneStartRequest.fromJson(Map<String, dynamic> j) => PhoneStartRequest(
+        chatCode: j['chat_code'] == null ? null : j['chat_code'] as String,
         phone: j['phone'] as String,
         via: j['via'] == null ? null : j['via'] as String,
       );
 
   Map<String, dynamic> toJson() => {
+        'chat_code': ?chatCode,
         'phone': phone,
         'via': ?via,
       };
@@ -6155,5 +6197,193 @@ class DeletePushEndpointRequest {
   Map<String, dynamic> toJson() => {
         'endpoint': ?endpoint,
         'token': ?token,
+      };
+}
+
+class ChatLinkCard {
+  const ChatLinkCard({this.area, required this.code, this.hours, required this.link, required this.name, this.openNow, this.photo, this.shop, this.tagline, required this.takesChats, required this.words});
+
+  final String? area;
+  final String code;
+  final Map<String, dynamic>? hours;
+  final String link;
+  final String name;
+  final bool? openNow;
+  final Map<String, dynamic>? photo;
+  final String? shop;
+  final String? tagline;
+  final bool takesChats;
+  final String words;
+
+  factory ChatLinkCard.fromJson(Map<String, dynamic> j) => ChatLinkCard(
+        area: j['area'] == null ? null : j['area'] as String,
+        code: j['code'] as String,
+        hours: j['hours'] == null ? null : j['hours'] as Map<String, dynamic>,
+        link: j['link'] as String,
+        name: j['name'] as String,
+        openNow: j['open_now'] == null ? null : j['open_now'] as bool,
+        photo: j['photo'] == null ? null : j['photo'] as Map<String, dynamic>,
+        shop: j['shop'] == null ? null : j['shop'] as String,
+        tagline: j['tagline'] == null ? null : j['tagline'] as String,
+        takesChats: j['takes_chats'] as bool,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': ?area,
+        'code': code,
+        'hours': ?hours,
+        'link': link,
+        'name': name,
+        'open_now': ?openNow,
+        'photo': ?photo,
+        'shop': ?shop,
+        'tagline': ?tagline,
+        'takes_chats': takesChats,
+        'words': words,
+      };
+}
+
+class ChatLink {
+  const ChatLink({required this.code, required this.createdAt, required this.qr, required this.settings, required this.url, required this.words});
+
+  final String code;
+  final DateTime createdAt;
+  /// Where the link's QR code is (GET, svg or png)
+  final String qr;
+  final ChatSettings settings;
+  final String url;
+  /// "Chat with {business} on Taskiem: {link}", to paste
+  final String words;
+
+  factory ChatLink.fromJson(Map<String, dynamic> j) => ChatLink(
+        code: j['code'] as String,
+        createdAt: DateTime.parse(j['created_at'] as String),
+        qr: j['qr'] as String,
+        settings: ChatSettings.fromJson(j['settings'] as Map<String, dynamic>),
+        url: j['url'] as String,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'qr': qr,
+        'settings': settings.toJson(),
+        'url': url,
+        'words': words,
+      };
+}
+
+class ChatSettings {
+  const ChatSettings({this.linkInUpdates, required this.storefrontButton, required this.takesChats, required this.updatesLink});
+
+  /// The business's own choice; null for the default
+  final Object? linkInUpdates;
+  final String storefrontButton;
+  final bool takesChats;
+  /// Whether updates end with the link now
+  final bool updatesLink;
+
+  factory ChatSettings.fromJson(Map<String, dynamic> j) => ChatSettings(
+        linkInUpdates: j['link_in_updates'],
+        storefrontButton: j['storefront_button'] as String,
+        takesChats: j['takes_chats'] as bool,
+        updatesLink: j['updates_link'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'link_in_updates': ?linkInUpdates,
+        'storefront_button': storefrontButton,
+        'takes_chats': takesChats,
+        'updates_link': updatesLink,
+      };
+}
+
+class PutChatSettingsRequest {
+  const PutChatSettingsRequest({this.linkInUpdates, this.linkInUpdatesDefault, this.storefrontButton, this.takesChats});
+
+  final bool? linkInUpdates;
+  final bool? linkInUpdatesDefault;
+  final String? storefrontButton;
+  final bool? takesChats;
+
+  factory PutChatSettingsRequest.fromJson(Map<String, dynamic> j) => PutChatSettingsRequest(
+        linkInUpdates: j['link_in_updates'] == null ? null : j['link_in_updates'] as bool,
+        linkInUpdatesDefault: j['link_in_updates_default'] == null ? null : j['link_in_updates_default'] as bool,
+        storefrontButton: j['storefront_button'] == null ? null : j['storefront_button'] as String,
+        takesChats: j['takes_chats'] == null ? null : j['takes_chats'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'link_in_updates': ?linkInUpdates,
+        'link_in_updates_default': ?linkInUpdatesDefault,
+        'storefront_button': ?storefrontButton,
+        'takes_chats': ?takesChats,
+      };
+}
+
+class MyStorefrontOrdersResponse {
+  const MyStorefrontOrdersResponse({required this.orders, required this.waiting});
+
+  final List<PhoneOrder> orders;
+  final bool waiting;
+
+  factory MyStorefrontOrdersResponse.fromJson(Map<String, dynamic> j) => MyStorefrontOrdersResponse(
+        orders: (j['orders'] as List).map((e) => PhoneOrder.fromJson(e as Map<String, dynamic>)).toList(),
+        waiting: j['waiting'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'orders': orders.map((e) => e.toJson()).toList(),
+        'waiting': waiting,
+      };
+}
+
+class PhoneOrder {
+  const PhoneOrder({required this.business, required this.businessId, required this.madeAt, required this.reference, required this.state, required this.totalKobo, required this.waiting});
+
+  final String business;
+  final String businessId;
+  final DateTime madeAt;
+  final String reference;
+  final String state;
+  final int totalKobo;
+  /// Made with the phone before it was on the account, and not yet confirmed as
+  /// the person's
+  final bool waiting;
+
+  factory PhoneOrder.fromJson(Map<String, dynamic> j) => PhoneOrder(
+        business: j['business'] as String,
+        businessId: j['business_id'] as String,
+        madeAt: DateTime.parse(j['made_at'] as String),
+        reference: j['reference'] as String,
+        state: j['state'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+        waiting: j['waiting'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business': business,
+        'business_id': businessId,
+        'made_at': madeAt.toUtc().toIso8601String(),
+        'reference': reference,
+        'state': state,
+        'total_kobo': totalKobo,
+        'waiting': waiting,
+      };
+}
+
+class ConfirmStorefrontOrdersResponse {
+  const ConfirmStorefrontOrdersResponse({required this.confirmed});
+
+  final bool confirmed;
+
+  factory ConfirmStorefrontOrdersResponse.fromJson(Map<String, dynamic> j) => ConfirmStorefrontOrdersResponse(
+        confirmed: j['confirmed'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirmed': confirmed,
       };
 }

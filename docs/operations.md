@@ -110,6 +110,8 @@ Switches take `true` or `false`, `1` or `0`, `yes` or `no`, `on` or `off`, in an
 | `TASKIEM_TRUST_PROXY` | `false` | Take the client address from the last `X-Forwarded-For` hop (behind a load balancer only). |
 | `TASKIEM_ALLOW_SIGNUP` | `false` | Self-serve signup ([onboarding](onboarding.md)). Needs email (`TASKIEM_SMTP_URL`, `TASKIEM_ALERT_FROM`, a public URL) for confirmation links |
 | `TASKIEM_APP_MIN_VERSION` | `0.1.0` | The lowest phone app version this server serves (`GET /v1/app/config`, [the phone app](spec/mobile-app.md#51-s1-what-the-app-is-told-about-itself)); an older app asks to be updated |
+| `TASKIEM_APP_GET_URL` | — | Where people get the Taskiem app: a business's chat link page offers **Get the Taskiem app** there, and the shared number answers **I'm a customer** with it ([Taskiem for everyone §8.2, §12](spec/taskiem-for-everyone.md#82-the-chat-link)). Chat links, the phone index and the browser chat's SMS need `TASKIEM_MESSAGE_HASH_KEY` |
+| `TASKIEM_WA_UPDATE_CHAT_TEMPLATE` | `false` | Meta approved `taskiem_update_chat`: updates to people outside a business on the shared number carry its chat link outside WhatsApp's 24 hours too ([templates](whatsapp.md#templates)) |
 | `TASKIEM_SIGNUP_PER_ADDRESS` | `5` | Signups per client address a day, across replicas; negative: no limit |
 | `TASKIEM_SIGNUP_BLOCKED_DOMAINS` | — | Email domains that may not sign up, besides the built-in throwaway services (comma-separated) |
 | `TASKIEM_DOCS_URL` | — | The public docs site the web app's help panels link to: the site's `/docs` (`https://example.ng/docs`) |

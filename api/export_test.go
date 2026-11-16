@@ -37,3 +37,10 @@ func (s *Server) BillsDueLine(ctx context.Context, tenant uuid.UUID) string {
 func (s *Server) WriteLinkedOrder(ctx context.Context, buyer, id uuid.UUID) error {
 	return s.writeLinkedOrder(ctx, buyer, id)
 }
+
+// ResetLimiters forgets every in-memory limit (a test that waits hours).
+func (s *Server) ResetLimiters() {
+	s.limiters.mu.Lock()
+	s.limiters.m, s.limiters.shared = nil, nil
+	s.limiters.mu.Unlock()
+}

@@ -28,6 +28,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/alerts"
 	"github.com/israel-duff/taskiem/engine/billing"
 	"github.com/israel-duff/taskiem/engine/catalogue"
+	"github.com/israel-duff/taskiem/engine/chatlinks"
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
@@ -43,6 +44,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/phoneindex"
 	"github.com/israel-duff/taskiem/engine/push"
 	"github.com/israel-duff/taskiem/engine/reach"
 	"github.com/israel-duff/taskiem/engine/remote"
@@ -255,6 +257,24 @@ type Server struct {
 	CodeSMS interface {
 		SendCode(ctx context.Context, number, text string) error
 	}
+	// ChatLinks are businesses' chat links (customer_links.go,
+	// engine/chatlinks); nil or without a key: none.
+	ChatLinks *chatlinks.Links
+	// PhoneIndex finds a person's storefront orders by their verified
+	// phone (engine/phoneindex); nil: none are found.
+	PhoneIndex *phoneindex.Index
+	// Answered tells a person in the browser chat that a business answered
+	// them (engine/chatlinks.Tell); nil tells no one.
+	Answered chatlinks.Teller
+	// AppGetURL is where people get the Taskiem app (TASKIEM_APP_GET_URL):
+	// the chat link's page and the shared number point there; "" leaves
+	// it out.
+	AppGetURL string
+	// UpdateChatTemplate: the taskiem_update_chat template, which carries
+	// "Reply in the Taskiem app" outside WhatsApp's 24 hours, is approved
+	// (TASKIEM_WA_UPDATE_CHAT_TEMPLATE); until then the link goes only in
+	// messages inside the window (docs/spec/taskiem-for-everyone.md §12).
+	UpdateChatTemplate bool
 	// Riders are the businesses' own riders (dispatch D1); nil: none.
 	Riders *riders.Riders
 	// Dispatch is their deliveries (D2 to D5); nil: none. ProofStore, when
@@ -394,7 +414,8 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/sso/saml/acs", s.samlACSHandler)
 		r.Get("/auth/sso/saml/{id}/metadata", s.samlMetadata)
 		r.Get("/signup", s.signupOptions)
-		r.Get("/app/config", s.appConfig) // the phone app's config (app_config.go)
+		r.Get("/app/config", s.appConfig)              // the phone app's config (app_config.go)
+		r.Get("/chat-links/{code}", s.getChatLinkCard) // a business's card for its chat link (customer_links.go)
 		if s.AllowSignup {
 			r.Post("/signup", s.signup) // self-serve signup (onboarding.go)
 		}
@@ -441,9 +462,11 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/auth/second-proof/password", s.secondProofPassword)
 			r.Post("/auth/second-proof/passkey/options", s.secondProofPasskeyOptions)
 			r.Post("/auth/second-proof/passkey", s.secondProofPasskey)
-			r.Post("/me/start", s.startSomething) // a business or workflows (start.go)
-			s.customerDoorRoutes(r)               // a person's chats with businesses (customer_door.go)
-			r.Get("/me/devices", s.listDevices)   // Your phones (devices.go)
+			r.Post("/me/start", s.startSomething)                // a business or workflows (start.go)
+			s.customerDoorRoutes(r)                              // a person's chats with businesses (customer_door.go)
+			r.Get("/me/storefront-orders", s.myStorefrontOrders) // a person's own orders, by their phone (customer_links.go)
+			r.Post("/me/storefront-orders/confirm", s.confirmStorefrontOrders)
+			r.Get("/me/devices", s.listDevices) // Your phones (devices.go)
 			r.Delete("/me/devices/{id}", s.removeDevice)
 			r.Get("/me/passkeys", s.listPasskeys)
 			r.Post("/me/passkeys/options", s.passkeyRegisterOptions)
@@ -472,6 +495,11 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermSecretManage), s.tenantWide).Post("/whatsapp/number/templates/{name}/submit", s.submitWhatsAppTemplate)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Put("/whatsapp/public-menu", s.putWhatsAppPublicMenu)
 			r.With(s.need(PermWorkflowRead)).Get("/reach", s.getReach)
+			// The business's chat link (customer_links.go, docs/spec/taskiem-for-everyone.md §8.2).
+			r.With(s.need(PermOrders)).Get("/customers/chat-link", s.getChatLink)
+			r.With(s.need(PermOrders)).Get("/customers/chat-link/qr", s.chatLinkQR)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/customers/chat-link", s.newChatLink)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/customers/chat-settings", s.putChatSettings)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Post("/reach/page", s.newReachPage)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Delete("/reach/contacts/{id}", s.removeReachContact)
 			r.With(s.need(PermAlertManage)).Get("/whatsapp/outbox", s.listWhatsAppOutbox)
@@ -835,6 +863,10 @@ func (s *Server) Handler() http.Handler {
 	})
 	if s.Static != nil {
 		r.Handle("/*", s.Static)
+	} else {
+		// A chat link's page, where no web app is served here to show it
+		// (customer_links.go).
+		r.Get("/m/{code}", s.chatLinkHTML)
 	}
 	return r
 }

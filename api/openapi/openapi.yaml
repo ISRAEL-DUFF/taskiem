@@ -15363,6 +15363,44 @@ paths:
                 $ref: '#/components/schemas/Session'
         default:
           $ref: '#/components/responses/Error'
+  /v1/chat-links/{code}:
+    get:
+      operationId: getChatLinkCard
+      tags:
+      - Customers
+      summary: A business's card, by its chat link
+      description: 'For anyone, signed in or not: the name, photo, area, hours (with whether it is open now) and published
+        shop of the business a chat link names, and whether it takes chats (taskiem-for-everyone §8.2), for the page the
+        link opens. 410 `gone` for a link the business replaced in the last 30 days ("This link no longer works"); 404 for
+        any other code, a workflows workspace''s or a business that is not active. Sixty a minute per address.'
+      security: []
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatLinkCard'
+        '410':
+          description: The business made a new link
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error, gone]
+                properties:
+                  error:
+                    type: string
+                  gone:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
   /v1/auth/phone/start:
     post:
       operationId: phoneStart
@@ -15391,6 +15429,11 @@ paths:
                 via:
                   type: string
                   enum: [whatsapp, sms]
+                chat_code:
+                  type: string
+                  description: The chat link the person came through (taskiem-for-everyone §8.2), when they did. The code
+                    is then counted against that business's plan (§15), and recorded with it; a link that names no
+                    business counts against no one.
       responses:
         '202':
           description: Sent
@@ -21107,6 +21150,79 @@ paths:
                     type: integer
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/storefront-orders:
+    get:
+      operationId: myStorefrontOrders
+      tags:
+      - Account
+      summary: Your storefront orders, found by your phone
+      description: 'The storefront orders and bookings made with the person''s verified phone, across businesses, newest
+        first (taskiem-for-everyone §13), so "Chat with {business} about this order" finds them. Each has only its
+        reference, state, total, date and business. They are found through the phone index, by the person''s own
+        verified phone only. An order made before the phone was on the account is `waiting` until the person says the
+        orders are theirs (POST /v1/me/storefront-orders/confirm); `waiting` at the top says one is. A personal session
+        reaches it.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: business
+        in: query
+        description: Only this business's orders.
+        schema:
+          type: string
+          format: uuid
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+          default: 50
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [orders, waiting]
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PhoneOrder'
+                  waiting:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/storefront-orders/confirm:
+    post:
+      operationId: confirmStorefrontOrders
+      tags:
+      - Account
+      summary: These are mine
+      description: The person says the orders made with their phone before it was on their account are theirs; they stop
+        being `waiting`. Changing the phone forgets it. 409 for a person with no phone.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: Confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [confirmed]
+                properties:
+                  confirmed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/start:
     post:
       operationId: startSomething
@@ -25605,6 +25721,129 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customers/chat-link:
+    get:
+      operationId: getChatLink
+      tags:
+      - Customers
+      summary: The business's chat link
+      description: 'The business''s chat link (taskiem-for-everyone §8.2), `https://<host>/m/{code}`, made the first time it
+        is asked for: ten characters with no look-alikes, kept only as a keyed hash. With the words to paste ("Chat with
+        {business} on Taskiem: {link}"), where its QR code is, and its settings. 503 when this Taskiem has no message hash
+        key (TASKIEM_MESSAGE_HASH_KEY).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatLink'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: newChatLink
+      tags:
+      - Customers
+      summary: Make a new chat link
+      description: Replaces the business's chat link. The old one says "This link no longer works" for 30 days, then names
+        no one. A published storefront is published again so its Chat with us button carries the new link. Audited as
+        `chat_link.replaced`.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      responses:
+        '200':
+          description: The new link
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatLink'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customers/chat-link/qr:
+    get:
+      operationId: chatLinkQR
+      tags:
+      - Customers
+      summary: The chat link as a QR code to print
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: format
+        in: query
+        schema:
+          type: string
+          enum: [svg, png]
+          default: svg
+      responses:
+        '200':
+          description: The QR code
+          content:
+            image/svg+xml:
+              schema:
+                type: string
+            image/png:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customers/chat-settings:
+    put:
+      operationId: putChatSettings
+      tags:
+      - Customers
+      summary: Change the chat link's settings
+      description: 'Whether customers can start a chat from the link (`takes_chats`), what the storefront offers
+        (`storefront_button`: `whatsapp` keeps Chat on WhatsApp alone, `taskiem` puts Chat with us in its place, `both` shows
+        both, the default), and whether updates on the shared WhatsApp number and Telegram bot end with "Reply in the
+        Taskiem app: {link}" (`link_in_updates`; `link_in_updates_default: true` goes back to the default, on for a
+        business with no WhatsApp number of its own). A field left out keeps its value. A published storefront is
+        published again when its button changes. Audited as `chat_link.settings`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                takes_chats:
+                  type: boolean
+                storefront_button:
+                  type: string
+                  enum: [whatsapp, taskiem, both]
+                link_in_updates:
+                  type: boolean
+                link_in_updates_default:
+                  type: boolean
+      responses:
+        '200':
+          description: The settings now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSettings'
         default:
           $ref: '#/components/responses/Error'
   /v1/reach:
@@ -31384,6 +31623,90 @@ components:
         made:
           type: boolean
       additionalProperties: false
+    ChatLink:
+      type: object
+      required: [code, url, created_at, words, qr, settings]
+      properties:
+        code:
+          type: string
+        url:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        words:
+          type: string
+          description: '"Chat with {business} on Taskiem: {link}", to paste'
+        qr:
+          type: string
+          description: Where the link's QR code is (GET, svg or png)
+        settings:
+          $ref: '#/components/schemas/ChatSettings'
+    ChatSettings:
+      type: object
+      required: [takes_chats, storefront_button, link_in_updates, updates_link]
+      properties:
+        takes_chats:
+          type: boolean
+        storefront_button:
+          type: string
+          enum: [whatsapp, taskiem, both]
+        link_in_updates:
+          type: [boolean, 'null']
+          description: The business's own choice; null for the default
+        updates_link:
+          type: boolean
+          description: Whether updates end with the link now
+    ChatLinkCard:
+      type: object
+      required: [name, takes_chats, code, link, words]
+      properties:
+        name:
+          type: string
+        tagline:
+          type: string
+        area:
+          type: string
+        photo:
+          type: object
+          additionalProperties: true
+        hours:
+          type: object
+          additionalProperties: true
+        open_now:
+          type: boolean
+        takes_chats:
+          type: boolean
+        shop:
+          type: string
+        code:
+          type: string
+        link:
+          type: string
+        words:
+          type: string
+    PhoneOrder:
+      type: object
+      required: [reference, state, total_kobo, made_at, business, business_id, waiting]
+      properties:
+        reference:
+          type: string
+        state:
+          type: string
+        total_kobo:
+          type: integer
+          format: int64
+        made_at:
+          type: string
+          format: date-time
+        business:
+          type: string
+        business_id:
+          type: string
+          format: uuid
+        waiting:
+          type: boolean
+          description: Made with the phone before it was on the account, and not yet confirmed as the person's
     Reach:
       type: object
       required: [telegram, whatsapp, contacts]

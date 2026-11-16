@@ -155,3 +155,11 @@ putPush
 patchPush
 deletePush
 deletePushEndpoint
+
+# Chat links and a customer's storefront orders (taskiem-for-everyone §8.2, §13, stage 2)
+getChatLinkCard
+getChatLink
+newChatLink
+putChatSettings
+myStorefrontOrders
+confirmStorefrontOrders

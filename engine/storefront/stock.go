@@ -456,3 +456,9 @@ func perItem(basket []Line) []Line {
 	}
 	return out
 }
+
+// PhoneIndexer writes an order's phone to the phone index, in the order's
+// transaction (engine/phoneindex.Index).
+type PhoneIndexer interface {
+	WriteTx(ctx context.Context, tx pgx.Tx, tenant, order uuid.UUID, phone string) error
+}

@@ -26,8 +26,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/israel-duff/taskiem/engine/db"
 	phonenum "github.com/israel-duff/taskiem/engine/phone"
+	"github.com/israel-duff/taskiem/engine/sender"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -55,12 +58,14 @@ func phoneCodeText(code string) string {
 }
 
 // sendPhoneCode sends a code by WhatsApp, else (or when asked) by SMS, and
-// says how it went.
-func (s *Server) sendPhoneCode(ctx context.Context, number, via, code string) (string, error) {
+// says how it went. A code for a person who came through a business's
+// chat link (business) counts against that business's plan (§15): its
+// WhatsApp templates, or its SMS (customer_message_charges); any other is
+// Taskiem's.
+func (s *Server) sendPhoneCode(ctx context.Context, number, via, code string, business uuid.UUID) (string, error) {
 	if via != "sms" && s.WhatsApp != nil {
-		// From Taskiem's own number, counted against no business: the code
-		// is for a person.
-		_, err := s.WhatsApp.SendTemplate(ctx, uuid.Nil, number, whatsapp.TplOTP, map[string]string{"code": code}, nil)
+		// From Taskiem's own number.
+		_, err := s.WhatsApp.SendTemplate(ctx, business, number, whatsapp.TplOTP, map[string]string{"code": code}, nil)
 		if err == nil {
 			return "whatsapp", nil
 		}
@@ -75,7 +80,22 @@ func (s *Server) sendPhoneCode(ctx context.Context, number, via, code string) (s
 	if err := s.CodeSMS.SendCode(ctx, number, phoneCodeText(code)); err != nil {
 		return "", err
 	}
+	if business != uuid.Nil {
+		if err := chargeCodeSMS(ctx, s.Store.Pool, business, phoneCodeText(code)); err != nil {
+			s.Logger.Warn("phone code: not counted against the business", "err", err, "tenant", business)
+		}
+	}
 	return "sms", nil
+}
+
+// chargeCodeSMS counts a sign-in code sent by SMS against the business the
+// person came through, as its SMS (§15).
+func chargeCodeSMS(ctx context.Context, pool *pgxpool.Pool, business uuid.UUID, text string) error {
+	return db.InTenantTx(ctx, pool, []uuid.UUID{business}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `INSERT INTO customer_message_charges (id, tenant_id, channel, purpose, segments) VALUES ($1, $2, 'sms', 'signin_code', $3)`,
+			uuid.Must(uuid.NewV7()), business, sender.Segments(text))
+		return err
+	})
 }
 
 // issuePhoneCode issues and sends one code, answering the request itself
@@ -83,6 +103,13 @@ func (s *Server) sendPhoneCode(ctx context.Context, number, via, code string) (s
 // way of sending is set up, 502 when sending failed. It reports how the
 // code went, "" when it answered.
 func (s *Server) issuePhoneCode(w http.ResponseWriter, r *http.Request, number, purpose string, user *uuid.UUID, via string) string {
+	return s.issuePhoneCodeFor(w, r, number, purpose, user, via, uuid.Nil)
+}
+
+// issuePhoneCodeFor is issuePhoneCode for a person who came through a
+// business's chat link: the code is recorded as theirs (phone_codes.came_from)
+// and counts against it.
+func (s *Server) issuePhoneCodeFor(w http.ResponseWriter, r *http.Request, number, purpose string, user *uuid.UUID, via string, business uuid.UUID) string {
 	ctx := r.Context()
 	if via == "sms" && s.CodeSMS == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": errSMSUnavailable.Error(), "sms_unavailable": true})
@@ -116,7 +143,14 @@ func (s *Server) issuePhoneCode(w http.ResponseWriter, r *http.Request, number, 
 		writeErr(w, http.StatusTooManyRequests, "A code was sent to this number a moment ago. Try again in 10 minutes.")
 		return ""
 	}
-	sent, err := s.sendPhoneCode(ctx, number, via, code)
+	if business != uuid.Nil {
+		var ok bool
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_phone_code_came_from($1, $2, $3)`, number, purpose, business).Scan(&ok); err != nil {
+			s.fail(w, r, err)
+			return ""
+		}
+	}
+	sent, err := s.sendPhoneCode(ctx, number, via, code, business)
 	if errors.Is(err, errSMSUnavailable) {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": err.Error(), "sms_unavailable": true})
 		return ""
@@ -153,6 +187,9 @@ func (s *Server) phoneStart(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Phone string `json:"phone"`
 		Via   string `json:"via"`
+		// ChatCode is the chat link the person came through, when they did
+		// (§8.2): the code is then the business's to pay for (§15).
+		ChatCode string `json:"chat_code"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -166,7 +203,14 @@ func (s *Server) phoneStart(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	sent := s.issuePhoneCode(w, r, number, "sign_in", nil, req.Via)
+	var business uuid.UUID
+	if req.ChatCode != "" && s.ChatLinks.Ready() {
+		// A link that no longer works counts against no one.
+		if b, err := s.ChatLinks.Resolve(r.Context(), req.ChatCode); err == nil {
+			business = b
+		}
+	}
+	sent := s.issuePhoneCodeFor(w, r, number, "sign_in", nil, req.Via, business)
 	if sent == "" {
 		return
 	}

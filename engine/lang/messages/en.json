@@ -7623,6 +7623,36 @@
       "text": "invoices {refs} and {more} more",
       "reviewed": true,
       "context": "The same, when there are more invoices than are named"
+    },
+    "reach.reply_in_app": {
+      "text": "Reply in the Taskiem app: {link}",
+      "reviewed": true,
+      "context": "Ends an update a business sends someone outside it on the shared number or bot, when the business offers its chat link; {link} is the link"
+    },
+    "reach.chat_link": {
+      "text": "To chat with {business}, open {link}",
+      "reviewed": true,
+      "context": "Someone who gets a business's updates replied to one; {business} is the business, {link} its chat link. One line per business"
+    },
+    "signup.offer_everyone": {
+      "text": "Hello! Taskiem runs your business's errands from this chat: payments, invoices, stock, reminders, your shop page. Do you want to start, for free? If you buy from a business on Taskiem, tap *I'm a customer*. Type *no* for not now.\n\nTo chat in another language, type its name: {languages}.",
+      "reviewed": true,
+      "context": "A stranger wrote to Taskiem's shared WhatsApp number or Telegram bot; three buttons follow (Start my business, I use Taskiem, I'm a customer). {languages} lists the languages on"
+    },
+    "signup.button_customer": {
+      "text": "I'm a customer",
+      "reviewed": true,
+      "context": "Button, at most 20 characters: the person buys from businesses and does not want to start one"
+    },
+    "signup.customer": {
+      "text": "To chat with a business, open its Taskiem link, or find it in the Taskiem app: {link}",
+      "reviewed": true,
+      "context": "The person tapped I'm a customer; {link} is where to get the Taskiem app"
+    },
+    "signup.customer_no_app": {
+      "text": "To chat with a business, open its Taskiem link: the business shares it on its page, its receipts and its messages.",
+      "reviewed": true,
+      "context": "The person tapped I'm a customer, on a Taskiem with no app link set"
     }
   }
 }
