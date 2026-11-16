@@ -264,6 +264,15 @@ customer_accounts.created_at
 customer_accounts.customer_id
 customer_accounts.id
 customer_accounts.tenant_id
+customer_conversations.blocked_at
+customer_conversations.id
+customer_conversations.last_inbound_at
+customer_conversations.last_reply_at
+customer_conversations.line
+customer_conversations.owner_told_at
+customer_conversations.person_blocked_at
+customer_conversations.person_id
+customer_conversations.tenant_id
 customer_invoice_accounts.account_name
 customer_invoice_accounts.account_number
 customer_invoice_accounts.amount_kobo
@@ -354,6 +363,10 @@ customer_invoices.void_reason
 customer_invoices.voided_at
 customer_messages.expires_at
 customer_messages.id
+customer_typing.person_id
+customer_typing.side
+customer_typing.tenant_id
+customer_typing.until
 data_table_columns.created_at
 data_table_columns.name
 data_table_columns.personal
@@ -1187,6 +1200,7 @@ storefront_orders.kind
 storefront_orders.pay_to_kobo
 storefront_orders.payment
 storefront_orders.payment_url
+storefront_orders.person_id
 storefront_orders.price_change
 storefront_orders.reference
 storefront_orders.service_id
