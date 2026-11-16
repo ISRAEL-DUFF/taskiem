@@ -14,7 +14,7 @@ import 'package:taskiem/app/session.dart';
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/conversation.dart';
 import 'package:taskiem/main.dart';
-import 'package:taskiem/screens/sign_in.dart';
+import 'package:taskiem/screens/welcome.dart';
 
 import 'lock_test.dart' show FakeUnlocker;
 import 'support.dart';
@@ -114,7 +114,7 @@ void main() {
     final o = await openBayo(t);
     await o.auth.signOut();
     await settle(t);
-    expect(find.byType(SignInScreen), findsOneWidget);
+    expect(find.byType(WelcomeScreen), findsOneWidget);
     expect(find.byType(ConversationScreen, skipOffstage: false), findsNothing);
     o.asked.clear();
     await t.pump(const Duration(seconds: 40));
@@ -127,7 +127,7 @@ void main() {
     // The server says the session has ended on the next request.
     o.auth.transport.onSessionEnded?.call();
     await settle(t);
-    expect(find.byType(SignInScreen), findsOneWidget);
+    expect(find.byType(WelcomeScreen), findsOneWidget);
     expect(find.byType(ConversationScreen, skipOffstage: false), findsNothing);
   });
 

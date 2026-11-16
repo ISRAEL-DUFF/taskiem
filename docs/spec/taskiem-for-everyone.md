@@ -680,3 +680,19 @@ Built on branch `stage1-web`, on streams A and B merged (`ccr-87497aa3-gf060z` a
 - No unread counts in the switcher, and nothing for `@Taskiem` on You (stage 2).
 - The phone app's parity pictures of the signed-out screens (`mobile/test/parity/web/sign-in*`, `sign-up*`) no longer match the web: they are to be written again (`PARITY_UPDATE=1`) with the app's own screens (stream D); `parity.spec.ts` now opens `/login?with=email` and `/signup`'s way in.
 - `you.spec.ts` listens on the fake Graph's and the SMTP sink's ports, as `whatsapp.spec.ts` and `password.spec.ts` do: run on its own when running specs side by side locally.
+
+## As built: stage 1, app
+
+Built on branch `stage1-app` (`mobile/`), against streams A and B as merged; the words are the web's (`web/src/pages/WayIn.tsx`, `Switch.tsx`, `StartSomething.tsx`, `ChangeNumber.tsx`).
+
+- **The first screen** is the phone way in (`lib/screens/welcome.dart`): the number, the code (by WhatsApp, **Send by SMS instead**, **Send a new code**, **Use another number**; problems in the web's plain words), and for a new number **Make your account**: name, "I'm 18 or over", the terms. Every step asks for a device session (`bearer`, `device`) as signing in does. **Sign in with email** opens the email, passkey and chat sign-in, which links back with **Use your phone number instead**. The business form and the WhatsApp-style sign-up conversation are no longer reached from signing out (their screens stay in the code, unused, for removal later).
+- **You** (`lib/screens/you.dart`): a personal session opens on it, not on the business chats: an empty chat list ("Chats with businesses will show here."), **Start something**, invitations waiting (**Join** moves into the business when the server answers a token), the switcher when the person is in a business, and Settings: name, phone with **Change number** (§5.5: the old number's code asked for where the server says), email when real, sign out.
+- **The switcher** (`lib/screens/switcher.dart`): a sheet with You and each business, its line as the web's (`Open now`, `Workflows`, or the lock), the workflows mark for a workspace. A 401 on switching opens its step: the passkey (signing in with it, then switching), **Prove it's you** with the passkey, **Email me a link** ("We sent a link to …", then **I've opened the link** reads `/v1/me` again), or the chat PIN. From a business: the chats' ⋯ menu (**Switch to You or a business**) and Settings.
+- **Start something** (`lib/screens/start_something.dart`): **A business** (name and what it does, `kinds` one of the four) or **Workflows** (name optional); `POST /v1/me/start` answers the new session's token and the app opens on it.
+- A 401 carrying `sso_required`, `passkey_required`, `second_proof_required` or `tries_left` no longer signs the phone out (`Transport.stillSignedIn`). What the phone keeps of a business is not opened on a personal session.
+- Tests: `test/everyone_test.dart`; `stack_test.dart` expects the new first screen.
+
+**Left over:**
+- The email's second-proof link (`/second-proof#token=…`) opens in the app only once the server lists `/second-proof` in its app links (`appPaths`, `api/applinks.go`); the app reads it (`appPageOf`) and confirms the device on **You**. Until then the person opens it in the browser and taps **I've opened the link**.
+- Parity pictures: the web half now takes `sign-up` as the way in and `sign-in` at `/login?with=email`. Once its pictures are taken again (`PARITY_UPDATE=1`), the app's `sign-up` becomes `WelcomeScreen` and `sign-in` gets `signup: false, onPhone`; You, the switcher and Start something have no parity screens yet.
+- §7's tabs (Orders, Discover), a photo, sessions, notifications and delete account on You; a single sign-on switch in the app (it says to use the web); the code's resend countdown the web shows.

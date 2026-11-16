@@ -14,7 +14,6 @@ import 'app/openers.dart';
 import 'app/config.dart';
 import 'kit/keyboard.dart';
 import 'app/lock.dart';
-import 'app/app_signup.dart' show AppSignup;
 import 'app/applinks.dart';
 import 'app/notify.dart';
 import 'app/notify_firebase.dart';
@@ -41,11 +40,12 @@ import 'chat/explore.dart' show showExplore;
 import 'chat/profile_screen.dart';
 import 'chat/live.dart';
 import 'chat/taskiem.dart';
-import 'screens/app_sign_up.dart';
 import 'screens/home_tabs.dart';
 import 'screens/signed_in.dart';
 import 'screens/sign_in.dart';
-import 'screens/sign_up.dart';
+import 'screens/switcher.dart' show showSwitcher;
+import 'screens/welcome.dart';
+import 'screens/you.dart';
 import 'theme/theme.dart';
 import 'kit/mobile.dart' show TkRoute;
 import 'kit/modal.dart' show showTkConfirm, showTkToast;
@@ -231,13 +231,17 @@ class _RootState extends State<_Root> {
       AuthState.checking => const _Opening(),
       AuthState.signedOut => _SignedOut(auth: auth),
       AuthState.outdated => const _Outdated(),
+      // A personal session: the person's own side (taskiem-for-everyone §7).
+      AuthState.signedIn when auth.personal => YouHome(key: ValueKey(auth.session), auth: auth, links: widget.links),
       AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify, links: widget.links),
     };
   }
 }
 
-/// Signed out: signing in, or signing up when the server has it open
-/// (GET /v1/signup), as the web offers "Create an account".
+/// Signed out: the phone way in (docs/spec/taskiem-for-everyone.md §5.1),
+/// and behind **Sign in with email** today's email, passkey and chat
+/// sign-in. Nobody starts a business here any more: a person makes their
+/// own account, and starts one from **You** (§17, §18).
 class _SignedOut extends StatefulWidget {
   const _SignedOut({required this.auth});
   final Auth auth;
@@ -247,52 +251,31 @@ class _SignedOut extends StatefulWidget {
 }
 
 class _SignedOutState extends State<_SignedOut> {
-  // What is open: signing in, the email form, or Get started (as on WhatsApp).
-  String _at = 'in';
-  bool _open = false;
-  bool _chat = false;
+  // What is open: the phone way in, or signing in with email.
+  bool _email = false;
   bool _passkeys = true;
-  // Kept while signed out: back from Get started and in again finds the
-  // conversation where it was (its code and token are not spent again).
-  late final AppSignup _signup = AppSignup(widget.auth);
-
-  @override
-  void dispose() {
-    _signup.dispose();
-    super.dispose();
-  }
 
   @override
   void initState() {
     super.initState();
-    widget.auth.api.signupOptions().then((o) {
-      if (mounted) setState(() => _open = o.enabled);
-    }, onError: (_) {});
-    // Signing up as on WhatsApp, where the server has it (M4 N7).
     widget.auth.api.appConfig().then((c) {
-      if (mounted) {
-        setState(() {
-          _chat = c.chatSignup ?? false;
-          _passkeys = c.passkeys;
-        });
-      }
+      if (mounted) setState(() => _passkeys = c.passkeys);
     }, onError: (_) {});
   }
 
   @override
   Widget build(BuildContext context) {
-    void go(String at) => setState(() => _at = at);
-    // Android's back from signing up returns to signing in, not out of the app.
+    void go(bool email) => setState(() => _email = email);
+    // Android's back from signing in with email returns to the phone, not
+    // out of the app.
     return PopScope(
-      canPop: _at == 'in',
+      canPop: !_email,
       onPopInvokedWithResult: (popped, _) {
-        if (!popped && _at != 'in') go('in');
+        if (!popped && _email) go(false);
       },
-      child: switch (_at) {
-        'email' => SignUpScreen(auth: widget.auth, onSignIn: () => go('in')),
-        'app' => AppSignUpScreen(auth: widget.auth, signup: _signup, onSignIn: () => go('in'), onEmail: _open ? () => go('email') : null),
-        _ => SignInScreen(auth: widget.auth, signup: _open || _chat, passkeys: _passkeys, onSignUp: () => go(_chat ? 'app' : 'email')),
-      },
+      child: _email
+          ? SignInScreen(auth: widget.auth, signup: false, passkeys: _passkeys, onPhone: () => go(false))
+          : WelcomeScreen(auth: widget.auth, onEmail: () => go(true)),
     );
   }
 }
@@ -596,6 +579,8 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     return ChatsScreen(
       data: _chats,
       onLinks: () => _links(context),
+      // You and the person's other businesses (taskiem-for-everyone §6).
+      onSwitch: () => showSwitcher(context, widget.auth),
       onProfile: () => _profile(context),
       onMenu: () => Navigator.of(context).push(TkRoute<void>(
         pageBuilder: (_, _, _) => SignedInScreen(auth: widget.auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify),

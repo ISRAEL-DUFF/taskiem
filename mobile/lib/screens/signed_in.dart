@@ -17,6 +17,7 @@ import '../kit/kit.dart';
 import '../kit/modal.dart' show showTkToast;
 import '../theme/theme.dart';
 import 'settings_more.dart';
+import 'switcher.dart' show lockWords, showSwitcher;
 
 class SignedInScreen extends StatefulWidget {
   const SignedInScreen({super.key, required this.auth, this.prefs, this.unlocker, this.notify});
@@ -74,12 +75,6 @@ class _SignedInScreenState extends State<SignedInScreen> {
     }
   }
 
-  Future<void> _switch(BusinessEntry b) =>
-      _try(() async {
-        await widget.auth.switchTo(b.id);
-        await _load();
-      });
-
   Future<void> _remove(Phone p) => _try(() async {
     await widget.auth.api.removeDevice(id: p.id);
     await _load();
@@ -122,7 +117,7 @@ class _SignedInScreenState extends State<SignedInScreen> {
               const SizedBox(height: 4),
               YouCard(auth: widget.auth),
               const SizedBox(height: 16),
-              if (_businesses.length > 1) ...[
+              if (_businesses.isNotEmpty) ...[
                 _Card(
                   title: 'Your businesses',
                   children: [
@@ -143,14 +138,17 @@ class _SignedInScreenState extends State<SignedInScreen> {
                             ),
                             if (b.current == true)
                               Text('Here now', style: tkHint(t))
-                            else
-                              TkButton(
-                                label: 'Switch',
-                                onPressed: () => _switch(b),
-                              ),
+                            else if (b.locked)
+                              Text(lockWords(b.lock), style: tkHint(t))
+                            else if (b.kind == 'workflows')
+                              Text('Workflows', style: tkHint(t)),
                           ],
                         ),
                       ),
+                    const SizedBox(height: 8),
+                    // You and each business, with what a locked one needs
+                    // (taskiem-for-everyone §5.4, §6).
+                    TkButton(label: 'Switch to You or a business', onPressed: () => showSwitcher(context, widget.auth)),
                   ],
                 ),
                 const SizedBox(height: 16),

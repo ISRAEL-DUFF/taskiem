@@ -15,7 +15,10 @@ import '../kit/kit.dart';
 import '../theme/theme.dart';
 
 class SignInScreen extends StatefulWidget {
-  const SignInScreen({super.key, this.auth, this.signup = true, this.onSignUp, this.onForgot, this.onPasskey, this.passkeys = true});
+  const SignInScreen({super.key, this.auth, this.signup = true, this.onSignUp, this.onForgot, this.onPasskey, this.passkeys = true, this.onPhone});
+
+  /// Back to the phone way in (the app's first screen), when it is.
+  final VoidCallback? onPhone;
 
   /// Signing in; none in a picture of the screen alone.
   final Auth? auth;
@@ -60,6 +63,11 @@ class _SignInScreenState extends State<SignInScreen> {
                     onPasskey: widget.onPasskey,
                     passkeys: widget.passkeys,
                   ),
+                if (widget.onPhone != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Center(child: TkLink(label: 'Use your phone number instead', onTap: widget.onPhone)),
+                  ),
                 if (widget.signup)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
@@ -84,10 +92,14 @@ class _SignInScreenState extends State<SignInScreen> {
 
 /// A sign-in or sign-up action's run: busy while it runs, its error kept to
 /// show (the web's useAction).
-mixin _Acting<T extends StatefulWidget> on State<T> {
+mixin AuthActing<T extends StatefulWidget> on State<T> {
   bool busy = false;
   String? error;
   bool passkeyRequired = false;
+
+  /// The server's answer in the words shown (its own, unless a screen has
+  /// plainer ones).
+  String words(ApiError e) => e.message;
 
   Future<void> act(Future<void> Function() f) async {
     // Pressing a button takes the cursor out of the field, as in a browser.
@@ -102,7 +114,7 @@ mixin _Acting<T extends StatefulWidget> on State<T> {
     } on PasskeyCancelled {
       // Closed the phone's passkey sheet: nothing to say.
     } on ApiError catch (e) {
-      error = e.message;
+      error = words(e);
       passkeyRequired = e.has('passkey_required');
     } on Offline {
       error = 'You’re offline. Check your connection and try again.';
@@ -127,7 +139,7 @@ class _EmailSignIn extends StatefulWidget {
   State<_EmailSignIn> createState() => _EmailSignInState();
 }
 
-class _EmailSignInState extends State<_EmailSignIn> with _Acting {
+class _EmailSignInState extends State<_EmailSignIn> with AuthActing {
   final _email = TextEditingController();
   final _password = TextEditingController();
 
@@ -209,7 +221,7 @@ class _ChatSignIn extends StatefulWidget {
   State<_ChatSignIn> createState() => _ChatSignInState();
 }
 
-class _ChatSignInState extends State<_ChatSignIn> with _Acting {
+class _ChatSignInState extends State<_ChatSignIn> with AuthActing {
   final _phone = TextEditingController();
   final _code = TextEditingController();
   String? _sent;
@@ -355,7 +367,10 @@ class AuthTitle extends StatelessWidget {
 
 /// The brand on pine (.auth-side): the mark and the wordmark, then the line.
 class AuthSide extends StatelessWidget {
-  const AuthSide({super.key});
+  const AuthSide({super.key, this.line = 'Orders, payments and approvals for your business, in one place.'});
+
+  /// The line under the brand.
+  final String line;
 
   @override
   Widget build(BuildContext context) {
@@ -381,7 +396,7 @@ class AuthSide extends StatelessWidget {
             ConstrainedBox(
               // `max-width: 30ch`: thirty of the font's zeros.
               constraints: BoxConstraints(maxWidth: 30 * _zero(line)),
-              child: Text('Orders, payments and approvals for your business, in one place.', style: line),
+              child: Text(this.line, style: line),
             ),
           ],
         ),

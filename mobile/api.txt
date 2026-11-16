@@ -31,6 +31,10 @@ secondProofEmailVerify
 secondProofPin
 phoneChangeStart
 phoneChangeVerify
+# Invitations waiting on You (taskiem-for-everyone §7)
+myInvitations
+acceptInvitation
+declineInvitation
 
 # The chats list (M3)
 listLinkChats
