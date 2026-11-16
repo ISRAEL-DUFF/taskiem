@@ -280,7 +280,7 @@ void main() {
 
   testWidgets('past their credit limit: the notice, and their statement', (t) async {
     await open(t, _order('received', more: {'over_limit_at': '2026-11-12T09:00:00Z'}));
-    expect(find.textContaining('past the credit limit you give them'), findsOneWidget);
+    expect(find.text('Past their credit limit'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Their statement').first);
     await t.pumpAndSettle();
     expect(find.text('This is coming to the app soon.'), findsNothing);
@@ -311,11 +311,11 @@ void main() {
 
   testWidgets('without storefront.manage no answers; without link.manage no terms', (t) async {
     await open(t, _order('received'), perms: ['link.manage']);
-    expect(find.text('Answer Rivers Foods'), findsNothing);
+    expect(find.bySemanticsLabel('Accept'), findsNothing);
     expect(find.text('Your items'), findsNothing);
     expect(find.text('Rivers Foods’s orders'), findsOneWidget);
     await open(t, _order('received'), perms: ['storefront.manage']);
-    expect(find.text('Answer Rivers Foods'), findsOneWidget);
+    expect(find.bySemanticsLabel('Accept'), findsOneWidget);
     expect(find.text('Rivers Foods’s orders'), findsNothing);
   });
 

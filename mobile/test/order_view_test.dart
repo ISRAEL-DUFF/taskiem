@@ -97,9 +97,9 @@ void main() {
     expect(find.text('2 × Rice 50kg'), findsOneWidget);
     expect(find.text('₦10,000'), findsOneWidget);
     expect(find.text('No price'), findsOneWidget);
-    expect(find.text('₦15,000'), findsOneWidget);
+    expect(find.text('₦15,000'), findsWidgets);
     expect(find.text('Their note: “By Friday”'), findsOneWidget);
-    expect(find.bySemanticsLabel('Placed: step 1 of 4'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^Placed, done; Accepted, not yet')), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Accept'));
     await settle(t);
     expect(r.sent.single, 'POST /v1/trade-orders/o1/accept {}');
@@ -124,7 +124,7 @@ void main() {
   testWidgets('an accepted order has no buttons', (t) async {
     await open(t, {...order, 'status': 'accepted'});
     expect(find.bySemanticsLabel('Accept'), findsNothing);
-    expect(find.bySemanticsLabel('Accepted: step 2 of 4'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('Accepted, done; On the way, not yet')), findsOneWidget);
   });
 
   testWidgets('a delivery offered: where and who; passed on after yes; the customer rung', (t) async {
@@ -139,7 +139,7 @@ void main() {
     expect(find.text('12 Allen Avenue'), findsOneWidget);
     expect(find.text('4 Herbert Macaulay (Yaba)'), findsOneWidget);
     expect(find.text('By the church'), findsOneWidget);
-    expect(find.text('At the door'), findsOneWidget);
+    expect(find.text('Your fee · they pay at the door'), findsOneWidget);
     expect(find.text('₦2,000'), findsOneWidget);
     await t.tap(find.bySemanticsLabel(RegExp('^Call ')));
     expect(called.single, '08031234567');
@@ -153,7 +153,7 @@ void main() {
 
   testWidgets('a delivery at the door with proof: Delivered once the photo is taken, sent with it', (t) async {
     final r = await open(t, delivery('arrived', proof: true), pickers: const _Camera());
-    expect(find.bySemanticsLabel('Arrived: step 4 of 5'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('Arrived, done; Delivered, not yet')), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Delivered'));
     await settle(t);
     expect(r.sent, isEmpty, reason: 'no photo yet');
@@ -187,8 +187,8 @@ void main() {
 
   testWidgets('an order at the door: its word and step', (t) async {
     await open(t, {...order, 'status': 'arrived'});
-    expect(find.text('At the door'), findsOneWidget);
-    expect(find.bySemanticsLabel('On the way: step 3 of 4'), findsOneWidget);
+    expect(find.text('AT THE DOOR'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('On the way, done; Delivered, not yet')), findsOneWidget);
   });
 
   testWidgets('a call that cannot be made says so', (t) async {

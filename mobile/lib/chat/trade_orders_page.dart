@@ -14,17 +14,20 @@ import '../kit/kit.dart';
 import '../kit/list.dart' show TkPill, TkRow, TkEmpty;
 import '../kit/modal.dart';
 import '../kit/page.dart';
-import '../kit/sheet.dart' show TkKitField, TkLines;
+import '../kit/sheet.dart' show TkKitField;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
-import 'book_sheet.dart' show whenLabel;
+import 'book_sheet.dart' show lagosTime, whenLabel;
 import 'doc_thread.dart' show DocThread;
 import 'invoices_page.dart' show openInvoice;
 import 'statement_page.dart' show openStatement;
 import 'storefront_orders_page.dart' show openStorefrontOrder, openStorefrontOrders;
 import 'tags.dart' show quantity;
 import 'words.dart' show CardTone, naira;
-import '../kit/mobile.dart' show TkRoute;
+import '../kit/icon.dart';
+import '../kit/look.dart';
+import '../kit/mobile.dart' show TkCountUp, TkListRow, TkRoute, TkSection;
+import '../theme/look.dart';
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -68,7 +71,6 @@ SellerSteps sellerSteps(Map<String, dynamic> o) {
   );
 }
 
-bool _any(SellerSteps s) => s.accept || s.change || s.decline || s.ready || s.dispatched || s.delivered || s.cancel || s.keep || s.agree;
 
 /// tradeorders.ts sellerAsk: what still needs the seller, in words; empty
 /// when nothing does.
@@ -316,6 +318,7 @@ class _TradeOrderPageState extends State<TradeOrderPage> {
     final o = _o;
     return TkPageScreen(
       title: o == null ? 'Order' : '${_str(o['reference'])} from ${_str(o['buyer_name'])}',
+      titleSize: 22,
       backLabel: 'Back to Orders from linked businesses',
       onRefresh: _load,
       children: [
@@ -329,7 +332,6 @@ class _TradeOrderPageState extends State<TradeOrderPage> {
   List<Widget> _order(TkTokens t, Map<String, dynamic> o) {
     final buyer = _str(o['buyer_name']);
     final status = _str(o['status']);
-    final ask = sellerAsk(o);
     final note = _str(o['note']);
     final change = _maps(o['change']);
     final manage = _auth.can('storefront.manage');
@@ -337,89 +339,135 @@ class _TradeOrderPageState extends State<TradeOrderPage> {
     final delivery = _str(o['fulfilment']) == 'delivery';
     final invoiceId = _str(o['invoice_id']);
     final links = widget.links;
-    return [
-      TkHero(
-        label: 'Order total',
-        tag: tradeStatus(status).label,
-        amount: naira(_int(o['total_kobo'])),
-        sub:
-            'From $buyer\nOrdered ${_str(o['created_at']).isEmpty ? '—' : whenLabel(_str(o['created_at']))} · Invoiced ${invoiceId.isNotEmpty ? 'yes' : (o['invoice_at'] == 'accepted' ? 'when accepted' : 'when received')}',
-        semanticsLabel: 'The order',
-      ),
-      if (ask.isNotEmpty) _Notice(ask),
-      if (_str(o['over_limit_at']).isNotEmpty && status == 'received')
-        _Notice(
-          'This order takes $buyer past the credit limit you give them. It was not accepted by itself; it waits for them to pay, and you can still accept it.',
-          warn: true,
-          link: (
-            label: 'Their statement',
-            onTap: () => (links.statement ?? (c, l) => openStatement(c, _auth, l))(context, _str(o['link'])),
-          ),
+    final look = TkLook.of(context);
+    final rows = <Widget>[
+      if (invoiceId.isNotEmpty)
+        TkListRow(
+          title: 'Its invoice',
+          sub: '$buyer’s bill on Taskiem',
+          icon: 'b-receipt',
+          square: look.teal,
+          onTap: () => (links.invoice ?? (c, id) => openInvoice(c, _auth, id))(context, invoiceId),
         ),
-      if (note.isNotEmpty) Text('Their note: “$note”', style: tkHint(t)),
-      TkPageCard(
+      if (live)
+        TkListRow(
+          title: delivery ? 'Its delivery and riders' : 'See it on the Orders page',
+          sub: delivery ? 'A rider takes it to where $buyer said' : '',
+          icon: delivery ? 'b-truck' : 'b-box',
+          square: look.blue,
+          onTap: () => (links.storefrontOrder ?? (c, r) => openStorefrontOrder(c, _auth, r))(context, _str(o['order_reference'])),
+        ),
+    ];
+    return [
+      _top(t, o, manage),
+      TkPersonCard(name: buyer, sub: note.isNotEmpty ? 'Their note: “$note”' : 'On Taskiem'),
+      TkSection(
         title: 'What $buyer ordered',
-        children: [_Lines(lines: _maps(o['lines']), short: (o['short'] as List?)?.whereType<num>().toList())],
+        children: [_bill(t, _maps(o['lines']), short: (o['short'] as List?)?.whereType<num>().toList())],
       ),
       if (manage && status == 'received' && _own.isNotEmpty) _OwnItems(auth: _auth, order: o, own: _own, onDone: _load),
-      if (change.isNotEmpty) TkPageCard(title: 'Your change', children: [_Lines(lines: change)]),
-      if (live)
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            TkLink(
-              label: delivery ? 'Its delivery and riders' : 'See it on the Orders page',
-              onTap: () => (links.storefrontOrder ?? (c, r) => openStorefrontOrder(c, _auth, r))(context, _str(o['order_reference'])),
-            ),
-            Text(delivery ? ': a rider takes it to where $buyer said.' : '.', style: tkText(size: 15, color: t.text)),
-          ],
-        ),
-      if (invoiceId.isNotEmpty)
-        Wrap(
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            TkLink(label: 'Its invoice', onTap: () => (links.invoice ?? (c, id) => openInvoice(c, _auth, id))(context, invoiceId)),
-            Text(', which is $buyer’s bill on Taskiem.', style: tkText(size: 15, color: t.text)),
-          ],
-        ),
-      if (manage && _any(sellerSteps(o))) _actions(t, o),
+      if (change.isNotEmpty) TkSection(title: 'Your change', children: [_bill(t, change)]),
+      if (rows.isNotEmpty) TkSection(inset: 56, children: rows),
       // TradeOrders.tsx DocThread: the order's thread, under its steps.
       DocThread(key: ValueKey('thread ${o['reference']}'), auth: _auth, doc: 'order', reference: _str(o['reference']), follow: widget.follow),
       if (_auth.can('link.manage')) _TradeSettings(auth: _auth, order: o, onDone: _load, onStatement: links.statement),
     ];
   }
 
-  /// SellerActions: the seller's steps, as the status allows.
-  Widget _actions(TkTokens t, Map<String, dynamic> o) {
+  /// LinesTable, as a bill: each item, how many at what each, what was
+  /// proposed, delivered and counted, and which of your items it is.
+  Widget _bill(TkTokens t, List<Map<String, dynamic>> lines, {List<num>? short}) {
+    final look = TkLook.of(context);
+    final total = lines.fold<int>(0, (a, l) => a + _int(l['quantity']) * _int(l['price_kobo']));
+    return TkBill(
+      lines: [
+        for (var i = 0; i < lines.length; i++)
+          () {
+            final l = lines[i];
+            final price = _int(l['price_kobo']);
+            final proposed = l['proposed_kobo'] as num?;
+            final mine = _own.where((x) => x['id'] == _str(l['item_id']) && _str(l['item_id']).isNotEmpty).firstOrNull;
+            return (
+              name: _str(l['item']),
+              sub: [
+                '${quantity(_int(l['quantity']), l['unit'] as String?)} at ${price > 0 ? naira(price) : 'no price yet'}',
+                if (proposed != null && proposed.toInt() != price) 'they proposed ${naira(proposed.toInt())}',
+                if (l['delivered'] != null) 'delivered ${_int(l['delivered'])}',
+                if (short != null) 'they counted ${i < short.length ? short[i].toInt() : 0}',
+              ].join(' · '),
+              under: mine == null
+                  ? null
+                  : Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Row(
+                        children: [
+                          ExcludeSemantics(child: TkIcon('b-box', size: 13, stroke: 2.2, color: look.tealInk)),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              'Your ${_str(mine['name'])}${mine['stock'] is num ? ', ${(mine['stock'] as num).toInt()} left' : ''}',
+                              style: tkText(size: 12.5, weight: 600, lineHeight: 1.35, color: look.tealInk),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+              amount: price > 0 ? naira(_int(l['quantity']) * price) : '—',
+            );
+          }(),
+      ],
+      total: naira(total),
+    );
+  }
+
+  /// The top card: what it needs from you, its total, how far it has gone,
+  /// and the steps its status allows.
+  Widget _top(TkTokens t, Map<String, dynamic> o, bool manage) {
+    final look = TkLook.of(context);
+    final buyer = _str(o['buyer_name']);
+    final status = _str(o['status']);
+    final ask = sellerAsk(o);
+    final invoiceId = _str(o['invoice_id']);
+    final asked = _str(o['cancel_asked_at']).isNotEmpty;
+    final short = status == 'delivered' && _str(o['short_at']).isNotEmpty && _str(o['short_agreed_at']).isEmpty;
+    final (words, ink) = status == 'received'
+        ? ('New · answer them', look.orangeInk)
+        : asked
+        ? ('They ask to cancel', look.redInk)
+        : short
+        ? ('Not all came, they say', look.orangeInk)
+        : (tradeStatus(status).label, switch (status) {
+            'accepted' || 'ready' => look.tealInk,
+            'dispatched' || 'arrived' || 'changed' => look.blueInk,
+            'proposed' => look.violetInk,
+            'delivered' => look.limeInk,
+            _ => t.muted,
+          });
+    const order = ['received', 'accepted', 'ready', 'dispatched', 'delivered'];
+    final at = order.indexOf(status == 'arrived' ? 'dispatched' : status);
+    final created = _str(o['created_at']);
     final can = sellerSteps(o);
     final ref = _str(o['reference']);
-    final buyer = _str(o['buyer_name']);
     final lines = _maps(o['lines']);
     final busy = _busy;
-    return TkPageCard(
-      title: 'Answer $buyer',
-      children: [
-        if (_stepError != null) Padding(padding: const EdgeInsets.only(bottom: 10), child: TkErrorBox(_stepError!)),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
+    final buttons = !manage
+        ? const <Widget>[]
+        : <Widget>[
             if (can.accept) TkSmallButton(label: 'Accept', primary: true, onPressed: busy ? null : () => _step('accept', '$ref accepted')),
-            if (can.change)
-              TkSmallButton(
-                label: 'Change',
-                onPressed: busy ? null : () => _form('Change $ref', _ChangeForm(auth: _auth, order: o), 'Your change is sent'),
-              ),
-            if (can.ready) TkSmallButton(label: 'It is ready', onPressed: busy ? null : () => _step('ready', 'They are told it is ready')),
-            if (can.dispatched) TkSmallButton(label: 'Sent on its way', onPressed: busy ? null : () => _step('dispatched', 'They are told it is on its way')),
+            if (can.agree) TkSmallButton(label: 'Agree their count', primary: true, onPressed: busy ? null : () => _step('agree', 'Agreed, and they are told')),
             if (can.delivered)
               TkSmallButton(
                 label: 'Delivered',
-                primary: true,
+                primary: !can.ready && !can.dispatched,
                 onPressed: busy ? null : () => _form('Delivered $ref', _DeliveredForm(auth: _auth, order: o, lines: lines), 'Delivered, and they are told'),
               ),
+            if (can.ready) TkSmallButton(label: 'It is ready', primary: true, onPressed: busy ? null : () => _step('ready', 'They are told it is ready')),
+            if (can.dispatched) TkSmallButton(label: 'Sent on its way', primary: !can.ready, onPressed: busy ? null : () => _step('dispatched', 'They are told it is on its way')),
             if (can.keep) TkSmallButton(label: 'Keep the order', onPressed: busy ? null : () => _step('keep', 'Kept, and they are told')),
-            if (can.agree) TkSmallButton(label: 'Agree their count', primary: true, onPressed: busy ? null : () => _step('agree', 'Agreed, and they are told')),
+            if (can.change)
+              TkSmallButton(label: 'Change', onPressed: busy ? null : () => _form('Change $ref', _ChangeForm(auth: _auth, order: o), 'Your change is sent')),
+            if (can.decline)
+              TkSmallButton(label: 'Decline', onPressed: busy ? null : () => _form('Decline $ref', _DeclineForm(auth: _auth, order: o), '$ref declined')),
             if (can.cancel)
               TkSmallButton(
                 label: 'Cancel the order',
@@ -432,91 +480,50 @@ class _TradeOrderPageState extends State<TradeOrderPage> {
                         }
                       },
               ),
-            if (can.decline)
-              TkSmallButton(
-                label: 'Decline',
-                danger: true,
-                onPressed: busy ? null : () => _form('Decline $ref', _DeclineForm(auth: _auth, order: o), '$ref declined'),
-              ),
+          ];
+    // Three to a row; the rest under.
+    final buttonRows = [for (var i = 0; i < buttons.length; i += 3) buttons.sublist(i, i + 3 > buttons.length ? buttons.length : i + 3)];
+    return TkTopCard(
+      semanticsLabel: 'The order',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TkEyebrow(words, color: ink, trailing: created.isEmpty ? null : whenLabel(created)),
+          const SizedBox(height: 6),
+          FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: TkCountUp(_int(o['total_kobo']), style: tkFigure(context, size: 40))),
+          Text(
+            '${linesWords(lines)} · invoiced ${invoiceId.isNotEmpty ? 'already' : (o['invoice_at'] == 'accepted' ? 'when you accept' : 'when delivered')}',
+            style: tkText(size: 13, lineHeight: 1.4, color: t.muted),
+          ),
+          if (ask.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Semantics(liveRegion: true, child: Text(ask, style: tkText(size: 14, weight: 500, lineHeight: 1.4, color: t.text))),
           ],
-        ),
-      ],
-    );
-  }
-}
-
-/// `.notice` (and `.notice.warn`): what needs us, said once.
-class _Notice extends StatelessWidget {
-  const _Notice(this.words, {this.warn = false, this.link});
-  final String words;
-  final bool warn;
-
-  /// A link after the words (the web's "Their statement").
-  final ({String label, VoidCallback onTap})? link;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    return Semantics(
-      liveRegion: true,
-      container: true,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(color: warn ? t.tintWarn : t.tkLimeSoft, borderRadius: BorderRadius.circular(14)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(words, style: tkText(size: 14, weight: 500, color: warn ? t.tintWarnText : t.text)),
-            if (link != null) ...[const SizedBox(height: 6), TkLink(label: link!.label, onTap: link!.onTap)],
+          if (at >= 0) ...[
+            const SizedBox(height: 14),
+            TkSteps(
+              steps: [
+                for (final (i, s) in order.indexed)
+                  (label: tradeStatus(s).label, when: i == 0 && created.isNotEmpty ? lagosTime(created) : '', done: i <= at),
+              ],
+            ),
           ],
-        ),
+          if (_stepError != null) ...[const SizedBox(height: 10), TkErrorBox(_stepError!)],
+          for (final r in buttonRows) ...[const SizedBox(height: 10), TkButtonRow(r)],
+          if (_str(o['over_limit_at']).isNotEmpty && status == 'received') ...[
+            const SizedBox(height: 12),
+            TkCallout(
+              leading: TkSquare('b-query', color: look.orange),
+              title: 'Past their credit limit',
+              sub: 'It waits for them to pay; you can still accept it.',
+              color: look.orange,
+              button: 'Statement',
+              semantics: 'Their statement',
+              onPressed: () => (widget.links.statement ?? (c, l) => openStatement(c, _auth, l))(context, _str(o['link'])),
+            ),
+          ],
+        ],
       ),
-    );
-  }
-}
-
-/// LinesTable, as rows on a phone: each item, how many at what each, and
-/// what was proposed, delivered and counted; the total under.
-class _Lines extends StatelessWidget {
-  const _Lines({required this.lines, this.short});
-  final List<Map<String, dynamic>> lines;
-  final List<num>? short;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    final total = lines.fold<int>(0, (a, l) => a + _int(l['quantity']) * _int(l['price_kobo']));
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (var i = 0; i < lines.length; i++)
-          () {
-            final l = lines[i];
-            final price = _int(l['price_kobo']);
-            final proposed = l['proposed_kobo'] as num?;
-            final parts = [
-              '${quantity(_int(l['quantity']), l['unit'] as String?)} at ${price > 0 ? naira(price) : 'no price yet'}',
-              if (proposed != null && proposed.toInt() != price) 'they proposed ${naira(proposed.toInt())}',
-              if (l['delivered'] != null) 'delivered ${_int(l['delivered'])}',
-              if (short != null) 'they counted ${i < short!.length ? short![i].toInt() : 0}',
-            ];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: MergeSemantics(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(_str(l['item']), style: tkText(size: 15, weight: 600, color: t.text)),
-                    Text(parts.join(' · '), style: tkText(size: 13, color: t.muted)),
-                  ],
-                ),
-              ),
-            );
-          }(),
-        Container(height: 1, color: t.border),
-        const SizedBox(height: 10),
-        TkLines([('Total', naira(total))]),
-      ],
     );
   }
 }

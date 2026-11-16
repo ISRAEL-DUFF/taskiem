@@ -187,9 +187,10 @@ void main() {
 
   testWidgets('an order: its details; offered to a free rider; the match undone; the customer shown', (t) async {
     final r = await serve(t, (c) => StorefrontOrderPage(auth: c.auth, reference: 'OR-5K2Q', now: () => _now));
-    expect(find.text('Order total'), findsOneWidget);
-    expect(find.text('2 × Jollof rice ₦5,000'), findsOneWidget);
-    expect(find.text('Delivery to Yaba ₦1,000'), findsOneWidget);
+    expect(find.text('ACCEPTED'), findsOneWidget);
+    expect(find.text('2 × Jollof rice'), findsOneWidget);
+    expect(find.text('₦5,000'), findsOneWidget);
+    expect(find.text('Delivery to Yaba'), findsOneWidget);
     expect(find.text('No rider has it yet.'), findsOneWidget);
     expect(find.text('Suggested, confirmed by Ada'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Offer to a free rider'));
@@ -237,8 +238,8 @@ void main() {
       ],
     );
     expect(find.text('On the way'), findsOneWidget);
-    expect(find.text('₦1,500'), findsOneWidget);
-    expect(find.textContaining('3. Picked up'), findsOneWidget);
+    expect(find.text('fee ₦1,500'), findsOneWidget);
+    expect(find.textContaining('Picked up'), findsOneWidget);
     expect(find.bySemanticsLabel('Offer to a free rider'), findsNothing);
     await t.tap(find.bySemanticsLabel('Show earlier offers (1)'));
     await t.pump();
@@ -539,10 +540,10 @@ void main() {
     await t.pump(const Duration(seconds: 30));
     await t.fling(find.byType(Scrollable).first, const Offset(0, 400), 1000);
     await settle(t);
-    expect(find.text('Completed'), findsWidgets);
+    expect(find.text('COMPLETED'), findsWidgets);
     slow.complete(json({'order': _order()}));
     await settle(t);
-    expect(find.text('Completed'), findsWidgets);
+    expect(find.text('COMPLETED'), findsWidgets);
   });
 
   testWidgets('Orders from linked businesses leads to all your orders; one opened from it says Back to Orders', (t) async {

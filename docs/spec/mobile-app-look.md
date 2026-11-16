@@ -196,10 +196,44 @@ A document named in the words (`RefCard`) is as it was. These six chat
 screens no longer match the web's pictures; the parity test still builds and
 drives them.
 
+### One order
+
+Drawn and agreed with the founder, 16 November 2026: the screens behind a
+row on Orders, and the two the chat's Orders sheet opens.
+
+- **A customer's order.** The top card: its status in its stage's colour
+  (new and waiting orange, accepted teal, with a rider blue, completed lime,
+  a refund due red), the total, how it is paid, and its steps with their
+  times (ordered, accepted, with the rider, delivered or done). Its rider
+  inside the card, with Call, how far they got and Take it back; before one
+  has it, Offer to a free rider and Choose the rider. A refund due takes the
+  card's words and buttons; new prices, theirs. The customer on one card with
+  Call, WhatsApp, Map and Email, or Show customer's details when they are
+  hidden. Then what they ordered, the money matched to it (Undo the match on
+  its row), and the note, fulfilment, who decided and the workflow as rows.
+- **A booking.** Its day (Today, Tomorrow or the date) and time large, the
+  service and its hours, the price and when it was booked as two small
+  tiles, Move and Cancel.
+- **An order from a business.** What it needs from you ("New · answer
+  them", "They ask to cancel", "Not all came, they say"), the total, what
+  it is and when it is invoiced, its five steps, and the steps its status
+  allows as buttons; past their credit limit as a callout that opens their
+  statement. Each line says which of your items it is and how many you
+  have. The invoice and the delivery as rows.
+- **In the Orders sheet.** An order from a business takes the same top
+  card. A rider's delivery: what to do now, the fee and payment at the door,
+  the route from pick-up to drop-off with a map on each, its steps; the
+  customer with Call; the photo the business asks for. The sheet's body is
+  the page's ground, so its cards stand out.
+- **Large text.** With text half as large again or more, a top card's
+  buttons go one under another, its steps down the card, and a callout's
+  button under its words.
+
 ## Order
 
 1. Orders and Money, and the chat's motion. Done.
 2. Today, Money and Orders in Direction B. **Done; waiting for the founder's word.**
 3. Invoices and bills. **Done; waiting for the founder's word.**
 4. Stock, Supplies, Suppliers and an order to a supplier. **Done; waiting for the founder's word.**
-5. Then riders, tables, Team, and the settings-like pages, the same way.
+5. One order: a customer's, a booking, a business's, a rider's delivery. **Done; waiting for the founder's word.**
+6. Then riders, tables, Team, and the settings-like pages, the same way.

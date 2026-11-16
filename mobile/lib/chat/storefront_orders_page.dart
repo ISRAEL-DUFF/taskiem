@@ -22,13 +22,15 @@ import '../kit/polling.dart';
 import '../kit/sheet.dart' show TkKitField, TkSavedTick, TkSheet, showTkSheet;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
-import 'book_sheet.dart' show lagosDay, lagosTime, whenLabel;
+import 'book_sheet.dart' show dayLabel, lagosDay, lagosTime, whenLabel;
 import 'bookings_page.dart' show askCancelBooking, canChange, cancelBooking, moveBooking, orderStatus, timeSpan;
 import 'stock_page.dart' show feeInput, feeKobo;
 import 'riders_page.dart' show openRiders, openRidersPay;
 import 'trade_orders_page.dart' show TradeOrdersPage, openTradeOrder;
 import 'words.dart' show CardTone, Tone, naira;
+import '../kit/look.dart';
 import '../kit/mobile.dart';
+import '../theme/look.dart';
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -286,50 +288,6 @@ class _Notice extends StatelessWidget {
   }
 }
 
-/// `dl.kv`: a word, and what it is, one under the other on a phone.
-class _Kv extends StatelessWidget {
-  const _Kv(this.rows);
-  final List<(String, Widget)> rows;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final (k, v) in rows)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: () {
-              final row = Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(k, style: tkText(size: 13, weight: 600, color: t.muted)),
-                  const SizedBox(height: 2),
-                  v,
-                ],
-              );
-              // A row of words is read as one; a row with links keeps each
-              // link its own, to be pressed (merged, one would be lost).
-              return v is _Links ? Semantics(container: true, child: row) : MergeSemantics(child: row);
-            }(),
-          ),
-      ],
-    );
-  }
-}
-
-/// A row's links, each pressed on its own (see [_Kv]).
-class _Links extends StatelessWidget {
-  const _Links(this.links);
-  final List<Widget> links;
-
-  @override
-  Widget build(BuildContext context) => Wrap(spacing: 12, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: links);
-}
-
-Widget _text(TkTokens t, String s, {bool hint = false}) => Text(s, style: hint ? tkHint(t) : tkText(size: 15, color: t.text));
-
 /// StorefrontOrders: the storefront's orders, newest first; a filter by
 /// status and by front; the list refreshes itself.
 class StorefrontOrdersPage extends StatefulWidget {
@@ -582,6 +540,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
     final o = _view == null ? null : _map(_view!['order']);
     return TkPageScreen(
       title: '${o == null ? 'Order' : (kindLabel[o['kind']] ?? 'Order')} ${widget.reference}',
+      titleSize: 22,
       backLabel: widget.backLabel,
       onRefresh: _load,
       children: [
@@ -593,272 +552,384 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
   }
 
   List<Widget> _order(TkTokens t, Map<String, dynamic> o) {
-    final now = _now;
     final kind = _str(o['kind']);
     final status = _str(o['status']);
     final booking = kind == 'booking';
     final c = _map(o['customer']);
+    final basket = _maps(o['basket']);
+    final look = TkLook.of(context);
+    final details = <Widget>[
+      if (_str(o['note']).isNotEmpty) TkListRow(title: 'Note', sub: _str(o['note']), icon: 'b-note', square: look.violet),
+      if (_str(o['fulfilment']).isNotEmpty)
+        TkListRow(
+          title: 'Fulfilment',
+          sub: '${_str(o['fulfilment'])[0].toUpperCase()}${_str(o['fulfilment']).substring(1)}',
+          icon: 'b-truck',
+          square: look.blue,
+        ),
+      if (status == 'awaiting_payment' && _str(o['expires_at']).isNotEmpty)
+        TkListRow(title: 'Payment expires', sub: whenLabel(_str(o['expires_at'])), icon: 'b-clock', square: look.orange),
+      if (_str(o['decided_at']).isNotEmpty)
+        TkListRow(
+          title: 'Decided',
+          sub: '${whenLabel(_str(o['decided_at']))}${_str(o['decided_by']).isNotEmpty ? ' by ${o['decided_by']}' : ''}',
+          icon: const {'declined', 'refund_due', 'refunded'}.contains(status) ? 'b-x' : 'b-check',
+          square: const {'declined', 'refund_due', 'refunded'}.contains(status) ? look.red : look.lime,
+        ),
+      // The run's own page is the web's: here, whether it started.
+      TkListRow(title: 'Workflow', icon: 'b-bolt', square: look.teal, amount: _str(o['run_id']).isNotEmpty ? 'Started' : 'Not started yet'),
+    ];
+    return [
+      _top(t, o),
+      if (_actError != null) TkErrorBox(_actError!),
+      _customer(t, c),
+      if (basket.isNotEmpty && !booking)
+        TkSection(
+          title: 'What they ordered',
+          children: [
+            TkBill(
+              lines: [
+                for (final l in basket)
+                  (
+                    name: '${(l['quantity'] as num?)?.toInt() ?? 1} × ${_str(l['name'])}',
+                    sub: '',
+                    under: null,
+                    amount: l['line_kobo'] != null ? naira(_int(l['line_kobo'])) : '',
+                  ),
+                if (_str(o['zone']).isNotEmpty) (name: 'Delivery to ${o['zone']}', sub: '', under: null, amount: naira(_int(o['delivery_kobo']))),
+              ],
+              total: naira(_int(o['total_kobo'])),
+            ),
+          ],
+        ),
+      ?_money(t),
+      TkSection(inset: 56, children: details),
+      Text(decideWhere, style: tkHint(t)),
+    ];
+  }
+
+  /// The top card: where the order stands in its stage's colour, its total
+  /// (a booking's time), how it is paid, how far it has gone, and what to
+  /// do now: its rider, a refund, Move or Cancel.
+  Widget _top(TkTokens t, Map<String, dynamic> o) {
+    final look = TkLook.of(context);
+    final now = _now;
+    final kind = _str(o['kind']);
+    final status = _str(o['status']);
+    final booking = kind == 'booking';
     final st = orderStatus(status);
+    final starts = _str(o['starts_at']);
     final refundKobo = _int(o['deposit_kobo']) > 0 ? _int(o['deposit_kobo']) : _int(o['total_kobo']);
     final paidBy = o['paid_by'] as String?;
     final card = paidBy == null || paidBy.isEmpty || paidBy == 'card';
-    final basket = _maps(o['basket']);
-    return [
-      if (kind == 'order' || booking || kind == 'trade')
-        TkHero(
-          label: booking ? (_str(o['service_name']).isEmpty ? 'Booking' : _str(o['service_name'])) : 'Order total',
-          tag: st.label,
-          amount: orderTotal(o),
-          sub:
-              '${paymentSummary(o)}\nCustomer ${_str(c['name']).isEmpty ? '—' : c['name']} · ${booking ? (_str(o['starts_at']).isEmpty ? '—' : whenLabel(_str(o['starts_at']))) : 'Received ${relativeAge(_str(o['created_at']), now)}'}',
-          semanticsLabel: booking ? 'The booking' : 'The order',
+    final delivery = o['fulfilment'] == 'delivery';
+    final ink = switch (status) {
+      'received' || 'awaiting_payment' || 'price_changed' => look.orangeInk,
+      'paid' || 'accepted' => look.tealInk,
+      'dispatched' || 'on_the_way' || 'arrived' || 'proposed' || 'changed' => look.blueInk,
+      'completed' => look.limeInk,
+      'refund_due' => look.redInk,
+      _ => t.muted,
+    };
+    // A booking that holds its time says its day; the rest their status.
+    var eyebrow = st.label;
+    var trailing = status == 'awaiting_payment' && _str(o['expires_at']).isNotEmpty
+        ? 'expires ${timeLeft(_str(o['expires_at']), now)}'
+        : 'ordered ${relativeAge(_str(o['created_at']), now)}';
+    var figure = orderTotal(o);
+    if (booking) {
+      trailing = starts.isEmpty ? st.label : (timeLeft(starts, now) == 'now' ? whenLabel(starts) : timeLeft(starts, now));
+      if (starts.isNotEmpty) {
+        final day = lagosDay(starts);
+        final today = lagosDay(now.toUtc().toIso8601String());
+        final tomorrow = lagosDay(now.toUtc().add(const Duration(days: 1)).toIso8601String());
+        if (canChange(o)) eyebrow = day == today ? 'Today' : (day == tomorrow ? 'Tomorrow' : dayLabel(day));
+        figure = '${dayLabel(day).split(' ').first} ${lagosTime(starts)}';
+      } else {
+        figure = 'No time';
+      }
+    }
+    final flowing = const {'received', 'awaiting_payment', 'paid', 'accepted', 'dispatched', 'on_the_way', 'arrived', 'completed'}.contains(status);
+    final accepted = const {'accepted', 'dispatched', 'on_the_way', 'arrived', 'completed'}.contains(status);
+    final out = const {'dispatched', 'on_the_way', 'arrived', 'completed'}.contains(status);
+    String at(String k) => _str(o[k]).isEmpty ? '' : lagosTime(_str(o[k]));
+    final manage = _auth.can('storefront.manage');
+    final refund = <Widget>[
+      if (card)
+        TkSmallButton(
+          label: 'Refund through Paystack',
+          primary: true,
+          onPressed: _busy
+              ? null
+              : () async {
+                  if (!await showTkConfirm(
+                    context,
+                    title: 'Refund ${naira(refundKobo)} to the customer now?',
+                    body: 'It comes from your Paystack balance.',
+                    ok: 'Refund',
+                    cancel: 'Not now',
+                  )) {
+                    return;
+                  }
+                  await _run(() => _auth.transport.send('POST', '/v1/storefront/orders/$_ref/refund', body: const {}), 'Refunded');
+                },
         ),
-      if (status == 'refund_due')
-        TkPageCard(
-          children: [
-            _Notice(refundLine(refundKobo, paidBy), tone: Tone.danger),
-            if (_str(o['note']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: _text(t, _str(o['note']), hint: true)),
-            // Refunds are the owner's (storefront.manage, api/server.go).
-            if (_auth.can('storefront.manage')) ...[
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (card)
-                  TkSmallButton(
-                    label: 'Refund through Paystack',
-                    onPressed: _busy
-                        ? null
-                        : () async {
-                            if (!await showTkConfirm(
-                              context,
-                              title: 'Refund ${naira(refundKobo)} to the customer now?',
-                              body: 'It comes from your Paystack balance.',
-                              ok: 'Refund',
-                              cancel: 'Not now',
-                            )) {
-                              return;
-                            }
-                            await _run(() => _auth.transport.send('POST', '/v1/storefront/orders/$_ref/refund', body: const {}), 'Refunded');
-                          },
-                  ),
-                TkSmallButton(
-                  label: 'Mark refunded',
-                  primary: !card,
-                  onPressed: _busy
-                      ? null
-                      : () async {
-                          if (!await showTkConfirm(
-                            context,
-                            title: 'Mark ${o['reference']} refunded?',
-                            body: 'Only once you have sent ${naira(refundKobo)} back to the customer. They will be told.',
-                            ok: 'Mark refunded',
-                            cancel: 'Not yet',
-                          )) {
-                            return;
-                          }
-                          await _run(() => _auth.transport.send('POST', '/v1/storefront/orders/$_ref/refunded', body: const {}), 'Marked refunded');
-                        },
-                ),
-              ],
-            ),
-            ],
-          ],
-        ),
-      if (_actError != null) TkErrorBox(_actError!),
-      TkPageCard(
-        title: 'Details',
-        children: [
-          _Kv([
-            ('Status', Align(alignment: Alignment.centerLeft, child: TkPill(st.label, tone: _pillTone(st.tone)))),
-            ('Received', _text(t, '${relativeAge(_str(o['created_at']), now)} (${whenLabel(_str(o['created_at']))})')),
-            if (booking) ...[
-              ('Service', _text(t, _str(o['service_name']).isEmpty ? '—' : _str(o['service_name']))),
-              ('When', _text(t, _str(o['starts_at']).isEmpty ? '—' : '${whenLabel(_str(o['starts_at']))} (${timeSpan(o)}, Lagos time)')),
-              ('Price', _text(t, orderTotal(o))),
-            ],
-            if (status == 'price_changed' && o['price_change'] != null)
-              (
-                'New prices',
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _text(t, priceChangeLine(_map(o['price_change']))),
-                    _text(t, 'The customer is asked to agree to the new total before the order goes on.', hint: true),
-                  ],
-                ),
-              ),
-            if (basket.isNotEmpty && !booking) ...[
-              (
-                'Items',
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final l in basket)
-                      _text(t, '${(l['quantity'] as num?)?.toInt() ?? 1} × ${_str(l['name'])}${l['line_kobo'] != null ? ' ${naira(_int(l['line_kobo']))}' : ''}'),
-                    if (_str(o['zone']).isNotEmpty) _text(t, 'Delivery to ${o['zone']} ${naira(_int(o['delivery_kobo']))}'),
-                  ],
-                ),
-              ),
-              ('Total', _text(t, naira(_int(o['total_kobo'])))),
-            ],
-            if (_str(o['fulfilment']).isNotEmpty) ('Fulfilment', _text(t, '${_str(o['fulfilment'])[0].toUpperCase()}${_str(o['fulfilment']).substring(1)}')),
-            if (kind == 'order' || booking)
-              ('Payment', _text(t, '${paymentSummary(o)}${_str(o['paid_at']).isNotEmpty ? ' (${whenLabel(_str(o['paid_at']))})' : ''}')),
-            if (status == 'awaiting_payment' && _str(o['expires_at']).isNotEmpty) ('Payment expires', _text(t, whenLabel(_str(o['expires_at'])))),
-            if (_str(o['note']).isNotEmpty) ('Note', _text(t, _str(o['note']))),
-            if (_str(o['decided_at']).isNotEmpty)
-              ('Decided', _text(t, '${whenLabel(_str(o['decided_at']))}${_str(o['decided_by']).isNotEmpty ? ' by ${o['decided_by']}' : ''}')),
-            // The run's own page is the web's: here, whether it started.
-            ('Workflow', _text(t, _str(o['run_id']).isNotEmpty ? 'Started' : 'Not started yet', hint: _str(o['run_id']).isEmpty)),
-          ]),
-          Text(decideWhere, style: tkHint(t)),
-          if (booking && canChange(o)) ...[
-            if (_changed.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 10), child: _Notice(_changed)),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              children: [
-                TkSmallButton(
-                  label: 'Move',
-                  semantics: 'Move ${o['service_name'] ?? 'booking'} ${o['reference']}',
-                  onPressed: _busy
-                      ? null
-                      : () async {
-                    final said = await moveBooking(context, _auth, o);
-                    if (said == null || !mounted) return;
-                    setState(() => _changed = said);
-                    await _load();
-                  },
-                ),
-                TkSmallButton(
-                  label: 'Cancel',
-                  danger: true,
-                  semantics: 'Cancel ${o['service_name'] ?? 'booking'} ${o['reference']}',
-                  onPressed: _busy
-                      ? null
-                      : () async {
-                          if (!await askCancelBooking(context, o) || !mounted) return;
-                          await _run(() async {
-                            final said = await cancelBooking(_auth, o);
-                            if (mounted) setState(() => _changed = said);
-                          }, 'Booking cancelled');
-                        },
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-      if (kind == 'trade')
-        TkPageCard(
-          title: 'From a linked business',
-          children: [
-            _text(
-              t,
-              '${_str(c['name']).isEmpty ? 'A business' : c['name']} ordered on Taskiem. Its items, a change to them, and what was delivered of each are on the linked order.',
-              hint: true,
-            ),
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TkSmallButton(label: 'Open the linked order', onPressed: () => openTradeOrder(context, _auth, _str(o['reference']))),
-            ),
-          ],
-        ),
-      if ((kind == 'order' || kind == 'trade') && o['fulfilment'] == 'delivery')
-        OrderDelivery(
-          key: ValueKey('delivery ${widget.reference}'),
-          auth: _auth,
-          reference: widget.reference,
-          onChanged: _load,
-          reads: _loads,
-          manage: _auth.can('storefront.manage'),
-        ),
-      _money(t),
-      TkPageCard(
-        title: 'Customer',
-        children: [
-          _CustomerDetails(c: _revealed ?? c),
-          if (_revealed == null && _auth.can('pii.reveal')) ...[
-            const SizedBox(height: 4),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TkSmallButton(
-                label: 'Show customer’s details',
-                onPressed: _busy
-                    ? null
-                    : () => _run(() async {
-                        final r = (await _auth.transport.send('GET', '/v1/storefront/orders/$_ref', query: {'reveal': 'true'}) as Map).cast<String, dynamic>();
-                        if (mounted) setState(() => _revealed = _map(_map(r['order'])['customer']));
-                      }, ''),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text('Showing them is recorded in the audit log.', style: tkHint(t)),
-          ],
-          if (_revealed == null && !_auth.can('pii.reveal'))
-            Text('The customer’s details are hidden. Someone who may see personal data can show them.', style: tkHint(t)),
-        ],
+      TkSmallButton(
+        label: 'Mark refunded',
+        primary: !card,
+        onPressed: _busy
+            ? null
+            : () async {
+                if (!await showTkConfirm(
+                  context,
+                  title: 'Mark ${o['reference']} refunded?',
+                  body: 'Only once you have sent ${naira(refundKobo)} back to the customer. They will be told.',
+                  ok: 'Mark refunded',
+                  cancel: 'Not yet',
+                )) {
+                  return;
+                }
+                await _run(() => _auth.transport.send('POST', '/v1/storefront/orders/$_ref/refunded', body: const {}), 'Marked refunded');
+              },
       ),
     ];
+    final sub = tkText(size: 13, lineHeight: 1.4, color: t.muted);
+    return TkTopCard(
+      semanticsLabel: booking ? 'The booking' : 'The order',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TkEyebrow(eyebrow, color: ink, trailing: trailing),
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: kind == 'order' ? TkCountUp(_int(o['total_kobo']), style: tkFigure(context, size: 40)) : Text(figure, style: tkFigure(context, size: 40)),
+          ),
+          if (booking) ...[
+            Text(_str(o['service_name']).isEmpty ? 'Booking' : _str(o['service_name']), style: tkText(size: 15, weight: 600, lineHeight: 1.35, color: t.text)),
+            if (starts.isNotEmpty) Text('${timeSpan(o)}, Lagos time', style: sub),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: TkMiniTile(icon: 'b-cash', value: orderTotal(o), sub: paymentSummary(o))),
+                const SizedBox(width: 8),
+                Expanded(child: TkMiniTile(icon: 'b-clock', value: st.label, sub: 'booked ${whenLabel(_str(o['created_at']))}')),
+              ],
+            ),
+          ] else
+            Text(status == 'refund_due' ? refundLine(refundKobo, paidBy) : paymentSummary(o), style: sub),
+          if (status == 'price_changed' && o['price_change'] != null) ...[
+            const SizedBox(height: 8),
+            Text(priceChangeLine(_map(o['price_change'])), style: tkText(size: 14, weight: 600, lineHeight: 1.4, color: t.text)),
+            Text('The customer is asked to agree to the new total before the order goes on.', style: sub),
+          ],
+          if (kind == 'order' && flowing) ...[
+            const SizedBox(height: 14),
+            TkSteps(
+              steps: [
+                (label: 'Ordered', when: at('created_at'), done: true),
+                (label: 'Accepted', when: accepted ? at('decided_at') : '', done: accepted),
+                if (delivery) (label: 'With rider', when: '', done: out),
+                (label: delivery ? 'Delivered' : 'Done', when: '', done: status == 'completed'),
+              ],
+            ),
+          ],
+          // Refunds are the owner's (storefront.manage, api/server.go).
+          if (status == 'refund_due' && manage) ...[const SizedBox(height: 14), TkButtonRow(refund)],
+          if (booking && canChange(o)) ...[
+            const SizedBox(height: 12),
+            if (_changed.isNotEmpty) Padding(padding: const EdgeInsets.only(bottom: 10), child: _Notice(_changed)),
+            TkButtonRow([
+              TkSmallButton(
+                label: 'Move',
+                primary: true,
+                semantics: 'Move ${o['service_name'] ?? 'booking'} ${o['reference']}',
+                onPressed: _busy
+                    ? null
+                    : () async {
+                        final said = await moveBooking(context, _auth, o);
+                        if (said == null || !mounted) return;
+                        setState(() => _changed = said);
+                        await _load();
+                      },
+              ),
+              TkSmallButton(
+                label: 'Cancel',
+                semantics: 'Cancel ${o['service_name'] ?? 'booking'} ${o['reference']}',
+                onPressed: _busy
+                    ? null
+                    : () async {
+                        if (!await askCancelBooking(context, o) || !mounted) return;
+                        await _run(() async {
+                          final said = await cancelBooking(_auth, o);
+                          if (mounted) setState(() => _changed = said);
+                        }, 'Booking cancelled');
+                      },
+              ),
+            ]),
+          ],
+          if (kind == 'trade') ...[
+            const SizedBox(height: 14),
+            TkCallout(
+              leading: TkSquare('b-people', color: look.violet),
+              title: 'From ${_str(_map(o['customer'])['name']).isEmpty ? 'a linked business' : _map(o['customer'])['name']}',
+              sub: 'Its items, a change and what was delivered are on the linked order',
+              color: look.violet,
+              button: 'Open',
+              semantics: 'Open the linked order',
+              onPressed: () => openTradeOrder(context, _auth, _str(o['reference'])),
+            ),
+          ],
+          if ((kind == 'order' || kind == 'trade') && delivery)
+            OrderDelivery(
+              key: ValueKey('delivery ${widget.reference}'),
+              auth: _auth,
+              reference: widget.reference,
+              onChanged: _load,
+              reads: _loads,
+              manage: _auth.can('storefront.manage'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// The customer on one card: Call, WhatsApp, Map and Email when their
+  /// details are shown; else one button to show them.
+  Widget _customer(TkTokens t, Map<String, dynamic> shown) {
+    final c = _revealed ?? shown;
+    final phone = _str(c['phone']);
+    final email = _str(c['email']);
+    final wa = whatsappLink(phone);
+    final pin = _str(c['pin']);
+    final name = _str(c['name']).isEmpty ? 'Customer' : _str(c['name']);
+    final hidden = _revealed == null && [phone, email, name].any(isMasked);
+    final line = tkText(size: 13, lineHeight: 1.4, color: t.muted);
+    return TkPersonCard(
+      name: name,
+      sub: [
+        if (phone.isNotEmpty) phone,
+        if (_str(c['address']).isNotEmpty) _str(c['address']),
+        if (phone.isEmpty && _str(c['address']).isEmpty && email.isNotEmpty) email,
+      ].join(' · ').ifEmpty(hidden ? 'Details hidden' : 'No details given'),
+      actions: [
+        if (phone.isNotEmpty && !isMasked(phone))
+          (icon: 'b-phone', label: 'Call', semantics: 'Call $phone', onTap: () => openOrSay(context, () => callPhone(phone), 'That number could not be called.')),
+        if (wa != null) (icon: 'b-chat', label: 'WhatsApp', semantics: 'WhatsApp', onTap: () => openOrSay(context, () => openOutside(Uri.parse(wa)), 'WhatsApp could not be opened.')),
+        if (pin.startsWith('https://'))
+          (icon: 'b-pin', label: 'Map', semantics: 'Open the map', onTap: () => openOrSay(context, () => openOutside(Uri.parse(pin)), 'The map could not be opened.')),
+        if (email.isNotEmpty && !isMasked(email))
+          (icon: 'b-mail', label: 'Email', semantics: email, onTap: () => openOrSay(context, () => mailTo(email), 'Your mail app could not be opened.')),
+      ],
+      children: [
+        for (final (k, v) in [
+          ('Landmark', _str(c['landmark'])),
+          if (!pin.startsWith('https://')) ('Location', pin),
+          ('Email', email.isNotEmpty && phone.isNotEmpty ? email : ''),
+          ('Message', _str(c['message'])),
+          ('Best time', _str(c['best_time'])),
+        ])
+          if (v.isNotEmpty && !(k == 'Email' && !isMasked(v))) Padding(padding: const EdgeInsets.only(top: 8), child: Text('$k: $v', style: line)),
+        if (hidden && _auth.can('pii.reveal')) ...[
+          const SizedBox(height: 12),
+          TkSmallButton(
+            label: 'Show customer’s details',
+            onPressed: _busy
+                ? null
+                : () => _run(() async {
+                    final r = (await _auth.transport.send('GET', '/v1/storefront/orders/$_ref', query: {'reveal': 'true'}) as Map).cast<String, dynamic>();
+                    if (mounted) setState(() => _revealed = _map(_map(r['order'])['customer']));
+                  }, ''),
+          ),
+          const SizedBox(height: 6),
+          Text('Showing them is recorded in the audit log.', textAlign: TextAlign.center, style: tkText(size: 12, color: t.muted)),
+        ],
+        if (hidden && !_auth.can('pii.reveal'))
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Text('The customer’s details are hidden. Someone who may see personal data can show them.', style: line),
+          ),
+      ],
+    );
   }
 
   /// OrderMoney: the money matched to an order, each with how; a wrong
   /// match undone while the order has not gone on.
-  Widget _money(TkTokens t) {
+  Widget? _money(TkTokens t) {
     final rows = [
       for (final p in _maps(_view?['payments']))
         if (_str(p['undoes']).isEmpty) (p: p, undone: _str(p['undone_by']).isNotEmpty),
     ];
-    if (rows.isEmpty) return const SizedBox.shrink();
+    if (rows.isEmpty) return null;
     final manage = _auth.can('invoice.manage');
-    return TkPageCard(
-      title: 'Money matched',
+    final look = TkLook.of(context);
+    return TkSection(
+      title: 'Money',
+      inset: 60,
       children: [
         for (final r in rows)
           Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Column(
+            padding: const EdgeInsets.fromLTRB(14, 11, 14, 11),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Wrap(
-                  spacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(naira(_int(r.p['amount_kobo'])), style: tkText(size: 15, weight: 700, color: t.text)),
-                    _text(t, howMatchedOrder(_str(r.p['how']), _str(r.p['by']))),
-                    Text(whenLabel(_str(r.p['created_at'])), style: tkHint(t)),
-                    if (r.undone) const TkPill('Undone'),
-                  ],
-                ),
-                for (final why in ((r.p['reasons'] as List?) ?? const []).whereType<String>()) Text('· $why', style: tkHint(t)),
-                if (manage && !r.undone && r.p['undoable'] == true)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: TkSmallButton(
-                      label: 'Undo the match',
-                      onPressed: _busy
-                          ? null
-                          : () async {
-                              if (!await showTkConfirm(
-                                context,
-                                title: 'Undo this match?',
-                                body: 'The order goes back to unpaid, and the money waits to be matched again.',
-                                ok: 'Undo the match',
-                                cancel: 'Keep it',
-                                danger: true,
-                              )) {
-                                return;
-                              }
-                              await _run(
-                                () => _auth.transport.send('POST', '/v1/money/order-payments/${Uri.encodeComponent(_str(r.p['id']))}/undo', body: const {}),
-                                'Match undone',
-                              );
-                            },
-                    ),
+                TkSquare(r.undone ? 'b-refund' : 'b-check', color: r.undone ? t.muted : look.lime, size: 30),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      MergeSemantics(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(child: Text(naira(_int(r.p['amount_kobo'])), style: tkText(size: 15.5, weight: 600, color: t.text))),
+                                if (r.undone) const TkPill('Undone'),
+                              ],
+                            ),
+                            Text(howMatchedOrder(_str(r.p['how']), _str(r.p['by'])), style: tkText(size: 13, lineHeight: 1.35, color: t.text)),
+                            Text(
+                              [whenLabel(_str(r.p['created_at'])), ...((r.p['reasons'] as List?) ?? const []).whereType<String>()].join(' · '),
+                              style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (manage && !r.undone && r.p['undoable'] == true)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: TkSmallButton(
+                              label: 'Undo the match',
+                              onPressed: _busy
+                                  ? null
+                                  : () async {
+                                      if (!await showTkConfirm(
+                                        context,
+                                        title: 'Undo this match?',
+                                        body: 'The order goes back to unpaid, and the money waits to be matched again.',
+                                        ok: 'Undo the match',
+                                        cancel: 'Keep it',
+                                        danger: true,
+                                      )) {
+                                        return;
+                                      }
+                                      await _run(
+                                        () => _auth.transport.send('POST', '/v1/money/order-payments/${Uri.encodeComponent(_str(r.p['id']))}/undo', body: const {}),
+                                        'Match undone',
+                                      );
+                                    },
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
+                ),
               ],
             ),
           ),
@@ -867,52 +938,8 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
   }
 }
 
-/// CustomerDetails: who the customer is, with a call, WhatsApp and the
-/// map when the details are shown.
-class _CustomerDetails extends StatelessWidget {
-  const _CustomerDetails({required this.c});
-  final Map<String, dynamic> c;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    final phone = _str(c['phone']);
-    final wa = whatsappLink(phone);
-    final pin = _str(c['pin']);
-    final rows = <(String, Widget)>[
-      if (_str(c['name']).isNotEmpty) ('Name', _text(t, _str(c['name']))),
-      if (phone.isNotEmpty)
-        (
-          'Phone',
-          isMasked(phone)
-              ? _text(t, phone)
-              : _Links([
-                  TkLink(label: 'Call $phone', onTap: () => openOrSay(context, () => callPhone(phone), 'That number could not be called.')),
-                  if (wa != null) TkLink(label: 'WhatsApp', onTap: () => openOrSay(context, () => openOutside(Uri.parse(wa)), 'WhatsApp could not be opened.')),
-                ]),
-        ),
-      if (_str(c['email']).isNotEmpty)
-        (
-          'Email',
-          isMasked(_str(c['email']))
-              ? _text(t, _str(c['email']))
-              : _Links([TkLink(label: _str(c['email']), onTap: () => openOrSay(context, () => mailTo(_str(c['email'])), 'Your mail app could not be opened.'))]),
-        ),
-      if (_str(c['address']).isNotEmpty) ('Address', _text(t, _str(c['address']))),
-      if (_str(c['landmark']).isNotEmpty) ('Landmark', _text(t, _str(c['landmark']))),
-      if (pin.isNotEmpty)
-        (
-          'Location',
-          pin.startsWith('https://')
-              ? _Links([TkLink(label: 'Open the map', onTap: () => openOrSay(context, () => openOutside(Uri.parse(pin)), 'The map could not be opened.'))])
-              : _text(t, pin),
-        ),
-      if (_str(c['message']).isNotEmpty) ('Message', _text(t, _str(c['message']))),
-      if (_str(c['best_time']).isNotEmpty) ('Best time', _text(t, _str(c['best_time']))),
-    ];
-    if (rows.isEmpty) return Text('No details given.', style: tkHint(t));
-    return _Kv(rows);
-  }
+extension on String {
+  String ifEmpty(String other) => isEmpty ? other : this;
 }
 
 /// OrderDelivery: an order's delivery on its page: who has it and how far
@@ -996,6 +1023,7 @@ class _OrderDeliveryState extends State<OrderDelivery> {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     if (_off) return const SizedBox.shrink();
     final v = _v;
     final list = _maps(v?['deliveries']);
@@ -1005,141 +1033,173 @@ class _OrderDeliveryState extends State<OrderDelivery> {
         if (!identical(d, cur)) d,
     ];
     final notReady = _str(v?['not_ready']);
-    return TkPageCard(
-      title: 'Delivery',
+    final small = tkText(size: 12.5, lineHeight: 1.4, color: t.muted);
+    final buttons = <Widget>[
+      if (v != null && notReady.isEmpty && (cur == null || cur['status'] == 'offered')) ...[
+        TkSmallButton(label: cur != null ? 'Offer to the next free rider' : 'Offer to a free rider', primary: true, onPressed: _busy ? null : () => _offer()),
+        TkSmallButton(label: 'Choose the rider', onPressed: _busy ? null : _choose),
+      ],
+      if (widget.manage && cur != null && cur['status'] == 'delivered' && _str(cur['fee_paid']).isEmpty) ...[
+        TkSmallButton(
+          label: 'Confirm, pay the fee',
+          primary: true,
+          onPressed: _busy
+              ? null
+              : () => _run(() async {
+                  await _t.send('POST', '/v1/storefront/orders/$_ref/confirm', body: const {});
+                  _said = '';
+                }, 'Confirmed: the fee is on its way'),
+        ),
+        TkSmallButton(
+          label: 'Paid in cash',
+          onPressed: _busy
+              ? null
+              : () => _run(() async {
+                  await _t.send('POST', '/v1/storefront/orders/$_ref/confirm', body: {'how': 'cash'});
+                  _said = '';
+                }, 'Paid in cash'),
+        ),
+      ],
+    ];
+    final held = cur != null && (isHeld(cur) || cur['status'] == 'offered');
+    final riderPhone = cur == null ? '' : _str(cur['rider_phone']);
+    final st = cur == null ? null : deliveryStatus(_str(cur['status']));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const SizedBox(height: 14),
         if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 10), child: TkErrorBox(_error!)),
-        if (v == null && _error == null) Text('Loading the delivery…', style: tkHint(t)),
+        if (v == null && _error == null) Text('Loading the delivery…', style: small),
         if (_said.isNotEmpty) Padding(padding: const EdgeInsets.only(bottom: 10), child: _Notice(_said)),
-        if (cur != null) ...[
-          _Kv([
-            (
-              'Rider',
-              // A cashier gets the rider's phone masked: words, not a call.
-              _str(cur['rider_phone']).isEmpty || isMasked(_str(cur['rider_phone']))
-                  ? _text(t, [_str(cur['rider']), _str(cur['rider_phone'])].where((x) => x.isNotEmpty).join(' · '))
-                  : _Links([
-                      _text(t, _str(cur['rider'])),
-                      TkLink(
-                        label: 'Call ${cur['rider_phone']}',
-                        onTap: () => openOrSay(context, () => callPhone(_str(cur['rider_phone'])), 'That number could not be called.'),
-                      ),
-                    ]),
-            ),
-            (
-              'Status',
-              Wrap(
-                spacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  TkPill(deliveryStatus(_str(cur['status'])).label, tone: _pillTone(deliveryStatus(_str(cur['status'])).tone)),
-                  if (cur['late'] != null) Text(cur['late'] == 'pickup' ? 'Not picked up in time' : 'Not at the door in time', style: tkHint(t)),
-                ],
-              ),
-            ),
-            if (_int(cur['fee_kobo']) > 0) ('Rider’s fee', _text(t, naira(_int(cur['fee_kobo'])))),
-            if (_int(cur['rating']) > 0) ('Customer’s rating', _text(t, '${cur['rating']} of 5')),
-          ]),
-          Semantics(
-            container: true,
-            label: 'How far it got',
+        // The rider: who has it, where it is, and Call.
+        if (cur != null)
+          Container(
+            padding: const EdgeInsets.fromLTRB(10, 10, 8, 10),
+            decoration: BoxDecoration(color: look.blue.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(16)),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (final (i, s) in deliveryStepsOf(cur).indexed) Text('${i + 1}. ${s.label}  ${s.at}', style: tkText(size: 14, color: t.text)),
+                Row(
+                  children: [
+                    TkSquare('b-bike', color: look.blue),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: MergeSemantics(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // A cashier gets the rider's phone masked: words, not a call.
+                            Text(
+                              [_str(cur['rider']), if (isMasked(riderPhone)) riderPhone].where((x) => x.isNotEmpty).join(' · '),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: tkText(size: 14, weight: 600, lineHeight: 1.3, color: t.text),
+                            ),
+                            Wrap(
+                              spacing: 6,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(st!.label, style: tkText(size: 12.5, weight: 600, lineHeight: 1.35, color: st.tone == Tone.ok ? look.limeInk : look.blueInk)),
+                                if (_int(cur['fee_kobo']) > 0) Text('fee ${naira(_int(cur['fee_kobo']))}', style: small),
+                                if (cur['late'] != null) Text(cur['late'] == 'pickup' ? 'Not picked up in time' : 'Not at the door in time', style: tkText(size: 12.5, weight: 600, color: look.redInk)),
+                                if (_int(cur['rating']) > 0) Text('rated ${cur['rating']} of 5', style: small),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (riderPhone.isNotEmpty && !isMasked(riderPhone)) ...[
+                      const SizedBox(width: 8),
+                      TkSmallButton(
+                        label: 'Call',
+                        primary: true,
+                        semantics: 'Call $riderPhone',
+                        onPressed: () => openOrSay(context, () => callPhone(riderPhone), 'That number could not be called.'),
+                      ),
+                    ],
+                  ],
+                ),
+                if (deliveryStepsOf(cur).isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 44, top: 6),
+                    child: Semantics(
+                      container: true,
+                      label: 'How far it got',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [for (final s in deliveryStepsOf(cur)) Text('${s.at}  ${s.label}', style: small)],
+                      ),
+                    ),
+                  ),
+                if (_str(cur['proof_url']).isNotEmpty || _str(cur['location']).isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 44, top: 6),
+                    child: Wrap(
+                      spacing: 12,
+                      children: [
+                        if (_str(cur['proof_url']).isNotEmpty)
+                          TkLink(
+                            label: 'See the photo from the door',
+                            onTap: () => openOrSay(context, () => openInBrowser(Uri.parse(_str(cur['proof_url']))), 'The photo could not be opened.'),
+                          ),
+                        if (_str(cur['location']).isNotEmpty)
+                          TkLink(
+                            label: 'Where the rider was',
+                            onTap: () => openOrSay(
+                              context,
+                              () => openOutside(
+                                Uri.parse(
+                                  _str(cur['location']).startsWith('https://')
+                                      ? _str(cur['location'])
+                                      : 'https://maps.google.com/?q=${Uri.encodeQueryComponent(_str(cur['location']))}',
+                                ),
+                              ),
+                              'The map could not be opened.',
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
-          if (_str(cur['proof_url']).isNotEmpty || _str(cur['location']).isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Wrap(
-                spacing: 12,
-                children: [
-                  if (_str(cur['proof_url']).isNotEmpty)
-                    TkLink(
-                      label: 'See the photo from the door',
-                      onTap: () => openOrSay(context, () => openInBrowser(Uri.parse(_str(cur['proof_url']))), 'The photo could not be opened.'),
-                    ),
-                  if (_str(cur['location']).isNotEmpty)
-                    TkLink(
-                      label: 'Where the rider was',
-                      onTap: () => openOrSay(
-                        context,
-                        () => openOutside(
-                          Uri.parse(
-                            _str(cur['location']).startsWith('https://')
-                                ? _str(cur['location'])
-                                : 'https://maps.google.com/?q=${Uri.encodeQueryComponent(_str(cur['location']))}',
-                          ),
-                        ),
-                        'The map could not be opened.',
-                      ),
-                    ),
-                ],
-              ),
-            ),
-        ],
-        if (v != null && cur == null) Text(notReady.isNotEmpty ? 'Not ready for a rider: $notReady.' : 'No rider has it yet.', style: tkHint(t)),
-        if (v != null) ...[
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+        if (v != null && cur == null)
+          Row(
             children: [
-              if (notReady.isEmpty && (cur == null || cur['status'] == 'offered')) ...[
-                TkSmallButton(label: cur != null ? 'Offer to the next free rider' : 'Offer to a free rider', primary: true, onPressed: _busy ? null : () => _offer()),
-                TkSmallButton(label: 'Choose the rider', onPressed: _busy ? null : _choose),
-              ],
-              if (widget.manage && cur != null && cur['status'] == 'delivered' && _str(cur['fee_paid']).isEmpty) ...[
-                TkSmallButton(
-                  label: 'Confirm, pay the fee',
-                  primary: true,
-                  onPressed: _busy
-                      ? null
-                      : () => _run(() async {
-                          await _t.send('POST', '/v1/storefront/orders/$_ref/confirm', body: const {});
-                          _said = '';
-                        }, 'Confirmed: the fee is on its way'),
-                ),
-                TkSmallButton(
-                  label: 'Paid in cash',
-                  onPressed: _busy
-                      ? null
-                      : () => _run(() async {
-                          await _t.send('POST', '/v1/storefront/orders/$_ref/confirm', body: {'how': 'cash'});
-                          _said = '';
-                        }, 'Paid in cash'),
-                ),
-              ],
-              if (cur != null && (isHeld(cur) || cur['status'] == 'offered'))
-                TkSmallButton(
-                  label: 'Take it back',
-                  danger: true,
-                  onPressed: _busy
-                      ? null
-                      : () async {
-                          if (!await showTkConfirm(
-                            context,
-                            title: 'Take ${widget.reference} back from ${cur['rider']}?',
-                            body: 'They are told, and you can offer it again.',
-                            ok: 'Take it back',
-                            cancel: 'Leave it with them',
-                            danger: true,
-                          )) {
-                            return;
-                          }
-                          await _run(() async {
-                            await _t.send('POST', '/v1/storefront/orders/$_ref/release', body: const {});
-                            _said = '';
-                          }, 'Taken back');
-                        },
-                ),
+              TkSquare('b-bike', color: t.muted, size: 30),
+              const SizedBox(width: 10),
+              Expanded(child: Text(notReady.isNotEmpty ? 'Not ready for a rider: $notReady.' : 'No rider has it yet.', style: tkText(size: 14, lineHeight: 1.35, color: t.text))),
             ],
+          ),
+        if (buttons.isNotEmpty) ...[const SizedBox(height: 10), TkButtonRow(buttons)],
+        if (held) ...[
+          const SizedBox(height: 8),
+          TkSmallButton(
+            label: 'Take it back',
+            danger: true,
+            onPressed: _busy
+                ? null
+                : () async {
+                    if (!await showTkConfirm(
+                      context,
+                      title: 'Take ${widget.reference} back from ${cur['rider']}?',
+                      body: 'They are told, and you can offer it again.',
+                      ok: 'Take it back',
+                      cancel: 'Leave it with them',
+                      danger: true,
+                    )) {
+                      return;
+                    }
+                    await _run(() async {
+                      await _t.send('POST', '/v1/storefront/orders/$_ref/release', body: const {});
+                      _said = '';
+                    }, 'Taken back');
+                  },
           ),
         ],
         if (earlier.isNotEmpty) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerLeft,
             child: TkLink(label: '${_earlier ? 'Hide' : 'Show'} earlier offers (${earlier.length})', onTap: () => setState(() => _earlier = !_earlier)),

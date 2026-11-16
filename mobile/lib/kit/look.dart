@@ -703,28 +703,32 @@ class TkCallout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final large = _large(context);
+    final press = button != null && onPressed != null ? TkSmallButton(label: button!, semantics: semantics, primary: true, onPressed: onPressed) : null;
+    final words = Row(
+      children: [
+        leading,
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, maxLines: large ? 4 : 2, overflow: TextOverflow.ellipsis, style: tkText(size: 14, weight: 600, lineHeight: 1.3, color: t.text)),
+              if (sub != null && sub!.isNotEmpty)
+                Text(sub!, maxLines: large ? 6 : 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.3, color: t.muted)),
+            ],
+          ),
+        ),
+        if (press != null && !large) ...[const SizedBox(width: 8), press],
+      ],
+    );
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(16)),
-      child: Row(
-        children: [
-          leading,
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 14, weight: 600, lineHeight: 1.3, color: t.text)),
-                if (sub != null && sub!.isNotEmpty) Text(sub!, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.3, color: t.muted)),
-              ],
-            ),
-          ),
-          if (button != null && onPressed != null) ...[
-            const SizedBox(width: 8),
-            TkSmallButton(label: button!, semantics: semantics, primary: true, onPressed: onPressed),
-          ],
-        ],
-      ),
+      // With large text, the button under the words.
+      child: press != null && large
+          ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [words, const SizedBox(height: 8), press])
+          : words,
     );
   }
 }
@@ -797,9 +801,40 @@ class TkSteps extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
+    Widget dot(bool done) => Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: done ? look.lime : look.card, border: done ? null : Border.all(color: t.muted, width: 2)),
+    );
+    final label = steps.map((s) => '${s.label}${s.done ? (s.when.isEmpty ? ', done' : ', ${s.when}') : ', not yet'}').join('; ');
+    // With large text, the steps down the card: across, their words break.
+    if (_large(context)) {
+      return Semantics(
+        container: true,
+        label: label,
+        excludeSemantics: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final s in steps)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  children: [
+                    dot(s.done),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(s.label, style: tkText(size: 11.5, weight: 600, lineHeight: 1.25, color: t.text))),
+                    if (s.when.isNotEmpty) Text(s.when, style: tkText(size: 10.5, lineHeight: 1.25, color: t.muted)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      );
+    }
     return Semantics(
       container: true,
-      label: steps.map((s) => '${s.label}${s.done ? (s.when.isEmpty ? ', done' : ', ${s.when}') : ', not yet'}').join('; '),
+      label: label,
       excludeSemantics: true,
       child: Stack(
         children: [
@@ -838,3 +873,214 @@ class TkSteps extends StatelessWidget {
     );
   }
 }
+
+/// A button of a person's card (Call, WhatsApp, Map): its icon over its
+/// word, on the ground's colour.
+typedef TkCardAction = ({String icon, String label, String? semantics, VoidCallback onTap});
+
+/// A person or a business on one card: their letters on their face, their
+/// name and a line under it, what is at its end, and the buttons to reach
+/// them across its foot.
+class TkPersonCard extends StatelessWidget {
+  const TkPersonCard({super.key, required this.name, this.sub = '', this.actions = const [], this.trailing, this.children = const []});
+  final String name;
+  final String sub;
+  final List<TkCardAction> actions;
+  final Widget? trailing;
+
+  /// More under the head (lines of detail, a button).
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final ink = look.on;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              TkFace(_letters(name), size: 40, colors: tkFaceFor(name)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: MergeSemantics(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 16, weight: 600, lineHeight: 1.3, color: t.text)),
+                      if (sub.isNotEmpty) Text(sub, maxLines: 3, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted)),
+                    ],
+                  ),
+                ),
+              ),
+              if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+            ],
+          ),
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                for (var i = 0; i < actions.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: TapArea(
+                      child: Semantics(
+                        button: true,
+                        label: actions[i].semantics ?? actions[i].label,
+                        excludeSemantics: true,
+                        onTap: actions[i].onTap,
+                        child: TkPress(
+                          onTap: actions[i].onTap,
+                          child: Container(
+                            padding: const EdgeInsets.fromLTRB(4, 10, 4, 8),
+                            decoration: BoxDecoration(color: look.ground, borderRadius: BorderRadius.circular(14)),
+                            child: Column(
+                              children: [
+                                TkIcon(actions[i].icon, size: 20, stroke: 2, color: ink),
+                                const SizedBox(height: 4),
+                                Text(actions[i].label, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 12, weight: 600, color: ink)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+String _letters(String name) {
+  final words = name.split(RegExp(r'[\s·]+')).where((w) => w.isNotEmpty && RegExp(r'[A-Za-z0-9]').hasMatch(w[0])).toList();
+  if (words.isEmpty) return '?';
+  if (words.length == 1) return words.first.substring(0, math.min(2, words.first.length)).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+/// One line of what was ordered: the item (and a line under it), its amount.
+typedef TkBillLine = ({String name, String sub, Widget? under, String amount});
+
+/// What was ordered on a card: each line with its amount, a hairline, the
+/// total large.
+class TkBill extends StatelessWidget {
+  const TkBill({super.key, required this.lines, this.totalLabel = 'Total', required this.total});
+  final List<TkBillLine> lines;
+  final String totalLabel;
+  final String total;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+      decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final l in lines)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 7),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        MergeSemantics(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(l.name, style: tkText(size: 15, weight: 500, lineHeight: 1.35, color: t.text)),
+                              if (l.sub.isNotEmpty) Text(l.sub, style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted)),
+                            ],
+                          ),
+                        ),
+                        ?l.under,
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(l.amount, style: tkText(size: 15, weight: 600, lineHeight: 1.35, color: t.text)),
+                ],
+              ),
+            ),
+          Container(height: 1, margin: const EdgeInsets.symmetric(vertical: 6), color: look.line),
+          MergeSemantics(
+            child: Row(
+              children: [
+                Expanded(child: Text(totalLabel, style: tkText(size: 15, weight: 700, color: t.text))),
+                Text(total, style: tkDisplay(size: 19, letterSpacing: -0.4, color: t.text)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A small tile inside a top card: an icon, a figure, a line under it.
+class TkMiniTile extends StatelessWidget {
+  const TkMiniTile({super.key, required this.icon, required this.value, required this.sub});
+  final String icon;
+  final String value;
+  final String sub;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    return MergeSemantics(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(color: look.ground, borderRadius: BorderRadius.circular(14)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ExcludeSemantics(child: TkIcon(icon, size: 18, stroke: 2, color: t.muted)),
+            const SizedBox(height: 4),
+            Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 15, weight: 650, lineHeight: 1.3, color: t.text)),
+            Text(sub, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12, lineHeight: 1.3, color: t.muted)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The buttons of a top card, side by side, sharing its width.
+class TkButtonRow extends StatelessWidget {
+  const TkButtonRow(this.buttons, {super.key});
+  final List<Widget> buttons;
+
+  @override
+  Widget build(BuildContext context) => _large(context)
+      // With large text, one under another: side by side, the words break.
+      ? Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < buttons.length; i++) ...[if (i > 0) const SizedBox(height: 8), buttons[i]],
+          ],
+        )
+      : Row(
+          children: [
+            for (var i = 0; i < buttons.length; i++) ...[if (i > 0) const SizedBox(width: 8), Expanded(child: buttons[i])],
+          ],
+        );
+}
+
+/// The phone asks for text half as large again or more.
+bool _large(BuildContext context) => MediaQuery.textScalerOf(context).scale(10) > 15;
