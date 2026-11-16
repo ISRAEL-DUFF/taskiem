@@ -78,7 +78,7 @@ void main() {
   testWidgets('a list’s items: one added, a lower price for more', (t) async {
     final sent = await open(t);
     expect(find.text('1 item · shared with Rivers Foods'), findsOneWidget);
-    await t.tap(find.bySemanticsLabel('Items of Trade'));
+    await t.tap(find.bySemanticsLabel(RegExp('^Items of Trade')));
     await settle(t);
     await t.tap(find.text('Beans (bag)'));
     await t.pump();

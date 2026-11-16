@@ -14,9 +14,11 @@ import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/page.dart';
 import '../kit/sheet.dart' show TkKitField;
+import '../kit/look.dart';
+import '../kit/mobile.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
-import 'chats.dart' show LinkSection;
 import 'product_form.dart' show hasSizes, sizesWords;
 import 'sizes_forms.dart' show choicesOf, sizesOf, variantLabel, variantOf;
 import 'stock_page.dart' show feeInput, feeKobo;
@@ -109,123 +111,123 @@ class _PriceListsPageState extends State<PriceListsPage> with Polling {
     if (saved == true) await _load();
   }
 
+
+  /// How many businesses see one of the lists.
+  int _sharedWith(List<Map<String, dynamic>> lists) => {for (final l in lists) ...((l['links'] as List?) ?? const []).whereType<String>()}.length;
+
+  /// A list as drawn: its name and who sees it; tapped, its items; share
+  /// and ⋯ (Delete) as round icons.
+  Widget _listCard(TkTokens t, Map<String, dynamic> l) {
+    final look = TkLook.of(context);
+    final n = _maps(l['items']).length;
+    final links = ((l['links'] as List?) ?? const []).whereType<String>().toList();
+    return Container(
+      decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+      padding: const EdgeInsets.fromLTRB(0, 2, 12, 2),
+      child: Row(
+        children: [
+          Expanded(
+            child: TkListRow(
+              title: l['name'] as String? ?? '',
+              sub: '$n item${n == 1 ? '' : 's'} · ${links.isEmpty ? 'not shared' : 'shared with ${links.map(_nameOf).join(', ')}'}',
+              icon: 'tag',
+              square: look.blue,
+              semanticsLabel: 'Items of ${l['name']}',
+              onTap: () => _modal('Items of ${l['name']}', (_) => _ListItems(auth: widget.auth, list: l)),
+            ),
+          ),
+          TkHeadButton(icon: 'b-share', label: 'Share ${l['name']}', onCard: true, onTap: () => _modal('Share ${l['name']}', (_) => _Share(auth: widget.auth, list: l, links: _active))),
+          const SizedBox(width: 8),
+          TkHeadButton(
+            icon: 'b-more',
+            label: 'More for ${l['name']}',
+            onCard: true,
+            onTap: () async {
+              final pick = await showTkModalChoices(context, title: l['name'] as String? ?? 'This list', choices: const [('delete', 'Delete')]);
+              if (pick != 'delete' || !mounted) return;
+              final yes = await showTkConfirm(
+                context,
+                title: 'Delete ${l['name']}?',
+                body: 'The businesses it is shared with no longer see it. Open orders keep their prices.',
+                ok: 'Delete',
+                danger: true,
+              );
+              if (yes) await _run(() async => _t.send('DELETE', '/v1/price-lists/${l['id']}'), 'Deleted');
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final lists = _lists;
     return TkPageScreen(
       title: 'Price lists',
+      titleSize: 30,
       onRefresh: _load,
       description: 'The prices linked businesses that buy from you see, from your own stock items. Share a list with them, and give one their own prices.',
       children: [
         if (_error != null) TkErrorBox(_error!),
         if (lists == null && _error == null) Text('Loading your price lists…', style: tkHint(t)),
         if (lists != null) ...[
-          TkPageCard(
-            title: 'Your price lists',
-            children: [
-              if (lists.isEmpty)
-                Text('No price lists yet. Make one, add items from your stock, and share it with the businesses that buy from you.', style: tkHint(t))
-              else
-                LinkSection(
-                  top: 0,
-                  rows: [
-                    for (final l in lists)
-                      (
-                        letter: null,
-                        icon: 'money',
-                        tone: null,
-                        title: l['name'] as String? ?? '',
-                        badge: null,
-                        badgeTone: null,
-                        sub:
-                            '${_maps(l['items']).length} item${_maps(l['items']).length == 1 ? '' : 's'} · ${((l['links'] as List?) ?? const []).isEmpty ? 'not shared' : 'shared with ${((l['links'] as List?) ?? const []).whereType<String>().map(_nameOf).join(', ')}'}',
-                        actions: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            TkSmallButton(
-                              label: 'Items',
-                              semantics: 'Items of ${l['name']}',
-                              onPressed: () => _modal('Items of ${l['name']}', (_) => _ListItems(auth: widget.auth, list: l)),
-                            ),
-                            TkSmallButton(
-                              label: 'Share',
-                              semantics: 'Share ${l['name']}',
-                              onPressed: () => _modal('Share ${l['name']}', (_) => _Share(auth: widget.auth, list: l, links: _active)),
-                            ),
-                            TkSmallButton(
-                              label: 'Delete',
-                              danger: true,
-                              semantics: 'Delete ${l['name']}',
-                              onPressed: _busy
-                                  ? null
-                                  : () async {
-                                      final yes = await showTkConfirm(
-                                        context,
-                                        title: 'Delete ${l['name']}?',
-                                        body: 'The businesses it is shared with no longer see it. Open orders keep their prices.',
-                                        ok: 'Delete',
-                                        danger: true,
-                                      );
-                                      if (yes) await _run(() async => _t.send('DELETE', '/v1/price-lists/${l['id']}'), 'Deleted');
-                                    },
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              const SizedBox(height: 12),
-              Row(
+          if (lists.isNotEmpty)
+            TkTopCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: Semantics(
-                      label: 'New price list’s name',
-                      child: TkTextBox(controller: _name, hint: 'Trade prices', height: 44, size: 16, max: 80),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  TkSmallButton(
-                    label: 'Make a price list',
-                    primary: true,
-                    onPressed: _busy || _name.text.trim().isEmpty
-                        ? null
-                        : () => _run(() async {
-                            await _t.send('POST', '/v1/price-lists', body: {'name': _name.text.trim()});
-                            _name.clear();
-                          }, 'Price list made'),
-                  ),
+                  TkEyebrow('Shared', color: TkLook.of(context).blueInk, trailing: lists.length == 1 ? '1 list' : '${lists.length} lists'),
+                  const SizedBox(height: 6),
+                  Text(_sharedWith(lists) == 1 ? '1 business' : '${_sharedWith(lists)} businesses', style: tkFigure(context)),
+                  Text('see a price list from you', style: tkText(size: 13, color: t.muted)),
                 ],
+              ),
+            ),
+          TkSection(title: 'Your price lists', children: const []),
+          if (lists.isEmpty)
+            Text('No price lists yet. Make one, add items from your stock, and share it with the businesses that buy from you.', style: tkHint(t))
+          else
+            for (final l in lists) _listCard(t, l),
+          Row(
+            children: [
+              Expanded(
+                child: Semantics(
+                  label: 'New price list’s name',
+                  child: TkTextBox(controller: _name, hint: 'Name a new list', height: 44, size: 16, max: 80),
+                ),
+              ),
+              const SizedBox(width: 8),
+              TkSmallButton(
+                label: 'Make',
+                semantics: 'Make a price list',
+                primary: true,
+                onPressed: _busy || _name.text.trim().isEmpty
+                    ? null
+                    : () => _run(() async {
+                        await _t.send('POST', '/v1/price-lists', body: {'name': _name.text.trim()});
+                        _name.clear();
+                      }, 'Price list made'),
               ),
             ],
           ),
           if (lists.any((l) => ((l['links'] as List?) ?? const []).isNotEmpty))
-            TkPageCard(
+            TkSection(
               title: 'A business’s own prices',
               children: [
-                Text('Give one business its own price for an item on its list.', style: tkHint(t)),
-                LinkSection(
-                  top: 8,
-                  rows: [
-                    for (final l in lists)
-                      for (final id in ((l['links'] as List?) ?? const []).whereType<String>())
-                        (
-                          letter: _nameOf(id),
-                          icon: null,
-                          tone: null,
-                          title: _nameOf(id),
-                          badge: null,
-                          badgeTone: null,
-                          sub: l['name'] as String? ?? '',
-                          actions: TkSmallButton(
-                            label: 'Their prices',
-                            semantics: 'Their prices for ${_nameOf(id)}',
-                            onPressed: () => _modal('${_nameOf(id)}’s prices', (_) => _LinkPrices(auth: widget.auth, link: id, name: _nameOf(id))),
-                          ),
-                        ),
-                  ],
-                ),
+                for (final l in lists)
+                  for (final id in ((l['links'] as List?) ?? const []).whereType<String>())
+                    TkListRow(
+                      title: _nameOf(id),
+                      letters: _nameOf(id),
+                      sub: l['name'] as String? ?? '',
+                      trailing: TkSmallButton(
+                        label: 'Their prices',
+                        semantics: 'Their prices for ${_nameOf(id)}',
+                        onPressed: () => _modal('${_nameOf(id)}’s prices', (_) => _LinkPrices(auth: widget.auth, link: id, name: _nameOf(id))),
+                      ),
+                    ),
               ],
             ),
           _Offers(key: const ValueKey('offers'), auth: widget.auth),
