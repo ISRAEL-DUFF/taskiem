@@ -1363,7 +1363,7 @@ func serve(ctx context.Context, args []string) error {
 		}
 		srv.SiteProver = &embedsites.Prover{LookupTXT: api.LookupTXT, Guard: &egress.Guard{Logger: log}}
 		e.linkOps.Set(srv)
-		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders, srv.RunForms, srv.RunInvoices)
+		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders, srv.RunForms, srv.RunInvoices, srv.RunCustomerChats)
 		if e.wa != nil {
 			// Template statuses from Meta, at start and hourly (docs/whatsapp.md#templates).
 			tasks = append(tasks, func(ctx context.Context) error { e.wa.RunTemplatePolls(ctx, time.Hour); return nil })

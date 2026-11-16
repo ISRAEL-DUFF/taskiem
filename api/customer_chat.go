@@ -70,7 +70,7 @@ func (s *Server) customerThreadTx(ctx context.Context, tx pgx.Tx, wa *whatsapp.P
 	id := uuid.Must(uuid.NewV7())
 	err = tx.QueryRow(ctx, `INSERT INTO customer_conversations (id, tenant_id, phone_number_id, subject_id, who)
 		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (tenant_id, phone_number_id, subject_id) DO UPDATE
+		ON CONFLICT (tenant_id, line, phone_number_id, subject_id) DO UPDATE
 		SET who = CASE WHEN $6 THEN EXCLUDED.who ELSE customer_conversations.who END
 		RETURNING id`, id, tenant, wa.Config.PhoneNumberID, subject, who, profile != "").Scan(&id)
 	return id, subject, err
@@ -302,8 +302,14 @@ func (s *Server) tellCustomerMessageTx(ctx context.Context, tx pgx.Tx, tenant, c
 		return err
 	}
 	users, err := holdersTx(ctx, tx, PermOrders)
-	if err != nil || len(users) == 0 {
+	if err != nil {
 		return err
+	}
+	if len(users) == 0 {
+		// No one handles orders: the owner is told (taskiem-for-everyone §8.6).
+		if users, err = ownersTx(ctx, tx); err != nil {
+			return err
+		}
 	}
 	return notices.AddTx(ctx, tx, tenant, users, notices.Notice{Kind: notices.Setup, Title: "A customer wrote", Many: "A customer wrote {n} messages",
 		Link: "/chat?with=c-" + chat.String(), Group: "customer:" + chat.String()})
@@ -337,6 +343,21 @@ type customerChatView struct {
 	Archived    bool       `json:"archived"`
 	// Muted: no bell item and no push for it.
 	Muted bool `json:"muted"`
+	// Line is where the conversation runs: whatsapp (the business's own
+	// number) or app (the Taskiem app or the browser chat,
+	// taskiem-for-everyone §8.3). An app thread has no 24-hour window and
+	// no template; Stopped there is the customer's Block, said in Notice.
+	Line string `json:"line"`
+	// Blocked: the business blocked this customer (app).
+	Blocked bool `json:"blocked"`
+	// Notice is what the thread says of itself ("This customer has
+	// stopped messages").
+	Notice string `json:"notice,omitempty"`
+	// Offers is the customer's answer to offers (app): unasked, yes or no.
+	Offers string `json:"offers,omitempty"`
+	// Typing: the customer is typing now (app, one thread only).
+	Typing *bool `json:"typing,omitempty"`
+	person *uuid.UUID
 	// The thread's page only: what the customer owes on open invoices.
 	OwesKobo *int64 `json:"owes_kobo,omitempty"`
 	Invoices *int   `json:"open_invoices,omitempty"`
@@ -355,6 +376,11 @@ type customerMessageView struct {
 	Failure   string     `json:"failure,omitempty"`
 	ReadAt    *time.Time `json:"read_at"`
 	CreatedAt time.Time  `json:"created_at"`
+	// An app thread's card (an order, a pay link, a booking offer, a
+	// product), its photo, voice note or file, and whether it was an offer.
+	Card       *customerCard   `json:"card,omitempty"`
+	Attachment *chatAttachment `json:"attachment,omitempty"`
+	Offer      bool            `json:"offer,omitempty"`
 }
 
 // openCustomerText opens a sealed message or number, or "" when its
@@ -400,6 +426,7 @@ func (s *Server) customerName(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 }
 
 const customerChatCols = `c.id, c.subject_id, c.who, c.last_inbound_at, c.last_message_at, c.stopped_at, c.archived, c.muted,
+	c.line, c.person_id, c.person_blocked_at IS NOT NULL, c.blocked_at IS NOT NULL,
 	(SELECT count(*) FROM customer_messages m WHERE m.tenant_id = c.tenant_id AND m.conversation_id = c.id AND NOT m.mine AND m.read_at IS NULL),
 	(SELECT row(m.mine, m.body) FROM customer_messages m WHERE m.tenant_id = c.tenant_id AND m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1)`
 
@@ -413,6 +440,8 @@ type customerChatRaw struct {
 	stopped  *time.Time
 	lastMine *bool
 	lastBody []byte
+	// personBlocked: the customer blocked the business (app).
+	personBlocked bool
 }
 
 func scanCustomerChatRaw(r pgx.Row) (customerChatRaw, error) {
@@ -421,7 +450,8 @@ func scanCustomerChatRaw(r pgx.Row) (customerChatRaw, error) {
 		Mine bool
 		Body []byte
 	}
-	if err := r.Scan(&x.v.ID, &x.subject, &x.who, &x.inbound, &x.v.LastAt, &x.stopped, &x.v.Archived, &x.v.Muted, &x.v.Unread, &last); err != nil {
+	if err := r.Scan(&x.v.ID, &x.subject, &x.who, &x.inbound, &x.v.LastAt, &x.stopped, &x.v.Archived, &x.v.Muted,
+		&x.v.Line, &x.v.person, &x.personBlocked, &x.v.Blocked, &x.v.Unread, &last); err != nil {
 		return x, err
 	}
 	if last != nil {
@@ -464,6 +494,16 @@ func (s *Server) openCustomerChat(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 		}
 	}
 	v.Stopped = x.stopped != nil
+	if v.Line == lineApp {
+		// No window in the app: a reply is always a message, unless either
+		// side blocked the other (§8.3).
+		v.Stopped = x.personBlocked
+		v.WindowOpen = !x.personBlocked && !v.Blocked
+		if x.personBlocked {
+			v.Notice = "This customer has stopped messages"
+		}
+		return v, nil
+	}
 	if x.inbound != nil {
 		until := x.inbound.Add(whatsapp.Window)
 		v.WindowUntil = &until
@@ -544,7 +584,10 @@ func (s *Server) getCustomerChat(w http.ResponseWriter, r *http.Request) {
 		}
 		due, n, err := owedBy(r.Context(), tx, p.TenantID, subject)
 		v.OwesKobo, v.Invoices = &due, &n
-		return err
+		if err != nil {
+			return err
+		}
+		return appChatExtrasTx(r.Context(), tx, p.TenantID, &v)
 	})
 	if err != nil {
 		s.customerChatFail(w, r, err)
@@ -564,7 +607,7 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		q := `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at FROM customer_messages
+		q := `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at, card, attachment, offer FROM customer_messages
 			WHERE tenant_id = $1 AND conversation_id = $2`
 		args := []any{p.TenantID, chat.ID}
 		if b, err := uuid.Parse(r.URL.Query().Get("before")); err == nil {
@@ -581,7 +624,8 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 		}
 		raws, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (rawMsg, error) {
 			var x rawMsg
-			return x, r.Scan(&x.v.ID, &x.v.Mine, &x.v.Kind, &x.body, &x.v.SenderName, &x.v.SentAs, &x.v.Delivery, &x.v.Failure, &x.v.ReadAt, &x.v.CreatedAt)
+			return x, r.Scan(&x.v.ID, &x.v.Mine, &x.v.Kind, &x.body, &x.v.SenderName, &x.v.SentAs, &x.v.Delivery, &x.v.Failure, &x.v.ReadAt, &x.v.CreatedAt,
+				&x.v.Card, &x.v.Attachment, &x.v.Offer)
 		})
 		if err != nil {
 			return err
@@ -613,10 +657,18 @@ func (s *Server) readCustomerChat(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return errCustomerChatNone
 		}
-		tag, err := tx.Exec(r.Context(), `UPDATE customer_messages SET read_at = now()
-			WHERE tenant_id = $1 AND conversation_id = $2 AND NOT mine AND read_at IS NULL`, p.TenantID, id)
-		if err != nil || tag.RowsAffected() > 0 {
+		rows, err := tx.Query(r.Context(), `UPDATE customer_messages SET read_at = now()
+			WHERE tenant_id = $1 AND conversation_id = $2 AND NOT mine AND read_at IS NULL RETURNING id`, p.TenantID, id)
+		if err != nil {
 			return err
+		}
+		read, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if err != nil {
+			return err
+		}
+		if len(read) > 0 {
+			// In the app, the customer's copy shows them read (§8.3).
+			return s.mirrorBusinessReadTx(r.Context(), tx, p.TenantID, id, read)
 		}
 		var ok bool
 		if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM customer_conversations WHERE tenant_id = $1 AND id = $2)`, p.TenantID, id).Scan(&ok); err != nil {
@@ -681,12 +733,26 @@ func (s *Server) replyCustomer(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Text     string `json:"text"`
 		ClientID string `json:"client_id"`
+		// In the app only: a rich reply (§8.3) and an offer (§15).
+		Card  *cardAsk `json:"card"`
+		Offer bool     `json:"offer"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	text := strings.TrimSpace(req.Text)
+	var card *customerCard
+	if req.Card != nil {
+		var err error
+		if card, err = s.cardFor(ctx, p.TenantID, chi.URLParam(r, "id"), *req.Card); err != nil {
+			s.customerSendFail(w, r, err)
+			return
+		}
+		if text == "" {
+			text = card.Title
+		}
+	}
 	if text == "" || len([]rune(text)) > customerReplyMax {
 		writeErr(w, http.StatusBadRequest, "the reply is required (up to "+strconv.Itoa(customerReplyMax)+" characters)")
 		return
@@ -712,7 +778,8 @@ func (s *Server) replyCustomer(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusTooManyRequests, "too many replies at once; try again in a moment")
 		return
 	}
-	m, fresh, err := s.sendCustomer(ctx, p.TenantID, chi.URLParam(r, "id"), customerSend{Text: text, ClientID: req.ClientID, SenderID: p.Actor(), SenderName: sender})
+	m, fresh, err := s.sendCustomer(ctx, p.TenantID, chi.URLParam(r, "id"), customerSend{Text: text, ClientID: req.ClientID, SenderID: p.Actor(), SenderName: sender,
+		Card: card, Offer: req.Offer})
 	if err != nil {
 		s.customerSendFail(w, r, err)
 		return
@@ -731,6 +798,10 @@ type customerSend struct {
 	ClientID   string
 	SenderID   string // the member, or "system:orders"
 	SenderName string
+	// In the app only (customer_app.go): a card, an offer (§15), a file.
+	Card  *customerCard
+	Offer bool
+	File  *sentFile
 }
 
 // customerSendErr is a send refused, with the status and words to answer.
@@ -757,9 +828,9 @@ func (s *Server) customerRepeat(ctx context.Context, tx pgx.Tx, tenant, chat uui
 	}
 	var m customerMessageView
 	var body []byte
-	err := tx.QueryRow(ctx, `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at FROM customer_messages
+	err := tx.QueryRow(ctx, `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at, card, attachment, offer FROM customer_messages
 		WHERE tenant_id = $1 AND conversation_id = $2 AND client_id = $3`, tenant, chat, clientID).
-		Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.Delivery, &m.Failure, &m.ReadAt, &m.CreatedAt)
+		Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.Delivery, &m.Failure, &m.ReadAt, &m.CreatedAt, &m.Card, &m.Attachment, &m.Offer)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -804,6 +875,13 @@ func (s *Server) sendCustomer(ctx context.Context, tenant uuid.UUID, threadID st
 	}
 	if again != nil {
 		return *again, false, nil
+	}
+	if chat.Line == lineApp {
+		// In the app: no window, no template, no WhatsApp (§8.3).
+		return s.sendCustomerApp(ctx, tenant, chat, subject, in)
+	}
+	if in.Card != nil || in.Offer || in.File != nil {
+		return customerMessageView{}, false, customerSendErr{http.StatusConflict, "cards, offers and files go to customers who chat in the Taskiem app; this customer writes on WhatsApp"}
 	}
 	switch {
 	case chat.Stopped:

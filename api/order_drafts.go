@@ -1289,9 +1289,16 @@ func (s *Server) orderDraftAlerts(ctx context.Context, p *Principal) ([]chatAler
 // thread with the business. The same words about one order go once.
 func (s *Server) ChatNotify(ctx context.Context, tenant uuid.UUID, ord storefront.Order, text string) error {
 	var thread uuid.UUID
+	// An order placed in the app is told in the app conversation it came
+	// from (taskiem-for-everyone §8.4); one from WhatsApp, there first.
+	prefer := "whatsapp"
+	if ord.Kind == "app" {
+		prefer = lineApp
+	}
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT id FROM customer_conversations WHERE tenant_id = $1 AND subject_id = $2 ORDER BY last_message_at DESC LIMIT 1`,
-			tenant, ord.CustomerID()).Scan(&thread)
+		return tx.QueryRow(ctx, `SELECT id FROM customer_conversations WHERE tenant_id = $1 AND subject_id = $2 AND blocked_at IS NULL
+			ORDER BY (line = $3) DESC, last_message_at DESC LIMIT 1`,
+			tenant, ord.CustomerID(), prefer).Scan(&thread)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errors.New("orders: the customer has no conversation with the business")

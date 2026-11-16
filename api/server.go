@@ -62,6 +62,14 @@ import (
 
 // Server serves the API.
 type Server struct {
+	// ChatCodes finds the business a chat link's code names
+	// (taskiem-for-everyone §8.2; stream B's customer_chat_codes); nil
+	// knows no code (customer_app.go).
+	ChatCodes ChatCodeResolver
+	// CustomerAnswered hears when a business writes to a person in the app
+	// (taskiem-for-everyone §9: the browser chat's SMS fallback, stream B);
+	// nil tells no one.
+	CustomerAnswered CustomerAnswerHook
 	// OrderReadInline reads a customer's message for an order before the
 	// webhook answers, not in the background (tests).
 	OrderReadInline bool
@@ -434,6 +442,7 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/auth/second-proof/passkey/options", s.secondProofPasskeyOptions)
 			r.Post("/auth/second-proof/passkey", s.secondProofPasskey)
 			r.Post("/me/start", s.startSomething) // a business or workflows (start.go)
+			s.customerDoorRoutes(r)               // a person's chats with businesses (customer_door.go)
 			r.Get("/me/devices", s.listDevices)   // Your phones (devices.go)
 			r.Delete("/me/devices/{id}", s.removeDevice)
 			r.Get("/me/passkeys", s.listPasskeys)
@@ -569,6 +578,7 @@ func (s *Server) Handler() http.Handler {
 			s.linkChatRoutes(r)     // their conversations (link_chat.go)
 			s.linkBookingRoutes(r)  // booking their services from it (link_bookings.go)
 			s.customerChatRoutes(r) // customers' conversations (customer_chat.go)
+			s.customerAppRoutes(r)  // customers in the app: blocks, files, offers (customer_app.go)
 			s.orderDraftRoutes(r)   // orders read from them (order_drafts.go)
 			s.taskiemChatRoutes(r)  // the Taskiem conversation on the web (chat_history.go)
 			s.priceListRoutes(r)    // price lists and item links (price_lists.go)

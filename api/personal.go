@@ -28,7 +28,10 @@ import (
 // phone, second proofs, invitations and signing out.
 var personalRoutes = regexp.MustCompile(`^(GET /v1/me|POST /v1/me/terms|GET /v1/me/businesses|POST /v1/me/switch|POST /v1/me/start|` +
 	`POST /v1/me/phone/(start|verify)|POST /v1/auth/second-proof/(email/start|email/verify|pin|password|passkey/options|passkey)|` +
-	`GET /v1/me/invitations|POST /v1/me/invitations/[^/]+/(accept|decline)|POST /v1/auth/logout)$`)
+	`GET /v1/me/invitations|POST /v1/me/invitations/[^/]+/(accept|decline)|POST /v1/auth/logout|` +
+	// A person's chats with businesses (customer_door.go, stage 2).
+	`(GET|POST) /v1/me/chats|(GET|PUT) /v1/me/chats/[^/]+|GET /v1/me/chats/[^/]+/(messages|files/[^/]+|shop|services|services/[^/]+/times|orders|orders/[^/]+/pay)|` +
+	`POST /v1/me/chats/[^/]+/(messages|files|read|typing|block|report|orders|bookings)|DELETE /v1/me/chats/[^/]+/block)$`)
 
 func personalAllowed(method, path string) bool {
 	return personalRoutes.MatchString(method + " " + strings.TrimSuffix(path, "/"))

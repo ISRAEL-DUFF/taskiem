@@ -122,8 +122,11 @@ tags:
   description: Invoices the business sends its customers, paid only by the payments counted towards them.
   x-taskiem-guide: invoices
 - name: Customers
-  description: Customers' conversations with the business on its own WhatsApp number (chat-five-more-flows, phase 1).
+  description: Customers' conversations with the business, on its own WhatsApp number (chat-five-more-flows, phase 1) or in the Taskiem app (taskiem-for-everyone §8).
   x-taskiem-guide: spec/chat-five-more-flows
+- name: You
+  description: 'A person''s own side: their chats with businesses, and the tools of each through the customer door (taskiem-for-everyone §7, §8).'
+  x-taskiem-guide: spec/taskiem-for-everyone
 - name: Links
   description: Links with other businesses on Taskiem, made with both sides' consent (decision 0061).
   x-taskiem-guide: spec/business-links
@@ -9333,6 +9336,332 @@ paths:
                           format: date-time
         default:
           $ref: '#/components/responses/Error'
+  /v1/customer-chats/app:
+    post:
+      operationId: openAppCustomerChat
+      tags:
+      - Customers
+      summary: Write first to a customer who ordered in the app
+      description: 'The app thread with the person who placed an order or booking (by its reference) in the Taskiem app, opened if it is not yet (taskiem-for-everyone §8.1, §15). Messages about their orders are not limited; offers go only to customers who agreed to them. 409 for an order not made in the app.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reference]
+              properties:
+                reference:
+                  type: string
+      responses:
+        '200':
+          description: The thread
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerChat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/offers:
+    post:
+      operationId: broadcastOffer
+      tags:
+      - Customers
+      summary: Send an offer to customers who agreed to offers
+      description: 'One offer to every customer in the app who said yes to offers from the business (§15), each marked Offer with Stop offers under it, and counted against each customer''s 2 a week: a customer who has had 2 this week, or who blocked or was blocked, is skipped. A repeat of client_id sends each customer the offer once.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  maxLength: 1000
+                client_id:
+                  type: string
+                  maxLength: 60
+      responses:
+        '200':
+          description: How many got it, and how many were skipped
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [sent, skipped]
+                properties:
+                  sent:
+                    type: integer
+                  skipped:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}/files:
+    post:
+      operationId: sendCustomerFile
+      tags:
+      - Customers
+      summary: Send a photo, voice note or file to a customer in the app
+      description: 'A multipart form: `file` (a photo up to 10 MB, a voice note up to 5 minutes, a PDF up to 25 MB), an optional `text` caption and `client_id`. Scanned for malware and checked before anything is kept (409 without a scanner); the business keeps its copy in its own storage, the customer theirs. For app threads only (409 on WhatsApp).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                text:
+                  type: string
+                  maxLength: 2000
+                client_id:
+                  type: string
+                  maxLength: 80
+      responses:
+        '201':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerMessage'
+        '200':
+          description: The message already sent with this client_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}/files/{message}:
+    get:
+      operationId: customerFile
+      tags:
+      - Customers
+      summary: A message's photo, voice note or file
+      description: The business's own copy, by the message's id.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            audio/webm:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}/block:
+    post:
+      operationId: blockCustomer
+      tags:
+      - Customers
+      summary: Block a customer in the app
+      description: 'The customer can no longer write to the business, nor reach its shop or orders through the customer door (§8.3, §8.4). Nothing is deleted. Audited. For app threads only: on WhatsApp a customer sends STOP.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unblockCustomer
+      tags:
+      - Customers
+      summary: Unblock a customer in the app
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      x-taskiem-all-environments: true
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/customer-chats/{id}/typing:
+    post:
+      operationId: customerChatTyping
+      tags:
+      - Customers
+      summary: Say someone is typing to a customer in the app
+      description: For the customer's typing line, for a few seconds; no words, not audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/settings/customer-chats:
+    get:
+      operationId: getCustomerChatSettings
+      tags:
+      - Customers
+      summary: When nobody answers customers
+      description: 'The closed reply (on by default: a customer writing in the app while the business is closed by its hours gets, once a day, "We''re closed now. We open at 9:00 and will answer then.", or the business''s own words), Needs you after 30 minutes unanswered in open hours, and the owner told after 2 hours (taskiem-for-everyone §8.6).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: 'storefront.manage|order.handle'
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerChatSettings'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putCustomerChatSettings
+      tags:
+      - Customers
+      summary: Change what happens when nobody answers
+      description: 'Each of the closed reply, its words (empty for Taskiem''s, no links), Needs you and telling the owner, on or off. Audited as `settings.customer_chats`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                closed_reply:
+                  type: boolean
+                closed_words:
+                  type: string
+                  maxLength: 300
+                needs_you:
+                  type: boolean
+                tell_owner:
+                  type: boolean
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerChatSettings'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/customer-chats/{id}:
     get:
       operationId: getCustomerChat
@@ -9446,7 +9775,7 @@ paths:
       tags:
       - Customers
       summary: Reply to a customer
-      description: Sent from the business's own WhatsApp number, as words within 24 hours of the customer's last message and as the approved template after (then up to 900 characters, on one line; longer is refused, 400, never cut). The reply is kept before it goes, so a repeat of a client_id answers the message it sent (200) and never goes twice. When the business's number changed since the customer wrote, the thread moves to the new number. Refused (409) when the customer sent STOP, the template is not approved yet, or the customer already has a thread on the new number.
+      description: 'Sent from the business''s own WhatsApp number, as words within 24 hours of the customer''s last message and as the approved template after (then up to 900 characters, on one line; longer is refused, 400, never cut). The reply is kept before it goes, so a repeat of a client_id answers the message it sent (200) and never goes twice. When the business''s number changed since the customer wrote, the thread moves to the new number. Refused (409) when the customer sent STOP, the template is not approved yet, or the customer already has a thread on the new number. To a customer in the app (line app) a reply is always a message, kept in both copies: it may carry a card (`card`: an order or its pay link by reference, a booking offer by service_id, a product by item_id, made from the business''s own data; the words may then be left out) or be an offer (`offer`: only to a customer who agreed to offers, at most 2 a week, 429 after). Refused (409) when either side blocked the other ("This customer has stopped messages").'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -9468,7 +9797,6 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [text]
               properties:
                 text:
                   type: string
@@ -9476,6 +9804,22 @@ paths:
                 client_id:
                   type: string
                   maxLength: 80
+                card:
+                  type: object
+                  additionalProperties: false
+                  required: [type]
+                  properties:
+                    type:
+                      type: string
+                      enum: [order, pay, booking, product]
+                    reference:
+                      type: string
+                    item_id:
+                      type: string
+                    service_id:
+                      type: string
+                offer:
+                  type: boolean
       responses:
         '200':
           description: The reply already sent with this client_id
@@ -10619,7 +10963,7 @@ paths:
         in: query
         schema:
           type: string
-          enum: [order, enquiry, callback, booking, hire, space, tickets, class, quote, trade]
+          enum: [order, enquiry, callback, booking, hire, space, tickets, class, quote, trade, chat, app]
       - name: limit
         in: query
         schema:
@@ -19881,6 +20225,886 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeviceProved'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats:
+    get:
+      operationId: listMyChats
+      tags:
+      - You
+      summary: Your chats with businesses
+      description: 'The signed-in person''s own conversations with businesses (taskiem-for-everyone §7, §8), the latest first; archived ones with archived=1. Read from the person''s own copy, with nothing of any business: a personal session reaches it, and so does a business session for the same person. API keys are refused (403).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: archived
+        in: query
+        schema:
+          type: string
+          enum: ['1']
+      responses:
+        '200':
+          description: The chats, and how many of their messages are unread
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [chats, unread]
+                properties:
+                  chats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PersonChat'
+                  unread:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: startMyChat
+      tags:
+      - You
+      summary: Start a chat with a business
+      description: 'Opens the person''s conversation with a business, by its id (from its shop, Discover or an order) or by its chat link''s code, through the customer door (§8.4: audited in the business''s chain as `customer.start`); answers the one they already have (200). The business sees the person''s name and phone (said once, in `notice`), so a phone is needed (409 without). The business''s thread is in the app line, sealed under the subject of the person''s phone in that business. New chats are limited per hour and per day, lower in an account''s first week (429). A business that blocked the person answers 403 `blocked`; a link that no longer works 410 `link_replaced`; an unknown link or business 404.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                business_id:
+                  type: string
+                  format: uuid
+                code:
+                  type: string
+                  maxLength: 40
+                from:
+                  type: string
+                  enum: [link, shop, discover, order]
+      responses:
+        '201':
+          description: Started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonChat'
+        '200':
+          description: The chat the person already has
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonChat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}:
+    get:
+      operationId: getMyChat
+      tags:
+      - You
+      summary: One of your chats
+      description: 'The conversation, with whether the business is typing and, when it keeps hours, its line under its name ("Open now, closes at 18:00"), read through the door.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The chat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonChat'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putMyChat
+      tags:
+      - You
+      summary: Mute, archive, or answer offers
+      description: 'The person''s own settings for the chat: muted (no notifications), archived. `offers` is the answer to "Get offers from {business}?" (§15), asked once at the first chat or order and changeable at any time: the business records it, with when (through the door). Only yes receives offers; order messages always come.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                muted:
+                  type: boolean
+                archived:
+                  type: boolean
+                offers:
+                  type: boolean
+      responses:
+        '200':
+          description: The chat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonChat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/messages:
+    get:
+      operationId: listMyChatMessages
+      tags:
+      - You
+      summary: Your chat's messages
+      description: The person's own copy, the latest 50, oldest first; before (a message's id) for the 50 before it.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: before
+        in: query
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: A page of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages, more]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PersonMessage'
+                  more:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: sendMyChatMessage
+      tags:
+      - You
+      summary: Write to the business
+      description: 'Kept in both copies in one transaction, through the door (the business''s sealed under the customer''s subject); the people who handle orders are told (the owner when nobody does). While the business is closed by its hours, it answers once a day in its own name (its closed reply). A repeat of client_id answers the first message (200). Messages per chat a minute are limited, lower in an account''s first week (429). 409 `you_blocked` after blocking the business; 403 `blocked` when it blocked the person.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [text]
+              properties:
+                text:
+                  type: string
+                  maxLength: 4000
+                client_id:
+                  type: string
+                  maxLength: 80
+      responses:
+        '201':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonMessage'
+        '200':
+          description: The message already sent with this client_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/files:
+    post:
+      operationId: sendMyChatFile
+      tags:
+      - You
+      summary: Send a photo, voice note or file
+      description: 'A multipart form: `file` (a photo up to 10 MB, cleaned of its metadata; a voice note up to 5 minutes in Ogg, WebM, MP3 or MP4 audio; or a PDF up to 25 MB, without scripts or embedded files), an optional `text` caption and `client_id`. The file is scanned for malware and checked before anything is kept (refused without a scanner, 409); each side keeps its own copy: the business''s in its own storage, the person''s in their own.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                text:
+                  type: string
+                  maxLength: 4000
+                client_id:
+                  type: string
+                  maxLength: 80
+      responses:
+        '201':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonMessage'
+        '200':
+          description: The message already sent with this client_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/files/{message}:
+    get:
+      operationId: myChatFile
+      tags:
+      - You
+      summary: A message's photo, voice note or file
+      description: The person's own copy, by the message's id (a photo or voice note inline, a PDF as a download).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            audio/webm:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/read:
+    post:
+      operationId: readMyChat
+      tags:
+      - You
+      summary: Mark the business's messages read
+      description: The business's copy shows them read (through the door), unless it has blocked the person.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/typing:
+    post:
+      operationId: typingInMyChat
+      tags:
+      - You
+      summary: Say you are typing
+      description: For the business's typing line, for a few seconds; no words, not audited.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/block:
+    post:
+      operationId: blockBusiness
+      tags:
+      - You
+      summary: Block the business
+      description: 'Stops the business writing to the person (§8.3); its thread says "This customer has stopped messages". Nothing is deleted: the business keeps its copy, since orders and payments may be disputed later (erasure is asked of the business, §14). Audited in the business''s chain.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The chat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonChat'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unblockBusiness
+      tags:
+      - You
+      summary: Unblock the business
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The chat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonChat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/report:
+    post:
+      operationId: reportBusiness
+      tags:
+      - You
+      summary: Report the chat to Taskiem
+      description: 'Sends the last 20 messages of the person''s copy to Taskiem''s moderators (§15), only with `consent: true` (400 without). A few a day (429).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [reason, consent]
+              properties:
+                reason:
+                  type: string
+                  enum: [spam, scam, abuse, other]
+                note:
+                  type: string
+                  maxLength: 1000
+                consent:
+                  type: boolean
+      responses:
+        '201':
+          description: Reported
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [id, messages_sent, said]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  messages_sent:
+                    type: boolean
+                  said:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/shop:
+    get:
+      operationId: myChatShop
+      tags:
+      - You
+      summary: Their shop
+      description: 'Through the door (`customer.shop`): the business''s published catalogue at its prices, products in their sizes and colours, with how few are left where the page says so (5 or fewer), and how it takes orders in the app: pickup, delivery to its areas (with their fees), and when an order is paid. A business with no published shop, or that turned the shop off, answers with no items and `closed`; one that turned the area off answers 409 `area_off`.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The shop
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, open, pickup, delivery, zones, payment]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ShopItem'
+                  open:
+                    type: boolean
+                  closed:
+                    type: string
+                  pickup:
+                    type: boolean
+                  delivery:
+                    type: boolean
+                  zones:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [name, fee_kobo]
+                      properties:
+                        name:
+                          type: string
+                        fee_kobo:
+                          type: integer
+                  payment:
+                    type: string
+                    enum: [after_accept, at_order, on_delivery, none]
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/services:
+    get:
+      operationId: myChatServices
+      tags:
+      - You
+      summary: Book
+      description: Through the door (`customer.book`), the services the business books, as its page shows them, and whether it takes bookings in the app now.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The services
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [services, open]
+                properties:
+                  services:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LinkService'
+                  open:
+                    type: boolean
+                  closed:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/services/{service}/times:
+    get:
+      operationId: myChatServiceTimes
+      tags:
+      - You
+      summary: Free times for one of their services
+      description: The days with a free time, and the free times of one day (day, or the first with any). Only whether a time is free, never who booked.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: service
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: day
+        in: query
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: The days and times
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [service, days, times]
+                properties:
+                  service:
+                    $ref: '#/components/schemas/LinkService'
+                  days:
+                    type: array
+                    items:
+                      type: string
+                      format: date
+                  day:
+                    type: string
+                    format: date
+                  times:
+                    type: array
+                    items:
+                      type: string
+                      format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/orders:
+    get:
+      operationId: myChatOrders
+      tags:
+      - You
+      summary: Your orders with them
+      description: Through the door (`customer.orders`), the person's own orders and bookings with the business, placed in the app, newest first.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The orders
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [orders]
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DoorOrder'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: placeMyChatOrder
+      tags:
+      - You
+      summary: Place an order
+      description: 'Through the door (`customer.order`): priced from their shop as it is now, the order goes into the business''s storefront inbox as an order of the kind `app`, linked to the person, under their name and phone (sealed under the business''s subject for that phone), and their order workflow takes it as any order from their page. Its card goes into the chat, to both sides. Needs an Idempotency-Key: the same key answers the first order (200). 409 `orders_closed` when they take no orders in the app, `phone_needed` without a phone; 400 or 422 `order_refused` for lines, items, stock or pickup and delivery they do not offer.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key answers the same order'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [lines]
+              properties:
+                lines:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [item_id, quantity]
+                    properties:
+                      item_id:
+                        type: string
+                        description: An item, or one of a product's sizes and colours (its own id).
+                      quantity:
+                        type: integer
+                        minimum: 1
+                        maximum: 99
+                fulfilment:
+                  type: string
+                  enum: [pickup, delivery]
+                zone:
+                  type: string
+                address:
+                  type: string
+                  maxLength: 300
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '201':
+          description: Placed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [order]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/DoorOrder'
+        '200':
+          description: The order this Idempotency-Key placed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [order]
+                properties:
+                  order:
+                    $ref: '#/components/schemas/DoorOrder'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/bookings:
+    post:
+      operationId: bookInMyChat
+      tags:
+      - You
+      summary: Book one of their services
+      description: 'Through the door (`customer.booking`): books the service at a free time through their storefront''s booking, under the person''s name and phone and linked to them; its card goes into the chat. Needs an Idempotency-Key: the same key answers the first booking (200). 409 `slot_taken`, 422 `pick_time`, 409 `bookings_closed`, 409 `phone_needed`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          maxLength: 255
+        description: 'Makes the request safe to retry: the same key answers the same booking'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [service_id, start]
+              properties:
+                service_id:
+                  type: string
+                start:
+                  type: string
+                  format: date-time
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '201':
+          description: Booked
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [booking]
+                properties:
+                  booking:
+                    $ref: '#/components/schemas/LinkBooking'
+        '200':
+          description: The booking this Idempotency-Key made
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [booking]
+                properties:
+                  booking:
+                    $ref: '#/components/schemas/LinkBooking'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/chats/{id}/orders/{reference}/pay:
+    get:
+      operationId: payMyChatOrder
+      tags:
+      - You
+      summary: Pay for an order
+      description: 'Through the door (`customer.pay`): the pay link of one of the person''s own orders or bookings (its status page, where it is paid), while something is due. 409 when nothing is due, or it is paid once they accept it.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The pay link
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [reference, url, due_kobo]
+                properties:
+                  reference:
+                    type: string
+                  url:
+                    type: string
+                  due_kobo:
+                    type: integer
         default:
           $ref: '#/components/responses/Error'
   /v1/me/start:
@@ -29966,7 +31190,7 @@ components:
           description: The alert's key, for Later (its kind and what it is about)
         kind:
           type: string
-          enum: [low_stock, overdue, new_order, rider, confirm, unmatched, approval, deal, order_draft]
+          enum: [low_stock, overdue, new_order, rider, confirm, unmatched, approval, deal, order_draft, customer_waiting]
         at:
           type: string
           format: date-time
@@ -36485,6 +37709,224 @@ components:
           items:
             type: string
           description: Their first names
+    PersonChat:
+      type: object
+      additionalProperties: false
+      required: [id, business, name, last, last_mine, last_at, unread, muted, archived, blocked, blocked_you, offers, ask_offers]
+      description: One of a person's chats with a business, as their own side shows it (taskiem-for-everyone §7, §8).
+      properties:
+        id:
+          type: string
+          format: uuid
+        business:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: The business's name.
+        last:
+          type: string
+        last_mine:
+          type: boolean
+        last_at:
+          type: string
+          format: date-time
+        unread:
+          type: integer
+        muted:
+          type: boolean
+        archived:
+          type: boolean
+        blocked:
+          type: boolean
+          description: You blocked the business.
+        blocked_you:
+          type: boolean
+          description: The business is not taking your messages.
+        offers:
+          type: string
+          enum: ['unasked', 'yes', 'no']
+          description: 'Your answer to "Get offers from {business}?"'
+        ask_offers:
+          type: boolean
+          description: Ask it now (once, at the first chat or order).
+        typing:
+          type: boolean
+          description: One chat only, the business is typing.
+        hours:
+          type: object
+          additionalProperties: false
+          required: [open, line]
+          description: One chat only, when the business keeps hours.
+          properties:
+            open:
+              type: boolean
+            line:
+              type: string
+              description: '"Open now, closes at 18:00", "Closed now. Opens tomorrow at 09:00"'
+        notice:
+          type: string
+          description: On starting, what the business sees of you, and that Taskiem may read business conversations to help with orders.
+    PersonMessage:
+      type: object
+      additionalProperties: false
+      required: [id, mine, kind, body, read_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The message, the same id on the business's copy.
+        mine:
+          type: boolean
+          description: You sent it.
+        kind:
+          type: string
+          enum: [text, media, card]
+        body:
+          type: string
+        sender_name:
+          type: string
+          description: Who wrote it on the business's side (a first name), when someone did.
+        card:
+          $ref: '#/components/schemas/CustomerCard'
+        attachment:
+          $ref: '#/components/schemas/ChatAttachment'
+        offer:
+          type: boolean
+          description: An offer (marked Offer, with Stop offers under it).
+        read_at:
+          type: [string, 'null']
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    CustomerCard:
+      type: object
+      additionalProperties: false
+      required: [type, title]
+      description: 'A card in an app conversation: an order (what, total, its state), a pay link (`url`), a booking (or a booking offer, by service), or a product.'
+      properties:
+        type:
+          type: string
+          enum: [order, pay, booking, product]
+        reference:
+          type: string
+        title:
+          type: string
+        line:
+          type: string
+        status:
+          type: string
+        total_kobo:
+          type: integer
+        item_id:
+          type: string
+        service_id:
+          type: string
+        minutes:
+          type: integer
+        url:
+          type: string
+    ChatAttachment:
+      type: object
+      additionalProperties: false
+      required: [kind, type, size]
+      properties:
+        kind:
+          type: string
+          enum: [photo, voice, file]
+        type:
+          type: string
+        size:
+          type: integer
+        name:
+          type: string
+    ShopItem:
+      type: object
+      additionalProperties: false
+      required: [id, name, available]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        price_kobo:
+          type: integer
+        description:
+          type: string
+        category:
+          type: string
+        photo:
+          type: string
+        available:
+          type: boolean
+        few_left:
+          type: integer
+          description: How many are left, when 5 or fewer (as the page says).
+        sizes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, variant, available]
+            properties:
+              id:
+                type: string
+              variant:
+                type: object
+                additionalProperties:
+                  type: string
+              price_kobo:
+                type: integer
+              available:
+                type: boolean
+              few_left:
+                type: integer
+    DoorOrder:
+      type: object
+      additionalProperties: false
+      required: [reference, kind, status, summary, total_kobo, due_kobo, pay, created_at]
+      description: One of a person's orders or bookings with a business.
+      properties:
+        reference:
+          type: string
+        kind:
+          type: string
+          enum: [order, booking]
+        status:
+          type: string
+          description: The order's state; `sent` for one just placed, not yet taken in.
+        summary:
+          type: string
+        total_kobo:
+          type: integer
+        due_kobo:
+          type: integer
+        service_name:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        pay:
+          type: boolean
+          description: Something is due now; its pay link is GET /v1/me/chats/{id}/orders/{reference}/pay.
+        created_at:
+          type: string
+          format: date-time
+    CustomerChatSettings:
+      type: object
+      additionalProperties: false
+      required: [closed_reply, closed_words, needs_you, tell_owner]
+      properties:
+        closed_reply:
+          type: boolean
+        closed_words:
+          type: string
+          description: The business's own words for the closed reply; empty for Taskiem's.
+        needs_you:
+          type: boolean
+        tell_owner:
+          type: boolean
     CustomerChat:
       type: object
       additionalProperties: false
@@ -36522,6 +37964,23 @@ components:
         muted:
           type: boolean
           description: Nobody is told of its messages (no bell item, no push).
+        line:
+          type: string
+          enum: [whatsapp, app]
+          description: 'Where the conversation runs: the business''s own WhatsApp number, or the Taskiem app (or the browser chat). An app thread has no 24-hour window and no template; `stopped` there is the customer''s Block.'
+        blocked:
+          type: boolean
+          description: The business blocked this customer (app).
+        notice:
+          type: string
+          description: '"This customer has stopped messages" (app).'
+        offers:
+          type: string
+          enum: ['unasked', 'yes', 'no']
+          description: One app thread only, the customer's answer to offers.
+        typing:
+          type: boolean
+          description: One app thread only, the customer is typing.
         owes_kobo:
           type: integer
           description: One thread only, what the customer owes on open invoices.
@@ -36540,11 +37999,18 @@ components:
           description: From the business.
         kind:
           type: string
-          enum: [text, media]
+          enum: [text, media, card]
         body:
           type: string
         sender_name:
           type: string
+        card:
+          $ref: '#/components/schemas/CustomerCard'
+        attachment:
+          $ref: '#/components/schemas/ChatAttachment'
+        offer:
+          type: boolean
+          description: An offer to a customer who agreed to offers (app, §15).
         sent_as:
           type: string
           enum: [text, template]
@@ -38690,7 +40156,7 @@ components:
           type: string
         kind:
           type: string
-          enum: [order, enquiry, callback, booking, hire, space, tickets, class, quote, trade]
+          enum: [order, enquiry, callback, booking, hire, space, tickets, class, quote, trade, chat, app]
         status:
           type: string
           enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due, no_show, price_changed, refunded, dispatched, on_the_way, arrived, proposed, changed]
