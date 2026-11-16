@@ -122,7 +122,7 @@ test("a link code opens a request to a business that is not found by search", as
   const stranger = await (await browser.newContext()).newPage();
   await stranger.goto(path);
   await expect(stranger.getByRole("heading", { name: "Link with a business on Taskiem" })).toBeVisible();
-  await expect(stranger.getByRole("link", { name: "Sign up your business" })).toBeVisible();
+  await expect(stranger.getByRole("link", { name: "Start your business on Taskiem" })).toBeVisible();
   await axeBoth(stranger, "a link code, signed out");
 
   // Signed in, it names the business and asks.

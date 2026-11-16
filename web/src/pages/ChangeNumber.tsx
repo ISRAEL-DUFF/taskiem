@@ -1,11 +1,11 @@
-import { useState } from "react";
-import { post } from "../api";
+import { useRef, useState } from "react";
+import { ApiError, post } from "../api";
 import { useAuth } from "../auth";
-import { sentWords, showPhone, toE164 } from "../lib/phone";
+import { CODE_EXPIRED, codeProblem, NOT_A_PHONE, plainly, sentWords, showPhone, toE164 } from "../lib/phone";
 import { toast } from "../toast";
 import { ErrorBox, Field, Modal, useAction } from "../ui";
 import { ProofStep } from "./Switch";
-import { CodeField, plainly, useCountdown } from "./WayIn";
+import { CodeField, codeDigits, useCountdown } from "./WayIn";
 
 // Settings > Phone > Change number (docs/spec/taskiem-for-everyone.md §5.5):
 // a code to the new number, and where this device has not proved itself, a
@@ -49,6 +49,10 @@ export function ChangeNumber({ onClose }: { onClose: () => void }) {
   const [needsOld, setNeedsOld] = useState(false);
   const [code, setCode] = useState("");
   const [oldCode, setOldCode] = useState("");
+  const [note, setNote] = useState<string | null>(null);
+  // Changed: nothing more is sent while the sheet closes.
+  const [done, setDone] = useState(false);
+  const sending = useRef(false);
   const [left, wait] = useCountdown();
   const act = useAction();
   const start = (number: string, confirmOld: boolean, via?: "whatsapp" | "sms") =>
@@ -86,8 +90,9 @@ export function ChangeNumber({ onClose }: { onClose: () => void }) {
             onSubmit={(e) => {
               e.preventDefault();
               void act.run(async () => {
+                setNote(null);
                 const n = toE164(typed);
-                if (!n) throw new Error("Enter the new number, with its country code if it is not Nigerian.");
+                if (!n) throw new Error(NOT_A_PHONE + ".");
                 const r = await start(n, false);
                 setPhone(n);
                 setNeedsOld(r.needs_old_code);
@@ -96,6 +101,11 @@ export function ChangeNumber({ onClose }: { onClose: () => void }) {
             }}
           >
             <p>Your account keeps everything: your chats, orders and businesses.</p>
+            {note && (
+              <p className="notice" role="status">
+                {note}
+              </p>
+            )}
             <Field label="New phone number" hint="A Nigerian number can start with 0. For another country, start with + and its code.">
               <input type="tel" inputMode="tel" autoComplete="tel" value={typed} onChange={(e) => setTyped(e.target.value)} required autoFocus />
             </Field>
@@ -137,16 +147,26 @@ export function ChangeNumber({ onClose }: { onClose: () => void }) {
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              void act.run(
-                () =>
-                  plainly(async () => {
-                    await post("/v1/me/phone/verify", { code, ...(needsOld ? { old_code: oldCode } : {}) });
-                    await refresh();
-                    toast(`Your number is now ${showPhone(phone)}`);
-                    onClose();
-                  }),
-                false,
-              );
+              if (done || sending.current) return;
+              sending.current = true;
+              void act.run(async () => {
+                try {
+                  await post("/v1/me/phone/verify", { code, ...(needsOld ? { old_code: oldCode } : {}) });
+                } catch (err) {
+                  sending.current = false;
+                  // Run out: a new code, from the number.
+                  if (err instanceof ApiError && err.body.ticket_expired) {
+                    setNote(CODE_EXPIRED);
+                    setStep("new");
+                    return;
+                  }
+                  throw new Error(codeProblem(err), { cause: err });
+                }
+                setDone(true);
+                await refresh();
+                toast(`Your number is now ${showPhone(phone)}`);
+                onClose();
+              }, false);
             }}
           >
             <p role="status">
@@ -164,12 +184,12 @@ export function ChangeNumber({ onClose }: { onClose: () => void }) {
             />
             {needsOld && (
               <Field label="Code sent to your old number">
-                <input inputMode="numeric" autoComplete="off" maxLength={6} value={oldCode} onChange={(e) => setOldCode(e.target.value.replace(/\D/g, ""))} required />
+                <input inputMode="numeric" autoComplete="off" value={oldCode} onChange={(e) => setOldCode(codeDigits(e.target.value))} required />
               </Field>
             )}
             <ErrorBox error={act.error} />
-            <button className="primary" type="submit" disabled={act.busy || code.length !== 6 || (needsOld && oldCode.length !== 6)}>
-              {act.busy ? "Checking…" : "Confirm the new number"}
+            <button className="primary" type="submit" disabled={act.busy || done || code.length !== 6 || (needsOld && oldCode.length !== 6)}>
+              {act.busy || done ? "Checking…" : "Confirm the new number"}
             </button>
           </form>
         )}

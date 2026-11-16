@@ -4,12 +4,15 @@
 // on pine above, one card over its edge. Email, passkeys and the chat code
 // stay behind **Sign in with email**.
 
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/links.dart';
+import '../app/phone.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'sign_in.dart';
@@ -36,18 +39,6 @@ class WelcomeScreen extends StatefulWidget {
   State<WelcomeScreen> createState() => _WelcomeScreenState();
 }
 
-/// What went wrong with a code, in plain words (the web's codeProblem).
-String codeProblem(ApiError e) {
-  if (e.has('locked')) return 'Too many wrong codes. This number is locked for an hour: try again later.';
-  if (e.has('sms_unavailable')) return 'We can\'t send codes by SMS here. Ask for the code on WhatsApp instead.';
-  if (e.has('phone_signin_off')) return 'Signing in with a code to your phone is turned off for this account. Sign in with your email instead.';
-  if (e.status == 401) return 'That code is not right, or it has expired. Check it, or ask for a new one.';
-  if (e.status == 429) return e.body['error'] is String ? e.message : 'Too many tries. Wait a little, then try again.';
-  if (e.status == 503) return 'We can\'t send codes to phones just now. Sign in with your email instead.';
-  if (e.status == 400) return 'Enter your phone number, with its country code if it is not Nigerian.';
-  return e.message;
-}
-
 class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
   @override
   String words(ApiError e) => codeProblem(e);
@@ -63,6 +54,23 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
   TermsAsked? _termsAsked;
   String? _note;
 
+  /// The number as sent (+234…), once it was.
+  late String _e164 = toE164(widget.phone) ?? widget.phone;
+
+  /// Seconds before a new code can be asked for, as the web counts them.
+  int _left = 0;
+  Timer? _tick;
+
+  void _wait() {
+    _tick?.cancel();
+    _left = resendAfter;
+    _tick = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return t.cancel();
+      setState(() => _left--);
+      if (_left <= 0) t.cancel();
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -74,41 +82,60 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
 
   @override
   void dispose() {
+    _tick?.cancel();
     _phone.dispose();
     _code.dispose();
     _name.dispose();
     super.dispose();
   }
 
-  void _send({bool sms = false, bool again = false}) {
+  void _send({bool sms = false}) {
     final a = widget.auth;
     if (a == null || busy) return;
-    if (_phone.text.trim().isEmpty) {
-      setState(() => error = 'Enter your phone number, with its country code if it is not Nigerian.');
+    // Said before anything is sent (the server would answer phone_invalid).
+    final number = _step == WelcomeStep.phone ? toE164(_phone.text) : _e164;
+    if (number == null) {
+      setState(() {
+        error = notAPhone;
+        _note = null;
+      });
       return;
     }
     act(() async {
-      final via = await a.sendPhoneCode(_phone.text.trim(), sms: sms);
+      final via = await a.sendPhoneCode(number, sms: sms);
       if (!mounted) return;
       setState(() {
+        _e164 = number;
         _sentVia = via;
         _step = WelcomeStep.code;
         _code.clear();
-        _note = again || sms ? 'We sent a new code.' : null;
+        _note = null;
+        _wait();
       });
     });
+  }
+
+  /// A code run out: back to the number, saying so (as the web does).
+  bool _expired(Object e) {
+    if (e is! ApiError || !(e.has('ticket_expired') || (_step == WelcomeStep.create && e.status == 401))) return false;
+    _back(note: yourCodeExpired);
+    return true;
   }
 
   void _verify() {
     final a = widget.auth;
     if (a == null || busy || _code.text.length != 6) return;
     act(() async {
-      final ticket = await a.verifyPhoneCode(_phone.text.trim(), _code.text);
-      if (ticket != null && mounted) {
-        setState(() {
-          _ticket = ticket;
-          _step = WelcomeStep.create;
-        });
+      try {
+        final ticket = await a.verifyPhoneCode(_e164, _code.text);
+        if (ticket != null && mounted) {
+          setState(() {
+            _ticket = ticket;
+            _step = WelcomeStep.create;
+          });
+        }
+      } on ApiError catch (e) {
+        if (!_expired(e)) rethrow;
       }
     });
   }
@@ -130,14 +157,23 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
       setState(() => error = 'Agree to the terms and privacy notice to go on.');
       return;
     }
-    act(() => a.createPersonal(ticket, name));
+    act(() async {
+      try {
+        await a.createPersonal(ticket, name);
+      } on ApiError catch (e) {
+        if (!_expired(e)) rethrow;
+      }
+    });
   }
 
-  void _back() => setState(() {
+  void _back({String? note}) => setState(() {
         _step = WelcomeStep.phone;
         _code.clear();
+        _ticket = null;
         error = null;
-        _note = null;
+        _note = note;
+        _tick?.cancel();
+        _left = 0;
       });
 
   @override
@@ -169,6 +205,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
           padding: const EdgeInsets.only(bottom: 18),
           child: Text('Chat with the businesses you buy from, and run your own.', style: tkText(size: 14, color: t.muted)),
         ),
+        if (_note != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Semantics(liveRegion: true, child: Text(_note!, style: tkText(size: 14, color: t.text))),
+          ),
         TkField(
           key: const ValueKey('phone'),
           label: 'Your phone number',
@@ -200,7 +241,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
         child: Semantics(
           liveRegion: true,
           child: Text(
-            _sentVia == 'sms' ? 'We sent a 6-digit code by SMS to ${_phone.text.trim()}.' : 'We sent a 6-digit code to WhatsApp on ${_phone.text.trim()}.',
+            sentWords(_sentVia, _e164),
             style: tkText(size: 14, color: t.text)),
         ),
       ),
@@ -216,12 +257,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
         onChanged: (_) => setState(() {}),
         onSubmitted: (_) => _verify(),
       ),
-      if (error != null)
-        ...[const SizedBox(height: 4), TkErrorBox(error!)]
-      else if (_note != null)
-        Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(_note!, style: tkHint(t)))
-      else
-        const SizedBox(height: 16),
+      // The web's line under the code: the new-code timer, then the links.
+      if (_left > 0)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text('You can ask for a new code in ${countdown(_left)}.', style: tkHint(t)),
+        ),
+      if (error != null) ...[const SizedBox(height: 4), TkErrorBox(error!)] else const SizedBox(height: 16),
       TkButton(
         label: busy ? 'Checking…' : 'Continue',
         primary: true,
@@ -231,7 +273,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
       ),
       if (_sentVia != 'sms')
         Center(child: TkLinkButton(label: 'Send by SMS instead', onPressed: busy ? null : () => _send(sms: true))),
-      Center(child: TkLinkButton(label: 'Send a new code', onPressed: busy ? null : () => _send(sms: _sentVia == 'sms', again: true))),
+      if (_left <= 0) Center(child: TkLinkButton(label: 'Send a new code', onPressed: busy ? null : () => _send(sms: _sentVia == 'sms'))),
       Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: Center(child: TkLinkButton(label: 'Use another number', onPressed: _back)),

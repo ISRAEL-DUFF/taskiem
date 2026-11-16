@@ -86,16 +86,26 @@ class Auth extends ChangeNotifier {
   Future<void> _keepMe() async {
     final m = me;
     // The person's own side keeps no business's chats: what was kept of a
-    // business is not opened on it (the next start asks the server).
+    // business is not opened on it (the next start asks the server). That
+    // the session is a personal one is kept, so opening the app offline
+    // opens You, not a business.
     if (m?.personal == true) {
       local?.close();
       local = null;
+      _keptPersonal = true;
       try {
         await store.keys.write('scope', null);
+        await store.keys.write('personal', '1');
       } on Object {
         // Read again from the server next time.
       }
       return;
+    }
+    _keptPersonal = false;
+    try {
+      await store.keys.write('personal', null);
+    } on Object {
+      // As above.
     }
     final tenant = m?.tenantId?.toString();
     final user = m?.user?.id;
@@ -171,6 +181,11 @@ class Auth extends ChangeNotifier {
     restored = true;
     session++;
     try {
+      _keptPersonal = await store.keys.read('personal') == '1';
+    } on Object {
+      _keptPersonal = false;
+    }
+    try {
       me = await api.me();
       await _keepMe();
       _set(AuthState.signedIn);
@@ -225,7 +240,7 @@ class Auth extends ChangeNotifier {
   /// Email and password.
   Future<void> signIn(String email, String password) async {
     final s = await api.login(body: LoginRequest(email: email, password: password, bearer: true, device: await store.device()));
-    await _signedIn(s.token);
+    await _signedIn(s.token, personal: s.personal == true);
   }
 
   /// Asks for a code on the person's WhatsApp or Telegram; answers the
@@ -238,12 +253,18 @@ class Auth extends ChangeNotifier {
   /// Signs in with the code.
   Future<void> signInWithCode(String phone, String code) async {
     final s = await api.chatSigninVerify(body: ChatSigninVerifyRequest(phone: phone, code: code, bearer: true, device: await store.device()));
-    await _signedIn(s.token);
+    // Someone in no business, or on a phone not yet proved for their
+    // businesses, has their own side: personal, and You opens.
+    await _signedIn(s.token, personal: s.personal == true);
   }
 
   /// The person's own side (docs/spec/taskiem-for-everyone.md §6, §7): a
-  /// session in no business.
-  bool get personal => me?.personal == true;
+  /// session in no business. Opened offline, before the server has said
+  /// who it is, what the phone kept says.
+  bool get personal => me == null ? _keptPersonal : me!.personal == true;
+
+  /// The session kept on this phone is a personal one (You).
+  bool _keptPersonal = false;
 
   /// The phone way in (§5.1): a 6-digit code to [phone], by WhatsApp where
   /// the number is on it, else by SMS; [sms] asks for SMS. Answers how it
@@ -262,7 +283,7 @@ class Auth extends ChangeNotifier {
       if (ticket == null) throw ApiError(500, {'error': 'Something went wrong. Try again.'});
       return ticket;
     }
-    await _signedIn(r.token);
+    await _signedIn(r.token, personal: r.personal ?? true);
     return null;
   }
 
@@ -271,14 +292,14 @@ class Auth extends ChangeNotifier {
     final r = await api.phoneCreate(
       body: PhoneCreateRequest(ticket: ticket, name: name, adult: true, terms: true, bearer: true, device: await store.device()),
     );
-    await _signedIn(r.token);
+    await _signedIn(r.token, personal: r.personal ?? true);
   }
 
   /// Back to the person's own side, **You** (POST /v1/me/switch).
   Future<void> switchToYou() async {
     final s = await api.switchBusiness(body: const SwitchBusinessRequest(personal: true));
     final restoredBefore = restored;
-    await _signedIn(s.token);
+    await _signedIn(s.token, personal: true);
     restored = restoredBefore;
   }
 
@@ -314,7 +335,7 @@ class Auth extends ChangeNotifier {
   }
 
   /// A session made by signing up (or another way in that answers one).
-  Future<void> signedInWith(String? token) => _signedIn(token);
+  Future<void> signedInWith(String? token, {bool personal = false}) => _signedIn(token, personal: personal);
 
   /// Signs this phone out: the server ends its session, the token goes.
   Future<void> signOut() async {
@@ -332,10 +353,18 @@ class Auth extends ChangeNotifier {
     await _forget();
   }
 
-  Future<void> _signedIn(String? token) async {
+  /// [personal]: what the sign-in said the session is, for when who it is
+  /// cannot be read just now (offline): You opens, not a business.
+  Future<void> _signedIn(String? token, {bool personal = false}) async {
     if (token == null) throw ApiError(500, {'error': 'Signed in, but no session came back. Try again.'});
     transport.token = token;
     await store.keep(token);
+    _keptPersonal = personal;
+    try {
+      await store.keys.write('personal', personal ? '1' : null);
+    } on Object {
+      // Read from the server when it can be.
+    }
     restored = false;
     session++;
     // Signed in: the session is good even if who-am-I cannot be read just
@@ -354,8 +383,14 @@ class Auth extends ChangeNotifier {
   Future<void> _forget() async {
     transport.token = null;
     me = null;
+    _keptPersonal = false;
     session++;
     await store.keep(null);
+    try {
+      await store.keys.write('personal', null);
+    } on Object {
+      // The token is gone: nothing is opened with it.
+    }
     try {
       await onForget?.call();
     } on Object {

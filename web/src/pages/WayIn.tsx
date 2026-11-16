@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { get, post, type TermsAsked } from "../api";
-import { useAuth } from "../auth";
-import { codeProblem, countdown, sentWords, toE164 } from "../lib/phone";
+import { ApiError, get, post, type Business, type Me, type TermsAsked } from "../api";
+import { afterPhone, codeDigits, codeProblem, countdown, NOT_A_PHONE, plainly, sentWords, signedInTo, toE164 } from "../lib/phone";
+import { safeNext } from "../lib/safePath";
 import { ErrorBox, Field, useAction } from "../ui";
+import { SwitchList, SwitchStep, useSwitch } from "./Switch";
 
 // The way in (docs/spec/taskiem-for-everyone.md §5.1): one screen for
 // signing in and making an account. A phone number, the 6-digit code sent
@@ -13,14 +14,9 @@ import { ErrorBox, Field, useAction } from "../ui";
 /** Seconds before a new code can be asked for. */
 const RESEND_AFTER = 60;
 
-/** Runs fn, turning what went wrong into plain words about the code. */
-export async function plainly<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (e) {
-    throw new Error(codeProblem(e), { cause: e });
-  }
-}
+export { plainly };
+
+export { codeDigits, signedInTo };
 
 /** Ticks down to zero from when it was last set, once a second. */
 export function useCountdown(): [number, (s: number) => void] {
@@ -58,9 +54,8 @@ export function CodeField({
         <input
           inputMode="numeric"
           autoComplete="one-time-code"
-          maxLength={6}
           value={code}
-          onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+          onChange={(e) => setCode(codeDigits(e.target.value))}
           required
           autoFocus
         />
@@ -83,9 +78,51 @@ export function CodeField({
   );
 }
 
+/** After a phone sign-in, a business's page asked for (?next=): its
+ * business switched to when the person has one, else chosen here. */
+function ChooseBusiness({ me, next }: { me: Me; next: string }) {
+  const sw = useSwitch(next);
+  return (
+    <div className="login card way-in" data-testid="choose-business">
+      <h1>Choose the business</h1>
+      <p className="way-in-line">Choose the business to open this in.</p>
+      <SwitchList me={me} onPick={sw.go} busy={sw.busy} hideYou />
+      <ErrorBox error={sw.error} />
+      {sw.asked && <SwitchStep asked={sw.asked} onClose={sw.close} dest={next} />}
+      <p className="hint way-in-other">
+        <a href="/you">Go to You instead</a>
+      </p>
+    </div>
+  );
+}
+
+/** The one business a link opened signed out belongs to, switched to. */
+function OpenIn({ me, business, next }: { me: Me; business: Business; next: string }) {
+  const sw = useSwitch(next);
+  const [tried, setTried] = useState(false);
+  useEffect(() => {
+    if (tried) return;
+    setTried(true);
+    sw.go(business);
+  }, [tried]);
+  return (
+    <div className="login card way-in" data-testid="open-in">
+      <h1>Opening {business.name}</h1>
+      <ErrorBox error={sw.error} />
+      {sw.asked && <SwitchStep asked={sw.asked} onClose={() => window.location.assign("/you")} dest={next} />}
+      {(sw.error || sw.asked) && (
+        <p className="hint way-in-other">
+          <a href="/you">Go to You instead</a>
+        </p>
+      )}
+      {!sw.error && !sw.asked && <p className="way-in-line">One moment…</p>}
+      {!!sw.error && <SwitchList me={me} onPick={sw.go} busy={sw.busy} hideYou />}
+    </div>
+  );
+}
+
 export function WayIn() {
-  const { refresh } = useAuth();
-  const [step, setStep] = useState<"phone" | "code" | "new">("phone");
+  const [step, setStep] = useState<"phone" | "code" | "new" | "business">("phone");
   const [typed, setTyped] = useState("");
   const [phone, setPhone] = useState("");
   const [via, setVia] = useState("whatsapp");
@@ -95,17 +132,40 @@ export function WayIn() {
   const [adult, setAdult] = useState(false);
   const [agree, setAgree] = useState(false);
   const [terms, setTerms] = useState<TermsAsked | undefined>();
+  const [slack, setSlack] = useState<string | undefined>();
+  const [note, setNote] = useState<string | null>(null);
+  const [signedIn, setSignedIn] = useState<Me | null>(null);
+  // Signed in: the button stays off until the page has moved on.
+  const [done, setDone] = useState(false);
   const [left, wait] = useCountdown();
   const act = useAction();
+  // A second press before the page has drawn the button off sends nothing.
+  const sending = useRef(false);
+  const once = (fn: () => Promise<unknown>) => {
+    if (sending.current) return;
+    sending.current = true;
+    void act.run(async () => {
+      try {
+        await fn();
+      } finally {
+        sending.current = false;
+      }
+    }, false);
+  };
   useEffect(() => {
-    get<{ terms?: TermsAsked }>("/v1/signup").then(
-      (o) => setTerms(o.terms),
+    get<{ terms?: TermsAsked; slack?: string }>("/v1/signup").then(
+      (o) => {
+        setTerms(o.terms);
+        setSlack(o.slack);
+      },
       () => undefined,
     );
   }, []);
-  const search = window.location.search;
-  const next = new URLSearchParams(search).get("next");
-  const emailLink = `/login?with=email${next ? `&next=${encodeURIComponent(next)}` : ""}`;
+  const q = new URLSearchParams(window.location.search);
+  const nextParam = q.get("next");
+  const next = safeNext(nextParam, "");
+  const start = q.get("start");
+  const emailLink = `/login?with=email${nextParam ? `&next=${encodeURIComponent(nextParam)}` : ""}`;
 
   const send = (number: string, how?: "whatsapp" | "sms") =>
     plainly(async () => {
@@ -114,6 +174,36 @@ export function WayIn() {
       setCode("");
       wait(RESEND_AFTER);
     });
+
+  /** Signed in by phone (a personal session): where it was going. */
+  const land = async () => {
+    setDone(true);
+    const to = afterPhone(next, start);
+    if (to !== null) return window.location.assign(to);
+    let me: Me;
+    try {
+      me = await get<Me>("/v1/me");
+    } catch {
+      // Signed in all the same: You, where everything else is reached.
+      return window.location.assign("/you");
+    }
+    if (!me.businesses?.length) return window.location.assign("/you");
+    setSignedIn(me);
+    setStep("business");
+  };
+
+  /** Back to the number, saying why. */
+  const again = (why: string | null) => {
+    act.clear();
+    setCode("");
+    setNote(why);
+    setStep("phone");
+  };
+
+  if (step === "business" && signedIn) {
+    const [only, ...more] = signedIn.businesses ?? [];
+    return only && !more.length ? <OpenIn me={signedIn} business={only} next={next} /> : <ChooseBusiness me={signedIn} next={next} />;
+  }
 
   if (step === "phone")
     return (
@@ -125,14 +215,20 @@ export function WayIn() {
           onSubmit={(e) => {
             e.preventDefault();
             void act.run(async () => {
+              setNote(null);
               const n = toE164(typed);
-              if (!n) throw new Error("Enter your phone number, with its country code if it is not Nigerian.");
+              if (!n) throw new Error(NOT_A_PHONE + ".");
               await send(n);
               setPhone(n);
               setStep("code");
             }, false);
           }}
         >
+          {note && (
+            <p className="notice" role="status">
+              {note}
+            </p>
+          )}
           <Field label="Your phone number" hint="A Nigerian number can start with 0. For another country, start with + and its code.">
             <input
               type="tel"
@@ -153,6 +249,11 @@ export function WayIn() {
         <p className="hint way-in-other">
           <Link to={emailLink}>Sign in with email</Link>
         </p>
+        {slack && (
+          <p className="hint way-in-other" data-testid="signup-slack">
+            Your team works in Slack? <a href={slack}>Start in Slack</a>: Taskiem joins your workspace and sets up workflows for your team.
+          </p>
+        )}
       </div>
     );
 
@@ -167,36 +268,32 @@ export function WayIn() {
           key="code"
           onSubmit={(e) => {
             e.preventDefault();
-            void act.run(
-              () =>
-                plainly(async () => {
-                  const r = await post<{ status: string; ticket?: string }>("/v1/auth/phone/verify", { phone, code });
-                  if (r.status === "new" && r.ticket) {
-                    setTicket(r.ticket);
-                    setStep("new");
-                    return;
-                  }
-                  await refresh();
-                }),
-              false,
-            );
+            if (done) return;
+            once(async () => {
+              let r: { status: string; ticket?: string };
+              try {
+                r = await post<{ status: string; ticket?: string }>("/v1/auth/phone/verify", { phone, code });
+              } catch (err) {
+                if (err instanceof ApiError && err.body.ticket_expired) return again("Your code has expired: ask for a new one.");
+                throw new Error(codeProblem(err), { cause: err });
+              }
+              if (r.status === "new" && r.ticket) {
+                setTicket(r.ticket);
+                setStep("new");
+                return;
+              }
+              await plainly(land);
+            });
           }}
         >
-          <CodeField code={code} setCode={setCode} left={left} busy={act.busy} onResend={(how) => void act.run(() => send(phone, how), false)} sms={via !== "sms"} />
+          <CodeField code={code} setCode={setCode} left={left} busy={act.busy || done} onResend={(how) => void act.run(() => send(phone, how), false)} sms={via !== "sms"} />
           <ErrorBox error={act.error} />
-          <button className="primary" type="submit" disabled={act.busy || code.length !== 6}>
-            {act.busy ? "Checking…" : "Continue"}
+          <button className="primary" type="submit" disabled={act.busy || done || code.length !== 6}>
+            {act.busy || done ? "Checking…" : "Continue"}
           </button>
         </form>
         <p className="hint way-in-other">
-          <button
-            type="button"
-            className="link"
-            onClick={() => {
-              act.clear();
-              setStep("phone");
-            }}
-          >
+          <button type="button" className="link" onClick={() => again(null)}>
             Use another number
           </button>
         </p>
@@ -211,10 +308,17 @@ export function WayIn() {
         key="new"
         onSubmit={(e) => {
           e.preventDefault();
-          void act.run(async () => {
-            await post("/v1/auth/phone/create", { ticket, name: name.trim(), adult, terms: agree });
-            await refresh();
-          }, false);
+          if (done) return;
+          once(async () => {
+            try {
+              await post("/v1/auth/phone/create", { ticket, name: name.trim(), adult, terms: agree });
+            } catch (err) {
+              // The code ran out while the name was typed: a new code, from the number.
+              if (err instanceof ApiError && err.status === 401) return again("Your code has expired: ask for a new one.");
+              throw new Error(codeProblem(err), { cause: err });
+            }
+            await land();
+          });
         }}
       >
         <Field label="Your name">
@@ -238,10 +342,15 @@ export function WayIn() {
           </span>
         </label>
         <ErrorBox error={act.error} />
-        <button className="primary" type="submit" disabled={act.busy}>
-          {act.busy ? "Creating…" : "Create"}
+        <button className="primary" type="submit" disabled={act.busy || done}>
+          {act.busy || done ? "Creating…" : "Create"}
         </button>
       </form>
+      <p className="hint way-in-other">
+        <button type="button" className="link" disabled={act.busy || done} onClick={() => again(null)}>
+          Use another number
+        </button>
+      </p>
     </div>
   );
 }

@@ -175,16 +175,11 @@ async function request<T>(
     data = { error: text };
   }
   if (!res.ok) {
-    // Moving to another business refused (it signs in with single sign-on)
-    // is not this session ending.
-    // Nor is a wrong code while changing the phone number, or a business
-    // asking for a passkey or a second proof first.
-    if (
-      res.status === 401 &&
-      !path.startsWith("/v1/auth/") &&
-      !path.startsWith("/v1/me/phone/") &&
-      !(path === "/v1/me/switch" && switchStep(data))
-    )
+    // A 401 that asks for another step is not this session ending: a
+    // business's own sign-in first (single sign-on, a passkey, a second
+    // proof), or a code or PIN that was wrong or ran out. Any other 401
+    // outside signing in is (changing the phone number included).
+    if (res.status === 401 && !path.startsWith("/v1/auth/") && !keepsSession(data))
       window.dispatchEvent(new Event("taskiem:unauthorised"));
     noteEnded(res.status, data);
     throw new ApiError(
@@ -201,6 +196,11 @@ async function request<T>(
     );
   }
   return data as T;
+}
+
+/** A 401 that asks for a step while the session goes on (§5.4, §5.5). */
+export function keepsSession(body: Record<string, unknown>): boolean {
+  return !!switchStep(body) || !!body.code_wrong || !!body.ticket_expired || body.tries_left !== undefined;
 }
 
 /** What a business asks for before a switch into it (POST /v1/me/switch). */
@@ -297,6 +297,8 @@ export interface ProofWays {
   passkey: boolean;
   email: boolean;
   pin: boolean;
+  /** The account's password (POST /v1/auth/second-proof/password). */
+  password?: boolean;
 }
 
 /** One of the person's businesses, for the switcher. */
@@ -375,6 +377,17 @@ export interface Invitation {
   tenant: string;
   roles: string[];
   invited_at: string;
+}
+
+/** POST /v1/me/invitations/{tenant}/accept. From a personal session the
+ * session moves into the business, unless its rules ask for a step first
+ * (sign_in, with the ways a second proof can be given). */
+export interface InvitationAccepted {
+  tenant_id: string;
+  roles: string[];
+  personal?: boolean;
+  sign_in?: Lock | "session_ended";
+  ways?: ProofWays;
 }
 
 export interface WorkflowSummary {

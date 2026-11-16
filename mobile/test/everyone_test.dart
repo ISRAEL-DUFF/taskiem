@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/api/transport.dart';
 import 'package:taskiem/app/applinks.dart';
+import 'package:taskiem/app/passkey.dart';
 import 'package:taskiem/app/auth.dart';
 import 'package:taskiem/app/session.dart';
 import 'package:taskiem/main.dart';
@@ -21,6 +22,7 @@ import 'package:taskiem/screens/you.dart';
 import 'package:taskiem/theme/theme.dart';
 
 import 'auth_test.dart' show FakeServer;
+import 'passkey_test.dart' show FakePasskeys;
 import 'support.dart' show loadFonts, snap;
 
 http.Response _json(Object body, [int status = 200]) => http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json; charset=utf-8'});
@@ -108,24 +110,35 @@ void main() {
     await settle(t);
 
     await press(t, 'Continue');
-    expect(find.text('Enter your phone number, with its country code if it is not Nigerian.'), findsOneWidget);
+    expect(find.text('That doesn\'t look like a phone number.'), findsOneWidget);
+    // Said before sending: half a number sends nothing.
+    await typeIn(t, find.byKey(const ValueKey('phone')), '0803 123');
+    await press(t, 'Continue');
+    expect(find.text('That doesn\'t look like a phone number.'), findsOneWidget);
+    expect(server.calls.where((c) => c.path == '/v1/auth/phone/start'), isEmpty);
     await typeIn(t, find.byKey(const ValueKey('phone')), '0803 123 0000');
     await press(t, 'Continue');
-    expect(server.calls.last.body, {'phone': '0803 123 0000'});
-    expect(find.text('We sent a 6-digit code to WhatsApp on 0803 123 0000.'), findsOneWidget);
+    expect(server.calls.last.body, {'phone': '+2348031230000'});
+    expect(find.text('We sent a 6-digit code to WhatsApp on +234 803 123 0000.'), findsOneWidget);
+    // A new code waits a minute, as on the web.
+    expect(find.textContaining(RegExp(r'You can ask for a new code in [01]:[0-9]{2}\.')), findsOneWidget);
+    expect(find.text('Send a new code'), findsNothing);
+    expect(find.text('We sent a new code.'), findsNothing);
 
     // By SMS instead.
     server.answers['POST /v1/auth/phone/start'] = () => _json({'sent_via': 'sms', 'expires_in': 600}, 202);
     await press(t, 'Send by SMS instead');
-    expect(server.calls.last.body, {'phone': '0803 123 0000', 'via': 'sms'});
-    expect(find.text('We sent a 6-digit code by SMS to 0803 123 0000.'), findsOneWidget);
+    expect(server.calls.last.body, {'phone': '+2348031230000', 'via': 'sms'});
+    expect(find.text('We sent a 6-digit code by SMS to +234 803 123 0000.'), findsOneWidget);
     expect(find.text('Send by SMS instead'), findsNothing);
+    await t.pump(const Duration(seconds: 61));
+    expect(find.text('Send a new code'), findsOneWidget);
 
-    // A wrong code is the server's words.
-    server.answers['POST /v1/auth/phone/verify'] = () => _json({'error': 'invalid code'}, 401);
+    // A wrong code, in plain words.
+    server.answers['POST /v1/auth/phone/verify'] = () => _json({'error': 'That code is not right.', 'code_wrong': true}, 401);
     await typeIn(t, find.byKey(const ValueKey('code')), '111111');
     await press(t, 'Continue');
-    expect(find.text('That code is not right, or it has expired. Check it, or ask for a new one.'), findsOneWidget);
+    expect(find.text('That code is not right. Check it, or ask for a new one.'), findsOneWidget);
     expect(auth.state, AuthState.signedOut, reason: 'a wrong code signs nobody out or in');
 
     server.answers['POST /v1/auth/phone/verify'] = () => _json({'status': 'new', 'ticket': 'tk-1', 'expires_in': 900});
@@ -226,7 +239,7 @@ void main() {
 
     await typeIn(t, labelled('Your chat PIN'), '1111');
     await press(t, 'Confirm with my PIN');
-    expect(find.text('That PIN is not right.'), findsOneWidget);
+    expect(find.text('That PIN is not right. 4 tries left.'), findsOneWidget);
     expect(auth.state, AuthState.signedIn, reason: 'a wrong PIN signs nobody out');
 
     await typeIn(t, labelled('Your chat PIN'), '4321');
@@ -344,8 +357,8 @@ void main() {
     await t.tap(find.bySemanticsLabel('Settings'));
     await settle(t);
     expect(find.text('Tolu Ade'), findsOneWidget);
-    expect(find.text('+2348031230000'), findsOneWidget);
-    expect(find.text('Sign out of this phone'), findsOneWidget);
+    expect(find.text('+234 803 123 0000'), findsOneWidget);
+    expect(find.text('Sign out'), findsOneWidget);
     expect(find.textContaining('phone.taskiem.invalid'), findsNothing, reason: 'a made-up sign-in name is not shown');
 
     server.answers['POST /v1/me/phone/start'] = () => _json({'sent_via': 'sms', 'old_sent_via': 'whatsapp', 'expires_in': 600, 'needs_old_code': true}, 202);
@@ -354,14 +367,28 @@ void main() {
     await typeIn(t, find.byKey(const ValueKey('new-phone')), '08039990000');
     await press(t, 'Send a code');
     final start = server.calls.lastWhere((c) => c.path == '/v1/me/phone/start').body!;
-    expect(start['phone'], '08039990000');
+    expect(start, {'phone': '+2348039990000'}, reason: 'asked first, not guessed');
+    // The server says the old number is needed: asked, as on the web.
+    expect(find.text('To keep your account safe, we also check it\'s you. Do you still have your old number, +234 803 123 0000?'), findsOneWidget);
+    expect(find.text('No, prove it\'s me another way'), findsOneWidget);
+    await press(t, 'Yes, send it a code');
+    expect(server.calls.lastWhere((c) => c.path == '/v1/me/phone/start').body, {'phone': '+2348039990000', 'confirm_old': true});
+    expect(find.text('We sent a 6-digit code by SMS to +234 803 999 0000. And one to your old number, +234 803 123 0000.'), findsOneWidget);
     await snap(t, 'change-number');
-    expect(start['confirm_old'], isTrue, reason: 'a phone-code session on an unconfirmed phone needs the old number');
-    await typeIn(t, find.byKey(const ValueKey('new-code')), '222222');
+    // A wrong code: said, and nobody is signed out.
+    server.answers['POST /v1/me/phone/verify'] = () => _json({'error': 'That code is not right.', 'code_wrong': true}, 401);
+    await typeIn(t, find.byKey(const ValueKey('new-code')), '111111');
     await typeIn(t, find.byKey(const ValueKey('old-code')), '333333');
     await t.tap(find.text('Confirm the new number').last);
     await settle(t);
-    expect(server.calls.lastWhere((c) => c.path == '/v1/me/phone/verify').body, {'code': '222222', 'old_code': '333333', 'phone': '08039990000'});
+    expect(find.text('That code is not right. Check it, or ask for a new one.'), findsOneWidget);
+    expect(auth.state, AuthState.signedIn, reason: 'a wrong code signs nobody out');
+    expect(auth.transport.token, 'tok-p');
+    server.answers['POST /v1/me/phone/verify'] = () => _json({'phone': '+2348039990000'});
+    await typeIn(t, find.byKey(const ValueKey('new-code')), '222222');
+    await t.tap(find.text('Confirm the new number').last);
+    await settle(t);
+    expect(server.calls.lastWhere((c) => c.path == '/v1/me/phone/verify').body, {'code': '222222', 'old_code': '333333', 'phone': '+2348039990000'});
     await t.pump(const Duration(seconds: 5));
     await t.pumpAndSettle();
   });
@@ -406,5 +433,169 @@ void main() {
     expect(ended, 0);
     await expectLater(auth.api.me(), throwsA(isA<ApiError>()));
     expect(ended, 1);
+  });
+
+  test('a wrong or expired code, or a wrong PIN, signs nobody out; an ended session does', () async {
+    final server = FakeServer();
+    final auth = _auth(server);
+    auth.transport.token = 'tok';
+    auth.state = AuthState.signedIn;
+    var ended = 0;
+    auth.transport.onSessionEnded = () => ended++;
+    for (final flag in [{'code_wrong': true}, {'ticket_expired': true}, {'tries_left': 2}]) {
+      server.answers['POST /v1/me/phone/verify'] = () => _json({'error': 'no', ...flag}, 401);
+      await expectLater(auth.api.phoneChangeVerify(body: const PhoneChangeVerifyRequest(code: '000000')), throwsA(isA<ApiError>()));
+    }
+    expect(ended, 0);
+    server.answers['POST /v1/me/phone/verify'] = () => _json({'error': 'the session has ended'}, 401);
+    await expectLater(auth.api.phoneChangeVerify(body: const PhoneChangeVerifyRequest(code: '000000')), throwsA(isA<ApiError>()));
+    expect(ended, 1);
+  });
+
+  testWidgets('Change number: no old number, so another proof (the PIN), then only the new number’s code', (t) async {
+    phone(t);
+    final server = FakeServer();
+    server.answers['GET /v1/me'] = () => _json(personalMe(ways: {'pin': true}));
+    server.answers['POST /v1/me/phone/start'] = () => _json({'sent_via': 'whatsapp', 'expires_in': 600, 'needs_old_code': true}, 202);
+    server.answers['POST /v1/auth/second-proof/pin'] = () => _json({'device_proved': true});
+    server.answers['POST /v1/me/phone/verify'] = () => _json({'error': 'That code has expired.', 'ticket_expired': true}, 401);
+    final auth = _auth(server);
+    auth.transport.token = 'tok-p';
+    auth.me = Me.fromJson(personalMe(ways: {'pin': true}));
+    auth.state = AuthState.signedIn;
+    await t.pumpWidget(TaskiemApp(home: ChangeNumberScreen(auth: auth)));
+    await settle(t);
+    await typeIn(t, find.byKey(const ValueKey('new-phone')), '+44 7700 900123');
+    await press(t, 'Send a code');
+    expect(server.calls.last.body, {'phone': '+447700900123'});
+    await press(t, 'No, prove it\'s me another way');
+    expect(find.text('Prove it\'s you'), findsOneWidget);
+    await typeIn(t, labelled('Your chat PIN'), '4321');
+    await press(t, 'Confirm with my PIN');
+    expect(server.calls.any((c) => c.path == '/v1/auth/second-proof/pin'), isTrue);
+    expect(find.text('Code sent to your new number'), findsOneWidget);
+    expect(find.text('Code sent to your old number'), findsNothing);
+    // The code ran out: back to the number, saying so; still signed in.
+    await typeIn(t, find.byKey(const ValueKey('new-code')), '222222');
+    await t.tap(find.text('Confirm the new number').last);
+    await settle(t);
+    expect(server.calls.last.body, {'code': '222222', 'phone': '+447700900123'});
+    expect(find.text('That code has expired: ask for a new one.'), findsOneWidget);
+    expect(find.text('New phone number'), findsOneWidget);
+    expect(auth.state, AuthState.signedIn);
+  });
+
+  testWidgets('a passkey as a second proof proves the phone, keeps the session, then switches', (t) async {
+    phone(t);
+    final was = passkeys;
+    final fake = FakePasskeys();
+    passkeys = fake;
+    addTearDown(() => passkeys = was);
+    final server = FakeServer();
+    server.answers['GET /v1/me'] = () => _json(personalMe(businesses: [_business], ways: {'passkey': true}));
+    var proved = false;
+    server.answers['POST /v1/me/switch'] = () => proved
+        ? _json({'token': 'tok-b', 'tenant_id': 'b1', 'user_id': 'u1'})
+        : _json({'error': 'Confirm it is you first.', 'second_proof_required': true, 'ways': {'passkey': true}}, 401);
+    server.answers['POST /v1/auth/second-proof/passkey/options'] = () => _json({'publicKey': {'challenge': 'ch', 'rpId': 'taskiem.example'}});
+    server.answers['POST /v1/auth/second-proof/passkey'] = () {
+      proved = true;
+      return _json({'device_proved': true});
+    };
+    final auth = _auth(server);
+    auth.transport.token = 'tok-p';
+    auth.me = Me.fromJson(personalMe(businesses: [_business], ways: {'passkey': true}));
+    auth.state = AuthState.signedIn;
+    await t.pumpWidget(TaskiemApp(home: Builder(builder: (c) => GestureDetector(onTap: () => showSwitcher(c, auth), child: const Text('open')))));
+    await t.tap(find.text('open'));
+    await settle(t);
+    await press(t, 'Mama’s Kitchen');
+    await press(t, 'Use your passkey');
+    final proof = server.calls.firstWhere((c) => c.path == '/v1/auth/second-proof/passkey');
+    expect((proof.body!['credential'] as Map)['id'], 'k1');
+    expect(proof.auth, 'Bearer tok-p', reason: 'the same session, proved');
+    expect(server.calls.where((c) => c.path == '/v1/auth/passkey'), isEmpty, reason: 'no new sign-in with the passkey');
+    expect(auth.transport.token, 'tok-b');
+  });
+
+  testWidgets('an invitation whose business asks for a second proof: the proof, then the business', (t) async {
+    phone(t);
+    final server = FakeServer();
+    server.answers['GET /v1/me'] = () => _json(personalMe(businesses: [_business]));
+    server.answers['GET /v1/me/invitations'] = () => _json({
+      'invitations': [
+        {'tenant_id': 'b2', 'tenant': 'Bola Stores', 'roles': ['staff'], 'invited_at': '2026-11-15T10:00:00Z'},
+      ],
+    });
+    server.answers['POST /v1/me/invitations/b2/accept'] = () => _json({'tenant_id': 'b2', 'roles': ['staff'], 'sign_in': 'second_proof_required', 'ways': {'pin': true}});
+    server.answers['POST /v1/auth/second-proof/pin'] = () => _json({'device_proved': true});
+    server.answers['POST /v1/me/switch'] = () => _json({'token': 'tok-b2', 'tenant_id': 'b2', 'user_id': 'u1'});
+    final auth = _auth(server);
+    auth.transport.token = 'tok-p';
+    auth.me = Me.fromJson(personalMe(businesses: [_business]));
+    auth.state = AuthState.signedIn;
+    await t.pumpWidget(TaskiemApp(home: YouHome(auth: auth)));
+    await settle(t);
+    // A new phone: the businesses wait for a proof, and they are listed.
+    expect(find.text('You signed in on a new device, so your businesses are locked until you prove it\'s you.'), findsOneWidget);
+    expect(find.text('Your businesses'), findsOneWidget);
+    await press(t, 'Join');
+    expect(auth.transport.token, 'tok-p', reason: 'not moved before the proof');
+    expect(find.text('Prove it\'s you'), findsWidgets);
+    expect(find.textContaining('Before Bola Stores opens'), findsOneWidget);
+    await typeIn(t, labelled('Your chat PIN'), '4321');
+    await press(t, 'Confirm with my PIN');
+    expect(server.calls.lastWhere((c) => c.path == '/v1/me/switch').body, {'tenant_id': 'b2'});
+    expect(auth.transport.token, 'tok-b2');
+  });
+
+  testWidgets('a personal session opened offline opens You, not a business', (t) async {
+    phone(t);
+    final server = FakeServer();
+    server.answers['GET /v1/me'] = () => _json(personalMe());
+    server.answers['POST /v1/auth/chat/verify'] = () => _json({'token': 'tok-c', 'personal': true, 'tenant_id': null});
+    final keys = MemoryKeyStore();
+    final first = _auth(server, keys: keys);
+    // Signed in with the chat code: a personal session (C4).
+    await first.signInWithCode('+2348031230000', '123456');
+    expect(first.personal, isTrue);
+    // Opened again with no network: what was kept says You.
+    server.offline = true;
+    final auth = _auth(server, keys: keys);
+    await auth.start();
+    expect(auth.state, AuthState.signedIn);
+    expect(auth.me, isNull);
+    expect(auth.personal, isTrue);
+    await t.pumpWidget(TaskiemApp(auth: auth));
+    await settle(t);
+    expect(find.byType(YouHome), findsOneWidget);
+    // Signed out, nothing of it stays.
+    await auth.signOut();
+    expect(auth.personal, isFalse);
+    expect(await keys.read('personal'), isNull);
+  });
+
+  testWidgets('the way in: a code that ran out while the name was typed goes back to the number', (t) async {
+    phone(t);
+    final server = FakeServer();
+    server.answers['POST /v1/auth/phone/create'] = () => _json({'error': 'This sign-up has expired. Ask for a new code.', 'ticket_expired': true}, 401);
+    server.answers['POST /v1/auth/phone/start'] = () => _json({'sent_via': 'whatsapp', 'expires_in': 600}, 202);
+    final auth = _auth(server)..state = AuthState.signedOut;
+    await t.pumpWidget(TaskiemApp(home: WelcomeScreen(auth: auth, step: WelcomeStep.code, phone: '+2348031230000')));
+    await settle(t);
+    expect(find.text('We sent a 6-digit code to WhatsApp on +234 803 123 0000.'), findsOneWidget);
+    server.answers['POST /v1/auth/phone/verify'] = () => _json({'status': 'new', 'ticket': 'tk-1', 'expires_in': 900});
+    await typeIn(t, find.byKey(const ValueKey('code')), '123 456');
+    expect(find.text('123456'), findsOneWidget, reason: 'a pasted "123 456" is six digits');
+    await press(t, 'Continue');
+    expect(find.text('Make your account'), findsOneWidget);
+    expect(find.text('Use another number'), findsOneWidget);
+    await typeIn(t, find.byKey(const ValueKey('name')), 'Tolu Ade');
+    await press(t, 'I\'m 18 or over');
+    await t.tap(find.textContaining('I agree to Taskiem\'s'));
+    await settle(t);
+    await press(t, 'Create');
+    expect(find.text('Your code has expired: ask for a new one.'), findsOneWidget);
+    expect(find.text('Welcome to Taskiem'), findsOneWidget);
   });
 }

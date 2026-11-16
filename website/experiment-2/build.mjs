@@ -51,12 +51,13 @@ const blobs = {
 };
 // The design's placeholder links. Until a WhatsApp number or the app's
 // address is given, both buttons lead to the contact page.
-const chat = whatsapp ? `https://wa.me/${whatsapp}?text=hi` : app ? `${app}/signup` : "/contact";
+const chat = whatsapp ? `https://wa.me/${whatsapp}?text=hi` : app ? `${app}/signup?start=business` : "/contact";
 const links = {
   "Home.dc.html": "/",
   "#whatsapp": chat,
   "#whatsapp-chat": chat,
-  "#start-web": app ? `${app}/signup` : "/contact",
+  // The way in, then Start something with A business chosen.
+  "#start-web": app ? `${app}/signup?start=business` : "/contact",
 };
 
 // ---------- The repository's facts ----------

@@ -5,7 +5,8 @@ import { useAuth } from "../auth";
 import { safeNext } from "../lib/safePath";
 import { passkeysSupported } from "../passkeys";
 import { ErrorBox, Field, useAction, PasswordInput } from "../ui";
-import { WayIn } from "./WayIn";
+import { plainly } from "../lib/phone";
+import { codeDigits, WayIn } from "./WayIn";
 
 /** /login and /signup: the phone way in (WayIn), or with ?with=email the
  * email, password, passkey and chat sign-in (taskiem-for-everyone §5.1). */
@@ -130,7 +131,7 @@ function ChatSignIn({ onBack }: { onBack: () => void }) {
           key="phone"
           onSubmit={(e) => {
             e.preventDefault();
-            void act.run(async () => setSent((await post<{ status: string }>("/v1/auth/chat/start", { phone })).status), false);
+            void act.run(async () => setSent((await plainly(() => post<{ status: string }>("/v1/auth/chat/start", { phone }))).status), false);
           }}
         >
           <p className="hint">We send a code to the WhatsApp or Telegram on your Taskiem account.</p>
@@ -148,14 +149,16 @@ function ChatSignIn({ onBack }: { onBack: () => void }) {
           onSubmit={(e) => {
             e.preventDefault();
             void act.run(async () => {
-              await post("/v1/auth/chat/verify", { phone, code });
+              // Someone in no business, or on a device not yet proved for
+              // their businesses, gets their own side: You (App.tsx).
+              await plainly(() => post("/v1/auth/chat/verify", { phone, code }));
               await refresh();
             }, false);
           }}
         >
           <p role="status">{sent}</p>
           <Field label="Code">
-            <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} required autoFocus />
+            <input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(codeDigits(e.target.value))} required autoFocus />
           </Field>
           <ErrorBox error={act.error} />
           <button className="primary" type="submit" disabled={act.busy || code.length !== 6} style={{ width: "100%" }}>
