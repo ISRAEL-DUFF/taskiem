@@ -46,6 +46,8 @@ dependencies:
   app_links: 7.2.2
   # Passkeys in the app: signing in, adding one, approving (lib/app/passkey.dart; N6). BSD-3-Clause.
   passkeys: 2.24.1
+  # A customer picked from the phone's contacts, in its own picker, so the app reads no other contact (lib/chat/invoices_page.dart). BSD-3-Clause.
+  flutter_native_contact_picker: 0.0.13
 dev_dependencies:
   flutter_test:
     sdk: flutter

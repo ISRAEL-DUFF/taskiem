@@ -214,8 +214,8 @@ void main() {
 
   testWidgets('staff: who is in, who is late; someone added with their own role; an invitation sent again', (t) async {
     final sent = await open(t, (c) => StaffPage(auth: c.auth));
-    expect(find.text('Since 08:25'), findsOneWidget);
-    expect(find.text('Not in yet'), findsOneWidget);
+    expect(find.textContaining('in since 08:25'), findsOneWidget);
+    expect(find.text('Chidi is late'), findsOneWidget);
     expect(find.text('Ada Obi (you)'), findsOneWidget);
     expect(find.bySemanticsLabel('Remove Ada Obi'), findsNothing, reason: 'not yourself');
     await t.tap(find.bySemanticsLabel('Send again to Bisi'));
@@ -235,7 +235,10 @@ void main() {
     await t.pumpAndSettle();
     expect(sent.last, 'POST /v1/staff/invites {"name":"Kemi","phone":"0803 555 1234","roles":["packer"]}');
     await t.pump(const Duration(seconds: 5));
-    await t.tap(find.bySemanticsLabel('Remove Tunde'));
+    // Removed from their own screen, after yes.
+    await t.tap(find.text('Tunde').last);
+    await settle(t);
+    await t.tap(find.bySemanticsLabel(RegExp('^Remove Tunde')));
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Remove').last);
     await settle(t);
@@ -246,11 +249,14 @@ void main() {
   testWidgets('a person: their hours and pay; this month’s figures; a Saturday taken off', (t) async {
     final sent = await open(t, (c) => StaffPersonPage(auth: c.auth, user: 'U2'));
     expect(find.text('Mon to Tue, 08:00 to 16:00; Sat, 10:00 to 18:00'), findsOneWidget);
-    expect(find.text('₦80,000 a month'), findsOneWidget);
-    expect(find.text('₦12,000 in 4 sales (Cash ₦7,000, Transfer ₦5,000)'), findsOneWidget);
+    expect(find.text('₦80,000 a month · for your records'), findsOneWidget);
+    expect(find.text('₦12,000'), findsOneWidget);
+    expect(find.text('4 sales · 2 orders'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('This month'));
     await settle(t);
-    await t.tap(find.bySemanticsLabel('Change Tunde'));
+    await t.tap(find.bySemanticsLabel('More about Tunde'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Change their job, hours and pay'));
     await t.pumpAndSettle();
     await t.tap(find.text('Saturday'));
     await t.pump();
@@ -277,10 +283,15 @@ void main() {
     await t.tap(find.bySemanticsLabel('I’ll do it: Sweep the shop'));
     await settle(t);
     expect(sent.last, 'POST /v1/staff/tasks/T2/take {}');
-    await t.tap(find.bySemanticsLabel('Done, with a photo: Sweep the shop'));
+    await t.tap(find.text('Sweep the shop'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Done, with a photo'));
     await settle(t);
     expect(sent.last, startsWith('POST /v1/staff/tasks/T2/done '), reason: 'the photo sent with it');
-    await t.tap(find.bySemanticsLabel('Can’t: Count the cash float'));
+    // Can't is on the task, pressed.
+    await t.tap(find.text('Count the cash float'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Can’t do it'));
     await t.pumpAndSettle();
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Why')), matching: find.byType(EditableText)), 'No float today');
     await t.tap(find.bySemanticsLabel('Send it back'));
@@ -292,6 +303,8 @@ void main() {
     await t.tap(find.bySemanticsLabel('Remind any cashier: Sweep the shop'));
     await settle(t);
     expect(sent.last, 'POST /v1/staff/tasks/T2/remind {}');
+    await t.tap(find.bySemanticsLabel('Repeating'));
+    await settle(t);
     expect(find.text('Open the shutters'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Stop: Open the shutters'));
     await t.pumpAndSettle();

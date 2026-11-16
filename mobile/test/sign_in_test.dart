@@ -22,11 +22,14 @@ void main() {
         'Sign in',
         'Forgot password?',
         'Sign in with a passkey',
-        'Sign in with WhatsApp or Telegram',
+        'A code on WhatsApp or Telegram',
         'Create an account',
       ]) {
         expect(find.text(words), findsOneWidget, reason: words);
       }
+      // The two apps' logos, not a long button.
+      expect(find.bySemanticsLabel('Sign in with a code on WhatsApp'), findsOneWidget);
+      expect(find.bySemanticsLabel('Sign in with a code on Telegram'), findsOneWidget);
     });
   }
 }

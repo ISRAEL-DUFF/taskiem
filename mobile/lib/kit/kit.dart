@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' show TextField, InputDecoration, Material
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'icon.dart';
 import 'motion.dart';
 import '../theme/theme.dart';
 import 'tap_area.dart';
@@ -178,13 +179,16 @@ class _TkFieldState extends State<TkField> {
     final t = TkTheme.tokens(context);
     final focused = _focus.hasFocus;
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    // In the app's own look (the sign-in card), as drawn: the words small
+    // and muted over the box, its corners rounder.
+    final own = TkAppLook.on(context);
     // The words and the field are one to a screen reader and a finger.
     return TapField(child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: Text(widget.label, style: tkText(size: 13, weight: 500, color: t.text)),
+          child: Text(widget.label, style: own ? tkText(size: 12.5, weight: 600, color: t.muted) : tkText(size: 13, weight: 500, color: t.text)),
         ),
         // `transition: background-color 0.18s ease, box-shadow 0.18s ease`
         AnimatedContainer(
@@ -194,8 +198,8 @@ class _TkFieldState extends State<TkField> {
           padding: const EdgeInsets.symmetric(horizontal: 12),
           alignment: Alignment.centerLeft,
           decoration: BoxDecoration(
-            color: focused ? t.fieldFocus : t.field,
-            borderRadius: BorderRadius.circular(Tk.radiusSm),
+            color: focused && !own ? t.fieldFocus : t.field,
+            borderRadius: BorderRadius.circular(own ? 12 : Tk.radiusSm),
             boxShadow: focused ? t.ring : const [],
           ),
           child: Material(
@@ -211,7 +215,7 @@ class _TkFieldState extends State<TkField> {
               onChanged: widget.onChanged,
               cursorColor: t.text,
               showCursor: !TkField.debugHideCaret,
-              style: tkText(size: 14, color: t.text),
+              style: tkText(size: own ? 15 : 14, color: t.text),
               decoration: const InputDecoration.collapsed(hintText: null),
               inputFormatters: widget.digits == null
                   ? const <TextInputFormatter>[]
@@ -230,10 +234,13 @@ TextStyle tkHint(TkTokens t) => tkText(size: 13, color: t.muted);
 /// A link in words (`a`, underlined on the sign-in card), with the web's
 /// 4 px above and below so it is easy to press.
 class TkLink extends StatelessWidget {
-  const TkLink({super.key, required this.label, this.onTap});
+  const TkLink({super.key, required this.label, this.onTap, this.bold = false});
 
   final String label;
   final VoidCallback? onTap;
+
+  /// As drawn in the app's own sheets: bold pine words, no line under them.
+  final bool bold;
 
   @override
   Widget build(BuildContext context) {
@@ -248,7 +255,12 @@ class TkLink extends StatelessWidget {
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(label, style: tkText(size: 13, color: t.accent, decoration: TextDecoration.underline)),
+            child: Text(
+              label,
+              style: bold
+                  ? tkText(size: 14, weight: 700, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand)
+                  : tkText(size: 13, color: t.accent, decoration: TextDecoration.underline),
+            ),
           ),
         ),
       ),
@@ -384,6 +396,22 @@ class TkCheckbox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = TkTheme.of(context).mode == TkMode.dark;
+    // In the app's own look, as drawn: a rounded square, lime with a white
+    // tick when on, a ring when off.
+    if (TkAppLook.on(context)) {
+      final t = TkTheme.tokens(context);
+      return Container(
+        width: 26,
+        height: 26,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: checked ? const Color(0xFF7ED321) : const Color(0x00000000),
+          borderRadius: BorderRadius.circular(7),
+          border: checked ? null : Border.all(color: t.muted, width: 1.8),
+        ),
+        child: checked ? const TkIcon('b-check', size: 16, stroke: 2.6, color: Color(0xFFFFFFFF)) : null,
+      );
+    }
     return SizedBox(width: 16, height: 16, child: CustomPaint(painter: _CheckPainter(checked: checked, dark: dark)));
   }
 }
@@ -495,8 +523,11 @@ class TkBadge extends StatelessWidget {
 /// The web's `button.small` in a list's row: a pill 36 px tall, 11.9 px words;
 /// pine (lime on dark) when [primary], the danger colour's words when [danger].
 class TkSmallButton extends StatelessWidget {
-  const TkSmallButton({super.key, required this.label, this.onPressed, this.primary = false, this.danger = false, this.semantics});
+  const TkSmallButton({super.key, required this.label, this.onPressed, this.primary = false, this.danger = false, this.semantics, this.icon});
   final String label;
+
+  /// An icon before the words (the app's own look only).
+  final String? icon;
 
   /// What a screen reader hears, when more than the words (the web's
   /// `sr-only` name after them).
@@ -518,8 +549,9 @@ class TkSmallButton extends StatelessWidget {
       child: TkPress(
         onTap: onPressed ?? () {},
         child: Container(
-          constraints: const BoxConstraints(minHeight: 36),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          // 40 tall, and room above and below words on two lines (as drawn).
+          constraints: const BoxConstraints(minHeight: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
             color: primary ? t.primary : (danger ? t.tkDangerBg : t.tkSoft),
             borderRadius: BorderRadius.circular(999),
@@ -528,10 +560,19 @@ class TkSmallButton extends StatelessWidget {
           child: Align(
             widthFactor: 1,
             heightFactor: 1,
-            child: Text(
-              label,
-              style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: primary ? t.primaryText : (danger ? t.tkDangerInk : t.text)),
-            ),
+            child: () {
+              final ink = primary ? t.primaryText : (danger ? t.tkDangerInk : t.text);
+              final words = Text(label, textAlign: TextAlign.center, style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: ink));
+              if (icon == null) return words;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ExcludeSemantics(child: TkIcon(icon!, size: 16, stroke: 2.2, color: ink)),
+                  const SizedBox(width: 6),
+                  Flexible(child: words),
+                ],
+              );
+            }(),
           ),
         ),
       ),

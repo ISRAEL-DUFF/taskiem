@@ -146,8 +146,14 @@ void main() {
   testWidgets('riders: each with their state; one added with their areas; one retired', (t) async {
     final sent = await open(t, (c) => RidersPage(auth: c.auth));
     expect(find.text('Busy till 15:00'), findsOneWidget);
-    expect(find.text('https://taskiem.test/r/abc'), findsOneWidget);
-    expect(find.bySemanticsLabel('Send the link again to Tolu'), findsOneWidget);
+    expect(find.bySemanticsLabel('Share the link for riders'), findsOneWidget);
+    // A rider pressed: what can be done to them.
+    await t.tap(find.text('Tolu').last);
+    await t.pumpAndSettle();
+    await t.tap(find.text('Send the link again'));
+    await settle(t);
+    expect(sent.last, 'POST /v1/riders/R2/invite {}');
+    await t.pump(const Duration(seconds: 5));
     await t.tap(find.bySemanticsLabel('Add a rider'));
     await t.pumpAndSettle();
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Name')), matching: find.byType(EditableText)), 'Chidi  Obi');
@@ -160,7 +166,9 @@ void main() {
     await t.pumpAndSettle();
     expect(sent.last, 'POST /v1/riders {"name":"Chidi Obi","zones":["Ajah"],"fee_kobo":120000,"phone":"0803 555 1234"}');
     await t.pump(const Duration(seconds: 5));
-    await t.tap(find.bySemanticsLabel('Retire Musa'));
+    await t.tap(find.text('Musa').last);
+    await t.pumpAndSettle();
+    await t.tap(find.text('Retire'));
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Retire').last);
     await settle(t);
@@ -170,7 +178,9 @@ void main() {
 
   testWidgets('a rider put on leave', (t) async {
     final sent = await open(t, (c) => RidersPage(auth: c.auth));
-    await t.tap(find.bySemanticsLabel('Change Musa'));
+    await t.tap(find.text('Musa').last);
+    await t.pumpAndSettle();
+    await t.tap(find.text('Change'));
     await t.pumpAndSettle();
     await t.tap(find.text('On leave: keep them, but offer them nothing'));
     await t.pump();
@@ -191,7 +201,7 @@ void main() {
     await t.pumpAndSettle();
     expect(sent.last, 'POST /v1/riders/R1/remit {"amount_kobo":500000,"how":"cash"}');
     await t.pump(const Duration(seconds: 5));
-    await t.tap(find.bySemanticsLabel('Mark not paid for Musa'));
+    await t.tap(find.bySemanticsLabel(RegExp('^Mark not paid for Musa')));
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Mark not paid').last);
     await settle(t);
@@ -207,7 +217,7 @@ void main() {
 
   testWidgets('a bank account, confirmed with a code from the authenticator app', (t) async {
     final sent = await open(t, (c) => RidersPayPage(auth: c.auth), stepUp: true);
-    await t.tap(find.bySemanticsLabel('Add bank account for Musa'));
+    await t.tap(find.bySemanticsLabel(RegExp('^Add bank account for Musa')));
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Bank: none chosen'));
     await t.pumpAndSettle();
@@ -249,13 +259,13 @@ void main() {
   testWidgets('M8 fixes 15: the cash owed failing to read leaves the pay shown', (t) async {
     await open(t, (c) => RidersPayPage(auth: c.auth), owedFails: true);
     expect(find.text('The cash owed could not be read.'), findsOneWidget);
-    expect(find.text('Due to riders now'), findsOneWidget);
-    expect(find.bySemanticsLabel('Add bank account for Musa'), findsOneWidget);
+    expect(find.text('DUE TO RIDERS NOW'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^Add bank account for Musa')), findsOneWidget);
   });
 
   testWidgets('M8 fixes 16, 32: a bank code with letters; no way to confirm: the server’s words and Account', (t) async {
     final sent = await open(t, (c) => RidersPayPage(auth: c.auth), stepUp: true, methods: const [], noBanks: true);
-    await t.tap(find.bySemanticsLabel('Add bank account for Musa'));
+    await t.tap(find.bySemanticsLabel(RegExp('^Add bank account for Musa')));
     await t.pumpAndSettle();
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Bank code')), matching: find.byType(EditableText)), 'MFB01');
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Account number')), matching: find.byType(EditableText)), '0123456789');

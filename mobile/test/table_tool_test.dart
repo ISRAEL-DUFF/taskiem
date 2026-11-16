@@ -259,10 +259,14 @@ void main() {
       {'column': 'balance_kobo', 'desc': true},
       {'column': 'id', 'desc': true},
     ]);
-    await t.tap(find.bySemanticsLabel('Export CSV'));
+    await t.tap(find.bySemanticsLabel('More about Customers'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Export CSV'));
     await settle(t);
     expect(shared.single, 'customers.csv text/csv');
-    await t.tap(find.bySemanticsLabel('Import CSV'));
+    await t.tap(find.bySemanticsLabel('More about Customers'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Import CSV'));
     await t.pumpAndSettle();
     final import = find.bySemanticsLabel('Import');
     expect(t.getSemantics(import).flagsCollection.isEnabled.toString(), 'Tristate.isFalse', reason: '“Town” not matched yet');
@@ -276,7 +280,9 @@ void main() {
     expect(sent, contains('IMPORT multipart/form-data'));
     expect(sent.last.startsWith('QUERY'), isTrue, reason: 'the rows read again');
     expect(find.text('Imported 2 rows.'), findsOneWidget);
-    await t.tap(find.bySemanticsLabel('Delete table'));
+    await t.tap(find.bySemanticsLabel('More about Customers'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Delete table'));
     await t.pumpAndSettle();
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Name')), matching: find.byType(EditableText)), 'customers');
     await t.pump();

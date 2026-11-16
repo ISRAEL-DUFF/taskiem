@@ -12,6 +12,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/material.dart' show showDatePicker;
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter/widgets.dart';
 
@@ -20,13 +21,15 @@ import '../api/transport.dart' show ApiError;
 import '../app/auth.dart';
 import '../kit/forms.dart' show errorWords, nairaKobo;
 import '../kit/kit.dart';
-import '../kit/list.dart' show TkEmpty, TkLoading, TkPill, TkRow;
+import '../kit/list.dart' show TkEmpty, TkLoading, TkPill;
 import '../kit/look.dart';
 import '../kit/mobile.dart';
 import '../kit/modal.dart';
 import '../kit/page.dart';
 import '../kit/polling.dart';
-import '../kit/sheet.dart' show TkKitField;
+import '../kit/icon.dart';
+import '../kit/sheet.dart' show TkKitField, showTkSheet;
+import '../kit/tap_area.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
@@ -454,6 +457,17 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
           ),
         TkHighlights(
           tiles: [
+            // Leaks first, then what is to match (as drawn).
+            TkHighlight(
+              label: 'Leaks',
+              icon: 'b-bolt',
+              color: look.redInk,
+              trailing: _int(s?['leaks_open']) > 0 ? '${_int(s?['leaks_open'])} open' : null,
+              value: naira(_int(s?['leaks_open_kobo'])),
+              line: _int(s?['leaks_open']) > 0 ? (_int(s?['recovered_kobo']) > 0 ? 'at risk · ${naira(_int(s?['recovered_kobo']))} back' : 'at risk') : 'None open',
+              semanticsLabel: _int(s?['leaks_open']) > 0 ? 'Leaks, ${_int(s?['leaks_open'])} open' : 'Leaks, none open',
+              onTap: () => _push(context, MoneyLeaksPage(auth: widget.auth)),
+            ),
             TkHighlight(
               label: 'To match',
               icon: 'b-check',
@@ -463,16 +477,6 @@ class _MoneyPageState extends State<MoneyPage> with Polling {
               line: _waiting.isEmpty ? 'Nothing to match' : (_waiting.length == 1 ? '1 payment not matched' : '${_waiting.length} payments not matched'),
               semanticsLabel: _waiting.isEmpty ? 'Match payments, none waiting' : 'Match payments, ${_waiting.length} waiting',
               onTap: () => _push(context, InvoiceMatchPage(auth: widget.auth)),
-            ),
-            TkHighlight(
-              label: 'Leaks',
-              icon: 'b-bolt',
-              color: look.redInk,
-              trailing: _int(s?['leaks_open']) > 0 ? '${_int(s?['leaks_open'])} open' : null,
-              value: naira(_int(s?['leaks_open_kobo'])),
-              line: _int(s?['leaks_open']) > 0 ? 'At risk. Recovered so far: ${naira(_int(s?['recovered_kobo']))}' : 'None open',
-              semanticsLabel: _int(s?['leaks_open']) > 0 ? 'Leaks, ${_int(s?['leaks_open'])} open' : 'Leaks, none open',
-              onTap: () => _push(context, MoneyLeaksPage(auth: widget.auth)),
             ),
             if (s != null && _int(s['in_settled_kobo']) > 0 && channels.any((c) => _int(c['in_settled_kobo']) > 0))
               () {
@@ -1002,59 +1006,46 @@ class _MoneyLeaksPageState extends State<MoneyLeaksPage> with Polling {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final leaks = _leaks;
     final tt = _totals;
     final manage = widget.auth.can('invoice.manage');
     final user = widget.auth.me?.user;
     final myId = user?.id;
     final names = {for (final m in _people) _str(m['user_id']): _str(m['name']).isNotEmpty ? _str(m['name']) : _str(m['email'])};
+    // As drawn (docs/spec/mobile-app-look.md, "The remaining screens"): what
+    // is open, large; each leak a card, who has it as a face to tap, and
+    // Close… opening a sheet.
     return TkPageScreen(
       title: 'Leaks',
+      titleSize: 30,
       description: 'Money your business may be losing, found by Taskiem: payments with no invoice, overdue invoices, money paid twice or too much, and fees above what you agreed.',
       backLabel: 'Back to Money',
       onRefresh: _load,
       children: [
         if (tt != null)
-          TkPageCard(
-            children: [
-              for (final (k, v) in [
-                ('Open leaks', '${_int(tt['open'])}'),
-                ('Open, in naira', naira(_int(tt['open_kobo']))),
-                ('Recovered so far', naira(_int(tt['recovered_kobo']))),
-              ])
-                MergeSemantics(
-                  child: Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(k, style: tkText(size: 14, color: t.muted)),
-                        ),
-                        Text(v, style: tkText(size: 17, weight: 700, color: t.text)),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
+          TkTopCard(
+            semanticsLabel: 'Open leaks: ${_int(tt['open'])}, ${naira(_int(tt['open_kobo']))}. Recovered so far: ${naira(_int(tt['recovered_kobo']))}',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TkEyebrow('Open leaks', color: look.redInk, trailing: '${_int(tt['open'])} open'),
+                const SizedBox(height: 6),
+                FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(naira(_int(tt['open_kobo'])), style: tkFigure(context))),
+                Text('${naira(_int(tt['recovered_kobo']))} recovered so far', style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
+              ],
+            ),
           ),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final (v, words) in const [('open', 'Open'), ('closed', 'Closed'), ('all', 'All')])
-              Semantics(
-                selected: _status == v,
-                child: TkSmallButton(
-                  label: words,
-                  primary: _status == v,
-                  onPressed: () async {
-                    if (v == _status) return;
-                    setState(() => (_status = v, _leaks = null));
-                    await _load();
-                  },
-                ),
-              ),
-          ],
+        TkChips<String>(
+          label: 'Show',
+          padding: EdgeInsets.zero,
+          chips: const [('open', 'Open'), ('closed', 'Closed'), ('all', 'All')],
+          on: _status,
+          onPick: (v) async {
+            if (v == _status) return;
+            setState(() => (_status = v, _leaks = null));
+            await _load();
+          },
         ),
         if (_said.isNotEmpty) _notice(t, _said),
         if (_error != null) TkErrorBox(_error!),
@@ -1110,8 +1101,164 @@ class _LeakCard extends StatefulWidget {
 }
 
 class _LeakCardState extends State<_LeakCard> {
-  late String _to = _str(widget.leak['assigned_to']);
-  bool _closing = false;
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _run(Future<String> Function() f) async {
+    setState(() => (_busy = true, _error = null));
+    try {
+      final line = await f();
+      if (mounted) setState(() => _busy = false);
+      widget.onDone(line);
+    } on Object catch (e) {
+      if (mounted) setState(() => (_error = errorWords(e), _busy = false));
+    }
+  }
+
+  /// Who has it: picked, then sent.
+  Future<void> _assign(List<({String id, String name})> choices, String kind) async {
+    final me = widget.me;
+    final now = _str(widget.leak['assigned_to']);
+    final v = await showTkModalChoices(
+      context,
+      title: 'Assign to',
+      value: now,
+      choices: [('', 'No one'), for (final c in choices) (c.id, c.id == me?.id ? 'Me (${c.name})' : c.name)],
+    );
+    if (v == null || v == now || !mounted) return;
+    final id = _str(widget.leak['id']);
+    await _run(() async {
+      await widget.auth.transport.send('POST', '/v1/money/leaks/${Uri.encodeComponent(id)}/assign', body: {'member': v.isEmpty ? null : v});
+      final who = v == me?.id ? 'you' : (choices.where((c) => c.id == v).map((c) => c.name).firstOrNull ?? 'a member');
+      return v.isNotEmpty ? '$kind assigned to $who.' : '$kind assigned to no one.';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final l = widget.leak;
+    final s = leakStatus(_str(l['status']));
+    final open = l['status'] == 'open';
+    final kind = leakKindWords(_str(l['kind']));
+    final me = widget.me;
+    final choices = <({String id, String name})>[
+      if (widget.people.isNotEmpty)
+        for (final m in widget.people) (id: _str(m['user_id']), name: _str(m['name']).isNotEmpty ? _str(m['name']) : _str(m['email']))
+      else
+        ?me,
+    ];
+    final assigned = _str(l['assigned_to']);
+    if (assigned.isNotEmpty && !choices.any((c) => c.id == assigned)) choices.add((id: assigned, name: whoWords(assigned, widget.names, me?.id)));
+    final who = assigned.isEmpty ? 'No one' : (assigned == me?.id ? 'You' : whoWords(assigned, widget.names, me?.id));
+    final invoice = _str(l['invoice_id']);
+    final whoChip = Container(
+      padding: const EdgeInsets.fromLTRB(4, 4, 10, 4),
+      decoration: BoxDecoration(color: t.tkSoft, borderRadius: BorderRadius.circular(999)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          assigned.isEmpty
+              ? Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(color: look.line, shape: BoxShape.circle),
+                  alignment: Alignment.center,
+                  child: TkIcon('b-plus', size: 13, color: t.muted),
+                )
+              : TkFace(tkInitials(who == 'You' ? (me?.name ?? 'You') : who), size: 22, colors: tkFaceFor(who == 'You' ? (me?.name ?? 'You') : who)),
+          const SizedBox(width: 6),
+          Text(who, style: tkText(size: 13.5, weight: 600, color: t.text)),
+          if (widget.manage) ...[const SizedBox(width: 2), TkIcon('chevron', size: 14, color: t.muted)],
+        ],
+      ),
+    );
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          MergeSemantics(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(naira(_int(l['amount_kobo'])), style: tkDisplay(size: 19, letterSpacing: -0.3, color: t.text).copyWith(fontFeatures: tkTabular)),
+                const SizedBox(width: 8),
+                Expanded(child: Padding(padding: const EdgeInsets.only(top: 3), child: Text(kind, style: tkText(size: 13.5, color: t.muted)))),
+                const SizedBox(width: 6),
+                TkPill(s.label, tone: s.tone),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(plainSentence(_str(l['detail'])), style: tkText(size: 13.5, lineHeight: 1.4, color: t.text)),
+          const SizedBox(height: 6),
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text('Opened ${dateLabel(_str(l['opened_at']))}', style: tkText(size: 12.5, color: t.muted)),
+              if (invoice.isNotEmpty) ...[
+                Text(' · ', style: tkText(size: 12.5, color: t.muted)),
+                TkLink(label: 'See the invoice', onTap: () => openInvoice(context, widget.auth, invoice)),
+              ],
+            ],
+          ),
+          if (_str(l['note']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text('Note: ${_str(l['note'])}', style: tkText(size: 12.5, color: t.muted))),
+          const SizedBox(height: 12),
+          if (!open)
+            Text(
+              '${closedLine(l, widget.names, me?.id)}${_str(l['closed_at']).isNotEmpty ? ' on ${dateLabel(_str(l['closed_at']))}' : ''}',
+              style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted),
+            )
+          else
+            Row(
+              children: [
+                if (widget.manage)
+                  TapArea(
+                    child: Semantics(
+                      button: true,
+                      label: 'Assign to: ${assigned.isEmpty ? 'No one' : (assigned == me?.id ? 'Me (${me!.name})' : who)}',
+                      excludeSemantics: true,
+                      onTap: _busy ? null : () => _assign(choices, kind),
+                      child: GestureDetector(onTap: _busy ? null : () => _assign(choices, kind), child: whoChip),
+                    ),
+                  )
+                else
+                  Semantics(label: 'Assigned to $who', excludeSemantics: true, child: whoChip),
+                const Spacer(),
+                if (widget.manage)
+                  TkSmallButton(
+                    label: 'Close…',
+                    semantics: 'Close: $kind',
+                    onPressed: _busy
+                        ? null
+                        : () => showTkSheet<void>(context, (_) => _CloseLeak(auth: widget.auth, leak: l, kind: kind, onDone: widget.onDone)),
+                  ),
+              ],
+            ),
+          if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_error!)),
+        ],
+      ),
+    );
+  }
+}
+
+/// How a leak was closed, in a sheet: recovered (how much), written off,
+/// or not a leak; a note.
+class _CloseLeak extends StatefulWidget {
+  const _CloseLeak({required this.auth, required this.leak, required this.kind, required this.onDone});
+  final Auth auth;
+  final Map<String, dynamic> leak;
+  final String kind;
+  final void Function(String line) onDone;
+
+  @override
+  State<_CloseLeak> createState() => _CloseLeakState();
+}
+
+class _CloseLeakState extends State<_CloseLeak> {
   String _how = '';
   final _recovered = TextEditingController();
   final _note = TextEditingController();
@@ -1133,12 +1280,21 @@ class _LeakCardState extends State<_LeakCard> {
     super.dispose();
   }
 
-  Future<void> _run(Future<String> Function() f) async {
+  Future<void> _close() async {
+    final problem = closeProblem(_how, _recovered.text, _note.text);
+    setState(() => _tried = true);
+    if (problem != null) return;
+    final kobo = _how == 'recovered' ? nairaKobo(_recovered.text) ?? 0 : null;
     setState(() => (_busy = true, _error = null));
     try {
-      final line = await f();
-      if (mounted) setState(() => _busy = false);
-      widget.onDone(line);
+      await widget.auth.transport.send(
+        'POST',
+        '/v1/money/leaks/${Uri.encodeComponent(_str(widget.leak['id']))}/close',
+        body: {'status': _how, 'recovered_kobo': ?kobo, if (_note.text.trim().isNotEmpty) 'note': _note.text.trim()},
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      widget.onDone(_how == 'recovered' ? '${widget.kind} closed: recovered ${naira(kobo!)}.' : '${widget.kind} closed as ${leakStatus(_how).label.toLowerCase()}.');
     } on Object catch (e) {
       if (mounted) setState(() => (_error = errorWords(e), _busy = false));
     }
@@ -1147,176 +1303,43 @@ class _LeakCardState extends State<_LeakCard> {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final l = widget.leak;
-    final id = _str(l['id']);
-    final s = leakStatus(_str(l['status']));
-    final open = l['status'] == 'open';
-    final kind = leakKindWords(_str(l['kind']));
-    final me = widget.me;
-    final choices = <({String id, String name})>[
-      if (widget.people.isNotEmpty)
-        for (final m in widget.people) (id: _str(m['user_id']), name: _str(m['name']).isNotEmpty ? _str(m['name']) : _str(m['email']))
-      else
-        ?me,
-    ];
-    final assigned = _str(l['assigned_to']);
-    if (assigned.isNotEmpty && !choices.any((c) => c.id == assigned)) choices.add((id: assigned, name: whoWords(assigned, widget.names, me?.id)));
-    String choiceLabel(String v) =>
-        v.isEmpty ? 'No one' : (v == me?.id ? 'Me (${me!.name})' : (choices.where((c) => c.id == v).map((c) => c.name).firstOrNull ?? 'a member'));
     final problem = closeProblem(_how, _recovered.text, _note.text);
-    Widget kv(String k, Widget v) => Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: MergeSemantics(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(k, style: tkText(size: 13, weight: 600, color: t.muted)),
-            v,
-          ],
-        ),
-      ),
-    );
-    return TkPageCard(
+    final squares = {'recovered': ('b-check', look.lime), 'written_off': ('b-x', look.blue), 'not_a_leak': ('b-query', look.teal)};
+    return TkFormSheet(
+      title: 'How it was closed',
+      crumb: '${naira(_int(l['amount_kobo']))} · ${widget.kind}',
+      action: 'Close leak',
+      onAction: _busy ? null : _close,
       children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 4,
-          crossAxisAlignment: WrapCrossAlignment.center,
+        TkSection(
+          inset: 56,
           children: [
-            Text(naira(_int(l['amount_kobo'])), style: tkText(size: 18, weight: 700, color: t.text)),
-            Text(kind, style: tkText(size: 15, color: t.text)),
-            TkPill(s.label, tone: s.tone),
+            for (final (v, label, help) in closeChoices)
+              Semantics(
+                selected: _how == v,
+                child: TkListRow(
+                  title: label,
+                  sub: help,
+                  icon: squares[v]?.$1 ?? 'b-check',
+                  square: squares[v]?.$2 ?? look.lime,
+                  semanticsLabel: '$label. $help',
+                  trailing: _how == v ? TkIcon('b-check', size: 20, stroke: 2.4, color: look.limeInk) : null,
+                  onTap: () => setState(() => _how = v),
+                ),
+              ),
           ],
         ),
-        const SizedBox(height: 6),
-        Text(plainSentence(_str(l['detail'])), style: tkText(size: 15, color: t.text)),
-        kv('Opened', Text(dateLabel(_str(l['opened_at'])), style: tkText(size: 15, color: t.text))),
-        if (_str(l['invoice_id']).isNotEmpty)
-          kv(
-            'Invoice',
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TkLink(label: 'See the invoice', onTap: () => openInvoice(context, widget.auth, _str(l['invoice_id']))),
-            ),
+        if (_how == 'recovered')
+          TkKitField(
+            label: 'Amount recovered (₦)',
+            hint: 'The leak is ${naira(_int(l['amount_kobo']))}.',
+            child: TkTextBox(controller: _recovered, money: true),
           ),
-        if (open)
-          kv(
-            'Assigned to',
-            Text(
-              assigned.isNotEmpty ? whoWords(assigned, widget.names, me?.id) : 'No one',
-              style: assigned.isNotEmpty ? tkText(size: 15, color: t.text) : tkHint(t),
-            ),
-          ),
-        if (!open)
-          kv(
-            'Closed',
-            Text(
-              '${closedLine(l, widget.names, me?.id)}${_str(l['closed_at']).isNotEmpty ? ' on ${dateLabel(_str(l['closed_at']))}' : ''}',
-              style: tkText(size: 15, color: t.text),
-            ),
-          ),
-        if (_str(l['note']).isNotEmpty) kv('Note', Text(_str(l['note']), style: tkText(size: 15, color: t.text))),
-        if (widget.manage && open) ...[
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              TkSmallButton(
-                label: 'Assign to: ${choiceLabel(_to)}',
-                onPressed: () async {
-                  final v = await showTkModalChoices(
-                    context,
-                    title: 'Assign to',
-                    value: _to,
-                    choices: [('', 'No one'), for (final c in choices) (c.id, c.id == me?.id ? 'Me (${c.name})' : c.name)],
-                  );
-                  if (v != null) setState(() => _to = v);
-                },
-              ),
-              TkSmallButton(
-                label: 'Assign',
-                semantics: 'Assign: $kind',
-                onPressed: _busy
-                    ? null
-                    : () => _run(() async {
-                        await widget.auth.transport.send(
-                          'POST',
-                          '/v1/money/leaks/${Uri.encodeComponent(id)}/assign',
-                          body: {'member': _to.isEmpty ? null : _to},
-                        );
-                        final who = _to == me?.id ? 'you' : (choices.where((c) => c.id == _to).map((c) => c.name).firstOrNull ?? 'a member');
-                        return _to.isNotEmpty ? '$kind assigned to $who.' : '$kind assigned to no one.';
-                      }),
-              ),
-              if (!_closing) TkSmallButton(label: 'Close…', semantics: 'Close: $kind', onPressed: () => setState(() => _closing = true)),
-            ],
-          ),
-          if (_closing) ...[
-            const SizedBox(height: 10),
-            Text('How it was closed', style: tkText(size: 13, weight: 600, color: t.muted)),
-            for (final (v, label, help) in closeChoices)
-              TkChoiceRow(
-                control: TkRadio(checked: _how == v),
-                label: Text('$label. $help', style: tkText(size: 15, color: t.text)),
-                onTap: () => setState(() => _how = v),
-              ),
-            if (_how == 'recovered')
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: TkKitField(
-                  label: 'Amount recovered (₦)',
-                  hint: 'The leak is ${naira(_int(l['amount_kobo']))}.',
-                  child: TkTextBox(controller: _recovered, money: true),
-                ),
-              ),
-            TkKitField(
-              label: 'Note (optional)',
-              child: TkTextBox(controller: _note, lines: 2, max: 500),
-            ),
-            if (_tried && problem != null) _problemText(t, problem),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                TkSmallButton(
-                  label: 'Close leak',
-                  primary: true,
-                  onPressed: _busy
-                      ? null
-                      : () {
-                          setState(() => _tried = true);
-                          if (problem != null) return;
-                          final kobo = _how == 'recovered' ? nairaKobo(_recovered.text) ?? 0 : null;
-                          _run(() async {
-                            await widget.auth.transport.send(
-                              'POST',
-                              '/v1/money/leaks/${Uri.encodeComponent(id)}/close',
-                              body: {'status': _how, 'recovered_kobo': ?kobo, if (_note.text.trim().isNotEmpty) 'note': _note.text.trim()},
-                            );
-                            return _how == 'recovered'
-                                ? '$kind closed: recovered ${naira(kobo!)}.'
-                                : '$kind closed as ${leakStatus(_how).label.toLowerCase()}.';
-                          });
-                        },
-                ),
-                TkSmallButton(
-                  label: 'Cancel',
-                  onPressed: () => setState(() {
-                    _closing = false;
-                    _tried = false;
-                    _how = '';
-                    _recovered.clear();
-                    _note.clear();
-                  }),
-                ),
-              ],
-            ),
-          ],
-        ],
-        if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_error!)),
+        TkKitField(label: 'Note (optional)', child: TkTextBox(controller: _note, lines: 2, max: 500)),
+        if (_tried && problem != null) _problemText(t, problem),
+        if (_error != null) TkErrorBox(_error!),
       ],
     );
   }
@@ -1639,8 +1662,34 @@ class _MoneyStatementsPageState extends State<MoneyStatementsPage> {
     final manage = widget.auth.can('invoice.manage');
     final cols = _cols;
     final problem = channelProblem(_channel.text) ?? _fileProblem ?? (cols == null ? null : columnsProblem(cols));
+    // As drawn: the account and the file on a card, Upload under it, and
+    // the lines that wait for you after.
+    final buttons = TkButtonRow([
+      if (cols == null && _file != null && _channel.text.trim().isNotEmpty && channelProblem(_channel.text) == null)
+        TkSmallButton(
+          label: 'Match columns myself',
+          onPressed: _busy
+              ? null
+              : () async {
+                  final m = await _matching();
+                  if (mounted) setState(() => (_headers = m.headers, _cols = m.form));
+                },
+        ),
+      TkSmallButton(
+        label: _busy ? 'Uploading…' : 'Upload statement',
+        primary: true,
+        onPressed: _busy
+            ? null
+            : () {
+                setState(() => _tried = true);
+                if (problem != null) return;
+                _upload();
+              },
+      ),
+    ]);
     return TkPageScreen(
       title: 'Upload a statement',
+      titleSize: 30,
       description: manage
           ? 'For a bank account Taskiem has no connection to: download its statement as a CSV and upload it here. Lines already in the money log are skipped, so uploading the same days again adds nothing twice.'
           : null,
@@ -1650,12 +1699,11 @@ class _MoneyStatementsPageState extends State<MoneyStatementsPage> {
           Text('You can see money, but not add to it. Someone who manages invoices can upload statements.', style: tkHint(t))
         else ...[
           if (_said.isNotEmpty) _notice(t, _said),
-          if (_waiting.isNotEmpty) _waitingCard(t),
           TkPageCard(
             children: [
               TkKitField(
                 label: 'Account',
-                hint: 'The bank and the account, in small letters with a / between them: gtbank/current, access/savings.',
+                hint: 'The bank and the account, with a / between them.',
                 child: TkTextBox(controller: _channel, plain: true, hint: 'gtbank/current'),
               ),
               KnownChannels(auth: widget.auth, controller: _channel),
@@ -1663,17 +1711,14 @@ class _MoneyStatementsPageState extends State<MoneyStatementsPage> {
               TkKitField(
                 field: false,
                 label: 'Statement file (CSV)',
-                hint: 'The common format has the columns date, description and amount (money in positive, money out negative, in naira), and optionally reference and balance. A file with other columns is matched once, then remembered for this account.',
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: TkSmallButton(
-                    label: _file == null ? 'Choose the file' : _file!.name,
-                    semantics: 'Statement file: ${_file?.name ?? 'none chosen'}',
-                    onPressed: () async {
-                      final f = await pickStatement();
-                      if (f != null && mounted) setState(() => (_file = f, _refusal = null, _said = ''));
-                    },
-                  ),
+                hint: 'Date, description and amount; a file with other columns is matched once, then remembered.',
+                child: _FilePick(
+                  label: _file == null ? 'Choose the file' : _file!.name,
+                  semantics: 'Statement file: ${_file?.name ?? 'none chosen'}',
+                  onTap: () async {
+                    final f = await pickStatement();
+                    if (f != null && mounted) setState(() => (_file = f, _refusal = null, _said = ''));
+                  },
                 ),
               ),
               if (cols != null && _headers != null) ..._columns(t, cols, _headers!),
@@ -1698,36 +1743,10 @@ class _MoneyStatementsPageState extends State<MoneyStatementsPage> {
                   ),
                 ),
               if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_error!)),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  TkSmallButton(
-                    label: _busy ? 'Uploading…' : 'Upload statement',
-                    primary: true,
-                    onPressed: _busy
-                        ? null
-                        : () {
-                            setState(() => _tried = true);
-                            if (problem != null) return;
-                            _upload();
-                          },
-                  ),
-                  if (cols == null && _file != null && _channel.text.trim().isNotEmpty && channelProblem(_channel.text) == null)
-                    TkSmallButton(
-                      label: 'Match columns myself',
-                      onPressed: _busy
-                          ? null
-                          : () async {
-                              final m = await _matching();
-                              if (mounted) setState(() => (_headers = m.headers, _cols = m.form));
-                            },
-                    ),
-                ],
-              ),
             ],
           ),
+          buttons,
+          if (_waiting.isNotEmpty) ..._waitingCards(t),
         ],
       ],
     );
@@ -1777,44 +1796,46 @@ class _MoneyStatementsPageState extends State<MoneyStatementsPage> {
     ];
   }
 
-  Widget _waitingCard(TkTokens t) => TkPageCard(
-    title: 'Transfers to confirm',
-    children: [
-      Text(
-        'These lines of your statement may be money someone already recorded by hand. Same money counts it once; Different money adds it as new money.',
-        style: tkHint(t),
-      ),
-      if (_waitError != null) TkErrorBox(_waitError!),
-      for (final l in _waiting)
-        Padding(
-          padding: const EdgeInsets.only(top: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TkRow(
-                name: '${naira(_int(l['amount_kobo']))} on ${dateLabel(_str(l['occurred_at']))}',
-                icon: 'money',
-                tone: CardTone.warn,
-                sub: '${_str(l['description']).isNotEmpty ? l['description'] : 'No description'} · ${l['channel']}',
-              ),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
+  /// Transfers to confirm: each line on its card, Same money or
+  /// Different money under it.
+  List<Widget> _waitingCards(TkTokens t) => [
+    TkSection(title: 'Transfers to confirm', count: _waiting.length, children: const []),
+    Text(
+      'These lines of your statement may be money someone already recorded by hand. Same money counts it once; Different money adds it as new money.',
+      style: tkText(size: 13, lineHeight: 1.4, color: t.muted),
+    ),
+    if (_waitError != null) TkErrorBox(_waitError!),
+    for (final l in _waiting)
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(20)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            MergeSemantics(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final c in _maps(l['candidates']))
-                    TkSmallButton(
-                      label:
-                          'Same money: ${naira(_int(c['amount_kobo']))} on ${dateLabel(_str(c['occurred_at']))}${_str(c['description']).isNotEmpty ? ', ${c['description']}' : ''}',
-                      onPressed: _busy ? null : () => _decide(_str(l['id']), _str(c['entry_id'])),
-                    ),
-                  TkSmallButton(label: 'Different money', onPressed: _busy ? null : () => _decide(_str(l['id']), null)),
+                  Text('${naira(_int(l['amount_kobo']))} on ${dateLabel(_str(l['occurred_at']))}', style: tkDisplay(size: 18, letterSpacing: -0.3, color: t.text)),
+                  Text('${_str(l['description']).isNotEmpty ? l['description'] : 'No description'} · ${l['channel']}', style: tkText(size: 13, color: t.muted)),
                 ],
               ),
+            ),
+            for (final c in _maps(l['candidates'])) ...[
+              const SizedBox(height: 10),
+              TkSmallButton(
+                label:
+                    'Same money: ${naira(_int(c['amount_kobo']))} on ${dateLabel(_str(c['occurred_at']))}${_str(c['description']).isNotEmpty ? ', ${c['description']}' : ''}',
+                primary: true,
+                onPressed: _busy ? null : () => _decide(_str(l['id']), _str(c['entry_id'])),
+              ),
             ],
-          ),
+            const SizedBox(height: 8),
+            TkSmallButton(label: 'Different money', onPressed: _busy ? null : () => _decide(_str(l['id']), null)),
+          ],
         ),
-    ],
-  );
+      ),
+  ];
 
   Future<void> _decide(String id, String? entry) async {
     setState(() => (_busy = true, _waitError = null));
@@ -1961,76 +1982,109 @@ class _MoneyEntriesPageState extends State<MoneyEntriesPage> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final manage = widget.auth.can('invoice.manage');
+    final look = TkLook.of(context);
+    final kind = entryKinds.firstWhere((k) => k.$1 == _kind, orElse: () => entryKinds.first);
+    final today = _day(widget.now?.call() ?? DateTime.now());
+    final dateWords = _date.text.isEmpty || _date.text == today ? 'Today' : dateLabel(_date.text);
+    // As drawn: what it is as a switch, the amount on the top card with the
+    // day as a chip opening the calendar, then the rest on a card.
     return TkPageScreen(
       title: 'Cash and expenses',
+      titleSize: 30,
       description: manage
           ? 'Money that moves without a connection Taskiem hears from: cash taken and paid out, and what the business spends. Each entry is added to the money log under your name.'
           : null,
       backLabel: 'Back to Money',
+      under: manage
+          ? TkChips<String>(label: 'What it is', chips: [for (final (v, label, _) in entryKinds) (v, label)], on: _kind, onPick: (v) => setState(() => _kind = v))
+          : null,
       children: [
         if (!manage)
           Text('You can see money, but not add to it. Someone who manages invoices can enter cash and expenses.', style: tkHint(t))
         else ...[
           if (_said.isNotEmpty) _notice(t, _said),
-          TkPageCard(
-            children: [
-              Text('What it is', style: tkText(size: 13, weight: 600, color: t.muted)),
-              for (final (v, label, help) in entryKinds)
-                TkChoiceRow(
-                  control: TkRadio(checked: _kind == v),
-                  label: Text('$label. $help', style: tkText(size: 15, color: t.text)),
-                  onTap: () => setState(() => _kind = v),
+          TkTopCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: TkEyebrow('Amount', color: t.muted)),
+                    TapArea(
+                      child: Semantics(
+                        button: true,
+                        label: 'Date: $dateWords',
+                        excludeSemantics: true,
+                        onTap: _pickDate,
+                        child: GestureDetector(
+                          onTap: _pickDate,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(color: t.tkSoft, borderRadius: BorderRadius.circular(999)),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                TkIcon('b-calendar', size: 15, color: t.text),
+                                const SizedBox(width: 5),
+                                Text(dateWords, style: tkText(size: 13, weight: 600, color: t.text)),
+                                const SizedBox(width: 2),
+                                TkIcon('down', size: 14, color: t.text),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              const SizedBox(height: 6),
-              TkKitField(
-                label: 'Amount (₦)',
-                child: TkTextBox(controller: _amount, money: true, hint: '12000'),
-              ),
-              const SizedBox(height: 10),
-              TkKitField(
-                label: 'Date',
-                hint: 'As 2026-11-12.',
-                child: TkTextBox(controller: _date),
-              ),
-              const SizedBox(height: 10),
-              TkKitField(
-                label: 'Description',
-                hint: 'What it was for: diesel for the generator, the day’s cash sales.',
-                child: TkTextBox(controller: _description, max: 300),
-              ),
-              if (_kind == 'expense') ...[
-                const SizedBox(height: 10),
-                TkKitField(
-                  label: 'Vendor (optional)',
-                  hint: 'Who was paid.',
-                  child: TkTextBox(controller: _vendor, max: 120),
-                ),
-                const SizedBox(height: 10),
-                TkKitField(
-                  label: 'Category (optional)',
-                  hint: 'Such as fuel, rent or supplies.',
-                  child: TkTextBox(controller: _category, max: 60),
-                ),
+                const SizedBox(height: 8),
+                TkKitField(label: 'Amount (₦)', child: TkTextBox(controller: _amount, money: true, hint: '12000')),
+                const SizedBox(height: 4),
+                Text(kind.$3, style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
               ],
-              const SizedBox(height: 10),
-              TkKitField(
-                label: 'Account (optional)',
-                hint: 'Where the money moved. Leave it empty for cash; or name an account, such as gtbank/current.',
-                child: TkTextBox(controller: _channel, plain: true, hint: 'cash'),
-              ),
-              KnownChannels(auth: widget.auth, controller: _channel),
-              if (_tried && _problem != null) _problemText(t, _problem!),
-              if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_error!)),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TkSmallButton(label: 'Add to the money log', primary: true, onPressed: _busy ? null : _save),
-              ),
-            ],
+            ),
           ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TkKitField(
+                  label: 'Description',
+                  hint: 'What it was for: diesel for the generator, the day’s cash sales.',
+                  child: TkTextBox(controller: _description, max: 300),
+                ),
+                if (_kind == 'expense') ...[
+                  const SizedBox(height: 10),
+                  TkButtonRow([
+                    TkKitField(label: 'Vendor (optional)', child: TkTextBox(controller: _vendor, max: 120)),
+                    TkKitField(label: 'Category (optional)', child: TkTextBox(controller: _category, max: 60)),
+                  ]),
+                ],
+                const SizedBox(height: 10),
+                TkKitField(
+                  label: 'Account (optional)',
+                  hint: 'Leave it as cash, or name an account, such as gtbank/current.',
+                  child: TkTextBox(controller: _channel, plain: true, hint: 'cash'),
+                ),
+                KnownChannels(auth: widget.auth, controller: _channel),
+                if (_tried && _problem != null) _problemText(t, _problem!),
+                if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_error!)),
+              ],
+            ),
+          ),
+          TkSmallButton(label: 'Add to the money log', primary: true, onPressed: _busy ? null : _save),
         ],
       ],
     );
+  }
+
+  Future<void> _pickDate() async {
+    final now = widget.now?.call() ?? DateTime.now();
+    final had = DateTime.tryParse(_date.text) ?? now;
+    final d = await showDatePicker(context: context, initialDate: had, firstDate: DateTime(now.year - 2), lastDate: now);
+    if (d != null) setState(() => _date.text = _day(d));
   }
 }
 
@@ -2084,33 +2138,12 @@ class MoneyFeesPage extends StatefulWidget {
 class _MoneyFeesPageState extends State<MoneyFeesPage> {
   List<Map<String, dynamic>>? _rates;
   String? _error;
-  final _channel = TextEditingController();
-  final _percent = TextEditingController();
-  final _flat = TextEditingController();
-  final _cap = TextEditingController();
-  bool _editing = false;
-  bool _tried = false;
-  bool _busy = false;
   String _said = '';
-  String? _saveError;
-
-  List<TextEditingController> get _boxes => [_channel, _percent, _flat, _cap];
 
   @override
   void initState() {
     super.initState();
-    for (final c in _boxes) {
-      c.addListener(() => setState(() {}));
-    }
     _load();
-  }
-
-  @override
-  void dispose() {
-    for (final c in _boxes) {
-      c.dispose();
-    }
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -2122,139 +2155,152 @@ class _MoneyFeesPageState extends State<MoneyFeesPage> {
     }
   }
 
-  void _clear() => setState(() {
-    for (final c in _boxes) {
-      c.clear();
-    }
-    _editing = false;
-    _tried = false;
-  });
+  /// Add a fee, or change one: its own sheet.
+  void _open([Map<String, dynamic>? r]) => showTkSheet<void>(
+    context,
+    (_) => _FeeSheet(
+      auth: widget.auth,
+      rate: r,
+      onSaved: (line) {
+        setState(() => _said = line);
+        _load();
+      },
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final manage = widget.auth.can('invoice.manage');
     final list = _rates;
-    final problem = feeProblem(_channel.text, _percent.text, _flat.text, _cap.text);
+    // As drawn: the fees agreed, each opening its sheet; + adds one.
     return TkPageScreen(
       title: 'Fees',
+      titleSize: 30,
       description: 'The fee you agreed with each payments connection: a percent of the amount, a flat fee, or both, up to a cap.',
       backLabel: 'Back to Money',
       onRefresh: _load,
+      action: manage ? TkHeadButton(icon: 'b-plus', label: 'Add a fee', primary: true, onTap: _open) : null,
       children: [
-        _notice(t, 'A fee above the agreed rate becomes a leak, so you can claim the difference back.'),
+        TkCallout(
+          leading: TkSquare('b-bolt', color: look.orange),
+          title: 'Above the agreed rate becomes a leak',
+          sub: 'So you can claim the difference back.',
+          color: look.orange,
+        ),
         if (_said.isNotEmpty) _notice(t, _said),
         if (_error != null) TkErrorBox(_error!),
         if (list == null && _error == null) const TkLoading(rows: 2, label: 'Loading the fees…'),
         if (list != null && list.isEmpty)
           const TkEmpty(icon: 'money', title: 'No fees agreed yet', line: 'Add the rate from your agreement with each connection.'),
         if (list != null && list.isNotEmpty)
-          TkPageCard(
+          TkSection(
             children: [
               for (final r in list)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TkRow(
-                        name: '${channelWords(_str(r['channel']))} · ${r['channel']}',
-                        letters: channelWords(_str(r['channel'])),
-                        sub:
-                            'Percent ${bpToPercent(_int(r['percent_bp']))}% · Flat fee ${naira(_int(r['flat_kobo']))} · Cap ${r['cap_kobo'] is num ? naira(_int(r['cap_kobo'])) : 'None'}',
-                      ),
-                      if (manage)
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: TkSmallButton(
-                            label: 'Change',
-                            semantics: 'Change the fee for ${r['channel']}',
-                            onPressed: () => setState(() {
-                              _channel.text = _str(r['channel']);
-                              _percent.text = bpToPercent(_int(r['percent_bp']));
-                              _flat.text = _int(r['flat_kobo']) > 0 ? feeInput(_int(r['flat_kobo'])) : '';
-                              _cap.text = r['cap_kobo'] is num ? feeInput(_int(r['cap_kobo'])) : '';
-                              _editing = true;
-                              _tried = false;
-                            }),
-                          ),
-                        ),
-                    ],
-                  ),
+                TkListRow(
+                  title: channelWords(_str(r['channel'])),
+                  letters: channelWords(_str(r['channel'])),
+                  sub: '${r['channel']} · ${rateWords(r)}',
+                  semanticsLabel: manage ? 'Change the fee for ${r['channel']}' : null,
+                  onTap: manage ? () => _open(r) : null,
                 ),
             ],
           ),
         if (!manage)
           Text('Someone who manages invoices can add and change fees.', style: tkHint(t))
-        else
-          TkPageCard(
-            title: _editing ? 'Change the fee for ${_channel.text}' : 'Add a fee',
-            children: [
-              TkKitField(
-                label: 'Connection',
-                hint: 'As the money log names it: the rail and the connection, such as paystack/main.',
-                child: TkTextBox(controller: _channel, plain: true, hint: 'paystack/main', enabled: !_editing),
-              ),
-              if (!_editing) KnownChannels(auth: widget.auth, controller: _channel),
-              const SizedBox(height: 10),
-              TkKitField(
-                label: 'Percent of the amount',
-                hint: 'Such as 1.5.',
-                child: TkTextBox(controller: _percent, money: true),
-              ),
-              const SizedBox(height: 10),
-              TkKitField(
-                label: 'Flat fee (₦)',
-                hint: 'Added to each payment.',
-                child: TkTextBox(controller: _flat, money: true),
-              ),
-              const SizedBox(height: 10),
-              TkKitField(
-                label: 'Cap (₦, optional)',
-                hint: 'The most one payment’s fee can be.',
-                child: TkTextBox(controller: _cap, money: true),
-              ),
-              if (_tried && problem != null) _problemText(t, problem),
-              if (_saveError != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_saveError!)),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  TkSmallButton(
-                    label: 'Save fee',
-                    primary: true,
-                    onPressed: _busy
-                        ? null
-                        : () async {
-                            setState(() => _tried = true);
-                            if (problem != null) return;
-                            setState(() => (_busy = true, _saveError = null));
-                            try {
-                              final r = (await widget.auth.transport.send(
-                                'PUT',
-                                '/v1/money/fee-rates',
-                                body: {
-                                  'channel': _channel.text.trim(),
-                                  'percent_bp': percentToBp(_percent.text) ?? 0,
-                                  'flat_kobo': nairaKobo(_flat.text) ?? 0,
-                                  if (_cap.text.trim().isNotEmpty) 'cap_kobo': nairaKobo(_cap.text),
-                                },
-                              ) as Map).cast<String, dynamic>();
-                              if (mounted) setState(() => _said = 'Fee for ${r['channel']} saved: ${rateWords(r)}.');
-                              _clear();
-                              await _load();
-                            } on Object catch (e) {
-                              if (mounted) setState(() => _saveError = errorWords(e));
-                            }
-                            if (mounted) setState(() => _busy = false);
-                          },
-                  ),
-                  if (_editing) TkSmallButton(label: 'Cancel', onPressed: _clear),
-                ],
-              ),
-            ],
-          ),
+        else if (list != null && list.isNotEmpty)
+          Text('Tap a fee to change it.', style: tkText(size: 13, color: t.muted)),
+      ],
+    );
+  }
+}
+
+class _FeeSheet extends StatefulWidget {
+  const _FeeSheet({required this.auth, this.rate, required this.onSaved});
+  final Auth auth;
+  final Map<String, dynamic>? rate;
+  final void Function(String line) onSaved;
+
+  @override
+  State<_FeeSheet> createState() => _FeeSheetState();
+}
+
+class _FeeSheetState extends State<_FeeSheet> {
+  late final _channel = TextEditingController(text: _str(widget.rate?['channel']));
+  late final _percent = TextEditingController(text: widget.rate == null ? '' : bpToPercent(_int(widget.rate!['percent_bp'])));
+  late final _flat = TextEditingController(text: _int(widget.rate?['flat_kobo']) > 0 ? feeInput(_int(widget.rate!['flat_kobo'])) : '');
+  late final _cap = TextEditingController(text: widget.rate?['cap_kobo'] is num ? feeInput(_int(widget.rate!['cap_kobo'])) : '');
+  bool _tried = false;
+  bool _busy = false;
+  String? _error;
+
+  List<TextEditingController> get _boxes => [_channel, _percent, _flat, _cap];
+
+  @override
+  void initState() {
+    super.initState();
+    for (final c in _boxes) {
+      c.addListener(() => setState(() {}));
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final c in _boxes) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final problem = feeProblem(_channel.text, _percent.text, _flat.text, _cap.text);
+    setState(() => _tried = true);
+    if (problem != null) return;
+    setState(() => (_busy = true, _error = null));
+    try {
+      final r = (await widget.auth.transport.send(
+        'PUT',
+        '/v1/money/fee-rates',
+        body: {
+          'channel': _channel.text.trim(),
+          'percent_bp': percentToBp(_percent.text) ?? 0,
+          'flat_kobo': nairaKobo(_flat.text) ?? 0,
+          if (_cap.text.trim().isNotEmpty) 'cap_kobo': nairaKobo(_cap.text),
+        },
+      ) as Map).cast<String, dynamic>();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      widget.onSaved('Fee for ${r['channel']} saved: ${rateWords(r)}.');
+    } on Object catch (e) {
+      if (mounted) setState(() => (_error = errorWords(e), _busy = false));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final editing = widget.rate != null;
+    final problem = feeProblem(_channel.text, _percent.text, _flat.text, _cap.text);
+    return TkFormSheet(
+      title: editing ? 'Change the fee for ${_channel.text}' : 'Add a fee',
+      crumb: 'Fees',
+      action: 'Save fee',
+      onAction: _busy ? null : _save,
+      children: [
+        TkKitField(
+          label: 'Connection',
+          hint: 'As the money log names it: the rail and the connection, such as paystack/main.',
+          child: TkTextBox(controller: _channel, plain: true, hint: 'paystack/main', enabled: !editing),
+        ),
+        if (!editing) KnownChannels(auth: widget.auth, controller: _channel),
+        TkButtonRow([
+          TkKitField(label: 'Percent of the amount', child: TkTextBox(controller: _percent, money: true, hint: '1.5')),
+          TkKitField(label: 'Flat fee (₦)', child: TkTextBox(controller: _flat, money: true)),
+        ]),
+        TkKitField(label: 'Cap (₦, optional)', hint: 'The most one payment’s fee can be.', child: TkTextBox(controller: _cap, money: true)),
+        if (_tried && problem != null) _problemText(t, problem),
+        if (_error != null) TkErrorBox(_error!),
       ],
     );
   }
@@ -2316,4 +2362,65 @@ class _KnownChannelsState extends State<KnownChannels> {
       ),
     );
   }
+}
+
+/// The file to send: a dashed box, its name once chosen.
+class _FilePick extends StatelessWidget {
+  const _FilePick({required this.label, required this.semantics, required this.onTap});
+  final String label;
+  final String semantics;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return TapArea(
+      child: Semantics(
+        button: true,
+        label: semantics,
+        excludeSemantics: true,
+        onTap: onTap,
+        child: GestureDetector(
+          onTap: onTap,
+          child: CustomPaint(
+            painter: _Dashes(t.muted.withValues(alpha: 0.5)),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+              decoration: BoxDecoration(color: t.tkSoft, borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TkIcon('b-note', size: 18, color: t.text),
+                  const SizedBox(width: 8),
+                  Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14.5, weight: 600, color: t.text))),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Dashes extends CustomPainter {
+  _Dashes(this.color);
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    final path = Path()..addRRect(RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(12)));
+    for (final m in path.computeMetrics()) {
+      for (var d = 0.0; d < m.length; d += 9) {
+        canvas.drawPath(m.extractPath(d, math.min(d + 5, m.length)), p);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_Dashes old) => old.color != color;
 }

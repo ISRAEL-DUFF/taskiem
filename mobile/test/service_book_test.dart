@@ -112,8 +112,9 @@ void main() {
       ],
     };
     final sent = await open(t, (chats) => TkSheet(title: 'Trade', body: PriceListForm(auth: chats.auth, list: list, onSaved: said.add)));
-    expect(find.text('Rice, a bag'), findsOneWidget);
-    await t.enterText(find.bySemanticsLabel(RegExp('^Rice, a bag in naira')), '41,000');
+    expect(find.text('Rice'), findsOneWidget);
+    expect(find.text('a bag'), findsOneWidget);
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Rice, a bag')), matching: find.byType(EditableText)), '41,000');
     await t.tap(find.bySemanticsLabel('Save'));
     await settle(t);
     expect(sent.single, 'PUT /v1/price-lists/PL1/items {"items":[{"item_id":"rice","price_kobo":4100000,"min_quantity":2,"available":true}]}');

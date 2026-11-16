@@ -11,6 +11,7 @@ import 'package:taskiem/api/api.g.dart' show Me;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/invoices_page.dart';
 import 'package:taskiem/kit/forms.dart' show TkSwitch;
+import 'package:taskiem/app/links.dart' show pickContact;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
@@ -207,7 +208,7 @@ void main() {
   testWidgets('an invoice sent again: what was sent, its page to share', (t) async {
     final sent = await open(t, (c) => InvoicePage(auth: c.auth, id: 'INV-0007', follow: false));
     expect(find.bySemanticsLabel('Still due'), findsOneWidget);
-    expect(find.text('Jollof rice tray'), findsOneWidget);
+    expect(find.text('Jollof rice tray × 2'), findsOneWidget);
     expect(find.text('₦30,000'), findsOneWidget);
     expect(find.text('Sent by SMS.'), findsNothing);
     await t.tap(find.bySemanticsLabel('Send again'));
@@ -287,7 +288,7 @@ void main() {
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Phone number')), matching: find.byType(EditableText)), '08031234567');
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp(r'^Amount')), matching: find.byType(EditableText)), '25000');
     await t.pump();
-    expect(find.text('Total ₦25,000'), findsOneWidget);
+    expect(find.bySemanticsLabel('Total ₦25,000'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Save and send'));
     await settle(t);
     final posts = sent.where((s) => s.startsWith('POST')).toList();
@@ -300,11 +301,28 @@ void main() {
     await t.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('a new invoice: the customer from the phone\'s contacts; an item\'s quantity by − and +', (t) async {
+    final was = pickContact;
+    pickContact = () async => (name: 'Bisi Ade', phone: '0803 123 4567');
+    addTearDown(() => pickContact = was);
+    await open(t, (c) => InvoiceEditorPage(auth: c.auth));
+    await t.tap(find.bySemanticsLabel('Pick from your contacts'));
+    await t.pump();
+    expect(find.text('Bisi Ade'), findsOneWidget);
+    expect(find.text('0803 123 4567'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('A list of items'));
+    await t.pump();
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp(r'^Price each')), matching: find.byType(EditableText)), '1500');
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('One more item 1'));
+    await t.pump();
+    expect(find.bySemanticsLabel('Total ₦3,000'), findsOneWidget);
+  });
+
   testWidgets('a new invoice for a linked business: no phone asked', (t) async {
     final sent = await open(t, (c) => InvoiceEditorPage(auth: c.auth));
-    await t.tap(find.bySemanticsLabel('Who is it for: Someone else'));
-    await t.pumpAndSettle();
-    await t.tap(find.text('Chidi Foods (linked)'));
+    // A linked business, by its face.
+    await t.tap(find.bySemanticsLabel('Who is it for: Chidi Foods (linked)'));
     await t.pumpAndSettle();
     expect(find.bySemanticsLabel(RegExp('^Phone number')), findsNothing);
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp(r'^Amount')), matching: find.byType(EditableText)), '9000');

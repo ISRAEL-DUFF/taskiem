@@ -16,6 +16,9 @@ import '../kit/api_image.dart';
 import '../kit/forms.dart' show RuneLimit, TkSwitch;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/mobile.dart' show TkListRow, TkSection;
+import '../kit/page.dart' show TkPageScreen;
+import '../theme/look.dart';
 import '../kit/list.dart' show TkSoftButton;
 import '../kit/modal.dart';
 import '../kit/tap_area.dart';
@@ -24,7 +27,6 @@ import 'chats.dart';
 import 'attachments.dart' show PickedFile;
 import 'composer.dart' show Pickers;
 import 'explore.dart' show CategoryPicker;
-import 'thread.dart' show ChatHeadBar;
 
 const maxName = 80, maxTagline = 140, maxArea = 80, maxAbout = 1000, maxCaption = 120, maxVehicle = 40, maxDeliveryAreas = 20;
 
@@ -298,69 +300,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
-    final pad = MediaQuery.paddingOf(context);
     final d = _data;
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
-      child: ColoredBox(
-        color: t.bg,
-        child: Padding(
-          padding: EdgeInsets.only(top: pad.top),
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, 28 + pad.bottom),
-            children: [
-              // `.tk-p-head`: back, and the title.
-              Row(
-                children: [
-                  ChatHeadBar.iconButton(widget.backLabel, TkIcon('back', size: 20, color: t.text), () => Navigator.of(context).maybePop()),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Semantics(
-                      header: true,
-                      child: Text('Your business in Explore', style: tkText(size: 22, weight: 800, letterSpacing: -0.44, color: t.text)),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 16), child: TkErrorBox(_error!)),
-              if (d == null && _error != null)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TkSoftButton(
-                    label: 'Try again',
-                    onTap: () {
-                      setState(() => _error = null);
-                      _load();
-                    },
-                  ),
-                )
-              else if (d == null)
-                Text('Loading your profile…', style: tkHint(t))
-              else ...[
-                _found(t, dark),
-                const SizedBox(height: 16),
-                _ProfileCard(
-                  transport: _t,
-                  name: _name.text.isNotEmpty ? _name.text : (widget.chats.auth.me?.tenantName ?? ''),
-                  tagline: _tagline.text,
-                  area: _area.text,
-                  logo: photoPath(d['logo'] as Map<String, dynamic>?),
-                  photos: [
-                    for (final g in ((d['gallery'] as List?) ?? const []).whereType<Map<String, dynamic>>())
-                      if (photoPath(g['photo'] as Map<String, dynamic>?) != null)
-                        (src: photoPath(g['photo'] as Map<String, dynamic>?)!, caption: g['caption'] as String? ?? ''),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _form(t, dark, d),
-                const SizedBox(height: 16),
-                _photos(t, dark, d),
-              ],
+    // As drawn (docs/spec/mobile-app-look.md, "Settings"): your card as
+    // others see it, being found, the card's words, then the photos.
+    return TkPageScreen(
+      title: 'Your business in Explore',
+      titleSize: 26,
+      backLabel: widget.backLabel,
+      children: [
+        if (_error != null) TkErrorBox(_error!),
+        if (d == null && _error != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TkSoftButton(
+              label: 'Try again',
+              onTap: () {
+                setState(() => _error = null);
+                _load();
+              },
+            ),
+          )
+        else if (d == null)
+          Text('Loading your profile…', style: tkHint(t))
+        else ...[
+          _ProfileCard(
+            transport: _t,
+            name: _name.text.isNotEmpty ? _name.text : (widget.chats.auth.me?.tenantName ?? ''),
+            tagline: _tagline.text,
+            area: _area.text,
+            logo: photoPath(d['logo'] as Map<String, dynamic>?),
+            photos: [
+              for (final g in ((d['gallery'] as List?) ?? const []).whereType<Map<String, dynamic>>())
+                if (photoPath(g['photo'] as Map<String, dynamic>?) != null)
+                  (src: photoPath(g['photo'] as Map<String, dynamic>?)!, caption: g['caption'] as String? ?? ''),
             ],
           ),
-        ),
-      ),
+          _found(t, dark),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+            child: Semantics(header: true, child: Text('Your card', style: tkDisplay(size: 20, letterSpacing: -0.4, color: t.text))),
+          ),
+          _form(t, dark, d),
+          _photos(t, dark, d),
+        ],
+      ],
     );
   }
 
@@ -368,55 +351,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// while it is on.
   Widget _found(TkTokens t, bool dark) {
     final on = _settings?['findable_now'] == true;
-    final ink = on ? t.tkOnPine : t.text;
     return Semantics(
       container: true,
       label: 'Being found',
       explicitChildNodes: true,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(color: on ? t.brand : t.panel, borderRadius: BorderRadius.circular(20)),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Be found in Explore', style: tkText(size: 15, weight: 700, color: ink)),
-                  const SizedBox(height: 2),
-                  Opacity(
-                    opacity: 0.85,
-                    child: Text(_settings == null ? 'Checking…' : foundLine(_settings!), style: tkText(size: 13, color: ink)),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 14),
-            TkSwitch(label: 'Be found in Explore', on: on, onPine: on, onChanged: !_manage || _busy || _settings == null ? null : _findable),
-          ],
-        ),
+      child: TkSection(
+        inset: 56,
+        children: [
+          TkListRow(
+            title: 'Be found in Explore',
+            sub: _settings == null ? 'Checking…' : foundLine(_settings!),
+            icon: 'b-eye',
+            square: TkLook.of(context).teal,
+            trailing: TkSwitch(label: 'Be found in Explore', on: on, onChanged: !_manage || _busy || _settings == null ? null : _findable),
+          ),
+        ],
       ),
     );
   }
 
   Widget _card({required Widget child, EdgeInsets padding = const EdgeInsets.all(16)}) {
-    final t = TkTheme.tokens(context);
-    final dark = TkTheme.of(context).mode == TkMode.dark;
     // `.tk-p-card`: the panel, 24 px round, its soft shadow (a line in dark).
     return Container(
       padding: padding,
-      decoration: BoxDecoration(
-        color: t.panel,
-        borderRadius: BorderRadius.circular(24),
-        border: dark ? Border.all(color: t.border) : null,
-        boxShadow: dark
-            ? null
-            : const [
-                BoxShadow(color: Color(0x0F0E1A14), offset: Offset(0, 1), blurRadius: 2),
-                BoxShadow(color: Color(0x400E1A14), offset: Offset(0, 12), blurRadius: 28, spreadRadius: -18),
-              ],
-      ),
+      decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(20)),
       child: child,
     );
   }
@@ -779,23 +737,13 @@ class _ProfileCard extends StatelessWidget {
       label: 'How your card looks',
       child: Container(
         padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: t.panel,
-          borderRadius: BorderRadius.circular(24),
-          border: dark ? Border.all(color: t.border) : null,
-          boxShadow: dark
-              ? null
-              : const [
-                  BoxShadow(color: Color(0x0F0E1A14), offset: Offset(0, 1), blurRadius: 2),
-                  BoxShadow(color: Color(0x400E1A14), offset: Offset(0, 12), blurRadius: 28, spreadRadius: -18),
-                ],
-        ),
+        decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(20)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 2, 4, 10),
-              child: Text('HOW OTHER BUSINESSES SEE YOU', style: tkText(size: 11, weight: 700, letterSpacing: 0.88, color: t.muted)),
+              child: Text('HOW OTHER BUSINESSES SEE YOU', style: tkText(size: 11.5, weight: 700, letterSpacing: 0.4, color: TkLook.of(context).tealInk)),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 0, 4, 12),

@@ -13,14 +13,13 @@ import '../app/auth.dart';
 import '../app/session.dart' show uuid4;
 import '../kit/motion.dart';
 import '../kit/forms.dart' show CloseSoon, errorWords, nairaKobo;
-import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart';
 import '../kit/sheet.dart';
 import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
-import 'order_sheet.dart' show BagBar, QtyStepper;
+import 'order_sheet.dart' show BagBar, NameTile, QtyStepper;
 import 'sizes_forms.dart' show choicesOf, keyOf, sizesOf, variantLabel, variantOf, Variant;
 import 'product_form.dart' show hasSizes, sizesWords;
 import 'words.dart' show naira;
@@ -240,23 +239,21 @@ class _SellSheetState extends State<SellSheet> with CloseSoon {
         for (final (i, it) in shown.indexed)
           Padding(
             key: ValueKey(it['id']),
-            // `.tk-order-list { padding: 0 20px 96px }`.
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: TkIn.sheetRow(index: i, child: hasSizes(it) ? _sizedRow(t, it, items) : _row(t, it)),
+            // The rows on one card (docs/spec/mobile-app-look.md, "The chat").
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: TkIn.sheetRow(
+              index: i,
+              child: TkCardSlice(
+                first: i == 0,
+                last: i == shown.length - 1,
+                inset: 66,
+                child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: hasSizes(it) ? _sizedRow(t, it, items) : _row(t, it)),
+              ),
+            ),
           ),
       ],
     );
   }
-
-  Widget _tile(TkTokens t) => ExcludeSemantics(
-    child: Container(
-      width: 52,
-      height: 52,
-      decoration: BoxDecoration(color: t.tkLimeSoft, borderRadius: BorderRadius.circular(14)),
-      alignment: Alignment.center,
-      child: TkIcon('box', size: 22, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand),
-    ),
-  );
 
   Widget _row(TkTokens t, Map<String, dynamic> it) {
     final name = it['name'] as String? ?? '';
@@ -266,13 +263,10 @@ class _SellSheetState extends State<SellSheet> with CloseSoon {
     final over = stock != null && n > (stock < 0 ? 0 : stock);
     final unit = it['unit'] as String? ?? '';
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: t.border)),
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          _tile(t),
+          NameTile(name),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -326,16 +320,13 @@ class _SellSheetState extends State<SellSheet> with CloseSoon {
 
     final price = _int(it['price_kobo']);
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: t.border)),
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              _tile(t),
+              NameTile(name),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(

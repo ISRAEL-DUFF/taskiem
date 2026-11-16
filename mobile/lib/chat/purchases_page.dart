@@ -371,50 +371,40 @@ class _PurchasePageState extends State<PurchasePage> with Polling {
                   ),
                 ),
               ),
+              // Their conversation, where the app has it (as drawn).
+              if (Openers.conversation != null && _str(p['link_id']).isNotEmpty)
+                TkHeadButton(
+                  icon: 'b-chat',
+                  label: 'Message $supplier',
+                  onCard: true,
+                  onTap: () {
+                    if (!Openers.conversation!(context, _str(p['link_id']))) showTkToast(context, 'Their conversation could not be found.', error: true);
+                  },
+                ),
             ],
           ),
         ],
       ),
       if (_str(p['cancel_asked_at']).isNotEmpty) Text('You asked $supplier to cancel it; they cancel it or keep it.', style: tkHint(t)),
-      TkPageCard(
+      // As drawn: "Ofada rice, 50 kg × 3 … ₦126,000"; under a line, what
+      // came of it once something came.
+      TkSection(
         title: 'What you ordered',
         children: [
-          for (final l in lines)
-            MergeSemantics(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: Text(_str(l['item']), style: tkText(size: 15, weight: 600, color: t.text))),
-                        const SizedBox(width: 12),
-                        Text(naira(_int(l['quantity']) * _int(l['cost_kobo'])), style: tkText(size: 15, weight: 600, color: t.text)),
-                      ],
-                    ),
-                    Text(
-                      [
-                        'Ordered ${quantity(_int(l['quantity']), l['unit'] as String?)} at ${naira(_int(l['cost_kobo']))} each',
-                        if (delivered) 'delivered ${_int(l['delivered'])}',
-                        'received ${_int(l['received'])}',
-                      ].join(' · '),
-                      style: tkHint(t),
-                    ),
-                  ],
+          TkBill(
+            lines: [
+              for (final l in lines)
+                (
+                  name: '${_str(l['item'])}${_int(l['quantity']) == 1 ? '' : ' × ${_int(l['quantity'])}'}',
+                  sub: [
+                    if (_int(l['received']) > 0) 'received ${_int(l['received'])} of ${_int(l['quantity'])}',
+                    if (delivered && _int(l['delivered']) != _int(l['quantity'])) 'they delivered ${_int(l['delivered'])}',
+                  ].join(' · '),
+                  under: null,
+                  amount: naira(_int(l['quantity']) * _int(l['cost_kobo'])),
                 ),
-              ),
-            ),
-          Container(height: 1, color: TkLook.of(context).line),
-          const SizedBox(height: 10),
-          MergeSemantics(
-            child: Row(
-              children: [
-                Expanded(child: Text('Total', style: tkText(size: 15, weight: 700, color: t.text))),
-                Text(naira(_int(p['total_kobo'])), style: tkDisplay(size: 19, letterSpacing: -0.4, color: t.text)),
-              ],
-            ),
+            ],
+            total: naira(_int(p['total_kobo'])),
           ),
         ],
       ),

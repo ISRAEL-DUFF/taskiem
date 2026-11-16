@@ -467,7 +467,22 @@ class TkTokens {
 	for _, n := range fields {
 		fmt.Fprintf(&b, "    required this.%s,\n", camel(n))
 	}
-	b.WriteString("  });\n}\n")
+	b.WriteString("  });\n")
+	// copyWith: a part of a screen with a few colours of its own (the
+	// words on your own bubble in the app's chat).
+	b.WriteString("\n  /// These tokens with the ones given changed.\n  TkTokens copyWith({\n")
+	for _, n := range fields {
+		typ := "Color"
+		if t.light[n].kind == kShadows {
+			typ = "List<BoxShadow>"
+		}
+		fmt.Fprintf(&b, "    %s? %s,\n", typ, camel(n))
+	}
+	b.WriteString("  }) =>\n      TkTokens(\n")
+	for _, n := range fields {
+		fmt.Fprintf(&b, "        %s: %s ?? this.%s,\n", camel(n), camel(n), camel(n))
+	}
+	b.WriteString("      );\n}\n")
 	for _, theme := range []struct {
 		name string
 		vals map[string]value

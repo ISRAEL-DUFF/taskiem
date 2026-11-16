@@ -44,6 +44,7 @@ import 'chat/taskiem.dart';
 import 'screens/app_sign_up.dart';
 import 'screens/home_tabs.dart';
 import 'screens/signed_in.dart';
+import 'screens/forgot_password.dart';
 import 'screens/sign_in.dart';
 import 'screens/sign_up.dart';
 import 'theme/theme.dart';
@@ -229,7 +230,7 @@ class _RootState extends State<_Root> {
     if (auth.state == AuthState.checking || !(widget.prefs?.loaded ?? true)) return const _Opening();
     return switch (auth.state) {
       AuthState.checking => const _Opening(),
-      AuthState.signedOut => _SignedOut(auth: auth),
+      AuthState.signedOut => _SignedOut(auth: auth, links: widget.links),
       AuthState.outdated => const _Outdated(),
       AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify, links: widget.links),
     };
@@ -239,8 +240,11 @@ class _RootState extends State<_Root> {
 /// Signed out: signing in, or signing up when the server has it open
 /// (GET /v1/signup), as the web offers "Create an account".
 class _SignedOut extends StatefulWidget {
-  const _SignedOut({required this.auth});
+  const _SignedOut({required this.auth, this.links});
   final Auth auth;
+
+  /// A password reset's link, opened while signed out: Choose a new password.
+  final LinkInbox? links;
 
   @override
   State<_SignedOut> createState() => _SignedOutState();
@@ -255,9 +259,23 @@ class _SignedOutState extends State<_SignedOut> {
   // Kept while signed out: back from Get started and in again finds the
   // conversation where it was (its code and token are not spent again).
   late final AppSignup _signup = AppSignup(widget.auth);
+  // Forgot password?: what was typed in Email; a reset link's token.
+  String _forgotEmail = '';
+  String? _reset;
+
+  void _linked() {
+    final token = widget.links?.takeReset();
+    if (token != null && mounted) {
+      setState(() {
+        _reset = token;
+        _at = 'reset';
+      });
+    }
+  }
 
   @override
   void dispose() {
+    widget.links?.removeListener(_linked);
     _signup.dispose();
     super.dispose();
   }
@@ -265,6 +283,9 @@ class _SignedOutState extends State<_SignedOut> {
   @override
   void initState() {
     super.initState();
+    widget.links?.addListener(_linked);
+    // The link that opened the app.
+    _linked();
     widget.auth.api.signupOptions().then((o) {
       if (mounted) setState(() => _open = o.enabled);
     }, onError: (_) {});
@@ -291,7 +312,18 @@ class _SignedOutState extends State<_SignedOut> {
       child: switch (_at) {
         'email' => SignUpScreen(auth: widget.auth, onSignIn: () => go('in')),
         'app' => AppSignUpScreen(auth: widget.auth, signup: _signup, onSignIn: () => go('in'), onEmail: _open ? () => go('email') : null),
-        _ => SignInScreen(auth: widget.auth, signup: _open || _chat, passkeys: _passkeys, onSignUp: () => go(_chat ? 'app' : 'email')),
+        'forgot' => ForgotPasswordScreen(auth: widget.auth, email: _forgotEmail, onBack: () => go('in')),
+        'reset' when _reset != null => ResetPasswordScreen(key: ValueKey(_reset), auth: widget.auth, token: _reset!, onDone: () => go('in')),
+        _ => SignInScreen(
+          auth: widget.auth,
+          signup: _open || _chat,
+          passkeys: _passkeys,
+          onSignUp: () => go(_chat ? 'app' : 'email'),
+          onForgot: (email) {
+            _forgotEmail = email;
+            go('forgot');
+          },
+        ),
       },
     );
   }
@@ -442,6 +474,13 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
 
   void _linked() {
     if (!mounted) return;
+    // A password reset's link, signed in: Choose a new password over the
+    // app (saving it signs every session out, this one too).
+    final reset = widget.links?.takeReset();
+    if (reset != null) {
+      final nav = Navigator.of(context);
+      nav.push(TkRoute<void>(pageBuilder: (_, _, _) => ResetPasswordScreen(auth: widget.auth, token: reset, onDone: nav.pop)));
+    }
     final page = widget.links?.take();
     if (page != null) _openPath(page);
   }

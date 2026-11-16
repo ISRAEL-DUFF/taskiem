@@ -268,7 +268,8 @@ void main() {
     expect(find.text('Someone changed this order. Look again.'), findsOneWidget);
     expect(reads, greaterThan(before));
     final h = t.ensureSemantics();
-    expect(t.getSemantics(find.text('Delivered')).flagsCollection.isChecked.toString(), 'CheckedState.isTrue');
+    // Put back as it was: Delivered still the one chosen.
+    expect(t.getSemantics(find.bySemanticsLabel('Delivered')).flagsCollection.isSelected.toString(), 'Tristate.isTrue');
     h.dispose();
   });
 

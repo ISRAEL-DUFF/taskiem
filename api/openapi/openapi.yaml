@@ -13665,6 +13665,56 @@ paths:
                     $ref: '#/components/schemas/StorefrontOrder'
         default:
           $ref: '#/components/responses/Error'
+  /v1/storefront/bookings/{reference}/times:
+    get:
+      operationId: storefrontBookingTimes
+      tags:
+      - Storefront
+      summary: Free times to move a booking to
+      description: 'The days with a free time for the booking''s service, in the booking hours and how far ahead bookings are taken, and the free times of one day (day, or the first with any). The booking''s own time is free to it and not offered. 409 when the order is not a booking or its service is no longer offered.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: day
+        in: query
+        schema:
+          type: string
+          format: date
+      responses:
+        '200':
+          description: The days and times
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [service, days, times]
+                properties:
+                  service:
+                    $ref: '#/components/schemas/LinkService'
+                  days:
+                    type: array
+                    items:
+                      type: string
+                      format: date
+                  day:
+                    type: string
+                    format: date
+                  times:
+                    type: array
+                    items:
+                      type: string
+                      format: date-time
+        default:
+          $ref: '#/components/responses/Error'
   /v1/forms:
     get:
       operationId: listForms

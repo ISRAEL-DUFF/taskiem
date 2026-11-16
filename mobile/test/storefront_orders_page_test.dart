@@ -187,9 +187,10 @@ void main() {
 
   testWidgets('an order: its details; offered to a free rider; the match undone; the customer shown', (t) async {
     final r = await serve(t, (c) => StorefrontOrderPage(auth: c.auth, reference: 'OR-5K2Q', now: () => _now));
-    expect(find.text('Order total'), findsOneWidget);
-    expect(find.text('2 × Jollof rice ₦5,000'), findsOneWidget);
-    expect(find.text('Delivery to Yaba ₦1,000'), findsOneWidget);
+    expect(find.text('ACCEPTED'), findsOneWidget);
+    expect(find.text('Jollof rice × 2'), findsOneWidget);
+    expect(find.text('₦5,000'), findsOneWidget);
+    expect(find.text('Delivery to Yaba'), findsOneWidget);
     expect(find.text('No rider has it yet.'), findsOneWidget);
     expect(find.text('Suggested, confirmed by Ada'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Offer to a free rider'));
@@ -236,16 +237,18 @@ void main() {
         {'id': 'D0', 'rider': 'Tunde', 'status': 'declined', 'offered_at': '2026-11-12T09:55:00Z'},
       ],
     );
-    expect(find.text('On the way'), findsOneWidget);
-    expect(find.text('₦1,500'), findsOneWidget);
-    expect(find.textContaining('3. Picked up'), findsOneWidget);
+    expect(find.text('Bayo · picked up 11:20'), findsOneWidget);
+    expect(find.text('fee ₦1,500'), findsOneWidget);
     expect(find.bySemanticsLabel('Offer to a free rider'), findsNothing);
     await t.tap(find.bySemanticsLabel('Show earlier offers (1)'));
     await t.pump();
     expect(find.text('Said they can’t'), findsOneWidget);
-    await t.tap(find.bySemanticsLabel('Take it back'));
+    // Taken back from the head's ⋯, after yes.
+    await t.tap(find.bySemanticsLabel('More about this order'));
     await t.pumpAndSettle();
-    await t.tap(find.bySemanticsLabel('Take it back').last);
+    await t.tap(find.text('Take it back from Bayo'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Take it back'));
     await settle(t);
     expect(r.sent.single, 'POST /v1/storefront/orders/OR-5K2Q/release {}');
     await t.pump(const Duration(seconds: 5));
@@ -281,7 +284,7 @@ void main() {
         more: {'service_name': 'Braids', 'starts_at': '2099-11-14T09:00:00Z', 'ends_at': '2099-11-14T10:30:00Z', 'fulfilment': null, 'basket': null},
       ),
     );
-    expect(find.text('Braids'), findsWidgets);
+    expect(find.textContaining('Braids'), findsWidgets);
     expect(find.bySemanticsLabel('Move Braids OR-5K2Q'), findsOneWidget);
     expect(find.bySemanticsLabel('Cancel Braids OR-5K2Q'), findsOneWidget);
     expect(find.text('Delivery'), findsNothing);
@@ -332,6 +335,12 @@ void main() {
     expect(find.text('No rider could take it. You are told when one is free'), findsOneWidget);
   });
 
+  test('a phone number grouped to read', () {
+    expect(groupedPhone('08034127821'), '0803 412 7821');
+    expect(groupedPhone('+2348034127821'), '+234 803 412 7821');
+    expect(groupedPhone('•••4567'), '•••4567');
+  });
+
   test('a rider’s statuses in words; the offer’s other outcomes', () {
     expect(orderStatus('dispatched').label, 'With a rider');
     expect(orderStatus('on_the_way').label, 'On the way');
@@ -358,7 +367,7 @@ void main() {
             })
           : null,
     );
-    expect(find.text('On the way'), findsOneWidget);
+    expect(find.textContaining('Bayo · offered'), findsOneWidget);
     status = 'delivered';
     await t.pump(const Duration(seconds: 30));
     await settle(t);
@@ -391,7 +400,7 @@ void main() {
     expect(wa.isMergedIntoParent, isFalse);
     expect(identical(call, wa), isFalse);
     expect(find.bySemanticsLabel('ngozi@example.com'), findsOneWidget);
-    expect(find.text('Bayo · •••0000'), findsOneWidget);
+    expect(find.textContaining('Bayo · •••0000'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp(r'^Call •••')), findsNothing);
     await t.tap(find.bySemanticsLabel('Call 08031234567'));
     await t.pump();
@@ -539,10 +548,10 @@ void main() {
     await t.pump(const Duration(seconds: 30));
     await t.fling(find.byType(Scrollable).first, const Offset(0, 400), 1000);
     await settle(t);
-    expect(find.text('Completed'), findsWidgets);
+    expect(find.text('COMPLETED'), findsWidgets);
     slow.complete(json({'order': _order()}));
     await settle(t);
-    expect(find.text('Completed'), findsWidgets);
+    expect(find.text('COMPLETED'), findsWidgets);
   });
 
   testWidgets('Orders from linked businesses leads to all your orders; one opened from it says Back to Orders', (t) async {

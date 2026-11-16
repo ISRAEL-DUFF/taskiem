@@ -117,9 +117,9 @@ void main() {
 
   testWidgets('a bill paid from Taskiem: sent for approval', (t) async {
     final sent = await open(t, (c) => BillPage(auth: c.auth, id: 'B1', follow: false));
-    expect(find.textContaining('once someone with the owner role approves it'), findsOneWidget);
+    expect(find.textContaining('once the owner approves it'), findsOneWidget);
     expect(find.text('9900 000 001'), findsOneWidget, reason: 'read out in groups');
-    expect(find.text('Rice 50kg'), findsOneWidget);
+    expect(find.text('Rice 50kg × 2'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Pay ₦100,000'));
     await settle(t);
     expect(sent.last, 'POST /v1/bills/B1/pay {}');
