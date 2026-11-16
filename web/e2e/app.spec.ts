@@ -6,7 +6,7 @@ import { expect, test, type Page } from "@playwright/test";
 test.use({ viewport: { width: 390, height: 844 } });
 
 async function signIn(page: Page) {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -14,7 +14,7 @@ async function signIn(page: Page) {
 }
 
 test("the console is installable", async ({ page }) => {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   const href = await page.locator('link[rel="manifest"]').getAttribute("href");
   expect(href).toBe("/manifest.json");
   const res = await page.request.get(href as string);

@@ -69,10 +69,11 @@ const PAGES = [
   "/schools/clearance",
   "/schools/gate",
   "/settings/schools",
+  "/start-something",
 ];
 
 async function signIn(page: Page) {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -183,7 +184,7 @@ for (const scheme of ["light", "dark"] as const) {
   test(`pages pass axe in the ${scheme} theme`, async ({ page }) => {
     test.setTimeout(180_000);
     await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
-    await page.goto("/login");
+    await page.goto("/login?with=email");
     await expect(
       page.getByRole("heading", { name: "Sign in to Taskiem" }),
     ).toBeVisible();
@@ -205,6 +206,8 @@ for (const scheme of ["light", "dark"] as const) {
       "/confirm-email",
       // A sign-in link from chat that is not good (chat_signin.go).
       "/signin#token=nope",
+      // The phone way in (taskiem-for-everyone §5.1).
+      "/login",
     ]) {
       await page.goto(path);
       await expect(page.locator("main h1").first()).toBeVisible();
@@ -332,6 +335,86 @@ test("the family page passes axe in every public theme", async ({
     expect(vs, describe(`an unknown link (${theme})`, vs)).toEqual([]);
   }
 });
+
+// A person's own side (taskiem-for-everyone §7), as a phone signs in to
+// it: the server's answers stood in for, so every state is drawn (you.spec.ts
+// goes through them for real).
+const PERSON = {
+  tenant_id: null,
+  personal: true,
+  roles: [],
+  permissions: [],
+  auth_method: "phone",
+  user: {
+    id: "0192e2e0-0000-7000-8000-00000000a001",
+    email: "person+a11y@phone.taskiem.invalid",
+    email_placeholder: true,
+    name: "Ada Obi",
+    phone: "+2348031234567",
+  },
+  businesses: [
+    { id: "0192e2e0-0000-7000-8000-00000000b001", name: "Ada Kitchen", kind: "business", locked: true, lock: "second_proof_required" },
+    { id: "0192e2e0-0000-7000-8000-00000000b002", name: "Ada Obi's workflows", kind: "workflows", locked: false, lock: null },
+  ],
+  second_proof: { required: true, device_proved: false, ways: { passkey: false, email: true, pin: true } },
+};
+
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`the way in and You pass axe and fit ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const found: string[] = [];
+      const check = async (where: string) => {
+        const vs = await axe(page);
+        if (vs.length > 0) found.push(describe(where, vs));
+        expect(await page.evaluate(() => document.documentElement.scrollWidth), where).toBeLessThanOrEqual(width);
+      };
+      const json = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+      await page.route("**/v1/auth/phone/start", (r) => r.fulfill(json({ sent_via: "whatsapp", expires_in: 600 }, 202)));
+      await page.route("**/v1/auth/phone/verify", (r) => r.fulfill(json({ status: "new", ticket: "a11y", expires_in: 900 })));
+      await page.goto("/login");
+      await expect(page.getByRole("heading", { name: "Welcome to Taskiem" })).toBeVisible();
+      await check("the way in");
+      await page.getByLabel("Your phone number").fill("0803 123 4567");
+      await page.getByRole("button", { name: "Continue" }).click();
+      await expect(page.getByRole("heading", { name: "Enter the code" })).toBeVisible();
+      await check("the code");
+      await page.getByLabel("6-digit code").fill("123456");
+      await page.getByRole("button", { name: "Continue" }).click();
+      await expect(page.getByRole("heading", { name: "Make your account" })).toBeVisible();
+      await check("a new account");
+
+      // Signed in, on You.
+      await page.route("**/v1/me", (r) => r.fulfill(json(PERSON)));
+      await page.route("**/v1/me/invitations", (r) =>
+        r.fulfill(json({ invitations: [{ tenant_id: "0192e2e0-0000-7000-8000-00000000b003", tenant: "Bola Stores", roles: ["staff"], invited_at: new Date().toISOString() }] })),
+      );
+      await page.goto("/you");
+      await expect(page.getByRole("heading", { name: "Hello, Ada" })).toBeVisible();
+      await check("/you");
+      await page.getByTestId("switcher").click();
+      await expect(page.getByRole("dialog", { name: "Switch to" })).toBeVisible();
+      await check("the switcher");
+      await page.route("**/v1/me/switch", (r) =>
+        r.fulfill(json({ error: "new device", second_proof_required: true, ways: PERSON.second_proof.ways }, 401)),
+      );
+      await page.getByRole("dialog").getByRole("button", { name: /Ada Kitchen/ }).click();
+      await expect(page.getByTestId("second-proof")).toBeVisible();
+      await check("a second proof");
+      await page.getByRole("button", { name: "Not now" }).click();
+      await page.goto("/you/settings");
+      await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+      await check("/you/settings");
+      await page.getByRole("button", { name: "Change number" }).click();
+      await expect(page.getByTestId("change-number")).toBeVisible();
+      await check("change number");
+      await page.goto("/you/start");
+      await page.getByTestId("start-business").click();
+      await expect(page.getByLabel("Business name")).toBeVisible();
+      await check("/you/start");
+      expect(found, found.join("\n\n")).toEqual([]);
+    });
 
 test("dialogs keep focus inside and give it back when they close", async ({
   page,

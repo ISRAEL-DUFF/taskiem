@@ -159,7 +159,7 @@ test.afterAll(
 
 test("link a WhatsApp number with a code, then unlink it", async ({ page }) => {
   const email = `wa-${Date.now()}@e2e.test`;
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -180,7 +180,7 @@ test("link a WhatsApp number with a code, then unlink it", async ({ page }) => {
   });
   await page.context().clearCookies();
 
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -230,7 +230,7 @@ test("link a WhatsApp number with a code, then unlink it", async ({ page }) => {
 test("the own number's templates: submit, hear from Meta, check now", async ({
   page,
 }) => {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

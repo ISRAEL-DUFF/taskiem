@@ -3,7 +3,7 @@ import { confirmEmail } from "./confirm";
 import { totp } from "./totp";
 
 async function signIn(page: Page, email: string) {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

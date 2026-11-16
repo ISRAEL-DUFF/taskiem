@@ -24,7 +24,7 @@ function sql(text: string): string {
 }
 
 async function signIn(page: Page) {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -213,7 +213,7 @@ test("money is matched to storefront orders from To match, and undone on the ord
   test.setTimeout(120_000);
   // A business of its own: the E2E business's storefront belongs to storefront.spec.ts, which expects it without orders.
   const name = `Ada Shop ${Date.now()}`;
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByRole("link", { name: "Create an account" }).click();
   await page.getByLabel("I sell things").check();
   await page.getByLabel("Business or organisation name").fill(name);

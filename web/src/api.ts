@@ -177,10 +177,13 @@ async function request<T>(
   if (!res.ok) {
     // Moving to another business refused (it signs in with single sign-on)
     // is not this session ending.
+    // Nor is a wrong code while changing the phone number, or a business
+    // asking for a passkey or a second proof first.
     if (
       res.status === 401 &&
       !path.startsWith("/v1/auth/") &&
-      !(path === "/v1/me/switch" && data.sso_required)
+      !path.startsWith("/v1/me/phone/") &&
+      !(path === "/v1/me/switch" && switchStep(data))
     )
       window.dispatchEvent(new Event("taskiem:unauthorised"));
     noteEnded(res.status, data);
@@ -198,6 +201,14 @@ async function request<T>(
     );
   }
   return data as T;
+}
+
+/** What a business asks for before a switch into it (POST /v1/me/switch). */
+export function switchStep(body: Record<string, unknown>): Lock | null {
+  if (body.sso_required) return "sso_required";
+  if (body.passkey_required) return "passkey_required";
+  if (body.second_proof_required) return "second_proof_required";
+  return null;
 }
 
 /** A part of Taskiem the business turned off answers 404 with area_off.
@@ -278,9 +289,39 @@ export interface TermsAsked {
   privacy_version: string;
 }
 
+/** What a business asks of this session before it opens (§5.4). */
+export type Lock = "sso_required" | "passkey_required" | "second_proof_required";
+
+/** The ways this person can prove a new device is theirs. */
+export interface ProofWays {
+  passkey: boolean;
+  email: boolean;
+  pin: boolean;
+}
+
+/** One of the person's businesses, for the switcher. */
+export interface Business {
+  id: string;
+  name: string;
+  /** A business, or a workflows workspace. */
+  kind?: "business" | "workflows";
+  /** The session is in it. */
+  current?: boolean;
+  locked?: boolean;
+  lock?: Lock | null;
+}
+
 export interface Me {
-  /** Null for a person with no membership answering invitations. */
+  /** Null on the person's own side (You): a personal session. */
   tenant_id: string | null;
+  /** A personal session: the person's own side, in no business. */
+  personal?: boolean;
+  /** The person's businesses, each with what it asks first (the switcher). */
+  businesses?: Business[];
+  /** Whether this device must prove itself before a business opens. */
+  second_proof?: { required: boolean; device_proved: boolean; ways: ProofWays };
+  /** A business, or a workflows workspace (taskiem-for-everyone §18.2). */
+  tenant_kind?: "business" | "workflows";
   /** Signed in only to answer invitations: no organisation yet. */
   invitations_only?: boolean;
   roles: string[];
@@ -295,11 +336,13 @@ export interface Me {
     chat_signin?: boolean;
     /** Whether the person signs in only with their passkey. */
     passkey_only?: boolean;
+    /** The account's phone, as +234…; null when it has none. */
+    phone?: string | null;
   };
   /** Whether the member has an authenticator app enrolled for step-up. */
   totp?: boolean;
   /** How this session signed in. */
-  auth_method?: "password" | "passkey" | "sso" | "chat";
+  auth_method?: "password" | "passkey" | "sso" | "chat" | "phone";
   /** An administrator who must add a passkey before anything else. */
   enrol_passkey?: boolean;
   /** Why the person is held to passkeys here: personal, deployment or business. */

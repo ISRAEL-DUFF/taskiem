@@ -1,3 +1,4 @@
+import { PhoneSetting } from "./ChangeNumber";
 import { useState } from "react";
 import { ApiError, del, get, post, put, type Invitation } from "../api";
 import { useAuth } from "../auth";
@@ -825,6 +826,12 @@ export function Account() {
         description="Your sign-in methods, invitations, and linked WhatsApp number, Telegram account and Slack."
       />
       <Appearance />
+      {me?.user && (
+        <section className="card">
+          <h2 style={{ marginTop: 0 }}>Phone</h2>
+          <PhoneSetting />
+        </section>
+      )}
       <Invitations />
       <AddEmail />
       <ChangePassword />
@@ -1026,7 +1033,7 @@ function ChatSignIn() {
   );
 }
 
-function Appearance() {
+export function Appearance() {
   const [theme, set] = useState<Theme>(savedTheme);
   const choices: [Theme, string][] = [
     ["light", "Light"],

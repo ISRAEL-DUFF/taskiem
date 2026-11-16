@@ -1,12 +1,22 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { ApiError, get, post } from "../api";
+import { Link, useLocation } from "react-router-dom";
+import { ApiError, post } from "../api";
 import { useAuth } from "../auth";
 import { safeNext } from "../lib/safePath";
 import { passkeysSupported } from "../passkeys";
 import { ErrorBox, Field, useAction, PasswordInput } from "../ui";
+import { WayIn } from "./WayIn";
 
+/** /login and /signup: the phone way in (WayIn), or with ?with=email the
+ * email, password, passkey and chat sign-in (taskiem-for-everyone §5.1). */
 export function Login() {
+  const q = new URLSearchParams(useLocation().search);
+  // A single sign-on that came back with a problem says so on the email screen.
+  const withEmail = q.get("with") === "email" || q.has("sso_error");
+  return withEmail ? <EmailLogin /> : <WayIn />;
+}
+
+function EmailLogin() {
   const { login, loginWithPasskey } = useAuth();
   const [withChat, setWithChat] = useState(false);
   const [email, setEmail] = useState("");
@@ -15,14 +25,6 @@ export function Login() {
   const [sso, setSSO] = useState<{ start: string; required: boolean } | null>(null);
   const [breakGlass, setBreakGlass] = useState(false); // owners are exempt from enforced SSO
   const ssoError = new URLSearchParams(window.location.search).get("sso_error");
-  // Offer signup when this deployment takes self-serve signups.
-  const [signup, setSignup] = useState(false);
-  useEffect(() => {
-    get<{ enabled: boolean }>("/v1/signup").then(
-      (r) => setSignup(r.enabled),
-      () => setSignup(false),
-    );
-  }, []);
   // Offer single sign-on when the email's domain uses it.
   useEffect(() => {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
@@ -38,6 +40,8 @@ export function Login() {
     return () => clearTimeout(t);
   }, [email]);
   const next = safeNext(new URLSearchParams(window.location.search).get("next"), "/workflows");
+  const nextParam = new URLSearchParams(window.location.search).get("next");
+  const phoneLink = nextParam ? `/login?next=${encodeURIComponent(nextParam)}` : "/login";
   const startSSO = () => window.location.assign(`${sso?.start}?return_to=${encodeURIComponent(next)}`);
   return (
     <div className="login card">
@@ -101,11 +105,9 @@ export function Login() {
         </>
       )}
       {act.error instanceof ApiError && act.error.body.passkey_required ? <p className="hint">Sign in with your passkey.</p> : null}
-      {signup && (
-        <p className="hint" style={{ textAlign: "center" }}>
-          New to Taskiem? <Link to="/signup">Create an account</Link>
-        </p>
-      )}
+      <p className="hint" style={{ textAlign: "center" }}>
+        <Link to={phoneLink}>Use your phone number instead</Link>
+      </p>
     </div>
   );
 }

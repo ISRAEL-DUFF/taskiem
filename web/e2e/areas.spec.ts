@@ -87,7 +87,7 @@ test("Chat still opens, and the shop's tabs follow, when parts are off", async (
 
 test("signup asks what the business does, and starts with those parts", async ({ page }) => {
   const stamp = letters();
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByRole("link", { name: "Create an account" }).click();
   await expect(page.getByTestId("signup-kind")).toContainText("What does your business do?");
   await axeBoth(page, "Signup");

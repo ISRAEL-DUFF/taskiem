@@ -6,7 +6,7 @@ import { expect, test, type Page } from "@playwright/test";
 const H = { "X-Taskiem-Request": "1" };
 
 async function signIn(page: Page) {
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByLabel("Email").fill("owner@e2e.test");
   await page.getByLabel("Password").fill("correct horse battery");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

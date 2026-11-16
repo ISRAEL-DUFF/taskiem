@@ -8,7 +8,7 @@ test("sign up, set up a template, and run it once", async ({ page }) => {
   const started = Date.now();
   const email = `ada-${started}@stores.test`;
 
-  await page.goto("/login");
+  await page.goto("/login?with=email");
   await page.getByRole("link", { name: "Create an account" }).click();
   await page.getByLabel("I sell things").check();
   await page.getByLabel("Business or organisation name").fill("Ada Stores");

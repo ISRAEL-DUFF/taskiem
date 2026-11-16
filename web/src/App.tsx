@@ -6,6 +6,7 @@ import {
   Route,
   Routes,
   useLocation,
+  useNavigate,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth";
 import { PageBoundary } from "./PageBoundary";
@@ -30,7 +31,10 @@ import { Staff } from "./pages/Staff";
 import { StaffPerson } from "./pages/StaffPerson";
 import { Tasks } from "./pages/Tasks";
 import { Policies } from "./pages/Policies";
-import { Account, Invitations, Passkeys } from "./pages/Account";
+import { Account, Passkeys } from "./pages/Account";
+import { SecondProofPage, YouApp } from "./pages/You";
+import { StartSomething } from "./pages/StartSomething";
+import { Switcher } from "./pages/Switch";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "./icons";
 import {
@@ -214,25 +218,6 @@ function EnrolPasskey() {
   );
 }
 
-/** Someone with an account but no organisation, signed in to answer the
- * invitations waiting for them; nothing else is open to them. */
-function InviteeHome() {
-  const { me, logout, refresh } = useAuth();
-  return (
-    <div className="login card" style={{ maxWidth: 720 }}>
-      <h1>Welcome back{me?.user?.name ? `, ${me.user.name}` : ""}</h1>
-      <p>
-        You do not belong to an organisation on Taskiem yet. Accept an
-        invitation to join one.
-      </p>
-      <Invitations always onJoined={() => void refresh()} />
-      <p>
-        <button onClick={() => void logout()}>Sign out</button>
-      </p>
-    </div>
-  );
-}
-
 function Shell() {
   const { me } = useAuth();
   const loc = useLocation();
@@ -252,12 +237,12 @@ function Shell() {
           />
         </div>
         <p className="auth-line">
-          Orders, payments and approvals for your business, in one place.
+          Chat with the businesses you buy from, and run your own.
         </p>
         <ul className="auth-points">
-          <li>Send invoices and see when they are paid</li>
-          <li>Take orders and bookings on your own page</li>
-          <li>Approve payments from your phone</li>
+          <li>Order, book and pay businesses in a chat</li>
+          <li>Run your own business: orders, invoices, approvals</li>
+          <li>Automate work with workflows</li>
         </ul>
       </aside>
       <main className="auth-main">{page}</main>
@@ -297,7 +282,13 @@ function Shell() {
       />
     );
   }
-  if (me.invitations_only) return alone(<InviteeHome />);
+  // The person's own side (You): a session in no business, invitations
+  // waiting or not (taskiem-for-everyone §7).
+  if (me.personal || (me.tenant_id === null && !me.gate_only)) {
+    if (loc.pathname === "/login" || loc.pathname === "/signup")
+      return <Navigate to="/you" replace />;
+    return <YouApp />;
+  }
   // An enrol-only session may confirm its email: until then its password
   // adds no passkey.
   if (me.enrol_passkey)
@@ -340,6 +331,7 @@ function Shell() {
 
 function SignedIn() {
   const { me, can, logout } = useAuth();
+  const navigate = useNavigate();
   const onboarding = useOnboarding().data;
   // The drawer (narrow screens): closes on navigation and on Escape, keeps
   // Tab inside while open, and gives focus back to the menu button.
@@ -510,7 +502,7 @@ function SignedIn() {
     ],
     [
       "/settings/areas",
-      "What your business uses",
+      me.tenant_kind === "workflows" ? "What you use" : "What your business uses",
       "settings",
       me.roles.includes("owner"),
     ],
@@ -559,6 +551,10 @@ function SignedIn() {
   ).filter(([, , , ok]) => ok);
   const name = me.user?.name || me.user?.email || "API key";
   const business = me.tenant_name || "Taskiem";
+  // The switcher: a person (not an API key or a field agent's business)
+  // moves between You and their businesses (taskiem-for-everyone §6).
+  const switcher = !!me.user && Array.isArray(me.businesses);
+  const startSomething = () => navigate("/start-something");
   // The workflow builder fills the window: the menu shrinks to a rail of
   // icons on a computer, and the top and tab bars give way on a phone.
   const building =
@@ -592,7 +588,11 @@ function SignedIn() {
               width={26}
               height={26}
             />
-            <span>{business}</span>
+            {switcher ? (
+              <Switcher testid="switcher-top" onStart={startSomething} />
+            ) : (
+              <span>{business}</span>
+            )}
           </span>
           {me.user && <Bell count={bell} onChange={bell.reload} />}
         </header>
@@ -618,10 +618,21 @@ function SignedIn() {
               width={26}
               height={26}
             />
-            <span className="brand-name">
-              <strong>{business}</strong>
-              <span>Taskiem</span>
-            </span>
+            {switcher ? (
+              <span className="brand-name">
+                {/* On a phone the top bar has the switcher; the drawer keeps the name. */}
+                <span className="nav-switcher">
+                  <Switcher testid="switcher" onStart={startSomething} />
+                </span>
+                <strong className="nav-name-phone">{business}</strong>
+                <span>Taskiem</span>
+              </span>
+            ) : (
+              <span className="brand-name">
+                <strong>{business}</strong>
+                <span>Taskiem</span>
+              </span>
+            )}
             {me.user && (
               <span className="nav-bell">
                 <Bell count={bell} onChange={bell.reload} />
@@ -713,8 +724,24 @@ function SignedIn() {
                 <AreaOff area={off} owner={me.roles.includes("owner")} />
               ) : (
                 <Routes>
-                  <Route path="/" element={<Navigate to="/home" replace />} />
+                  <Route
+                    path="/"
+                    element={
+                      <Navigate
+                        to={
+                          me.tenant_kind === "workflows" ? "/workflows" : "/home"
+                        }
+                        replace
+                      />
+                    }
+                  />
                   <Route path="/home" element={<Home />} />
+                  <Route
+                    path="/start-something"
+                    element={<StartSomething />}
+                  />
+                  <Route path="/second-proof" element={<SecondProofPage />} />
+                  <Route path="/you" element={<Navigate to="/home" replace />} />
                   <Route path="/workflows" element={<Workflows />} />
                   <Route path="/workflows/new" element={<NewWorkflow />} />
                   <Route path="/workflows/:id" element={<Editor />} />
