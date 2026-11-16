@@ -95,6 +95,54 @@ class TaskiemApi {
     return Session.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Ask for a code to your phone (the phone way in) (`POST /v1/auth/phone/start`)
+  Future<PhoneStartResponse> phoneStart({required PhoneStartRequest body}) async {
+    final j = await _t.send('POST', '/v1/auth/phone/start', body: body.toJson());
+    return PhoneStartResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Sign in with the code sent to your phone (`POST /v1/auth/phone/verify`)
+  Future<PhoneSignin> phoneVerify({required PhoneVerifyRequest body}) async {
+    final j = await _t.send('POST', '/v1/auth/phone/verify', body: body.toJson());
+    return PhoneSignin.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a personal account on a new number (`POST /v1/auth/phone/create`)
+  Future<PhoneSignin> phoneCreate({required PhoneCreateRequest body}) async {
+    final j = await _t.send('POST', '/v1/auth/phone/create', body: body.toJson());
+    return PhoneSignin.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Prove it is you by email (`POST /v1/auth/second-proof/email/start`)
+  Future<SecondProofEmailStartResponse> secondProofEmailStart() async {
+    final j = await _t.send('POST', '/v1/auth/second-proof/email/start');
+    return SecondProofEmailStartResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Open the second-proof link (`POST /v1/auth/second-proof/email/verify`)
+  Future<DeviceProved> secondProofEmailVerify({required SecondProofEmailVerifyRequest body}) async {
+    final j = await _t.send('POST', '/v1/auth/second-proof/email/verify', body: body.toJson());
+    return DeviceProved.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Prove it is you with your chat PIN (`POST /v1/auth/second-proof/pin`)
+  Future<DeviceProved> secondProofPin({required SecondProofPinRequest body}) async {
+    final j = await _t.send('POST', '/v1/auth/second-proof/pin', body: body.toJson());
+    return DeviceProved.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change your phone number (`POST /v1/me/phone/start`)
+  Future<PhoneChangeStartResponse> phoneChangeStart({required PhoneChangeStartRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/phone/start', body: body.toJson());
+    return PhoneChangeStartResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Confirm your new phone number (`POST /v1/me/phone/verify`)
+  Future<PhoneChangeVerifyResponse> phoneChangeVerify({required PhoneChangeVerifyRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/phone/verify', body: body.toJson());
+    return PhoneChangeVerifyResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Conversations with linked businesses (`GET /v1/link-chats`)
   Future<ListLinkChatsResponse> listLinkChats() async {
     final j = await _t.send('GET', '/v1/link-chats');
@@ -583,8 +631,11 @@ class DeviceRequest {
 }
 
 class Session {
-  const Session({this.tenantId, this.tenants, this.token, this.userId});
+  const Session({this.personal, this.tenantId, this.tenants, this.token, this.userId});
 
+  /// A personal session, on the person's own side with no business
+  /// (docs/spec/taskiem-for-everyone.md §5.2).
+  final bool? personal;
   final Object? tenantId;
   /// The organisations the person can sign in to.
   final Object? tenants;
@@ -594,6 +645,7 @@ class Session {
   final String? userId;
 
   factory Session.fromJson(Map<String, dynamic> j) => Session(
+        personal: j['personal'] == null ? null : j['personal'] as bool,
         tenantId: j['tenant_id'],
         tenants: j['tenants'],
         token: j['token'] == null ? null : j['token'] as String,
@@ -601,6 +653,7 @@ class Session {
       );
 
   Map<String, dynamic> toJson() => {
+        'personal': ?personal,
         'tenant_id': ?tenantId,
         'tenants': ?tenants,
         'token': ?token,
@@ -933,7 +986,7 @@ class SignupResult {
 }
 
 class Me {
-  const Me({this.advanced, this.areas, required this.authMethod, this.delivers, this.enrolPasskey, this.factors, this.fieldAgent, this.gateOnly, this.invitationsOnly, required this.permissions, this.roles, this.schools, this.tenantId, this.tenantName, this.terms, this.totp, this.user});
+  const Me({this.advanced, this.areas, required this.authMethod, this.businesses, this.delivers, this.enrolPasskey, this.factors, this.fieldAgent, this.gateOnly, this.invitationsOnly, required this.permissions, this.personal, this.roles, this.schools, this.secondProof, this.tenantId, this.tenantName, this.terms, this.totp, this.user});
 
   /// Whether the business sees the web app's technical parts (the Advanced
   /// switch).
@@ -943,9 +996,12 @@ class Me {
   /// (docs/spec/business-areas.md). GET /v1/settings/areas has them in plain
   /// words.
   final Map<String, dynamic>? areas;
-  /// How the session signed in (`password`, `passkey`, `sso`); empty for an API
-  /// key.
+  /// How the session signed in (`password`, `passkey`, `sso`, `chat`, `phone`);
+  /// empty for an API key.
   final String authMethod;
+  /// The person's businesses, for the switcher, each with what locks it for
+  /// this session.
+  final List<BusinessEntry>? businesses;
   /// The business delivers for other businesses (a rider), so its chat has the
   /// Availability tool
   final bool? delivers;
@@ -960,12 +1016,19 @@ class Me {
   /// A gate session: the gate role's school.gate and nothing else. Every route
   /// but GET /v1/me and sign-out answers 403 with gate_only.
   final bool? gateOnly;
-  /// Someone in no organisation, answering invitations.
+  /// Someone in no organisation, with invitations waiting.
   final bool? invitationsOnly;
   final List<String> permissions;
+  /// A personal session, on the person's own side (tenant_id null, no roles);
+  /// false for a business session.
+  final bool? personal;
   final Object? roles;
   /// Whether the business has the Schools area on (docs/schools.md).
   final bool? schools;
+  /// Second proofs (docs/spec/taskiem-for-everyone.md §5.4): whether one is
+  /// needed to enter the person's businesses from this device, whether the
+  /// device has one, and which the person could give.
+  final MeSecondProof? secondProof;
   final Object? tenantId;
   /// The business's name, as the web app's sidebar shows it.
   final String? tenantName;
@@ -979,6 +1042,7 @@ class Me {
         advanced: j['advanced'] == null ? null : j['advanced'] as bool,
         areas: j['areas'] == null ? null : j['areas'] as Map<String, dynamic>,
         authMethod: j['auth_method'] as String,
+        businesses: j['businesses'] == null ? null : (j['businesses'] as List).map((e) => BusinessEntry.fromJson(e as Map<String, dynamic>)).toList(),
         delivers: j['delivers'] == null ? null : j['delivers'] as bool,
         enrolPasskey: j['enrol_passkey'] == null ? null : j['enrol_passkey'] as bool,
         factors: j['factors'],
@@ -986,8 +1050,10 @@ class Me {
         gateOnly: j['gate_only'] == null ? null : j['gate_only'] as bool,
         invitationsOnly: j['invitations_only'] == null ? null : j['invitations_only'] as bool,
         permissions: (j['permissions'] as List).map((e) => e as String).toList(),
+        personal: j['personal'] == null ? null : j['personal'] as bool,
         roles: j['roles'],
         schools: j['schools'] == null ? null : j['schools'] as bool,
+        secondProof: j['second_proof'] == null ? null : MeSecondProof.fromJson(j['second_proof'] as Map<String, dynamic>),
         tenantId: j['tenant_id'],
         tenantName: j['tenant_name'] == null ? null : j['tenant_name'] as String,
         terms: j['terms'] == null ? null : TermsAsked.fromJson(j['terms'] as Map<String, dynamic>),
@@ -999,6 +1065,7 @@ class Me {
         'advanced': ?advanced,
         'areas': ?areas,
         'auth_method': authMethod,
+        'businesses': ?businesses?.map((e) => e.toJson()).toList(),
         'delivers': ?delivers,
         'enrol_passkey': ?enrolPasskey,
         'factors': ?factors,
@@ -1006,8 +1073,10 @@ class Me {
         'gate_only': ?gateOnly,
         'invitations_only': ?invitationsOnly,
         'permissions': permissions.map((e) => e).toList(),
+        'personal': ?personal,
         'roles': ?roles,
         'schools': ?schools,
+        'second_proof': ?secondProof?.toJson(),
         'tenant_id': ?tenantId,
         'tenant_name': ?tenantName,
         'terms': ?terms?.toJson(),
@@ -1016,8 +1085,80 @@ class Me {
       };
 }
 
+/// One of the person's businesses in the switcher.
+class BusinessEntry {
+  const BusinessEntry({this.current, required this.id, this.lock, required this.locked, required this.name});
+
+  /// This session is in it.
+  final bool? current;
+  final String id;
+  /// What this session must do first to enter it.
+  final Object? lock;
+  final bool locked;
+  final String name;
+
+  factory BusinessEntry.fromJson(Map<String, dynamic> j) => BusinessEntry(
+        current: j['current'] == null ? null : j['current'] as bool,
+        id: j['id'] as String,
+        lock: j['lock'],
+        locked: j['locked'] as bool,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'current': ?current,
+        'id': id,
+        'lock': ?lock,
+        'locked': locked,
+        'name': name,
+      };
+}
+
+/// Second proofs (docs/spec/taskiem-for-everyone.md §5.4): whether one is
+/// needed to enter the person's businesses from this device, whether the device
+/// has one, and which the person could give.
+class MeSecondProof {
+  const MeSecondProof({this.deviceProved, this.required, this.ways});
+
+  final bool? deviceProved;
+  final bool? required;
+  final MeSecondProofWays? ways;
+
+  factory MeSecondProof.fromJson(Map<String, dynamic> j) => MeSecondProof(
+        deviceProved: j['device_proved'] == null ? null : j['device_proved'] as bool,
+        required: j['required'] == null ? null : j['required'] as bool,
+        ways: j['ways'] == null ? null : MeSecondProofWays.fromJson(j['ways'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'device_proved': ?deviceProved,
+        'required': ?required,
+        'ways': ?ways?.toJson(),
+      };
+}
+
+class MeSecondProofWays {
+  const MeSecondProofWays({this.email, this.passkey, this.pin});
+
+  final bool? email;
+  final bool? passkey;
+  final bool? pin;
+
+  factory MeSecondProofWays.fromJson(Map<String, dynamic> j) => MeSecondProofWays(
+        email: j['email'] == null ? null : j['email'] as bool,
+        passkey: j['passkey'] == null ? null : j['passkey'] as bool,
+        pin: j['pin'] == null ? null : j['pin'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'email': ?email,
+        'passkey': ?passkey,
+        'pin': ?pin,
+      };
+}
+
 class MeUser {
-  const MeUser({this.email, this.emailPlaceholder, this.emailVerified, this.id, this.name});
+  const MeUser({this.email, this.emailPlaceholder, this.emailVerified, this.id, this.name, this.phone});
 
   final String? email;
   /// The sign-in name receives no mail (an account made in chat); the web app
@@ -1026,6 +1167,8 @@ class MeUser {
   final bool? emailVerified;
   final String? id;
   final String? name;
+  /// The person's own phone number (E.164), or null.
+  final Object? phone;
 
   factory MeUser.fromJson(Map<String, dynamic> j) => MeUser(
         email: j['email'] == null ? null : j['email'] as String,
@@ -1033,6 +1176,7 @@ class MeUser {
         emailVerified: j['email_verified'] == null ? null : j['email_verified'] as bool,
         id: j['id'] == null ? null : j['id'] as String,
         name: j['name'] == null ? null : j['name'] as String,
+        phone: j['phone'],
       );
 
   Map<String, dynamic> toJson() => {
@@ -1041,6 +1185,7 @@ class MeUser {
         'email_verified': ?emailVerified,
         'id': ?id,
         'name': ?name,
+        'phone': ?phone,
       };
 }
 
@@ -1089,50 +1234,306 @@ class Phone {
 }
 
 class ListBusinessesResponse {
-  const ListBusinessesResponse({required this.businesses});
+  const ListBusinessesResponse({required this.businesses, this.personal});
 
-  final List<ListBusinessesResponseBusinessesItem> businesses;
+  final List<BusinessEntry> businesses;
+  /// This session is the person's own side.
+  final bool? personal;
 
   factory ListBusinessesResponse.fromJson(Map<String, dynamic> j) => ListBusinessesResponse(
-        businesses: (j['businesses'] as List).map((e) => ListBusinessesResponseBusinessesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        businesses: (j['businesses'] as List).map((e) => BusinessEntry.fromJson(e as Map<String, dynamic>)).toList(),
+        personal: j['personal'] == null ? null : j['personal'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
         'businesses': businesses.map((e) => e.toJson()).toList(),
+        'personal': ?personal,
       };
 }
 
-class ListBusinessesResponseBusinessesItem {
-  const ListBusinessesResponseBusinessesItem({this.current, required this.id, required this.name});
-
-  final bool? current;
-  final String id;
-  final String name;
-
-  factory ListBusinessesResponseBusinessesItem.fromJson(Map<String, dynamic> j) => ListBusinessesResponseBusinessesItem(
-        current: j['current'] == null ? null : j['current'] as bool,
-        id: j['id'] as String,
-        name: j['name'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'current': ?current,
-        'id': id,
-        'name': name,
-      };
-}
-
+/// A business's `tenant_id`; for the person's own side, `tenant_id` null or
+/// `personal` true.
 class SwitchBusinessRequest {
-  const SwitchBusinessRequest({required this.tenantId});
+  const SwitchBusinessRequest({this.personal, this.tenantId});
 
-  final String tenantId;
+  /// True for the person's own side (with no tenant_id).
+  final bool? personal;
+  /// The business, or null for the person's own side.
+  final Object? tenantId;
 
   factory SwitchBusinessRequest.fromJson(Map<String, dynamic> j) => SwitchBusinessRequest(
-        tenantId: j['tenant_id'] as String,
+        personal: j['personal'] == null ? null : j['personal'] as bool,
+        tenantId: j['tenant_id'],
       );
 
   Map<String, dynamic> toJson() => {
-        'tenant_id': tenantId,
+        'personal': ?personal,
+        'tenant_id': ?tenantId,
+      };
+}
+
+class PhoneStartRequest {
+  const PhoneStartRequest({required this.phone, this.via});
+
+  /// The number, in any usual form; the deployment's default country when it
+  /// has none.
+  final String phone;
+  final String? via;
+
+  factory PhoneStartRequest.fromJson(Map<String, dynamic> j) => PhoneStartRequest(
+        phone: j['phone'] as String,
+        via: j['via'] == null ? null : j['via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'phone': phone,
+        'via': ?via,
+      };
+}
+
+class PhoneStartResponse {
+  const PhoneStartResponse({required this.expiresIn, required this.sentVia});
+
+  final int expiresIn;
+  final String sentVia;
+
+  factory PhoneStartResponse.fromJson(Map<String, dynamic> j) => PhoneStartResponse(
+        expiresIn: (j['expires_in'] as num).toInt(),
+        sentVia: j['sent_via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_in': expiresIn,
+        'sent_via': sentVia,
+      };
+}
+
+class PhoneVerifyRequest {
+  const PhoneVerifyRequest({this.bearer, required this.code, this.device, required this.phone});
+
+  final bool? bearer;
+  final String code;
+  final DeviceRequest? device;
+  final String phone;
+
+  factory PhoneVerifyRequest.fromJson(Map<String, dynamic> j) => PhoneVerifyRequest(
+        bearer: j['bearer'] == null ? null : j['bearer'] as bool,
+        code: j['code'] as String,
+        device: j['device'] == null ? null : DeviceRequest.fromJson(j['device'] as Map<String, dynamic>),
+        phone: j['phone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'bearer': ?bearer,
+        'code': code,
+        'device': ?device?.toJson(),
+        'phone': phone,
+      };
+}
+
+/// What the phone way in answers: `signed_in` or `created` with a personal
+/// session (as Session), or `new` with a ticket for POST /v1/auth/phone/create.
+class PhoneSignin {
+  const PhoneSignin({this.expiresIn, this.invitationsOnly, this.personal, required this.status, this.tenantId, this.tenants, this.ticket, this.token, this.userId});
+
+  final int? expiresIn;
+  final bool? invitationsOnly;
+  final bool? personal;
+  final String status;
+  final Object? tenantId;
+  final List<String>? tenants;
+  final String? ticket;
+  final String? token;
+  final String? userId;
+
+  factory PhoneSignin.fromJson(Map<String, dynamic> j) => PhoneSignin(
+        expiresIn: j['expires_in'] == null ? null : (j['expires_in'] as num).toInt(),
+        invitationsOnly: j['invitations_only'] == null ? null : j['invitations_only'] as bool,
+        personal: j['personal'] == null ? null : j['personal'] as bool,
+        status: j['status'] as String,
+        tenantId: j['tenant_id'],
+        tenants: j['tenants'] == null ? null : (j['tenants'] as List).map((e) => e as String).toList(),
+        ticket: j['ticket'] == null ? null : j['ticket'] as String,
+        token: j['token'] == null ? null : j['token'] as String,
+        userId: j['user_id'] == null ? null : j['user_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_in': ?expiresIn,
+        'invitations_only': ?invitationsOnly,
+        'personal': ?personal,
+        'status': status,
+        'tenant_id': ?tenantId,
+        'tenants': ?tenants?.map((e) => e).toList(),
+        'ticket': ?ticket,
+        'token': ?token,
+        'user_id': ?userId,
+      };
+}
+
+class PhoneCreateRequest {
+  const PhoneCreateRequest({required this.adult, this.bearer, this.device, required this.name, required this.terms, required this.ticket});
+
+  final bool adult;
+  final bool? bearer;
+  final DeviceRequest? device;
+  final String name;
+  final bool terms;
+  final String ticket;
+
+  factory PhoneCreateRequest.fromJson(Map<String, dynamic> j) => PhoneCreateRequest(
+        adult: j['adult'] as bool,
+        bearer: j['bearer'] == null ? null : j['bearer'] as bool,
+        device: j['device'] == null ? null : DeviceRequest.fromJson(j['device'] as Map<String, dynamic>),
+        name: j['name'] as String,
+        terms: j['terms'] as bool,
+        ticket: j['ticket'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'adult': adult,
+        'bearer': ?bearer,
+        'device': ?device?.toJson(),
+        'name': name,
+        'terms': terms,
+        'ticket': ticket,
+      };
+}
+
+class SecondProofEmailStartResponse {
+  const SecondProofEmailStartResponse({required this.expiresIn, required this.sentTo});
+
+  final int expiresIn;
+  /// The address, masked.
+  final String sentTo;
+
+  factory SecondProofEmailStartResponse.fromJson(Map<String, dynamic> j) => SecondProofEmailStartResponse(
+        expiresIn: (j['expires_in'] as num).toInt(),
+        sentTo: j['sent_to'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_in': expiresIn,
+        'sent_to': sentTo,
+      };
+}
+
+class SecondProofEmailVerifyRequest {
+  const SecondProofEmailVerifyRequest({required this.token});
+
+  final String token;
+
+  factory SecondProofEmailVerifyRequest.fromJson(Map<String, dynamic> j) => SecondProofEmailVerifyRequest(
+        token: j['token'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'token': token,
+      };
+}
+
+class DeviceProved {
+  const DeviceProved({required this.deviceProved});
+
+  final bool deviceProved;
+
+  factory DeviceProved.fromJson(Map<String, dynamic> j) => DeviceProved(
+        deviceProved: j['device_proved'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'device_proved': deviceProved,
+      };
+}
+
+class SecondProofPinRequest {
+  const SecondProofPinRequest({required this.pin});
+
+  final String pin;
+
+  factory SecondProofPinRequest.fromJson(Map<String, dynamic> j) => SecondProofPinRequest(
+        pin: j['pin'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'pin': pin,
+      };
+}
+
+class PhoneChangeStartRequest {
+  const PhoneChangeStartRequest({this.confirmOld, required this.phone, this.via});
+
+  final bool? confirmOld;
+  final String phone;
+  final String? via;
+
+  factory PhoneChangeStartRequest.fromJson(Map<String, dynamic> j) => PhoneChangeStartRequest(
+        confirmOld: j['confirm_old'] == null ? null : j['confirm_old'] as bool,
+        phone: j['phone'] as String,
+        via: j['via'] == null ? null : j['via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'confirm_old': ?confirmOld,
+        'phone': phone,
+        'via': ?via,
+      };
+}
+
+class PhoneChangeStartResponse {
+  const PhoneChangeStartResponse({required this.expiresIn, required this.needsOldCode, this.oldSentVia, required this.sentVia});
+
+  final int expiresIn;
+  final bool needsOldCode;
+  final String? oldSentVia;
+  final String sentVia;
+
+  factory PhoneChangeStartResponse.fromJson(Map<String, dynamic> j) => PhoneChangeStartResponse(
+        expiresIn: (j['expires_in'] as num).toInt(),
+        needsOldCode: j['needs_old_code'] as bool,
+        oldSentVia: j['old_sent_via'] == null ? null : j['old_sent_via'] as String,
+        sentVia: j['sent_via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_in': expiresIn,
+        'needs_old_code': needsOldCode,
+        'old_sent_via': ?oldSentVia,
+        'sent_via': sentVia,
+      };
+}
+
+class PhoneChangeVerifyRequest {
+  const PhoneChangeVerifyRequest({required this.code, this.oldCode, this.phone});
+
+  final String code;
+  final String? oldCode;
+  final String? phone;
+
+  factory PhoneChangeVerifyRequest.fromJson(Map<String, dynamic> j) => PhoneChangeVerifyRequest(
+        code: j['code'] as String,
+        oldCode: j['old_code'] == null ? null : j['old_code'] as String,
+        phone: j['phone'] == null ? null : j['phone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'old_code': ?oldCode,
+        'phone': ?phone,
+      };
+}
+
+class PhoneChangeVerifyResponse {
+  const PhoneChangeVerifyResponse({required this.phone});
+
+  final String phone;
+
+  factory PhoneChangeVerifyResponse.fromJson(Map<String, dynamic> j) => PhoneChangeVerifyResponse(
+        phone: j['phone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'phone': phone,
       };
 }
 

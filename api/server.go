@@ -241,6 +241,12 @@ type Server struct {
 	ReachKeys *forms.Keys
 	ReachHost string
 	Messages  *sender.Queue
+	// CodeSMS texts a person their own sign-in code (phone_signin.go), with
+	// no tenant and no outbox; nil when no SMS provider is configured, and
+	// codes then go by WhatsApp only.
+	CodeSMS interface {
+		SendCode(ctx context.Context, number, text string) error
+	}
 	// Riders are the businesses' own riders (dispatch D1); nil: none.
 	Riders *riders.Riders
 	// Dispatch is their deliveries (D2 to D5); nil: none. ProofStore, when
@@ -351,6 +357,9 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/password/reset", s.resetPassword)
 		r.Post("/auth/chat/start", s.chatSigninStart) // signing in with the chat (chat_signin.go)
 		r.Post("/auth/chat/verify", s.chatSigninVerify)
+		r.Post("/auth/phone/start", s.phoneStart) // the phone way in (phone_signin.go)
+		r.Post("/auth/phone/verify", s.phoneVerify)
+		r.Post("/auth/phone/create", s.phoneCreate)
 		r.Post("/signup/app/code", s.appSignupCode) // signing up in the app as on WhatsApp (app_signup.go)
 		r.Post("/signup/app/verify", s.appSignupVerify)
 		r.Post("/signup/app/turn", s.appSignupTurn)
@@ -416,6 +425,11 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/me/invitations/{tenant}/decline", s.declineInvitation)
 			r.Get("/me/businesses", s.listBusinesses) // the switcher (switch.go)
 			r.Post("/me/switch", s.switchBusiness)
+			r.Post("/me/phone/start", s.phoneChangeStart) // changing your phone (phone_signin.go)
+			r.Post("/me/phone/verify", s.phoneChangeVerify)
+			r.Post("/auth/second-proof/email/start", s.secondProofEmailStart) // second proofs (second_proof.go)
+			r.Post("/auth/second-proof/email/verify", s.secondProofEmailVerify)
+			r.Post("/auth/second-proof/pin", s.secondProofPin)
 			r.Get("/me/devices", s.listDevices) // Your phones (devices.go)
 			r.Delete("/me/devices/{id}", s.removeDevice)
 			r.Get("/me/passkeys", s.listPasskeys)

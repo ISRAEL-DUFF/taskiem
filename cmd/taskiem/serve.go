@@ -1828,6 +1828,11 @@ func (e *engine) chat(srv *api.Server) {
 	// Updates for people outside a tenant (N11): links they send back,
 	// STOP, and messages to them.
 	srv.Reach, srv.Messages = e.reach, e.messages
+	// A person's own sign-in code by SMS, through the same providers: no
+	// tenant, no outbox (docs/spec/taskiem-for-everyone.md §5.1).
+	if sms := e.cfg.Messages.smsProviders(e.log); len(sms) > 0 {
+		srv.CodeSMS = &sender.CodeSender{Providers: sms, Countries: e.cfg.Messages.Countries}
+	}
 	srv.Riders, srv.Dispatch = e.riders, e.dispatch
 	srv.Stock = e.stock
 	if e.purchases != nil {

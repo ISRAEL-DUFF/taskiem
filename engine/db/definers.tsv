@@ -387,3 +387,4 @@ taskiem_auth_device_prove(uuid,bytea,text)	@ISRAEL-DUFF (identity)	Records a sec
 taskiem_auth_proof_link_issue(uuid,bytea,bytea,interval,integer)	@ISRAEL-DUFF (identity)	Issues a second-proof email link for a device, kept as a hash; hourly cap (00448)
 taskiem_auth_proof_link_use(bytea,uuid,bytea)	@ISRAEL-DUFF (identity)	Uses a second-proof link once, for its person and device, and proves the device (00448)
 taskiem_auth_second_proofs(uuid)	@ISRAEL-DUFF (identity)	Which second proofs a person could give: passkey, confirmed real email, chat PIN; booleans only (00448)
+taskiem_auth_phone_change_pending(uuid)	@ISRAEL-DUFF (identity)	The new number a person asked a change code for, while pending (00448)

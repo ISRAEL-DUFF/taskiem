@@ -15015,6 +15015,125 @@ paths:
                 $ref: '#/components/schemas/Session'
         default:
           $ref: '#/components/responses/Error'
+  /v1/auth/phone/start:
+    post:
+      operationId: phoneStart
+      tags:
+      - Authentication
+      summary: Ask for a code to your phone (the phone way in)
+      description: 'Takes only `application/json`. Sends a six-digit code, good for 10 minutes, to any phone number: by
+        WhatsApp from Taskiem''s own number, else by SMS; `via: "sms"` asks for SMS (Send by SMS instead). At most five codes
+        an hour per number, limits per address; five wrong codes lock the number for an hour (429 `locked`). 503
+        `sms_unavailable` when SMS was asked for and this server has no SMS provider. docs/spec/taskiem-for-everyone.md §5.1.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+                  description: The number, in any usual form; the deployment's default country when it has none.
+                via:
+                  type: string
+                  enum: [whatsapp, sms]
+      responses:
+        '202':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sent_via, expires_in]
+                properties:
+                  sent_via:
+                    type: string
+                    enum: [whatsapp, sms]
+                  expires_in:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/phone/verify:
+    post:
+      operationId: phoneVerify
+      tags:
+      - Authentication
+      summary: Sign in with the code sent to your phone
+      description: 'Takes only `application/json`. A number that belongs to an account (its phone, or a WhatsApp or Telegram
+        binding) signs in to it, on the person''s own side: a personal session (`tenant_id` null, `auth_method` `phone`),
+        delivered as signing in is (`status: signed_in`). A new number answers `status: new` with a `ticket` for
+        POST /v1/auth/phone/create, good for 15 minutes, once. 401 for a wrong or expired code, or `phone_signin_off` when
+        the person turned signing in by code off; 429 `locked` after five wrong codes.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code]
+              properties:
+                phone:
+                  type: string
+                code:
+                  type: string
+                bearer:
+                  type: boolean
+                device:
+                  $ref: '#/components/schemas/DeviceRequest'
+      responses:
+        '200':
+          description: Signed in, or a new number's ticket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhoneSignin'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/phone/create:
+    post:
+      operationId: phoneCreate
+      tags:
+      - Authentication
+      summary: Make a personal account on a new number
+      description: 'Takes only `application/json`. Uses the ticket a new number''s code gave. The person gives their name and
+        confirms they are 18 or over and agree to the terms and privacy notice (400 without either). The account has no
+        password and no email yet (its sign-in name is a placeholder that receives no mail); the number is its phone. It is
+        signed in to its own side (`status: created`). 401 for a ticket used or expired; 409 when the number belongs to an
+        account by now.'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticket, name, adult, terms]
+              properties:
+                ticket:
+                  type: string
+                name:
+                  type: string
+                adult:
+                  type: boolean
+                terms:
+                  type: boolean
+                bearer:
+                  type: boolean
+                device:
+                  $ref: '#/components/schemas/DeviceRequest'
+      responses:
+        '201':
+          description: Made and signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhoneSignin'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/auth/chat/link/peek:
     post:
       operationId: chatSigninLinkPeek
@@ -19401,7 +19520,8 @@ paths:
       - Authentication
       summary: Your businesses
       description: The businesses the person belongs to, by name, the one this session is in marked (the phone app's
-        switcher). An API key is refused (403).
+        switcher), each with what locks it for this session (`lock`) - `sso_required`, `passkey_required` or
+        `second_proof_required` - or null. A personal session reaches it too. An API key is refused (403).
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -19415,19 +19535,13 @@ paths:
                 type: object
                 required: [businesses]
                 properties:
+                  personal:
+                    type: boolean
+                    description: This session is the person's own side.
                   businesses:
                     type: array
                     items:
-                      type: object
-                      required: [id, name]
-                      properties:
-                        id:
-                          type: string
-                          format: uuid
-                        name:
-                          type: string
-                        current:
-                          type: boolean
+                      $ref: '#/components/schemas/BusinessEntry'
         default:
           $ref: '#/components/responses/Error'
   /v1/me/switch:
@@ -19438,10 +19552,14 @@ paths:
       summary: Switch business
       description: 'Ends this session and answers one in the other business, as signing in does (the token with a bearer
         session, the cookie with a cookie one). The new session is the same in every other way: the person, how and
-        when they signed in (which step-up reads), the phone and its expiry. Not a fresh sign-in. 401 `sso_required`
-        when that business signs in with single sign-on; 409 when this session signed in with single sign-on (it vouches
-        for one business only: sign in to the other). Audited as `auth.switch`. An API key is refused (403): it belongs
-        to one business.'
+        when they signed in (which step-up reads), the phone and its expiry. Not a fresh sign-in. `tenant_id: null`
+        goes to the person''s own side (a personal session); a personal session switches into a business the same way.
+        Before moving into a business: 401 `sso_required` when that business signs in with single sign-on; 401
+        `passkey_required` when the person is held to their passkey there and this session did not sign in with it; 401
+        `second_proof_required` (with `ways`) when this session signed in by a code to the phone on a device with no
+        second proof, and the person has one to give (a person with none is let in, and it is audited); 409 when this
+        session signed in with single sign-on (it vouches for one business only: sign in to the other), or is on its own
+        side already. Audited as `auth.switch`. An API key is refused (403): it belongs to one business.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -19453,11 +19571,15 @@ paths:
           application/json:
             schema:
               type: object
-              required: [tenant_id]
+              description: A business's `tenant_id`; for the person's own side, `tenant_id` null or `personal` true.
               properties:
                 tenant_id:
-                  type: string
+                  type: [string, 'null']
                   format: uuid
+                  description: The business, or null for the person's own side.
+                personal:
+                  type: boolean
+                  description: True for the person's own side (with no tenant_id).
       responses:
         '200':
           description: Switched
@@ -19465,6 +19587,192 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Session'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/phone/start:
+    post:
+      operationId: phoneChangeStart
+      tags:
+      - Account
+      summary: Change your phone number
+      description: 'Sends a code to the new number, which must belong to no other account (409). `needs_old_code` says
+        whether POST /v1/me/phone/verify will also need a code to the old number: it does for a session made by a code to
+        the phone or chat on a device without a second proof. `confirm_old: true` sends that code too. A personal
+        session reaches it. docs/spec/taskiem-for-everyone.md §5.5.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+                via:
+                  type: string
+                  enum: [whatsapp, sms]
+                confirm_old:
+                  type: boolean
+      responses:
+        '202':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sent_via, expires_in, needs_old_code]
+                properties:
+                  sent_via:
+                    type: string
+                    enum: [whatsapp, sms]
+                  old_sent_via:
+                    type: string
+                    enum: [whatsapp, sms]
+                  expires_in:
+                    type: integer
+                  needs_old_code:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/phone/verify:
+    post:
+      operationId: phoneChangeVerify
+      tags:
+      - Account
+      summary: Confirm your new phone number
+      description: 'The code sent to the new number (`phone` may be left out: the pending one), and `old_code` where
+        `needs_old_code` said so (403 `old_code_required` without it). The account keeps everything; WhatsApp and Telegram
+        bindings are not moved. Audited as `auth.phone_change` in each of the person''s businesses.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                phone:
+                  type: string
+                code:
+                  type: string
+                old_code:
+                  type: string
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [phone]
+                properties:
+                  phone:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/second-proof/email/start:
+    post:
+      operationId: secondProofEmailStart
+      tags:
+      - Authentication
+      summary: Prove it is you by email
+      description: 'A second proof (docs/spec/taskiem-for-everyone.md §5.4): a one-time link, good for 15 minutes, to the
+        account''s confirmed email, for the device this session is on (the phone app''s install or the browser). Three an
+        hour. 409 without a confirmed email; 400 for a client that is neither the app nor a browser.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '202':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sent_to, expires_in]
+                properties:
+                  sent_to:
+                    type: string
+                    description: The address, masked.
+                  expires_in:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/second-proof/email/verify:
+    post:
+      operationId: secondProofEmailVerify
+      tags:
+      - Authentication
+      summary: Open the second-proof link
+      description: 'The link''s token, from a session of the same person on the device that asked: that device is proved.
+        400 for a link used, expired or asked for on another device.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        '200':
+          description: Proved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceProved'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/second-proof/pin:
+    post:
+      operationId: secondProofPin
+      tags:
+      - Authentication
+      summary: Prove it is you with your chat PIN
+      description: 'The chat PIN (set on WhatsApp) proves the device this session is on. Wrong PINs are counted as on
+        WhatsApp: five in 15 minutes lock it (429 `locked`). 409 with no PIN set.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pin]
+              properties:
+                pin:
+                  type: string
+      responses:
+        '200':
+          description: Proved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceProved'
         default:
           $ref: '#/components/responses/Error'
   /v1/me/devices:
@@ -30745,7 +31053,65 @@ components:
         user_id:
           type: string
           format: uuid
+        personal:
+          type: boolean
+          description: A personal session, on the person's own side with no business (docs/spec/taskiem-for-everyone.md §5.2).
       additionalProperties: true
+    PhoneSignin:
+      type: object
+      required: [status]
+      description: 'What the phone way in answers: `signed_in` or `created` with a personal session (as Session), or `new`
+        with a ticket for POST /v1/auth/phone/create.'
+      properties:
+        status:
+          type: string
+          enum: [signed_in, created, new]
+        ticket:
+          type: string
+        expires_in:
+          type: integer
+        token:
+          type: string
+        tenant_id:
+          type: 'null'
+        tenants:
+          type: array
+          items:
+            type: string
+            format: uuid
+        user_id:
+          type: string
+          format: uuid
+        personal:
+          type: boolean
+        invitations_only:
+          type: boolean
+      additionalProperties: false
+    BusinessEntry:
+      type: object
+      required: [id, name, locked, lock]
+      description: One of the person's businesses in the switcher.
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        current:
+          type: boolean
+          description: This session is in it.
+        locked:
+          type: boolean
+        lock:
+          type: [string, 'null']
+          enum: [sso_required, passkey_required, second_proof_required, null]
+          description: What this session must do first to enter it.
+    DeviceProved:
+      type: object
+      required: [device_proved]
+      properties:
+        device_proved:
+          type: boolean
     Me:
       type: object
       required:
@@ -30771,16 +31137,45 @@ components:
             type: string
         auth_method:
           type: string
-          description: How the session signed in (`password`, `passkey`, `sso`); empty for an API key.
+          description: How the session signed in (`password`, `passkey`, `sso`, `chat`, `phone`); empty for an API key.
         enrol_passkey:
           type: boolean
           description: An administrator signed in with a password who must add a passkey before anything else.
         invitations_only:
           type: boolean
-          description: Someone in no organisation, answering invitations.
+          description: Someone in no organisation, with invitations waiting.
+        personal:
+          type: boolean
+          description: A personal session, on the person's own side (tenant_id null, no roles); false for a business session.
+        businesses:
+          type: array
+          description: The person's businesses, for the switcher, each with what locks it for this session.
+          items:
+            $ref: '#/components/schemas/BusinessEntry'
+        second_proof:
+          type: object
+          description: 'Second proofs (docs/spec/taskiem-for-everyone.md §5.4): whether one is needed to enter the person''s
+            businesses from this device, whether the device has one, and which the person could give.'
+          properties:
+            required:
+              type: boolean
+            device_proved:
+              type: boolean
+            ways:
+              type: object
+              properties:
+                passkey:
+                  type: boolean
+                email:
+                  type: boolean
+                pin:
+                  type: boolean
         user:
           type: object
           properties:
+            phone:
+              type: [string, 'null']
+              description: The person's own phone number (E.164), or null.
             id:
               type: string
               format: uuid
@@ -33411,15 +33806,21 @@ components:
           items:
             type: string
             format: uuid
-          description: An invitee session became a member's session; the organisations it can switch to.
+          description: An invitee or personal session became a member's session; the organisations it can switch to.
         token:
           type: string
-          description: The new session token, when the invitee session was a bearer token.
+          description: The new session token, when the invitee or personal session was a bearer token.
+        personal:
+          type: boolean
+          description: False when a personal session moved into the organisation.
         sign_in:
           type: string
           enum:
           - sso_required
-          description: The organisation needs single sign-on; sign in again that way.
+          - passkey_required
+          - session_ended
+          description: 'The organisation needs another sign-in first: its single sign-on, or (a personal session) the
+            person''s passkey. A personal session stays on the person''s own side.'
       additionalProperties: false
     EmailVerifyRequest:
       type: object

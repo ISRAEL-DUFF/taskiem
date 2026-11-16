@@ -26,6 +26,19 @@ GRANT SELECT (ip, device_name, device_platform) ON sessions TO taskiem_dispatch;
 -- When a person made by phone confirmed they are 18 or over (§15).
 ALTER TABLE users ADD COLUMN adult_confirmed_at timestamptz;
 
+-- A person's own scope (§19): the person a personal session is, set by the
+-- API for one transaction (db.InPersonTx) as app.tenant_scope is for a
+-- business. It reaches their own users row, which the tenant policy reaches
+-- only through a membership in scope.
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_person_scope() RETURNS uuid
+LANGUAGE sql STABLE PARALLEL SAFE AS $$
+  SELECT NULLIF(current_setting('app.person_scope', true), '')::uuid
+$$;
+-- +goose StatementEnd
+GRANT EXECUTE ON FUNCTION taskiem_person_scope() TO taskiem_app, taskiem_dispatch;
+CREATE POLICY person_self ON users TO taskiem_app USING (id = taskiem_person_scope()) WITH CHECK (id = taskiem_person_scope());
+
 -- A person's phone: one per account, unique across accounts.
 CREATE TABLE user_phones (
   user_id         uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -189,7 +202,8 @@ $$;
 
 -- Who a number signs in (§5.1, §5.3): the account whose phone it is, else
 -- the one whose WhatsApp is bound to it, else the one whose Telegram
--- shared it (dormant bindings left out). Their status and whether they
+-- shared it, where that account has no phone of its own (a number changed
+-- away from signs in no one; dormant bindings are left out too). Their status and whether they
 -- allow signing in by a code to their phone or chat (users.chat_signin).
 -- +goose StatementBegin
 CREATE FUNCTION taskiem_auth_phone_user(p_number text)
@@ -199,8 +213,10 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
     SELECT p.user_id, 1 AS rank FROM user_phones p WHERE p.number = p_number
     UNION ALL
     SELECT b.user_id, 2 FROM whatsapp_bindings b WHERE b.number = p_number AND b.dormant_at IS NULL
+       AND NOT EXISTS (SELECT 1 FROM user_phones p WHERE p.user_id = b.user_id)
     UNION ALL
     SELECT t.user_id, 3 FROM telegram_bindings t WHERE t.number = p_number AND t.dormant_at IS NULL
+       AND NOT EXISTS (SELECT 1 FROM user_phones p WHERE p.user_id = t.user_id)
   ), one AS (SELECT f.user_id FROM found f ORDER BY f.rank LIMIT 1)
   SELECT u.id, u.status, u.chat_signin, EXISTS (SELECT 1 FROM user_phones p WHERE p.user_id = u.id)
     FROM one o JOIN users u ON u.id = o.user_id
@@ -353,6 +369,15 @@ END
 $$;
 -- +goose StatementEnd
 
+-- The new number a person asked a change code for, while it is pending.
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_auth_phone_change_pending(p_user uuid)
+RETURNS text LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
+  SELECT c.number FROM phone_codes c WHERE c.user_id = p_user AND c.purpose = 'change_new' AND c.expires_at > now()
+   ORDER BY c.created_at DESC LIMIT 1
+$$;
+-- +goose StatementEnd
+
 -- Whether the person proved a code sent to their own (old) number for a
 -- change in the last 15 minutes; the proof is used up.
 -- +goose StatementBegin
@@ -467,7 +492,7 @@ BEGIN
     'taskiem_auth_phone_user(text)', 'taskiem_auth_phone_of(uuid)', 'taskiem_auth_phone_claim(uuid, text)',
     'taskiem_auth_phone_code_issue(text, text, uuid, text, text, interval, int)', 'taskiem_auth_phone_code_check(text, text, uuid, text, int, bytea)',
     'taskiem_auth_phone_ticket_use(bytea)', 'taskiem_auth_phone_taken(text)', 'taskiem_auth_phone_change(uuid, text)',
-    'taskiem_auth_phone_old_proven(uuid)', 'taskiem_auth_device_signin(uuid, bytea, boolean)', 'taskiem_auth_device_proved(uuid, bytea)',
+    'taskiem_auth_phone_old_proven(uuid)', 'taskiem_auth_phone_change_pending(uuid)', 'taskiem_auth_device_signin(uuid, bytea, boolean)', 'taskiem_auth_device_proved(uuid, bytea)',
     'taskiem_auth_device_prove(uuid, bytea, text)', 'taskiem_auth_proof_link_issue(uuid, bytea, bytea, interval, int)',
     'taskiem_auth_proof_link_use(bytea, uuid, bytea)', 'taskiem_auth_second_proofs(uuid)'] LOOP
     EXECUTE format('ALTER FUNCTION %s OWNER TO taskiem_dispatch', f);
@@ -485,6 +510,7 @@ DROP FUNCTION taskiem_auth_proof_link_issue(uuid, bytea, bytea, interval, int);
 DROP FUNCTION taskiem_auth_device_prove(uuid, bytea, text);
 DROP FUNCTION taskiem_auth_device_proved(uuid, bytea);
 DROP FUNCTION taskiem_auth_device_signin(uuid, bytea, boolean);
+DROP FUNCTION taskiem_auth_phone_change_pending(uuid);
 DROP FUNCTION taskiem_auth_phone_old_proven(uuid);
 DROP FUNCTION taskiem_auth_phone_change(uuid, text);
 DROP FUNCTION taskiem_auth_phone_taken(text);
@@ -513,6 +539,8 @@ DROP TABLE user_devices;
 DROP TABLE phone_codes;
 DROP TABLE user_phones;
 ALTER TABLE users DROP COLUMN adult_confirmed_at;
+DROP POLICY person_self ON users;
+DROP FUNCTION taskiem_person_scope();
 -- Personal sessions and phone sessions have no place without these: gone.
 DELETE FROM sessions WHERE tenant_id IS NULL OR auth_method = 'phone';
 REVOKE SELECT (ip, device_name, device_platform) ON sessions FROM taskiem_dispatch;

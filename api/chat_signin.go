@@ -102,10 +102,17 @@ func (s *Server) chatSigninSend(ctx context.Context, number, ip, agent string) e
 		return nil
 	}
 	tenants, err := s.userTenants(ctx, user)
-	if err != nil || len(tenants) == 0 {
+	if err != nil {
 		return err
 	}
-	if ok, err := s.passwordUsable(ctx, user); err != nil || !ok {
+	// Someone in no business signs in to their own side
+	// (docs/spec/taskiem-for-everyone.md §5.2): the code is counted
+	// against no business.
+	home := uuid.Nil
+	if len(tenants) > 0 {
+		home = tenants[0]
+	}
+	if ok, err := s.passwordUsable(ctx, user); err != nil || (!ok && len(tenants) > 0) {
 		return err // single sign-on everywhere: a code would be no use
 	}
 	if _, err := s.passwordSigninTenant(ctx, user, uuid.Nil); err != nil {
@@ -148,15 +155,21 @@ func (s *Server) chatSigninSend(ctx context.Context, number, ip, agent string) e
 	// Telegram a message, which is kept in no history.
 	switch channel {
 	case "whatsapp":
-		if _, err := s.WhatsApp.SendTemplate(ctx, tenants[0], number, whatsapp.TplOTP, map[string]string{"code": code}, nil); err != nil {
+		if _, err := s.WhatsApp.SendTemplate(ctx, home, number, whatsapp.TplOTP, map[string]string{"code": code}, nil); err != nil {
 			return err
 		}
 	case "telegram":
 		addr := fmt.Sprintf("tg:%d", *tg)
-		l := s.chooseLang(ctx, tenants[0], addr, "").Tag
+		l := lang.EN
+		if home != uuid.Nil {
+			l = s.chooseLang(ctx, home, addr, "").Tag
+		}
 		if _, err := s.Telegram.Client.SendMessage(ctx, *tg, tr(l, "chat.signin.code", "code", code), nil); err != nil {
 			return err
 		}
+	}
+	if len(tenants) == 0 {
+		return nil
 	}
 	return db.InTenantTx(ctx, s.Store.Pool, tenants, func(tx pgx.Tx) error {
 		for _, t := range tenants {
@@ -336,7 +349,19 @@ func (s *Server) chatSigninFinish(w http.ResponseWriter, r *http.Request, user u
 	case errors.Is(err, errPhoneBusy):
 		writeErr(w, http.StatusConflict, err.Error())
 		return
-	case errors.Is(err, errNoMembership), errors.Is(err, errNotMember):
+	case errors.Is(err, errNoMembership):
+		// In no business: their own side (docs/spec/taskiem-for-everyone.md §5.2).
+		out := map[string]any{}
+		if perr := s.startPersonalSession(w, r, user, "chat", bearer, out); errors.Is(perr, errPhoneBusy) {
+			writeErr(w, http.StatusConflict, perr.Error())
+			return
+		} else if perr != nil {
+			s.fail(w, r, perr)
+			return
+		}
+		writeJSON(w, http.StatusOK, out)
+		return
+	case errors.Is(err, errNotMember):
 		writeErr(w, http.StatusUnauthorized, err.Error())
 		return
 	case err != nil:

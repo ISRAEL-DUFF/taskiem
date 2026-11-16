@@ -109,8 +109,13 @@ type Principal struct {
 	// Run is a workflow run acting through link@1 (link_connector.go):
 	// it acts as the system, "workflow:<run>".
 	Run uuid.UUID
+	// Personal is a person's own session, in no business (personal.go,
+	// docs/spec/taskiem-for-everyone.md §5.2): UserID only, no tenant, no
+	// roles; it reaches the person's own routes only.
+	Personal bool
 	// Invitee is a person with no membership signed in to answer their
 	// invitations (invitations.go): UserID only, no tenant, no permissions.
+	// New sign-ins make personal sessions instead; these are still read.
 	Invitee                   bool
 	inviteeEmail, inviteeName string
 	viaCookie                 bool
@@ -293,6 +298,10 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			writeJSON(w, http.StatusForbidden, map[string]any{"error": "you belong to no organisation yet: accept an invitation first", "invitations_only": true})
 			return
 		}
+		if p.Personal && !personalAllowed(r.Method, r.URL.Path) {
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": "this is your own side: switch to a business for this", "personal_only": true})
+			return
+		}
 		if p.Agent != nil && !agentAllowed(r.Method, r.URL.Path) {
 			writeErr(w, http.StatusForbidden, "in a business, a field agent works on its page and the tables behind it only")
 			return
@@ -376,14 +385,24 @@ func (s *Server) resolve(r *http.Request) (*Principal, error) {
 	}
 	p := Principal{viaCookie: viaCookie, Permissions: map[string]bool{}}
 	var lastUsed *time.Time
+	var tenant *uuid.UUID
 	if err := s.Store.Pool.QueryRow(ctx, `SELECT user_id, tenant_id, auth_method, signed_in_at, device, last_used_at FROM taskiem_auth_session($1)`, hashToken(tok)).
-		Scan(&p.UserID, &p.TenantID, &p.AuthMethod, &p.SignedInAt, &p.Device, &lastUsed); err != nil {
+		Scan(&p.UserID, &tenant, &p.AuthMethod, &p.SignedInAt, &p.Device, &lastUsed); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Perhaps someone with no membership answering invitations.
 			return s.resolveInvitee(r, tok, viaCookie)
 		}
 		return nil, err
 	}
+	if tenant == nil {
+		// The person's own session, in no business (personal.go).
+		p.Personal = true
+		if p.Device {
+			s.touchDevice(ctx, tok, lastUsed)
+		}
+		return &p, nil
+	}
+	p.TenantID = *tenant
 	if err := s.loadRoles(ctx, &p); err != nil {
 		return nil, err
 	}
@@ -553,9 +572,12 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	// chooses it: a bearer token before a cookie.
 	tok := sessionToken(r)
 	var err error
-	if principalFrom(r.Context()).Invitee {
+	switch p := principalFrom(r.Context()); {
+	case p.Invitee:
 		_, err = s.Store.Pool.Exec(r.Context(), `SELECT taskiem_auth_invitee_end($1)`, hashToken(tok))
-	} else {
+	case p.Personal:
+		_, err = s.Store.Pool.Exec(r.Context(), `SELECT taskiem_auth_session_end($1)`, hashToken(tok))
+	default:
 		err = s.tx(r, func(tx pgx.Tx) error {
 			_, err := tx.Exec(r.Context(), `UPDATE sessions SET revoked_at = now() WHERE token_hash = $1`, hashToken(tok))
 			return err
@@ -571,6 +593,10 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
+	if p.Personal {
+		s.personalMe(w, r, p)
+		return
+	}
 	if p.Invitee {
 		writeJSON(w, http.StatusOK, map[string]any{"tenant_id": nil, "roles": []string{}, "permissions": []string{}, "auth_method": p.AuthMethod,
 			"invitations_only": true, "user": map[string]any{"id": p.UserID, "email": p.inviteeEmail, "name": p.inviteeName}})
@@ -636,6 +662,18 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 		out["gate_only"] = access.GateOnly(p.Permissions)
 		return nil
 	})
+	// The switcher: the person's businesses and their own side
+	// (docs/spec/taskiem-for-everyone.md §6).
+	out["personal"] = false
+	if p.UserID != uuid.Nil && p.Agent == nil && p.KeyID == uuid.Nil {
+		proof, err := s.proofStateOf(r, p)
+		if err == nil {
+			if bs, err := s.businessesWithLocks(r, p, proof); err == nil {
+				out["businesses"] = bs
+			}
+			out["user"].(map[string]any)["phone"] = s.phoneOf(r.Context(), p.UserID)
+		}
+	}
 	// A field agent signed in as themselves lands on the agent app (N6).
 	if p.UserID != uuid.Nil && p.Agent == nil && p.KeyID == uuid.Nil {
 		var active bool
@@ -941,6 +979,20 @@ func (s *Server) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := map[string]any{"tenant_id": tenant, "roles": nonNil(roles)}
+	if p.Personal {
+		// Now a member: the person's own session moves into the business,
+		// under its rules (personal.go). Joining asks no second proof: the
+		// person is asked to set one up instead
+		// (docs/spec/taskiem-for-everyone.md §5.4).
+		more, err := s.enterJoined(w, r, p, tenant)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		for k, v := range more {
+			out[k] = v
+		}
+	}
 	if p.Invitee {
 		// Now a member: the invitee session becomes one in this tenant.
 		more, err := s.upgradeInvitee(w, r, p, tenant)

@@ -1,8 +1,11 @@
 package api
 
 import (
-	"errors"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -16,40 +19,83 @@ import (
 // the other business that is the same in every other way: the same person,
 // sign-in method, phone, and — what step-up reads — the same moment of
 // signing in. Switching is never a fresh sign-in. The other business's own
-// rules on signing in (single sign-on) still apply, and a session that
-// signed in with one business's single sign-on does not switch at all.
+// rules on signing in still apply before the session moves: its single
+// sign-on, its passkeys, and a second proof for a session made by a code to
+// the person's phone on a new device (personal.go). A session that signed
+// in with one business's single sign-on does not switch to another. The
+// person's own side (no business) is switched to and from like a business
+// (docs/spec/taskiem-for-everyone.md §5.4).
 
 // listBusinesses is GET /v1/me/businesses: the person's businesses by
-// name, the one this session is in marked.
+// name, the one this session is in marked, each with what locks it for
+// this session (personal.go): sso_required, passkey_required or
+// second_proof_required.
 func (s *Server) listBusinesses(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
-	if p.UserID == uuid.Nil {
+	if p.UserID == uuid.Nil || p.KeyID != uuid.Nil {
 		writeErr(w, http.StatusForbidden, "only a person has businesses")
 		return
 	}
-	ts, err := s.tenantsOf(r.Context(), p.UserID)
+	proof, err := s.proofStateOf(r, p)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	out := make([]map[string]any, 0, len(ts))
-	for _, t := range ts {
-		b := map[string]any{"id": t.ID, "name": t.Name}
-		if t.ID == p.TenantID {
-			b["current"] = true
-		}
-		out = append(out, b)
+	out, err := s.businessesWithLocks(r, p, proof)
+	if err != nil {
+		s.fail(w, r, err)
+		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"businesses": out})
+	writeJSON(w, http.StatusOK, map[string]any{"businesses": out, "personal": p.Personal})
 }
 
 // switchBusiness is POST /v1/me/switch ({tenant_id}): this session ends and
 // one in that business takes its place, answered as signing in is.
+// {tenant_id: null} goes to the person's own side
+// (docs/spec/taskiem-for-everyone.md §5.4).
 func (s *Server) switchBusiness(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	tok := sessionToken(r)
-	if p.UserID == uuid.Nil || p.KeyID != uuid.Nil || p.AuthMethod == "" || tok == "" {
+	if p.UserID == uuid.Nil || p.KeyID != uuid.Nil || p.AuthMethod == "" || tok == "" || p.Agent != nil {
 		writeErr(w, http.StatusForbidden, "only a signed-in person switches business")
+		return
+	}
+	var req struct {
+		TenantID json.RawMessage `json:"tenant_id"`
+		// Personal asks for the person's own side, as tenant_id null does,
+		// for clients that leave out what is null.
+		Personal bool `json:"personal"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	ctx := r.Context()
+	var target *uuid.UUID
+	raw := strings.TrimSpace(string(req.TenantID))
+	if req.Personal && raw == "" {
+		raw = "null"
+	}
+	switch raw {
+	case "":
+		s.fail(w, r, fmt.Errorf("%w: tenant_id is a business's id, or null for your own side", errBadRequest))
+		return
+	case "null":
+	default:
+		var id uuid.UUID
+		if err := json.Unmarshal(req.TenantID, &id); err != nil {
+			s.fail(w, r, fmt.Errorf("%w: tenant_id is a business's id, or null for your own side", errBadRequest))
+			return
+		}
+		target = &id
+	}
+	tenants, err := s.userTenants(ctx, p.UserID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if target == nil {
+		s.switchToPersonal(w, r, p, tok, tenants)
 		return
 	}
 	// Single sign-on vouches for a person in one business, through its own
@@ -60,72 +106,90 @@ func (s *Server) switchBusiness(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "you signed in with your organisation's single sign-on: sign in to that business instead", "sign_in": true})
 		return
 	}
-	var req struct {
-		TenantID uuid.UUID `json:"tenant_id"`
-	}
-	if err := decodeBody(r, &req); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	ctx := r.Context()
-	var tenants []uuid.UUID
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_tenant_scope($1, false)`, p.UserID).Scan(&tenants); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	member := false
-	for _, t := range tenants {
-		member = member || t == req.TenantID
-	}
-	if !member {
+	if !slices.Contains(tenants, *target) {
 		writeErr(w, http.StatusNotFound, "you are not in that business")
 		return
 	}
-	// A business that signs in with single sign-on is signed in to that way.
-	var enforced bool
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_sso_enforced($1, $2)`, p.UserID, req.TenantID).Scan(&enforced); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if enforced {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": errSSORequired.Error(), "sso_required": true})
-		return
-	}
-	next := newToken()
-	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID, req.TenantID}, func(tx pgx.Tx) error {
-		// The new session is this one's twin in the other business: its
-		// moment of signing in, its method, its phone, its expiry (a phone's
-		// renewed by use as before, never past 180 days from signing in).
-		// Ended first, and only if still live: of two switches racing from
-		// one session, one ends it and the other finds nothing to move.
-		tag, err := tx.Exec(ctx, `WITH old AS (
-				UPDATE sessions SET revoked_at = now()
-				 WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()
-				RETURNING user_id, created_at, expires_at, auth_method, device_id, device_name, device_platform, last_used_at)
-			INSERT INTO sessions (token_hash, user_id, tenant_id, created_at, expires_at, ip, auth_method, device_id, device_name, device_platform, last_used_at)
-			SELECT $2, user_id, $3, created_at, expires_at, $4, auth_method, device_id, device_name, device_platform, last_used_at FROM old`,
-			hashToken(tok), hashToken(next), req.TenantID, clientIP(r))
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() != 1 {
-			return errNoSession
-		}
-		_, err = tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'auth.switch', $3, jsonb_build_object('from', $4::text, 'ip', $5::text))`,
-			req.TenantID, p.UserID.String(), p.UserID.String(), p.TenantID.String(), clientIP(r))
-		return err
-	})
-	if errors.Is(err, errNoSession) {
-		writeErr(w, http.StatusUnauthorized, "this session has ended: sign in again")
-		return
-	}
+	proof, err := s.proofStateOf(r, p)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	out := map[string]any{"tenant_id": req.TenantID, "tenants": tenants, "user_id": p.UserID}
+	lock, err := s.businessLock(ctx, p, *target, proof)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	switch lock {
+	case "sso_required":
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": errSSORequired.Error(), "sso_required": true})
+		return
+	case "passkey_required":
+		passkeyRequiredOut(w)
+		return
+	case "second_proof_required":
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "this is a new device: prove it is you another way first (a passkey, a link to your email, or your chat PIN)",
+			"second_proof_required": true, "ways": proof.ways})
+		return
+	}
+	next := newToken()
+	var moved bool
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_session_move($1, $2, $3, $4)`, hashToken(tok), hashToken(next), *target, clientIP(r)).Scan(&moved); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !moved {
+		writeErr(w, http.StatusUnauthorized, "this session has ended: sign in again")
+		return
+	}
+	from := "personal"
+	if !p.Personal {
+		from = p.TenantID.String()
+	}
+	detail := map[string]any{"from": from, "ip": clientIP(r)}
+	if proof.unprovable {
+		// Signed in by a code to the phone on a new device, with no second
+		// proof to give: let in, so no one is locked out of their own
+		// business, and recorded where its owners can see it.
+		detail["second_proof"] = "none_possible"
+	}
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{*target}, func(tx pgx.Tx) error {
+		raw, _ := json.Marshal(detail)
+		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'auth.switch', $2, $3)`, *target, p.UserID.String(), raw)
+		return err
+	}); err != nil {
+		s.Logger.Warn("switch: audit", "err", err)
+	}
+	out := map[string]any{"tenant_id": *target, "tenants": tenants, "user_id": p.UserID, "personal": false}
 	s.deliverSession(w, !p.viaCookie, next, out)
 	writeJSON(w, http.StatusOK, out)
 }
 
-var errNoSession = errors.New("no such session")
+// switchToPersonal moves a business session to the person's own side.
+func (s *Server) switchToPersonal(w http.ResponseWriter, r *http.Request, p *Principal, tok string, tenants []uuid.UUID) {
+	ctx := r.Context()
+	if p.Personal {
+		writeErr(w, http.StatusConflict, "you are on your own side already")
+		return
+	}
+	next := newToken()
+	var moved bool
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_session_move($1, $2, NULL, $3)`, hashToken(tok), hashToken(next), clientIP(r)).Scan(&moved); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !moved {
+		writeErr(w, http.StatusUnauthorized, "this session has ended: sign in again")
+		return
+	}
+	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'user', $2, 'auth.switch', $2, jsonb_build_object('to', 'personal', 'ip', $3::text))`,
+			p.TenantID, p.UserID.String(), clientIP(r))
+		return err
+	}); err != nil {
+		s.Logger.Warn("switch: audit", "err", err)
+	}
+	out := map[string]any{"tenant_id": nil, "tenants": nonNil(tenants), "user_id": p.UserID, "personal": true}
+	s.deliverSession(w, !p.viaCookie, next, out)
+	writeJSON(w, http.StatusOK, out)
+}

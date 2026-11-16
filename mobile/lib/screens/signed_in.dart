@@ -35,7 +35,7 @@ class SignedInScreen extends StatefulWidget {
 
 class _SignedInScreenState extends State<SignedInScreen> {
   List<Phone>? _phones;
-  List<ListBusinessesResponseBusinessesItem> _businesses = const [];
+  List<BusinessEntry> _businesses = const [];
   String? _error;
 
   @override
@@ -74,7 +74,7 @@ class _SignedInScreenState extends State<SignedInScreen> {
     }
   }
 
-  Future<void> _switch(ListBusinessesResponseBusinessesItem b) =>
+  Future<void> _switch(BusinessEntry b) =>
       _try(() async {
         await widget.auth.switchTo(b.id);
         await _load();

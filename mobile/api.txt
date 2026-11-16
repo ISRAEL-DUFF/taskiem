@@ -19,6 +19,17 @@ removeDevice
 listBusinesses
 switchBusiness
 
+# Personal accounts: the phone way in, second proofs, changing a phone
+# (docs/spec/taskiem-for-everyone.md §5, stage 1)
+phoneStart
+phoneVerify
+phoneCreate
+secondProofEmailStart
+secondProofEmailVerify
+secondProofPin
+phoneChangeStart
+phoneChangeVerify
+
 # The chats list (M3)
 listLinkChats
 listCustomerChats

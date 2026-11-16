@@ -75,10 +75,10 @@ func deviceOf(ctx context.Context) *deviceReq {
 // they belong to: signing in again on a phone replaces its session wherever
 // the earlier one was (a copied token does not outlive a fresh sign-in).
 func (s *Server) endPhone(ctx context.Context, user, device uuid.UUID) error {
-	return s.inPersonsTenants(ctx, user, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at = now() WHERE device_id = $1 AND user_id = $2 AND revoked_at IS NULL`, device, user)
-		return err
-	})
+	// Their own side's session on it too, which no business's scope reaches
+	// (taskiem_auth_device_end, 00448).
+	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_auth_device_end($1, $2)`, user, device)
+	return err
 }
 
 // errPhoneBusy is two sign-ins on one phone at once: the second loses
