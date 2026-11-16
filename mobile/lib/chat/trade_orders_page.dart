@@ -495,7 +495,8 @@ class _TradeOrderPageState extends State<TradeOrderPage> {
             '${linesWords(lines)} · invoiced ${invoiceId.isNotEmpty ? 'already' : (o['invoice_at'] == 'accepted' ? 'when you accept' : 'when delivered')}',
             style: tkText(size: 13, lineHeight: 1.4, color: t.muted),
           ),
-          if (ask.isNotEmpty) ...[
+          // A new one's buttons say it; the rest say what they wait on.
+          if (ask.isNotEmpty && status != 'received') ...[
             const SizedBox(height: 4),
             Semantics(liveRegion: true, child: Text(ask, style: tkText(size: 14, weight: 500, lineHeight: 1.4, color: t.text))),
           ],

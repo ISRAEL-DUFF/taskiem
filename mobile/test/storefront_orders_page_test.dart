@@ -188,7 +188,7 @@ void main() {
   testWidgets('an order: its details; offered to a free rider; the match undone; the customer shown', (t) async {
     final r = await serve(t, (c) => StorefrontOrderPage(auth: c.auth, reference: 'OR-5K2Q', now: () => _now));
     expect(find.text('ACCEPTED'), findsOneWidget);
-    expect(find.text('2 × Jollof rice'), findsOneWidget);
+    expect(find.text('Jollof rice × 2'), findsOneWidget);
     expect(find.text('₦5,000'), findsOneWidget);
     expect(find.text('Delivery to Yaba'), findsOneWidget);
     expect(find.text('No rider has it yet.'), findsOneWidget);
@@ -237,9 +237,8 @@ void main() {
         {'id': 'D0', 'rider': 'Tunde', 'status': 'declined', 'offered_at': '2026-11-12T09:55:00Z'},
       ],
     );
-    expect(find.text('On the way'), findsOneWidget);
+    expect(find.text('Bayo · picked up 11:20'), findsOneWidget);
     expect(find.text('fee ₦1,500'), findsOneWidget);
-    expect(find.textContaining('Picked up'), findsOneWidget);
     expect(find.bySemanticsLabel('Offer to a free rider'), findsNothing);
     await t.tap(find.bySemanticsLabel('Show earlier offers (1)'));
     await t.pump();
@@ -282,7 +281,7 @@ void main() {
         more: {'service_name': 'Braids', 'starts_at': '2099-11-14T09:00:00Z', 'ends_at': '2099-11-14T10:30:00Z', 'fulfilment': null, 'basket': null},
       ),
     );
-    expect(find.text('Braids'), findsWidgets);
+    expect(find.textContaining('Braids'), findsWidgets);
     expect(find.bySemanticsLabel('Move Braids OR-5K2Q'), findsOneWidget);
     expect(find.bySemanticsLabel('Cancel Braids OR-5K2Q'), findsOneWidget);
     expect(find.text('Delivery'), findsNothing);
@@ -359,7 +358,7 @@ void main() {
             })
           : null,
     );
-    expect(find.text('On the way'), findsOneWidget);
+    expect(find.textContaining('Bayo · offered'), findsOneWidget);
     status = 'delivered';
     await t.pump(const Duration(seconds: 30));
     await settle(t);
@@ -392,7 +391,7 @@ void main() {
     expect(wa.isMergedIntoParent, isFalse);
     expect(identical(call, wa), isFalse);
     expect(find.bySemanticsLabel('ngozi@example.com'), findsOneWidget);
-    expect(find.text('Bayo · •••0000'), findsOneWidget);
+    expect(find.textContaining('Bayo · •••0000'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp(r'^Call •••')), findsNothing);
     await t.tap(find.bySemanticsLabel('Call 08031234567'));
     await t.pump();

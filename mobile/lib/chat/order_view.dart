@@ -404,7 +404,8 @@ class _DeliveryViewState extends State<DeliveryView> {
                         ),
                     ],
                   ),
-                if (proof)
+                // Said from the start; taken at the door.
+                if (d['proof_required'] == true && !const {'delivered', 'declined', 'cancelled'}.contains(status))
                   Container(
                     padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
                     decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
@@ -417,13 +418,14 @@ class _DeliveryViewState extends State<DeliveryView> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Photo of the delivery', style: tkText(size: 15, weight: 500, color: t.text)),
+                                Text(proof ? 'Photo of the delivery' : 'A photo when you deliver', style: tkText(size: 15, weight: 500, color: t.text)),
                                 Text(_photo == null ? 'The business asks for one.' : 'Taken', style: tkText(size: 12.5, color: t.muted)),
                               ],
                             ),
                           ),
                         ),
-                        TkSmallButton(
+                        if (proof)
+                          TkSmallButton(
                           label: _photo == null ? 'Take the photo' : 'Take another',
                           semantics: _photo == null ? 'Take the photo' : 'Photo taken: take another',
                           primary: _photo == null,

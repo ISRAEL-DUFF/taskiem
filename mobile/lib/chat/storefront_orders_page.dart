@@ -22,8 +22,8 @@ import '../kit/polling.dart';
 import '../kit/sheet.dart' show TkKitField, TkSavedTick, TkSheet, showTkSheet;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
-import 'book_sheet.dart' show dayLabel, lagosDay, lagosTime, whenLabel;
-import 'bookings_page.dart' show askCancelBooking, canChange, cancelBooking, moveBooking, orderStatus, timeSpan;
+import 'book_sheet.dart' show dayLabel, formatDuration, lagosDay, lagosTime, whenLabel;
+import 'bookings_page.dart' show askCancelBooking, canChange, cancelBooking, moveBooking, orderStatus;
 import 'stock_page.dart' show feeInput, feeKobo;
 import 'riders_page.dart' show openRiders, openRidersPay;
 import 'trade_orders_page.dart' show TradeOrdersPage, openTradeOrder;
@@ -591,7 +591,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
               lines: [
                 for (final l in basket)
                   (
-                    name: '${(l['quantity'] as num?)?.toInt() ?? 1} × ${_str(l['name'])}',
+                    name: '${_str(l['name'])}${((l['quantity'] as num?)?.toInt() ?? 1) == 1 ? '' : ' × ${(l['quantity'] as num).toInt()}'}',
                     sub: '',
                     under: null,
                     amount: l['line_kobo'] != null ? naira(_int(l['line_kobo'])) : '',
@@ -623,6 +623,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
     final paidBy = o['paid_by'] as String?;
     final card = paidBy == null || paidBy.isEmpty || paidBy == 'card';
     final delivery = o['fulfilment'] == 'delivery';
+    final manage = _auth.can('storefront.manage');
     final ink = switch (status) {
       'received' || 'awaiting_payment' || 'price_changed' => look.orangeInk,
       'paid' || 'accepted' => look.tealInk,
@@ -633,17 +634,36 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
     };
     // A booking that holds its time says its day; the rest their status.
     var eyebrow = st.label;
+    var eyebrowInk = ink;
+    // At the end: the latest that happened to it, or when payment expires.
+    final decided = _str(o['decided_at']);
+    final refused = const {'declined', 'refund_due', 'refunded'}.contains(status);
     var trailing = status == 'awaiting_payment' && _str(o['expires_at']).isNotEmpty
         ? 'expires ${timeLeft(_str(o['expires_at']), now)}'
-        : 'ordered ${relativeAge(_str(o['created_at']), now)}';
+        : decided.isNotEmpty
+        ? '${refused ? 'declined' : 'accepted'} ${lagosTime(decided)}'
+        : 'ordered ${lagosTime(_str(o['created_at']))}';
     var figure = orderTotal(o);
+    // How it was paid, and when it came in.
+    final paidHow = switch (paidBy) {
+      'card' => 'Paid by card',
+      'transfer' => 'Paid by transfer',
+      _ => 'Paid',
+    };
+    final ordered = 'ordered ${relativeAge(_str(o['created_at']), now)}';
+    final payLine = status == 'refund_due'
+        ? (manage ? '$paidHow · the customer is owed it back' : refundLine(refundKobo, paidBy))
+        : '${_str(o['paid_at']).isNotEmpty ? paidHow : paymentSummary(o)} · $ordered';
     if (booking) {
       trailing = starts.isEmpty ? st.label : (timeLeft(starts, now) == 'now' ? whenLabel(starts) : timeLeft(starts, now));
       if (starts.isNotEmpty) {
         final day = lagosDay(starts);
         final today = lagosDay(now.toUtc().toIso8601String());
         final tomorrow = lagosDay(now.toUtc().add(const Duration(days: 1)).toIso8601String());
-        if (canChange(o)) eyebrow = day == today ? 'Today' : (day == tomorrow ? 'Tomorrow' : dayLabel(day));
+        if (canChange(o)) {
+          eyebrow = day == today ? 'Today' : (day == tomorrow ? 'Tomorrow' : dayLabel(day));
+          eyebrowInk = look.blueInk;
+        }
         figure = '${dayLabel(day).split(' ').first} ${lagosTime(starts)}';
       } else {
         figure = 'No time';
@@ -653,7 +673,6 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
     final accepted = const {'accepted', 'dispatched', 'on_the_way', 'arrived', 'completed'}.contains(status);
     final out = const {'dispatched', 'on_the_way', 'arrived', 'completed'}.contains(status);
     String at(String k) => _str(o[k]).isEmpty ? '' : lagosTime(_str(o[k]));
-    final manage = _auth.can('storefront.manage');
     final refund = <Widget>[
       if (card)
         TkSmallButton(
@@ -699,7 +718,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TkEyebrow(eyebrow, color: ink, trailing: trailing),
+          TkEyebrow(eyebrow, color: eyebrowInk, trailing: trailing),
           const SizedBox(height: 6),
           FittedBox(
             fit: BoxFit.scaleDown,
@@ -707,8 +726,14 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
             child: kind == 'order' ? TkCountUp(_int(o['total_kobo']), style: tkFigure(context, size: 40)) : Text(figure, style: tkFigure(context, size: 40)),
           ),
           if (booking) ...[
-            Text(_str(o['service_name']).isEmpty ? 'Booking' : _str(o['service_name']), style: tkText(size: 15, weight: 600, lineHeight: 1.35, color: t.text)),
-            if (starts.isNotEmpty) Text('${timeSpan(o)}, Lagos time', style: sub),
+            Text(
+              [
+                _str(o['service_name']).isEmpty ? 'Booking' : _str(o['service_name']),
+                if (starts.isNotEmpty && _str(o['ends_at']).isNotEmpty)
+                  '${formatDuration(DateTime.parse(_str(o['ends_at'])).difference(DateTime.parse(starts)).inMinutes)}, to ${lagosTime(_str(o['ends_at']))}',
+              ].join(' · '),
+              style: sub,
+            ),
             const SizedBox(height: 12),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -719,7 +744,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
               ],
             ),
           ] else
-            Text(status == 'refund_due' ? refundLine(refundKobo, paidBy) : paymentSummary(o), style: sub),
+            Text(payLine, style: sub),
           if (status == 'price_changed' && o['price_change'] != null) ...[
             const SizedBox(height: 8),
             Text(priceChangeLine(_map(o['price_change'])), style: tkText(size: 14, weight: 600, lineHeight: 1.4, color: t.text)),
@@ -782,7 +807,8 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
               onPressed: () => openTradeOrder(context, _auth, _str(o['reference'])),
             ),
           ],
-          if ((kind == 'order' || kind == 'trade') && delivery)
+          // No rider for an order that will not go out.
+          if ((kind == 'order' || kind == 'trade') && delivery && !const {'refund_due', 'refunded', 'declined', 'cancelled', 'expired', 'no_show'}.contains(status))
             OrderDelivery(
               key: ValueKey('delivery ${widget.reference}'),
               auth: _auth,
@@ -809,7 +835,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
     final line = tkText(size: 13, lineHeight: 1.4, color: t.muted);
     return TkPersonCard(
       name: name,
-      sub: [
+      sub: hidden ? 'Details hidden' : [
         if (phone.isNotEmpty) phone,
         if (_str(c['address']).isNotEmpty) _str(c['address']),
         if (phone.isEmpty && _str(c['address']).isEmpty && email.isNotEmpty) email,
@@ -1089,8 +1115,16 @@ class _OrderDeliveryState extends State<OrderDelivery> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // A cashier gets the rider's phone masked: words, not a call.
+                            // Who, and the latest step with its time ("Tunde · picked up 11:40").
                             Text(
-                              [_str(cur['rider']), if (isMasked(riderPhone)) riderPhone].where((x) => x.isNotEmpty).join(' · '),
+                              [
+                                _str(cur['rider']),
+                                if (isMasked(riderPhone)) riderPhone,
+                                if (deliveryStepsOf(cur).isNotEmpty)
+                                  '${deliveryStepsOf(cur).last.label[0].toLowerCase()}${deliveryStepsOf(cur).last.label.substring(1)} ${deliveryStepsOf(cur).last.at}'
+                                else
+                                  st!.label.toLowerCase(),
+                              ].where((x) => x.isNotEmpty).join(' · '),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: tkText(size: 14, weight: 600, lineHeight: 1.3, color: t.text),
@@ -1099,10 +1133,15 @@ class _OrderDeliveryState extends State<OrderDelivery> {
                               spacing: 6,
                               crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
-                                Text(st!.label, style: tkText(size: 12.5, weight: 600, lineHeight: 1.35, color: st.tone == Tone.ok ? look.limeInk : look.blueInk)),
-                                if (_int(cur['fee_kobo']) > 0) Text('fee ${naira(_int(cur['fee_kobo']))}', style: small),
+                                Text(
+                                  [
+                                    if (_str(cur['zone']).isNotEmpty) _str(cur['zone']),
+                                    if (_int(cur['fee_kobo']) > 0) 'fee ${naira(_int(cur['fee_kobo']))}',
+                                    if (_int(cur['rating']) > 0) 'rated ${cur['rating']} of 5',
+                                  ].join(' · '),
+                                  style: small,
+                                ),
                                 if (cur['late'] != null) Text(cur['late'] == 'pickup' ? 'Not picked up in time' : 'Not at the door in time', style: tkText(size: 12.5, weight: 600, color: look.redInk)),
-                                if (_int(cur['rating']) > 0) Text('rated ${cur['rating']} of 5', style: small),
                               ],
                             ),
                           ],
@@ -1120,18 +1159,6 @@ class _OrderDeliveryState extends State<OrderDelivery> {
                     ],
                   ],
                 ),
-                if (deliveryStepsOf(cur).isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 44, top: 6),
-                    child: Semantics(
-                      container: true,
-                      label: 'How far it got',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [for (final s in deliveryStepsOf(cur)) Text('${s.at}  ${s.label}', style: small)],
-                      ),
-                    ),
-                  ),
                 if (_str(cur['proof_url']).isNotEmpty || _str(cur['location']).isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(left: 44, top: 6),

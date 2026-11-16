@@ -145,7 +145,7 @@ void main() {
     final sent = await open(t, _order('received'));
     expect(find.text('PO-12 from Rivers Foods'), findsOneWidget);
     expect(find.text('₦15,000'), findsWidgets);
-    expect(find.text('Accept it, change it, or decline it.'), findsOneWidget);
+    expect(find.text('NEW · ANSWER THEM'), findsOneWidget);
     expect(find.text('Their note: “By Friday”'), findsOneWidget);
     expect(find.text('Messages about it'), findsOneWidget, reason: 'the order’s thread, under its steps');
     expect(find.text('2 bags at ₦5,000'), findsOneWidget);
