@@ -1,6 +1,6 @@
 # Taskiem for everyone: one chat app for people and the businesses they deal with
 
-Status: **draft for review** (2026-11-16; its questions settled the same day, §22). Nothing here is built. It replaces the earlier draft "Customers at the door" (both its parts).
+Status: **draft for review** (2026-11-16; its questions settled the same day, §23). Nothing here is built. It replaces the earlier draft "Customers at the door" (both its parts).
 
 It needs a new decision, **0068**, before any of it is built (§4). Builds on: [the phone app](mobile-app.md) ([0066](../decisions/0066-a-flutter-phone-app.md)), [chat push](chat-push.md), [chat as the way in](chat-way-in.md), [chat sign-in](chat-sign-in.md), [customers' conversations](chat-five-more-flows.md#as-built-phase-1-customers-conversations), [business links](business-links.md), [storefronts](storefronts.md).
 
@@ -10,14 +10,14 @@ The Taskiem app becomes **a chat app anyone can use**, like WhatsApp and Telegra
 - with **businesses**: to ask, order, book and pay;
 - in time, with **other people** (§16).
 
-Running a business is something a person *does in* Taskiem, not what they must be to use it. An owner or a member of staff is a person with a business attached. A customer is a person with none.
+Running a business is something a person *does in* Taskiem, not what they must be to use it. Nor is a business needed to automate work: a person can start **workflows** on their own or with a team, with no shop or business questions (§18). An owner or a member of staff is a person with a business attached. A customer is a person with none.
 
 For businesses this changes how customers reach them:
 - **In the Taskiem app, or in the phone's browser** with nothing to install (§9). Each business is its own conversation, under its own name and photo, with its own notifications. Orders, bookings and payments happen in the conversation, as cards. There is no 24-hour window and no template. This works for every business, whether or not it has a WhatsApp number of its own.
 - **On WhatsApp,** for a business that has connected its own number, as today (§11). The same customer may use both. The business sees one customer.
 - **Taskiem's shared WhatsApp number and Telegram bot** stay as they are for outsiders: updates, one way. They now point customers to the app or the browser to chat (§12).
 
-The work comes in stages (§19):
+The work comes in stages (§20):
 1. personal accounts;
 2. customers chatting with businesses, in the app and the browser;
 3. finding businesses, and a customer's own orders;
@@ -35,6 +35,7 @@ The work comes in stages (§19):
 | Line | Where a customer conversation runs: **app** (the Taskiem app or the browser chat) or **WhatsApp** (the business's own number) |
 | Chat link | A business's link that opens a customer conversation with it: `https://<host>/c/{code}`. In the app if installed, else in the browser |
 | Discoverable | A business that chose to be found by the public in the app (§10). Not the same as being found by other businesses in Explore |
+| Workflows workspace | What **Start something > Workflows** makes: a tenant with every business area off, for automating work alone or with a team, with no business questions (§18) |
 | You | The personal side of the app: your chats with businesses and people, your orders. Beside it, each business you work in |
 
 ## 3. Where we are
@@ -84,7 +85,7 @@ The app's first screen and the web's `/signup` and `/login` become one way in:
    - A number that already belongs to an account signs in to it: chat-born owners and staff, and any account with that number bound (§5.3).
    - A new number makes a **personal account**, with a name (required) and a photo (optional).
    - Agreeing to the terms and privacy notice, and confirming they are 18 or over (§15), is recorded, as for every way in today.
-3. **Then the app's home** (§7), on **You**. A **Start a business** button is always there. It leads to today's sign-up (the form, or the conversation with Taskiem), and the business it makes is attached to this person.
+3. **Then the app's home** (§7), on **You**. A **Start something** button is always there: a business or workflows (§18). What it makes is attached to this person.
 
 **Email and password stay** for people who have them: **Sign in with email** under the phone box, passkeys, and single sign-on for businesses that require it. An account can add an email later in Settings, as chat-born owners do today.
 
@@ -93,7 +94,7 @@ The app's first screen and the web's `/signup` and `/login` become one way in:
 - **`users.email` becomes optional.** Accounts made by phone have none. The placeholder (`ownerPlaceholderEmail`) is retired for new accounts and stays on old ones until they add a real email.
 - **`user_phones`** (new): one verified phone per account, unique across accounts, kept as a keyed hash with the number sealed under the person's subject, plus when it was verified.
   - Existing `whatsapp_bindings` numbers are copied in. Where an account's bound WhatsApp number is free, it becomes its phone.
-  - A number bound to two accounts is not copied; both are asked to verify once (§18).
+  - A number bound to two accounts is not copied; both are asked to verify once (§19).
 - **A session may have no business.** The session's scope becomes either **personal** (no tenant) or **a business**, as today. A personal session reaches only the person's own routes (§8, §13); a business session also reaches the person's own routes. The invitee-only session (`invitations_only`) becomes an ordinary personal session.
 - **The 90-day dormancy rule for a phone stays** ([chat as the way in §12](chat-way-in.md)). A phone silent for 90 days re-proves itself before it signs in, since numbers are reissued.
 
@@ -130,7 +131,7 @@ The app's first screen and the web's `/signup` and `/login` become one way in:
 - **Discover**: businesses to find (§10);
 - **Settings**: name, photo, phone, email, sessions, notifications, privacy, delete account.
 
-**`@Taskiem` on You** is a help conversation: "How do I pay?", "Where is my order?", answered from the person's own orders and Taskiem's help. It never acts in a business. It is the place for **Start a business**.
+**`@Taskiem` on You** is a help conversation: "How do I pay?", "Where is my order?", answered from the person's own orders and Taskiem's help. It never acts in a business. It is the place for **Start something** (§18).
 
 ## 8. Customers chatting with a business
 
@@ -278,15 +279,69 @@ Every door now leads to the same place:
 
 | Door | Today | After |
 | --- | --- | --- |
-| Web `/signup`, `/login` | Business form / email sign-in | The phone way in (§5.1), with **Sign in with email** and **Start a business** |
+| Web `/signup`, `/login` | Business form / email sign-in | The phone way in (§5.1), with **Sign in with email** and **Start something** (§18) |
 | The app's first screen | Sign in, or sign up a business | The phone way in |
 | Taskiem's WhatsApp number, a stranger | Sign-up offer (three buttons) | The same, with **I'm a customer** in place of **Not now** (§12) |
 | Taskiem's Telegram bot, a stranger | Sign-up offer | The same, plus **I'm a customer** |
 | Signed in, in no business | "You do not belong to an organisation" | **You** (§7) |
 
-Nobody makes a business by mistake any more: a customer makes a personal account, and **Start a business** is a deliberate step.
+Nobody makes a business by mistake any more: a customer makes a personal account, and **Start something** is a deliberate step: a business, or workflows (§18).
 
-## 18. Data and server changes
+## 18. Starting something: a business, or workflows
+
+A person who wants Taskiem to automate work (send reminders, collect form answers, chase payments, move data between their apps) is not always a business with a shop. Today every way in treats them as one:
+- **Web sign-up** offers "Just workflows for now", but as the last of five answers to "What does your business do?", after a required business name.
+- **Sign-up in chat and in the app** never asks. It makes a business with every area on (shop, orders, stock, money, linked businesses), except a delivery business (`api/chat_signup.go`, `areas.DefaultOn`). A person who wanted workflows must find **What your business uses** in Settings and turn the rest off.
+
+### 18.1 The choice
+
+**Start a business** becomes **Start something**, on **You**, in `@Taskiem` on You, and at every door that makes one:
+
+> **What do you want to start?**
+>
+> **A business**: sell, take orders and bookings, send invoices, with your staff.
+> **Workflows**: automate work for yourself or a team: forms, reminders, approvals, your other apps.
+
+- **A business** leads to today's flow: a name, what it does (the areas it starts with, as `kinds` sets them today), and the rest.
+- **Workflows** makes a **workflows workspace** (§18.2) at once. It asks nothing more than an optional name.
+
+### 18.2 A workflows workspace
+
+It is a tenant like any business, so workflows, runs, forms, tables, connections, approvals, members, billing and audit all work unchanged. What differs:
+
+| | A workflows workspace |
+| --- | --- |
+| Name | Optional. "{Person}'s workflows" until renamed |
+| Areas | Every area off (`kinds: []`, as "Just workflows for now" today) |
+| What it opens on | Workflows: the templates and the AI builder ("What do you want to automate?"), not a shop checklist |
+| Its chat | `@Taskiem` for building and running workflows. No shop, stock or money tools, since their areas are off (business areas phase 3 already hides their words) |
+| Discover and Explore | Never listed, and no nudges to open a shop |
+| Customers' chat links | None until it turns a business area on |
+| Members | Invited as in a business, to share workflows with a team |
+| Plans | The same plans as a business |
+| In the switcher | Shown under its name with a workflows mark, beside **You** and any businesses |
+
+**Becoming a business** needs no move. Turning an area on in **What your business uses** (renamed **What you use** for a workspace) makes it one. Its workflows, connections and members stay, and the shop, Discover and the rest open as for any business. Turning every area off again makes it a workflows workspace again. Nothing is deleted either way.
+
+The difference is a single flag on the tenant, `kind`: `business` or `workflows`. It is set at the start and changed by turning areas on or off. It decides only the name's requirement, what the workspace opens on, and Discover and Explore. Areas still decide what is reachable, through the gate business areas already has.
+
+### 18.3 Every door asks the same
+
+| Door | Today | After |
+| --- | --- | --- |
+| Web | "What does your business do?" with "Just workflows for now" last, a business name required first | **Start something** (§18.1) after the phone way in; the business name only for **A business** |
+| The app | The business form, or the sign-up conversation | **Start something** |
+| WhatsApp and Telegram sign-up | The questions, then a business with every area on | The first question becomes "Is this for a business, or for workflows?" **Workflows** skips the questions about selling and payments and makes a workflows workspace. **A business** goes on as today and asks what it sells, which sets its areas, so it no longer starts with every area on |
+| Slack ("Add to Slack") | A business for the Slack workspace, every area on | A workflows workspace, every area off: a Slack workspace is usually a team wanting workflows and approvals. Its owner turns areas on if it sells |
+| Field agents | A business, every area on | Unchanged: agents sign up traders, who are businesses |
+| Partners' sub-tenants, the API without `kinds` | Every area on | Unchanged ([business areas](business-areas.md) §7, phase 4) |
+
+### 18.4 Not done here
+
+- **Workflows on a person's own side** (**You**), with no workspace. Connections, secrets, approvals, billing and audit all belong to a tenant; a personal copy would rebuild most of the platform. A workflows workspace gives the same result with what exists.
+- **Moving a workflow between workspaces or businesses.** Today's export and import of a workflow serves, as it does between businesses.
+
+## 19. Data and server changes
 
 | Change | Notes |
 | --- | --- |
@@ -296,20 +351,21 @@ Nobody makes a business by mistake any more: a customer makes a personal account
 | A person's row-level scope | Personal tables use `taskiem_person_scope()` (the session's person), as business tables use `taskiem_tenant_scope()` |
 | `person_conversations`, `person_messages` (new) | The person's copies of customer conversations (later, of chats with people). Paired with the business's `customer_messages` by a shared message id, as `link_messages` pairs copies |
 | `customer_conversations` | Gains `line` (`whatsapp`, `app`) and `person_id` (set when the customer is a person with an account, §11). The unique key covers the line |
+| `tenants.kind` | `business` or `workflows` (§18.2). Existing tenants are `business`. Set at the start; changed when areas are turned on or all off |
 | Chat codes | `customer_chat_codes`: per business, hashed, replaceable |
 | Discover | A business's public listing (category, area, hours, photo), its setting, and a search index across businesses that opted in, served by a narrow function |
 | Orders by phone | One function returning a verified phone's orders and bookings across businesses (§13) |
 | Phone codes | Generalised from WhatsApp-only codes (`whatsapp_otps`) to WhatsApp or SMS, with the limits in §5.1 |
 | Push | Notifications carry the side (You or a business) and open that conversation |
 
-## 19. Stages
+## 20. Stages
 
 Each stage ships on its own, Android, iPhone and web together:
 
-1. **Personal accounts** (§5, §6, §7 without Orders and Discover, §17):
+1. **Personal accounts** (§5, §6, §7 without Orders and Discover, §17, §18):
    - the phone way in;
    - personal sessions;
-   - **You** with `@Taskiem` help and **Start a business**;
+   - **You** with `@Taskiem` help and **Start something** (§18), with the same question at every door;
    - the switcher;
    - existing accounts adding a phone.
 2. **Customers chatting with businesses** (§8, §9, §12, §14, §15):
@@ -328,7 +384,7 @@ Each stage ships on its own, Android, iPhone and web together:
 - the store listings changed;
 - the SMS provider's cost per code agreed.
 
-## 20. Tests
+## 21. Tests
 
 - **Accounts:**
   - the phone way in by WhatsApp code and by SMS;
@@ -344,6 +400,10 @@ Each stage ships on its own, Android, iPhone and web together:
   - Mute and Block both ways;
   - a business writing first to a past customer: order messages unlimited; offers marked **Offer**, refused past 2 per customer per week, broadcasts counted per customer; **Mute offers** silencing offers but not orders;
   - deleting an account leaving the business's copy.
+- **Starting something (§18):**
+  - **Workflows** from the web, the app, WhatsApp, Telegram and Slack makes a workspace with every area off, opening on the workflows, never listed in Discover or Explore;
+  - **A business** from chat sets its areas from what it sells, not every area;
+  - turning an area on makes a workspace a business with its workflows, connections and members intact; turning all off makes it a workspace again.
 - **Browser:**
   - signed in by code with no install;
   - push where allowed, SMS where not;
@@ -355,7 +415,7 @@ Each stage ships on its own, Android, iPhone and web together:
 - **App:** parity pictures for every new screen, light and dark, against the web ([mobile-app.md §9](mobile-app.md)).
 - **Load:** a business with 10,000 customers in the app; one person with 50 businesses.
 
-## 21. Risks
+## 22. Risks
 
 | Risk | What helps |
 | --- | --- |
@@ -368,13 +428,13 @@ Each stage ships on its own, Android, iPhone and web together:
 | The app becomes two products in one | One look; the switcher; a customer never sees business tools (§6) |
 | Phone codes by SMS cost money and are abused | WhatsApp first; limits per number, device and IP; the dashboard (§15) |
 
-## 22. Settled in review (2026-11-16)
+## 23. Settled in review (2026-11-16)
 
 | # | Question | Answer |
 | --- | --- | --- |
 | 1 | The first screen's line | "Chat with the businesses you buy from, and run your own." (§5.1) |
 | 2 | Email sign-in's place | A small **Sign in with email** link under the phone box (§5.1) |
-| 3 | `@Taskiem` on You | A help conversation: a person's own orders and Taskiem's help, and **Start a business**. It never acts in a business (§7) |
+| 3 | `@Taskiem` on You | A help conversation: a person's own orders and Taskiem's help, and **Start something**. It never acts in a business (§7) |
 | 4 | Businesses writing first | To anyone who has chatted or ordered with them, for any reason. Order messages are unlimited; offers are marked, limited to 2 per customer per week, and can be muted (§15). The limit of 2 is this spec's default, open to change |
 | 5 | The browser's fallback by SMS | Yes: an SMS when the business answers and the browser cannot be notified, at most one per conversation per hour (§9) |
 | 6 | One customer on WhatsApp and the app | One thread with both lines; each message marked; replies go where the customer last wrote, and staff can switch (§11) |
