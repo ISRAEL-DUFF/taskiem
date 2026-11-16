@@ -11,11 +11,11 @@ import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/passkey.dart';
-import '../chat/approve.dart' show TkTextBox;
 import '../kit/kit.dart';
 import '../kit/mobile.dart';
 import '../kit/sheet.dart';
 import '../theme/theme.dart';
+import 'second_proof.dart';
 
 /// What a lock asks, in a few words under the business's name.
 String lockWords(Object? lock) => switch (lock) {
@@ -32,15 +32,30 @@ String businessLine(BusinessEntry b) {
   return b.kind == 'workflows' ? 'Workflows' : 'Business';
 }
 
-/// Opens the switcher over [context].
-Future<void> showSwitcher(BuildContext context, Auth auth) => showTkSheet<void>(context, (_) => SwitcherSheet(auth: auth));
+/// Opens the switcher over [context]; [open] switches to that business at
+/// once, asking for its step if it has one.
+Future<void> showSwitcher(BuildContext context, Auth auth, {BusinessEntry? open}) => showTkSheet<void>(context, (_) => SwitcherSheet(auth: auth, open: open));
+
+/// A business's step asked for outside the switcher (an invitation
+/// accepted): the step's sheet, then the business.
+Future<void> showBusinessStep(BuildContext context, Auth auth, {required BusinessEntry to, required String need, ProofWays? ways}) =>
+    showTkSheet<void>(context, (_) => SwitcherSheet(auth: auth, to: to, need: need, ways: ways));
 
 class SwitcherSheet extends StatefulWidget {
-  const SwitcherSheet({super.key, required this.auth, this.businesses});
+  const SwitcherSheet({super.key, required this.auth, this.businesses, this.to, this.need, this.ways, this.open});
   final Auth auth;
 
   /// The businesses to show (a test's); else read from the server.
   final List<BusinessEntry>? businesses;
+
+  /// Opened on a business's step at once (an invitation accepted whose
+  /// business asks for one first): the business, the step and its ways.
+  final BusinessEntry? to;
+  final String? need;
+  final ProofWays? ways;
+
+  /// A business to switch to at once (a row of **Your businesses** on You).
+  final BusinessEntry? open;
 
   @override
   State<SwitcherSheet> createState() => _SwitcherSheetState();
@@ -52,22 +67,16 @@ class _SwitcherSheetState extends State<SwitcherSheet> {
   String? _error;
 
   /// The business asking for a step first, and the step.
-  BusinessEntry? _to;
-  String? _need;
-  MeSecondProofWays? _ways;
-  String? _sentTo;
-  final _pin = TextEditingController();
+  late BusinessEntry? _to = widget.to;
+  late String? _need = widget.need;
+  late ProofWays? _ways = widget.ways;
 
   @override
   void initState() {
     super.initState();
     if (widget.businesses == null) _load();
-  }
-
-  @override
-  void dispose() {
-    _pin.dispose();
-    super.dispose();
+    final open = widget.open;
+    if (open != null) WidgetsBinding.instance.addPostFrameCallback((_) => mounted ? _pick(open) : null);
   }
 
   Future<void> _load() async {
@@ -95,7 +104,7 @@ class _SwitcherSheetState extends State<SwitcherSheet> {
       if (e.has('second_proof_required')) {
         final w = e.body['ways'];
         _need = 'second_proof_required';
-        _ways = w is Map ? MeSecondProofWays.fromJson(w.cast<String, dynamic>()) : widget.auth.me?.secondProof?.ways;
+        _ways = w is Map ? ProofWays.of(w) : ProofWays.ofMe(widget.auth.me);
       } else if (e.has('passkey_required')) {
         _need = 'passkey_required';
       } else if (e.has('sso_required')) {
@@ -127,8 +136,8 @@ class _SwitcherSheetState extends State<SwitcherSheet> {
     _run(() => auth.switchTo(b.id));
   }
 
-  /// The passkey on this phone: signing in with it proves the phone and
-  /// meets a passkey rule; then the business opens.
+  /// A business that opens only with a passkey: signing in with the one
+  /// on this phone meets its rule; then the business opens.
   void _passkey() {
     final auth = widget.auth, to = _to!;
     _run(() async {
@@ -137,42 +146,18 @@ class _SwitcherSheetState extends State<SwitcherSheet> {
     });
   }
 
-  void _emailLink() {
-    _run(() async {
-      final r = await widget.auth.api.secondProofEmailStart();
-      if (mounted) setState(() => _sentTo = r.sentTo);
+  void _back() {
+    // Opened on the step (an invitation): back closes it.
+    if (widget.to != null) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+    setState(() {
+      _to = null;
+      _need = null;
+      _error = null;
     });
   }
-
-  /// Back from the email: the server asked whether the link was opened.
-  void _opened() {
-    final auth = widget.auth, to = _to!;
-    _run(() async {
-      await auth.refreshMe();
-      if (auth.me?.secondProof?.deviceProved != true) {
-        throw ApiError(400, {'error': 'The link has not been opened yet. Open it from the email, then try again.'});
-      }
-      await auth.switchTo(to.id);
-    });
-  }
-
-  void _usePin() {
-    final pin = _pin.text.trim();
-    if (pin.isEmpty) return;
-    final auth = widget.auth, to = _to!;
-    _run(() async {
-      await auth.api.secondProofPin(body: SecondProofPinRequest(pin: pin));
-      await auth.switchTo(to.id);
-    });
-  }
-
-  void _back() => setState(() {
-        _to = null;
-        _need = null;
-        _sentTo = null;
-        _error = null;
-        _pin.clear();
-      });
 
   @override
   Widget build(BuildContext context) {
@@ -215,44 +200,34 @@ class _SwitcherSheetState extends State<SwitcherSheet> {
   /// What the business asks before it opens.
   Widget _step(BuildContext context, BusinessEntry b, String need) {
     final t = TkTheme.tokens(context);
-    final ways = _ways;
-    final sent = _sentTo;
+    if (need == 'second_proof_required') {
+      final auth = widget.auth;
+      return TkSheet(
+        title: 'Prove it\'s you',
+        onBack: _busy ? null : _back,
+        body: SecondProof(
+          auth: auth,
+          ways: _ways ?? ProofWays.ofMe(auth.me),
+          business: b.name,
+          // Proved, and the session where it was: now the business opens.
+          onProved: () => auth.switchTo(b.id),
+        ),
+      );
+    }
     final List<Widget> body;
     if (need == 'sso_required') {
       body = [
         Text('${b.name} asks you to sign in with your organisation\'s sign-in.', style: tkText(size: 16, weight: 600, color: t.text)),
         Text('Sign out, then sign in to ${b.name} with your organisation\'s email.', style: tkFormNow(t)),
       ];
-    } else if (need == 'passkey_required') {
+    } else {
       body = [
         Text('${b.name} opens with your passkey: your phone\'s fingerprint, face or PIN.', style: tkText(size: 16, weight: 600, color: t.text)),
         TkButton(label: 'Use your passkey', primary: true, minHeight: 44, enabled: !_busy, onPressed: _passkey),
       ];
-    } else if (sent != null) {
-      body = [
-        Text('We sent a link to $sent. Open it on this phone within 15 minutes.', style: tkText(size: 16, weight: 600, color: t.text)),
-        Text('Opened it? Come back here and say so.', style: tkFormNow(t)),
-        TkButton(label: _busy ? 'Checking…' : 'I’ve opened the link', primary: true, minHeight: 44, enabled: !_busy, onPressed: _opened),
-        TkLinkButton(label: 'Send it again', onPressed: _busy ? null : _emailLink),
-      ];
-    } else {
-      body = [
-        Text(
-          'This is a new device for your account. Before ${b.name} opens, prove it\'s you another way. This keeps your businesses safe if your number ever goes to someone else.',
-          style: tkFormNow(t),
-        ),
-        if (ways?.passkey == true) TkButton(label: 'Use your passkey', primary: true, minHeight: 44, enabled: !_busy, onPressed: _passkey),
-        if (ways?.email == true) TkButton(label: 'Email me a link', minHeight: 44, enabled: !_busy, onPressed: _emailLink),
-        if (ways?.pin == true) ...[
-          TkKitField(label: 'Your chat PIN', hint: 'The PIN you set for approving on WhatsApp.', child: TkTextBox(controller: _pin, digits: 8, secret: true)),
-          TkButton(label: _busy ? 'Checking…' : 'Confirm with my PIN', minHeight: 44, enabled: !_busy, onPressed: _usePin),
-        ],
-        if (ways?.passkey != true && ways?.email != true && ways?.pin != true)
-          Text('Your account has no other way to prove it\'s you yet. Add an email or a passkey from a device you have used before.', style: tkFormNow(t)),
-      ];
     }
     return TkSheet(
-      title: need == 'second_proof_required' ? 'Prove it\'s you' : 'Open ${b.name}',
+      title: 'Open ${b.name}',
       onBack: _busy ? null : _back,
       body: TkFormBody(children: [...body, if (_error != null) TkErrorBox(_error!)]),
     );

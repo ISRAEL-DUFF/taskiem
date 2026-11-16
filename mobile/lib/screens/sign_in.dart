@@ -10,6 +10,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../api/transport.dart';
 import '../app/auth.dart';
+import '../app/phone.dart';
 import '../app/passkey.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
@@ -99,7 +100,7 @@ mixin AuthActing<T extends StatefulWidget> on State<T> {
 
   /// The server's answer in the words shown (its own, unless a screen has
   /// plainer ones).
-  String words(ApiError e) => e.message;
+  String words(ApiError e) => e.status == 429 ? tooMany : sentence(e.message);
 
   Future<void> act(Future<void> Function() f) async {
     // Pressing a button takes the cursor out of the field, as in a browser.

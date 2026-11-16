@@ -29,7 +29,7 @@ describe("a passkey as a second proof", () => {
     });
     await passkeyProof();
     expect(calls.map((c) => c.path)).toEqual(["/v1/auth/second-proof/passkey/options", "/v1/auth/second-proof/passkey"]);
-    expect(calls[1]?.body).toMatchObject({ assertion: { id: "cred", type: "public-key" } });
+    expect(calls[1]?.body).toMatchObject({ credential: { id: "cred", type: "public-key" } });
     expect(calls.some((c) => c.path === "/v1/auth/passkey")).toBe(false);
   });
 });

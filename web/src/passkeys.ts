@@ -138,5 +138,5 @@ export async function passkeyLogin() {
  * (taskiem-for-everyone §5.4). The session stays as it is, on You or in a
  * business; it is not a new sign-in. */
 export async function passkeyProof() {
-  await post("/v1/auth/second-proof/passkey", { assertion: await assert("/v1/auth/second-proof/passkey/options") });
+  await post("/v1/auth/second-proof/passkey", { credential: await assert("/v1/auth/second-proof/passkey/options") });
 }

@@ -376,10 +376,12 @@ class Transport {
     throw ApiError(status, json is Map<String, dynamic> ? json : {'error': 'The server answered $status.'});
   }
 
-  /// A 401 that asks for another step (a business's sign-in rules on
-  /// switching, a wrong chat PIN as a second proof) while the session goes
-  /// on: it signs nobody out (docs/spec/taskiem-for-everyone.md §5.4).
-  static const stillSignedIn = {'sso_required', 'passkey_required', 'second_proof_required', 'tries_left'};
+  /// A 401 that asks for another step while the session goes on: a
+  /// business's sign-in rules on switching, a wrong chat PIN as a second
+  /// proof, a wrong or expired code while changing the number. It signs
+  /// nobody out (docs/spec/taskiem-for-everyone.md §5.4, §5.5); any other
+  /// 401 to the session does, as on the web (web/src/api.ts keepsSession).
+  static const stillSignedIn = {'code_wrong', 'ticket_expired', 'tries_left', 'sso_required', 'passkey_required', 'second_proof_required'};
 
   // Plain http only to a server on this machine or the emulator's host,
   // for development.

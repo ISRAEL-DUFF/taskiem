@@ -12,6 +12,7 @@ import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/applinks.dart';
 import '../app/auth.dart';
+import '../app/phone.dart';
 import '../chat/approve.dart' show TkTextBox;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty;
@@ -19,6 +20,7 @@ import '../kit/mobile.dart';
 import '../kit/modal.dart' show showTkToast;
 import '../kit/sheet.dart' show TkKitField;
 import '../theme/theme.dart';
+import 'second_proof.dart';
 import 'start_something.dart';
 import 'switcher.dart';
 
@@ -89,19 +91,45 @@ class _YouHomeState extends State<YouHome> {
       _error = null;
     });
     try {
-      final r = await widget.auth.api.acceptInvitation(tenant: inv.tenantId);
+      final j = await widget.auth.transport.send('POST', '/v1/me/invitations/${Uri.encodeComponent(inv.tenantId)}/accept');
+      final r = InvitationAccepted.fromJson((j as Map).cast<String, dynamic>());
       // Moved into the business: the app opens on it.
       if (r.token != null) return await widget.auth.signedInWith(r.token);
       await widget.auth.refreshMe();
       await _load();
-      if (mounted) {
-        showTkToast(context, 'You joined ${inv.tenant}. Open it from Switch.');
+      final need = r.signIn;
+      if (!mounted) return;
+      if (need != null && need != 'session_ended') {
+        // A member now, but the business asks for a step first (its
+        // sign-in rules, or a second proof on a new phone): that step,
+        // then the business opens. The session stays on You till then.
+        setState(() => _busy = false);
+        await showBusinessStep(
+          context,
+          widget.auth,
+          to: BusinessEntry(id: inv.tenantId, name: inv.tenant, locked: true, lock: need),
+          need: need,
+          ways: ProofWays.of(j['ways']),
+        );
+        return;
       }
+      showTkToast(context, 'You joined ${inv.tenant}. Open it from Switch.');
     } on Object catch (e) {
       _error = _say(e);
     }
     if (mounted) setState(() => _busy = false);
   }
+
+  /// A new phone's businesses stay locked until it is proved (§5.4).
+  Future<void> _prove() => showSecondProof(
+        context,
+        widget.auth,
+        ways: ProofWays.ofMe(widget.auth.me),
+        onProved: () async {
+          await widget.auth.refreshMe();
+          if (mounted) showTkToast(context, 'Done: this device is yours now. Your businesses are open to you here.');
+        },
+      );
 
   Future<void> _decline(Invitation inv) async {
     setState(() => _busy = true);
@@ -153,6 +181,26 @@ class _YouHomeState extends State<YouHome> {
               ],
             ),
           if (_error != null) TkErrorBox(_error!),
+          if (auth.me?.secondProof?.required == true)
+            TkPanel(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        'You signed in on a new device, so your businesses are locked until you prove it\'s you.',
+                        style: tkText(size: 14, color: t.text),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TkButton(label: 'Prove it\'s you', onPressed: _prove),
+                  ],
+                ),
+              ],
+            ),
           TkPanel(
             children: [
               TkEmpty(
@@ -169,6 +217,26 @@ class _YouHomeState extends State<YouHome> {
             onPressed: () => tkPush<void>(context, StartSomethingScreen(auth: auth)),
           ),
           Text('A business, or workflows to automate your work.', textAlign: TextAlign.center, style: tkHint(t)),
+          // The web's Your businesses: the switcher's rows, on You.
+          if (businesses.isNotEmpty)
+            TkSection(
+              title: 'Your businesses',
+              children: [
+                TkPanel(
+                  children: [
+                    for (final b in businesses)
+                      TkListRow(
+                        title: b.name,
+                        sub: businessLine(b),
+                        icon: b.kind == 'workflows' ? 'workflows' : (b.locked ? 'lock' : null),
+                        letters: b.name,
+                        semanticsLabel: '${b.name}, ${b.kind == 'workflows' ? 'workflows' : 'business'}${b.locked ? ', ${lockWords(b.lock)}' : ''}',
+                        onTap: () => showSwitcher(context, auth, open: b),
+                      ),
+                  ],
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -243,7 +311,7 @@ class YouSettingsScreen extends StatelessWidget {
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [Text('Phone', style: tkHint(t)), Text(phone ?? 'No phone yet: add one to sign in with a code.', style: tkText(size: 15, weight: 500, color: t.text))],
+                          children: [Text('Phone', style: tkHint(t)), Text(phone == null ? 'No phone yet: add one to sign in with a code.' : showPhone(phone), style: tkText(size: 15, weight: 500, color: t.text))],
                         ),
                       ),
                       TkButton(
@@ -256,7 +324,7 @@ class YouSettingsScreen extends StatelessWidget {
                 if (email != null) line('Email', email),
               ],
             ),
-            TkButton(label: 'Sign out of this phone', minHeight: 44, onPressed: auth.signOut),
+            TkButton(label: 'Sign out', minHeight: 44, onPressed: auth.signOut),
           ],
         );
       },
@@ -264,8 +332,10 @@ class YouSettingsScreen extends StatelessWidget {
   }
 }
 
-/// Settings > Phone > Change number (§5.5): the new number and its code,
-/// and a code to the old number where the server asks for one.
+/// Settings > Phone > Change number (§5.5), as the web's (ChangeNumber.tsx):
+/// the new number and a code to it; where the server says this phone must
+/// also prove it is the person's, it asks first whether they still have the
+/// old number: **Yes** sends it a code too, **No** proves it another way.
 class ChangeNumberScreen extends StatefulWidget {
   const ChangeNumberScreen({super.key, required this.auth});
   final Auth auth;
@@ -274,31 +344,44 @@ class ChangeNumberScreen extends StatefulWidget {
   State<ChangeNumberScreen> createState() => _ChangeNumberScreenState();
 }
 
+enum _Step { number, old, code }
+
 class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
   final _phone = TextEditingController();
   final _code = TextEditingController();
   final _old = TextEditingController();
+  _Step _step = _Step.number;
+  String _e164 = '';
   PhoneChangeStartResponse? _sent;
   bool _needsOld = false;
   bool _busy = false;
+  bool _done = false;
   String? _error;
+  String? _note;
+  int _left = 0;
+  Timer? _tick;
 
   @override
   void dispose() {
+    _tick?.cancel();
     _phone.dispose();
     _code.dispose();
     _old.dispose();
     super.dispose();
   }
 
-  /// Whether this session will need the old number's code: made by a code
-  /// to the phone or chat on a phone not yet confirmed (the server says).
-  bool get _oldLikely {
-    final me = widget.auth.me;
-    return (me?.authMethod == 'phone' || me?.authMethod == 'chat') && me?.secondProof?.deviceProved != true && me?.user?.phone != null;
+  void _wait() {
+    _tick?.cancel();
+    _left = resendAfter;
+    _tick = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return t.cancel();
+      setState(() => _left--);
+      if (_left <= 0) t.cancel();
+    });
   }
 
   Future<void> _run(Future<void> Function() f) async {
+    if (_busy || _done) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -306,34 +389,76 @@ class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
     try {
       await f();
     } on ApiError catch (e) {
-      if (e.has('old_code_required')) _needsOld = true;
-      _error = e.message;
+      _error = codeProblem(e);
     } on Object catch (e) {
       _error = _say(e);
     }
     if (mounted) setState(() => _busy = false);
   }
 
-  void _send({bool confirmOld = false}) {
-    final phone = _phone.text.trim();
-    if (phone.isEmpty) return setState(() => _error = 'Enter the new number, with its country code if it is not Nigerian.');
+  Future<PhoneChangeStartResponse> _start(String phone, {bool confirmOld = false, bool sms = false}) async {
+    final r = await widget.auth.api.phoneChangeStart(body: PhoneChangeStartRequest(phone: phone, confirmOld: confirmOld ? true : null, via: sms ? 'sms' : null));
+    _sent = r;
+    _code.clear();
+    _old.clear();
+    _wait();
+    return r;
+  }
+
+  void _send() {
+    final phone = toE164(_phone.text);
+    if (phone == null) return setState(() => _error = notAPhone);
+    _note = null;
     _run(() async {
-      final r = await widget.auth.api.phoneChangeStart(body: PhoneChangeStartRequest(phone: phone, confirmOld: confirmOld || _oldLikely ? true : null));
-      _sent = r;
+      final r = await _start(phone);
+      _e164 = phone;
       _needsOld = r.needsOldCode;
+      _step = r.needsOldCode ? _Step.old : _Step.code;
     });
   }
 
-  void _verify() {
-    final phone = _phone.text.trim();
-    _run(() async {
-      final r = await widget.auth.api.phoneChangeVerify(
-        body: PhoneChangeVerifyRequest(code: _code.text.trim(), oldCode: _needsOld ? _old.text.trim() : null, phone: phone),
+  /// Yes, the old number: a code to it too.
+  void _yes() => _run(() async {
+        await _start(_e164, confirmOld: true);
+        _step = _Step.code;
+      });
+
+  /// No: another proof (a passkey, the email's link, the password, the
+  /// chat PIN); then only the new number's code.
+  Future<void> _no() => showSecondProof(
+        context,
+        widget.auth,
+        ways: ProofWays.ofMe(widget.auth.me),
+        onProved: () async {
+          await widget.auth.refreshMe();
+          if (mounted) {
+            setState(() {
+              _needsOld = false;
+              _step = _Step.code;
+            });
+          }
+        },
       );
-      await widget.auth.refreshMe();
-      if (!mounted) return;
-      showTkToast(context, 'Your number is now ${r.phone}');
-      unawaited(Navigator.of(context).maybePop());
+
+  void _verify() {
+    if (_code.text.length != 6 || (_needsOld && _old.text.length != 6)) return;
+    _run(() async {
+      try {
+        final r = await widget.auth.api.phoneChangeVerify(
+          body: PhoneChangeVerifyRequest(code: _code.text, oldCode: _needsOld ? _old.text : null, phone: _e164),
+        );
+        _done = true;
+        await widget.auth.refreshMe();
+        if (!mounted) return;
+        showTkToast(context, 'Your number is now ${showPhone(r.phone)}');
+        unawaited(Navigator.of(context).maybePop());
+      } on ApiError catch (e) {
+        // Run out: a new code, from the number.
+        if (!e.has('ticket_expired')) rethrow;
+        _note = codeExpired;
+        _step = _Step.number;
+        _sent = null;
+      }
     });
   }
 
@@ -341,8 +466,57 @@ class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final sent = _sent;
+    final old = widget.auth.me?.user?.phone as String?;
+    final List<Widget> body = switch (_step) {
+      _Step.number => [
+          if (_note != null) ...[Semantics(liveRegion: true, child: Text(_note!, style: tkText(size: 14, color: t.text))), const SizedBox(height: 10)],
+          TkKitField(
+            label: 'New phone number',
+            hint: 'A Nigerian number can start with 0. For another country, start with + and its code.',
+            child: TkTextBox(key: const ValueKey('new-phone'), controller: _phone, phone: true),
+          ),
+          const SizedBox(height: 14),
+          TkButton(label: _busy ? 'Sending…' : 'Send a code', primary: true, minHeight: 44, enabled: !_busy, onPressed: _send),
+        ],
+      _Step.old => [
+          Text(
+            'To keep your account safe, we also check it\'s you. Do you still have your old number${old == null ? '' : ', ${showPhone(old)}'}?',
+            style: tkText(size: 15, color: t.text),
+          ),
+          const SizedBox(height: 14),
+          TkButton(label: 'Yes, send it a code', primary: true, minHeight: 44, enabled: !_busy, onPressed: _yes),
+          const SizedBox(height: 8),
+          TkButton(label: 'No, prove it\'s me another way', minHeight: 44, enabled: !_busy, onPressed: _no),
+        ],
+      _Step.code => [
+          Semantics(
+            liveRegion: true,
+            child: Text(
+              '${sentWords(sent?.sentVia ?? 'whatsapp', _e164)}${_needsOld && old != null && sent?.oldSentVia != null ? ' And one to your old number, ${showPhone(old)}.' : ''}',
+              style: tkText(size: 14, color: t.text),
+            ),
+          ),
+          const SizedBox(height: 14),
+          TkKitField(
+            label: 'Code sent to your new number',
+            child: TkTextBox(key: const ValueKey('new-code'), controller: _code, digits: 6),
+          ),
+          if (_left > 0)
+            Padding(padding: const EdgeInsets.only(top: 6), child: Text('You can ask for a new code in ${countdown(_left)}.', style: tkHint(t)))
+          else
+            TkLinkButton(label: 'Send a new code', onPressed: _busy ? null : () => _run(() => _start(_e164, confirmOld: _needsOld))),
+          if (sent?.sentVia != 'sms')
+            TkLinkButton(label: 'Send by SMS instead', onPressed: _busy ? null : () => _run(() => _start(_e164, confirmOld: _needsOld, sms: true))),
+          if (_needsOld) ...[
+            const SizedBox(height: 14),
+            TkKitField(label: 'Code sent to your old number', child: TkTextBox(key: const ValueKey('old-code'), controller: _old, digits: 6)),
+          ],
+          const SizedBox(height: 14),
+          TkButton(label: _busy || _done ? 'Checking…' : 'Confirm the new number', primary: true, minHeight: 44, enabled: !_busy && !_done, onPressed: _verify),
+        ],
+    };
     return TkScreen(
-      title: 'Change your number',
+      title: old == null ? 'Add your phone' : 'Change your number',
       children: [
         TkPanel(
           padding: const EdgeInsets.all(16),
@@ -352,37 +526,7 @@ class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
               children: [
                 Text('Your account keeps everything: your chats, orders and businesses.', style: tkHint(t)),
                 const SizedBox(height: 14),
-                if (sent == null) ...[
-                  TkKitField(label: 'New phone number', child: TkTextBox(key: const ValueKey('new-phone'), controller: _phone, phone: true)),
-                  const SizedBox(height: 14),
-                  TkButton(label: _busy ? 'Sending…' : 'Send a code', primary: true, minHeight: 44, enabled: !_busy, onPressed: _send),
-                ] else ...[
-                  TkKitField(
-                    label: 'Code sent to your new number',
-                    child: TkTextBox(key: const ValueKey('new-code'), controller: _code, digits: 6),
-                  ),
-                  if (_needsOld) ...[
-                    const SizedBox(height: 14),
-                    TkKitField(
-                      label: 'Code sent to your old number',
-                      hint: sent.oldSentVia == null ? 'Still have your old number? We’ll send it a code too.' : null,
-                      child: TkTextBox(key: const ValueKey('old-code'), controller: _old, digits: 6),
-                    ),
-                    if (sent.oldSentVia == null)
-                      TkLinkButton(label: 'Send a code to my old number', onPressed: _busy ? null : () => _send(confirmOld: true)),
-                  ],
-                  const SizedBox(height: 14),
-                  TkButton(label: _busy ? 'Checking…' : 'Confirm the new number', primary: true, minHeight: 44, enabled: !_busy, onPressed: _verify),
-                  TkLinkButton(
-                    label: 'Use another number',
-                    onPressed: () => setState(() {
-                      _sent = null;
-                      _code.clear();
-                      _old.clear();
-                      _error = null;
-                    }),
-                  ),
-                ],
+                ...body,
               ],
             ),
           ],

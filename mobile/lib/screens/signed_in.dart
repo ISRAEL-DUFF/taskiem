@@ -202,7 +202,7 @@ class _SignedInScreenState extends State<SignedInScreen> {
               SlackCard(auth: widget.auth),
               const SizedBox(height: 16),
               TkButton(
-                label: 'Sign out of this phone',
+                label: 'Sign out',
                 minHeight: 44,
                 onPressed: widget.auth.signOut,
               ),
