@@ -159,6 +159,11 @@ func (o *Orders) PlaceChatTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, i
 			return Order{}, errors.New("storefront: no free reference for the order")
 		}
 	}
+	if o.PhoneIndex != nil {
+		if err := o.PhoneIndex.WriteTx(ctx, tx, tenant, id, in.Customer.Phone); err != nil {
+			return Order{}, err
+		}
+	}
 	if err := audit(ctx, tx, tenant, "storefront.order_confirmed", ref, map[string]any{"kind": "chat", "by": in.By, "pay": in.Pay}); err != nil {
 		return Order{}, err
 	}

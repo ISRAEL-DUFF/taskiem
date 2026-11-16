@@ -103,6 +103,11 @@ type Orders struct {
 	// five-more-flows.md, phase 2), not by SMS; "{link}" is already the
 	// order's status link.
 	ChatNotify func(ctx context.Context, tenant uuid.UUID, ord Order, text string) error
+	// PhoneIndex records which phone an order or booking was made with,
+	// across businesses, in the transaction that makes it
+	// (docs/spec/taskiem-for-everyone.md §13; engine/phoneindex); nil
+	// records nothing.
+	PhoneIndex PhoneIndexer
 	// AfterPaid hears of an order a payment moved to paid, after the
 	// payment is counted (dispatch tells the rider at the door).
 	AfterPaid func(ctx context.Context, tenant uuid.UUID, ord Order) error
@@ -587,6 +592,11 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 		return Order{}, err
 	} else if tag.RowsAffected() == 0 {
 		return Order{}, fmt.Errorf("storefront: no %s action for this storefront", x.kind)
+	}
+	if o.PhoneIndex != nil {
+		if err := o.PhoneIndex.WriteTx(ctx, tx, x.tenant, id, sub.Customer.Phone); err != nil {
+			return Order{}, err
+		}
 	}
 	if b != nil {
 		kept := true

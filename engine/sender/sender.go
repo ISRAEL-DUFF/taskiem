@@ -124,8 +124,12 @@ func (q *Queue) Enqueue(ctx context.Context, tx pgx.Tx, m Message) (bool, error)
 		}
 		if allowed > 0 {
 			var used int64
-			if err := tx.QueryRow(ctx, `SELECT count(*) FROM platform_messages WHERE tenant_id = $1 AND channel = 'sms'
-				AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`, m.Tenant).Scan(&used); err != nil {
+			// Sign-in codes sent to its customers count too
+			// (customer_message_charges, docs/spec/taskiem-for-everyone.md §15).
+			if err := tx.QueryRow(ctx, `SELECT (SELECT count(*) FROM platform_messages WHERE tenant_id = $1 AND channel = 'sms'
+				AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')
+				+ (SELECT count(*) FROM customer_message_charges WHERE tenant_id = $1 AND channel = 'sms'
+				AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')`, m.Tenant).Scan(&used); err != nil {
 				return false, err
 			}
 			if used >= allowed {
