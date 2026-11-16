@@ -257,34 +257,12 @@ class _TkSheetState extends State<TkSheet> with SingleTickerProviderStateMixin {
                                   // `.tk-back { margin-right: 4px }` with the head's 12 px gap.
                                   const SizedBox(width: 16),
                                 ],
-                                // `.tk-sheet-head.crumbed`: "Products / Jollof rice", the
-                                // first word the way back.
+                                // As drawn (docs/spec/mobile-app-look.md): a round
+                                // Back, then what it is in ("Products") small over
+                                // the title.
                                 if (onBack != null && crumb != null) ...[
-                                  TapArea(
-                                    child: Semantics(
-                                      button: true,
-                                      label: '$crumb: back to the list',
-                                      onTap: onBack,
-                                      excludeSemantics: true,
-                                      child: GestureDetector(
-                                        behavior: HitTestBehavior.opaque,
-                                        onTap: onBack,
-                                        child: ConstrainedBox(
-                                          constraints: const BoxConstraints(minHeight: 32),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(crumb, style: tkText(size: 14, weight: 500, color: t.muted)),
-                                              const SizedBox(width: 8),
-                                              Text('/', style: tkText(size: 14, weight: 500, color: t.muted)),
-                                              const SizedBox(width: 2),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
+                                  _Round(icon: 'back', label: '$crumb: back to the list', onTap: onBack),
+                                  const SizedBox(width: 12),
                                 ],
                                 if (lead != null) ...[
                                   SizedBox(width: 48, height: 48, child: ExcludeSemantics(child: lead)),
@@ -296,7 +274,7 @@ class _TkSheetState extends State<TkSheet> with SingleTickerProviderStateMixin {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        if (crumb != null && onBack == null) Text(crumb, style: tkText(size: 13, weight: 600, color: t.muted)),
+                                        if (crumb != null) Text(crumb, style: tkText(size: 13, weight: 500, color: t.muted)),
                                         Text.rich(
                                           TextSpan(
                                             text: title,
@@ -308,11 +286,8 @@ class _TkSheetState extends State<TkSheet> with SingleTickerProviderStateMixin {
                                               ],
                                             ],
                                           ),
-                                          style: onBack != null && crumb != null
-                                              // `.tk-sheet-head.crumbed h2 { font-size: 14px; font-weight: 700; letter-spacing: 0 }`
-                                              ? tkText(size: 14, weight: 700, lineHeight: 1.35, color: t.text)
-                                              // The app's titles: Inter Tight (docs/spec/mobile-app-look.md).
-                                              : lead != null
+                                          // The app's titles: Inter Tight (docs/spec/mobile-app-look.md).
+                                          style: lead != null || crumb != null
                                               ? tkDisplay(size: 22, lineHeight: 1.15, letterSpacing: -0.6, color: t.text)
                                               : tkDisplay(size: 24, lineHeight: 1.2, letterSpacing: -0.8, color: t.text),
                                         ),

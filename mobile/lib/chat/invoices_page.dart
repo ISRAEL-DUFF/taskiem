@@ -32,6 +32,9 @@ import 'product_form.dart' show SaveKey, formKey;
 import 'storefront_orders_page.dart' show isMasked;
 import 'words.dart' show CardTone, naira;
 import '../kit/mobile.dart';
+import '../kit/icon.dart';
+import '../kit/tap_area.dart';
+import 'order_sheet.dart' show QtyStepper;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -1487,6 +1490,67 @@ class _InvoiceEditorPageState extends State<InvoiceEditorPage> {
     }
   }
 
+  /// A linked business picked, or '' for someone else.
+  void _pickBuyer(String pick) {
+    final b = _buyers.where((x) => x['business'] == pick).firstOrNull;
+    setState(() {
+      _linked = b == null ? null : pick;
+      _name.text = b == null ? (_linked == null ? _name.text : '') : _str(b['name']);
+      if (b != null) {
+        _phone.clear();
+        _email.clear();
+      }
+    });
+  }
+
+  Future<void> _fromContacts() async {
+    final c = await pickContact();
+    if (c == null || !mounted) return;
+    setState(() {
+      if (c.name.isNotEmpty) _name.text = c.name;
+      if (c.phone.isNotEmpty) _phone.text = c.phone;
+    });
+  }
+
+  Widget _whoFace(TkTokens t, String name, bool on, VoidCallback tap) {
+    final look = TkLook.of(context);
+    final other = name == 'Someone else';
+    return TapArea(
+      child: Semantics(
+        button: true,
+        selected: on,
+        label: other ? 'Who is it for: Someone else' : 'Who is it for: $name (linked)',
+        excludeSemantics: true,
+        onTap: tap,
+        child: GestureDetector(
+          onTap: tap,
+          child: SizedBox(
+            width: 66,
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(2.5),
+                  decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: on ? (TkTheme.of(context).mode == TkMode.dark ? look.lime : t.brand) : const Color(0x00000000), width: 2)),
+                  child: other
+                      ? Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(color: t.tkSoft, shape: BoxShape.circle),
+                          alignment: Alignment.center,
+                          child: TkIcon('b-people', size: 20, color: t.text),
+                        )
+                      : TkFace(tkInitials(name), size: 44, colors: tkFaceFor(name)),
+                ),
+                const SizedBox(height: 4),
+                Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 11.5, weight: on ? 700 : 500, color: on ? t.text : t.muted)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
@@ -1494,7 +1558,8 @@ class _InvoiceEditorPageState extends State<InvoiceEditorPage> {
     final manage = widget.auth.can('invoice.manage');
     return TkPageScreen(
       title: x == null ? 'New invoice' : 'Change ${x['number']}',
-      backLabel: 'Back',
+      titleSize: 26,
+      backLabel: 'Back to Invoices',
       children: [
         if (!manage)
           Text('You can see invoices, but not make or change them. Someone who manages invoices can.', style: tkHint(t))
@@ -1504,154 +1569,149 @@ class _InvoiceEditorPageState extends State<InvoiceEditorPage> {
           Text('Loading…', style: tkHint(t))
         else ...[
           if (_hidden && _linked == null) Text('The customer’s details are hidden from you. Enter them again to save your changes.', style: tkHint(t)),
-          TkPageCard(
-            title: 'Customer',
-            children: [
-              if (_buyers.isNotEmpty) ...[
-                TkKitField(
-                  field: false,
-                  label: 'Who is it for?',
-                  hint: _linked != null ? 'A linked business: the invoice reaches it as a bill in its business.' : null,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: TkSmallButton(
-                      label: _linked == null
-                          ? 'Someone else'
-                          : '${_buyers.where((b) => b['business'] == _linked).map((b) => _str(b['name'])).firstOrNull ?? _name.text} (linked)',
-                      semantics: 'Who is it for: ${_linked == null ? 'Someone else' : _name.text}',
-                      onPressed: () async {
-                        final pick = await showTkModalChoices(
-                          context,
-                          title: 'Who is it for?',
-                          value: _linked ?? '',
-                          choices: [('', 'Someone else'), for (final b in _buyers) (_str(b['business']), '${b['name']} (linked)')],
-                        );
-                        if (pick == null) return;
-                        final b = _buyers.where((x) => x['business'] == pick).firstOrNull;
-                        setState(() {
-                          _linked = b == null ? null : pick;
-                          _name.text = b == null ? '' : _str(b['name']);
-                          if (b != null) {
-                            _phone.clear();
-                            _email.clear();
-                          }
-                        });
-                      },
+          // As drawn (docs/spec/mobile-app-look.md, "The remaining screens"):
+          // a linked business picked by its face, or someone else, picked
+          // from the phone's contacts or typed; one amount or the items, each
+          // with − n +.
+          TkSection(title: 'Customer', children: const []),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(20)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_buyers.isNotEmpty) ...[
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        for (final b in _buyers) _whoFace(t, _str(b['name']), _linked == _str(b['business']), () => _pickBuyer(_str(b['business']))),
+                        _whoFace(t, 'Someone else', _linked == null, () => _pickBuyer('')),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 10),
+                  if (_linked != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text('A linked business: the invoice reaches it as a bill in its business.', style: tkHint(t)),
+                    ),
+                  const SizedBox(height: 10),
+                ],
+                if (_linked == null) ...[
+                  TkKitField(
+                    label: 'Name',
+                    child: Row(
+                      children: [
+                        Expanded(child: TkTextBox(controller: _name, max: 120)),
+                        const SizedBox(width: 8),
+                        TkHeadButton(icon: 'b-people', label: 'Pick from your contacts', onCard: true, onTap: _fromContacts),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TkButtonRow([
+                    TkKitField(label: 'Phone number', child: TkTextBox(controller: _phone, phone: true)),
+                    TkKitField(label: 'Email', child: TkTextBox(controller: _email, plain: true)),
+                  ]),
+                  const SizedBox(height: 6),
+                  Text('Give a phone number or an email, or both.', style: tkHint(t)),
+                ],
               ],
-              if (_linked == null) ...[
-                TkKitField(
-                  label: 'Name',
-                  child: TkTextBox(controller: _name, max: 120),
-                ),
-                const SizedBox(height: 10),
-                TkKitField(
-                  label: 'Phone number',
-                  hint: 'For the SMS.',
-                  child: TkTextBox(controller: _phone, phone: true),
-                ),
-                const SizedBox(height: 10),
-                TkKitField(
-                  label: 'Email',
-                  hint: 'For the email.',
-                  child: TkTextBox(controller: _email, plain: true),
-                ),
-                const SizedBox(height: 6),
-                Text('Give a phone number or an email, or both.', style: tkHint(t)),
-              ],
-            ],
+            ),
           ),
-          TkPageCard(
-            title: 'What it is for',
-            children: [
-              for (final (v, words) in const [('amount', 'One amount'), ('items', 'A list of items')])
-                TkChoiceRow(
-                  control: TkRadio(checked: _mode == v),
-                  label: Text(words, style: tkText(size: 15, color: t.text)),
-                  onTap: () => setState(() => _mode = v),
-                ),
-              if (_mode == 'amount') ...[
-                TkKitField(
-                  label: 'Amount (₦)',
-                  child: TkTextBox(controller: _amount, money: true, hint: '25,000'),
-                ),
-                const SizedBox(height: 10),
-                TkKitField(
-                  label: 'Description',
-                  hint: 'What it is for, such as Catering for 12 October. Optional.',
-                  child: TkTextBox(controller: _description, max: 200),
-                ),
-              ] else ...[
-                for (var i = 0; i < _items.length; i++)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: Semantics(
-                      container: true,
-                      label: 'Item ${i + 1}',
-                      explicitChildNodes: true,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          TkKitField(
-                            label: 'Description',
-                            child: TkTextBox(controller: _items[i].description, max: 200),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 8,
-                            crossAxisAlignment: WrapCrossAlignment.end,
-                            children: [
-                              SizedBox(
-                                width: 100,
-                                child: TkKitField(
-                                  label: 'Quantity',
-                                  child: TkTextBox(controller: _items[i].quantity, digits: 6),
-                                ),
-                              ),
-                              SizedBox(
-                                width: 150,
-                                child: TkKitField(
-                                  label: 'Price each (₦)',
-                                  child: TkTextBox(controller: _items[i].price, money: true, hint: '1,500'),
-                                ),
-                              ),
-                              Padding(padding: const EdgeInsets.only(bottom: 14), child: _text(t, naira(_items[i].total))),
-                            ],
-                          ),
-                          if (_items.length > 1)
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: TkSmallButton(
-                                label: 'Remove',
-                                danger: true,
-                                semantics: 'Remove item ${i + 1}',
-                                onPressed: () {
-                                  final gone = _items[i];
-                                  setState(() => _items.removeAt(i));
-                                  WidgetsBinding.instance.addPostFrameCallback((_) => gone.dispose());
-                                },
-                              ),
+          TkSection(title: 'What it is for', children: const []),
+          TkChips<String>(
+            label: 'What it is for',
+            padding: EdgeInsets.zero,
+            chips: const [('amount', 'One amount'), ('items', 'A list of items')],
+            on: _mode,
+            onPick: (v) => setState(() => _mode = v),
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(20)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_mode == 'amount') ...[
+                  TkKitField(label: 'Amount (₦)', child: TkTextBox(controller: _amount, money: true, hint: '25,000')),
+                  const SizedBox(height: 10),
+                  TkKitField(
+                    label: 'Description',
+                    hint: 'What it is for, such as Catering for 12 October. Optional.',
+                    child: TkTextBox(controller: _description, max: 200),
+                  ),
+                ] else ...[
+                  for (var i = 0; i < _items.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Semantics(
+                        container: true,
+                        label: 'Item ${i + 1}',
+                        explicitChildNodes: true,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(child: TkKitField(label: 'Description', child: TkTextBox(controller: _items[i].description, max: 200))),
+                                const SizedBox(width: 10),
+                                Padding(padding: const EdgeInsets.only(top: 18), child: Text(naira(_items[i].total), style: tkText(size: 15, weight: 700, color: t.text).copyWith(fontFeatures: tkTabular))),
+                              ],
                             ),
-                        ],
+                            const SizedBox(height: 8),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Builder(builder: (_) {
+                                  final q = int.tryParse(_items[i].quantity.text.trim()) ?? 1;
+                                  return QtyStepper(
+                                    name: 'item ${i + 1}',
+                                    n: q,
+                                    on: true,
+                                    onLess: q > 1 ? () => _items[i].quantity.text = '${q - 1}' : null,
+                                    onMore: () => _items[i].quantity.text = '${q + 1}',
+                                  );
+                                }),
+                                const SizedBox(width: 10),
+                                Expanded(child: TkKitField(label: 'Price each (₦)', child: TkTextBox(controller: _items[i].price, money: true, hint: '1,500'))),
+                              ],
+                            ),
+                            if (_items.length > 1)
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TkLink(
+                                  label: 'Remove',
+                                  onTap: () {
+                                    final gone = _items[i];
+                                    setState(() => _items.removeAt(i));
+                                    WidgetsBinding.instance.addPostFrameCallback((_) => gone.dispose());
+                                  },
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
+                  if (_items.length < 50)
+                    Align(alignment: Alignment.centerLeft, child: TkLink(label: '+ Add an item', onTap: () => setState(() => _items.add(_Item(_changed))))),
+                ],
+                const SizedBox(height: 10),
+                Container(height: 1, color: TkLook.of(context).line),
+                const SizedBox(height: 10),
+                Semantics(
+                  liveRegion: true,
+                  label: 'Total ${naira(_total)}',
+                  excludeSemantics: true,
+                  child: Row(
+                    children: [
+                      Expanded(child: Text('Total', style: tkText(size: 15, weight: 700, color: t.text))),
+                      Text(naira(_total), style: tkDisplay(size: 20, letterSpacing: -0.4, color: t.text).copyWith(fontFeatures: tkTabular)),
+                    ],
                   ),
-                if (_items.length < 50)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TkSmallButton(label: 'Add an item', onPressed: () => setState(() => _items.add(_Item(_changed)))),
-                  ),
+                ),
               ],
-              const SizedBox(height: 10),
-              Semantics(
-                liveRegion: true,
-                child: Text('Total ${naira(_total)}', style: tkText(size: 16, weight: 700, color: t.text)),
-              ),
-            ],
+            ),
           ),
           TkPageCard(
             title: 'When and a note',

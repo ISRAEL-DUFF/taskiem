@@ -13,6 +13,8 @@ import '../kit/kit.dart';
 import '../kit/list.dart';
 import '../kit/modal.dart';
 import '../kit/sheet.dart';
+import '../kit/mobile.dart' show TkFormGroup;
+import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'words.dart' show naira;
 
@@ -226,13 +228,34 @@ class _PriceListFormState extends State<PriceListForm> {
       onSaved: widget.onSaved,
       ready: !bad,
       canEdit: widget.canEdit,
+      // As drawn: each item on one card, its name and unit, its price
+      // beside it.
       children: [
-        for (var i = 0; i < _items.length; i++)
-          TkMoneyField(
-            key: ValueKey(_items[i]['item_id']),
-            label: '${_items[i]['name'] ?? ''}${(_items[i]['unit'] as String? ?? '').isNotEmpty ? ', a ${_items[i]['unit']}' : ''}',
-            controller: _prices[i],
-          ),
+        TkFormGroup(children: [
+          for (var i = 0; i < _items.length; i++)
+            Row(
+              key: ValueKey(_items[i]['item_id']),
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${_items[i]['name'] ?? ''}', style: tkText(size: 15, weight: 600, color: TkTheme.tokens(context).text)),
+                      if ((_items[i]['unit'] as String? ?? '').isNotEmpty) Text('a ${_items[i]['unit']}', style: tkText(size: 12.5, color: TkTheme.tokens(context).muted)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 128,
+                  child: Semantics(
+                    label: '${_items[i]['name'] ?? ''}${(_items[i]['unit'] as String? ?? '').isNotEmpty ? ', a ${_items[i]['unit']}' : ''}',
+                    child: TkTextBox(controller: _prices[i], money: true),
+                  ),
+                ),
+              ],
+            ),
+        ]),
       ],
     );
   }

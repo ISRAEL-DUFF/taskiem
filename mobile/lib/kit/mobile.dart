@@ -987,3 +987,42 @@ class TkFormSheet extends StatelessWidget {
     ),
   );
 }
+
+/// A group of a form's fields (docs/spec/mobile-app-look.md, "The remaining
+/// screens"): its heading on the ground, the fields on a card, their boxes
+/// a shade of the ground so they show on it.
+class TkFormGroup extends StatelessWidget {
+  const TkFormGroup({super.key, this.title, required this.children});
+  final String? title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (title != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
+            child: Semantics(header: true, child: Text(title!, style: tkDisplay(size: 20, letterSpacing: -0.4, color: t.text))),
+          ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+          child: TkTheme.recolour(
+            context,
+            (x) => x.copyWith(field: look.ground, tkSoft: look.ground),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 12), children[i]],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}

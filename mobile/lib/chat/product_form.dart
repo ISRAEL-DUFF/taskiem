@@ -23,6 +23,7 @@ import '../kit/list.dart';
 import '../kit/modal.dart' show showTkModalChoices;
 import '../kit/sheet.dart';
 import '../kit/tap_area.dart';
+import '../kit/mobile.dart' show TkFormGroup;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'attachments.dart' show PickedFile;
@@ -314,8 +315,10 @@ class _PhotoAddState extends State<PhotoAdd> {
           label: 'Add a photo',
           explicitChildNodes: true,
           // `.tk-photo-ways`: side by side, wrapping, each growing.
+          // As drawn: three round icons, centred; their names are spoken.
           child: Wrap(
-            spacing: 8,
+            alignment: WrapAlignment.center,
+            spacing: 12,
             runSpacing: 8,
             children: [
               way('camera', 'Take a photo', () => _take(() async => [?await widget.pickers.camera(side: sendSide)], camera: true)),
@@ -367,17 +370,11 @@ class _Way extends StatelessWidget {
           child: Opacity(
             opacity: onTap == null ? 0.5 : 1,
             child: Container(
-              constraints: const BoxConstraints(minHeight: 40),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(color: t.tkSoft, borderRadius: BorderRadius.circular(999)),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TkIcon(icon, size: 18, color: ink),
-                  const SizedBox(width: 8),
-                  Text(label, style: tkText(size: 14, weight: 700, color: ink)),
-                ],
-              ),
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(color: t.tkSoft, shape: BoxShape.circle),
+              alignment: Alignment.center,
+              child: TkIcon(icon, size: 22, color: ink),
             ),
           ),
         ),
@@ -943,13 +940,21 @@ class _ProductFormState extends State<ProductForm> {
           (_tradePrice.text.trim().isEmpty || tradeKobo != null) &&
           floorKobo != null,
       children: [
-        ProductPhotos(auth: widget.auth, row: _id, name: _it['name'] as String? ?? '', canEdit: widget.canEdit, pickers: widget.pickers),
+        // As drawn (docs/spec/mobile-app-look.md, "The remaining screens"):
+        // the photo on its card, then Details and Prices as headed cards,
+        // then who sees it, its sizes and whether it shows, as rows.
+        TkFormGroup(children: [
+  ProductPhotos(auth: widget.auth, row: _id, name: _it['name'] as String? ?? '', canEdit: widget.canEdit, pickers: widget.pickers),
+        ]),
+        TkFormGroup(title: 'Details', children: [
         TkKitField(
           label: 'Name',
           child: TkTextBox(controller: _name, max: 120),
         ),
         CategoryField(transport: _t, controller: _category),
-        if (chosen != null) ...[
+        ]),
+        TkFormGroup(title: 'Prices', children: [
+          if (chosen != null) ...[
           // `.tk-form-two`: two columns, 12 apart.
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -975,6 +980,18 @@ class _ProductFormState extends State<ProductForm> {
                 _fillTyped();
               }),
             ),
+          if (_floors != null)
+            TkMoneyField(
+              label: 'Lowest price',
+              controller: _floor,
+              hint: (floorKobo ?? 0) > 0 && (tradeKobo ?? 0) > 0 && floorKobo! > tradeKobo!
+                  ? 'Higher than the trade price: every offer will wait for you.'
+                  : 'Staff can agree offers down to this. Under it, an offer waits for your OK. Buyers never see it.',
+            ),
+          ] else
+            TkMoneyField(label: 'Price', controller: _price),
+        ]),
+        if (chosen != null) ...[
           // `.tk-share-box`: who sees the list, and Change.
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1054,16 +1071,7 @@ class _ProductFormState extends State<ProductForm> {
                       ],
                     ),
             ),
-          if (_floors != null)
-            TkMoneyField(
-              label: 'Lowest price',
-              controller: _floor,
-              hint: (floorKobo ?? 0) > 0 && (tradeKobo ?? 0) > 0 && floorKobo! > tradeKobo!
-                  ? 'Higher than the trade price: every offer will wait for you.'
-                  : 'Staff can agree offers down to this. Under it, an offer waits for your OK. Buyers never see it.',
-            ),
-        ] else
-          TkMoneyField(label: 'Price', controller: _price),
+        ],
         if (!sizes)
           TkFormRow(
             title: 'In stock',
@@ -1278,26 +1286,34 @@ class _ProductAddState extends State<ProductAdd> {
       ready: _name.text.trim().isNotEmpty && kobo != null && kobo > 0,
       children: [
         if (_sending != null) sendingLine(context, _sending),
+        // As drawn: the photo on its card, then Details, then the price and
+        // what it is sold by on a card, and how many are in stock.
         if (_photosOK)
           if (_added != null)
             PhotoFailures(failed: _failed)
           else
-            PendingPhotos(picks: _picks, pickers: widget.pickers, onChange: (p) => setState(() => _picks = p), onError: (w) => setState(() => _photoError = w)),
+            TkFormGroup(children: [PendingPhotos(picks: _picks, pickers: widget.pickers, onChange: (p) => setState(() => _picks = p), onError: (w) => setState(() => _photoError = w))]),
         if (_photoError != null) TkErrorBox(_photoError!),
         if (_added != null)
           Text('${_name.text.trim()} is in your products.', style: tkFormNow(t))
         else ...[
-          TkKitField(
-            label: 'Name',
-            child: TkTextBox(controller: _name, hint: 'Rice, 50kg bag', max: 120),
-          ),
-          CategoryField(transport: _t, controller: _category),
-          TkMoneyField(label: 'Price', controller: _price),
-          TkKitField(
-            label: 'Sold by the',
-            hint: 'bag, carton, piece…',
-            child: TkTextBox(controller: _unit),
-          ),
+          TkFormGroup(title: 'Details', children: [
+            TkKitField(
+              label: 'Name',
+              child: TkTextBox(controller: _name, hint: 'Rice, 50kg bag', max: 120),
+            ),
+            CategoryField(transport: _t, controller: _category),
+          ]),
+          TkFormGroup(children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: TkMoneyField(label: 'Price', controller: _price)),
+                const SizedBox(width: 12),
+                Expanded(child: TkKitField(label: 'Sold by the', child: TkTextBox(controller: _unit, hint: 'bag, carton…'))),
+              ],
+            ),
+          ]),
           TkFormRow(
             title: 'In stock now',
             trailing: TkStepper(label: 'In stock now', value: _count, onChanged: (n) => setState(() => _count = n)),

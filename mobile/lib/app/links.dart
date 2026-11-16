@@ -2,6 +2,7 @@
 // the phone's own browser tab (Custom Tabs on Android, Safari's on an
 // iPhone), over the app and back to it when closed. Only web addresses.
 
+import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Opens [url] in the browser tab; false when it is not a web address or
@@ -33,6 +34,19 @@ Future<bool> Function(String phone) callPhone = (phone) async {
     return await launchUrl(Uri(scheme: 'tel', path: phone.replaceAll(RegExp(r'[^\d+]'), '')));
   } on Object {
     return false;
+  }
+};
+
+/// A person picked from the phone's contacts, in the phone's own picker
+/// (the app reads only the one picked); null when none was. A test stands
+/// in for it.
+Future<({String name, String phone})?> Function() pickContact = () async {
+  try {
+    final c = await FlutterNativeContactPicker().selectPhoneNumber();
+    if (c == null) return null;
+    return (name: c.fullName ?? '', phone: c.selectedPhoneNumber ?? (c.phoneNumbers?.firstOrNull ?? ''));
+  } on Object {
+    return null;
   }
 };
 
