@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 import '../kit/polling.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
+import '../kit/forms.dart' show nairaText;
 import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/page.dart';
@@ -21,7 +22,7 @@ import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'product_form.dart' show hasSizes, sizesWords;
 import 'sizes_forms.dart' show choicesOf, sizesOf, variantLabel, variantOf;
-import 'stock_page.dart' show feeInput, feeKobo;
+import 'stock_page.dart' show feeKobo;
 import 'words.dart' show naira;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
@@ -253,19 +254,23 @@ Widget _saveCancel(BuildContext context, {required VoidCallback? save, bool busy
   ],
 );
 
+/// A price as it is shown to change, as drawn: 39,500 (feeKobo reads the
+/// commas back).
+String _money(int kobo) => nairaText(kobo);
+
 class _Row {
   _Row(this.item, Map<String, dynamic>? on, VoidCallback changed)
     : on = on != null,
-      price = TextEditingController(text: feeInput(_int(on?['price_kobo']) ?? _int(item['price_kobo']) ?? 0)),
+      price = TextEditingController(text: _money(_int(on?['price_kobo']) ?? _int(item['price_kobo']) ?? 0)),
       min = TextEditingController(text: '${_int(on?['min_quantity']) ?? 1}'),
       available = on?['available'] as bool? ?? true,
       breaks = [
         for (final b in _maps(on?['breaks']))
-          (qty: TextEditingController(text: '${b['min_quantity']}'), price: TextEditingController(text: feeInput(_int(b['price_kobo']) ?? 0))),
+          (qty: TextEditingController(text: '${b['min_quantity']}'), price: TextEditingController(text: _money(_int(b['price_kobo']) ?? 0))),
       ],
       sizePrices = {
         for (final z in _maps(on?['sizes']))
-          if ((_int(z['price_kobo']) ?? 0) > 0) z['item_id'] as String: TextEditingController(text: feeInput(_int(z['price_kobo'])!)),
+          if ((_int(z['price_kobo']) ?? 0) > 0) z['item_id'] as String: TextEditingController(text: _money(_int(z['price_kobo'])!)),
       } {
     for (final c in [
       price,
@@ -650,7 +655,7 @@ class _LinkPricesState extends State<_LinkPrices> {
             setState(() {
               _items = items;
               for (final it in items) {
-                _prices[it['item_id'] as String] = TextEditingController(text: it['overridden'] == true ? feeInput(_int(it['price_kobo']) ?? 0) : '')
+                _prices[it['item_id'] as String] = TextEditingController(text: it['overridden'] == true ? _money(_int(it['price_kobo']) ?? 0) : '')
                   ..addListener(() => setState(() {}));
               }
             });
