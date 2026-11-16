@@ -14985,7 +14985,11 @@ paths:
       summary: Sign in with a code sent to the chat
       description: 'Takes only `application/json`. A code works once, for the number it was sent to; five wrong lock it.
         An administrator with a passkey signs in with it where the deployment requires it (401 `passkey_required`); an
-        organisation with single sign-on signs in with it (401 `sso_required`). The session''s `auth_method` is `chat`.'
+        organisation with single sign-on signs in with it (401 `sso_required`). The session''s `auth_method` is `chat`. On
+        a device with no second proof, a person in a business who could give one gets a personal session (`personal: true`,
+        `tenant_id` null, `second_proof_required: true`, `ways`): they prove, then switch (docs/spec/taskiem-for-everyone.md
+        §5.4). A WhatsApp number that is no longer the account''s phone signs no one in. 400 `phone_invalid` for a number
+        that is not one.'
       security: []
       requestBody:
         required: true
@@ -15024,7 +15028,10 @@ paths:
       description: 'Takes only `application/json`. Sends a six-digit code, good for 10 minutes, to any phone number: by
         WhatsApp from Taskiem''s own number, else by SMS; `via: "sms"` asks for SMS (Send by SMS instead). At most five codes
         an hour per number, limits per address; five wrong codes lock the number for an hour (429 `locked`). 503
-        `sms_unavailable` when SMS was asked for and this server has no SMS provider. docs/spec/taskiem-for-everyone.md §5.1.'
+        `sms_unavailable` when SMS was asked for and this server has no SMS provider. 400 `phone_invalid` for a number that
+        is not one (engine/phone). `sent_via` says how the code actually went: `whatsapp` only when WhatsApp took it, `sms`
+        when it went by SMS, asked for or because WhatsApp refused it; a person who gets nothing on WhatsApp asks again
+        with `via: "sms"`. docs/spec/taskiem-for-everyone.md §5.1.'
       security: []
       requestBody:
         required: true
@@ -15065,8 +15072,9 @@ paths:
       description: 'Takes only `application/json`. A number that belongs to an account (its phone, or a WhatsApp or Telegram
         binding) signs in to it, on the person''s own side: a personal session (`tenant_id` null, `auth_method` `phone`),
         delivered as signing in is (`status: signed_in`). A new number answers `status: new` with a `ticket` for
-        POST /v1/auth/phone/create, good for 15 minutes, once. 401 for a wrong or expired code, or `phone_signin_off` when
-        the person turned signing in by code off; 429 `locked` after five wrong codes.'
+        POST /v1/auth/phone/create, good for 15 minutes, once. 401 `code_wrong` for a wrong or expired code, or
+        `phone_signin_off` when the person turned signing in by code off; 429 `locked` after five wrong codes; 400
+        `phone_invalid` for a number that is not one.'
       security: []
       requestBody:
         required: true
@@ -15102,8 +15110,8 @@ paths:
       description: 'Takes only `application/json`. Uses the ticket a new number''s code gave. The person gives their name and
         confirms they are 18 or over and agree to the terms and privacy notice (400 without either). The account has no
         password and no email yet (its sign-in name is a placeholder that receives no mail); the number is its phone. It is
-        signed in to its own side (`status: created`). 401 for a ticket used or expired; 409 when the number belongs to an
-        account by now.'
+        signed in to its own side (`status: created`). 401 `ticket_expired` for a ticket used or expired; 409 when the number
+        belongs to an account by now.'
       security: []
       requestBody:
         required: true
@@ -19595,7 +19603,9 @@ paths:
       tags:
       - Account
       summary: Change your phone number
-      description: 'Sends a code to the new number, which must belong to no other account (409). `needs_old_code` says
+      description: 'Sends a code to the new number. Whether it belongs to another account is not said here (the code goes
+        anyway); POST /v1/me/phone/verify refuses it then (409). A change code another person asked for the same number,
+        still pending, is not replaced (429). `needs_old_code` says
         whether POST /v1/me/phone/verify will also need a code to the old number: it does for a session made by a code to
         the phone or chat on a device without a second proof. `confirm_old: true` sends that code too. A personal
         session reaches it. docs/spec/taskiem-for-everyone.md §5.5.'
@@ -19647,8 +19657,10 @@ paths:
       - Account
       summary: Confirm your new phone number
       description: 'The code sent to the new number (`phone` may be left out: the pending one), and `old_code` where
-        `needs_old_code` said so (403 `old_code_required` without it). The account keeps everything; WhatsApp and Telegram
-        bindings are not moved. Audited as `auth.phone_change` in each of the person''s businesses.'
+        `needs_old_code` said so (403 `old_code_required` without it). 401 `code_wrong` for a wrong or expired code; 409
+        when the number belongs to another account. The account keeps everything; WhatsApp and Telegram bindings are not
+        moved. Every other session of the person ends, and every other device must give a second proof again. Audited as
+        `auth.phone_change` in each of the person''s businesses.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -19688,8 +19700,9 @@ paths:
       - Authentication
       summary: Prove it is you by email
       description: 'A second proof (docs/spec/taskiem-for-everyone.md §5.4): a one-time link, good for 15 minutes, to the
-        account''s confirmed email, for the device this session is on (the phone app''s install or the browser). Three an
-        hour. 409 without a confirmed email; 400 for a client that is neither the app nor a browser.'
+        account''s real email (confirmed or not), for the device this session is on (the phone app''s install or the
+        browser). Three an hour; audited as `auth.second_proof_link`. 409 with no real email; 400 for a client that is
+        neither the app nor a browser.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -19750,7 +19763,9 @@ paths:
       - Authentication
       summary: Prove it is you with your chat PIN
       description: 'The chat PIN (set on WhatsApp) proves the device this session is on. Wrong PINs are counted as on
-        WhatsApp: five in 15 minutes lock it (429 `locked`). 409 with no PIN set.'
+        WhatsApp: five in 15 minutes lock it (429 `locked`); a wrong one answers 401 with `tries_left`. The check and its
+        count are one, so guesses sent side by side cannot pass the lock, and a right PIN while locked is refused. Limited
+        per person and per address. 409 with no PIN set.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -19766,6 +19781,99 @@ paths:
               properties:
                 pin:
                   type: string
+      responses:
+        '200':
+          description: Proved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceProved'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/second-proof/password:
+    post:
+      operationId: secondProofPassword
+      tags:
+      - Authentication
+      summary: Prove it is you with your password
+      description: 'The person''s password proves the device this session is on, where it is one of their `ways`
+        (`password`: set, usable in a business of theirs, on a confirmed email where this server sends email; 409
+        otherwise). Limited as signing in is; 401 for a wrong password.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Proved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceProved'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/second-proof/passkey/options:
+    post:
+      operationId: secondProofPasskeyOptions
+      tags:
+      - Authentication
+      summary: A challenge for proving it is you with your passkey
+      description: 'WebAuthn assertion options (`publicKey`) for the signed-in person''s own passkeys
+        (`allowCredentials`), for POST /v1/auth/second-proof/passkey. A personal session reaches it. 409 with no passkey.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The options
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [publicKey]
+                properties:
+                  publicKey:
+                    type: object
+                    additionalProperties: true
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/auth/second-proof/passkey:
+    post:
+      operationId: secondProofPasskey
+      tags:
+      - Authentication
+      summary: Prove it is you with your passkey
+      description: 'An assertion by one of the person''s own passkeys, for a challenge from
+        POST /v1/auth/second-proof/passkey/options, proves the device this session is on. The session is not changed (to
+        enter a business, switch after). Takes only `application/json`; 401 for an assertion that does not pass.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [credential]
+              properties:
+                credential:
+                  $ref: '#/components/schemas/PasskeyCredential'
       responses:
         '200':
           description: Proved
@@ -30286,6 +30394,30 @@ components:
           type: boolean
         enrol_passkey:
           type: boolean
+        code_wrong:
+          type: boolean
+          description: 'A 401 from POST /v1/auth/phone/verify, /v1/auth/phone/create or /v1/me/phone/verify for a code that is
+            wrong or expired (not a session that ended).'
+        ticket_expired:
+          type: boolean
+          description: A 401 from POST /v1/auth/phone/create for a ticket used or expired.
+        phone_invalid:
+          type: boolean
+          description: 'A 400 for a phone number that is not one, read by people''s one rule (engine/phone): spaces, dashes,
+            dots and brackets dropped; 00 is +; +234 0… drops the 0; 0 and 10 digits, or 10 digits starting 7, 8 or 9, are
+            Nigerian; a Nigerian number is +234 and 10 digits starting 7, 8 or 9; any other + and 8 to 15 digits.'
+        second_proof_required:
+          type: boolean
+          description: 'A 401: this session was made by a code to the phone or chat on a device with no second proof, and
+            the person could give one (`ways`). Switching into a business, and adding a passkey, an authenticator, an email
+            or a chat, wait for it.'
+        ways:
+          $ref: '#/components/schemas/SecondProofWays'
+        tries_left:
+          type: integer
+          description: A wrong chat PIN (POST /v1/auth/second-proof/pin, 401) leaves this many tries before the lock.
+        locked:
+          type: boolean
       additionalProperties: true
     Problem:
       type: object
@@ -31189,6 +31321,22 @@ components:
       properties:
         device_proved:
           type: boolean
+    SecondProofWays:
+      type: object
+      description: 'The second proofs a person could give (docs/spec/taskiem-for-everyone.md §5.4): `passkey` (POST
+        /v1/auth/second-proof/passkey), `email` (a link to their real email, confirmed or not), `pin` (the chat PIN), and
+        `password` (POST /v1/auth/second-proof/password: set, usable in a business of theirs, on a confirmed email where
+        this server sends email).'
+      required: [passkey, email, pin, password]
+      properties:
+        passkey:
+          type: boolean
+        email:
+          type: boolean
+        pin:
+          type: boolean
+        password:
+          type: boolean
     Me:
       type: object
       required:
@@ -31240,12 +31388,15 @@ components:
               type: boolean
             ways:
               type: object
+              description: As SecondProofWays.
               properties:
                 passkey:
                   type: boolean
                 email:
                   type: boolean
                 pin:
+                  type: boolean
+                password:
                   type: boolean
         user:
           type: object
@@ -33901,9 +34052,14 @@ components:
           enum:
           - sso_required
           - passkey_required
+          - second_proof_required
           - session_ended
-          description: 'The organisation needs another sign-in first: its single sign-on, or (a personal session) the
-            person''s passkey. A personal session stays on the person''s own side.'
+          description: 'The organisation needs another sign-in first: its single sign-on, (a personal session) the
+            person''s passkey, or a second proof for a session made by a code to the phone or chat on a device without
+            one (`ways` says which the person could give: they prove, then switch). The invitation is accepted either way;
+            a personal session stays on the person''s own side.'
+        ways:
+          $ref: '#/components/schemas/SecondProofWays'
       additionalProperties: false
     EmailVerifyRequest:
       type: object

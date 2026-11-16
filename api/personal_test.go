@@ -446,14 +446,26 @@ func TestSecondProofs(t *testing.T) {
 	if me := two.must(200, "GET", "/v1/me", nil); me["user"].(map[string]any)["phone"] != newer {
 		t.Fatalf("the phone: %v", me["user"])
 	}
-	// From a session on a proved device (the PIN-proved one's business
-	// session), no old code; a number someone has is refused.
-	if st, _ := inFoods.do("POST", "/v1/me/phone/start", map[string]any{"phone": newer}); st != 409 {
+	// The change ended every other session (the PIN-proved device's
+	// business session among them) and forgot other devices' proofs.
+	if st, _ := inFoods.do("GET", "/v1/me", nil); st != 401 {
+		t.Fatalf("another session outlived the change: %d", st)
+	}
+	var proved int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM user_devices WHERE user_id = $1 AND proved_at IS NOT NULL`, adaID).Scan(&proved); err != nil || proved != 0 {
+		t.Fatalf("devices still proved: %d %v", proved, err)
+	}
+	if st, _ := two.do("POST", "/v1/me/phone/start", map[string]any{"phone": newer}); st != 409 {
 		t.Fatalf("its own number again: %d", st)
 	}
-	signUpOnWhatsApp(t, w, "+2348031230205", "Bola Stores", "Bola")
-	if st, _ := inFoods.do("POST", "/v1/me/phone/start", map[string]any{"phone": "+2348031230205"}); st != 409 {
-		t.Fatalf("another account's number: %d", st)
+	// Another account's number: a code goes to it all the same (whose it
+	// is is not told), and the change is refused once it is entered.
+	const bola = "+2348031230205"
+	signUpOnWhatsApp(t, w, bola, "Bola Stores", "Bola")
+	two.must(202, "POST", "/v1/me/phone/start", map[string]any{"phone": bola, "confirm_old": true})
+	if st, out := two.do("POST", "/v1/me/phone/verify", map[string]any{"code": codeRe.FindString(w.graph.Last(t, bola).Text),
+		"old_code": codeRe.FindString(w.graph.Last(t, newer).Text)}); st != 409 {
+		t.Fatalf("another account's number: %d %v", st, out)
 	}
 	// The old number signs in no one now: the WhatsApp binding stays, but
 	// the account's phone is the new one.

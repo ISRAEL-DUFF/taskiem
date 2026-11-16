@@ -137,6 +137,24 @@ class TaskiemApi {
     return DeviceProved.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Prove it is you with your password (`POST /v1/auth/second-proof/password`)
+  Future<DeviceProved> secondProofPassword({required SecondProofPasswordRequest body}) async {
+    final j = await _t.send('POST', '/v1/auth/second-proof/password', body: body.toJson());
+    return DeviceProved.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A challenge for proving it is you with your passkey (`POST /v1/auth/second-proof/passkey/options`)
+  Future<SecondProofPasskeyOptionsResponse> secondProofPasskeyOptions() async {
+    final j = await _t.send('POST', '/v1/auth/second-proof/passkey/options');
+    return SecondProofPasskeyOptionsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Prove it is you with your passkey (`POST /v1/auth/second-proof/passkey`)
+  Future<DeviceProved> secondProofPasskey({required SecondProofPasskeyRequest body}) async {
+    final j = await _t.send('POST', '/v1/auth/second-proof/passkey', body: body.toJson());
+    return DeviceProved.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Change your phone number (`POST /v1/me/phone/start`)
   Future<PhoneChangeStartResponse> phoneChangeStart({required PhoneChangeStartRequest body}) async {
     final j = await _t.send('POST', '/v1/me/phone/start', body: body.toJson());
@@ -1156,6 +1174,7 @@ class MeSecondProof {
 
   final bool? deviceProved;
   final bool? required;
+  /// As SecondProofWays.
   final MeSecondProofWays? ways;
 
   factory MeSecondProof.fromJson(Map<String, dynamic> j) => MeSecondProof(
@@ -1171,22 +1190,26 @@ class MeSecondProof {
       };
 }
 
+/// As SecondProofWays.
 class MeSecondProofWays {
-  const MeSecondProofWays({this.email, this.passkey, this.pin});
+  const MeSecondProofWays({this.email, this.passkey, this.password, this.pin});
 
   final bool? email;
   final bool? passkey;
+  final bool? password;
   final bool? pin;
 
   factory MeSecondProofWays.fromJson(Map<String, dynamic> j) => MeSecondProofWays(
         email: j['email'] == null ? null : j['email'] as bool,
         passkey: j['passkey'] == null ? null : j['passkey'] as bool,
+        password: j['password'] == null ? null : j['password'] as bool,
         pin: j['pin'] == null ? null : j['pin'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
         'email': ?email,
         'passkey': ?passkey,
+        'password': ?password,
         'pin': ?pin,
       };
 }
@@ -1548,6 +1571,48 @@ class SecondProofPinRequest {
       };
 }
 
+class SecondProofPasswordRequest {
+  const SecondProofPasswordRequest({required this.password});
+
+  final String password;
+
+  factory SecondProofPasswordRequest.fromJson(Map<String, dynamic> j) => SecondProofPasswordRequest(
+        password: j['password'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'password': password,
+      };
+}
+
+class SecondProofPasskeyOptionsResponse {
+  const SecondProofPasskeyOptionsResponse({required this.publicKey});
+
+  final Map<String, dynamic> publicKey;
+
+  factory SecondProofPasskeyOptionsResponse.fromJson(Map<String, dynamic> j) => SecondProofPasskeyOptionsResponse(
+        publicKey: j['publicKey'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'publicKey': publicKey,
+      };
+}
+
+class SecondProofPasskeyRequest {
+  const SecondProofPasskeyRequest({required this.credential});
+
+  final PasskeyCredential credential;
+
+  factory SecondProofPasskeyRequest.fromJson(Map<String, dynamic> j) => SecondProofPasskeyRequest(
+        credential: PasskeyCredential.fromJson(j['credential'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'credential': credential.toJson(),
+      };
+}
+
 class PhoneChangeStartRequest {
   const PhoneChangeStartRequest({this.confirmOld, required this.phone, this.via});
 
@@ -1664,15 +1729,17 @@ class Invitation {
 }
 
 class InvitationAccepted {
-  const InvitationAccepted({this.personal, required this.roles, this.signIn, required this.tenantId, this.tenants, this.token});
+  const InvitationAccepted({this.personal, required this.roles, this.signIn, required this.tenantId, this.tenants, this.token, this.ways});
 
   /// False when a personal session moved into the organisation.
   final bool? personal;
   /// The roles now held, including those single sign-on provisioning gives.
   final List<String> roles;
-  /// The organisation needs another sign-in first: its single sign-on, or (a
-  /// personal session) the person's passkey. A personal session stays on the
-  /// person's own side.
+  /// The organisation needs another sign-in first: its single sign-on, (a
+  /// personal session) the person's passkey, or a second proof for a session
+  /// made by a code to the phone or chat on a device without one (`ways` says
+  /// which the person could give: they prove, then switch). The invitation is
+  /// accepted either way; a personal session stays on the person's own side.
   final String? signIn;
   final String tenantId;
   /// An invitee or personal session became a member's session; the
@@ -1681,6 +1748,7 @@ class InvitationAccepted {
   /// The new session token, when the invitee or personal session was a bearer
   /// token.
   final String? token;
+  final SecondProofWays? ways;
 
   factory InvitationAccepted.fromJson(Map<String, dynamic> j) => InvitationAccepted(
         personal: j['personal'] == null ? null : j['personal'] as bool,
@@ -1689,6 +1757,7 @@ class InvitationAccepted {
         tenantId: j['tenant_id'] as String,
         tenants: j['tenants'] == null ? null : (j['tenants'] as List).map((e) => e as String).toList(),
         token: j['token'] == null ? null : j['token'] as String,
+        ways: j['ways'] == null ? null : SecondProofWays.fromJson(j['ways'] as Map<String, dynamic>),
       );
 
   Map<String, dynamic> toJson() => {
@@ -1698,6 +1767,35 @@ class InvitationAccepted {
         'tenant_id': tenantId,
         'tenants': ?tenants?.map((e) => e).toList(),
         'token': ?token,
+        'ways': ?ways?.toJson(),
+      };
+}
+
+/// The second proofs a person could give (docs/spec/taskiem-for-everyone.md
+/// §5.4): `passkey` (POST /v1/auth/second-proof/passkey), `email` (a link to
+/// their real email, confirmed or not), `pin` (the chat PIN), and `password`
+/// (POST /v1/auth/second-proof/password: set, usable in a business of theirs,
+/// on a confirmed email where this server sends email).
+class SecondProofWays {
+  const SecondProofWays({required this.email, required this.passkey, required this.password, required this.pin});
+
+  final bool email;
+  final bool passkey;
+  final bool password;
+  final bool pin;
+
+  factory SecondProofWays.fromJson(Map<String, dynamic> j) => SecondProofWays(
+        email: j['email'] as bool,
+        passkey: j['passkey'] as bool,
+        password: j['password'] as bool,
+        pin: j['pin'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'email': email,
+        'passkey': passkey,
+        'password': password,
+        'pin': pin,
       };
 }
 

@@ -4,8 +4,9 @@ package api
 // proves only that someone holds the number today, and numbers are given
 // to new people. So an account in a business that signed in by phone code
 // on a new device proves itself another way before entering a business:
-// a passkey (signing in with one, passkeys.go), a one-time link to the
-// account's confirmed email, or the chat PIN. The proof is the device's,
+// a passkey (signing in with one, passkeys.go, or an assertion here), a
+// one-time link to the account's real email, the chat PIN, or the
+// person's password. The proof is the device's,
 // kept in user_devices, and forgotten after 90 days unused.
 
 import (
@@ -55,15 +56,16 @@ func (s *Server) secondProofEmailStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var email string
-	var verified bool
 	if err := db.InPersonTx(ctx, s.Store.Pool, p.UserID, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT email, email_verified_at IS NOT NULL FROM users WHERE id = $1`, p.UserID).Scan(&email, &verified)
+		return tx.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, p.UserID).Scan(&email)
 	}); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if emailPlaceholder(email) || !verified {
-		s.fail(w, r, fmt.Errorf("%w: your account has no confirmed email", errConflict))
+	// A real email, confirmed or not: the link goes to it, and only its
+	// reader can use it (§5.4). A placeholder receives no mail.
+	if emailPlaceholder(email) {
+		s.fail(w, r, fmt.Errorf("%w: your account has no email", errConflict))
 		return
 	}
 	token := newToken()
@@ -87,6 +89,7 @@ func (s *Server) secondProofEmailStart(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadGateway, "The email could not be sent just now. Try again in a moment.")
 		return
 	}
+	_ = s.auditEverywhere(ctx, p.UserID, "auth.second_proof_link", map[string]any{"sent_to": maskEmail(email), "ip": clientIP(r), "device": device})
 	writeJSON(w, http.StatusAccepted, map[string]any{"sent_to": maskEmail(email), "expires_in": int(proofLinkTTL.Seconds())})
 }
 
@@ -132,10 +135,17 @@ func (s *Server) secondProofEmailVerify(w http.ResponseWriter, r *http.Request) 
 
 // secondProofPin is POST /v1/auth/second-proof/pin ({pin}): the chat PIN,
 // checked and counted as on WhatsApp (whatsapp_flows.go), proves this
-// device.
+// device. The check and its count are one: the PIN's row is locked
+// (taskiem_wa_pin_lock) while the hash is compared, so guesses sent side
+// by side wait for each other and cannot pass the lock; a right PIN while
+// locked is refused. Limited per person and per address too.
 func (s *Server) secondProofPin(w http.ResponseWriter, r *http.Request) {
 	p, key, ok := s.proofDevice(w, r)
 	if !ok {
+		return
+	}
+	if !s.loginLimiter("second-proof-pin:"+p.UserID.String()).Allow() || !s.loginLimiter("second-proof-pin-ip:"+limitIP(r)).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "too many tries; wait a little")
 		return
 	}
 	ctx := r.Context()
@@ -146,27 +156,35 @@ func (s *Server) secondProofPin(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	var hash string
-	var locked *time.Time
-	err := s.Store.Pool.QueryRow(ctx, `SELECT pin_hash, locked_until FROM taskiem_wa_pin_state($1)`, p.UserID).Scan(&hash, &locked)
+	var (
+		none, right, nowLocked bool
+		lockedUntil            *time.Time
+		failures               int
+	)
+	err := pgx.BeginFunc(ctx, s.Store.Pool, func(tx pgx.Tx) error {
+		var hash string
+		err := tx.QueryRow(ctx, `SELECT pin_hash, locked_until FROM taskiem_wa_pin_lock($1)`, p.UserID).Scan(&hash, &lockedUntil)
+		if errors.Is(err, pgx.ErrNoRows) {
+			none = true
+			return nil
+		}
+		if err != nil || lockedUntil != nil {
+			return err
+		}
+		right = validPin(req.Pin) && checkPassword(hash, req.Pin)
+		return tx.QueryRow(ctx, `SELECT failures, locked FROM taskiem_wa_pin_result($1, $2, $3, $4::interval)`, p.UserID, right, waPinMaxFailures, waPinWindow.String()).
+			Scan(&failures, &nowLocked)
+	})
 	switch {
-	case errors.Is(err, pgx.ErrNoRows):
-		s.fail(w, r, fmt.Errorf("%w: you have no chat PIN", errConflict))
-		return
 	case err != nil:
 		s.fail(w, r, err)
 		return
-	case locked != nil:
-		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "Your PIN is locked after too many wrong tries, until " + locked.UTC().Format("15:04") + " UTC.",
-			"locked": true})
+	case none:
+		s.fail(w, r, fmt.Errorf("%w: you have no chat PIN", errConflict))
 		return
-	}
-	right := validPin(req.Pin) && checkPassword(hash, req.Pin)
-	var failures int
-	var nowLocked bool
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT failures, locked FROM taskiem_wa_pin_result($1, $2, $3, $4::interval)`, p.UserID, right, waPinMaxFailures, waPinWindow.String()).
-		Scan(&failures, &nowLocked); err != nil {
-		s.fail(w, r, err)
+	case lockedUntil != nil:
+		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "Your PIN is locked after too many wrong tries, until " + lockedUntil.UTC().Format("15:04") + " UTC.",
+			"locked": true})
 		return
 	}
 	if !right {
@@ -178,10 +196,132 @@ func (s *Server) secondProofPin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "That PIN is not right.", "tries_left": waPinMaxFailures - failures})
 		return
 	}
-	if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_auth_device_prove($1, $2, 'pin')`, p.UserID, key); err != nil {
+	s.deviceProved(w, r, p.UserID, key, "pin")
+}
+
+// deviceProved records a second proof for the device and answers 200
+// {device_proved: true}.
+func (s *Server) deviceProved(w http.ResponseWriter, r *http.Request, user uuid.UUID, key []byte, how string) {
+	ctx := r.Context()
+	if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_auth_device_prove($1, $2, $3)`, user, key, how); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	_ = s.auditEverywhere(ctx, p.UserID, "auth.second_proof", map[string]any{"how": "pin", "ip": clientIP(r)})
+	_ = s.auditEverywhere(ctx, user, "auth.second_proof", map[string]any{"how": how, "ip": clientIP(r)})
 	writeJSON(w, http.StatusOK, map[string]any{"device_proved": true})
+}
+
+// secondProofPassword is POST /v1/auth/second-proof/password ({password}):
+// the person's password, where it is a way (secondProofsOf: set, usable in
+// a business of theirs, on a confirmed email where email can be sent),
+// proves this device. Limited as signing in is.
+func (s *Server) secondProofPassword(w http.ResponseWriter, r *http.Request) {
+	p, key, ok := s.proofDevice(w, r)
+	if !ok {
+		return
+	}
+	if !s.loginLimiter("second-proof-password:"+p.UserID.String()).Allow() || !s.loginLimiter("login:"+limitIP(r)).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
+		return
+	}
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	ctx := r.Context()
+	ways, err := s.secondProofsOf(ctx, p.UserID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if !ways.Password {
+		s.fail(w, r, fmt.Errorf("%w: your password cannot prove it is you here: use another way", errConflict))
+		return
+	}
+	var hash *string
+	if err := db.InPersonTx(ctx, s.Store.Pool, p.UserID, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1`, p.UserID).Scan(&hash)
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if hash == nil || req.Password == "" || !checkPassword(*hash, req.Password) {
+		_ = s.auditEverywhere(ctx, p.UserID, "auth.second_proof_fail", map[string]any{"how": "password", "ip": clientIP(r)})
+		writeErr(w, http.StatusUnauthorized, "That password is not right.")
+		return
+	}
+	s.deviceProved(w, r, p.UserID, key, "password")
+}
+
+// secondProofPasskeyOptions is POST /v1/auth/second-proof/passkey/options:
+// a challenge for one of the signed-in person's own passkeys, as signing
+// in with one asks ({publicKey}).
+func (s *Server) secondProofPasskeyOptions(w http.ResponseWriter, r *http.Request) {
+	if !s.passkeysOn(w) {
+		return
+	}
+	p, _, ok := s.proofDevice(w, r)
+	if !ok {
+		return
+	}
+	if !s.limiter("challenge:"+limitIP(r), time.Second, 30).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "too many requests")
+		return
+	}
+	ctx := r.Context()
+	var ids [][]byte
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_passkey_ids($1)`, p.UserID).Scan(&ids); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if len(ids) == 0 {
+		s.fail(w, r, fmt.Errorf("%w: you have no passkey: use another way", errConflict))
+		return
+	}
+	ch, err := s.issueChallenge(ctx, "step_up", &p.UserID, secondProofScope)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	allow := make([]any, len(ids))
+	for i, id := range ids {
+		allow[i] = map[string]any{"type": "public-key", "id": b64.EncodeToString(id)}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"publicKey": map[string]any{
+		"challenge": b64.EncodeToString(ch), "rpId": s.WebAuthn.RPID, "allowCredentials": allow, "userVerification": "required", "timeout": 60000}})
+}
+
+// secondProofScope binds a second-proof passkey challenge to its use.
+const secondProofScope = "second_proof"
+
+// secondProofPasskey is POST /v1/auth/second-proof/passkey ({credential}):
+// an assertion by one of the person's own passkeys, for a challenge from
+// the options above, proves this device. The session is not changed.
+func (s *Server) secondProofPasskey(w http.ResponseWriter, r *http.Request) {
+	if !s.passkeysOn(w) || !jsonOnly(w, r) {
+		return
+	}
+	p, key, ok := s.proofDevice(w, r)
+	if !ok {
+		return
+	}
+	if !s.loginLimiter("login:" + limitIP(r)).Allow() {
+		writeErr(w, http.StatusTooManyRequests, "too many login attempts")
+		return
+	}
+	var req struct {
+		Credential credentialJSON `json:"credential"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if _, err := s.verifyPasskey(r.Context(), req.Credential, "step_up", &p.UserID, secondProofScope); err != nil {
+		s.passkeyFail(w, r, err)
+		return
+	}
+	s.deviceProved(w, r, p.UserID, key, "passkey")
 }

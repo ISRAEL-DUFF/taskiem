@@ -481,7 +481,9 @@ func (s *Server) needVerified(r *http.Request, sendsEmail bool) error {
 	}
 	sources := []string{"signup"}
 	if sendsEmail {
-		sources = append(sources, "whatsapp", "telegram", "slack")
+		// The app's (a phone account's Start something, the app's sign-up
+		// conversation) as chat sign-ups: no email of their own yet.
+		sources = append(sources, "whatsapp", "telegram", "slack", "app")
 	}
 	var source string
 	err := s.tx(r, func(tx pgx.Tx) error {

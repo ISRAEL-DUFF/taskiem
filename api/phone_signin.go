@@ -27,6 +27,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	phonenum "github.com/israel-duff/taskiem/engine/phone"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
@@ -39,6 +40,12 @@ const (
 
 // phoneCodeWrong is a wrong or expired code's answer.
 const phoneCodeWrong = "That code is not right, or it has expired. Ask for a new one."
+
+// codeWrongOut answers a wrong or expired code: 401 {code_wrong: true}, so
+// a client tells it from a session that ended.
+func codeWrongOut(w http.ResponseWriter) {
+	writeJSON(w, http.StatusUnauthorized, map[string]any{"error": phoneCodeWrong, "code_wrong": true})
+}
 
 var errSMSUnavailable = errors.New("codes by SMS are not available here")
 
@@ -103,6 +110,11 @@ func (s *Server) issuePhoneCode(w http.ResponseWriter, r *http.Request, number, 
 	case "locked":
 		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "Too many wrong codes: this number is locked for an hour.", "locked": true})
 		return ""
+	case "busy":
+		// Another person's change code for this number is pending: it is
+		// theirs, and not replaced.
+		writeErr(w, http.StatusTooManyRequests, "A code was sent to this number a moment ago. Try again in 10 minutes.")
+		return ""
 	}
 	sent, err := s.sendPhoneCode(ctx, number, via, code)
 	if errors.Is(err, errSMSUnavailable) {
@@ -117,11 +129,12 @@ func (s *Server) issuePhoneCode(w http.ResponseWriter, r *http.Request, number, 
 	return sent
 }
 
-// phoneNumber reads a typed number as E.164, or answers 400.
-func (s *Server) phoneNumber(w http.ResponseWriter, r *http.Request, typed string) (string, bool) {
-	number, err := whatsapp.Normalise(typed, s.defaultCountry())
+// phoneNumber reads a typed number as E.164 by people's one rule
+// (phone.Normalise), or answers 400 {phone_invalid: true}.
+func phoneNumber(w http.ResponseWriter, typed string) (string, bool) {
+	number, err := phonenum.Normalise(typed)
 	if err != nil {
-		s.fail(w, r, fmt.Errorf("%w: give your phone number, with its country code if it is not Nigerian", errBadRequest))
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "Give your phone number, with its country code if it is not Nigerian.", "phone_invalid": true})
 		return "", false
 	}
 	return number, true
@@ -149,7 +162,7 @@ func (s *Server) phoneStart(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: via is whatsapp or sms", errBadRequest))
 		return
 	}
-	number, ok := s.phoneNumber(w, r, req.Phone)
+	number, ok := phoneNumber(w, req.Phone)
 	if !ok {
 		return
 	}
@@ -175,7 +188,7 @@ func (s *Server) checkPhoneCode(w http.ResponseWriter, r *http.Request, number, 
 	case "locked":
 		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "Too many wrong codes: this number is locked for an hour.", "locked": true})
 	default:
-		writeErr(w, http.StatusUnauthorized, phoneCodeWrong)
+		codeWrongOut(w)
 	}
 	return false
 }
@@ -206,9 +219,8 @@ func (s *Server) phoneVerify(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	number, err := whatsapp.Normalise(req.Phone, s.defaultCountry())
-	if err != nil {
-		writeErr(w, http.StatusUnauthorized, phoneCodeWrong)
+	number, ok := phoneNumber(w, req.Phone)
+	if !ok {
 		return
 	}
 	if !s.loginLimiter("phone-verify-number:" + number).Allow() {
@@ -223,7 +235,7 @@ func (s *Server) phoneVerify(w http.ResponseWriter, r *http.Request) {
 	var user uuid.UUID
 	var status string
 	var on, hasPhone bool
-	err = s.Store.Pool.QueryRow(ctx, `SELECT user_id, status, chat_signin, has_phone FROM taskiem_auth_phone_user($1)`, number).Scan(&user, &status, &on, &hasPhone)
+	err := s.Store.Pool.QueryRow(ctx, `SELECT user_id, status, chat_signin, has_phone FROM taskiem_auth_phone_user($1)`, number).Scan(&user, &status, &on, &hasPhone)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "new", "ticket": ticket, "expires_in": int(phoneTicketTTL.Seconds())})
 		return
@@ -361,7 +373,7 @@ func (s *Server) phoneCreate(w http.ResponseWriter, r *http.Request) {
 	})
 	switch {
 	case errors.Is(err, errTicket):
-		writeErr(w, http.StatusUnauthorized, "This sign-up has expired. Ask for a new code.")
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "This sign-up has expired. Ask for a new code.", "ticket_expired": true})
 		return
 	case errors.Is(err, errNumberTaken):
 		writeErr(w, http.StatusConflict, "This number belongs to an account now: sign in with it.")
@@ -426,7 +438,7 @@ func (s *Server) phoneChangeStart(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: via is whatsapp or sms", errBadRequest))
 		return
 	}
-	number, ok := s.phoneNumber(w, r, req.Phone)
+	number, ok := phoneNumber(w, req.Phone)
 	if !ok {
 		return
 	}
@@ -439,19 +451,9 @@ func (s *Server) phoneChangeStart(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: that is your phone number already", errConflict))
 		return
 	}
-	var taken bool
-	if err := s.Store.Pool.QueryRow(r.Context(), `SELECT taskiem_auth_phone_taken($1)`, number).Scan(&taken); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if taken {
-		// The person's own WhatsApp binding to it is no one else's.
-		var owner uuid.UUID
-		if err := s.Store.Pool.QueryRow(r.Context(), `SELECT user_id FROM taskiem_auth_phone_user($1)`, number).Scan(&owner); err != nil || owner != p.UserID {
-			s.fail(w, r, fmt.Errorf("%w: that number belongs to another account", errConflict))
-			return
-		}
-	}
+	// Whether the number belongs to another account is not said here: the
+	// code goes to it anyway, and the change is refused (409) only once its
+	// code is entered, so no one learns whose a number is by asking.
 	user := p.UserID
 	sent := s.issuePhoneCode(w, r, number, "change_new", &user, req.Via)
 	if sent == "" {
@@ -493,7 +495,7 @@ func (s *Server) phoneChangeVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	var number string
 	if req.Phone != "" {
-		n, ok := s.phoneNumber(w, r, req.Phone)
+		n, ok := phoneNumber(w, req.Phone)
 		if !ok {
 			return
 		}
@@ -505,7 +507,7 @@ func (s *Server) phoneChangeVerify(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if pending == nil {
-			writeErr(w, http.StatusUnauthorized, phoneCodeWrong)
+			codeWrongOut(w)
 			return
 		}
 		number = *pending
@@ -532,7 +534,7 @@ func (s *Server) phoneChangeVerify(w http.ResponseWriter, r *http.Request) {
 	if needsOld {
 		var used bool
 		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_phone_old_proven($1)`, p.UserID).Scan(&used); err != nil || !used {
-			writeErr(w, http.StatusUnauthorized, phoneCodeWrong)
+			codeWrongOut(w)
 			return
 		}
 	}
@@ -546,10 +548,18 @@ func (s *Server) phoneChangeVerify(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, fmt.Errorf("%w: that number belongs to another account", errConflict))
 		return
 	case "unproven":
-		writeErr(w, http.StatusUnauthorized, phoneCodeWrong)
+		codeWrongOut(w)
 		return
 	}
-	detail := map[string]any{"number": whatsapp.MaskNumber(number), "ip": clientIP(r)}
+	// Whoever held the old number may hold sessions or a proved device:
+	// every other session ends and every other device proves itself again.
+	var ended int64
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_phone_change_fence($1, $2, $3)`, p.UserID, hashToken(sessionToken(r)), s.sessionDeviceKey(r, p)).
+		Scan(&ended); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	detail := map[string]any{"number": whatsapp.MaskNumber(number), "ip": clientIP(r), "sessions_ended": ended}
 	if old != "" {
 		detail["old"] = whatsapp.MaskNumber(old)
 	}

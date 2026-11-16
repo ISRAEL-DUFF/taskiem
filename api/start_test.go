@@ -76,7 +76,7 @@ func TestStartSomething(t *testing.T) {
 		t.Errorf("tenants: %d, before %d", n, tenants)
 	}
 	if v := scalarText(t, w, `SELECT o.source || '|' || m.role || '|' || (SELECT string_agg(action, ' ' ORDER BY chain_seq) FROM audit_log a WHERE a.tenant_id = o.tenant_id)
-		FROM tenant_onboarding o JOIN memberships m ON m.tenant_id = o.tenant_id AND m.user_id = o.signed_up_by WHERE o.tenant_id = $1`, wf); v != "app|owner|tenant.create auth.switch" {
+		FROM tenant_onboarding o JOIN memberships m ON m.tenant_id = o.tenant_id AND m.user_id = o.signed_up_by WHERE o.tenant_id = $1`, wf); v != "signup|owner|tenant.create auth.switch" { // a real email: signup, bearer or not
 		t.Errorf("onboarding, membership and audit: %s", v)
 	}
 	if n := startCount(t, w, `SELECT count(*) FROM workspaces WHERE tenant_id = $1`, wf) + startCount(t, w, `SELECT count(*) FROM environments WHERE tenant_id = $1`, wf); n != 3 {

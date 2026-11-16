@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"github.com/israel-duff/taskiem/engine/db"
 	"net/http"
 	"slices"
@@ -182,31 +183,56 @@ func (s *Server) startSomething(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusTooManyRequests, "you have started the most businesses and workspaces for one day: try again tomorrow")
 		return
 	}
-	// A web start is recorded as a sign-up, whose "confirm your email"
-	// holds then apply; a person with no email of their own (made with a
-	// phone, or in chat) has none to confirm, so theirs is recorded as the
-	// app's.
+	// The onboarding source follows the person, not how they came in: one
+	// with a real email is recorded as a sign-up (its "confirm your email"
+	// holds apply), one whose sign-in email is a placeholder (made with a
+	// phone, or in chat) as the app's, as chat sign-ups are (needVerified
+	// holds those whose owner has no confirmed email too).
 	source := "signup"
-	if !p.viaCookie || s.placeholderEmailOf(ctx, p.UserID) {
+	if s.placeholderEmailOf(ctx, p.UserID) {
 		source = "app"
 	}
 	next := newToken()
 	var made string
 	nb := newBusiness{Name: name, Owner: p.UserID, Source: source, ChannelHash: id, ActorType: "user", Kind: req.Kind,
 		Detail: map[string]any{"kind": req.Kind, "from": "start"}}
+	// Counting, making and moving the session are one transaction, under a
+	// lock on the person: two starts at once wait for each other, the
+	// second sees the first's tenant in its count, and a session that has
+	// already moved (a double tap) moves no more, so nothing is made.
 	nb.Then = func(tx pgx.Tx, tenant, owner uuid.UUID) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "taskiem-start:"+p.UserID.String()); err != nil {
+			return err
+		}
+		var today, all int
+		if err := tx.QueryRow(ctx, `SELECT identity_day, all_hour FROM taskiem_chat_signup_counts($1)`, id).Scan(&today, &all); err != nil {
+			return err
+		}
+		if today > startPerDay { // this one included
+			return errStartLimit
+		}
+		var moved bool
+		if err := tx.QueryRow(ctx, `SELECT taskiem_auth_session_move($1, $2, $3, $4)`, hashToken(tok), hashToken(next), tenant, clientIP(r)).Scan(&moved); err != nil {
+			return err
+		}
+		if !moved {
+			return errSessionEnded
+		}
 		if start != nil {
 			if err := startAreasTx(ctx, tx, tenant, start, kinds, "start"); err != nil {
 				return err
 			}
 		}
-		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenant).Scan(&made); err != nil {
-			return err
-		}
-		return nil
+		return tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenant).Scan(&made)
 	}
 	tenant, _, err := s.makeBusiness(ctx, nb)
 	switch {
+	case errors.Is(err, errStartLimit):
+		writeErr(w, http.StatusTooManyRequests, "you have started the most businesses and workspaces for one day: try again tomorrow")
+		return
+	case errors.Is(err, errSessionEnded):
+		writeErr(w, http.StatusUnauthorized, "this session has ended: sign in again")
+		return
 	case err != nil && tenant == uuid.Nil:
 		s.fail(w, r, err)
 		return
@@ -214,17 +240,6 @@ func (s *Server) startSomething(w http.ResponseWriter, r *http.Request) {
 		// Made and moved into; only its trial did not start, which
 		// starts on its first visit to billing.
 		s.Logger.Warn("start: starting the trial", "err", err)
-	}
-	// This session moves into what was made, as switching moves it
-	// (switch.go): from a business or from the person's own side.
-	var moved bool
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_session_move($1, $2, $3, $4)`, hashToken(tok), hashToken(next), tenant, clientIP(r)).Scan(&moved); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if !moved {
-		writeErr(w, http.StatusUnauthorized, "this session has ended: sign in again")
-		return
 	}
 	from := "personal"
 	if !p.Personal {
@@ -245,6 +260,11 @@ func (s *Server) startSomething(w http.ResponseWriter, r *http.Request) {
 	s.deliverSession(w, !p.viaCookie, next, out)
 	writeJSON(w, http.StatusCreated, out)
 }
+
+var (
+	errStartLimit   = errors.New("the day's starts are used")
+	errSessionEnded = errors.New("this session has ended")
+)
 
 // placeholderEmailOf reports whether the person's sign-in email is a
 // placeholder (an account made with a phone, or in chat): they have no
