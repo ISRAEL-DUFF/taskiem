@@ -675,7 +675,7 @@ class _AlertCardState extends State<_AlertCard> {
                   children: [
                     if (step != null)
                       Expanded(
-                        child: _Pill(label: step.short ?? step.words, said: step.words, named: a.title, height: 44, onTap: _busy ? null : step.go),
+                        child: TapArea(child: _Pill(label: step.short ?? step.words, said: step.words, named: a.title, height: 44, onTap: _busy ? null : step.go)),
                       ),
                     if (give != null) ...[
                       const SizedBox(width: 8),
