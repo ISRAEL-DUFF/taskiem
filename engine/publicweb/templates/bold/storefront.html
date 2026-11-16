@@ -15,6 +15,7 @@
   <div class="hero-actions">
     {{range .Forms}}{{if or (eq .Ref "order") (and (eq .Kind "booking") (not $.Ordering))}}<a class="btn btn-light" href="{{$.Base}}/a/{{.Ref}}">{{.Label}}</a>{{end}}{{end}}
     {{with .M.WhatsLink}}<a class="round{{if not $.Forms}} round-wide{{end}}" href="{{.}}" rel="noopener" aria-label="Chat on WhatsApp">{{template "i-whatsapp"}}{{if not $.Forms}}<span>Chat on WhatsApp</span>{{end}}</a>{{end}}
+    {{with .M.ChatLink}}<a class="round{{if not $.Forms}} round-wide{{end}}" href="{{.}}" rel="noopener" aria-label="Chat with us">{{template "i-chat"}}{{if not $.Forms}}<span>Chat with us</span>{{end}}</a>{{end}}
     {{with .Phone}}<a class="round" href="tel:{{.}}" aria-label="Call">{{template "i-call"}}</a>{{end}}
     {{with .M.MapLink}}<a class="round" href="{{.}}" rel="noopener" aria-label="Directions">{{template "i-map"}}</a>{{end}}
   </div>

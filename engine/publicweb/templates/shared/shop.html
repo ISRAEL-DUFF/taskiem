@@ -123,7 +123,7 @@ notices before it. A look's stylesheet draws them. */}}
 <ul class="items">{{range .Fronts}}<li class="item">{{if .Small}}<img class="thumb" src="{{.Small}}" alt="" loading="lazy" decoding="async">{{else}}<span class="thumb thumb-icon">{{template "i-photo"}}</span>{{end}}<div class="item-text"><h3><a href="{{.Href}}">{{.Name}}</a></h3>{{with .Tagline}}<p class="item-sub">{{.}}</p>{{end}}</div></li>
 {{end}}</ul></section>{{end}}{{end}}
 
-{{define "sfcontact"}}{{with .M.WhatsLink}}<a class="btn" href="{{.}}" rel="noopener">{{template "i-whatsapp"}}WhatsApp</a>{{end}}{{with .Phone}}<a class="btn" href="tel:{{.}}">{{template "i-call"}}Call</a>{{end}}{{end}}
+{{define "sfcontact"}}{{with .M.ChatLink}}<a class="btn" href="{{.}}" rel="noopener">{{template "i-chat"}}Chat with us</a>{{end}}{{with .M.WhatsLink}}<a class="btn" href="{{.}}" rel="noopener">{{template "i-whatsapp"}}WhatsApp</a>{{end}}{{with .Phone}}<a class="btn" href="tel:{{.}}">{{template "i-call"}}Call</a>{{end}}{{end}}
 
 {{define "sffoot"}}<footer class="foot sf-foot">
 <p class="sf-foot-name">{{.M.Card.Name}}</p>

@@ -219,7 +219,11 @@ func (s *Server) publishGated(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 	}
 	first := sf.PublishedVersion == 0 || sf.Status == "in_review"
 	hold := first && (!v.Business || res.Verdict == moderation.Flagged)
-	if sf, err = storefront.Publish(ctx, tx, tenant, s.previewDomain(), actor, hold); err != nil {
+	chat, err := s.storefrontChat(ctx, tx, tenant)
+	if err != nil {
+		return publishResult{}, err
+	}
+	if sf, err = storefront.PublishWith(ctx, tx, tenant, s.previewDomain(), actor, hold, chat); err != nil {
 		return publishResult{}, err
 	}
 	switch {
