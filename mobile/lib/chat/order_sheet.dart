@@ -18,6 +18,7 @@ import '../kit/api_image.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart';
+import '../kit/mobile.dart' show tkInitials;
 import '../kit/modal.dart';
 import '../kit/sheet.dart';
 import '../kit/tap_area.dart';
@@ -508,7 +509,7 @@ class _OrderSheetState extends State<OrderSheet> {
                   child: TkCardSlice(
                     first: i == 0,
                     last: i == sec.items.length - 1,
-                    inset: 78,
+                    inset: 66,
                     child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: _row(t, dark, it)),
                   ),
                 ),
@@ -630,16 +631,12 @@ class _OrderSheetState extends State<OrderSheet> {
           Row(
             children: [
               ExcludeSemantics(
-                child: Container(
-                  width: 52,
-                  height: 52,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(color: t.toneSandBg, borderRadius: BorderRadius.circular(14)),
-                  alignment: Alignment.center,
-                  child: it.photo
-                      ? ApiImage(transport: _t, path: '/v1/link-chats/$_enc/photo?item=${Uri.encodeQueryComponent(it.id)}&w=320', width: 52, height: 52)
-                      : TkIcon('package', size: 22, color: t.toneSandInk),
-                ),
+                child: it.photo
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: ApiImage(transport: _t, path: '/v1/link-chats/$_enc/photo?item=${Uri.encodeQueryComponent(it.id)}&w=320', width: 40, height: 40),
+                      )
+                    : NameTile(it.name),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -1034,6 +1031,29 @@ class _Select extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A thing for sale with no photo: its letters on a soft square of its
+/// name's own colour (docs/spec/mobile-app-look.md, "The chat").
+class NameTile extends StatelessWidget {
+  const NameTile(this.name, {super.key});
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final g = tkFaceFor(name);
+    final ink = Color.lerp(g.last, dark ? const Color(0xFFFFFFFF) : const Color(0xFF000000), dark ? 0.25 : 0.2)!;
+    return ExcludeSemantics(
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(color: g.first.withValues(alpha: dark ? 0.2 : 0.18), borderRadius: BorderRadius.circular(12)),
+        alignment: Alignment.center,
+        child: Text(tkInitials(name), maxLines: 1, textScaler: TextScaler.noScaling, style: tkText(size: 14, weight: 700, color: ink)),
       ),
     );
   }
