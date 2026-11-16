@@ -12,6 +12,7 @@ import '../app/lock.dart';
 import '../app/notify.dart';
 import '../app/passkey.dart';
 import '../app/prefs.dart';
+import '../chat/chat_link_page.dart' show CustomerChatsCard;
 import '../kit/forms.dart' show TkSwitchRow;
 import '../kit/kit.dart';
 import '../kit/modal.dart' show showTkToast;
@@ -196,6 +197,8 @@ class _SignedInScreenState extends State<SignedInScreen> {
               ],
               // Owners and admins turn chat tools on for everyone.
               if (widget.auth.can('member.manage')) ChatToolsCard(auth: widget.auth),
+              // Customers chatting in the app (taskiem-for-everyone §8.2).
+              if (widget.auth.can('storefront.manage|order.handle')) CustomerChatsCard(auth: widget.auth),
               // The chats you have linked (Account on the web).
               WhatsAppCard(auth: widget.auth),
               TelegramCard(auth: widget.auth),
