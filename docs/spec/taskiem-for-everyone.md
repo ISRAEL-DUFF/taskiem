@@ -751,3 +751,74 @@ Built on branch `stage1-fix-clients`, against the server's review fixes (`stage1
 Tests: `you.spec.ts` (a number refused before sending, a pasted code, **Use another number**, the second proof's link signed out, `next` after a phone sign-in to You and to a business, Start something double-clicked making one business, a wrong code on Change number keeping the session, an invitation needing a second proof proved by the link opened in another tab); `phone.test.ts`, `apiAuth.test.ts`, `passkeyProof.test.ts`; `everyone_test.dart` and `phone_test.dart`.
 
 **Left over.** The email sign-in still shows the server's "invalid email or password" as it comes (its parity picture would change with it); the invitation link page for someone with no account (`/accept-invitation`) is unchanged but for landing on `/`.
+
+## As built: stage 2, stream A
+
+Built on branch `stage2-core`, on stage 1 as merged (`ccr-87497aa3-gf060z`): the server of §8 (but the chat link's codes and the browser's SMS, stream B), with §14's two copies and §15's limits. The web and app screens are later streams; the API is written for them.
+
+**Migration `00452_customer_door.sql`:**
+- `customer_conversations` gain `line` (`whatsapp`, `app`; existing threads are `whatsapp`) and `person_id`; an app thread has `phone_number_id` `app`, one per person per business; the unique key is now `(tenant_id, line, phone_number_id, subject_id)`. They also gain the blocks both ways (`blocked_at` by the business, `person_blocked_at` by the customer), `last_reply_at`, `closed_reply_at` and `owner_told_at`.
+- `customer_messages` gain the kind `card`, `card`, `attachment` (the business's copy, in its own storage) and `offer`.
+- The person's copy: `person_conversations` (muted, archived, both blocks, the offers answer), `person_messages` (the same id as the business's copy: `customer_messages.id = person_messages.id`), `person_files`. Scoped by `taskiem_person_scope()` and, once a door names one business, by `taskiem_person_business()` (`app.person_business`) to that business's rows only (listed in `wide_policies.tsv`).
+- `customer_offer_consents` (the business's record of the answer and when), `customer_chat_settings`, `customer_reports` (insert only, as the person), `customer_typing` (definers only).
+- `storefront_orders` gain the kind `app` and `person_id`; the audit chain's actor types gain `person`.
+- Definers (in `engine/db/definers.tsv`): `taskiem_customer_enter(person, business, action, detail)`, the door; `taskiem_customer_reach(business, person, action, detail)`, the way back; `taskiem_customer_business_names`, `taskiem_customer_typing`, `taskiem_customer_typing_of`, `taskiem_customer_order`, `taskiem_customer_waiting`.
+
+**The door (§8.4).** `taskiem_customer_enter` refuses unless the person is the transaction's own, the business is active and a business (not a workflows workspace), the action is one of `customer.start`, `customer.chat`, `customer.block`, `customer.shop`, `customer.book`, `customer.orders`, `customer.order`, `customer.booking`, `customer.pay`, the business has not blocked the person (Block itself excepted), the person has an app thread with it (or, for `customer.start`, the business has a published shop, a resolved chat code, or an order of the person's), and the area the action needs is on (`storefront` and `orders` for the shop, Book, ordering and booking; `orders` for their orders and paying; nothing for the chat). It writes `{actor_type: person, actor_id: the person}` into the business's chain, then sets the scope to that business for the rest of the transaction. The way back (`taskiem_customer_reach`) needs the business in scope and an app thread with the person, refuses messages after the person's Block, audits messages and blocks (not read marks or typing), then puts that person's rows of that business in scope. A message is written to both copies in that one transaction.
+
+**Endpoints, the person's side** (any user session for its own person: a personal session, listed in `personalRoutes`, or a business session; an API key is refused, 403):
+
+| Endpoint | What |
+| --- | --- |
+| `GET /v1/me/chats` | Your chats, latest first (`?archived=1`), with `unread` |
+| `POST /v1/me/chats` `{business_id \| code, from?}` | Start (201) or answer the one you have (200); `notice` says what the business sees; `ask_offers`; 409 without a phone, 403 `blocked`, 410 `link_replaced`, 429 limits |
+| `GET /v1/me/chats/{id}` | One chat, with `typing` and the business's `hours` line |
+| `PUT /v1/me/chats/{id}` `{muted?, archived?, offers?}` | Your settings; `offers` is recorded with the business |
+| `GET /v1/me/chats/{id}/messages?before=` | Your copy, 50 a page |
+| `POST /v1/me/chats/{id}/messages` `{text, client_id?}` | Write; 409 `you_blocked`, 403 `blocked`, 429 |
+| `POST /v1/me/chats/{id}/files` (multipart) | A photo, voice note or PDF |
+| `GET /v1/me/chats/{id}/files/{message}` | Your copy of a file |
+| `POST /v1/me/chats/{id}/read`, `/typing` | Read marks (mirrored), typing |
+| `POST`/`DELETE /v1/me/chats/{id}/block` | Block, unblock the business |
+| `POST /v1/me/chats/{id}/report` `{reason, note?, consent: true}` | The last 20 messages to Taskiem's moderators |
+| `GET /v1/me/chats/{id}/shop` | Their shop: items, sizes and colours, `few_left` (5 or fewer, as the page says), pickup, delivery areas and fees, when paid |
+| `GET /v1/me/chats/{id}/services`, `/services/{service}/times?day=` | Book: services and free times |
+| `GET /v1/me/chats/{id}/orders` | Your orders and bookings with them (placed in the app) |
+| `POST /v1/me/chats/{id}/orders` (Idempotency-Key) `{lines, fulfilment, zone, address, note}` | An order of the kind `app` |
+| `POST /v1/me/chats/{id}/bookings` (Idempotency-Key) `{service_id, start, note}` | A booking |
+| `GET /v1/me/chats/{id}/orders/{reference}/pay` | Its pay link while something is due |
+
+**Endpoints, the business's side** (`storefront.manage|order.handle` unless said):
+
+| Endpoint | What |
+| --- | --- |
+| `GET /v1/customer-chats…` | As before; threads carry `line`, `blocked`, `notice` ("This customer has stopped messages"), and on one thread `offers` and `typing`; messages carry `card`, `attachment`, `offer` |
+| `POST /v1/customer-chats/{id}/messages` `{text?, client_id?, card?, offer?}` | To an app customer: always a message, no window or template; `card` is `{type: order\|pay\|booking\|product, reference \| service_id \| item_id}`, made from the business's own data; an offer only after a yes, 2 a week (429) |
+| `POST /v1/customer-chats/{id}/files` (multipart), `GET …/files/{message}` | Files to and from an app customer |
+| `POST`/`DELETE /v1/customer-chats/{id}/block` | Block, unblock an app customer |
+| `POST /v1/customer-chats/{id}/typing` | Typing |
+| `POST /v1/customer-chats/app` `{reference}` | Writing first: the app thread of the person who placed an order |
+| `POST /v1/customer-chats/offers` `{text, client_id?}` | A broadcast offer to every customer who said yes, counted per customer |
+| `GET /v1/settings/customer-chats`, `PUT` (`storefront.manage`) | `closed_reply`, `closed_words`, `needs_you`, `tell_owner` |
+
+**How it behaves.**
+- **Orders and bookings in the app** go into the business's storefront inbox as sealed submissions (`Channel: app`, `PersonID`), as a page's do, and the same worker records them: an order is of the kind `app` (its run is the order workflow's: trigger `storefront/order`, body `kind: order`), a booking stays `booking`; both carry `person_id`. The customer's name and phone are sealed under the business's subject for the person's phone. Stock, delivery, the status page, counts and briefings treat `app` as `order`; messages to the customer of an `app` order (`NotifyCustomer`, the workflow's) go into their app conversation, not by SMS. Each order or booking leaves a card in both copies; a repeat of the Idempotency-Key is found by that card.
+- **Files** are scanned (`media.ScanChatFile`, refused without a scanner), then checked and cleaned once (`media.CheckChatFile`: photos 10 MB, voice notes 5 minutes for Ogg and 5 MB otherwise, PDFs 25 MB without scripts), before either copy is kept: the business's in its own storage (`PutChatFile`), the person's in `person_files`.
+- **When nobody answers (§8.6).** A customer's message tells those who handle orders (the owners when nobody does). While the business is closed by its shop's hours, the closed reply goes once a day, in the business's name, with its words or "We're closed now. We open at 9:00 and will answer then." (tomorrow, or a weekday, as it falls). An app customer waiting 30 minutes while open is a `customer_waiting` card on Needs you (`GET /v1/chat-alerts`); after 2 hours `RunCustomerChats` (every minute) tells the owners once per wait. Each can be turned off.
+- **Limits (§15).** 10 new chats an hour and 30 a day, 20 messages a chat a minute; half that in an account's first week.
+- **The person told of an answer.** Every business message to an app customer, once kept, is given to `Server.CustomerAnswered` (`CustomerAnswerHook`, with the person, business, conversation, message, the business's name, whether it is an offer and whether the chat is muted). Stream B fills it with the browser's SMS fallback.
+
+**Hooks for stream B.**
+- `Server.ChatCodes` (`ChatCodeResolver.ResolveChatCode(ctx, code) (business, error)`, with `ErrChatCodeUnknown` and `ErrChatCodeReplaced`), used by `POST /v1/me/chats {code}`; until set, no code is known (`noChatCodes`). When it lands, `taskiem_customer_enter`'s `customer.start` should check the code itself (`customer_chat_codes`) rather than trust the API's `via: code`.
+- `Server.CustomerAnswered` (`CustomerAnswerHook.BusinessAnswered`), above.
+
+**Deviations from the spec.**
+- The person's copy is kept in their own rows under their own scope, but not sealed under a key of their own (as stage 1 kept phones in the clear): messages in `person_messages.body`, files as bytes in `person_files`.
+- "Your orders with them" lists orders and bookings placed in the app (by `person_id`); storefront orders made with the same phone wait for the phone index and "These are mine" (§13, stage 3). Invoices are not listed; a business can send a pay link card for an order.
+- A voice note's five minutes are read from Ogg only; others are held to 5 MB.
+- Read ticks are always mirrored: the "leave them off" setting of §8.3 is not built.
+- Every door entry is audited, looks included (the shop, the times, the hours line of `GET /v1/me/chats/{id}`), so the business's chain has one entry per look.
+
+**Left for later.** Push notifications to a person (their side has no push yet; the hook carries what is needed); deleting a chat; the warning on a message asking for a transfer to a personal account (§15); offers paused for businesses muted or blocked far above the norm (§15); counting offers and messages against the business's plan (stream B); the web and app screens.
+
+**Tests.** `TestCustomerDoor` (both copies, sealing, notices, typing, read marks, offers and broadcasts, cards, the shop, an `app` order through the order workflow and its card, pay refused when nothing is due, files and malware, blocks both ways, a report, mute, the closed reply once, Needs you, the owner told once, an area off, the audit entries); `TestCustomerDoorIsolation` (another person's chat, another business's thread, the door and the way back refusing another person, a business with no chat, an action not on the list, a business not in scope, a workflows workspace; through the door only that business's rows and only that person's chat with it; a business session is its person, an API key is refused); `TestCustomerDoorBookingAndLimits` (Book, the booking's card and repeat, a booking offer card, the first week's limits); `engine/media` `TestCheckChatFile`.
