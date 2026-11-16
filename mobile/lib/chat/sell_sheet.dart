@@ -240,9 +240,17 @@ class _SellSheetState extends State<SellSheet> with CloseSoon {
         for (final (i, it) in shown.indexed)
           Padding(
             key: ValueKey(it['id']),
-            // `.tk-order-list { padding: 0 20px 96px }`.
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: TkIn.sheetRow(index: i, child: hasSizes(it) ? _sizedRow(t, it, items) : _row(t, it)),
+            // The rows on one card (docs/spec/mobile-app-look.md, "The chat").
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: TkIn.sheetRow(
+              index: i,
+              child: TkCardSlice(
+                first: i == 0,
+                last: i == shown.length - 1,
+                inset: 78,
+                child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: hasSizes(it) ? _sizedRow(t, it, items) : _row(t, it)),
+              ),
+            ),
           ),
       ],
     );
@@ -266,10 +274,7 @@ class _SellSheetState extends State<SellSheet> with CloseSoon {
     final over = stock != null && n > (stock < 0 ? 0 : stock);
     final unit = it['unit'] as String? ?? '';
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: t.border)),
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
           _tile(t),
@@ -326,10 +331,7 @@ class _SellSheetState extends State<SellSheet> with CloseSoon {
 
     final price = _int(it['price_kobo']);
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: t.border)),
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

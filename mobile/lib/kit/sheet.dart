@@ -10,6 +10,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/widgets.dart';
 
 import 'motion.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'icon.dart';
 import 'kit.dart';
@@ -310,9 +311,10 @@ class _TkSheetState extends State<TkSheet> with SingleTickerProviderStateMixin {
                                           style: onBack != null && crumb != null
                                               // `.tk-sheet-head.crumbed h2 { font-size: 14px; font-weight: 700; letter-spacing: 0 }`
                                               ? tkText(size: 14, weight: 700, lineHeight: 1.35, color: t.text)
+                                              // The app's titles: Inter Tight (docs/spec/mobile-app-look.md).
                                               : lead != null
-                                              ? tkText(size: 22, weight: 800, lineHeight: 1.2, letterSpacing: -0.44, color: t.text)
-                                              : tkText(size: 26, weight: 800, lineHeight: 1.35, letterSpacing: -0.52, color: t.text),
+                                              ? tkDisplay(size: 22, lineHeight: 1.15, letterSpacing: -0.6, color: t.text)
+                                              : tkDisplay(size: 24, lineHeight: 1.2, letterSpacing: -0.8, color: t.text),
                                         ),
                                         if (sub != null) ...[
                                           const SizedBox(height: 2),
@@ -427,12 +429,24 @@ class _TkSheetState extends State<TkSheet> with SingleTickerProviderStateMixin {
                 label: semanticsLabel ?? title,
                 child: Container(
                   clipBehavior: Clip.antiAlias,
+                  // On the page's ground, its cards white on it.
                   decoration: BoxDecoration(
-                    color: t.panel,
+                    color: TkLook.of(context).ground,
                     borderRadius: BorderRadius.vertical(top: Radius.circular(_full ? 0 : 28)),
                     boxShadow: const [BoxShadow(color: Color(0x660E0F0C), offset: Offset(0, -20), blurRadius: 50, spreadRadius: -20)],
                   ),
-                  child: Stack(
+                  // On the ground, boxes are white and soft buttons a shade
+                  // under it (docs/spec/mobile-app-look.md, "The chat").
+                  child: TkTheme.recolour(
+                    context,
+                    (t) => t.copyWith(
+                      field: TkLook.of(context).card,
+                      tkSoft: Color.alphaBlend(
+                        TkTheme.of(context).mode == TkMode.dark ? const Color(0x1FFFFFFF) : const Color(0x12000000),
+                        TkLook.of(context).ground,
+                      ),
+                    ),
+                    Stack(
                     children: [
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -456,6 +470,7 @@ class _TkSheetState extends State<TkSheet> with SingleTickerProviderStateMixin {
                       ),
                       ?overlay,
                     ],
+                  ),
                   ),
                 ),
               ),
@@ -487,7 +502,7 @@ class _Round extends StatelessWidget {
         child: Container(
           width: 40,
           height: 40,
-          decoration: BoxDecoration(color: t.tkSoft, shape: BoxShape.circle),
+          decoration: BoxDecoration(color: TkLook.of(context).card, shape: BoxShape.circle),
           alignment: Alignment.center,
           child: TkIcon(icon, size: 18, color: t.text),
         ),
@@ -826,10 +841,9 @@ class TkSheetFoot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
     final pad = MediaQuery.paddingOf(context);
     return Container(
-      decoration: bare ? null : BoxDecoration(border: Border(top: BorderSide(color: t.border))),
+      // On the ground, no line over it.
       padding: EdgeInsets.fromLTRB(20, bare ? 0 : 12, 20, 18 + pad.bottom),
       child: child,
     );

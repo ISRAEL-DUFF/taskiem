@@ -654,7 +654,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
             builder: (context, _) => Column(
               children: [
                 ColoredBox(
-                  color: t.panel,
+                  color: t.chatWallpaper,
                   child: Padding(
                     padding: EdgeInsets.only(top: pad.top),
                     child: ChatHeadBar(

@@ -21,6 +21,7 @@ import '../kit/list.dart';
 import '../kit/modal.dart';
 import '../kit/sheet.dart';
 import '../kit/tap_area.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'buyer.dart';
@@ -498,7 +499,20 @@ class _OrderSheetState extends State<OrderSheet> {
                 ),
               ),
             // ChatBuyer.tsx `.tk-order-list.tk-stagger`: rows follow the sheet up.
-            for (final (i, it) in sec.items.indexed) side(ValueKey('item:${it.id}'), TkIn.sheetRow(index: i, child: _row(t, dark, it))),
+            // The rows on one card (docs/spec/mobile-app-look.md, "The chat").
+            for (final (i, it) in sec.items.indexed)
+              side(
+                ValueKey('item:${it.id}'),
+                TkIn.sheetRow(
+                  index: i,
+                  child: TkCardSlice(
+                    first: i == 0,
+                    last: i == sec.items.length - 1,
+                    inset: 78,
+                    child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: _row(t, dark, it)),
+                  ),
+                ),
+              ),
           ],
         ],
       );
@@ -609,8 +623,7 @@ class _OrderSheetState extends State<OrderSheet> {
     final n = _qty[it.id] ?? 0;
     final sizes = soldInSizes(it);
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.border))),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -785,8 +798,12 @@ class QtyStepper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    final dark = TkTheme.of(context).mode == TkMode.dark;
-    final (bg, ink) = !on ? (t.tkSoft, t.text) : (dark ? (t.brandDark, t.brandDarkText) : (t.brand, t.tkOnPine));
+    final look = TkLook.of(context);
+    // A soft track, − and + on round card buttons, the number lime-inked
+    // and the track lime-tinted once something is picked
+    // (docs/spec/mobile-app-look.md, "The chat").
+    final bg = on ? look.lime.withValues(alpha: 0.22) : look.ground;
+    final ink = on ? look.limeInk : t.text;
     Widget step(String sign, String label, VoidCallback? onTap) => TapArea(child: Semantics(
       button: true,
       enabled: onTap != null,
@@ -797,12 +814,16 @@ class QtyStepper extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: SizedBox(
-          width: 44,
-          height: 44,
+          width: 40,
+          height: 40,
           child: Center(
-            // On a row in the bag, − and + stay bright though one cannot go
-            // further (chat.css `.tk-order-row .tk-qty button:disabled`).
-            child: Text(sign, style: tkText(size: 20, weight: 600, color: ink)),
+            child: Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: look.card, shape: BoxShape.circle),
+              child: Text(sign, style: tkText(size: 18, weight: 600, lineHeight: 1, color: t.text)),
+            ),
           ),
         ),
       ),
@@ -812,6 +833,7 @@ class QtyStepper extends StatelessWidget {
       label: 'How many $name',
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
         child: Row(
           mainAxisSize: MainAxisSize.min,

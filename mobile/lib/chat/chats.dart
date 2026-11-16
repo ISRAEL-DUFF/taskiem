@@ -18,7 +18,9 @@ import '../app/store.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
+import '../kit/mobile.dart' show TkChips, TkHeadButton, TkPanel;
 import '../kit/tap_area.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'customer.dart';
@@ -629,8 +631,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
     final top = MediaQuery.paddingOf(context).top;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
-      child: ColoredBox(
-        color: t.panel,
+      // The app's own look (docs/spec/mobile-app-look.md, "The chat"): the
+      // page's ground, the kit's buttons.
+      child: TkAppLook(
+        child: ColoredBox(
+        color: TkLook.of(context).ground,
         child: ListenableBuilder(
           listenable: widget.data,
           builder: (context, _) {
@@ -646,9 +651,14 @@ class _ChatsScreenState extends State<ChatsScreen> {
             return Stack(
               children: [
                 ListView(
-                  padding: EdgeInsets.only(top: top, bottom: 88 + MediaQuery.paddingOf(context).bottom),
+                  padding: EdgeInsets.only(top: top, bottom: 24 + MediaQuery.paddingOf(context).bottom),
                   children: [
-                    _Head(name: d.auth.me?.tenantName, onMenu: (at) => _menu(d, at)),
+                    _Head(
+                      name: d.auth.me?.tenantName,
+                      onMenu: (at) => _menu(d, at),
+                      // Find a business: Explore, over the chats.
+                      onFind: d.linksOn ? (widget.onFind ?? () => showExplore(context, chats: d, onOpen: (c) => widget.onOpen?.call(c))) : null,
+                    ),
                     if (d.linksOn || d.customers.isNotEmpty || d.archivedCustomers > 0) _Search(controller: _q),
                     if (!searching && d.loaded && (d.conversations.isNotEmpty || d.customers.isNotEmpty || d.archivedCustomers > 0))
                       _Chips(
@@ -671,10 +681,14 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       ),
                     if (!searching && !archived && _filter != ChatFilter.starred && (query.isEmpty || 'taskiem'.startsWith(query.toLowerCase())))
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: ChatRow(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                        child: _RowsCard(
+                          children: [
+                          ChatRow(
                           key: const ValueKey('row taskiem'),
                           accent: true,
+                          alert: d.waiting > 0,
+                          need: d.waiting,
                           title: 'Taskiem',
                           unread: d.taskiemUnread,
                           onTap: widget.onOpenTaskiem,
@@ -685,9 +699,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                   d.waiting == 1 ? '1 thing needs you' : '${d.waiting} things need you',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: tkText(size: 14.5, weight: 700, color: t.tintText),
+                                  style: tkText(size: 14.5, weight: 600, color: TkLook.of(context).limeInk),
                                 )
                               : _previewText(context, 'Your own conversation with Taskiem, as on your phone'),
+                        ),
+                          ],
                         ),
                       ),
                     if (d.customersOn && _filter != ChatFilter.starred)
@@ -739,7 +755,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       ),
                     if (!searching && _filter != ChatFilter.starred && d.conversations.isNotEmpty && !d.noLinks)
                       Padding(
-                        padding: EdgeInsets.only(left: 16, right: 16, top: d.asked.isEmpty ? 0 : 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -757,6 +773,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                   style: tkHint(t),
                                 ),
                               ),
+                            if (listed.isNotEmpty)
+                            _RowsCard(children: [
                             for (final c in listed)
                               ChatRow(
                                 key: ValueKey('row link ${c.link}'),
@@ -782,6 +800,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                 muted: c.muted,
                                 onTap: widget.onOpen == null ? null : () => widget.onOpen!(c),
                               ),
+                            ]),
                           ],
                         ),
                       ),
@@ -794,19 +813,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       _Findable(data: d),
                   ],
                 ),
-                if (d.linksOn)
-                  Positioned(
-                    right: 16,
-                    bottom: 16 + MediaQuery.paddingOf(context).bottom,
-                    child: _FindButton(
-                      // Find a business: Explore, over the chats.
-                      onTap: widget.onFind ?? () => showExplore(context, chats: d, onOpen: (c) => widget.onOpen?.call(c)),
-                    ),
-                  ),
               ],
             );
           },
         ),
+      ),
       ),
     );
   }
@@ -852,63 +863,48 @@ class _ChatsScreenState extends State<ChatsScreen> {
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       softWrap: false,
-      style: tkText(size: 14.5, color: typing ? t.ok : t.muted),
+      style: tkText(size: 14.5, weight: typing ? 600 : 400, color: typing ? TkLook.of(context).limeInk : t.muted),
     );
   }
 }
 
-/// `.chat-list-head`: Chats, the business's name, and the menu.
+/// The list's head: "Chats" large with the business's name under it, ⋯
+/// and + (Find a business) as round buttons.
 class _Head extends StatelessWidget {
-  const _Head({this.name, this.onMenu});
+  const _Head({this.name, this.onMenu, this.onFind});
   final String? name;
   final ValueChanged<Rect>? onMenu;
+  final VoidCallback? onFind;
 
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Row(
         children: [
           Expanded(
-            child: Semantics(
-              header: true,
-              child: Text('Chats', style: tkText(size: 26, weight: 800, lineHeight: 1.35, letterSpacing: -0.52, color: t.text)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Semantics(header: true, child: Text('Chats', style: tkDisplay(size: 30, lineHeight: 1.15, letterSpacing: -1.1, color: t.text))),
+                if (name != null) Text(name!, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 13, lineHeight: 1.35, color: t.muted)),
+              ],
             ),
           ),
-          if (name != null) ...[const SizedBox(width: 6), Text(name!, style: tkText(size: 13, color: t.muted))],
-          const SizedBox(width: 6),
           // Its own button, not merged with the title beside it; the menu
           // grows from where it is.
           Builder(
-            builder: (context) {
-              void open() {
+            builder: (context) => TkHeadButton(
+              icon: 'b-more',
+              label: 'More about the chats',
+              onTap: () {
                 final box = context.findRenderObject()! as RenderBox;
                 onMenu?.call(box.localToGlobal(Offset.zero) & box.size);
-              }
-
-              return TapArea(
-                child: Semantics(
-                  container: true,
-                  button: true,
-                  label: 'More about the chats',
-                  onTap: open,
-                  excludeSemantics: true,
-                  child: TkPress(
-                    onTap: open,
-                    // The web's `more`, turned upright, its dots bolder (`.chat-menu-wrap svg`).
-                    child: SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: Center(
-                        child: RotatedBox(quarterTurns: 1, child: TkIcon('more', size: 18, stroke: 3, color: t.text)),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
+              },
+            ),
           ),
+          if (onFind != null) ...[const SizedBox(width: 8), TkHeadButton(icon: 'b-plus', label: 'Find a business to link with', primary: true, onTap: onFind!)],
         ],
       ),
     );
@@ -924,15 +920,15 @@ class _Search extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
       // The field's name, with what is typed in it or its hint.
       child: TapField(
         child: Semantics(
           label: 'Find a business',
           child: Container(
             height: 42,
-            decoration: BoxDecoration(color: t.field, borderRadius: BorderRadius.circular(999)),
-            padding: const EdgeInsets.only(left: 11, right: 11),
+            decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(14)),
+            padding: const EdgeInsets.only(left: 14, right: 14),
             child: Row(
               children: [
                 TkIcon('search', size: 16, color: t.muted),
@@ -962,7 +958,7 @@ class _Search extends StatelessWidget {
   }
 }
 
-/// `.chat-chips`: All, Unread, Starred, Archived; sliding sideways.
+/// All, Unread, Starred, Archived: the app's segmented switch.
 class _Chips extends StatelessWidget {
   const _Chips({required this.filter, required this.unread, required this.archived, required this.onPick});
   final ChatFilter filter;
@@ -971,58 +967,29 @@ class _Chips extends StatelessWidget {
   final ValueChanged<ChatFilter> onPick;
 
   @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    final chips = [
-      (ChatFilter.all, 'All'),
-      (ChatFilter.unread, unread > 0 ? 'Unread ($unread)' : 'Unread'),
-      (ChatFilter.starred, 'Starred'),
-      (ChatFilter.archived, 'Archived ($archived)'),
-    ];
-    // Within the list's 16 px margins, clipped there (`.chat-chips`).
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: SizedBox(
-        height: 50,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: chips.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 8),
-          itemBuilder: (context, i) {
-            final (f, label) = chips[i];
-            final on = filter == f;
-            // The 8 px above and below are the chip's to a finger too.
-            return TapArea(
-              child: Semantics(
-                button: true,
-                selected: on,
-                child: TkPress(
-                  onTap: () => onPick(f),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Container(
-                      height: 34,
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: t.borderStrong),
-                        borderRadius: BorderRadius.circular(999),
-                        boxShadow: outsideOnly(t.shadow),
-                      ),
-                      child: Text(
-                        label,
-                        style: tkText(size: 14, weight: on ? 600 : 500, lineHeight: 1.2, color: on ? t.tintText : t.text),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+    child: TkChips<ChatFilter>(
+      label: 'Show',
+      chips: [
+        (ChatFilter.all, 'All'),
+        (ChatFilter.unread, unread > 0 ? 'Unread · $unread' : 'Unread'),
+        (ChatFilter.starred, 'Starred'),
+        (ChatFilter.archived, archived > 0 ? 'Archived · $archived' : 'Archived'),
+      ],
+      on: filter,
+      onPick: onPick,
+    ),
+  );
+}
+
+/// Rows on one rounded card, a hairline between them after the faces.
+class _RowsCard extends StatelessWidget {
+  const _RowsCard({required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => TkPanel(inset: 76, children: children);
 }
 
 /// ChatRow.tsx: one conversation, as WhatsApp's row.
@@ -1039,9 +1006,16 @@ class ChatRow extends StatelessWidget {
     this.pinned = false,
     this.muted = false,
     this.accent = false,
+    this.alert = false,
+    this.need = 0,
     this.onTap,
   });
 
+  /// Its count in orange (Taskiem's: what needs you).
+  final bool alert;
+
+  /// How many things need you (Taskiem's), in orange where nothing is unread.
+  final int need;
   final String title;
   final Widget preview;
   final String letter;
@@ -1057,15 +1031,17 @@ class ChatRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
     return ChatRowMotion(
       child: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
           children: [
-            accent ? const _AccentAvatar() : ChatAvatar(name: letter, logo: logo, size: 52),
+            accent ? const _AccentAvatar() : ChatAvatar(name: letter, logo: logo, size: 48),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -1086,7 +1062,7 @@ class ChatRow extends StatelessWidget {
                         const SizedBox(width: 8),
                         Text(
                           time!,
-                          style: tkText(size: 12, weight: unread > 0 ? 600 : 400, color: unread > 0 ? t.ok : t.muted),
+                          style: tkText(size: 12, weight: unread > 0 ? 700 : 400, color: unread > 0 ? look.limeInk : t.muted),
                         ),
                       ],
                     ],
@@ -1095,15 +1071,18 @@ class ChatRow extends StatelessWidget {
                   Row(
                     children: [
                       if (ticks != null) ...[
-                        TkIcon('tick-double', size: 16, stroke: 2, color: ticks!.read ? t.chatTickRead : t.muted),
+                        TkIcon('tick-double', size: 16, stroke: 2, color: ticks!.read ? (dark ? look.lime : look.limeInk) : t.muted),
                         const SizedBox(width: 4),
                       ],
                       Expanded(child: preview),
-                      if (pinned) ...[const SizedBox(width: 8), TkIcon('pin', size: 15, color: t.muted)],
-                      if (muted) ...[const SizedBox(width: 6), TkIcon('mute', size: 15, color: t.muted)],
+                      if (pinned) ...[const SizedBox(width: 8), TkIcon('pin', size: 14, color: t.muted)],
+                      if (muted) ...[const SizedBox(width: 6), TkIcon('mute', size: 14, color: t.muted)],
                       if (unread > 0) ...[
                         const SizedBox(width: 8),
-                        Semantics(label: '$unread unread ${unread == 1 ? 'message' : 'messages'}', child: UnreadCount(unread)),
+                        Semantics(label: '$unread unread ${unread == 1 ? 'message' : 'messages'}', child: UnreadCount(unread, muted: muted, alert: alert)),
+                      ] else if (need > 0) ...[
+                        const SizedBox(width: 8),
+                        ExcludeSemantics(child: UnreadCount(need, alert: true)),
                       ],
                     ],
                   ),
@@ -1233,8 +1212,8 @@ class _AccentAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     return Container(
-      width: 52,
-      height: 52,
+      width: 48,
+      height: 48,
       decoration: BoxDecoration(color: t.brand, shape: BoxShape.circle),
       alignment: Alignment.center,
       child: TkTaskiemMark(size: 20, color: t.brandDark),
@@ -1254,25 +1233,26 @@ class ChatAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
     final l = logo;
     if (l != null) {
       return ClipOval(
         child: Image.memory(l, width: size, height: size, fit: BoxFit.cover, gaplessPlayback: true),
       );
     }
-    // The web's ChatAvatar sets a tone by the name (`data-tone`), but
-    // chat.css's `.chat-avatar` comes after kit.css's tones and wins: in
-    // the chat every initials avatar is pine with lime letters.
-    final (bg, ink) = (t.brand, t.brandDark);
+    // The initials white on the name's own gradient, as every face in the
+    // app (docs/spec/mobile-app-look.md).
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: tkFaceFor(name)),
+      ),
       alignment: Alignment.center,
       child: Text(
         initialsOf(name),
-        style: tkText(size: letterSize ?? size * 20 / 52, weight: 800, letterSpacing: 0.2, color: ink),
+        textScaler: TextScaler.noScaling,
+        style: tkText(size: letterSize ?? size * 17 / 48, weight: 700, letterSpacing: 0.2, color: const Color(0xFFFFFFFF)),
       ),
     );
   }
@@ -1326,12 +1306,8 @@ class LinkSection extends StatelessWidget {
       children: [
         if (title != null) _Heading(title!, top: top),
         Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: t.panel,
-            border: Border.all(color: t.border),
-            borderRadius: BorderRadius.circular(20),
-          ),
+          margin: const EdgeInsets.only(bottom: 10),
+          decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(20)),
           child: Column(
             children: [
               for (final r in rows)
@@ -1370,7 +1346,15 @@ class LinkSection extends StatelessWidget {
                                       style: tkText(size: 15, weight: 600, color: t.text),
                                     ),
                                   ),
-                                  if (r.badge != null) ...[const SizedBox(width: 12), TkBadge(r.badge!, tone: ink(r.badgeTone))],
+                                  if (r.badge != null) ...[
+                                    const SizedBox(width: 12),
+                                    // A capsule in the badge's colour.
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+                                      decoration: BoxDecoration(color: ink(r.badgeTone).withValues(alpha: 0.14), borderRadius: BorderRadius.circular(999)),
+                                      child: Text(r.badge!, style: tkText(size: 11.5, weight: 700, color: r.badgeTone == Tone.warn ? TkLook.of(context).orangeInk : ink(r.badgeTone))),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -1441,23 +1425,23 @@ class _Asked extends StatelessWidget {
                             onPressed: onAnswer == null ? null : () => onAnswer!(l, 'decline', 'Declined. They are not told.'),
                           ),
                         ),
-                        IntrinsicWidth(
-                          child: TkSmallButton(
-                            label: 'Block',
-                            semantics: 'Block ${l.name}',
-                            danger: true,
-                            onPressed: onAnswer == null
-                                ? null
-                                : () async {
-                                    final yes = await showTkConfirm(
-                                      context,
-                                      title: 'Block ${l.name}?',
-                                      body: 'Their requests will not reach you, and they are not told.',
-                                      ok: 'Block',
-                                      danger: true,
-                                    );
-                                    if (yes) onAnswer!(l, 'block', 'Blocked');
-                                  },
+                        // Block, rarely wanted, under ⋯.
+                        TapArea(
+                          child: Semantics(
+                            button: true,
+                            label: 'More for ${l.name}',
+                            excludeSemantics: true,
+                            onTap: onAnswer == null ? null : () => _more(context, l),
+                            child: TkPress(
+                              onTap: onAnswer == null ? null : () => _more(context, l),
+                              child: Container(
+                                width: 44,
+                                height: 36,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(color: t.tkSoft, borderRadius: BorderRadius.circular(999)),
+                                child: TkIcon('b-more', size: 18, stroke: 2.4, color: t.text),
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -1467,6 +1451,22 @@ class _Asked extends StatelessWidget {
           ),
       ],
     );
+  }
+}
+
+extension on _Asked {
+  /// ⋯ on a request: Block, after yes.
+  Future<void> _more(BuildContext context, BusinessLink l) async {
+    final pick = await showTkModalChoices(context, title: l.name, choices: [('block', 'Block ${l.name}')]);
+    if (pick != 'block' || !context.mounted) return;
+    final yes = await showTkConfirm(
+      context,
+      title: 'Block ${l.name}?',
+      body: 'Their requests will not reach you, and they are not told.',
+      ok: 'Block',
+      danger: true,
+    );
+    if (yes) onAnswer!(l, 'block', 'Blocked');
   }
 }
 
@@ -1530,11 +1530,12 @@ class _Heading extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    // A section's title, as on every page: Inter Tight, 20.
     return Padding(
-      padding: EdgeInsets.only(top: top, bottom: 12),
+      padding: EdgeInsets.only(left: 4, top: top > 12 ? 12 : top, bottom: 8),
       child: Semantics(
         header: true,
-        child: Text(text, style: tkText(size: 15, weight: 600, lineHeight: 1.35, letterSpacing: -0.15, color: t.text)),
+        child: Text(text, style: tkDisplay(size: 20, lineHeight: 1.25, letterSpacing: -0.4, color: t.text)),
       ),
     );
   }
@@ -1946,59 +1947,32 @@ class _Waiting extends StatelessWidget {
   }
 }
 
-/// `.new-chat`: Find a business, over the list's corner.
-class _FindButton extends StatelessWidget {
-  const _FindButton({this.onTap});
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    // Lime on pine; in dark, pine on lime.
-    final ink = TkTheme.of(context).mode == TkMode.dark ? t.brandDarkText : t.brandDark;
-    return Semantics(
-      button: true,
-      label: 'Find a business to link with',
-      onTap: onTap ?? () {},
-      excludeSemantics: true,
-      child: TkPress(
-        onTap: onTap ?? () {},
-        child: Container(
-          height: 56,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: BoxDecoration(
-            color: t.primary,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(offset: const Offset(0, 4), blurRadius: 9.53, color: t.chatShadow)],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TkIcon('plus', size: 20, color: ink),
-              const SizedBox(width: 8),
-              Text('Find a business', style: tkText(size: 15, weight: 600, lineHeight: 1.2, color: ink)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// `.unread-count`: how many, on the ok colour.
+/// How many unread: a pine pill with lime figures (lime and pine in the
+/// dark); grey when the chat is muted, orange for what needs you.
 class UnreadCount extends StatelessWidget {
-  const UnreadCount(this.count, {super.key});
+  const UnreadCount(this.count, {super.key, this.muted = false, this.alert = false});
   final int count;
+  final bool muted;
+  final bool alert;
 
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final (bg, ink) = alert
+        ? (look.orange, const Color(0xFFFFFFFF))
+        : muted
+        ? (t.tkSoft, t.muted)
+        : dark
+        ? (look.lime, const Color(0xFF0D3B2E))
+        : (const Color(0xFF0D3B2E), look.lime);
     return Container(
-      constraints: const BoxConstraints(minWidth: 20),
+      constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
       padding: const EdgeInsets.symmetric(horizontal: 7),
-      decoration: BoxDecoration(color: t.ok, borderRadius: BorderRadius.circular(999)),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
       alignment: Alignment.center,
-      child: Text('$count', style: tkText(size: 12, weight: 600, color: t.panel)),
+      child: Text('$count', style: tkText(size: 12, weight: 700, lineHeight: 1.2, color: ink)),
     );
   }
 }
@@ -2021,18 +1995,28 @@ class _Customers extends StatelessWidget {
     final waiting = chats.where((c) => c.unread > 0).length;
     final head = archived ? 'Archived customers' : 'Customers';
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Semantics(
             header: true,
-            child: Text(
-              '$head${waiting > 0 && !archived ? ' · ${waiting == 1 ? '1 waiting' : '$waiting waiting'}' : ''}',
-              style: tkText(size: 15, weight: 600, lineHeight: 1.35, letterSpacing: -0.15, color: t.text),
+            child: Row(
+              children: [
+                Padding(padding: const EdgeInsets.only(left: 4), child: Text(head, style: tkDisplay(size: 20, lineHeight: 1.25, letterSpacing: -0.4, color: t.text))),
+                if (waiting > 0 && !archived) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: t.tkWarnBg, borderRadius: BorderRadius.circular(999)),
+                    child: Text(waiting == 1 ? '1 waiting' : '$waiting waiting', style: tkText(size: 12, weight: 700, color: t.tkWarnInk)),
+                  ),
+                ],
+              ],
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
+          _RowsCard(children: [
           for (final c in chats)
             ChatRow(
               key: ValueKey('row customer ${c.id}'),
@@ -2047,6 +2031,7 @@ class _Customers extends StatelessWidget {
               unread: c.unread,
               onTap: onOpen == null ? null : () => onOpen!(c),
             ),
+          ]),
         ],
       ),
     );
@@ -2138,7 +2123,7 @@ class _GetStartedState extends State<_GetStarted> {
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         // `.tk-start { padding: 24px 20px; gap: 10px }`
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-        decoration: BoxDecoration(color: t.panel, border: Border.all(color: t.border), borderRadius: BorderRadius.circular(20)),
+        decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(20)),
         child: Column(
           children: [
             Container(
@@ -2154,7 +2139,7 @@ class _GetStartedState extends State<_GetStarted> {
               child: Text(
                 'Link with the businesses you trade with',
                 textAlign: TextAlign.center,
-                style: tkText(size: 18, weight: 700, lineHeight: 1.35, letterSpacing: -0.18, color: t.text),
+                style: tkDisplay(size: 19, lineHeight: 1.25, letterSpacing: -0.4, color: t.text),
               ),
             ),
             const SizedBox(height: 10),
@@ -2319,11 +2304,7 @@ class _FindableState extends State<_Findable> {
         // two collapse into 16 (CSS block margins).
         margin: EdgeInsets.fromLTRB(16, widget.data.noLinks ? 0 : 14, 16, 16),
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: t.panel,
-          border: Border.all(color: t.border),
-          borderRadius: BorderRadius.circular(20),
-        ),
+        decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(20)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

@@ -14,6 +14,7 @@ import '../kit/motion.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/tap_area.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'chats.dart' show UnreadCount;
 import 'words.dart';
@@ -106,14 +107,22 @@ class ChatHeadBar extends StatelessWidget {
   final List<Widget> actions;
   final VoidCallback? onBack;
 
-  /// A 40 px round button of the head.
+  /// A 38 px round button of the head, on the card's colour
+  /// (docs/spec/mobile-app-look.md, "The chat").
   static Widget iconButton(String label, Widget icon, VoidCallback? onTap) => TapArea(
     child: Semantics(
       button: true,
       label: label,
       child: TkPress(
         onTap: onTap ?? () {},
-        child: SizedBox(width: 40, height: 40, child: Center(child: icon)),
+        child: Builder(
+          builder: (context) => Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(color: TkLook.of(context).card, shape: BoxShape.circle),
+            child: Center(child: icon),
+          ),
+        ),
       ),
     ),
   );
@@ -121,16 +130,24 @@ class ChatHeadBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final look = TkLook.of(context);
     final sub = typing ? 'typing…' : subtitle;
     return Container(
-      // `.chat-head`: 12 px 16 px, a line under it.
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.border))),
+      // The head on the page's ground, a hairline under it.
+      padding: const EdgeInsets.fromLTRB(8, 6, 12, 10),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: look.line))),
       child: Row(
         children: [
-          iconButton('Back to the chats', TkIcon('back', size: 20, color: t.text), onBack ?? () => Navigator.of(context).maybePop()),
-          const SizedBox(width: 6),
+          TapArea(
+            child: Semantics(
+              button: true,
+              label: 'Back to the chats',
+              child: TkPress(
+                onTap: onBack ?? () => Navigator.of(context).maybePop(),
+                child: SizedBox(width: 34, height: 40, child: Center(child: TkIcon('back', size: 24, stroke: 2, color: look.on))),
+              ),
+            ),
+          ),
           if (onAvatar != null)
             TapArea(child: Semantics(
               button: true,
@@ -139,7 +156,7 @@ class ChatHeadBar extends StatelessWidget {
             )
           else
             avatar,
-          const SizedBox(width: 6),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,7 +168,7 @@ class ChatHeadBar extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: tkText(size: 16, weight: 600, lineHeight: 1.35, letterSpacing: -0.16, color: t.text),
+                    style: tkDisplay(size: 17, lineHeight: 1.25, letterSpacing: -0.3, color: t.text),
                   ),
                 ),
                 if (sub != null)
@@ -160,21 +177,21 @@ class ChatHeadBar extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: typing
-                        ? tkText(size: 13, weight: 600, lineHeight: 1.25, color: dark ? t.brandDark : t.brand)
-                        : tkText(size: 13, lineHeight: 1.25, color: t.muted),
+                        ? tkText(size: 12.5, weight: 600, lineHeight: 1.3, color: look.limeInk)
+                        : tkText(size: 12.5, lineHeight: 1.3, color: t.muted),
                   ),
               ],
             ),
           ),
-          for (final a in actions) ...[const SizedBox(width: 6), a],
+          for (final a in actions) ...[const SizedBox(width: 8), a],
           // With no menu of its own (Taskiem's), no ⋯ on a phone: the web's
           // holds only Keyboard there, which a phone hides.
           if (onMore != null) ...[
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
           Builder(
             builder: (context) => iconButton(
               'More about this conversation',
-              RotatedBox(quarterTurns: 1, child: TkIcon('more', size: 18, stroke: 3, color: t.text)),
+              TkIcon('b-more', size: 18, stroke: 2.4, color: t.text),
               onMore == null
                   ? null
                   : () {
@@ -202,13 +219,9 @@ class DayChip extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final chip = Container(
       key: chipKey,
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 3),
-      decoration: BoxDecoration(
-        color: cssMix(t.panel, const Color(0x00000000), 0.92),
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 0.5)],
-      ),
-      child: Text(label, style: tkText(size: 12, color: t.muted)),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(999)),
+      child: Text(label, style: tkText(size: 12, weight: 600, color: t.muted)),
     );
     return margin ? Padding(padding: const EdgeInsets.symmetric(vertical: 6), child: chip) : chip;
   }
@@ -222,18 +235,19 @@ class UnreadMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Container(
-        key: markKey,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(color: t.tint, borderRadius: BorderRadius.circular(8)),
-        child: Text(
-          // ChatStream.tsx unreadWords.
-          count == 1 ? '1 unread message' : '$count unread messages',
-          textAlign: TextAlign.center,
-          style: tkText(size: 12, weight: 600, color: t.tintText),
+      child: Center(
+        child: Container(
+          key: markKey,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(color: TkLook.of(context).lime.withValues(alpha: 0.18), borderRadius: BorderRadius.circular(999)),
+          child: Text(
+            // ChatStream.tsx unreadWords.
+            count == 1 ? '1 unread message' : '$count unread messages',
+            textAlign: TextAlign.center,
+            style: tkText(size: 12, weight: 700, color: TkLook.of(context).limeInk),
+          ),
         ),
       ),
     );
@@ -1221,6 +1235,78 @@ class _CheerRingState extends State<CheerRing> with SingleTickerProviderStateMix
           ),
         );
       },
+    );
+  }
+}
+
+/// The other side typing: three dots in their bubble, at the thread's end
+/// (docs/spec/mobile-app-look.md, "The chat"); still when the phone asks
+/// for less motion.
+class TypingBubble extends StatefulWidget {
+  const TypingBubble({super.key});
+
+  @override
+  State<TypingBubble> createState() => _TypingBubbleState();
+}
+
+class _TypingBubbleState extends State<TypingBubble> with SingleTickerProviderStateMixin {
+  late final _beat = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (still) {
+      _beat.stop();
+    } else if (!_beat.isAnimating) {
+      _beat.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _beat.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Semantics(
+      liveRegion: true,
+      label: 'Typing',
+      excludeSemantics: true,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          margin: const EdgeInsets.only(top: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            color: t.chatIn,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+              bottomRight: Radius.circular(20),
+              bottomLeft: Radius.circular(6),
+            ),
+          ),
+          child: AnimatedBuilder(
+            animation: _beat,
+            builder: (context, _) => Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < 3; i++) ...[
+                  if (i > 0) const SizedBox(width: 4),
+                  Opacity(
+                    opacity: 0.35 + 0.5 * (1 - ((_beat.value * 3 - i) % 3).clamp(0.0, 1.0)),
+                    child: Container(width: 7, height: 7, decoration: BoxDecoration(color: t.muted, shape: BoxShape.circle)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

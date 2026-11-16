@@ -37,5 +37,6 @@ const tkLookIcons = <String, String>{
   'b-calendar': 'M6.5 5.5h11a2.5 2.5 0 0 1 2.5 2.5v10a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18V8a2.5 2.5 0 0 1 2.5-2.5zM4 10h16M8.5 3.5v4M15.5 3.5v4',
   'b-mail': 'M4 6h16v12H4zM4 7l8 6 8-6',
   'b-x': 'M6.5 6.5l11 11M17.5 6.5l-11 11',
+  'pause': 'M7 5h3.5v14H7zM13.5 5H17v14h-3.5z',
   'b-start': 'M6 4v16M6 5h11l-2 4 2 4H6',
 };

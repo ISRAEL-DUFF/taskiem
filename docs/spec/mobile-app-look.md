@@ -274,6 +274,46 @@ Drawn and agreed with the founder, 16 November 2026, in the same look.
   their labels (a status in its colour); + adds a row, ⋯ holds Export,
   Import and Delete table. The Tables tool in the chat keeps its list.
 
+### The chat
+
+Drawn and agreed with the founder, 16 November 2026: the chat leaves the web
+chat's look for the app's own, as sleek as WhatsApp and Telegram. Its tools
+were drawn the day before. These screens are no longer compared with the
+web's pictures (the parity test still builds and drives them).
+
+- **Colours.** The chat's tokens are the app's (`tkAppLight`, `tkAppDark` in
+  `theme.dart`, over the web's): no wallpaper, the page's ground; their
+  bubbles white (#1A1B1A in the dark), yours pine with white words (a deep
+  green, #1D3A2D, in the dark); read ticks lime. The tokens have a
+  `copyWith` (generated) and `TkTheme.recolour` gives a part of a screen
+  colours of its own (your own bubble's words, a sheet's boxes).
+- **The conversation.** The head on the ground: Back, the face, the name in
+  Inter Tight, who they are or "typing…" in lime, Search and ⋯ as round
+  buttons, a hairline under it. Bubbles 20 px round; a run from one side
+  tucks one corner, at its end. A quote with a lime bar and the sender's
+  name; reactions as pills on the card's colour; the day and "unread" as
+  pills; a voice note with a lime play button and bars that fill as it
+  plays; three dots in a bubble while they type. Replying: the line on a
+  card with a round ×.
+- **The chats list.** "Chats" large with the business under it; ⋯ and + (Find
+  a business, which no longer floats over the rows) round in the head. The
+  search on a card; All, Unread, Starred, Archived as the switch.
+  Taskiem's conversation on its own card, what needs you as an orange
+  count. A business asking to link on a card with an orange capsule, Accept,
+  Decline, and Block under ⋯. The chats on one card, faces on their
+  gradients, the time lime when unread, read ticks lime, the count a pine
+  pill (grey when muted). Customers with their own heading and count.
+- **The tools.** The panel floats as a card on the ground; each tool on its
+  accent's square (selling and money lime, products and orders teal, stock
+  and bills orange, invoices and price lists blue, services and tables
+  violet) with its count as a capsule. A tool's sheet on the ground: round
+  Back and Close on the card's colour, the title in Inter Tight, the search
+  on a card, filters as the switch, the rows on one card. Sell and Order:
+  − and + round on a soft track, lime once picked; the total a pine bar.
+- **Left as it was:** the product form keeps its order (the photo's ways
+  under the picture, the fields one under another) in the new colours; the
+  documents named in a message (`RefCard`).
+
 ## Order
 
 1. Orders and Money, and the chat's motion. Done.
@@ -282,4 +322,5 @@ Drawn and agreed with the founder, 16 November 2026, in the same look.
 4. Stock, Supplies, Suppliers and an order to a supplier. **Done; waiting for the founder's word.**
 5. One order: a customer's, a booking, a business's, a rider's delivery. **Done; waiting for the founder's word.**
 6. Team, riders and tables. **Done; waiting for the founder's word.**
-7. Then the settings-like pages, the same way.
+7. The chat: the conversation, the chats list, the tools. **Done; waiting for the founder's word.**
+8. Then the settings-like pages, the same way.
