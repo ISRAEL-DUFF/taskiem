@@ -93,7 +93,7 @@ func TestChatLinks(t *testing.T) {
 
 	// Anyone with the link sees the business's card.
 	card := anon.must(200, "GET", "/v1/chat-links/"+strings.ToUpper(code), nil)
-	if card["name"] != "Mama's Kitchen" || card["takes_chats"] != true || card["link"] != chatBase+"/m/"+code {
+	if card["name"] != "Mama's Kitchen" || card["takes_chats"] != true || card["link"] != chatBase+"/m/"+code || card["app"] != "https://taskiem.test/app" {
 		t.Fatalf("card: %v", card)
 	}
 	if st, _ := anon.do("GET", "/v1/chat-links/abcdefgh23", nil); st != 404 {

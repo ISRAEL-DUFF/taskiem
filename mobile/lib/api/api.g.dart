@@ -6201,8 +6201,11 @@ class DeletePushEndpointRequest {
 }
 
 class ChatLinkCard {
-  const ChatLinkCard({this.area, required this.code, this.hours, required this.link, required this.name, this.openNow, this.photo, this.shop, this.tagline, required this.takesChats, required this.words});
+  const ChatLinkCard({this.app, this.area, required this.code, this.hours, required this.link, required this.name, this.openNow, this.photo, this.shop, this.tagline, required this.takesChats, required this.words});
 
+  /// Where to get the Taskiem app (TASKIEM_APP_GET_URL), for the page's Get the
+  /// Taskiem app; absent where it is not listed.
+  final String? app;
   final String? area;
   final String code;
   final Map<String, dynamic>? hours;
@@ -6216,6 +6219,7 @@ class ChatLinkCard {
   final String words;
 
   factory ChatLinkCard.fromJson(Map<String, dynamic> j) => ChatLinkCard(
+        app: j['app'] == null ? null : j['app'] as String,
         area: j['area'] == null ? null : j['area'] as String,
         code: j['code'] as String,
         hours: j['hours'] == null ? null : j['hours'] as Map<String, dynamic>,
@@ -6230,6 +6234,7 @@ class ChatLinkCard {
       );
 
   Map<String, dynamic> toJson() => {
+        'app': ?app,
         'area': ?area,
         'code': code,
         'hours': ?hours,

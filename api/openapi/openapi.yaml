@@ -31685,6 +31685,9 @@ components:
           type: string
         words:
           type: string
+        app:
+          type: string
+          description: Where to get the Taskiem app (TASKIEM_APP_GET_URL), for the page's Get the Taskiem app; absent where it is not listed.
     PhoneOrder:
       type: object
       required: [reference, state, total_kobo, made_at, business, business_id, waiting]

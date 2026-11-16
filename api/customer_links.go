@@ -107,6 +107,9 @@ type chatCardOut struct {
 	Link string `json:"link"`
 	// Words are the business's words to share the link with.
 	Words string `json:"words"`
+	// App is where to get the Taskiem app (TASKIEM_APP_GET_URL), for the
+	// page's Get the Taskiem app; empty where it is not listed.
+	App string `json:"app,omitempty"`
 }
 
 // chatCardFor reads the card of the business a code names.
@@ -123,6 +126,7 @@ func (s *Server) chatCardFor(ctx context.Context, code string) (chatCardOut, err
 		return err
 	})
 	out.Words = chatLinkWords(out.Name, out.Link)
+	out.App = s.AppGetURL
 	return out, err
 }
 
