@@ -151,6 +151,10 @@ func TestSlackSignup(t *testing.T) {
 	if b := buttons(ask[len(ask)-1]); len(b) != 1 || b[0] != "su:suggest" {
 		t.Fatalf("the business's name: %v", ask[len(ask)-1])
 	}
+	// A workspace's name, never a business's.
+	if q, _ := ask[len(ask)-1]["text"].(string); !strings.Contains(q, "this workspace") || strings.Contains(q, "business") {
+		t.Fatalf("the workspace's name asked as: %q", q)
+	}
 	// The workspace's name, offered; the person's name is Slack's. A Slack
 	// workspace starts as workflows (taskiem-for-everyone §18.3): nothing
 	// about selling is asked.

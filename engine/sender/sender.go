@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/phone"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
 
@@ -257,8 +258,20 @@ func (q *Queue) hash(channel, to string) []byte {
 
 // NormalisePhone returns a phone number as E.164 (+2348031234567). A
 // number starting 0 is Nigerian. The calling code must be one of
-// countries.
+// countries. A number with its country (+ or 00) or a local one (0…) is
+// read as people's own numbers are (phone.Normalise, which also takes
+// +234 0803…); bare digits are read as international, and a bare 803…
+// is refused here: a business's customer's number is not guessed at.
 func NormalisePhone(s string, countries []string) (string, error) {
+	if t := strings.TrimSpace(s); strings.HasPrefix(t, "+") || strings.HasPrefix(t, "0") {
+		if n, err := phone.Normalise(t); err == nil {
+			for _, c := range countries {
+				if strings.HasPrefix(n[1:], c) {
+					return n, nil
+				}
+			}
+		}
+	}
 	d := strings.Map(func(r rune) rune {
 		if r == ' ' || r == '-' || r == '(' || r == ')' || r == '.' {
 			return -1

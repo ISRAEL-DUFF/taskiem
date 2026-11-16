@@ -393,10 +393,14 @@ func (s *Server) signupAsk(ctx context.Context, sc *signupChat, st *signupState)
 			whatsapp.Button{ID: "su:kind:business", Title: sc.t("signup.button_business")},
 			whatsapp.Button{ID: "su:kind:workflows", Title: sc.t("signup.button_workflows")})
 	case suBusiness:
-		if n, ok := plainName(st.Suggest, 2, 80); ok {
-			return s.suSay(ctx, sc, sc.t("signup.ask_business"), whatsapp.Button{ID: "su:suggest", Title: n})
+		ask := "signup.ask_business"
+		if st.Kind == areas.TenantWorkflows {
+			ask = "signup.ask_workspace" // Slack: a workspace, not a business
 		}
-		return s.suSay(ctx, sc, sc.t("signup.ask_business"))
+		if n, ok := plainName(st.Suggest, 2, 80); ok {
+			return s.suSay(ctx, sc, sc.t(ask), whatsapp.Button{ID: "su:suggest", Title: n})
+		}
+		return s.suSay(ctx, sc, sc.t(ask))
 	case suName:
 		return s.suSay(ctx, sc, sc.t("signup.ask_name"))
 	case suSells:
@@ -496,6 +500,9 @@ func (s *Server) signupStep(ctx context.Context, sc *signupChat, st *signupState
 		}
 		name, ok := plainName(text, 2, 80)
 		if !ok {
+			if st.Kind == areas.TenantWorkflows {
+				return s.suSay(ctx, sc, sc.t("signup.workspace_bad"))
+			}
 			return s.suSay(ctx, sc, sc.t("signup.business_bad"))
 		}
 		st.Business = name
@@ -957,9 +964,6 @@ type newBusiness struct {
 	// default, or TenantWorkflows, whose Name may be empty: it is then
 	// named after its owner).
 	Kind string
-	// Scope adds tenants to the transaction's scope, for Then (the session
-	// a person starting something moves out of, start.go).
-	Scope []uuid.UUID
 }
 
 // makeBusiness makes the business, its default workspace and
@@ -975,13 +979,7 @@ func (s *Server) makeBusiness(ctx context.Context, nb newBusiness) (tenant, owne
 	if actor == "" {
 		actor = owner.String()
 	}
-	scope := []uuid.UUID{tenant}
-	for _, t := range nb.Scope {
-		if t != uuid.Nil && !slices.Contains(scope, t) {
-			scope = append(scope, t)
-		}
-	}
-	err = db.InTenantTx(ctx, s.Store.Pool, scope, func(tx pgx.Tx) error {
+	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if newOwner {
 			// No password: the owner works through the channel that proved them.
 			if _, err := tx.Exec(ctx, `INSERT INTO users (id, email, name) VALUES ($1, $2, $3)`, owner, nb.OwnerEmail, nb.OwnerName); err != nil {

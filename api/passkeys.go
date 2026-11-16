@@ -649,9 +649,17 @@ func (s *Server) factorsOf(ctx context.Context, tenant, user uuid.UUID) (factorS
 // their email is confirmed (where email can be sent); one with none of these (signed in by SSO only) has nothing more to give. A
 // passkey assertion must be for a challenge asked for "account.reauth"
 // and action (passkey.add, totp.setup, ...).
+//
+// A session made by a code to the person's phone or chat on a device with
+// no second proof, of someone who could give one, changes no factor at all
+// (401 second_proof_required, refuseUnproved): the code proves only that
+// someone holds the number today (docs/spec/taskiem-for-everyone.md §5.4).
 func (s *Server) proveFactor(w http.ResponseWriter, r *http.Request, proof factorProof, action string) bool {
 	ctx := r.Context()
 	p := principalFrom(ctx)
+	if s.refuseUnproved(w, r) {
+		return false
+	}
 	f, hash, err := s.factorsOf(ctx, p.TenantID, p.UserID)
 	if err != nil {
 		s.fail(w, r, err)

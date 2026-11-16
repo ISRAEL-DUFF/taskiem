@@ -128,8 +128,7 @@ func (s *Server) switchBusiness(w http.ResponseWriter, r *http.Request) {
 		passkeyRequiredOut(w)
 		return
 	case "second_proof_required":
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "this is a new device: prove it is you another way first (a passkey, a link to your email, or your chat PIN)",
-			"second_proof_required": true, "ways": proof.ways})
+		secondProofRequiredOut(w, proof.ways)
 		return
 	}
 	next := newToken()

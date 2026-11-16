@@ -27,7 +27,7 @@ import (
 // account, switching, starting something (stream B's /v1/me/start), their
 // phone, second proofs, invitations and signing out.
 var personalRoutes = regexp.MustCompile(`^(GET /v1/me|POST /v1/me/terms|GET /v1/me/businesses|POST /v1/me/switch|POST /v1/me/start|` +
-	`POST /v1/me/phone/(start|verify)|POST /v1/auth/second-proof/(email/start|email/verify|pin)|` +
+	`POST /v1/me/phone/(start|verify)|POST /v1/auth/second-proof/(email/start|email/verify|pin|password|passkey/options|passkey)|` +
 	`GET /v1/me/invitations|POST /v1/me/invitations/[^/]+/(accept|decline)|POST /v1/auth/logout)$`)
 
 func personalAllowed(method, path string) bool {
@@ -133,27 +133,47 @@ var errAccountOff = errors.New("this account is not active")
 
 // --- the business's rules, on switching ---
 
-// secondProofWays are the second proofs a person could give (§5.4).
+// secondProofWays are the second proofs a person could give (§5.4): a
+// passkey, a link to their real email (confirmed or not), the chat PIN,
+// or their password (where it is usable: a business of theirs lets them
+// sign in with it, and their email is confirmed where email can be sent,
+// as proveFactor asks).
 type secondProofWays struct {
-	Passkey bool `json:"passkey"`
-	Email   bool `json:"email"`
-	Pin     bool `json:"pin"`
+	Passkey  bool `json:"passkey"`
+	Email    bool `json:"email"`
+	Pin      bool `json:"pin"`
+	Password bool `json:"password"`
 }
 
-func (w secondProofWays) any() bool { return w.Passkey || w.Email || w.Pin }
+func (w secondProofWays) any() bool { return w.Passkey || w.Email || w.Pin || w.Password }
 
 func (s *Server) secondProofsOf(ctx context.Context, user uuid.UUID) (secondProofWays, error) {
 	var out secondProofWays
-	err := s.Store.Pool.QueryRow(ctx, `SELECT passkey, email, pin FROM taskiem_auth_second_proofs($1)`, user).Scan(&out.Passkey, &out.Email, &out.Pin)
-	return out, err
+	var password, verified bool
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT passkey, email, pin, password, email_verified FROM taskiem_auth_second_proofs($1)`, user).
+		Scan(&out.Passkey, &out.Email, &out.Pin, &password, &verified); err != nil {
+		return out, err
+	}
+	if password && (verified || !s.mailOn()) {
+		usable, err := s.passwordUsable(ctx, user)
+		if err != nil {
+			return out, err
+		}
+		out.Password = usable
+	}
+	return out, nil
 }
 
+// codeSession is whether a session was made by a code to the person's
+// phone or chat: a code proves only that someone holds the number today.
+func codeSession(p *Principal) bool { return p.AuthMethod == "phone" || p.AuthMethod == "chat" }
+
 // proofState is whether the session's person must give a second proof
-// before entering a business: a session made by a code to their phone, on
-// a device without one. unprovable is such a session of someone with no
-// way to give one (a chat-born owner with no email, passkey or PIN): they
-// are let in, and it is recorded, rather than locked out of their own
-// business.
+// before entering a business: a session made by a code to their phone or
+// chat, on a device without one. unprovable is such a session of someone
+// with no way to give one (a chat-born owner with no email, passkey, PIN
+// or password): they are let in, and it is recorded, rather than locked
+// out of their own business.
 type proofState struct {
 	needed, unprovable, deviceProved bool
 	ways                             secondProofWays
@@ -172,10 +192,41 @@ func (s *Server) proofStateOf(r *http.Request, p *Principal) (proofState, error)
 			return st, err
 		}
 	}
-	if p.AuthMethod == "phone" && !st.deviceProved {
+	if codeSession(p) && !st.deviceProved {
 		st.needed, st.unprovable = ways.any(), !ways.any()
 	}
 	return st, nil
+}
+
+// secondProofRequiredOut is the 401 that asks for a second proof first.
+func secondProofRequiredOut(w http.ResponseWriter, ways secondProofWays) {
+	writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "this is a new device: prove it is you another way first (a passkey, a link to your email, your chat PIN or your password)",
+		"second_proof_required": true, "ways": ways})
+}
+
+// refuseUnproved answers 401 second_proof_required, and reports true, for
+// a session made by a code on a device without a second proof, of someone
+// who could give one: such a session adds no way of signing in (a passkey,
+// an authenticator, a password, an email, a chat or a PIN), or a holder of
+// a reissued number would make the account theirs (§5.4). The session's
+// method and device carry over switching and Start something
+// (taskiem_auth_session_move), so a business session made from one is
+// held the same.
+func (s *Server) refuseUnproved(w http.ResponseWriter, r *http.Request) bool {
+	p := principalFrom(r.Context())
+	if p == nil || !codeSession(p) {
+		return false
+	}
+	st, err := s.proofStateOf(r, p)
+	if err != nil {
+		s.fail(w, r, err)
+		return true
+	}
+	if st.needed {
+		secondProofRequiredOut(w, st.ways)
+		return true
+	}
+	return false
 }
 
 // businessLock is what stands between the session and a business of the
@@ -293,12 +344,23 @@ func (s *Server) phoneOf(ctx context.Context, user uuid.UUID) any {
 
 // enterJoined moves a personal session into a business the person has just
 // joined, unless its rules ask for another sign-in ({sign_in: lock}, and
-// the personal session goes on).
+// the personal session goes on): its single sign-on, a passkey, or a
+// second proof for a session made by a code on an unproved device
+// ({sign_in: second_proof_required, ways}).
 func (s *Server) enterJoined(w http.ResponseWriter, r *http.Request, p *Principal, tenant uuid.UUID) (map[string]any, error) {
 	ctx := r.Context()
-	lock, err := s.businessLock(ctx, p, tenant, proofState{})
+	proof, err := s.proofStateOf(r, p)
 	if err != nil {
 		return nil, err
+	}
+	lock, err := s.businessLock(ctx, p, tenant, proof)
+	if err != nil {
+		return nil, err
+	}
+	if lock == "second_proof_required" {
+		// Joined, but entered only once this device is proved: the person
+		// proves it, then switches (§5.4).
+		return map[string]any{"sign_in": lock, "ways": proof.ways}, nil
 	}
 	if lock != "" {
 		return map[string]any{"sign_in": lock}, nil

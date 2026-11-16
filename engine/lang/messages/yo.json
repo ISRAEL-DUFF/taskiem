@@ -4200,6 +4200,14 @@
       "text": "Kí ni orúkọ okòwò rẹ? (Fi *cancel* ránṣẹ́ láti dúró nígbàkígbà.)",
       "reviewed": false
     },
+    "signup.ask_workspace": {
+      "text": "What should we call this workspace? (Send *cancel* to stop at any point.)",
+      "reviewed": false
+    },
+    "signup.workspace_bad": {
+      "text": "A workspace name needs 2 to 80 characters, and no links or email addresses. What should we call it?",
+      "reviewed": false
+    },
     "signup.ask_name": {
       "text": "Àti orúkọ rẹ?",
       "reviewed": false

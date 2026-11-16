@@ -29,6 +29,9 @@ phoneCreate
 secondProofEmailStart
 secondProofEmailVerify
 secondProofPin
+secondProofPassword
+secondProofPasskeyOptions
+secondProofPasskey
 phoneChangeStart
 phoneChangeVerify
 # Invitations waiting on You (taskiem-for-everyone §7)

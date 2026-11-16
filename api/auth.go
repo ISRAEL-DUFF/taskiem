@@ -974,8 +974,9 @@ func (s *Server) acceptInvitation(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{"tenant_id": tenant, "roles": nonNil(roles)}
 	if p.Personal {
 		// Now a member: the person's own session moves into the business,
-		// under its rules (personal.go). Joining asks no second proof: the
-		// person is asked to set one up instead
+		// under its rules (personal.go), a second proof included: a session
+		// that needs one stays personal and is answered {sign_in:
+		// second_proof_required, ways}; the person proves, then switches
 		// (docs/spec/taskiem-for-everyone.md §5.4).
 		more, err := s.enterJoined(w, r, p, tenant)
 		if err != nil {
