@@ -106,7 +106,7 @@ export interface Order {
   reference: string;
   /** The front the submission came from (fronts F3). */
   front_id?: string;
-  kind: FormKind | "trade";
+  kind: FormKind | "trade" | "app";
   status: OrderStatus;
   customer: Customer;
   basket: OrderLine[] | null;
@@ -511,12 +511,13 @@ export function ordersPath(filter: string, front = ""): string {
   return qs ? `/v1/storefront/orders?${qs}` : "/v1/storefront/orders";
 }
 
-export const KIND_LABEL: Record<FormKind | "trade", string> = {
+export const KIND_LABEL: Record<FormKind | "trade" | "app", string> = {
   order: "Order",
   enquiry: "Question",
   callback: "Call-back",
   booking: "Booking",
   trade: "From a linked business",
+  app: "Order in the app",
   hire: "Hire",
   space: "Space booking",
   tickets: "Tickets",
@@ -578,7 +579,7 @@ export function orderWhat(
 export function orderTotal(o: Pick<Order, "kind" | "total_kobo">): string {
   if (o.kind === "booking")
     return o.total_kobo > 0 ? formatPrice(o.total_kobo) : "Price on the day";
-  return o.kind === "order" ? formatPrice(o.total_kobo) : "—";
+  return o.kind === "order" || o.kind === "app" ? formatPrice(o.total_kobo) : "—";
 }
 
 /** The line a price_changed order carries: the new total, and what is no longer offered. */
@@ -604,7 +605,7 @@ export function paymentSummary(
       : "";
     return `${when}${deposit} · ${o.paid_at ? "paid" : "not paid"}`;
   }
-  if (o.kind === "order" && o.payment === "on_delivery") return `Pays at the door · ${o.paid_at ? "paid" : "not paid"}`;
+  if ((o.kind === "order" || o.kind === "app") && o.payment === "on_delivery") return `Pays at the door · ${o.paid_at ? "paid" : "not paid"}`;
   if (o.kind !== "order" || o.payment === "none") return "No online payment";
   const when =
     o.payment === "at_order" ? "Pays when ordering" : "Pays after you accept";

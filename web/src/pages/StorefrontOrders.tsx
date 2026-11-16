@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { TradeOrdersCard } from "./TradeOrders";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { customerKey } from "../lib/customerchat";
 import { ApiError, get, post } from "../api";
 import { useAuth } from "../auth";
 import {
@@ -275,7 +276,7 @@ export function StorefrontOrders() {
                   ? "refund"
                   : o.kind === "booking"
                     ? "clock"
-                    : o.kind === "order" || o.kind === "trade"
+                    : o.kind === "order" || o.kind === "app" || o.kind === "trade"
                       ? "orders"
                       : "inbox"
               }
@@ -339,6 +340,33 @@ export function StorefrontOrders() {
 }
 
 /** One order (GET /v1/storefront/orders/{reference}), and its customer's details for those who may see them. */
+/** An order placed in the Taskiem app: write to its customer there
+ * (taskiem-for-everyone §8.1), their app conversation opened if need be. */
+function WriteInApp({ reference }: { reference: string }) {
+  const act = useAction();
+  const nav = useNavigate();
+  return (
+    <section className="card" aria-labelledby="write-in-app" data-testid="write-in-app">
+      <h2 id="write-in-app">Chat with them</h2>
+      <p className="hint">They ordered in the Taskiem app: write to them there. No 24-hour wait, and they see your order card.</p>
+      <ErrorBox error={act.error} />
+      <button
+        type="button"
+        className="primary"
+        disabled={act.busy}
+        onClick={() =>
+          void act.run(async () => {
+            const c = await post<{ id: string }>("/v1/customer-chats/app", { reference });
+            nav(`/chat?with=${customerKey(c.id)}`);
+          }, false)
+        }
+      >
+        Write to them in the app
+      </button>
+    </section>
+  );
+}
+
 export function StorefrontOrder() {
   const { reference = "" } = useParams();
   const { can } = useAuth();
@@ -427,6 +455,7 @@ export function StorefrontOrder() {
               <ErrorBox error={refund.error} />
             </div>
           )}
+          {o.kind === "app" && can("order.handle") && <WriteInApp reference={o.reference} />}
           <section className="card" aria-labelledby="order-summary">
             <h2 id="order-summary">Details</h2>
             <dl className="kv">
@@ -509,7 +538,7 @@ export function StorefrontOrder() {
                   <dd className="capitalize">{o.fulfilment}</dd>
                 </>
               )}
-              {(o.kind === "order" || o.kind === "booking") && (
+              {(o.kind === "order" || o.kind === "app" || o.kind === "booking") && (
                 <>
                   <dt>Payment</dt>
                   <dd>
@@ -581,7 +610,7 @@ export function StorefrontOrder() {
               </Link>
             </section>
           )}
-          {(o.kind === "order" || o.kind === "trade") && (
+          {(o.kind === "order" || o.kind === "app" || o.kind === "trade") && (
             <OrderDelivery
               reference={o.reference}
               delivery={o.fulfilment === "delivery"}

@@ -1,5 +1,6 @@
 import { plainValue, showValue } from "../lib/values";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { del, get, post, put, type GitConnection, type GitSync } from "../api";
 import { useAdvanced, useAuth } from "../auth";
 import { EnvSelect, useEnvironments } from "../environments";
@@ -170,6 +171,15 @@ export function Settings() {
       />
       {can("member.manage") && <AdvancedSwitch />}
       {can("member.manage") && <ChatToolsSwitch />}
+      {(can("order.handle") || can("storefront.manage")) && (
+        <div className="card" data-testid="settings-customer-chats">
+          <h2 style={{ marginTop: 0 }}>Customer chats</h2>
+          <p className="hint">Your chat link and its QR code, whether you take chats, and what happens when nobody answers.</p>
+          <Link className="button" to="/settings/customers">
+            Open customer chats
+          </Link>
+        </div>
+      )}
       {can("member.manage") && <Security />}
       {me?.roles.includes("owner") && <SchoolsSwitch />}
       {advanced && <Environments editable={can("secret.manage")} />}

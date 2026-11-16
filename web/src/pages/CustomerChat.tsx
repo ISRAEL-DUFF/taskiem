@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { get, post, put } from "../api";
+import { Link } from "react-router-dom";
+import { del, get, post, put, upload } from "../api";
 import { Icon } from "../icons";
+import { Pill } from "../kit";
 import { naira } from "../lib/billing";
+import { appNote, appThreadLine, mayOffer, type CardAsk } from "../lib/customerlinks";
 import {
   customerKey,
   customerLetter,
@@ -23,9 +26,13 @@ import { clock, listTime } from "../lib/linkchat";
 import { useAutoGrow } from "../lib/useAutoGrow";
 import { useThread } from "../lib/useThread";
 import { ErrorBox, fmtTime, useAction, useLoad } from "../ui";
+import { AppAttachmentView, AppCardView } from "./AppCards";
 import { BubbleShell, Ticks } from "./BubbleShell";
 import { ChatAvatar } from "./ChatAvatar";
+import { BUSINESS_FILES } from "./ChatComposer";
 import { ChatHead } from "./ChatHead";
+import { useConfirm } from "./ConfirmSheet";
+import { CardSheet } from "./CustomerCards";
 import { ChatRow } from "./ChatRow";
 import { ChatStream } from "./ChatStream";
 import { CustomerOrders } from "./CustomerOrders";
@@ -74,7 +81,17 @@ export function CustomerRows({
               key={c.id}
               to={`/chat?with=${customerKey(c.id)}`}
               letter={customerLetter(c)}
-              title={customerTitle(c)}
+              title={
+                <>
+                  {customerTitle(c)}
+                  {c.line === "app" && (
+                    <span className="line-mark" data-testid="in-the-app">
+                      {" "}
+                      · in the app
+                    </span>
+                  )}
+                </>
+              }
               time={listTime(c.last_at)}
               preview={
                 draft ? (
@@ -82,7 +99,7 @@ export function CustomerRows({
                     <span className="draft">Draft:</span> {draft}
                   </>
                 ) : c.stopped ? (
-                  "Sent STOP"
+                  c.line === "app" ? "Stopped messages" : "Sent STOP"
                 ) : (
                   `${c.last_mine ? "You: " : ""}${c.last}`
                 )
@@ -306,33 +323,63 @@ export function CustomerPane({
   useAutoGrow(box, text);
 
   const c = chat.data;
-  const note = c ? replyNote(c) : null;
-  const canSend = !!c && !c.stopped && !!c.phone;
-  const tooLong = !!c && lateTooLong(text, c.window_open);
-  const send = () => {
-    const words = text.trim();
-    if (!words || !canSend || act.busy) return;
+  // A customer in the Taskiem app (taskiem-for-everyone §8.3): no 24-hour
+  // window, cards, files, typing and blocks.
+  const app = c?.line === "app";
+  const note = c ? (app ? appNote(c) : replyNote(c)) : null;
+  const canSend = !!c && !c.stopped && !c.blocked && (app || !!c.phone);
+  const tooLong = !!c && !app && lateTooLong(text, c.window_open);
+  const [cards, setCards] = useState(false);
+  const [asOffer, setAsOffer] = useState(false);
+  const filePick = useRef<HTMLInputElement>(null);
+  const sure = useConfirm();
+  const lastTyped = useRef(0);
+  const typed = (v: string) => {
+    setText(v);
+    if (!app || !v.trim() || Date.now() - lastTyped.current < 4000) return;
+    lastTyped.current = Date.now();
+    void post(`/v1/customer-chats/${id}/typing`).catch(() => undefined);
+  };
+  const send = (extra?: { card?: CardAsk; cardWords?: string; file?: File }) => {
+    const words = extra?.card ? (extra.cardWords ?? "") : text.trim();
+    if ((!words && !extra?.file && !extra?.card) || !canSend || act.busy) return;
     const client = `${Date.now()}-${++localN}`;
+    const file = extra?.file;
+    const offer = !extra?.card && !file && asOffer && mayOffer(c ?? {});
     const mine: CustomerMessage = {
       id: `local-${client}`,
       mine: true,
-      kind: "text",
+      kind: file ? "media" : extra?.card ? "card" : "text",
       body: words,
+      attachment: file ? { kind: file.type.startsWith("image/") ? "photo" : file.type.startsWith("audio/") ? "voice" : "file", type: file.type, size: file.size, name: file.name } : undefined,
+      offer,
       read_at: null,
       created_at: new Date().toISOString(),
       local: true,
     };
     setMessages((cur) => mergeCustomer(cur ?? [], [mine]));
-    setText("");
+    if (!extra?.card) setText("");
     void act
       .run(async () => {
-        const out = await post<CustomerMessage>(
-          `/v1/customer-chats/${id}/messages`,
-          {
-            text: words,
-            client_id: client,
-          },
-        );
+        let out: CustomerMessage;
+        if (file) {
+          const form = new FormData();
+          form.append("file", file);
+          if (words) form.append("text", words);
+          form.append("client_id", client);
+          out = await upload<CustomerMessage>(`/v1/customer-chats/${id}/files`, form);
+        } else
+          out = await post<CustomerMessage>(
+            `/v1/customer-chats/${id}/messages`,
+            extra?.card
+              ? { card: extra.card, client_id: client }
+              : {
+                  text: words,
+                  client_id: client,
+                  ...(offer ? { offer: true } : {}),
+                },
+          );
+        if (offer) setAsOffer(false);
         setMessages((cur) =>
           mergeCustomer(
             (cur ?? []).filter((m) => m.id !== mine.id),
@@ -345,7 +392,7 @@ export function CustomerPane({
         if (ok) return;
         // Not sent: the words come back to the box.
         setMessages((cur) => cur?.filter((m) => m.id !== mine.id));
-        setText((cur) => (cur === "" ? words : cur));
+        if (!extra?.card && !file) setText((cur) => (cur === "" ? words : cur));
         chat.reload();
       });
   };
@@ -365,9 +412,9 @@ export function CustomerPane({
         subtitle={
           c
             ? [
-                c.phone && c.phone !== c.name ? phoneWords(c.phone) : "",
-                owes,
-                "Customer on WhatsApp",
+                c.typing ? "" : c.phone && c.phone !== c.name ? phoneWords(c.phone) : "",
+                c.typing ? "" : owes,
+                appThreadLine(c),
               ]
                 .filter(Boolean)
                 .join(" · ")
@@ -419,11 +466,42 @@ export function CustomerPane({
                   >
                     {c.muted ? "Unmute notifications" : "Mute notifications"}
                   </button>
+                  {c.line === "app" && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-testid="customer-block"
+                      onClick={async () => {
+                        close();
+                        if (!c.blocked) {
+                          const yes = await sure.confirm({
+                            title: `Block ${customerTitle(c)}?`,
+                            body: "They will not be able to write to you, and you will not be able to write to them. Nothing is deleted.",
+                            ok: "Block",
+                            danger: true,
+                          });
+                          if (!yes) return;
+                        }
+                        void act.run(
+                          async () => {
+                            if (c.blocked) await del(`/v1/customer-chats/${id}/block`);
+                            else await post(`/v1/customer-chats/${id}/block`);
+                            chat.reload();
+                            changed.current();
+                          },
+                          c.blocked ? "Unblocked" : "Blocked",
+                        );
+                      }}
+                    >
+                      {c.blocked ? "Unblock this customer" : "Block this customer"}
+                    </button>
+                  )}
                 </>
               )
             : undefined
         }
       />
+      {sure.node}
       <ErrorBox error={error ?? chat.error ?? act.error} />
       <ChatStream
         items={messages}
@@ -435,7 +513,9 @@ export function CustomerPane({
           !prev || prev.mine !== m.mine || prev.sender_name !== m.sender_name
         }
         empty={
-          c?.stopped ? (
+          app ? (
+            <>Nothing here yet. Write first: they read it in the Taskiem app.</>
+          ) : c?.stopped ? (
             <>What they wrote was deleted when they sent STOP.</>
           ) : (
             <>
@@ -450,10 +530,10 @@ export function CustomerPane({
             mine={m.mine}
             first={first}
             testid="customer-message"
-            className={m.kind === "media" ? "media-note" : ""}
-            what={m.body.split("\n")[0]?.slice(0, 60) ?? "message"}
+            className={m.card ? "card-bubble" : m.kind === "media" && !m.attachment ? "media-note" : ""}
+            what={(m.card?.title ?? m.body).split("\n")[0]?.slice(0, 60) ?? "message"}
             after={
-              <span className="stamp inline">
+              <span className={m.card || m.attachment ? "stamp" : "stamp inline"}>
                 {m.mine && m.sent_as === "template" && (
                   <span
                     className="channel-mark"
@@ -472,9 +552,36 @@ export function CustomerPane({
             {m.mine && first && m.sender_name && (
               <span className="who">{m.sender_name}</span>
             )}
-            <span className="text">
-              {m.kind === "media" ? <em>{m.body}</em> : m.body}
-            </span>
+            {m.offer && (
+              <span className="pc-offer-mark">
+                <Pill tone="plain">Offer</Pill>
+              </span>
+            )}
+            {m.card && (
+              <AppCardView
+                card={m.card}
+                actions={
+                  m.card.reference ? (
+                    <Link className="tk-btn soft" to={`/storefront/orders/${encodeURIComponent(m.card.reference)}`}>
+                      Open<span className="sr-only"> {m.card.title}</span>
+                    </Link>
+                  ) : undefined
+                }
+              />
+            )}
+            {m.attachment && (
+              <AppAttachmentView
+                a={m.attachment}
+                src={m.local ? undefined : `/v1/customer-chats/${encodeURIComponent(id)}/files/${encodeURIComponent(m.id)}`}
+                who={c ? customerTitle(c) : "the customer"}
+                mine={m.mine}
+              />
+            )}
+            {!m.card && !(m.attachment && ["Photo", "Voice note", "File", m.attachment.name].includes(m.body)) && (
+              <span className="text">
+                {m.kind === "media" && !m.attachment ? <em>{m.body}</em> : m.body}
+              </span>
+            )}
             {m.mine && m.delivery === "failed" && (
               <span className="customer-failed" role="status">
                 Not delivered{m.failure ? `: ${m.failure}` : "."}
@@ -503,6 +610,12 @@ export function CustomerPane({
           {LATE_REPLY_MAX} characters. This one is {lateLength(text)}.
         </p>
       )}
+      {canSend && app && mayOffer(c ?? {}) && (
+        <label className="switch-line customer-offer-line">
+          <input type="checkbox" checked={asOffer} onChange={(e) => setAsOffer(e.target.checked)} data-testid="customer-as-offer" />{" "}
+          <span>Send as an offer (they said yes to offers; two a week at most)</span>
+        </label>
+      )}
       {canSend && (
         <form
           className="composer"
@@ -511,6 +624,36 @@ export function CustomerPane({
             send();
           }}
         >
+          {app && (
+            <>
+              <button
+                type="button"
+                className="composer-tools"
+                aria-label="Send a card: an order, a pay link, a booking or a product"
+                data-testid="customer-cards"
+                onClick={() => setCards(true)}
+              >
+                <Icon name="grid" />
+              </button>
+              <input
+                ref={filePick}
+                type="file"
+                hidden
+                accept={BUSINESS_FILES.accept}
+                data-testid="customer-file"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!f) return;
+                  if (f.size > BUSINESS_FILES.max || !BUSINESS_FILES.types.test(f.type)) {
+                    setError(new Error(f.size > BUSINESS_FILES.max ? `${f.name} is larger than ${BUSINESS_FILES.maxWords}.` : BUSINESS_FILES.typesMessage));
+                    return;
+                  }
+                  send({ file: f });
+                }}
+              />
+            </>
+          )}
           <div className="composer-pill">
             <label className="sr-only" htmlFor="customer-text">
               Reply to {c ? customerTitle(c) : "the customer"}
@@ -523,7 +666,7 @@ export function CustomerPane({
               maxLength={2000}
               placeholder="Reply"
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => typed(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
@@ -531,6 +674,11 @@ export function CustomerPane({
                 }
               }}
             />
+            {app && (
+              <button type="button" className="icon-button" aria-label="Send a photo, PDF or voice note" title="Send a photo or a PDF" onClick={() => filePick.current?.click()}>
+                <Icon name="attach" />
+              </button>
+            )}
           </div>
           <button
             type="submit"
@@ -541,6 +689,15 @@ export function CustomerPane({
             <span className="sr-only">Send</span>
           </button>
         </form>
+      )}
+      {cards && c && (
+        <CardSheet
+          chat={id}
+          name={customerTitle(c)}
+          references={[...new Set((messages ?? []).map((m) => m.card?.reference).filter((r): r is string => !!r))]}
+          onClose={() => setCards(false)}
+          onSend={(card, words) => send({ card, cardWords: words })}
+        />
       )}
     </section>
   );

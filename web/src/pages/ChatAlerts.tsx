@@ -338,6 +338,12 @@ function AlertCard({
           words: "Open the order",
           go: () => nav(`/chat?with=${customerKey(a.id ?? "")}`),
         };
+      case "customer_waiting":
+        // A customer in the app waiting for an answer (taskiem-for-everyone §8.6).
+        return {
+          words: "Answer them",
+          go: () => nav(`/chat?with=${customerKey(a.id ?? "")}`),
+        };
       case "unmatched":
         return can("invoice.manage")
           ? { words: "Match it", go: () => onSheet("match", from()) }

@@ -13,7 +13,8 @@ export type AlertKind =
   | "unmatched"
   | "approval"
   | "deal"
-  | "order_draft";
+  | "order_draft"
+  | "customer_waiting";
 
 export interface ChatAlert {
   key: string;
@@ -54,6 +55,7 @@ export const ALERT_LOOK: Record<
   approval: { icon: "approvals", tone: "plain" },
   deal: { icon: "money", tone: "warn" },
   order_draft: { icon: "chat", tone: "lime" },
+  customer_waiting: { icon: "chat", tone: "warn" },
 };
 
 /** "Reorder 20 from Bayo Rice Mills". */

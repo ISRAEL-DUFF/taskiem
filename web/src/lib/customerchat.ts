@@ -3,6 +3,8 @@
 // in the chat; staff who handle orders answer there, and the answer goes
 // from the business's number. Pure helpers, tested on their own.
 
+import type { AppAttachment, AppCard } from "./personchat";
+
 export interface CustomerChat {
   id: string;
   /** Their name in the business's book, or their number. */
@@ -24,14 +26,31 @@ export interface CustomerChat {
   /** One thread only: what they owe on open invoices. */
   owes_kobo?: number;
   open_invoices?: number;
+  /** Where it runs: their WhatsApp, or the Taskiem app (or their
+   * browser): no 24-hour window there (taskiem-for-everyone §8.3). */
+  line?: "whatsapp" | "app";
+  /** The business blocked this customer (app). */
+  blocked?: boolean;
+  /** What the thread says of itself ("This customer has stopped messages"). */
+  notice?: string;
+  /** Their answer to offers (app): unasked, yes or no. */
+  offers?: "unasked" | "yes" | "no";
+  /** They are typing now (app, one thread only). */
+  typing?: boolean;
 }
 
 export interface CustomerMessage {
   id: string;
   /** From the business. */
   mine: boolean;
-  kind: "text" | "media";
+  kind: "text" | "media" | "card";
   body: string;
+  /** In the app: a card, a photo, voice note or file, an offer. */
+  card?: AppCard;
+  attachment?: AppAttachment;
+  offer?: boolean;
+  /** A photo being sent: this device's own copy. */
+  localPreview?: string;
   sender_name?: string;
   sent_as?: "text" | "template";
   /** A reply's way to the customer, as WhatsApp reports it. */

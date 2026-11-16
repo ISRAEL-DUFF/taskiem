@@ -33,6 +33,8 @@ import { Tasks } from "./pages/Tasks";
 import { Policies } from "./pages/Policies";
 import { Account, Passkeys } from "./pages/Account";
 import { SecondProofElsewhere, SecondProofPage, YouApp } from "./pages/You";
+import { ChatLinkPage } from "./pages/ChatLinkPage";
+import { CustomerChatSettings } from "./pages/CustomerChatSettings";
 import { signedInTo } from "./pages/WayIn";
 import { StartSomething } from "./pages/StartSomething";
 import { Switcher } from "./pages/Switch";
@@ -269,6 +271,14 @@ function Shell() {
       </Routes>,
     );
   if (me === undefined) return alone(<Skeleton rows={3} />);
+  // A business's chat link (taskiem-for-everyone §8.2, §9): its card,
+  // signed out or in a business; on You it is You's own page.
+  if (/^\/m\/[A-Za-z0-9]{4,40}\/?$/.test(loc.pathname) && !(me && (me.personal || (me.tenant_id === null && !me.gate_only))))
+    return alone(
+      <Routes>
+        <Route path="/m/:code" element={<ChatLinkPage />} />
+      </Routes>,
+    );
   if (me === null) {
     if (loc.pathname === "/signup") return alone(<Signup />);
     // A second proof's link opened where nobody is signed in: it proves
@@ -942,6 +952,10 @@ function SignedIn() {
                   <Route path="/catalogue" element={<Catalogue />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/settings/billing" element={<Billing />} />
+                  <Route
+                    path="/settings/customers"
+                    element={<CustomerChatSettings />}
+                  />
                   <Route path="/settings/areas" element={<Areas />} />
                   <Route
                     path="/settings/payments"
