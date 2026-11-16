@@ -92,12 +92,14 @@ class _YouHomeState extends State<YouHome> {
     });
     try {
       final j = await widget.auth.transport.send('POST', '/v1/me/invitations/${Uri.encodeComponent(inv.tenantId)}/accept');
-      final r = InvitationAccepted.fromJson((j as Map).cast<String, dynamic>());
+      // Read as it came: the ways may name only those the person has.
+      final r = (j as Map).cast<String, dynamic>();
+      final token = r['token'] as String?;
       // Moved into the business: the app opens on it.
-      if (r.token != null) return await widget.auth.signedInWith(r.token);
+      if (token != null) return await widget.auth.signedInWith(token);
       await widget.auth.refreshMe();
       await _load();
-      final need = r.signIn;
+      final need = r['sign_in'] as String?;
       if (!mounted) return;
       if (need != null && need != 'session_ended') {
         // A member now, but the business asks for a step first (its
@@ -109,7 +111,7 @@ class _YouHomeState extends State<YouHome> {
           widget.auth,
           to: BusinessEntry(id: inv.tenantId, name: inv.tenant, locked: true, lock: need),
           need: need,
-          ways: ProofWays.of(j['ways']),
+          ways: ProofWays.of(r['ways']),
         );
         return;
       }

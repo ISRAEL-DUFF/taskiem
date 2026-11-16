@@ -44,8 +44,6 @@ String? toE164(String typed) {
     s = '+$homeCountry${s.substring(1)}';
   } else if (RegExp(r'^[789]\d{9}$').hasMatch(s)) {
     s = '+$homeCountry$s';
-  } else if (RegExp(r'^[1-9]\d+$').hasMatch(s)) {
-    s = '+$s';
   } else {
     return null;
   }

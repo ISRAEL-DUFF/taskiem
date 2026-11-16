@@ -17,7 +17,7 @@ export const NOT_A_PHONE = "That doesn't look like a phone number";
  * 0; a local 0 and 10 digits, or a bare 10 digits starting 7, 8 or 9, is
  * Nigerian. A Nigerian number is +234 and 10 digits starting 7, 8 or 9;
  * another country's is + and 8 to 15 digits in all. Null when it cannot be
- * one.
+ * one (a bare country code with no + included).
  */
 export function toE164(typed: string): string | null {
   let s = typed.trim().replace(/[\s\-.()\u00a0]/g, "");
@@ -27,7 +27,6 @@ export function toE164(typed: string): string | null {
     if (s.startsWith("+" + HOME_COUNTRY + "0")) s = "+" + HOME_COUNTRY + s.slice(HOME_COUNTRY.length + 2);
   } else if (/^0\d{10}$/.test(s)) s = "+" + HOME_COUNTRY + s.slice(1);
   else if (/^[789]\d{9}$/.test(s)) s = "+" + HOME_COUNTRY + s;
-  else if (/^[1-9]\d+$/.test(s)) s = "+" + s;
   else return null;
   if (s.startsWith("+" + HOME_COUNTRY)) return /^\+234[789]\d{9}$/.test(s) ? s : null;
   return /^\+[1-9]\d{7,14}$/.test(s) ? s : null;

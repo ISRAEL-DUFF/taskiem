@@ -295,11 +295,13 @@ test("an invitation accepted on a new device asks for a second proof first, then
   // Another business invites Kemi by her email.
   const inviter = await browser.newPage();
   const tenant = `Bola Foods ${String(Date.now()).slice(-6)}`;
+  const bola = `bola-${Date.now()}@you.test`;
   const up = await inviter.request.post("/v1/signup", {
     headers: H,
-    data: { tenant, email: `bola-${Date.now()}@you.test`, name: "Bola", password: "correct horse battery", kinds: ["shop"] },
+    data: { tenant, email: bola, name: "Bola", password: "correct horse battery", kinds: ["shop"] },
   });
   expect(up.status(), await up.text()).toBe(201);
+  confirmEmail(bola);
   const invited = await inviter.request.post("/v1/members", { headers: H, data: { email: who.email, roles: ["builder"] } });
   expect(invited.status(), await invited.text()).toBe(201);
   await inviter.close();
