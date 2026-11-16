@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ApiError, post, switchStep, type Business, type Lock, type Me, type ProofWays } from "../api";
+import { ApiError, get, post, switchStep, type Business, type Lock, type Me, type ProofWays } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
-import { businessLine } from "../lib/phone";
-import { assert, passkeysSupported } from "../passkeys";
+import { businessLine, plainly } from "../lib/phone";
+import { assert, passkeyProof, passkeysSupported } from "../passkeys";
 import { ErrorBox, Field, Modal, PasswordInput, useAction } from "../ui";
 
 // The switcher (docs/spec/taskiem-for-everyone.md §6, §5.4): You, then each
@@ -19,9 +19,10 @@ export function landing(to: Business | "you"): string {
   return to.kind === "workflows" ? "/workflows" : "/home";
 }
 
-/** A fresh page in the other side: nothing of this one stays. */
-function arrive(to: Business | "you") {
-  window.location.assign(landing(to));
+/** A fresh page in the other side: nothing of this one stays. [dest] is
+ * where to go in it instead of its start (a link opened signed out). */
+function arrive(to: Business | "you", dest?: string) {
+  window.location.assign(dest ?? landing(to));
 }
 
 /** What a business asked for, with what the sheet needs to offer it. */
@@ -31,13 +32,15 @@ interface Asked {
   ways: ProofWays;
 }
 
-/** Signs in with a passkey straight into the business (it proves this device too). */
+/** Signs in with a passkey straight into the business (a business that
+ * opens only with a passkey: a session made with it). */
 async function passkeyInto(tenant: string) {
   await post("/v1/auth/passkey", { credential: await assert("/v1/auth/passkey/options"), tenant_id: tenant });
 }
 
-/** Switching, and the step a business asks for first. */
-export function useSwitch() {
+/** Switching, and the step a business asks for first; [dest] is where to
+ * go once in, instead of the business's start. */
+export function useSwitch(dest?: string) {
   const { me } = useAuth();
   const [asked, setAsked] = useState<Asked | null>(null);
   const act = useAction();
@@ -54,9 +57,9 @@ export function useSwitch() {
         }
         throw e;
       }
-      arrive(to);
+      arrive(to, dest);
     }, false);
-  return { go, asked, close: () => setAsked(null), busy: act.busy, error: act.error };
+  return { go, asked, ask: setAsked, close: () => setAsked(null), busy: act.busy, error: act.error };
 }
 
 /** The list: You, then each business, the one open marked. */
@@ -113,7 +116,7 @@ export function Switcher({ onStart, testid = "switcher" }: { onStart?: () => voi
   const here = me.personal ? "You" : me.tenant_name || "Your business";
   return (
     <>
-      <button type="button" className="switcher" aria-haspopup="dialog" onClick={() => setOpen(true)} data-testid={testid}>
+      <button type="button" className="switcher" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)} data-testid={testid}>
         <span className="switcher-name">{here}</span>
         <Icon name="down" />
         <span className="sr-only">: switch</span>
@@ -157,15 +160,16 @@ export function Switcher({ onStart, testid = "switcher" }: { onStart?: () => voi
   );
 }
 
-/** What a business asks for before it opens, as a sheet. */
-export function SwitchStep({ asked, onClose }: { asked: Asked; onClose: () => void }) {
+/** What a business asks for before it opens, as a sheet; [dest] is where
+ * to go once it has. */
+export function SwitchStep({ asked, onClose, dest }: { asked: Asked; onClose: () => void; dest?: string }) {
   const { business, lock, ways } = asked;
-  if (lock === "sso_required") return <SSOStep business={business} onClose={onClose} />;
-  if (lock === "passkey_required") return <PasskeyStep business={business} onClose={onClose} />;
-  return <ProofStep business={business} ways={ways} onClose={onClose} />;
+  if (lock === "sso_required") return <SSOStep business={business} onClose={onClose} dest={dest} />;
+  if (lock === "passkey_required") return <PasskeyStep business={business} onClose={onClose} dest={dest} />;
+  return <ProofStep business={business} ways={ways} onClose={onClose} dest={dest} />;
 }
 
-function SSOStep({ business, onClose }: { business: Business; onClose: () => void }) {
+function SSOStep({ business, onClose, dest }: { business: Business; onClose: () => void; dest?: string }) {
   const { me, logout } = useAuth();
   const [none, setNone] = useState(false);
   const act = useAction();
@@ -188,7 +192,7 @@ function SSOStep({ business, onClose }: { business: Business; onClose: () => voi
               const r = me?.user?.email_placeholder
                 ? { sso: false }
                 : await post<{ sso: boolean; start?: string }>("/v1/auth/sso/discover", { email: me?.user?.email ?? "" });
-              if (r.sso && "start" in r && r.start) window.location.assign(`${r.start}?return_to=${encodeURIComponent("/home")}`);
+              if (r.sso && "start" in r && r.start) window.location.assign(`${r.start}?return_to=${encodeURIComponent(dest ?? landing(business))}`);
               else setNone(true);
             }, false)
           }
@@ -206,7 +210,7 @@ function SSOStep({ business, onClose }: { business: Business; onClose: () => voi
   );
 }
 
-function PasskeyStep({ business, onClose }: { business: Business; onClose: () => void }) {
+function PasskeyStep({ business, onClose, dest }: { business: Business; onClose: () => void; dest?: string }) {
   const act = useAction();
   return (
     <Modal title={`Open ${business.name}`} onClose={onClose}>
@@ -218,7 +222,7 @@ function PasskeyStep({ business, onClose }: { business: Business; onClose: () =>
         onClick={() =>
           void act.run(async () => {
             await passkeyInto(business.id);
-            arrive(business);
+            arrive(business, dest);
           }, false)
         }
       >
@@ -234,19 +238,61 @@ function PasskeyStep({ business, onClose }: { business: Business; onClose: () =>
   );
 }
 
-/** A second proof for a new device: whichever ways the account has. */
-export function ProofStep({ business, ways, onClose, onProved }: { business?: Business; ways: ProofWays; onClose: () => void; onProved?: () => void }) {
+/** A second proof for a new device: whichever ways the account has. Each
+ * proves this device and leaves the session where it is; then the business
+ * opens (or onProved says what next). */
+export function ProofStep({
+  business,
+  ways,
+  onClose,
+  onProved,
+  dest,
+}: {
+  business?: Business;
+  ways: ProofWays;
+  onClose: () => void;
+  onProved?: () => void | Promise<void>;
+  dest?: string;
+}) {
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [pin, setPin] = useState("");
+  const [password, setPassword] = useState("");
   const act = useAction();
+  const done = useRef(false);
   const proved = async () => {
-    if (onProved) return onProved();
-    if (!business) return onClose();
-    await post("/v1/me/switch", { tenant_id: business.id });
-    arrive(business);
+    if (done.current) return;
+    done.current = true;
+    try {
+      if (onProved) return await onProved();
+      if (!business) return onClose();
+      await post("/v1/me/switch", { tenant_id: business.id });
+      arrive(business, dest);
+    } catch (e) {
+      done.current = false;
+      throw e;
+    }
   };
+  // The link opened in another tab proves this device: back here, the tab
+  // asks whether it has (as the app does on coming back to it).
+  const opened = async (quiet: boolean) => {
+    const m = await get<Me>("/v1/me");
+    if (m.second_proof?.device_proved) return proved();
+    if (!quiet) throw new Error("The link has not been opened yet. Open it from the email, then try again.");
+  };
+  useEffect(() => {
+    if (!sentTo) return;
+    const back = () => {
+      if (document.visibilityState === "visible" && !done.current) void opened(true).catch(() => undefined);
+    };
+    window.addEventListener("focus", back);
+    document.addEventListener("visibilitychange", back);
+    return () => {
+      window.removeEventListener("focus", back);
+      document.removeEventListener("visibilitychange", back);
+    };
+  }, [sentTo]);
   const what = business ? `Before ${business.name} opens` : "First";
-  const none = !ways.passkey && !ways.email && !ways.pin;
+  const none = !ways.passkey && !ways.email && !ways.pin && !ways.password;
   return (
     <Modal title="Prove it's you" onClose={onClose}>
       <div data-testid="second-proof">
@@ -263,13 +309,8 @@ export function ProofStep({ business, ways, onClose, onProved }: { business?: Bu
               disabled={act.busy}
               onClick={() =>
                 void act.run(async () => {
-                  if (business) {
-                    await passkeyInto(business.id);
-                    arrive(business);
-                  } else {
-                    await post("/v1/auth/passkey", { credential: await assert("/v1/auth/passkey/options") });
-                    await proved();
-                  }
+                  await plainly(passkeyProof);
+                  await proved();
                 }, false)
               }
             >
@@ -279,9 +320,16 @@ export function ProofStep({ business, ways, onClose, onProved }: { business?: Bu
         )}
         {ways.email &&
           (sentTo ? (
-            <p role="status" className="notice" data-testid="proof-link-sent">
-              We sent a link to {sentTo}. Open it on this device within 15 minutes.
-            </p>
+            <>
+              <p role="status" className="notice" data-testid="proof-link-sent">
+                We sent a link to {sentTo}. Open it on this device within 15 minutes.
+              </p>
+              <p>
+                <button type="button" className="primary" disabled={act.busy} onClick={() => void act.run(() => opened(false), false)}>
+                  I've opened the link
+                </button>
+              </p>
+            </>
           ) : (
             <p>
               <button
@@ -289,7 +337,7 @@ export function ProofStep({ business, ways, onClose, onProved }: { business?: Bu
                 disabled={act.busy}
                 onClick={() =>
                   void act.run(async () => {
-                    const r = await post<{ sent_to: string }>("/v1/auth/second-proof/email/start");
+                    const r = await plainly(() => post<{ sent_to: string }>("/v1/auth/second-proof/email/start"));
                     setSentTo(r.sent_to);
                   }, false)
                 }
@@ -298,18 +346,41 @@ export function ProofStep({ business, ways, onClose, onProved }: { business?: Bu
               </button>
             </p>
           ))}
+        {ways.password && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void act.run(async () => {
+                try {
+                  await post("/v1/auth/second-proof/password", { password });
+                } catch (err) {
+                  if (err instanceof ApiError && err.status === 401) throw new Error("That password is not right.", { cause: err });
+                  throw err;
+                }
+                await proved();
+              }, false);
+            }}
+          >
+            <Field label="Your password">
+              <PasswordInput autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            </Field>
+            <button type="submit" disabled={act.busy || !password}>
+              Confirm with my password
+            </button>
+          </form>
+        )}
         {ways.pin && (
           <form
             onSubmit={(e) => {
               e.preventDefault();
               void act.run(async () => {
-                await post("/v1/auth/second-proof/pin", { pin });
+                await plainly(() => post("/v1/auth/second-proof/pin", { pin }));
                 await proved();
               }, false);
             }}
           >
             <Field label="Your chat PIN" hint="The PIN you set for approving on WhatsApp.">
-              <PasswordInput inputMode="numeric" autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} maxLength={8} required />
+              <PasswordInput inputMode="numeric" autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 8))} required />
             </Field>
             <button type="submit" disabled={act.busy || pin.length < 4}>
               Confirm with my PIN

@@ -133,3 +133,10 @@ export const stepUpAssert = (operation: string, target: string) => assert("/v1/m
 export async function passkeyLogin() {
   await post("/v1/auth/passkey", { credential: await assert("/v1/auth/passkey/options") });
 }
+
+/** Proves this device is the person's with a passkey: a second proof
+ * (taskiem-for-everyone §5.4). The session stays as it is, on You or in a
+ * business; it is not a new sign-in. */
+export async function passkeyProof() {
+  await post("/v1/auth/second-proof/passkey", { assertion: await assert("/v1/auth/second-proof/passkey/options") });
+}

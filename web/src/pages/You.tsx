@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, NavLink, Route, Routes, useNavigate } from "react-router-dom";
-import { post } from "../api";
+import { post, type Business, type InvitationAccepted, type Lock } from "../api";
 import { useAuth } from "../auth";
 import { brandFile } from "../brand";
 import { Icon } from "../icons";
@@ -55,6 +55,8 @@ export function YouApp() {
 function YouHome() {
   const { me, refresh } = useAuth();
   const [proving, setProving] = useState(false);
+  // An invitation accepted whose business asks for a step first (§5.4).
+  const [joining, setJoining] = useState<{ business: Business; lock: Lock; accepted: InvitationAccepted } | null>(null);
   const first = me?.user?.name?.trim().split(/\s+/)[0];
   return (
     <>
@@ -84,7 +86,26 @@ function YouHome() {
           }}
         />
       )}
-      <Invitations onJoined={() => window.location.assign("/home")} />
+      <Invitations
+        onJoined={(r, inv) => {
+          const lock = r.sign_in && r.sign_in !== "session_ended" ? r.sign_in : null;
+          // Moved into the business: it opens on its start ("/" knows a workspace's).
+          if (!lock) return window.location.assign(r.sign_in === "session_ended" ? "/login" : "/");
+          setJoining({ business: { id: inv.tenant_id, name: inv.tenant }, lock, accepted: r });
+          void refresh();
+        }}
+      />
+      {joining && (
+        <SwitchStepHere
+          asked={{
+            business: joining.business,
+            lock: joining.lock,
+            ways: joining.accepted.ways ?? me?.second_proof?.ways ?? { passkey: false, email: false, pin: false },
+          }}
+          dest="/"
+          onClose={() => setJoining(null)}
+        />
+      )}
       <section className="card" aria-labelledby="you-chats">
         <h2 id="you-chats">Chats</h2>
         <EmptyState icon="chat">Chats with businesses will show here.</EmptyState>
@@ -182,5 +203,24 @@ export function SecondProofPage() {
         )}
       </section>
     </>
+  );
+}
+
+/** The second proof's link opened where nobody is signed in: it proves
+ * only the browser that asked for it, so it is not used here, and its
+ * token is dropped from the address at once. */
+export function SecondProofElsewhere() {
+  useState(() => {
+    if (window.location.hash) window.history.replaceState(null, "", window.location.pathname);
+    return null;
+  });
+  return (
+    <div className="login card" data-testid="second-proof-elsewhere">
+      <h1>Prove it's you</h1>
+      <p>Open this link in the browser where you asked for it.</p>
+      <p className="hint">
+        It confirms the device that asked for it. To sign in here, <Link to="/login">sign in with your phone number</Link>.
+      </p>
+    </div>
   );
 }

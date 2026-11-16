@@ -24,6 +24,20 @@ describe("a 401", () => {
     expect(told).not.toContain("taskiem:unauthorised");
   });
 
+  it("a wrong or expired code, or a wrong PIN, while changing the number does not", async () => {
+    for (const body of [{ code_wrong: true }, { ticket_expired: true }, { tries_left: 2 }]) {
+      const told = serve({ error: "no", ...body });
+      await expect(api("POST", "/v1/me/phone/verify", { code: "000000" })).rejects.toBeInstanceOf(ApiError);
+      expect(told).not.toContain("taskiem:unauthorised");
+    }
+  });
+
+  it("an ended session while changing the number does", async () => {
+    const told = serve({ error: "the session has ended" });
+    await expect(api("POST", "/v1/me/phone/verify", { code: "123456" })).rejects.toBeInstanceOf(ApiError);
+    expect(told).toContain("taskiem:unauthorised");
+  });
+
   it("anything else does", async () => {
     const told = serve({ error: "the session has ended" });
     await expect(api("GET", "/v1/me/push")).rejects.toBeInstanceOf(ApiError);

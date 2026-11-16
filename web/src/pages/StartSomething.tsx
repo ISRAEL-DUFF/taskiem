@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { post } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
@@ -25,7 +25,16 @@ export function startLanding(kind: "business" | "workflows"): string {
 
 export function StartSomething() {
   const { me } = useAuth();
-  const [what, setWhat] = useState<"business" | "workflows" | "">("");
+  // ?what=business (from /signup?start=business): A business chosen.
+  const [what, setWhat] = useState<"business" | "workflows" | "">(() => {
+    const w = new URLSearchParams(window.location.search).get("what");
+    return w === "business" || w === "workflows" ? w : "";
+  });
+  // Started: the button stays off until the new page has opened, so a
+  // second click starts nothing more.
+  const [done, setDone] = useState(false);
+  // A click before the page has drawn the button off.
+  const going = useRef(false);
   const [name, setName] = useState("");
   const [kind, setKind] = useState<BusinessKind | "">("");
   const act = useAction();
@@ -46,13 +55,20 @@ export function StartSomething() {
         className="card"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!what) return;
+          if (!what || going.current) return;
+          going.current = true;
           void act.run(async () => {
             const body =
               what === "business"
                 ? { kind: "business", name: name.trim(), kinds: [kind] }
                 : { kind: "workflows", ...(name.trim() ? { name: name.trim() } : {}) };
-            await post("/v1/me/start", body);
+            try {
+              await post("/v1/me/start", body);
+            } catch (err) {
+              going.current = false;
+              throw err;
+            }
+            setDone(true);
             // A fresh page in what was started: this session is in it now.
             window.location.assign(startLanding(what));
           }, false);
@@ -97,8 +113,8 @@ export function StartSomething() {
         )}
         <ErrorBox error={act.error} />
         {what && (
-          <button className="primary" type="submit" disabled={act.busy}>
-            {act.busy ? "Starting…" : what === "business" ? "Start the business" : "Start workflows"}
+          <button className="primary" type="submit" disabled={act.busy || done}>
+            {act.busy || done ? "Starting…" : what === "business" ? "Start the business" : "Start workflows"}
           </button>
         )}
       </form>

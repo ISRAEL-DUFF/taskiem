@@ -32,7 +32,8 @@ import { StaffPerson } from "./pages/StaffPerson";
 import { Tasks } from "./pages/Tasks";
 import { Policies } from "./pages/Policies";
 import { Account, Passkeys } from "./pages/Account";
-import { SecondProofPage, YouApp } from "./pages/You";
+import { SecondProofElsewhere, SecondProofPage, YouApp } from "./pages/You";
+import { signedInTo } from "./pages/WayIn";
 import { StartSomething } from "./pages/StartSomething";
 import { Switcher } from "./pages/Switch";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -270,6 +271,9 @@ function Shell() {
   if (me === undefined) return alone(<Skeleton rows={3} />);
   if (me === null) {
     if (loc.pathname === "/signup") return alone(<Signup />);
+    // A second proof's link opened where nobody is signed in: it proves
+    // only the browser that asked for it. Its token goes no further.
+    if (loc.pathname === "/second-proof") return alone(<SecondProofElsewhere />);
     // A business's link code (business links): sign in, or sign up first.
     if (/^\/l\/[A-Za-z0-9]{8}$/.test(loc.pathname))
       return alone(<LinkCodeSignedOut />);
@@ -286,7 +290,7 @@ function Shell() {
   // waiting or not (taskiem-for-everyone §7).
   if (me.personal || (me.tenant_id === null && !me.gate_only)) {
     if (loc.pathname === "/login" || loc.pathname === "/signup")
-      return <Navigate to="/you" replace />;
+      return <Navigate to={signedInTo(loc.search, "/you")} replace />;
     return <YouApp />;
   }
   // An enrol-only session may confirm its email: until then its password
@@ -297,12 +301,14 @@ function Shell() {
     );
   // The gate role: one screen, whatever the address; the server refuses every other route.
   if (me.gate_only) return <GateHome />;
+  // Where this business or workspace starts (taskiem-for-everyone §18.2).
+  const opens = me.tenant_kind === "workflows" ? "/workflows" : "/home";
   if (loc.pathname === "/login")
     return (
       <Navigate
         to={safeNext(
           new URLSearchParams(loc.search).get("next"),
-          me.field_agent ? "/agent" : "/home",
+          me.field_agent ? "/agent" : opens,
         )}
         replace
       />
@@ -316,7 +322,17 @@ function Shell() {
       loc.pathname === "/workflows")
   )
     return <Navigate to="/agent" replace />;
-  if (loc.pathname === "/signup") return <Navigate to="/start" replace />;
+  if (loc.pathname === "/signup")
+    return (
+      <Navigate
+        to={signedInTo(
+          loc.search,
+          me.tenant_kind === "workflows" ? "/workflows" : "/start",
+          false,
+        )}
+        replace
+      />
+    );
   // Field agents (docs/agents.md): their own pages, and a business's page
   // and tables while they work in it.
   if (loc.pathname === "/agent" || loc.pathname.startsWith("/agent/"))
@@ -741,7 +757,17 @@ function SignedIn() {
                     element={<StartSomething />}
                   />
                   <Route path="/second-proof" element={<SecondProofPage />} />
-                  <Route path="/you" element={<Navigate to="/home" replace />} />
+                  <Route
+                    path="/you"
+                    element={
+                      <Navigate
+                        to={
+                          me.tenant_kind === "workflows" ? "/workflows" : "/home"
+                        }
+                        replace
+                      />
+                    }
+                  />
                   <Route path="/workflows" element={<Workflows />} />
                   <Route path="/workflows/new" element={<NewWorkflow />} />
                   <Route path="/workflows/:id" element={<Editor />} />

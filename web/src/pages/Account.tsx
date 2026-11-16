@@ -1,6 +1,6 @@
 import { PhoneSetting } from "./ChangeNumber";
 import { useState } from "react";
-import { ApiError, del, get, post, put, type Invitation } from "../api";
+import { ApiError, del, get, post, put, type Invitation, type InvitationAccepted } from "../api";
 import { useAuth } from "../auth";
 import { addPasskey, passkeysSupported, proof, stepUpAssert } from "../passkeys";
 import { ErrorBox, Field, Items, PageHeader, Row, fmtTime, useAction, useLoad, PasswordInput } from "../ui";
@@ -738,7 +738,7 @@ export function Invitations({
   onJoined,
 }: {
   always?: boolean;
-  onJoined?: () => void;
+  onJoined?: (accepted: InvitationAccepted, invitation: Invitation) => void;
 }) {
   const list = useLoad(
     () => get<{ invitations: Invitation[] }>("/v1/me/invitations"),
@@ -776,11 +776,12 @@ export function Invitations({
               disabled={act.busy}
               onClick={() =>
                 void act.run(
-                  async () => (
-                    await post(`/v1/me/invitations/${i.tenant_id}/accept`),
-                    onJoined ? onJoined() : list.reload()
-                  ),
-                  "Joined",
+                  async () => {
+                    const r = await post<InvitationAccepted>(`/v1/me/invitations/${i.tenant_id}/accept`);
+                    if (onJoined) onJoined(r, i);
+                    else list.reload();
+                  },
+                  onJoined ? false : "Joined",
                 )
               }
             >
