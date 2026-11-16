@@ -44,7 +44,7 @@ type Settings struct {
 // has said nothing.
 func SettingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Settings, error) {
 	st := Settings{TakesChats: true, StorefrontButton: ButtonBoth}
-	err := tx.QueryRow(ctx, `SELECT takes_chats, storefront_button, link_in_updates FROM customer_chat_settings WHERE tenant_id = $1`, tenant).
+	err := tx.QueryRow(ctx, `SELECT takes_chats, storefront_button, link_in_updates FROM customer_chat_link_settings WHERE tenant_id = $1`, tenant).
 		Scan(&st.TakesChats, &st.StorefrontButton, &st.LinkInUpdates)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return st, err
@@ -94,7 +94,7 @@ func SaveSettingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in Setting
 	case in.LinkInUpdates != nil:
 		cur.LinkInUpdates = in.LinkInUpdates
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO customer_chat_settings (tenant_id, takes_chats, storefront_button, link_in_updates, updated_by)
+	if _, err := tx.Exec(ctx, `INSERT INTO customer_chat_link_settings (tenant_id, takes_chats, storefront_button, link_in_updates, updated_by)
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (tenant_id) DO UPDATE SET takes_chats = EXCLUDED.takes_chats, storefront_button = EXCLUDED.storefront_button,
 		  link_in_updates = EXCLUDED.link_in_updates, updated_by = EXCLUDED.updated_by, updated_at = now()`,

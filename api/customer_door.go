@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/israel-duff/taskiem/engine/chatlinks"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -312,7 +314,12 @@ func (s *Server) startPersonChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	via := in.From
+	if via == "code" {
+		writeErr(w, http.StatusBadRequest, "from is link, shop, discover or order")
+		return
+	}
 	var tenant uuid.UUID
+	detail := map[string]any{}
 	switch {
 	case in.BusinessID != nil && in.Code == "":
 		tenant = *in.BusinessID
@@ -330,6 +337,9 @@ func (s *Server) startPersonChat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		tenant, via = t, "code"
+		if s.ChatLinks.Ready() {
+			detail["code_hash"] = hex.EncodeToString(s.ChatLinks.Hash(chatlinks.Clean(in.Code)))
+		}
 	default:
 		writeErr(w, http.StatusBadRequest, "give a business_id or a chat link's code")
 		return
@@ -382,8 +392,15 @@ func (s *Server) startPersonChat(w http.ResponseWriter, r *http.Request) {
 		if err := tx.QueryRow(ctx, `SELECT name FROM users WHERE id = $1`, person).Scan(&name); err != nil {
 			return err
 		}
-		if err := enterTx(ctx, tx, person, tenant, "customer.start", map[string]any{"via": via}); err != nil {
+		detail["via"] = via
+		if err := enterTx(ctx, tx, person, tenant, "customer.start", detail); err != nil {
 			return err
+		}
+		// A business that turned chats off takes no new ones (§8.2).
+		if st, err := chatlinks.SettingsTx(ctx, tx, tenant); err != nil {
+			return err
+		} else if !st.TakesChats {
+			return customerSendErr{http.StatusConflict, "This business is not taking chats in Taskiem right now."}
 		}
 		if _, _, err := s.appThreadTx(ctx, tx, tenant, person, *phone, name); err != nil {
 			return err

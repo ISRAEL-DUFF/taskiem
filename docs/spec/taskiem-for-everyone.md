@@ -831,7 +831,7 @@ Built on branch `stage2-links`, on stage 1 as merged (`ccr-87497aa3-gf060z` at 5
 **Data.**
 - `00453_chat_links.sql`:
   - `customer_chat_codes`: one live code per business (a partial unique index), the code kept only as a keyed hash beside the random nonce it is made from (the code is HMAC of the nonce with a key derived from `TASKIEM_MESSAGE_HASH_KEY`, spelt in an alphabet with no look-alikes, `23456789abcdefghjkmnpqrstwxyz`, ten characters), so the owner reads the link back and a copy of the database alone gives no one the codes. A replaced code keeps its row, `replaced_at` set, for 30 days.
-  - `customer_chat_settings`: `takes_chats` (on), `storefront_button` (`whatsapp`, `taskiem` or `both`, the default), `link_in_updates` (null: on exactly when the business has no WhatsApp number of its own).
+  - `customer_chat_link_settings`: `takes_chats` (on), `storefront_button` (`whatsapp`, `taskiem` or `both`, the default), `link_in_updates` (null: on exactly when the business has no WhatsApp number of its own).
   - `customer_chat_notices`: "at most once per …" for the browser's SMS (per conversation per hour) and the answer to an outsider (per business per day), claimed in one statement.
   - `customer_message_charges`: sign-in codes sent by SMS to people who came through a business's link; `phone_codes.came_from`: the business a code was asked for through.
   - Definers: `taskiem_chat_code_find` (a code's hash → its business, and `replaced_at` within 30 days; only an active business, never a workflows workspace), `taskiem_reach_business_list` (`taskiem_reach_businesses` with the ids), `taskiem_auth_phone_code_came_from`.
@@ -881,7 +881,7 @@ Built on branch `stage2-links`, on stage 1 as merged (`ccr-87497aa3-gf060z` at 5
 **Deviations.**
 - The narrow function also returns `business_id` (to open "Chat with {business} about this order") and `waiting`, which is not an order's column but the confirmation's; nothing else.
 - The function is given a key: the narrowed index key, not the platform key, so that it, not its caller, makes the hash of the person's own phone.
-- The storefront's button is a chat setting (`customer_chat_settings.storefront_button`), not a field of the storefront's card, so it sits with the link and its other settings; the page takes it at publishing.
+- The storefront's button is a chat setting (`customer_chat_link_settings.storefront_button`), not a field of the storefront's card, so it sits with the link and its other settings; the page takes it at publishing.
 - `GET /v1/me/storefront-orders` returns every order, the waiting ones marked, rather than leaving the waiting ones out until confirmed: "These are mine" is asked on that list.
 - The chat link's page is served by the API only where it serves no web app; elsewhere it is the web app's.
 - Codes counted against a business by SMS are kept in their own table, not `platform_messages` (they go straight to the provider, outside the outbox, as stage 1 sends them).
@@ -894,3 +894,13 @@ Built on branch `stage2-links`, on stage 1 as merged (`ccr-87497aa3-gf060z` at 5
 - Push to a person's browser for the browser chat (a `chatlinks.Pusher`).
 - The full Orders list on You (stage 3); re-making the index when a person changes phone is not needed (it is keyed by the order's phone, and the function reads the person's phone now), but orders made with the old number then stop being listed.
 - The operator dashboard's code costs by country (§15).
+
+## As built: stage 2, streams A and B together
+
+- **A chat link opens the door only when it is the live code.** Stream A's door (00452) let a person open a business with no published shop when the API said `via: code`, and the API took `from: "code"` from the person, so any business could be opened by its id. Migration 00455 redefines `taskiem_customer_enter`: `customer.start` from a link carries the code's keyed hash (`engine/chatlinks`), and the door checks it against the business's live code in `customer_chat_codes`. The hash is left out of the audit entry. The API refuses `from: "code"`.
+- **Codes resolve through the chat links:** `POST /v1/me/chats {code}` uses `chatlinks.Links.Resolve` when chat links are set up; a replaced link answers 410 with `link_replaced`.
+- **A business that turned chats off** (`takes_chats: false`) takes no new chats from any door (409); chats already open go on.
+- **The person is told when the business answers** (§9): after each business message in an app chat, `chatlinks.Tell` (browser push when there is one, else the SMS at most once an hour). Not for an offer, and not into a muted chat.
+- **App orders are in the phone index:** they go through the storefront inbox like a page's order, which writes the index.
+- **One settings table each:** both streams made a `customer_chat_settings`. Stream B's is renamed `customer_chat_link_settings` (whether the business takes chats, the storefront button, the link in updates); stream A's keeps the name (the closed reply, Needs you, telling the owner).
+- Tested in `TestCustomerDoorWithChatLinks`.

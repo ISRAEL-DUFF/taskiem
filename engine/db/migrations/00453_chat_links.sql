@@ -7,7 +7,7 @@
 --   its nonce with the platform's key, so the owner can read the link back
 --   and the database alone cannot). "Make a new link" replaces it; the old
 --   code is kept for 30 days so it can say "This link no longer works".
--- * customer_chat_settings: whether the business takes chats, what its
+-- * customer_chat_link_settings: whether the business takes chats, what its
 --   storefront's chat button offers (WhatsApp, Taskiem or both), and
 --   whether updates to outsiders on the shared number end with the link
 --   (NULL: on exactly when the business has no number of its own).
@@ -42,7 +42,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON customer_chat_codes TO taskiem_app;
 CREATE POLICY dispatch ON customer_chat_codes FOR SELECT TO taskiem_dispatch USING (true);
 GRANT SELECT (tenant_id, code_hash, replaced_at) ON customer_chat_codes TO taskiem_dispatch;
 
-CREATE TABLE customer_chat_settings (
+CREATE TABLE customer_chat_link_settings (
   tenant_id          uuid PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
   takes_chats        boolean NOT NULL DEFAULT true,
   storefront_button  text NOT NULL DEFAULT 'both' CHECK (storefront_button IN ('whatsapp', 'taskiem', 'both')),
@@ -50,11 +50,11 @@ CREATE TABLE customer_chat_settings (
   updated_at         timestamptz NOT NULL DEFAULT now(),
   updated_by         text NOT NULL
 );
-ALTER TABLE customer_chat_settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE customer_chat_settings FORCE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON customer_chat_settings TO taskiem_app
+ALTER TABLE customer_chat_link_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE customer_chat_link_settings FORCE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON customer_chat_link_settings TO taskiem_app
   USING (tenant_id = ANY (taskiem_tenant_scope())) WITH CHECK (tenant_id = ANY (taskiem_tenant_scope()));
-GRANT SELECT, INSERT, UPDATE, DELETE ON customer_chat_settings TO taskiem_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON customer_chat_link_settings TO taskiem_app;
 
 CREATE TABLE customer_chat_notices (
   tenant_id  uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
@@ -148,5 +148,5 @@ DROP FUNCTION taskiem_chat_code_find(bytea);
 ALTER TABLE phone_codes DROP COLUMN came_from;
 DROP TABLE customer_message_charges;
 DROP TABLE customer_chat_notices;
-DROP TABLE customer_chat_settings;
+DROP TABLE customer_chat_link_settings;
 DROP TABLE customer_chat_codes;

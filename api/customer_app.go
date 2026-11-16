@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/israel-duff/taskiem/engine/access"
+	"github.com/israel-duff/taskiem/engine/chatlinks"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/notices"
@@ -124,7 +125,25 @@ func (s *Server) chatCodes() ChatCodeResolver {
 	if s.ChatCodes != nil {
 		return s.ChatCodes
 	}
+	if s.ChatLinks.Ready() {
+		return linkCodes{s.ChatLinks}
+	}
 	return noChatCodes{}
+}
+
+// linkCodes resolves codes through the businesses' chat links
+// (engine/chatlinks), in the door's words.
+type linkCodes struct{ l *chatlinks.Links }
+
+func (c linkCodes) ResolveChatCode(ctx context.Context, code string) (uuid.UUID, error) {
+	t, err := c.l.Resolve(ctx, code)
+	switch {
+	case errors.Is(err, chatlinks.ErrReplaced):
+		return uuid.Nil, ErrChatCodeReplaced
+	case errors.Is(err, chatlinks.ErrNotFound), errors.Is(err, chatlinks.ErrOff):
+		return uuid.Nil, ErrChatCodeUnknown
+	}
+	return t, err
 }
 
 // offersPerWeek is how many offers a customer gets from one business in
@@ -328,6 +347,11 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 	if s.CustomerAnswered != nil {
 		s.CustomerAnswered.BusinessAnswered(context.WithoutCancel(ctx), CustomerAnswer{Person: person, Business: tenant, Conversation: conv,
 			Message: out.ID, BusinessName: name, Offer: in.Offer, Muted: muted})
+	}
+	// The person told where the app cannot reach them (§9): an answer, not
+	// an offer, and never into a muted chat.
+	if !in.Offer && !muted {
+		s.tellAnswered(context.WithoutCancel(ctx), chatlinks.Answer{Tenant: tenant, Conversation: conv, Person: person})
 	}
 	return out, true, nil
 }
