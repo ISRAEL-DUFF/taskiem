@@ -2,7 +2,7 @@
 
 Status: **draft for review** (2026-11-16; its questions settled the same day, §23). Nothing here is built. It replaces the earlier draft "Customers at the door" (both its parts).
 
-It needs a new decision, **0068**, before any of it is built (§4). Builds on: [the phone app](mobile-app.md) ([0066](../decisions/0066-a-flutter-phone-app.md)), [chat push](chat-push.md), [chat as the way in](chat-way-in.md), [chat sign-in](chat-sign-in.md), [customers' conversations](chat-five-more-flows.md#as-built-phase-1-customers-conversations), [business links](business-links.md), [storefronts](storefronts.md).
+It needs a new decision, [**0068**](../decisions/0068-taskiem-for-everyone.md) (proposed), before any of it is built (§4). Builds on: [the phone app](mobile-app.md) ([0066](../decisions/0066-a-flutter-phone-app.md)), [chat push](chat-push.md), [chat as the way in](chat-way-in.md), [chat sign-in](chat-sign-in.md), [customers' conversations](chat-five-more-flows.md#as-built-phase-1-customers-conversations), [business links](business-links.md), [storefronts](storefronts.md).
 
 ## 1. Summary
 
@@ -52,6 +52,8 @@ The work comes in stages (§20):
 | Customers on the shared WhatsApp number and Telegram bot get updates only; anything they send gets one fixed answer | `api/reach.go`, 0039 point 7 |
 
 ## 4. The decision this needs (0068)
+
+The decision is written as [0068](../decisions/0068-taskiem-for-everyone.md) (proposed). It also records the review's answers (§23) and Start something (§18); the points below are its core.
 
 1. **Taskiem is a chat app for everyone.** Anyone may make a personal account with a phone number and use the app and the web chat with no business. This replaces three earlier rules:
    - [mobile-app.md](mobile-app.md) §1–2: "for owners and their staff", "does not replace WhatsApp";
