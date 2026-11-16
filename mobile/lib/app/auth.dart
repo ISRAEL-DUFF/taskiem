@@ -269,8 +269,8 @@ class Auth extends ChangeNotifier {
   /// The phone way in (§5.1): a 6-digit code to [phone], by WhatsApp where
   /// the number is on it, else by SMS; [sms] asks for SMS. Answers how it
   /// went (`whatsapp` or `sms`).
-  Future<String> sendPhoneCode(String phone, {bool sms = false}) async {
-    final r = await api.phoneStart(body: PhoneStartRequest(phone: phone, via: sms ? 'sms' : null));
+  Future<String> sendPhoneCode(String phone, {bool sms = false, String? chatCode}) async {
+    final r = await api.phoneStart(body: PhoneStartRequest(phone: phone, via: sms ? 'sms' : null, chatCode: chatCode));
     return r.sentVia;
   }
 

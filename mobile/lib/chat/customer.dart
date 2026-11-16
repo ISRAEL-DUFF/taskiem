@@ -5,6 +5,11 @@
 // business's number. Within 24 hours of their last message a reply goes as
 // words; after, as a WhatsApp message they answer to carry on (on one
 // line, up to 900 characters). A customer who sent STOP gets nothing.
+//
+// A customer who chats in the Taskiem app (taskiem-for-everyone §8.3) is a
+// thread of the line `app`: no 24-hour window and no templates, rich
+// replies (customer_app.dart), photos and files both ways, typing, and
+// Block both ways ("This customer has stopped messages").
 
 import 'dart:async';
 
@@ -21,7 +26,11 @@ import '../kit/modal.dart';
 import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'chats.dart';
+import 'attachments.dart';
+import 'composer.dart' show Pickers;
+import 'customer_app.dart';
 import 'customer_orders.dart' show CustomerOrders;
+import 'door.dart';
 import 'thread.dart';
 import 'words.dart';
 
@@ -41,6 +50,11 @@ String customerLetter(CustomerChat c) => c.name == c.phone || RegExp(r'^\+?\d').
 
 /// customerchat.ts replyNote: what the box says about how a reply goes.
 ({bool stop, String text})? replyNote(CustomerChat c) {
+  if (c.line == 'app') {
+    if (c.blocked == true) return (stop: true, text: 'You blocked this customer. Unblock them to write to them.');
+    if (c.stopped) return (stop: true, text: c.notice ?? 'This customer has stopped messages');
+    return null;
+  }
   if (c.stopped) return (stop: true, text: 'They asked not to get messages (they sent STOP). Nothing can be sent until they send START.');
   if (c.phone.isEmpty) return (stop: true, text: 'This customer’s details were erased.');
   if (!c.windowOpen) {
@@ -82,11 +96,13 @@ List<CustomerLine> latestPage(List<CustomerLine> cur, List<CustomerLine> page, b
   return mergeCustomer(kept, page);
 }
 
-/// A message of the thread; a reply of ours on its way is [local].
+/// A message of the thread; a reply of ours on its way is [local], with
+/// its file.
 class CustomerLine {
-  CustomerLine(this.m, {this.local = false});
+  CustomerLine(this.m, {this.local = false, this.file});
   final CustomerMessage m;
   final bool local;
+  final PickedFile? file;
   String get id => m.id;
 }
 
@@ -117,6 +133,23 @@ class CustomerData extends ChangeNotifier {
   bool offline = false;
 
   String get _key => 'customer:$id';
+
+  /// The customer chats in the Taskiem app (not on WhatsApp).
+  bool get app => chat?.line == 'app';
+
+  /// The thread's photos, voice notes and PDFs (app customers'), fetched
+  /// as shown.
+  late final ChatFiles files = ChatFiles(chats.auth.transport, pathOf: (m) => '/v1/customer-chats/${Uri.encodeComponent(id)}/files/${Uri.encodeComponent(m.id)}');
+  DateTime _typedAt = DateTime(2000);
+
+  /// Staff typing, told to an app customer at most every 3 seconds.
+  void typing() {
+    if (!app) return;
+    final at = chats.now();
+    if (at.difference(_typedAt) < const Duration(seconds: 3)) return;
+    _typedAt = at;
+    api.customerChatTyping(id: id).catchError((Object _) {});
+  }
 
   /// The conversation as the phone kept it: shown at once.
   void _restore() {
@@ -225,32 +258,82 @@ class CustomerData extends ChangeNotifier {
 
   /// A reply: shown at once with a clock, then the server's copy; not sent,
   /// the words come back to the box.
-  Future<void> send(String text) async {
+  Future<void> send(String text, {bool offer = false}) async {
     final words = text.trim();
+    if (words.isEmpty) return;
+    await _reply(
+      CustomerMessage(id: '', mine: true, kind: 'text', body: words, offer: offer ? true : null, createdAt: chats.now()),
+      (client) => api.replyCustomer(id: id, body: ReplyCustomerRequest(text: words, clientId: client, offer: offer ? true : null)),
+      words: words,
+    );
+  }
+
+  /// A card to an app customer: an order, a pay link, a booking offer or a
+  /// product, made by the server from the business's own records.
+  Future<void> sendCard(ReplyCustomerRequestCard card) => _reply(
+    CustomerMessage(id: '', mine: true, kind: 'card', body: '', createdAt: chats.now()),
+    (client) => api.replyCustomer(id: id, body: ReplyCustomerRequest(card: card, clientId: client)),
+  );
+
+  /// A photo, voice note or PDF to an app customer.
+  Future<void> sendFile(PickedFile f) => _reply(
+    CustomerMessage(
+      id: '',
+      mine: true,
+      kind: 'text',
+      body: '',
+      createdAt: chats.now(),
+      attachment: ChatAttachment(kind: f.photo ? 'photo' : (f.type.startsWith('audio/') ? 'voice' : 'file'), name: f.name, size: f.bytes.length, type: f.type),
+    ),
+    (client) async {
+      final j = await chats.auth.transport.upload('/v1/customer-chats/${Uri.encodeComponent(id)}/files', bytes: f.bytes, filename: f.name, type: f.type, fields: {'client_id': client});
+      final m = CustomerMessage.fromJson((j as Map).cast<String, dynamic>());
+      await files.keep(m.id, Uint8List.fromList(f.bytes));
+      return m;
+    },
+    file: f,
+  );
+
+  Future<void> _reply(CustomerMessage shown, Future<CustomerMessage> Function(String client) go, {String? words, PickedFile? file}) async {
     final c = chat;
-    if (words.isEmpty || c == null || c.stopped || c.phone.isEmpty || busy) return;
+    if (c == null || c.stopped || c.blocked == true || c.phone.isEmpty || busy) return;
     final client = '${DateTime.now().millisecondsSinceEpoch}-${++_localN}';
     final mine = CustomerLine(
-      CustomerMessage(id: 'local-$client', mine: true, kind: 'text', body: words, createdAt: chats.now()),
+      CustomerMessage(id: 'local-$client', mine: true, kind: shown.kind, body: shown.body, offer: shown.offer, attachment: shown.attachment, createdAt: shown.createdAt),
       local: true,
+      file: file,
     );
     messages = mergeCustomer(messages ?? const [], [mine]);
     busy = true;
     error = null;
     _changed();
     try {
-      final out = await api.replyCustomer(id: id, body: ReplyCustomerRequest(text: words, clientId: client));
+      final out = await go(client);
       messages = mergeCustomer((messages ?? const []).where((m) => m != mine).toList(), [CustomerLine(out)]);
       unawaited(chats.load());
     } on Object catch (e) {
       messages = messages?.where((m) => m != mine).toList();
       // Given back only while the screen is there to take it.
-      if (!_back.isClosed) _back.add(words);
+      if (!_back.isClosed && words != null) _back.add(words);
       _fail(e);
       unawaited(_chat());
     } finally {
       busy = false;
       _changed();
+    }
+  }
+
+  /// Block an app customer (they can no longer write; nothing is deleted),
+  /// or unblock.
+  Future<bool> setBlocked(bool on) async {
+    try {
+      on ? await api.blockCustomer(id: id) : await api.unblockCustomer(id: id);
+      await _chat();
+      unawaited(chats.load());
+      return true;
+    } on Object catch (e) {
+      _fail(e);
+      return false;
     }
   }
 
@@ -288,15 +371,19 @@ class CustomerData extends ChangeNotifier {
     _disposed = true;
     _timer?.cancel();
     _back.close();
+    files.dispose();
     super.dispose();
   }
 }
 
 /// CustomerChat.tsx CustomerPane.
 class CustomerScreen extends StatefulWidget {
-  const CustomerScreen({super.key, required this.data, this.onBack});
+  const CustomerScreen({super.key, required this.data, this.onBack, this.pickers = const Pickers()});
   final CustomerData data;
   final VoidCallback? onBack;
+
+  /// The phone's photos and files (a test's own).
+  final Pickers pickers;
 
   @override
   State<CustomerScreen> createState() => _CustomerScreenState();
@@ -315,6 +402,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
     _text.text = widget.data.chats.draft(key);
     _text.addListener(() {
       widget.data.chats.setDraft(key, _text.text);
+      if (_text.text.trim().isNotEmpty) widget.data.typing();
       setState(() {});
     });
     _back = widget.data.givenBack.listen((w) {
@@ -349,8 +437,9 @@ class _CustomerScreenState extends State<CustomerScreen> {
         builder: (context, _) {
           final c = d.chat;
           final note = c == null ? null : replyNote(c);
-          final canSend = c != null && !c.stopped && c.phone.isNotEmpty;
-          final tooLong = c != null && lateTooLong(_text.text, c.windowOpen);
+          final app = c?.line == 'app';
+          final canSend = c != null && !c.stopped && c.blocked != true && c.phone.isNotEmpty;
+          final tooLong = c != null && !app && lateTooLong(_text.text, c.windowOpen);
           final owes = c == null ? '' : owesWords(c.owesKobo, c.openInvoices);
           final title = c == null ? 'Customer' : customerTitle(c);
           return Semantics(
@@ -384,6 +473,25 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                       if (!c.archived) (widget.onBack ?? () => Navigator.of(context).maybePop())();
                                     },
                                   ),
+                                  if (app)
+                                    (
+                                      c.blocked == true ? 'Unblock this customer' : 'Block this customer',
+                                      () async {
+                                        final on = c.blocked != true;
+                                        if (on &&
+                                            !await showTkConfirm(
+                                              context,
+                                              title: 'Block this customer?',
+                                              body: 'They can no longer write to you, and you can’t write to them. Nothing is deleted.',
+                                              ok: 'Block',
+                                              danger: true,
+                                            )) {
+                                          return;
+                                        }
+                                        final ok = await d.setBlocked(on);
+                                        if (ok && context.mounted) showTkToast(context, on ? 'Blocked' : 'Unblocked');
+                                      },
+                                    ),
                                   (
                                     c.muted == true ? 'Unmute notifications' : 'Mute notifications',
                                     () async {
@@ -397,11 +505,12 @@ class _CustomerScreenState extends State<CustomerScreen> {
                               ),
                         avatar: ChatAvatar(name: c == null ? 'Customer' : customerLetter(c), size: 42, letterSize: 15),
                         title: title,
+                        typing: c?.typing == true,
                         subtitle: d.offline
                             ? 'Waiting for network…'
                             : c == null
                             ? null
-                            : [if (c.phone.isNotEmpty && c.phone != c.name) phoneWords(c.phone), owes, 'Customer on WhatsApp'].where((s) => s.isNotEmpty).join(' · '),
+                            : [if (c.phone.isNotEmpty && c.phone != c.name) phoneWords(c.phone), owes, app ? 'Customer in the app' : 'Customer on WhatsApp'].where((s) => s.isNotEmpty).join(' · '),
                       ),
                     ),
                   ),
@@ -421,7 +530,9 @@ class _CustomerScreenState extends State<CustomerScreen> {
                             onOlder: d.older,
                             errors: [?d.error],
                             empty: Text(
-                              c?.stopped == true
+                              app
+                                  ? 'Nothing here yet. What this customer writes to you in the Taskiem app shows here.'
+                                  : c?.stopped == true
                                   ? 'What they wrote was deleted when they sent STOP.'
                                   : 'Nothing here yet. What this customer writes to your WhatsApp number shows here.',
                               textAlign: TextAlign.center,
@@ -429,6 +540,33 @@ class _CustomerScreenState extends State<CustomerScreen> {
                             ),
                             render: (m, prev) {
                               final first = prev == null || prev.m.mine != m.m.mine || prev.m.senderName != m.m.senderName;
+                              if (app || m.m.card != null || m.m.attachment != null) {
+                                final meta = m.m.mine ? t.chatOutMeta : t.muted;
+                                return Padding(
+                                  padding: EdgeInsets.only(top: first ? 6 : 0),
+                                  child: DoorBubble(
+                                    id: m.id,
+                                    mine: m.m.mine,
+                                    first: first,
+                                    body: m.m.body,
+                                    at: m.m.createdAt,
+                                    files: d.files,
+                                    other: title,
+                                    sender: m.m.mine ? m.m.senderName : null,
+                                    card: m.m.card,
+                                    attachment: m.m.attachment,
+                                    offer: m.m.offer == true,
+                                    local: m.file,
+                                    stamp: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(clock(m.m.createdAt), style: tkText(size: 11, lineHeight: 16 / 11, color: meta)),
+                                        if (m.m.mine) ...[const SizedBox(width: 4), _Delivery(x: m, meta: meta)],
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              }
                               return Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: _CustomerBubble(x: m, first: first));
                             },
                           ),
@@ -453,7 +591,14 @@ class _CustomerScreenState extends State<CustomerScreen> {
                       stop: true,
                       text: 'Too long to send now: after a day, a reply can be up to $lateReplyMax characters. This one is ${lateLength(_text.text)}.',
                     ),
-                  if (canSend) _ReplyBox(text: _text, onSend: d.busy || tooLong ? null : _send, bottom: pad.bottom, label: 'Reply to $title'),
+                  if (canSend)
+                    _ReplyBox(
+                      text: _text,
+                      onSend: d.busy || tooLong ? null : _send,
+                      bottom: pad.bottom,
+                      label: 'Reply to $title',
+                      onMore: app && !d.busy ? () => showRichReply(context, d, pickers: widget.pickers, box: _text) : null,
+                    ),
                 ],
               ),
             ),
@@ -558,11 +703,15 @@ class _Note extends StatelessWidget {
 
 /// CustomerPane's box: the round box alone, and Send.
 class _ReplyBox extends StatelessWidget {
-  const _ReplyBox({required this.text, required this.onSend, required this.bottom, required this.label});
+  const _ReplyBox({required this.text, required this.onSend, required this.bottom, required this.label, this.onMore});
   final TextEditingController text;
   final VoidCallback? onSend;
   final double bottom;
   final String label;
+
+  /// The + of an app customer's thread: an order, a pay link, a booking
+  /// offer, a product, a photo or a file.
+  final VoidCallback? onMore;
 
   @override
   Widget build(BuildContext context) {
@@ -576,6 +725,23 @@ class _ReplyBox extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          if (onMore != null) ...[
+            TapArea(child: Semantics(
+              button: true,
+              label: 'Send an order, a pay link, a booking, a product or a file',
+              child: TkPress(
+                onTap: onMore,
+                child: Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(color: t.panel, shape: BoxShape.circle, boxShadow: lift),
+                  alignment: Alignment.center,
+                  child: TkIcon('plus', size: 22, stroke: 2, color: dark ? t.text : t.brand),
+                ),
+              ),
+            )),
+            const SizedBox(width: 8),
+          ],
           Expanded(
             child: Container(
               constraints: const BoxConstraints(minHeight: 46),

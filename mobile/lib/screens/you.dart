@@ -1,8 +1,10 @@
 // You: a person's own side (docs/spec/taskiem-for-everyone.md §6, §7). A
-// personal session opens here: the chats with businesses (none yet in this
-// stage), **Start something**, invitations waiting, the switcher when the
-// person is in businesses, and Settings: name, phone (Change number, §5.5)
-// and signing out.
+// personal session opens here: the chats with businesses (§8.3, with the
+// archived ones apart), orders made on businesses' shops with this phone
+// (§13: "These are mine", and "Chat with {business} about this order"),
+// **Start something**, invitations waiting, the switcher when the person
+// is in businesses, and Settings: name, phone (Change number, §5.5) and
+// signing out. A business's chat link opens its card here (§8.2).
 
 import 'dart:async';
 
@@ -14,12 +16,16 @@ import '../app/applinks.dart';
 import '../app/auth.dart';
 import '../app/phone.dart';
 import '../chat/approve.dart' show TkTextBox;
+import '../chat/door.dart' show yourOrderStatus;
+import '../chat/my_chat.dart';
+import '../chat/words.dart' show naira, listTime;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty;
 import '../kit/mobile.dart';
-import '../kit/modal.dart' show showTkToast;
+import '../kit/modal.dart' show showTkConfirm, showTkToast;
 import '../kit/sheet.dart' show TkKitField;
 import '../theme/theme.dart';
+import 'chat_link.dart';
 import 'second_proof.dart';
 import 'start_something.dart';
 import 'switcher.dart';
@@ -32,11 +38,13 @@ String _say(Object e) => switch (e) {
     };
 
 class YouHome extends StatefulWidget {
-  const YouHome({super.key, required this.auth, this.links});
+  const YouHome({super.key, required this.auth, this.links, this.now = DateTime.now});
   final Auth auth;
 
-  /// Links that open the app: a second proof's link opened on this phone.
+  /// Links that open the app: a second proof's link opened on this phone,
+  /// a business's chat link.
   final LinkInbox? links;
+  final DateTime Function() now;
 
   @override
   State<YouHome> createState() => _YouHomeState();
@@ -46,6 +54,9 @@ class _YouHomeState extends State<YouHome> {
   List<Invitation> _invitations = const [];
   String? _error;
   bool _busy = false;
+  late final MyChats _chats = MyChats(widget.auth);
+  MyStorefrontOrdersResponse? _orders;
+  Timer? _poll;
 
   @override
   void initState() {
@@ -53,27 +64,111 @@ class _YouHomeState extends State<YouHome> {
     _load();
     widget.links?.addListener(_linked);
     WidgetsBinding.instance.addPostFrameCallback((_) => _linked());
+    // New messages show in the list while it is open.
+    _poll = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted && ModalRoute.of(context)?.isCurrent != false) _chats.load();
+    });
   }
 
   @override
   void dispose() {
+    _poll?.cancel();
     widget.links?.removeListener(_linked);
+    _chats.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
+    await Future.wait([
+      _chats.load(),
+      () async {
+        try {
+          final r = await widget.auth.api.myInvitations();
+          if (mounted) setState(() => _invitations = r.invitations);
+        } on Object {
+          // None shown; read again next time.
+        }
+      }(),
+      _loadOrders(),
+    ]);
+  }
+
+  Future<void> _loadOrders() async {
     try {
-      final r = await widget.auth.api.myInvitations();
-      if (mounted) setState(() => _invitations = r.invitations);
+      final r = await widget.auth.api.myStorefrontOrders(limit: '20');
+      if (mounted) setState(() => _orders = r);
     } on Object {
-      // None shown; read again next time.
+      // None shown; read again next time (no phone yet: none to find).
     }
   }
 
-  /// The email's link to confirm this phone (§5.4), opened in the app.
+  /// A chat opened, and the list read again when it is closed.
+  Future<void> _open(PersonChat c, {String? notice, String draft = ''}) async {
+    await tkPush<void>(context, MyChatScreen(data: MyChatData(widget.auth, c.id, notice: notice, now: widget.now), draft: draft));
+    await _chats.load();
+  }
+
+  /// "Chat with {business} about this order" (§8.1): the chat with the
+  /// business of a shop order, started if there is none, the order named
+  /// in the box.
+  Future<void> _chatAbout(PhoneOrder o) async {
+    try {
+      final c = await widget.auth.api.startMyChat(body: StartMyChatRequest(businessId: o.businessId, from: 'order'));
+      if (!mounted) return;
+      await _open(c, notice: c.notice, draft: 'About my order ${o.reference}: ');
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, _say(e), error: true);
+    }
+  }
+
+  /// "These are mine": orders made with this phone before it was on the
+  /// account (§13).
+  Future<void> _theseAreMine() async {
+    try {
+      await widget.auth.api.confirmStorefrontOrders();
+      await _loadOrders();
+      if (mounted) showTkToast(context, 'Done: these orders are on your account now.');
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, _say(e), error: true);
+    }
+  }
+
+  Future<void> _order(PhoneOrder o) async {
+    final yes = await showTkConfirm(
+      context,
+      title: 'Order ${o.reference}',
+      body: '${o.business} · ${yourOrderStatus(o.state)} · ${naira(o.totalKobo)}',
+      ok: 'Chat with ${o.business} about this order',
+      cancel: 'Close',
+    );
+    if (yes) await _chatAbout(o);
+  }
+
+  /// The email's link to confirm this phone (§5.4), or a business's chat
+  /// link (§8.2), opened in the app.
   Future<void> _linked() async {
     final page = widget.links?.waiting == true ? widget.links!.take() : null;
     if (page == null || !mounted) return;
+    final code = chatCodeOf(page);
+    if (code != null) {
+      // Seen on the way in: the chat starts at once.
+      final auto = widget.links!.shownSignedOut;
+      widget.links!.shownSignedOut = false;
+      await tkPush<void>(
+        context,
+        ChatLinkScreen(
+          auth: widget.auth,
+          code: code,
+          autoStart: auto,
+          onStarted: (c) {
+            Navigator.of(context).pop();
+            _open(c, notice: c.notice);
+          },
+        ),
+      );
+      await _chats.load();
+      return;
+    }
     final token = Uri.parse(page).queryParameters['token'];
     if (!page.startsWith('/second-proof') || token == null) return;
     try {
@@ -144,6 +239,56 @@ class _YouHomeState extends State<YouHome> {
     if (mounted) setState(() => _busy = false);
   }
 
+  /// Orders made on businesses' shops with this phone (§13): those made
+  /// before the phone was on the account wait for "These are mine".
+  Widget? _ordersSection(TkTokens t) {
+    final r = _orders;
+    if (r == null || r.orders.isEmpty) return null;
+    final waiting = r.orders.where((o) => o.waiting).toList();
+    final mine = r.orders.where((o) => !o.waiting).toList();
+    return TkSection(
+      title: 'Your shop orders',
+      count: r.orders.length,
+      children: [
+        if (waiting.isNotEmpty)
+          TkPanel(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    waiting.length == 1
+                        ? 'We found an order made with your number before it was on your account. Is it yours?'
+                        : 'We found ${waiting.length} orders made with your number before it was on your account. Are they yours?',
+                    style: tkText(size: 14, color: t.text),
+                  ),
+                  const SizedBox(height: 8),
+                  for (final o in waiting) Text('${o.business} · ${o.reference} · ${naira(o.totalKobo)}', style: tkHint(t)),
+                  const SizedBox(height: 10),
+                  TkButton(label: 'These are mine', primary: true, onPressed: _theseAreMine),
+                ],
+              ),
+            ],
+          ),
+        if (mine.isNotEmpty)
+          TkPanel(
+            children: [
+              for (final o in mine)
+                TkListRow(
+                  title: o.business,
+                  sub: '${o.reference} · ${yourOrderStatus(o.state)} · ${listTime(o.madeAt, widget.now())}',
+                  letters: o.business,
+                  amount: naira(o.totalKobo),
+                  semanticsLabel: 'Order ${o.reference} with ${o.business}, ${yourOrderStatus(o.state)}, ${naira(o.totalKobo)}',
+                  onTap: () => _order(o),
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = widget.auth;
@@ -203,15 +348,46 @@ class _YouHomeState extends State<YouHome> {
                 ),
               ],
             ),
-          TkPanel(
-            children: [
-              TkEmpty(
-                icon: 'chat',
-                title: 'No chats yet',
-                line: 'Chats with businesses will show here.',
-              ),
-            ],
+          ListenableBuilder(
+            listenable: _chats,
+            builder: (context, _) {
+              final chats = _chats.chats;
+              final archived = _chats.archived;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (_chats.error != null && chats == null) TkErrorBox(_chats.error!),
+                  if (chats != null && chats.isEmpty && archived.isEmpty)
+                    const TkPanel(
+                      children: [
+                        TkEmpty(
+                          icon: 'chat',
+                          title: 'No chats yet',
+                          line: 'Chats with businesses will show here.',
+                        ),
+                      ],
+                    ),
+                  if (chats != null && (chats.isNotEmpty || archived.isNotEmpty))
+                    TkPanel(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      inset: 0,
+                      children: [
+                        if (archived.isNotEmpty)
+                          TkListRow(
+                            title: 'Archived',
+                            icon: 'archive',
+                            amount: '${archived.length}',
+                            semanticsLabel: 'Archived chats, ${archived.length}',
+                            onTap: () => tkPush<void>(context, ArchivedChatsScreen(data: _chats, now: widget.now, onOpen: (c) => _open(c))),
+                          ),
+                        MyChatRows(chats: chats, now: widget.now(), onOpen: (c) => _open(c)),
+                      ],
+                    ),
+                ],
+              );
+            },
           ),
+          ?_ordersSection(t),
           TkButton(
             label: 'Start something',
             primary: true,

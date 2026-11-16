@@ -2046,7 +2046,7 @@ class _Customers extends StatelessWidget {
               time: listTime(c.lastAt, now),
               preview: _ChatsScreenState._previewText(
                 context,
-                c.stopped ? 'Sent STOP' : '${c.lastMine ? 'You: ' : ''}${c.last}',
+                c.stopped ? (c.line == 'app' ? 'Stopped messages' : 'Sent STOP') : '${c.lastMine ? 'You: ' : ''}${c.last}',
                 draft: drafts['customer:${c.id}'],
               ),
               unread: c.unread,
