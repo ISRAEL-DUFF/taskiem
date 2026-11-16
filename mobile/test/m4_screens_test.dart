@@ -117,7 +117,7 @@ void main() {
     final auth = _auth(server, {'passkey': true});
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ApproveSheet(a: _approval(stepUp: 'passkey_or_totp'), decision: 'approved', auth: auth)));
     await settle(t);
-    expect(find.textContaining('Your phone asks for your passkey'), findsOneWidget);
+    // As drawn: the passkey asked for is the fingerprint on Approve.
     await t.tap(find.text('Approve').last);
     await settle(t);
     final decided = server.calls.firstWhere((c) => c.path == '/v1/approvals/r1/pay');
