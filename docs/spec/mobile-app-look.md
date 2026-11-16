@@ -172,6 +172,30 @@ orders to suppliers leave the Stock screen for one of their own, Supplies.
   one card with what they last said; the lines with their amounts and the
   total; Cancel as a row.
 
+### Cards in a conversation
+
+Asked by the founder, 16 November 2026, for the app only, keeping the
+bubbles: what a conversation shows for an order, an invoice, a product and a
+tag.
+
+- **An order or an invoice** stands free of the bubbles, on a card with its
+  sender's corner tucked in: the kind and number small in capitals with its
+  status as a pill (to pay or new lime, a counter orange, declined red), the
+  amount large in Inter Tight, a line saying what happened, the deal's
+  history, how far it has gone as dots on a line, its buttons (the main one
+  pine, lime in the dark; the rest on the ground's colour), and "View order ›"
+  as a row under a hairline.
+- **A product** (`LiveCard`) sits above the words it came with, on its own
+  card: its letters on a soft square (a clock for a service), its name large,
+  its price, then your stock as a pill and Order.
+- **A tag** in the words is a chip: a product's letters on a small square
+  and its price, a business's letters on its face; a business opens its
+  conversation.
+
+A document named in the words (`RefCard`) is as it was. These six chat
+screens no longer match the web's pictures; the parity test still builds and
+drives them.
+
 ## Order
 
 1. Orders and Money, and the chat's motion. Done.

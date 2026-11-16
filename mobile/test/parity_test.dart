@@ -500,6 +500,12 @@ final screens = <String, Screen>{
   ),
 };
 
+/// Screens drawn in the app's own look rather than the web's (docs/spec/
+/// mobile-app-look.md, "Cards in a conversation"): the cards and tags in a
+/// conversation. Each is still built and driven, so it still fails on an
+/// error or an overflow, but it is no longer compared with the web's picture.
+const appsOwnLook = {'chat-bayo', 'chat-deal', 'chat-deal-counter', 'chat-tag', 'chat-tag-hash', 'chat-tagged'};
+
 final kept = RegExp(r'^([a-z-]+)-(light|dark)-(\d+)x(\d+)\.png$');
 
 void main() {
@@ -537,6 +543,10 @@ void main() {
       ));
       await tester.pumpAndSettle();
       await screens[m.group(1)]!.drive(tester);
+      if (appsOwnLook.contains(m.group(1))) {
+        debugDisableShadows = true;
+        return;
+      }
       final boundary = tester.renderObject(find.byKey(shot)) as RenderRepaintBoundary;
       final result = await tester.runAsync(() async {
         final app = await boundary.toImage();

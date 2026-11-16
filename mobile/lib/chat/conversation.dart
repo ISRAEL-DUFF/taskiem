@@ -19,6 +19,8 @@ import '../kit/motion.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
+import '../kit/mobile.dart' show tkInitials;
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'cards.dart';
@@ -1782,21 +1784,16 @@ class _Bubble extends StatelessWidget {
               if (p.tag == null)
                 TextSpan(text: p.text)
               else
-                TextSpan(
-                  style: TextStyle(color: t.tintText, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]),
-                  children: [
-                    TextSpan(
-                      text: p.text,
-                      recognizer: p.tag!.kind == 'business' && p.tag!.link != null && onOpenLink != null
-                          ? tap(p.tag!.link!, () => onOpenLink!(p.tag!.link!))
-                          : null,
-                    ),
-                    if (p.tag!.kind == 'item' && p.tag!.priceKobo != null)
-                      TextSpan(
-                        text: ' (${naira(p.tag!.priceKobo!)}${(p.tag!.unit ?? '').isNotEmpty ? ' a ${p.tag!.unit}' : ''})',
-                        style: tkText(size: 13, weight: 600, color: t.muted),
-                      ),
-                  ],
+                // A tag as a chip (docs/spec/mobile-app-look.md): a product
+                // with its small square and price, a business with its face;
+                // a business's opens its conversation.
+                WidgetSpan(
+                  alignment: PlaceholderAlignment.middle,
+                  child: TagChip(
+                    tag: p.tag!,
+                    words: p.text,
+                    onTap: p.tag!.kind == 'business' && p.tag!.link != null && onOpenLink != null ? () => onOpenLink!(p.tag!.link!) : null,
+                  ),
                 ),
             if (fold.folded) ...[
               const TextSpan(text: '… '),
@@ -1853,18 +1850,22 @@ class _Bubble extends StatelessWidget {
                 child: Semantics(
                   label: mine ? null : (first && msg.senderName != null ? '${msg.senderName}: ' : null),
                   child: Container(
-                    decoration: BoxDecoration(
-                      color: mine ? t.chatOut : t.chatIn,
-                      borderRadius: radius,
-                      boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 1)],
-                    ),
+                    // A card is its own message, on the card's frame, not
+                    // a bubble's (docs/spec/mobile-app-look.md).
+                    decoration: card != null
+                        ? cardDecoration(context, mine: mine, first: first)
+                        : BoxDecoration(
+                            color: mine ? t.chatOut : t.chatIn,
+                            borderRadius: radius,
+                            boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 1)],
+                          ),
                     child: Stack(
                       clipBehavior: Clip.none,
                       children: [
                         if (card != null)
-                          // `.bubble.card-bubble { padding: 6px }`: the frame, then the time.
+                          // The card, then the time.
                           Padding(
-                            padding: const EdgeInsets.all(6),
+                            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               mainAxisSize: MainAxisSize.min,
@@ -1910,8 +1911,6 @@ class _Bubble extends StatelessWidget {
                                   ),
                                 if (msg.reply != null) _Quote(reply: msg.reply!, mine: mine, other: other),
                                 if (msg.attachment != null) AttachmentView(m: msg, files: files, other: other, room: max - 24, local: out?.file),
-                                if (live != null && liveTag(msg.mentions) != null)
-                                  LiveCard(m: liveTag(msg.mentions)!, items: live!.items, whose: live!.whose, stock: live!.stock, onOrder: onOrder),
                                 if (body.isNotEmpty) text,
                                 // Conversation.tsx: the invoices, bills and orders it
                                 // names, each as its card, read now.
@@ -1972,7 +1971,29 @@ class _Bubble extends StatelessWidget {
       onReply: out == null ? onReply : null,
       child: bubble,
     );
-    final placed = held;
+    // A product or service tagged: its card on its own, over the message
+    // (docs/spec/mobile-app-look.md, "Cards in a conversation").
+    final tagged = live != null ? liveTag(msg.mentions) : null;
+    final placed = tagged == null
+        ? held
+        : Column(
+            crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            children: [
+              LayoutBuilder(
+                builder: (context, box) => Align(
+                  alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    width: (box.maxWidth * 0.86).clamp(0.0, 420.0),
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                    decoration: cardDecoration(context, mine: mine, first: first),
+                    child: LiveCard(m: tagged, items: live!.items, whose: live!.whose, stock: live!.stock, onOrder: onOrder),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              held,
+            ],
+          );
     if (!failed) return placed;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -2193,6 +2214,74 @@ class _Reactions extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// A tag in a message's text, as a chip: a product or service with its
+/// letters on a small square of its accent and its price, a business with
+/// its face; pressed (a business), its conversation.
+class TagChip extends StatelessWidget {
+  const TagChip({super.key, required this.tag, required this.words, this.onTap});
+  final LinkMention tag;
+
+  /// The words as written ("Rice, 50kg bag").
+  final String words;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final business = tag.kind == 'business';
+    final name = words.replaceFirst(RegExp(r'^[#@]'), '');
+    final accents = [(look.violet, look.violetInk), (look.orange, look.orangeInk), (look.blue, look.blueInk), (look.teal, look.tealInk), (look.lime, look.limeInk)];
+    final (fill, ink) = accents[name.codeUnits.fold<int>(0, (a, c) => (a * 31 + c) & 0x7fffffff) % accents.length];
+    final price = tag.kind == 'item' && tag.priceKobo != null ? naira(tag.priceKobo!) : null;
+    final chip = Container(
+      margin: const EdgeInsets.symmetric(vertical: 1),
+      padding: const EdgeInsets.fromLTRB(2, 2, 9, 2),
+      decoration: BoxDecoration(color: t.text.withValues(alpha: 0.07), borderRadius: BorderRadius.circular(999)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 240),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              alignment: Alignment.center,
+              decoration: business
+                  ? BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: tkFaceFor(name)))
+                  : BoxDecoration(color: fill.withValues(alpha: 0.22), borderRadius: BorderRadius.circular(7)),
+              child: Text(
+                tkInitials(name),
+                textScaler: TextScaler.noScaling,
+                style: tkText(size: 8.5, weight: 800, lineHeight: 1, color: business ? const Color(0xFFFFFFFF) : ink),
+              ),
+            ),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 15, weight: 600, lineHeight: 1.3, color: t.text)),
+            ),
+            if (price != null) ...[
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(price, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 12, weight: 500, lineHeight: 1.3, color: t.muted)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+    final said = '${business ? '@' : '#'}$name${price != null ? ', $price${(tag.unit ?? '').isNotEmpty ? ' a ${tag.unit}' : ''}' : ''}';
+    if (onTap == null) return Semantics(label: said, excludeSemantics: true, child: chip);
+    return Semantics(
+      link: true,
+      label: said,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: GestureDetector(onTap: onTap, child: chip),
     );
   }
 }
