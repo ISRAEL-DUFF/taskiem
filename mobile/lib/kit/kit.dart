@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' show TextField, InputDecoration, Material
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'icon.dart';
 import 'motion.dart';
 import '../theme/theme.dart';
 import 'tap_area.dart';
@@ -495,8 +496,11 @@ class TkBadge extends StatelessWidget {
 /// The web's `button.small` in a list's row: a pill 36 px tall, 11.9 px words;
 /// pine (lime on dark) when [primary], the danger colour's words when [danger].
 class TkSmallButton extends StatelessWidget {
-  const TkSmallButton({super.key, required this.label, this.onPressed, this.primary = false, this.danger = false, this.semantics});
+  const TkSmallButton({super.key, required this.label, this.onPressed, this.primary = false, this.danger = false, this.semantics, this.icon});
   final String label;
+
+  /// An icon before the words (the app's own look only).
+  final String? icon;
 
   /// What a screen reader hears, when more than the words (the web's
   /// `sr-only` name after them).
@@ -528,10 +532,19 @@ class TkSmallButton extends StatelessWidget {
           child: Align(
             widthFactor: 1,
             heightFactor: 1,
-            child: Text(
-              label,
-              style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: primary ? t.primaryText : (danger ? t.tkDangerInk : t.text)),
-            ),
+            child: () {
+              final ink = primary ? t.primaryText : (danger ? t.tkDangerInk : t.text);
+              final words = Text(label, style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: ink));
+              if (icon == null) return words;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ExcludeSemantics(child: TkIcon(icon!, size: 16, stroke: 2.2, color: ink)),
+                  const SizedBox(width: 6),
+                  Flexible(child: words),
+                ],
+              );
+            }(),
           ),
         ),
       ),

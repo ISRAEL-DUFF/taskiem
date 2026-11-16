@@ -19,6 +19,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'icon.dart';
 import 'kit.dart';
+import 'look.dart' show tkTabular;
 import 'list.dart' show TkLoading;
 import 'tap_area.dart';
 
@@ -779,7 +780,7 @@ class TkListRow extends StatelessWidget {
                             amount!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: tkText(size: 15, weight: 650, color: t.text),
+                            style: tkText(size: 15, weight: 650, color: t.text).copyWith(fontFeatures: tkTabular),
                           ),
                         if (status != null) ...[
                           if (amount != null) const SizedBox(height: 4),

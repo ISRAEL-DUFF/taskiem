@@ -18,6 +18,7 @@ import '../kit/mobile.dart' show TkHeadButton;
 import '../theme/look.dart';
 import 'composer.dart' show Pickers;
 import 'customer.dart' show phoneWords;
+import 'storefront_orders_page.dart' show groupedPhone;
 import 'attachments.dart' show PickedFile;
 import 'words.dart';
 
@@ -393,7 +394,7 @@ class _DeliveryViewState extends State<DeliveryView> {
                 if (_str(c['name']).isNotEmpty || phone.isNotEmpty)
                   TkPersonCard(
                     name: _str(c['name']).isEmpty ? 'The customer' : _str(c['name']),
-                    sub: phone.isEmpty ? '' : phoneWords(phone),
+                    sub: phone.isEmpty ? '' : groupedPhone(phone),
                     actions: [
                       if (phone.isNotEmpty)
                         (

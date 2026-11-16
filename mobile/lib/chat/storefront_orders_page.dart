@@ -160,6 +160,15 @@ String refundLine(int kobo, String? paidBy) => paidBy != null && paidBy.isNotEmp
     ? '${naira(kobo)} is due back to the customer. They paid by bank transfer, so send it back from your bank, then mark it refunded.'
     : '${naira(kobo)} is due back to the customer. Refund it here through Paystack, or refund it yourself in Paystack.';
 
+/// A phone number to read: a Nigerian 0803… in fours and threes
+/// ("0803 412 7821"), +234… as the chat says it; anything else as it is.
+String groupedPhone(String p) {
+  final local = RegExp(r'^(0\d{3})(\d{3})(\d{4})$').firstMatch(p);
+  if (local != null) return '${local[1]} ${local[2]} ${local[3]}';
+  final intl = RegExp(r'^\+234(\d{3})(\d{3})(\d{4})$').firstMatch(p);
+  return intl == null ? p : '+234 ${intl[1]} ${intl[2]} ${intl[3]}';
+}
+
 /// orders.ts isMasked: the server's masked form ("A•••", "•••4567").
 bool isMasked(String? v) => v != null && v.contains('•••');
 
@@ -492,6 +501,10 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
   String? _error;
   Map<String, dynamic>? _revealed;
   String _changed = '';
+
+  /// The order's delivery, and who has it now (for the ⋯ menu).
+  final _delivery = GlobalKey<OrderDeliveryState>();
+  String? _holder;
   bool _busy = false;
   String? _actError;
 
@@ -543,12 +556,21 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
       titleSize: 22,
       backLabel: widget.backLabel,
       onRefresh: _load,
+      action: _holder == null ? null : TkHeadButton(icon: 'b-more', label: 'More about this order', onTap: _more),
       children: [
         if (_error != null) TkErrorBox(_error!),
         if (o == null && _error == null) Text('Loading the order…', style: tkHint(t)),
         if (o != null) ..._order(t, o),
       ],
     );
+  }
+
+  /// ⋯: what else can be done to it (take it back from its rider).
+  Future<void> _more() async {
+    final rider = _holder;
+    if (rider == null) return;
+    final pick = await showTkModalChoices(context, title: 'Order ${widget.reference}', choices: [('back', 'Take it back from $rider')]);
+    if (pick == 'back' && mounted) await _delivery.currentState?.takeBack(rider);
   }
 
   List<Widget> _order(TkTokens t, Map<String, dynamic> o) {
@@ -769,6 +791,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
             TkButtonRow([
               TkSmallButton(
                 label: 'Move',
+                icon: 'b-calendar',
                 primary: true,
                 semantics: 'Move ${o['service_name'] ?? 'booking'} ${o['reference']}',
                 onPressed: _busy
@@ -810,7 +833,10 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
           // No rider for an order that will not go out.
           if ((kind == 'order' || kind == 'trade') && delivery && !const {'refund_due', 'refunded', 'declined', 'cancelled', 'expired', 'no_show'}.contains(status))
             OrderDelivery(
-              key: ValueKey('delivery ${widget.reference}'),
+              key: _delivery,
+              onHolder: (r) {
+                if (mounted && r != _holder) setState(() => _holder = r);
+              },
               auth: _auth,
               reference: widget.reference,
               onChanged: _load,
@@ -836,7 +862,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
     return TkPersonCard(
       name: name,
       sub: hidden ? 'Details hidden' : [
-        if (phone.isNotEmpty) phone,
+        if (phone.isNotEmpty) groupedPhone(phone),
         if (_str(c['address']).isNotEmpty) _str(c['address']),
         if (phone.isEmpty && _str(c['address']).isEmpty && email.isNotEmpty) email,
       ].join(' · ').ifEmpty(hidden ? 'Details hidden' : 'No details given'),
@@ -862,6 +888,7 @@ class _StorefrontOrderPageState extends State<StorefrontOrderPage> with Polling 
           const SizedBox(height: 12),
           TkSmallButton(
             label: 'Show customer’s details',
+            icon: 'b-eye',
             onPressed: _busy
                 ? null
                 : () => _run(() async {
@@ -972,7 +999,7 @@ extension on String {
 /// it got, with Offer, Choose the rider, Confirm the fee and Take it back.
 /// Nothing with riders off.
 class OrderDelivery extends StatefulWidget {
-  const OrderDelivery({super.key, required this.auth, required this.reference, required this.onChanged, this.reads = 0, this.manage = true});
+  const OrderDelivery({super.key, required this.auth, required this.reference, required this.onChanged, this.reads = 0, this.manage = true, this.onHolder});
   final Auth auth;
   final String reference;
   final Future<void> Function() onChanged;
@@ -984,11 +1011,15 @@ class OrderDelivery extends StatefulWidget {
   /// May confirm the rider's fee (storefront.manage).
   final bool manage;
 
+  /// Told who has it, or was offered it (null: nobody), each time it is
+  /// read: the page's ⋯ offers Take it back from them.
+  final void Function(String? rider)? onHolder;
+
   @override
-  State<OrderDelivery> createState() => _OrderDeliveryState();
+  State<OrderDelivery> createState() => OrderDeliveryState();
 }
 
-class _OrderDeliveryState extends State<OrderDelivery> {
+class OrderDeliveryState extends State<OrderDelivery> {
   Map<String, dynamic>? _v;
   String? _error;
   bool _off = false;
@@ -1008,16 +1039,20 @@ class _OrderDeliveryState extends State<OrderDelivery> {
   }
 
   @override
-  void didUpdateWidget(OrderDelivery old) {
-    super.didUpdateWidget(old);
-    if (old.reads != widget.reads) _load();
+  void didUpdateWidget(OrderDelivery oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.reads != widget.reads) _load();
   }
 
   Future<void> _load() async {
     final asked = ++_asked;
     try {
       final r = (await _t.send('GET', '/v1/storefront/orders/$_ref/deliveries') as Map).cast<String, dynamic>();
-      if (mounted && asked == _asked) setState(() => (_v = r, _error = null));
+      if (mounted && asked == _asked) {
+        setState(() => (_v = r, _error = null));
+        final cur = currentDelivery(_maps(r['deliveries']));
+        widget.onHolder?.call(cur != null && (isHeld(cur) || cur['status'] == 'offered') ? _str(cur['rider']) : null);
+      }
     } on Object catch (e) {
       if (mounted && asked == _asked) setState(() => _dispatchOff(e) ? _off = true : _error = errorWords(e));
     }
@@ -1040,6 +1075,24 @@ class _OrderDeliveryState extends State<OrderDelivery> {
     final out = (await _t.send('POST', '/v1/storefront/orders/$_ref/offer', body: {'rider_id': ?rider}) as Map?)?.cast<String, dynamic>() ?? const {};
     if (mounted) setState(() => _said = offerOutcome(out));
   }, '');
+
+  /// Takes the order back from its rider, after yes (the page's ⋯).
+  Future<void> takeBack(String rider) async {
+    if (!await showTkConfirm(
+      context,
+      title: 'Take ${widget.reference} back from $rider?',
+      body: 'They are told, and you can offer it again.',
+      ok: 'Take it back',
+      cancel: 'Leave it with them',
+      danger: true,
+    )) {
+      return;
+    }
+    await _run(() async {
+      await _t.send('POST', '/v1/storefront/orders/$_ref/release', body: const {});
+      _said = '';
+    }, 'Taken back');
+  }
 
   Future<void> _choose() async {
     final id = await showTkModal<String>(context, title: 'Choose the rider', builder: (_) => _ChooseRider(auth: widget.auth));
@@ -1087,7 +1140,6 @@ class _OrderDeliveryState extends State<OrderDelivery> {
         ),
       ],
     ];
-    final held = cur != null && (isHeld(cur) || cur['status'] == 'offered');
     final riderPhone = cur == null ? '' : _str(cur['rider_phone']);
     final st = cur == null ? null : deliveryStatus(_str(cur['status']));
     return Column(
@@ -1200,31 +1252,6 @@ class _OrderDeliveryState extends State<OrderDelivery> {
             ],
           ),
         if (buttons.isNotEmpty) ...[const SizedBox(height: 10), TkButtonRow(buttons)],
-        if (held) ...[
-          const SizedBox(height: 8),
-          TkSmallButton(
-            label: 'Take it back',
-            danger: true,
-            onPressed: _busy
-                ? null
-                : () async {
-                    if (!await showTkConfirm(
-                      context,
-                      title: 'Take ${widget.reference} back from ${cur['rider']}?',
-                      body: 'They are told, and you can offer it again.',
-                      ok: 'Take it back',
-                      cancel: 'Leave it with them',
-                      danger: true,
-                    )) {
-                      return;
-                    }
-                    await _run(() async {
-                      await _t.send('POST', '/v1/storefront/orders/$_ref/release', body: const {});
-                      _said = '';
-                    }, 'Taken back');
-                  },
-          ),
-        ],
         if (earlier.isNotEmpty) ...[
           const SizedBox(height: 8),
           Align(

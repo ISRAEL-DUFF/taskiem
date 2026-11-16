@@ -228,6 +228,14 @@ row on Orders, and the two the chat's Orders sheet opens.
 - **Large text.** With text half as large again or more, a top card's
   buttons go one under another, its steps down the card, and a callout's
   button under its words.
+- **Asked after comparing with the mockup** (16 November 2026): the head's ⋯
+  on a customer's order holds Take it back while a rider has it (it shows
+  only then); Show customer's details has an eye, Move a calendar; the
+  business's card has Message, which opens its conversation. Figures and
+  amounts are set in tabular figures, as the mockup's are; a phone number
+  is grouped to read ("0803 412 7821"). The fonts are the mockup's own
+  (Inter 4.001, Inter Tight 3.004); compared at the mockup's 340 px width,
+  sizes and weights match.
 
 ## Order
 

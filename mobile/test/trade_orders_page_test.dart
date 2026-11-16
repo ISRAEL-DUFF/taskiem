@@ -309,6 +309,22 @@ void main() {
     await t.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('Message opens the business’s conversation; none without one', (t) async {
+    final opened = <String>[];
+    Openers.conversation = (context, link) {
+      opened.add(link);
+      return true;
+    };
+    addTearDown(() => Openers.conversation = null);
+    await open(t, _order('received'));
+    await t.tap(find.bySemanticsLabel('Message Rivers Foods'));
+    await t.pump();
+    expect(opened.single, 'L1');
+    Openers.conversation = null;
+    await open(t, _order('received'));
+    expect(find.bySemanticsLabel('Message Rivers Foods'), findsNothing);
+  });
+
   testWidgets('without storefront.manage no answers; without link.manage no terms', (t) async {
     await open(t, _order('received'), perms: ['link.manage']);
     expect(find.bySemanticsLabel('Accept'), findsNothing);

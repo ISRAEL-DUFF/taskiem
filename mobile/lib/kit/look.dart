@@ -98,7 +98,11 @@ class TkEyebrow extends StatelessWidget {
 
 /// A figure large, as the top card and the tiles set it.
 TextStyle tkFigure(BuildContext context, {double size = 40, Color? color}) =>
-    tkDisplay(size: size, lineHeight: 1.1, letterSpacing: -size * 0.04, color: color ?? TkTheme.tokens(context).text);
+    tkDisplay(size: size, lineHeight: 1.1, letterSpacing: -size * 0.04, color: color ?? TkTheme.tokens(context).text).copyWith(fontFeatures: tkTabular);
+
+/// Figures in columns of equal width (`font-variant-numeric: tabular-nums`),
+/// with Inter's letter features kept.
+const tkTabular = <FontFeature>[FontFeature.tabularFigures(), FontFeature('cv11'), FontFeature('ss01')];
 
 /// A highlight: its label in an accent's colour, a figure, a line under it,
 /// and a small chart if it has one; pressed, it opens its page.
@@ -1013,7 +1017,7 @@ class TkBill extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Text(l.amount, style: tkText(size: 15, weight: 600, lineHeight: 1.35, color: t.text)),
+                  Text(l.amount, style: tkText(size: 15, weight: 600, lineHeight: 1.35, color: t.text).copyWith(fontFeatures: tkTabular)),
                 ],
               ),
             ),
@@ -1022,7 +1026,7 @@ class TkBill extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(child: Text(totalLabel, style: tkText(size: 15, weight: 700, color: t.text))),
-                Text(total, style: tkDisplay(size: 19, letterSpacing: -0.4, color: t.text)),
+                Text(total, style: tkDisplay(size: 19, letterSpacing: -0.4, color: t.text).copyWith(fontFeatures: tkTabular)),
               ],
             ),
           ),

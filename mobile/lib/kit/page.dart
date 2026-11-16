@@ -174,7 +174,8 @@ class TkPageScreen extends StatelessWidget {
                     builder: (context) => Text(description!, style: tkText(size: 15, lineHeight: 1.45, color: TkTheme.tokens(context).text)),
                   ),
                 ),
-              if (action != null) ...[const SizedBox(width: 6), Flexible(child: action!)],
+              // At the head's end: given the spacer's share, set at its right.
+              if (action != null) ...[const SizedBox(width: 6), Expanded(child: Align(alignment: Alignment.centerRight, child: action!))],
             ],
           ),
           Padding(
@@ -185,7 +186,7 @@ class TkPageScreen extends StatelessWidget {
                 title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: tkDisplay(size: titleSize!, lineHeight: 1.15, letterSpacing: -titleSize! * 0.036, color: t.text),
+                style: tkDisplay(size: titleSize!, lineHeight: 1.15, letterSpacing: -titleSize! * (titleSize! >= 26 ? 0.0367 : 0.0273), color: t.text),
               ),
             ),
           ),

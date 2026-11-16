@@ -243,9 +243,12 @@ void main() {
     await t.tap(find.bySemanticsLabel('Show earlier offers (1)'));
     await t.pump();
     expect(find.text('Said they can’t'), findsOneWidget);
-    await t.tap(find.bySemanticsLabel('Take it back'));
+    // Taken back from the head's ⋯, after yes.
+    await t.tap(find.bySemanticsLabel('More about this order'));
     await t.pumpAndSettle();
-    await t.tap(find.bySemanticsLabel('Take it back').last);
+    await t.tap(find.text('Take it back from Bayo'));
+    await t.pumpAndSettle();
+    await t.tap(find.bySemanticsLabel('Take it back'));
     await settle(t);
     expect(r.sent.single, 'POST /v1/storefront/orders/OR-5K2Q/release {}');
     await t.pump(const Duration(seconds: 5));
@@ -330,6 +333,12 @@ void main() {
     await settle(t);
     expect(r.sent.single, 'POST /v1/storefront/orders/OR-5K2Q/offer {}');
     expect(find.text('No rider could take it. You are told when one is free'), findsOneWidget);
+  });
+
+  test('a phone number grouped to read', () {
+    expect(groupedPhone('08034127821'), '0803 412 7821');
+    expect(groupedPhone('+2348034127821'), '+234 803 412 7821');
+    expect(groupedPhone('•••4567'), '•••4567');
   });
 
   test('a rider’s statuses in words; the offer’s other outcomes', () {

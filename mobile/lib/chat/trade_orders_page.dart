@@ -26,7 +26,7 @@ import 'tags.dart' show quantity;
 import 'words.dart' show CardTone, naira;
 import '../kit/icon.dart';
 import '../kit/look.dart';
-import '../kit/mobile.dart' show TkCountUp, TkListRow, TkRoute, TkSection;
+import '../kit/mobile.dart' show TkCountUp, TkHeadButton, TkListRow, TkRoute, TkSection;
 import '../theme/look.dart';
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
@@ -360,7 +360,21 @@ class _TradeOrderPageState extends State<TradeOrderPage> {
     ];
     return [
       _top(t, o, manage),
-      TkPersonCard(name: buyer, sub: note.isNotEmpty ? 'Their note: “$note”' : 'On Taskiem'),
+      TkPersonCard(
+        name: buyer,
+        sub: note.isNotEmpty ? 'Their note: “$note”' : 'On Taskiem',
+        // Their conversation, where the app has it.
+        trailing: Openers.conversation == null || _str(o['link']).isEmpty
+            ? null
+            : TkHeadButton(
+                icon: 'b-chat',
+                label: 'Message $buyer',
+                onCard: true,
+                onTap: () {
+                  if (!Openers.conversation!(context, _str(o['link']))) showTkToast(context, 'Their conversation could not be found.', error: true);
+                },
+              ),
+      ),
       TkSection(
         title: 'What $buyer ordered',
         children: [_bill(t, _maps(o['lines']), short: (o['short'] as List?)?.whereType<num>().toList())],
