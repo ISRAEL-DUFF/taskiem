@@ -15,17 +15,22 @@ import '../app/auth.dart';
 import '../app/links.dart';
 import '../kit/forms.dart' show errorWords, nairaKobo;
 import '../kit/kit.dart';
-import '../kit/list.dart' show TkEmpty, TkLoading, TkPill, TkRow;
+import '../kit/list.dart' show TkEmpty, TkLoading;
 import '../kit/modal.dart';
 import '../kit/page.dart';
 import '../kit/polling.dart';
 import '../kit/sheet.dart' show TkKitField;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
+import 'book_sheet.dart' show dayLabel;
 import 'give_task.dart' show GiveTask, roleWords, weekdays, whoChoices;
 import 'money_sheets.dart' show dateLabel;
 import 'words.dart' show CardTone, naira;
-import '../kit/mobile.dart' show TkRoute;
+import '../kit/icon.dart';
+import '../kit/look.dart';
+import '../kit/mobile.dart';
+import '../theme/look.dart';
+import 'storefront_orders_page.dart' show groupedPhone, whatsappLink;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 Map<String, dynamic> _map(Object? v) => (v as Map?)?.cast<String, dynamic>() ?? const {};
@@ -48,6 +53,8 @@ String _hm(String iso) {
   final l = _lagos(d);
   return '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
 }
+
+String _dayOf(DateTime t) => _day(t);
 
 String _day(DateTime t) {
   final l = _lagos(t);
@@ -259,6 +266,7 @@ class StaffPage extends StatefulWidget {
 class _StaffPageState extends State<StaffPage> with Polling {
   Map<String, dynamic>? _view;
   Map<String, dynamic>? _day;
+  List<Map<String, dynamic>> _tasks = const [];
   List<String> _own = const [];
   String? _error;
   String? _actError;
@@ -289,6 +297,12 @@ class _StaffPageState extends State<StaffPage> with Polling {
       if (mounted) setState(() => _day = d);
     } on Object {
       // No day shown.
+    }
+    try {
+      final x = (await _auth.transport.send('GET', '/v1/staff/tasks') as Map).cast<String, dynamic>();
+      if (mounted) setState(() => _tasks = _maps(x['tasks']));
+    } on Object {
+      // The Tasks tile counts none.
     }
   }
 
@@ -322,163 +336,189 @@ class _StaffPageState extends State<StaffPage> with Polling {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final v = _view;
     final d = _day;
     final late = d == null ? const <Map<String, dynamic>>[] : _maps(d['late']);
     final shifts = d == null ? const <Map<String, dynamic>>[] : _maps(d['shifts']);
     final invites = v == null ? const <Map<String, dynamic>>[] : _maps(v['invites']);
     final people = v == null ? const <Map<String, dynamic>>[] : _maps(v['people']);
+    // Each person's day: in now, been and gone, late, or off.
+    ({String word, String under, Color dot, Color fill, Color ink, int order}) state(Map<String, dynamic> p) {
+      final id = _str(p['user_id']);
+      final s = shifts.where((x) => x['user_id'] == id).lastOrNull;
+      final l = late.where((x) => x['user_id'] == id).firstOrNull;
+      if (s != null && _str(s['out_at']).isEmpty) return (word: 'In', under: _hm(_str(s['in_at'])), dot: look.lime, fill: look.lime, ink: look.limeInk, order: 0);
+      if (l != null) return (word: 'Late', under: 'late', dot: look.orange, fill: look.orange, ink: look.orangeInk, order: 1);
+      if (s != null) return (word: 'Gone', under: 'out ${_hm(_str(s['out_at']))}', dot: look.teal, fill: look.teal, ink: look.tealInk, order: 2);
+      return (word: 'Off', under: 'off', dot: t.muted.withValues(alpha: 0.5), fill: t.muted, ink: t.muted, order: 3);
+    }
+    final ordered = [...people]..sort((a, b) => state(a).order - state(b).order);
+    final came = people.where((p) => shifts.any((x) => x['user_id'] == p['user_id'])).length;
+    final tasks = _tasks;
+    final open = tasks.where((x) => x['state'] == 'open').toList();
+    final lateTasks = open.where((x) => x['late'] == true).length;
+    final doneToday = tasks.where((x) => x['state'] == 'done' && _str(x['done_at']).isNotEmpty && _day0(_str(x['done_at']), _str(d?['day']))).length;
+    String? phoneOf(String id) => people.where((p) => p['user_id'] == id).map((p) => _str(p['phone'])).where((x) => x.isNotEmpty).firstOrNull;
+    final firstLate = late.firstOrNull;
+    final latePhone = firstLate == null ? null : phoneOf(_str(firstLate['user_id']));
     return TkPageScreen(
-      title: 'Staff',
-      description:
-          'The people who work with you. Add someone by their phone number: they get a WhatsApp message from Taskiem and join with one tap, no email needed.',
+      title: 'Team',
+      titleSize: 30,
       onRefresh: _load,
-      action: TkSmallButton(label: 'Add', semantics: 'Add staff', primary: true, onPressed: _add),
+      action: TkHeadButton(icon: 'b-plus', label: 'Add staff', primary: true, onTap: _add),
       children: [
         if (_error != null) TkErrorBox(_error!),
         if (_actError != null) TkErrorBox(_actError!),
         if (v == null && _error == null) const TkLoading(rows: 4, label: 'Loading your staff…'),
-        if (late.isNotEmpty || shifts.isNotEmpty)
-          TkPageCard(
-            title: 'Today',
-            children: [
-              Text('Staff say in and out to Taskiem on WhatsApp when they start and finish.', style: tkHint(t)),
-              for (final l in late)
-                TkRow(
-                  name: _str(l['name']),
-                  letters: _str(l['name']),
-                  sub: 'Due at ${l['due']}',
-                  pill: const TkPill('Not in yet', tone: CardTone.warn),
+        if (v != null && people.isNotEmpty)
+          TkTopCard(
+            semanticsLabel: 'Today',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TkEyebrow('In today', color: look.limeInk, trailing: d == null ? null : dayLabel(_str(d['day'])).split(' ').take(3).join(' ')),
+                const SizedBox(height: 6),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: '$came', style: tkFigure(context, size: 40)),
+                      TextSpan(text: ' of ${people.length}', style: tkDisplay(size: 22, color: t.muted)),
+                    ],
+                  ),
                 ),
-              for (final x in shifts)
-                TkRow(
-                  name: _str(x['name']).isNotEmpty ? _str(x['name']) : 'Someone',
-                  letters: _str(x['name']).isNotEmpty ? _str(x['name']) : '?',
-                  sub: shiftWords(x),
-                  pill: _str(x['out_at']).isEmpty ? const TkPill('In now', tone: CardTone.lime) : null,
-                  // Where they clocked in, when they shared it: a map.
-                  onTap: _str(x['in_where']).isEmpty
-                      ? null
-                      : () => openOrSay(context, () => openOutside(Uri.parse(_str(x['in_where']))), 'The map could not be opened.'),
-                ),
+                Text('They said “in” to Taskiem on WhatsApp', style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
+                const SizedBox(height: 14),
+                TkFaceRow(faces: [for (final p in ordered) (name: _str(p['name']).isNotEmpty ? _str(p['name']) : _str(p['email']), dot: state(p).dot, under: state(p).under)]),
+                if (firstLate != null) ...[
+                  const SizedBox(height: 14),
+                  TkCallout(
+                    leading: TkSquare('b-clock', color: look.orange),
+                    title: late.length == 1 ? '${_str(firstLate['name'])} is late' : '${late.length} are late',
+                    sub: late.length == 1 ? 'Due at ${firstLate['due']} · not in yet' : late.map((l) => '${l['name']} (${l['due']})').join(', '),
+                    color: look.orange,
+                    button: late.length == 1 && latePhone != null ? 'Call' : null,
+                    semantics: 'Call ${_str(firstLate['name'])}',
+                    onPressed: latePhone == null ? null : () => openOrSay(context, () => callPhone(latePhone), 'That number could not be called.'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        if (v != null)
+          TkHighlights(
+            tiles: [
+              TkHighlight(
+                label: 'Tasks',
+                icon: 'b-check',
+                color: look.blueInk,
+                trailing: lateTasks > 0 ? '$lateTasks late' : null,
+                value: '${open.length} open',
+                line: '$doneToday done today',
+                onTap: () => _go(TasksPage(auth: _auth, backLabel: 'Back to Team')),
+                semanticsLabel: 'Tasks: ${open.length} open${lateTasks > 0 ? ', $lateTasks late' : ''}',
+              ),
+              TkHighlight(
+                label: 'Invited',
+                icon: 'b-chat',
+                color: look.violetInk,
+                value: '${invites.length} waiting',
+                line: 'to join on WhatsApp',
+              ),
             ],
           ),
-        if (invites.isNotEmpty)
-          TkPageCard(
-            title: 'Waiting to join',
+        if (v != null)
+          TkSection(
+            title: 'Your staff',
+            trailing: Text('${people.length}', style: tkText(size: 14, weight: 600, color: t.muted)),
+            empty: 'No one yet. Add the people who work with you.',
             children: [
-              Text('They tap Join in the WhatsApp message Taskiem sent them. An invitation lasts seven days.', style: tkHint(t)),
-              for (final x in invites)
+              for (final p in ordered)
                 () {
-                  final who = _str(x['name']).isNotEmpty ? _str(x['name']) : _str(x['phone']);
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TkRow(name: who, letters: who, sub: inviteSub(x)),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            TkSmallButton(
-                              label: 'Send again',
-                              semantics: 'Send again to $who',
-                              onPressed: _busy
-                                  ? null
-                                  : () => _run(() async {
-                                      final r =
-                                          (await _auth.transport.send('POST', '/v1/staff/invites/${Uri.encodeComponent(_str(x['id']))}/send', body: const {})
-                                              as Map?) ??
-                                          const {};
-                                      if (r['sent'] != true) throw StateError('The WhatsApp message did not go. Try again in a little while.');
-                                      return 'Sent again to $who';
-                                    }),
-                            ),
-                            TkSmallButton(
-                              label: 'Cancel',
-                              semantics: 'Cancel the invitation to $who',
-                              danger: true,
-                              onPressed: _busy
-                                  ? null
-                                  : () async {
-                                      final yes = await showTkConfirm(
-                                        context,
-                                        title: 'Cancel the invitation to $who?',
-                                        body: 'Join will no longer work.',
-                                        ok: 'Cancel it',
-                                        cancel: 'Keep it',
-                                        danger: true,
-                                      );
-                                      if (!yes) return;
-                                      await _run(() async {
-                                        await _auth.transport.send('DELETE', '/v1/staff/invites/${Uri.encodeComponent(_str(x['id']))}');
-                                        return 'Invitation cancelled';
-                                      });
-                                    },
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                  final name = _str(p['name']).isNotEmpty ? _str(p['name']) : _str(p['email']);
+                  final s = state(p);
+                  final id = _str(p['user_id']);
+                  final shift = shifts.where((x) => x['user_id'] == id).lastOrNull;
+                  final due = late.where((x) => x['user_id'] == id).firstOrNull;
+                  return TkListRow(
+                    title: '$name${p['you'] == true ? ' (you)' : ''}',
+                    letters: name,
+                    sub: [
+                      _strs(p['roles']).map(roleWords).join(', '),
+                      if (s.word == 'In' && shift != null) 'in since ${_hm(_str(shift['in_at']))}',
+                      if (s.word == 'Gone' && shift != null) shiftWords(shift).toLowerCase(),
+                      if (s.word == 'Late' && due != null) 'due at ${due['due']}',
+                      if (s.word == 'Off') 'off today',
+                      if (p['chat'] != true) 'web only',
+                    ].where((x) => x.isNotEmpty).join(' · '),
+                    status: s.word,
+                    statusAccent: (fill: s.fill, ink: s.ink),
+                    waiting: s.word == 'Late',
+                    onTap: () => _go(StaffPersonPage(auth: _auth, user: id, canRemove: p['you'] != true)),
                   );
                 }(),
             ],
           ),
-        if (v != null)
-          TkPageCard(
-            title: 'Your staff',
+        if (invites.isNotEmpty)
+          TkSection(
+            title: 'Waiting to join',
             children: [
-              if (people.isEmpty) Text('No one yet. Add the people who work with you.', style: tkHint(t)),
-              for (final p in people)
+              for (final x in invites)
                 () {
-                  final name = _str(p['name']).isNotEmpty ? _str(p['name']) : _str(p['email']);
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TkRow(
-                          name: '$name${p['you'] == true ? ' (you)' : ''}',
-                          letters: name,
-                          sub: personSub(p),
-                          pill: TkPill(p['chat'] == true ? 'On chat' : 'Web only', tone: p['chat'] == true ? CardTone.lime : CardTone.plain),
-                          onTap: () => _go(StaffPersonPage(auth: _auth, user: _str(p['user_id']))),
+                  final who = _str(x['name']).isNotEmpty ? _str(x['name']) : _str(x['phone']);
+                  final left = DateTime.tryParse(_str(x['expires_at']))?.difference(DateTime.now()).inDays;
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: TkListRow(
+                          title: who,
+                          letters: who,
+                          sub: [
+                            _strs(x['roles']).map(roleWords).join(', '),
+                            if (_str(x['inviter']).isNotEmpty) 'invited by ${x['inviter']}',
+                            if (left != null && left >= 0) '${left == 1 ? '1 day' : '$left days'} left' else if (_str(x['sent_at']).isEmpty) 'not sent yet',
+                          ].where((s) => s.isNotEmpty).join(' · '),
+                          onTap: _busy ? null : () => _invite(x, who),
+                          semanticsLabel: '$who, waiting to join',
                         ),
-                        if (p['you'] != true)
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TkSmallButton(
-                              label: 'Remove',
-                              semantics: 'Remove $name',
-                              danger: true,
-                              onPressed: _busy
-                                  ? null
-                                  : () async {
-                                      final yes = await showTkConfirm(
-                                        context,
-                                        title: 'Remove $name from the business?',
-                                        body: 'They lose ${_strs(p['roles']).map(roleWords).join(', ')}; what they did stays.',
-                                        ok: 'Remove',
-                                        cancel: 'Keep them',
-                                        danger: true,
-                                      );
-                                      if (!yes) return;
-                                      await _run(() async {
-                                        await _auth.transport.send('POST', '/v1/staff/${Uri.encodeComponent(_str(p['user_id']))}/remove', body: const {});
-                                        return '$name removed';
-                                      });
-                                    },
-                            ),
-                          ),
-                      ],
-                    ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: TkSmallButton(label: 'Send again', semantics: 'Send again to $who', onPressed: _busy ? null : () => _sendAgain(x, who)),
+                      ),
+                    ],
                   );
                 }(),
             ],
           ),
       ],
     );
+  }
+
+  /// Whether a time falls on [day] (the clock's today), else today.
+  bool _day0(String iso, String day) {
+    final d = DateTime.tryParse(iso);
+    return d != null && _dayOf(d) == (day.isNotEmpty ? day : _dayOf(DateTime.now()));
+  }
+
+  Future<void> _sendAgain(Map<String, dynamic> x, String who) => _run(() async {
+    final r = (await _auth.transport.send('POST', '/v1/staff/invites/${Uri.encodeComponent(_str(x['id']))}/send', body: const {}) as Map?) ?? const {};
+    if (r['sent'] != true) throw StateError('The WhatsApp message did not go. Try again in a little while.');
+    return 'Sent again to $who';
+  });
+
+  /// An invitation pressed: send it again, or cancel it after yes.
+  Future<void> _invite(Map<String, dynamic> x, String who) async {
+    final pick = await showTkModalChoices(context, title: who, choices: [('send', 'Send again'), ('cancel', 'Cancel the invitation')]);
+    if (!mounted) return;
+    if (pick == 'send') return _sendAgain(x, who);
+    if (pick != 'cancel') return;
+    final yes = await showTkConfirm(context, title: 'Cancel the invitation to $who?', body: 'Join will no longer work.', ok: 'Cancel it', cancel: 'Keep it', danger: true);
+    if (!yes) return;
+    await _run(() async {
+      await _auth.transport.send('DELETE', '/v1/staff/invites/${Uri.encodeComponent(_str(x['id']))}');
+      return 'Invitation cancelled';
+    });
   }
 
   Future<void> _go(Widget page) async {
@@ -605,9 +645,12 @@ class _AddStaffState extends State<_AddStaff> {
 /// One person of the business: their job, usual hours and pay for the
 /// record, and how they are doing.
 class StaffPersonPage extends StatefulWidget {
-  const StaffPersonPage({super.key, required this.auth, required this.user});
+  const StaffPersonPage({super.key, required this.auth, required this.user, this.canRemove = false});
   final Auth auth;
   final String user;
+
+  /// Someone other than the person looking: Remove from the business.
+  final bool canRemove;
 
   @override
   State<StaffPersonPage> createState() => _StaffPersonPageState();
@@ -649,99 +692,198 @@ class _StaffPersonPageState extends State<StaffPersonPage> {
     }
   }
 
+  Future<void> _change(String name, Map<String, dynamic> pr) async {
+    final saved = await showTkModal<bool>(context, title: 'Change $name', builder: (_) => _EditProfile(auth: widget.auth, path: _path, profile: pr));
+    if (saved == true && mounted) {
+      showTkToast(context, 'Saved');
+      await _load();
+    }
+  }
+
+  Future<void> _remove(Map<String, dynamic> p, String name) async {
+    final yes = await showTkConfirm(
+      context,
+      title: 'Remove $name from the business?',
+      body: 'They lose ${_strs(p['roles']).map(roleWords).join(', ')}; what they did stays.',
+      ok: 'Remove',
+      cancel: 'Keep them',
+      danger: true,
+    );
+    if (!yes || !mounted) return;
+    try {
+      await widget.auth.transport.send('POST', '$_path/remove', body: const {});
+      if (!mounted) return;
+      showTkToast(context, '$name removed');
+      Navigator.of(context).maybePop();
+    } on Object catch (e) {
+      if (mounted) setState(() => _error = errorWords(e));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final p = _p;
     final name = p == null ? '' : (_str(p['name']).isNotEmpty ? _str(p['name']) : (_str(p['email']).isNotEmpty ? _str(p['email']) : 'Someone'));
     final pr = p == null ? const <String, dynamic>{} : _map(p['profile']);
     final f = _figures;
-    Widget kv(String k, String v) => MergeSemantics(
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(k, style: tkText(size: 13, weight: 600, color: t.muted)),
-            Text(v, style: tkText(size: 15, color: t.text)),
-          ],
-        ),
-      ),
-    );
+    final phone = p == null ? '' : _str(p['phone']);
+    final wa = whatsappLink(phone);
+    final job = _str(pr['title']).isNotEmpty ? _str(pr['title']) : (p == null ? '' : _strs(p['roles']).map(roleWords).join(', '));
     return TkPageScreen(
       title: p == null ? 'Staff' : name,
-      description: 'Their job, their usual hours and their pay, for your records. Taskiem does not pay staff.',
-      backLabel: 'Back to Staff',
+      titleSize: 22,
+      backLabel: 'Back to Team',
       onRefresh: () async {
         await _load();
         await _loadFigures();
       },
-      action: p == null
-          ? null
-          : TkSmallButton(
-              label: 'Change',
-              semantics: 'Change $name',
-              primary: true,
-              onPressed: () async {
-                final saved = await showTkModal<bool>(
-                  context,
-                  title: 'Change $name',
-                  builder: (_) => _EditProfile(auth: widget.auth, path: _path, profile: pr),
-                );
-                if (saved == true && mounted) {
-                  showTkToast(this.context, 'Saved');
-                  await _load();
-                }
-              },
-            ),
+      action: p == null ? null : TkHeadButton(icon: 'b-more', label: 'More about $name', onTap: () async {
+        final pick = await showTkModalChoices(context, title: name, choices: [('change', 'Change their job, hours and pay')]);
+        if (pick == 'change' && mounted) await _change(name, pr);
+      }),
+      under: TkChips<String>(
+        label: 'Show',
+        chips: const [('day', 'Today'), ('week', 'This week'), ('month', 'This month')],
+        on: _period,
+        onPick: (v) {
+          if (_period == v) return;
+          setState(() => _period = v);
+          _loadFigures();
+        },
+      ),
       children: [
         if (_error != null) TkErrorBox(_error!),
         if (p == null && _error == null) const TkLoading(rows: 4, label: 'Loading…'),
+        if (_figuresError != null) TkErrorBox(_figuresError!),
+        if (p != null && f == null && _figuresError == null) const TkLoading(rows: 3, label: 'Loading their figures…'),
+        if (p != null && f != null) ..._figuresCards(t, look, f),
         if (p != null)
-          TkPageCard(
-            title: _str(pr['title']).isNotEmpty ? _str(pr['title']) : 'About',
-            children: [
-              kv('What they do', personSub(p)),
-              kv('On chat', p['chat'] == true ? 'Yes, Taskiem reaches them on WhatsApp' : 'Not yet'),
-              if (_str(pr['started_on']).isNotEmpty) kv('Started', dateLabel(_str(pr['started_on']))),
-              kv('Usual hours', rotaWords(_maps(pr['rota']))),
-              kv('Pay', payWords(pr).isNotEmpty ? payWords(pr) : 'Not set'),
-              if (_str(pr['note']).isNotEmpty) kv('Note', _str(pr['note'])),
+          TkPersonCard(
+            name: name,
+            sub: [if (phone.isNotEmpty) groupedPhone(phone) else _str(p['email']), job].where((x) => x.isNotEmpty).join(' · '),
+            actions: [
+              if (phone.isNotEmpty) (icon: 'b-phone', label: 'Call', semantics: 'Call $name', onTap: () => openOrSay(context, () => callPhone(phone), 'That number could not be called.')),
+              if (wa != null) (icon: 'b-chat', label: 'WhatsApp', semantics: 'WhatsApp $name', onTap: () => openOrSay(context, () => openOutside(Uri.parse(wa)), 'WhatsApp could not be opened.')),
             ],
           ),
         if (p != null)
-          TkPageCard(
-            title: 'How ${name.split(' ').first} is doing',
+          TkSection(
+            title: 'Their job',
+            inset: 56,
             children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final (v, label) in const [('day', 'Today'), ('week', 'This week'), ('month', 'This month')])
-                    Semantics(
-                      selected: _period == v,
-                      child: TkSmallButton(
-                        label: label,
-                        primary: _period == v,
-                        onPressed: () {
-                          if (_period == v) return;
-                          setState(() => _period = v);
-                          _loadFigures();
-                        },
-                      ),
-                    ),
-                ],
+              TkListRow(
+                title: job.isEmpty ? 'What they do' : job,
+                sub: [
+                  if (_str(pr['started_on']).isNotEmpty) 'Since ${dateLabel(_str(pr['started_on']))}',
+                  p['chat'] == true ? 'on chat' : 'web only',
+                ].join(' · '),
+                icon: 'b-people',
+                square: look.teal,
+                onTap: () => _change(name, pr),
               ),
-              const SizedBox(height: 10),
-              if (_figuresError != null) TkErrorBox(_figuresError!),
-              if (f == null && _figuresError == null) const TkLoading(rows: 3, label: 'Loading their figures…'),
-              if (f != null)
-                for (final (k, v) in figureRows(f)) kv(k, v),
+              TkListRow(title: 'Hours', sub: rotaWords(_maps(pr['rota'])), icon: 'b-clock', square: look.blue, onTap: () => _change(name, pr)),
+              TkListRow(
+                title: 'Pay',
+                sub: payWords(pr).isNotEmpty ? '${payWords(pr)} · for your records' : 'Not set · for your records',
+                icon: 'b-cash',
+                square: look.lime,
+                onTap: () => _change(name, pr),
+              ),
+              if (_str(pr['note']).isNotEmpty) TkListRow(title: 'Note', sub: _str(pr['note']), icon: 'b-note', square: look.violet, onTap: () => _change(name, pr)),
             ],
+          ),
+        if (p != null && widget.canRemove)
+          TkSection(
+            inset: 56,
+            children: [TkListRow(title: 'Remove from the business', icon: 'b-x', square: look.red, semanticsLabel: 'Remove $name', onTap: () => _remove(p, name))],
           ),
       ],
     );
   }
+
+  /// The top card (hours, time keeping, the week's days) and the tiles
+  /// (sales, tasks, the till at handover).
+  List<Widget> _figuresCards(TkTokens t, TkLook look, Map<String, dynamic> f) {
+    final minutes = _int(f['minutes']);
+    final shifts = _int(f['shifts']);
+    final lateDays = _strs(f['late_days']);
+    final missed = _strs(f['missed_days']);
+    String count(int n, String one) => '$n $one${n == 1 ? '' : 's'}';
+    final keeping = [
+      count(shifts, 'shift'),
+      lateDays.isEmpty ? 'never late' : 'late ${lateDays.length == 1 ? 'once' : '${lateDays.length} times'}',
+      missed.isEmpty ? 'no days missed' : '${count(missed.length, 'day')} missed',
+    ].join(' · ');
+    // This week's days, Monday first, marking the late and missed ones.
+    final now = _lagos(DateTime.now());
+    final monday = DateTime.utc(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+    String key(DateTime d) => '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    final sales = _map(f['sales']);
+    final hand = _maps(f['handovers']).where((h) => h['diff_kobo'] != null).toList();
+    final diff = hand.fold(0, (n, h) => n + _int(h['diff_kobo']));
+    final tk = _map(f['tasks']);
+    return [
+      TkTopCard(
+        semanticsLabel: 'Hours worked',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TkEyebrow('Hours worked', color: look.tealInk, trailing: switch (_period) { 'day' => 'today', 'month' => 'this month', _ => 'this week' }),
+            const SizedBox(height: 6),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(shifts == 0 ? 'None' : '${minutes ~/ 60}h ${(minutes % 60).toString().padLeft(2, '0')}m', style: tkFigure(context, size: 40)),
+            ),
+            Text(shifts == 0 ? 'No shifts clocked' : keeping, style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
+            if (_period == 'week') ...[
+              const SizedBox(height: 14),
+              TkDayMarks(
+                days: [
+                  for (var i = 0; i < 7; i++)
+                    () {
+                      final k = key(monday.add(Duration(days: i)));
+                      final l = lateDays.contains(k), m = missed.contains(k);
+                      return (letter: const ['M', 'T', 'W', 'T', 'F', 'S', 'S'][i], word: l ? 'late' : (m ? 'missed' : ''), color: l ? look.orange : (m ? look.red : null));
+                    }(),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+      TkStatTiles([
+        (
+          label: 'Sales',
+          ink: look.limeInk,
+          value: _int(sales['count']) == 0 ? 'None' : naira(_int(sales['total_kobo'])),
+          line: [if (_int(sales['count']) > 0) count(_int(sales['count']), 'sale'), if (_int(f['orders']) > 0) count(_int(f['orders']), 'order')].join(' · ').ifEmpty('none recorded'),
+        ),
+        (
+          label: 'Tasks',
+          ink: look.blueInk,
+          value: '${_int(tk['done'])} done',
+          line: [
+            if (_int(tk['done_late']) > 0) '${_int(tk['done_late'])} late',
+            if (_int(tk['open']) > 0) '${_int(tk['open'])} open',
+            if (_int(tk['cant']) > 0) '${_int(tk['cant'])} sent back',
+          ].join(' · ').ifEmpty('none open'),
+        ),
+        (
+          label: 'Till',
+          ink: diff < 0 ? look.orangeInk : look.tealInk,
+          value: hand.isEmpty ? '—' : (diff == 0 ? 'Right' : naira(diff.abs())),
+          line: hand.isEmpty ? 'no handover' : (diff < 0 ? 'short at handover' : (diff > 0 ? 'over at handover' : count(hand.length, 'handover'))),
+        ),
+      ]),
+    ];
+  }
+}
+
+extension on String {
+  String ifEmpty(String other) => isEmpty ? other : this;
 }
 
 class _EditProfile extends StatefulWidget {
@@ -943,8 +1085,11 @@ TaskPhotoPick pickTaskPhoto = () async {
 /// Tasks: the person's own and, for those who give them, everyone's and
 /// those that repeat.
 class TasksPage extends StatefulWidget {
-  const TasksPage({super.key, required this.auth, this.now});
+  const TasksPage({super.key, required this.auth, this.now, this.backLabel = 'Back'});
   final Auth auth;
+
+  /// Where Back goes, said ("Back to Team").
+  final String backLabel;
   final DateTime Function()? now;
 
   @override
@@ -955,6 +1100,9 @@ class _TasksPageState extends State<TasksPage> with Polling {
   Map<String, dynamic>? _mine;
   Map<String, dynamic>? _all;
   bool _everyone = false;
+
+  /// The repeating tasks shown in the list's place.
+  bool _repeating = false;
   String? _error;
   String? _actError;
   bool _busy = false;
@@ -1044,171 +1192,202 @@ class _TasksPageState extends State<TasksPage> with Polling {
     );
   }
 
+  /// A task pressed: what else can be done to it.
+  Future<void> _more(Map<String, dynamic> task) async {
+    final what = _str(task['what']);
+    final open = task['state'] == 'open';
+    final mine = !_everyone;
+    final free = open && _str(task['to_role']).isNotEmpty && _str(task['taken_by']).isEmpty;
+    final choices = [
+      if (_str(task['photo_url']).isNotEmpty) ('photo', 'See the photo'),
+      // A role's task shows I'll do it; done straight away from here.
+      if (mine && free) ('done', task['photo'] == true ? 'Done, with a photo' : 'Done'),
+      if (mine && open) ('cant', 'Can’t do it'),
+      if (!mine && open) ('remind', 'Remind ${taskWho(task)}'),
+      if (!mine && (open || task['state'] == 'cant')) ('pass', 'Give to someone else'),
+      if (!mine && (open || task['state'] == 'cant')) ('off', 'Call it off'),
+    ];
+    if (choices.isEmpty) return;
+    final pick = await showTkModalChoices(context, title: what, choices: choices);
+    if (!mounted) return;
+    switch (pick) {
+      case 'photo':
+        await openOrSay(context, () => openInBrowser(Uri.parse(_str(task['photo_url']))), 'The photo could not be opened.');
+      case 'done':
+        await _done(task);
+      case 'cant':
+        await _cant(task);
+      case 'remind':
+        await _run(() => _auth.transport.send('POST', _path(task, '/remind'), body: const {}), 'Reminded ${taskWho(task)}');
+      case 'pass':
+        await _pass(task);
+      case 'off':
+        final yes = await showTkConfirm(context, title: 'Call off “$what”?', body: '${taskWho(task)} hears it is called off.', ok: 'Call it off', cancel: 'Keep it', danger: true);
+        if (yes) await _run(() => _auth.transport.send('DELETE', _path(task)), 'Called off');
+    }
+  }
+
+  Widget _row(TkTokens t, TkLook look, Map<String, dynamic> task, DateTime now) {
+    final what = _str(task['what']);
+    final state = _str(task['state']);
+    final open = state == 'open';
+    final mine = !_everyone;
+    final free = open && _str(task['to_role']).isNotEmpty && _str(task['taken_by']).isEmpty;
+    final late = open && task['late'] == true;
+    final done = state == 'done';
+    final badge = taskBadge(task);
+    final Widget? button = mine && free
+        ? TkSmallButton(
+            label: 'I’ll do it',
+            semantics: 'I’ll do it: $what',
+            onPressed: _busy ? null : () => _run(() => _auth.transport.send('POST', _path(task, '/take'), body: const {}), 'It is yours'),
+          )
+        : mine && open
+        ? TkSmallButton(
+            label: task['photo'] == true ? 'Done, with a photo' : 'Done',
+            semantics: '${task['photo'] == true ? 'Done, with a photo' : 'Done'}: $what',
+            primary: true,
+            onPressed: _busy ? null : () => _done(task),
+          )
+        : !mine && late
+        ? TkSmallButton(
+            label: 'Remind',
+            semantics: 'Remind ${taskWho(task)}: $what',
+            onPressed: _busy ? null : () => _run(() => _auth.transport.send('POST', _path(task, '/remind'), body: const {}), 'Reminded ${taskWho(task)}'),
+          )
+        : null;
+    final (pillFill, pillInk) = switch (badge?.tone) {
+      CardTone.warn => (look.orange, look.orangeInk),
+      CardTone.danger => (look.red, look.redInk),
+      CardTone.lime => (look.lime, look.limeInk),
+      _ => (t.muted, t.muted),
+    };
+    return TkPress(
+      onTap: () => _more(task),
+      scale: 0.985,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 11, 12, 11),
+        child: Row(
+          children: [
+            ExcludeSemantics(
+              child: Container(
+                width: 24,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: done ? look.lime : null,
+                  border: done ? null : Border.all(color: late ? look.orange : t.muted, width: 2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: done ? const TkIcon('b-check', size: 15, stroke: 2.6, color: Color(0xFFFFFFFF)) : null,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: MergeSemantics(
+                child: Semantics(
+                  button: true,
+                  onTap: () => _more(task),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        what,
+                        style: tkText(size: 15.5, weight: 500, lineHeight: 1.3, color: done ? t.muted : t.text, decoration: done ? TextDecoration.lineThrough : null),
+                      ),
+                      Text(taskSub(task, mine, now), style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (badge != null && !done || button != null) ...[
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (badge != null && !done)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+                      decoration: BoxDecoration(color: pillFill.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(999)),
+                      child: Text(badge.text, style: tkText(size: 11.5, weight: 700, color: pillInk)),
+                    ),
+                  if (badge != null && !done && button != null) const SizedBox(height: 6),
+                  ?button,
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final give = _mine?['give'] == true;
     final v = _everyone ? _all : _mine;
     final tasks = v == null ? const <Map<String, dynamic>>[] : _maps(v['tasks']);
-    final repeats = v == null ? const <Map<String, dynamic>>[] : _maps(v['repeats']);
+    final repeats = _maps((_all ?? _mine)?['repeats']);
     final now = _now;
+    final late = tasks.where((x) => x['state'] == 'open' && x['late'] == true).toList();
+    final open = tasks.where((x) => x['state'] == 'open' && x['late'] != true).toList();
+    final done = tasks.where((x) => x['state'] == 'done').toList();
+    final back = tasks.where((x) => x['state'] == 'cant' || x['state'] == 'cancelled').toList();
+    final counted = late.length + open.length + done.length;
+    final mineCount = _maps(_mine?['tasks']).where((x) => x['state'] == 'open').length;
+    final allCount = _all == null ? null : _maps(_all!['tasks']).where((x) => x['state'] == 'open').length;
     return TkPageScreen(
       title: 'Tasks',
-      description: 'Things to do, given to a person or to anyone in a role. They hear in their chat and reply DONE when it is done.',
+      titleSize: 30,
+      backLabel: widget.backLabel,
       onRefresh: _load,
-      action: give ? TkSmallButton(label: 'Give', semantics: 'Give a task', primary: true, onPressed: _give) : null,
+      action: give ? TkHeadButton(icon: 'b-plus', label: 'Give a task', primary: true, onTap: _give) : null,
+      under: give
+          ? TkChips<String>(
+              label: 'Show',
+              chips: [('mine', 'Yours · $mineCount'), ('all', allCount == null ? 'Everyone’s' : 'Everyone’s · $allCount'), ('repeat', 'Repeating')],
+              on: _repeating ? 'repeat' : (_everyone ? 'all' : 'mine'),
+              onPick: (k) {
+                final all = k != 'mine';
+                setState(() => (_repeating = k == 'repeat', _everyone = all));
+                _load();
+              },
+            )
+          : null,
       children: [
-        if (give)
-          Wrap(
-            spacing: 8,
-            children: [
-              for (final (all, label) in const [(false, 'Mine'), (true, 'Everyone’s')])
-                Semantics(
-                  selected: _everyone == all,
-                  child: TkSmallButton(
-                    label: label,
-                    primary: _everyone == all,
-                    onPressed: () {
-                      if (_everyone == all) return;
-                      setState(() => _everyone = all);
-                      _load();
-                    },
-                  ),
-                ),
-            ],
-          ),
         if (_said.isNotEmpty) _notice(t, _said),
         if (_error != null) TkErrorBox(_error!),
         if (_actError != null) TkErrorBox(_actError!),
         if (v == null && _error == null) const TkLoading(rows: 3, label: 'Loading the tasks…'),
-        if (v != null && tasks.isEmpty)
-          TkEmpty(
-            icon: 'check',
-            title: _everyone ? 'No tasks this week.' : 'You have no tasks',
-            line: _everyone ? null : 'When someone gives you one, it shows here and in your chat.',
-            action: give ? TkSmallButton(label: 'Give a task', primary: true, onPressed: _give) : null,
-          ),
-        if (tasks.isNotEmpty)
-          TkPageCard(
-            children: [
-              for (final task in tasks)
-                () {
-                  final badge = taskBadge(task);
-                  final open = task['state'] == 'open';
-                  final free = open && _str(task['to_role']).isNotEmpty && _str(task['taken_by']).isEmpty;
-                  final what = _str(task['what']);
-                  final mine = !_everyone;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TkRow(
-                          name: what,
-                          icon: task['state'] == 'done' ? 'check' : 'clock',
-                          tone: badge?.tone,
-                          sub: taskSub(task, mine, now),
-                          pill: badge == null ? null : TkPill(badge.text, tone: badge.tone),
-                        ),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            if (_str(task['photo_url']).isNotEmpty)
-                              TkLink(
-                                label: 'See the photo',
-                                onTap: () => openOrSay(context, () => openInBrowser(Uri.parse(_str(task['photo_url']))), 'The photo could not be opened.'),
-                              ),
-                            if (mine && free)
-                              TkSmallButton(
-                                label: 'I’ll do it',
-                                semantics: 'I’ll do it: $what',
-                                onPressed: _busy ? null : () => _run(() => _auth.transport.send('POST', _path(task, '/take'), body: const {}), 'It is yours'),
-                              ),
-                            if (mine && open)
-                              TkSmallButton(
-                                label: task['photo'] == true ? 'Done, with a photo' : 'Done',
-                                semantics: '${task['photo'] == true ? 'Done, with a photo' : 'Done'}: $what',
-                                primary: true,
-                                onPressed: _busy ? null : () => _done(task),
-                              ),
-                            if (mine && open) TkSmallButton(label: 'Can’t', semantics: 'Can’t: $what', onPressed: _busy ? null : () => _cant(task)),
-                            if (!mine && open)
-                              TkSmallButton(
-                                label: 'Remind',
-                                semantics: 'Remind ${taskWho(task)}: $what',
-                                onPressed: _busy
-                                    ? null
-                                    : () => _run(() => _auth.transport.send('POST', _path(task, '/remind'), body: const {}), 'Reminded ${taskWho(task)}'),
-                              ),
-                            if (!mine && (open || task['state'] == 'cant'))
-                              TkSmallButton(
-                                label: 'Give to someone else',
-                                semantics: 'Give to someone else: $what',
-                                onPressed: _busy ? null : () => _pass(task),
-                              ),
-                            if (!mine && (open || task['state'] == 'cant'))
-                              TkSmallButton(
-                                label: 'Call off',
-                                semantics: 'Call off: $what',
-                                danger: true,
-                                onPressed: _busy
-                                    ? null
-                                    : () async {
-                                        final yes = await showTkConfirm(
-                                          context,
-                                          title: 'Call off “$what”?',
-                                          body: '${taskWho(task)} hears it is called off.',
-                                          ok: 'Call it off',
-                                          cancel: 'Keep it',
-                                          danger: true,
-                                        );
-                                        if (yes) await _run(() => _auth.transport.send('DELETE', _path(task)), 'Called off');
-                                      },
-                              ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                }(),
-            ],
-          ),
-        if (_everyone && repeats.isNotEmpty)
-          TkPageCard(
-            title: 'Repeating',
-            children: [
-              for (final r in repeats)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+        if (_repeating) ...[
+          if (v != null)
+            TkSection(
+              inset: 56,
+              empty: 'Nothing repeats. Give a task and choose how often.',
+              children: [
+                for (final r in repeats)
+                  Row(
                     children: [
-                      TkRow(
-                        name: _str(r['what']),
-                        icon: 'loop',
-                        sub: [
-                          taskWho({...r, 'taken_by': null}),
-                          repeatWords(r),
-                          if (r['photo'] == true) 'photo when done',
-                        ].join(' · '),
+                      Expanded(
+                        child: TkListRow(
+                          title: _str(r['what']),
+                          sub: [taskWho({...r, 'taken_by': null}), repeatWords(r), if (r['photo'] == true) 'photo when done'].join(' · '),
+                          icon: 'b-flow',
+                          square: look.violet,
+                        ),
                       ),
-                      Align(
-                        alignment: Alignment.centerLeft,
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12),
                         child: TkSmallButton(
                           label: 'Stop',
                           semantics: 'Stop: ${r['what']}',
                           onPressed: _busy
                               ? null
                               : () async {
-                                  final yes = await showTkConfirm(
-                                    context,
-                                    title: 'Stop “${r['what']}”?',
-                                    body: 'Tasks it made stay.',
-                                    ok: 'Stop it',
-                                    cancel: 'Keep it',
-                                    danger: true,
-                                  );
+                                  final yes = await showTkConfirm(context, title: 'Stop “${r['what']}”?', body: 'Tasks it made stay.', ok: 'Stop it', cancel: 'Keep it', danger: true);
                                   if (!yes) return;
                                   await _run(() => _auth.transport.send('DELETE', '/v1/staff/task-repeats/${Uri.encodeComponent(_str(r['id']))}'), 'Stopped');
                                 },
@@ -1216,9 +1395,49 @@ class _TasksPageState extends State<TasksPage> with Polling {
                       ),
                     ],
                   ),
-                ),
-            ],
-          ),
+              ],
+            ),
+        ] else ...[
+          if (v != null && tasks.isEmpty)
+            TkEmpty(
+              icon: 'check',
+              title: _everyone ? 'No tasks this week.' : 'You have no tasks',
+              line: _everyone ? null : 'When someone gives you one, it shows here and in your chat.',
+              action: give ? TkSmallButton(label: 'Give a task', primary: true, onPressed: _give) : null,
+            ),
+          if (counted > 0)
+            TkTopCard(
+              semanticsLabel: 'Tasks: ${done.length} done, ${open.length} open, ${late.length} late',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TkEyebrow(_everyone ? 'Everyone’s' : 'Yours', color: look.blueInk, trailing: '$counted given'),
+                  const SizedBox(height: 6),
+                  Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(text: '${done.length}', style: tkFigure(context, size: 40)),
+                        TextSpan(text: ' of $counted done', style: tkDisplay(size: 22, color: t.muted)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TkSplitBar(
+                    percent: false,
+                    parts: [
+                      (label: 'Done ${done.length}', share: done.length, color: look.lime),
+                      (label: 'Open ${open.length}', share: open.length, color: look.blue),
+                      (label: 'Late ${late.length}', share: late.length, color: look.orange),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          if (late.isNotEmpty) TkSection(title: 'Late', count: late.length, inset: 50, children: [for (final x in late) _row(t, look, x, now)]),
+          if (open.isNotEmpty) TkSection(title: 'Open', inset: 50, children: [for (final x in open) _row(t, look, x, now)]),
+          if (back.isNotEmpty) TkSection(title: 'Sent back or called off', inset: 50, children: [for (final x in back) _row(t, look, x, now)]),
+          if (done.isNotEmpty) TkSection(title: 'Done', inset: 50, children: [for (final x in done) _row(t, look, x, now)]),
+        ],
       ],
     );
   }

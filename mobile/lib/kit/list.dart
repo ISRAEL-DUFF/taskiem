@@ -17,8 +17,11 @@ import 'tap_area.dart';
 /// kit.css `.tk-search`: a pill of the soft ground, 46 px, the magnifier and
 /// the words; the ring while typing in it.
 class TkSearchBox extends StatefulWidget {
-  const TkSearchBox({super.key, required this.controller, required this.hint, this.margin = const EdgeInsets.fromLTRB(20, 0, 20, 12)});
+  const TkSearchBox({super.key, required this.controller, required this.hint, this.margin = const EdgeInsets.fromLTRB(20, 0, 20, 12), this.fill});
   final TextEditingController controller;
+
+  /// The box's colour (a page's card colour on the ground); else soft.
+  final Color? fill;
   final String hint;
   final EdgeInsets margin;
 
@@ -53,7 +56,7 @@ class _TkSearchBoxState extends State<TkSearchBox> {
             constraints: const BoxConstraints(minHeight: 46),
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              color: t.tkSoft,
+              color: widget.fill ?? t.tkSoft,
               borderRadius: BorderRadius.circular(14),
               boxShadow: _focus.hasFocus ? t.ring : const [],
             ),

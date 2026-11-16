@@ -28,7 +28,11 @@ import 'invoices_page.dart' show fmtTime;
 import 'money_page.dart' show csvHeader;
 import 'money_sheets.dart' show dateLabel, sheetFoot;
 import 'words.dart' show CardTone, naira;
-import '../kit/mobile.dart' show TkRoute;
+import '../kit/icon.dart';
+import '../kit/look.dart';
+import '../kit/mobile.dart' show TkHeadButton, TkRoute;
+import '../kit/tap_area.dart';
+import '../theme/look.dart';
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 String _str(Object? v) => v as String? ?? '';
@@ -232,7 +236,12 @@ class TableRows extends StatefulWidget {
     this.reads = 0,
     this.padding = EdgeInsets.zero,
     this.shop,
+    this.cards = false,
   });
+
+  /// On the table's own screen: each row a card (its first column large,
+  /// the next under it, three more by their labels), the page above.
+  final bool cards;
   final Auth auth;
   final Map<String, dynamic> table;
   final bool canEdit;
@@ -341,68 +350,87 @@ class _TableRowsState extends State<TableRows> {
     final page = _page;
     final title = _str(widget.table['title']).isNotEmpty ? _str(widget.table['title']) : _str(widget.table['name']);
     final textCols = _textCols;
+    final Widget searchIn = TkSmallButton(
+      label:
+          'Search in: ${_in.isEmpty ? 'Everything' : (cols.where((c) => c['name'] == _in).map((c) => _str(c['title']).isEmpty ? _str(c['name']) : _str(c['title'])).firstOrNull ?? _in)}',
+      onPressed: () async {
+        final pick = await showTkModalChoices(
+          context,
+          title: 'Search in',
+          value: _in,
+          choices: [
+            ('', 'Everything'),
+            for (final c in cols)
+              if (textCols.contains(c['name'])) (_str(c['name']), _str(c['title']).isEmpty ? _str(c['name']) : _str(c['title'])),
+          ],
+        );
+        if (pick != null && pick != _in) {
+          setState(() => (_in = pick, _cursors = []));
+          unawaited(_load());
+        }
+      },
+    );
+    final Widget sortBtn = TkSmallButton(
+      label: 'Sort: $sortWords',
+      onPressed: () async {
+        final pick = await showTkModalChoices(
+          context,
+          title: 'Sort',
+          value: _sort == null ? '' : '${_sort!.column}:${_sort!.desc ? 'down' : 'up'}',
+          choices: [
+            ('', 'Newest first'),
+            for (final c in cols) ...[('${c['name']}:up', '${named(c)}, low to high'), ('${c['name']}:down', '${named(c)}, high to low')],
+          ],
+        );
+        if (pick == null) return;
+        final i = pick.lastIndexOf(':');
+        setState(() => (_sort = pick.isEmpty ? null : (column: pick.substring(0, i), desc: pick.substring(i + 1) == 'down'), _cursors = []));
+        unawaited(_load());
+      },
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (textCols.isNotEmpty) ...[
-          TkSearchBox(controller: _search, hint: 'Search', margin: EdgeInsets.zero),
-          if (textCols.length > 1)
+          TkSearchBox(
+            controller: _search,
+            hint: widget.cards ? 'Search ${title.toLowerCase()}' : 'Search',
+            margin: EdgeInsets.zero,
+            fill: widget.cards ? TkLook.of(context).card : null,
+          ),
+          if (textCols.length > 1 && !widget.cards)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: TkSmallButton(
-                  label:
-                      'Search in: ${_in.isEmpty ? 'Everything' : (cols.where((c) => c['name'] == _in).map((c) => _str(c['title']).isEmpty ? _str(c['name']) : _str(c['title'])).firstOrNull ?? _in)}',
-                  onPressed: () async {
-                    final pick = await showTkModalChoices(
-                      context,
-                      title: 'Search in',
-                      value: _in,
-                      choices: [
-                        ('', 'Everything'),
-                        for (final c in cols)
-                          if (textCols.contains(c['name'])) (_str(c['name']), _str(c['title']).isEmpty ? _str(c['name']) : _str(c['title'])),
-                      ],
-                    );
-                    if (pick != null && pick != _in) {
-                      setState(() => (_in = pick, _cursors = []));
-                      unawaited(_load());
-                    }
-                  },
-                ),
-              ),
+              child: Align(alignment: Alignment.centerLeft, child: searchIn),
             ),
           const SizedBox(height: 10),
         ],
+        // On the table's screen, Search in and Sort side by side.
         Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: TkSmallButton(
-              label: 'Sort: $sortWords',
-              onPressed: () async {
-                final pick = await showTkModalChoices(
-                  context,
-                  title: 'Sort',
-                  value: _sort == null ? '' : '${_sort!.column}:${_sort!.desc ? 'down' : 'up'}',
-                  choices: [
-                    ('', 'Newest first'),
-                    for (final c in cols) ...[('${c['name']}:up', '${named(c)}, low to high'), ('${c['name']}:down', '${named(c)}, high to low')],
-                  ],
-                );
-                if (pick == null) return;
-                final i = pick.lastIndexOf(':');
-                setState(() => (_sort = pick.isEmpty ? null : (column: pick.substring(0, i), desc: pick.substring(i + 1) == 'down'), _cursors = []));
-                unawaited(_load());
-              },
-            ),
+            child: widget.cards ? Wrap(spacing: 8, runSpacing: 8, children: [if (textCols.length > 1) searchIn, sortBtn]) : sortBtn,
           ),
         ),
+        if (widget.cards && page != null && (_cursors.isNotEmpty || page.rows.isNotEmpty)) _pager(t, page),
         if (page == null)
           if (_error != null) TkErrorBox(_error!) else const TkLoading(label: 'Loading rows…')
         else if (page.rows.isEmpty)
           TkEmpty(icon: 'tables', title: _q.isNotEmpty ? 'Nothing found for “$_q”' : 'No rows yet')
+        else if (widget.cards)
+          Semantics(
+            container: true,
+            label: '$title: its rows',
+            explicitChildNodes: true,
+            child: Opacity(
+              opacity: _loading ? 0.6 : 1,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [for (final r in page.rows) Padding(padding: const EdgeInsets.only(bottom: 10), child: _card(t, r, cols, views))],
+              ),
+            ),
+          )
         else
           Semantics(
             container: true,
@@ -436,7 +464,7 @@ class _TableRowsState extends State<TableRows> {
             ),
           ),
         if (_error != null && page != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_error!)),
-        if (page != null && (_cursors.isNotEmpty || page.rows.isNotEmpty))
+        if (!widget.cards && page != null && (_cursors.isNotEmpty || page.rows.isNotEmpty))
           Padding(
             padding: const EdgeInsets.only(top: 10),
             child: Row(
@@ -472,6 +500,170 @@ class _TableRowsState extends State<TableRows> {
             ),
           ),
       ],
+    );
+  }
+
+  /// The page it is on, and the page before and after (round buttons).
+  Widget _pager(TkTokens t, ({List<Map<String, dynamic>> rows, String? next, int? count}) page) {
+    final look = TkLook.of(context);
+    Widget round(String icon, String label, VoidCallback? go) => TapArea(
+      child: Semantics(
+        button: true,
+        label: label,
+        enabled: go != null,
+        onTap: go,
+        child: TkPress(
+          onTap: go ?? () {},
+          child: Opacity(
+            opacity: go == null ? 0.4 : 1,
+            child: Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: look.card, shape: BoxShape.circle),
+              child: TkIcon(icon, size: 18, stroke: 2.2, color: t.text),
+            ),
+          ),
+        ),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 0, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Semantics(
+              liveRegion: true,
+              child: Text(
+                _loading ? 'Loading…' : pageWords(_cursors.length, tablePage, page.rows.length, page.count),
+                style: tkText(size: 13, weight: 600, color: t.muted),
+              ),
+            ),
+          ),
+          round(
+            'back',
+            'Previous page',
+            _loading || _cursors.isEmpty
+                ? null
+                : () {
+                    setState(() => _cursors = _cursors.sublist(0, _cursors.length - 1));
+                    _load();
+                  },
+          ),
+          const SizedBox(width: 8),
+          round(
+            'chevron',
+            'Next page',
+            _loading || page.next == null
+                ? null
+                : () {
+                    setState(() => _cursors = [..._cursors, page.next!]);
+                    _load();
+                  },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// A row as a card: its first column large, the next under it when it
+  /// is words (a phone, an email), then three more by their labels.
+  Widget _card(TkTokens t, Map<String, dynamic> r, List<Map<String, dynamic>> cols, Map<String, String> views) {
+    final look = TkLook.of(context);
+    String named(Map<String, dynamic> c) => _str(c['title']).isEmpty ? _str(c['name']) : _str(c['title']);
+    String words(Map<String, dynamic> c) => cellWords(r[c['name']], views[c['name']] ?? 'text');
+    final first = cols.firstOrNull;
+    final firstWords = first == null ? '—' : words(first);
+    final second = cols.length > 1 && const {'text', 'phone', 'email'}.contains(cols[1]['type']) && views[cols[1]['name']] != 'status' ? cols[1] : null;
+    final more = cols.skip(second == null ? 1 : 2).take(3).toList();
+    Widget cell(Map<String, dynamic> c) {
+      final v = words(c);
+      final view = views[c['name']] ?? 'text';
+      final Widget value;
+      if (view == 'status' && v != '—') {
+        final (fill, ink) = switch (statusTone(v)) {
+          CardTone.lime => (look.lime, look.limeInk),
+          CardTone.warn => (look.orange, look.orangeInk),
+          CardTone.danger => (look.red, look.redInk),
+          _ => (t.muted, t.muted),
+        };
+        value = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+          decoration: BoxDecoration(color: fill.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(999)),
+          child: Text(
+            v[0].toUpperCase() + v.substring(1),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: tkText(size: 11.5, weight: 700, color: ink),
+          ),
+        );
+      } else {
+        value = Text(
+          v,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: tkText(size: 14, weight: view.startsWith('money') ? 650 : 400, lineHeight: 1.35, color: t.text).copyWith(fontFeatures: tkTabular),
+        );
+      }
+      return MergeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              named(c).toUpperCase(),
+              semanticsLabel: named(c),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: tkText(size: 11, weight: 700, letterSpacing: 0.4, color: t.muted),
+            ),
+            const SizedBox(height: 3),
+            Align(alignment: Alignment.centerLeft, child: value),
+          ],
+        ),
+      );
+    }
+
+    final body = Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: MergeSemantics(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(firstWords == '—' ? 'Row ${r['id']}' : firstWords, style: tkText(size: 16, weight: 600, lineHeight: 1.3, color: t.text)),
+                      if (second != null) Text(words(second), style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted)),
+                    ],
+                  ),
+                ),
+              ),
+              if (widget.canEdit) ExcludeSemantics(child: TkIcon('chevron', size: 16, color: t.muted.withValues(alpha: 0.6))),
+            ],
+          ),
+          if (more.isNotEmpty) ...[
+            Container(height: 1, margin: const EdgeInsets.symmetric(vertical: 10), color: look.line),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < 3; i++) ...[if (i > 0) const SizedBox(width: 10), Expanded(child: i < more.length ? cell(more[i]) : const SizedBox())],
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+    if (!widget.canEdit) return body;
+    return TapArea(
+      child: Semantics(
+        button: true,
+        onTap: () => widget.onOpen(r),
+        child: TkPress(onTap: () => widget.onOpen(r), scale: 0.985, child: body),
+      ),
     );
   }
 }
@@ -675,12 +867,15 @@ class _TablesPageState extends State<TablesPage> {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final list = _tables;
+    final colours = [look.teal, look.lime, look.orange, look.violet, look.blue];
     return TkPageScreen(
       title: 'Tables',
-      description: 'The business’s own lists: customers, products, anything kept in rows. A new table and its columns are set up on the web.',
+      titleSize: 30,
       onRefresh: _load,
       children: [
+        Text('Your own lists, kept in rows. A new table and its columns are set up on the web.', style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
         if (_unavailable)
           Text(
             'Data tables are not available on this Taskiem: no Xenibase is configured. An owner can bring the organisation’s own Xenibase project, on the web.',
@@ -690,17 +885,15 @@ class _TablesPageState extends State<TablesPage> {
         if (list == null && _error == null) Text('Loading your tables…', style: tkHint(t)),
         if (list != null && list.isEmpty) const TkEmpty(icon: 'tables', title: 'No tables yet', line: 'Ask Taskiem to make one, or make one on the web.'),
         if (list != null && list.isNotEmpty)
-          TkPageCard(
-            children: [
-              for (final x in list)
-                TkRow(
+          _TableTiles(
+            tiles: [
+              for (final (i, x) in list.indexed)
+                (
                   name: _str(x['title']).isNotEmpty ? _str(x['title']) : _str(x['name']),
-                  icon: 'tables',
-                  sub: [
-                    if (x['row_count'] != null) '${x['row_count']} ${x['row_count'] == 1 ? 'row' : 'rows'}',
-                    if (_str(x['description']).isNotEmpty) _str(x['description']),
-                    if (isKept(x)) 'Kept by Taskiem',
-                  ].join(' · '),
+                  icon: isKept(x) ? 'b-money' : const ['b-people', 'b-box', 'b-bars', 'b-check', 'b-receipt'][i % 5],
+                  color: isKept(x) ? look.blue : colours[i % colours.length],
+                  rows: x['row_count'] == null ? '' : '${numberWords(x['row_count'] as num)} ${x['row_count'] == 1 ? 'row' : 'rows'}',
+                  line: [if (_str(x['description']).isNotEmpty) _str(x['description']), if (isKept(x)) 'Kept by Taskiem · read only'].join(' · '),
                   onTap: () async {
                     // Deleted there: the list read again.
                     await Navigator.of(context).push(
@@ -713,6 +906,77 @@ class _TablesPageState extends State<TablesPage> {
                 ),
             ],
           ),
+      ],
+    );
+  }
+}
+
+/// Tables as tiles, two across (one with large text): an icon on its
+/// square, the name, how many rows, what it is for.
+class _TableTiles extends StatelessWidget {
+  const _TableTiles({required this.tiles});
+  final List<({String name, String icon, Color color, String rows, String line, VoidCallback onTap})> tiles;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final across = MediaQuery.textScalerOf(context).scale(10) > 15 ? 1 : 2;
+    Widget tile(({String name, String icon, Color color, String rows, String line, VoidCallback onTap}) x) => TapArea(
+      child: Semantics(
+        button: true,
+        onTap: x.onTap,
+        child: TkPress(
+          onTap: x.onTap,
+          scale: 0.97,
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            constraints: const BoxConstraints(minHeight: 118),
+            decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+            child: MergeSemantics(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TkSquare(x.icon, color: x.color, size: 30),
+                  const SizedBox(height: 10),
+                  Text(
+                    x.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: tkDisplay(size: 17, letterSpacing: -0.3, color: t.text),
+                  ),
+                  if (x.rows.isNotEmpty) Text(x.rows, style: tkText(size: 12.5, weight: 600, lineHeight: 1.35, color: t.text)),
+                  if (x.line.isNotEmpty)
+                    Text(
+                      x.line,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: tkText(size: 12, lineHeight: 1.35, color: t.muted),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < tiles.length; i += across) ...[
+          if (i > 0) const SizedBox(height: 10),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var j = i; j < i + across; j++) ...[
+                  if (j > i) const SizedBox(width: 10),
+                  Expanded(child: j < tiles.length ? tile(tiles[j]) : const SizedBox()),
+                ],
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -843,35 +1107,50 @@ class _TablePageState extends State<TablePage> {
     if (changed == true && mounted) setState(() => _reads++);
   }
 
+  /// ⋯: Export CSV, and for those who may change it Import CSV and Delete
+  /// table.
+  Future<void> _more() async {
+    final pick = await showTkModalChoices(
+      context,
+      title: _title,
+      choices: [('export', 'Export CSV'), if (_edit) ('import', 'Import CSV'), if (_edit) ('delete', 'Delete table')],
+    );
+    if (!mounted || _busy) return;
+    switch (pick) {
+      case 'export':
+        await _export();
+      case 'import':
+        await _import();
+      case 'delete':
+        await _delete();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     return TkPageScreen(
       title: _title,
-      description: _str(widget.table['description']).isEmpty ? null : _str(widget.table['description']),
+      titleSize: 30,
       backLabel: 'Back to Tables',
       onRefresh: () async => setState(() => _reads++),
-      action: _edit ? TkSmallButton(label: 'Add a row', primary: true, onPressed: () => _open(null)) : null,
+      action: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TkHeadButton(icon: 'b-more', label: 'More about $_title', onTap: _more),
+          if (_edit) ...[const SizedBox(width: 6), TkHeadButton(icon: 'b-plus', label: 'Add a row', primary: true, onTap: () => _open(null))],
+        ],
+      ),
       children: [
+        if (_str(widget.table['description']).isNotEmpty) Text(_str(widget.table['description']), style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
         if (isKept(widget.table)) Text(_own ? '$keptMessage $keptOwnNote' : keptMessage, style: tkHint(t)),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            TkSmallButton(label: 'Export CSV', onPressed: _busy ? null : _export),
-            if (_edit) TkSmallButton(label: 'Import CSV', onPressed: _busy ? null : _import),
-            if (_edit) TkSmallButton(label: 'Delete table', danger: true, onPressed: _busy ? null : _delete),
-          ],
-        ),
         if (_said.isNotEmpty)
           Semantics(
             liveRegion: true,
             child: Text(_said, style: tkText(size: 15, color: t.text)),
           ),
         if (_error != null) TkErrorBox(_error!),
-        TkPageCard(
-          children: [TableRows(auth: widget.auth, table: widget.table, canEdit: _edit, shop: _shop, onOpen: _open, reads: _reads)],
-        ),
+        TableRows(auth: widget.auth, table: widget.table, canEdit: _edit, shop: _shop, onOpen: _open, reads: _reads, cards: true),
       ],
     );
   }
@@ -881,16 +1160,18 @@ class _TablePageState extends State<TablePage> {
 typedef TableFilePick = Future<({String name, Uint8List bytes})?> Function();
 
 TableFilePick pickTableFile = () async {
-  final x = await stepOut(() => openFile(
-    acceptedTypeGroups: const [
-      XTypeGroup(
-        label: 'CSV',
-        extensions: ['csv'],
-        mimeTypes: ['text/csv', 'text/comma-separated-values'],
-        uniformTypeIdentifiers: ['public.comma-separated-values-text'],
-      ),
-    ],
-  ));
+  final x = await stepOut(
+    () => openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(
+          label: 'CSV',
+          extensions: ['csv'],
+          mimeTypes: ['text/csv', 'text/comma-separated-values'],
+          uniformTypeIdentifiers: ['public.comma-separated-values-text'],
+        ),
+      ],
+    ),
+  );
   if (x == null) return null;
   return (name: x.name, bytes: await x.readAsBytes());
 };

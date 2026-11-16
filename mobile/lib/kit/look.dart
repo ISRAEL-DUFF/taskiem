@@ -1088,3 +1088,163 @@ class TkButtonRow extends StatelessWidget {
 
 /// The phone asks for text half as large again or more.
 bool _large(BuildContext context) => MediaQuery.textScalerOf(context).scale(10) > 15;
+
+/// One face in a [TkFaceRow]: who, the colour of their dot, and a word
+/// under their name (a time, "late", "off").
+typedef TkFaceItem = ({String name, Color dot, String under});
+
+/// Faces in a row (who is in, who is free): each with a dot of its state,
+/// the first name and a word; past [most], a count of the rest.
+class TkFaceRow extends StatelessWidget {
+  const TkFaceRow({super.key, required this.faces, this.most = 5});
+  final List<TkFaceItem> faces;
+  final int most;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final shown = faces.length > most ? faces.sublist(0, most - 1) : faces;
+    final rest = faces.length - shown.length;
+    Widget cell(Widget face, String name, String under) => Expanded(
+      child: Column(
+        children: [
+          face,
+          const SizedBox(height: 4),
+          Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 12, weight: 600, lineHeight: 1.25, color: t.text)),
+          Text(under, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 11, lineHeight: 1.25, color: t.muted)),
+        ],
+      ),
+    );
+    return Semantics(
+      container: true,
+      label: [for (final f in faces) '${f.name}, ${f.under}'].join('; '),
+      excludeSemantics: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final f in shown)
+            cell(
+              SizedBox(
+                width: 44,
+                height: 44,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    TkFace(_letters(f.name), size: 44, colors: tkFaceFor(f.name)),
+                    Positioned(
+                      right: -1,
+                      bottom: -1,
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(color: f.dot, shape: BoxShape.circle, border: Border.all(color: look.card, width: 2.5)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              f.name.split(' ').first,
+              f.under,
+            ),
+          if (rest > 0)
+            cell(
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: look.ground, shape: BoxShape.circle),
+                child: Text('+$rest', style: tkText(size: 13, weight: 700, color: t.text)),
+              ),
+              'more',
+              '',
+            ),
+          for (var i = shown.length + (rest > 0 ? 1 : 0); i < most; i++) const Expanded(child: SizedBox()),
+        ],
+      ),
+    );
+  }
+}
+
+/// A week's days as marks: each its letter, and a word in an accent's
+/// colour on the days that say something (late, missed).
+class TkDayMarks extends StatelessWidget {
+  const TkDayMarks({super.key, required this.days});
+  final List<({String letter, String word, Color? color})> days;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    return Semantics(
+      container: true,
+      label: days.where((d) => d.word.isNotEmpty).map((d) => '${d.letter}: ${d.word}').join('; '),
+      excludeSemantics: true,
+      child: Row(
+        children: [
+          for (var i = 0; i < days.length; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(2, 8, 2, 6),
+                decoration: BoxDecoration(
+                  color: days[i].color == null ? look.ground : days[i].color!.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text(days[i].letter, textScaler: TextScaler.noScaling, style: tkText(size: 13, weight: 600, lineHeight: 1.2, color: t.text)),
+                    Text(days[i].word, maxLines: 1, overflow: TextOverflow.clip, textScaler: TextScaler.noScaling, style: tkText(size: 10.5, weight: 600, lineHeight: 1.3, color: days[i].color == null ? t.muted : t.text)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// A small tile of a figure: its label in an accent's ink, the figure, a
+/// line; three across ([TkStatTiles]).
+typedef TkStat = ({String label, Color ink, String value, String line});
+
+/// Figures three across on tiles (two rows with large text).
+class TkStatTiles extends StatelessWidget {
+  const TkStatTiles(this.stats, {super.key});
+  final List<TkStat> stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    Widget tile(TkStat s) => MergeSemantics(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+        decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(s.label.toUpperCase(), semanticsLabel: s.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 11.5, weight: 700, letterSpacing: 0.4, color: s.ink)),
+            const SizedBox(height: 6),
+            FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(s.value, style: tkDisplay(size: 17, letterSpacing: -0.4, color: t.text).copyWith(fontFeatures: tkTabular))),
+            Text(s.line, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12, lineHeight: 1.3, color: t.muted)),
+          ],
+        ),
+      ),
+    );
+    if (_large(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [for (var i = 0; i < stats.length; i++) ...[if (i > 0) const SizedBox(height: 8), tile(stats[i])]],
+      );
+    }
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [for (var i = 0; i < stats.length; i++) ...[if (i > 0) const SizedBox(width: 8), Expanded(child: tile(stats[i]))]],
+      ),
+    );
+  }
+}

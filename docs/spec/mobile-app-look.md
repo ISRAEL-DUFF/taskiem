@@ -237,6 +237,43 @@ row on Orders, and the two the chat's Orders sheet opens.
   (Inter 4.001, Inter Tight 3.004); compared at the mockup's 340 px width,
   sizes and weights match.
 
+### Team, riders and tables
+
+Drawn and agreed with the founder, 16 November 2026, in the same look.
+
+- **Team** (was Staff). "In today" large, as a count of the staff, and
+  everyone's face in a row with a dot of their day: in (lime, the time they
+  said in), late (orange), gone (teal) or off (grey). One late person is
+  called out with Call. Tiles: the tasks open and late (opens Tasks) and
+  the people invited. Then the staff, each with their role and their day,
+  and the invitations with Send again (pressed: Send again or Cancel).
+- **One person.** Today, this week or this month: the hours worked, the
+  shifts and time keeping, and this week's days with the late and missed
+  ones marked. Three tiles: sales (and orders), tasks, the till at
+  handover. Call and WhatsApp; their job, hours and pay (for your
+  records), each opening Change; Remove from the business here, not on the
+  list. ⋯ holds Change.
+- **Tasks.** Yours, everyone's and repeating, as a switch. Done, open and
+  late as one bar; the late first, then open, sent back, and done struck
+  through. Each task has its one button (Done, I'll do it, or Remind on a
+  late one); pressed, the rest: Can't, Remind, Give to someone else, Call
+  off, See the photo.
+- **Riders.** Current or retired. "Free now" large and each rider's face:
+  free, busy till a time, off, on leave. The link for riders with Share
+  (Copy, or WhatsApp). Pay riders as a row with what is due and the cash
+  owed. Each rider on one line (areas, fee, how Taskiem reaches them, their
+  rating); pressed: Change, Send the link again, Retire. Areas and fees.
+- **Pay riders.** What is due now, Pay riders now and Weekly pay; each
+  rider's cash owed as a callout with Handed in. Each rider's amount, Add
+  bank where none (pressed: add or change it); recent payouts, a pending
+  one pressed to mark it not paid.
+- **Tables.** Tiles two across: an icon, the name, its rows, what it is
+  for; the money log says it is kept by Taskiem. **One table:** the search,
+  Search in and Sort, the page with round Previous and Next, and each row a
+  card: the first column large, a phone or email under it, three more by
+  their labels (a status in its colour); + adds a row, ⋯ holds Export,
+  Import and Delete table. The Tables tool in the chat keeps its list.
+
 ## Order
 
 1. Orders and Money, and the chat's motion. Done.
@@ -244,4 +281,5 @@ row on Orders, and the two the chat's Orders sheet opens.
 3. Invoices and bills. **Done; waiting for the founder's word.**
 4. Stock, Supplies, Suppliers and an order to a supplier. **Done; waiting for the founder's word.**
 5. One order: a customer's, a booking, a business's, a rider's delivery. **Done; waiting for the founder's word.**
-6. Then riders, tables, Team, and the settings-like pages, the same way.
+6. Team, riders and tables. **Done; waiting for the founder's word.**
+7. Then the settings-like pages, the same way.
