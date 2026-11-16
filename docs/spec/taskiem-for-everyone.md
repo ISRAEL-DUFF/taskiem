@@ -1,6 +1,6 @@
 # Taskiem for everyone: one chat app for people and the businesses they deal with
 
-Status: **draft for review** (2026-11-16; its first questions settled the same day, §23; revised after a review of gaps the same day, §24 holds what is still open). Nothing here is built. It replaces the earlier draft "Customers at the door" (both its parts).
+Status: **draft for review** (2026-11-16; its first questions settled the same day, §23; revised after a review of gaps the same day, and that review's questions settled too, §24). Nothing here is built. It replaces the earlier draft "Customers at the door" (both its parts).
 
 It needs a new decision, [**0068**](../decisions/0068-taskiem-for-everyone.md) (proposed), before any of it is built (§4). Builds on: [the phone app](mobile-app.md) ([0066](../decisions/0066-a-flutter-phone-app.md)), [chat push](chat-push.md), [chat as the way in](chat-way-in.md), [chat sign-in](chat-sign-in.md), [customers' conversations](chat-five-more-flows.md#as-built-phase-1-customers-conversations), [business links](business-links.md), [storefronts](storefronts.md).
 
@@ -128,7 +128,7 @@ The app's first screen and the web's `/signup` and `/login` become one way in:
 - **An account that belongs to any business** needs a **second proof** the first time it signs in by phone on a new device: a passkey, a link sent to the account's email, or the chat PIN. Without one, the person reaches only the personal side, and the switcher shows the businesses as locked with how to unlock them. An account with no second proof yet is asked to set one up when it joins or starts a business.
 - **A personal-only account unused for 180 days** that signs in by phone on a new device is asked "Is this a new number for you?":
   - **No, it's still mine** needs a second proof if the account has one. Without one, its chats and orders stay hidden until one is added from the old device or by support.
-  - **Yes, it's new to me** starts a new personal account on the number. The old account is set aside, kept for 30 days for its owner to claim with a second proof, then deleted.
+  - **Yes, it's new to me** starts a new personal account on the number. The old account is set aside, kept for 90 days for its owner to claim with a second proof, then deleted.
 - **Any account whose phone has not signed in for 90 days** is treated as on a new device.
 
 ### 5.5 Changing your phone number
@@ -173,7 +173,7 @@ A person starts a conversation with a business from:
 - **its chat link** (§8.2), shared on its storefront, Instagram, a flyer or a receipt;
 - **Discover** (§10), or the business's profile there;
 - **an order or booking** they made on its storefront with the same phone: "Chat with Mama's Kitchen about this order";
-- **a message from the business** in the app: a reply, an order card, a reminder, an offer. A business can write first to anyone who has chatted or ordered with it, within §15's limits.
+- **a message from the business** in the app: a reply, an order card, a reminder, or an offer to a customer who agreed to offers. A business can write first to anyone who has chatted or ordered with it, within §15's limits.
 
 ### 8.2 The chat link
 
@@ -322,16 +322,22 @@ Nothing in a business's own data changes. An order placed before the account was
 
 - **Businesses writing first.** A business may message anyone who has chatted or ordered with it, for any reason (settled in review). Two kinds of message are told apart:
   - **About something of theirs**: an order, a booking, an invoice, a delivery. No limit beyond the ordinary sending limits.
-  - **Anything else** (an offer, news, "we're open today"): at most **2 per customer per week**. Each is marked **Offer** in the conversation, with **Mute offers from {business}** under it. A business may also send one such message to many customers at once (a broadcast), counted against each customer's 2.
-  - **Mute offers** keeps order messages and silences the rest. **Block** stops everything.
+  - **Anything else** (an offer, news, "we're open today"): only to customers who **opted in**, at most **2 per customer per week**. Each is marked **Offer** in the conversation, with **Stop offers from {business}** under it. A business may also send one such message to many opted-in customers at once (a broadcast), counted against each customer's 2.
+  - **Opting in** (settled in review, §24): at a customer's first chat or first order with a business, the app asks once, "Get offers from Mama's Kitchen?" with **Yes** and **No**. Only **Yes** receives offers. The answer, and when it was given, is recorded with the business. The customer can change it at any time in the conversation's menu.
+  - **Stop offers** keeps order messages and stops the rest. **Block** stops everything.
   - A business whose offers are muted or blocked far above the norm has its offers paused for review.
 - **A person writing to businesses.** New conversations limited per hour and per day. Messages per conversation per minute limited. New accounts get lower limits for their first week.
 - **Reporting.** **Report** on every conversation and in Discover, sending the last 20 messages to Taskiem's moderators with the person's consent. Apple and Google require this of apps where people message each other.
 - **Fraud.** A business's verification status (phone verified, payments connected, trading for N months) shows on its profile and in the conversation's header. Paying is only ever through Taskiem's pay links, and the app warns on a message that asks for a transfer to a personal account.
 - **Age.** **Eighteen and over** in the terms (settled in review), in line with Nigeria's data protection rules, under which a person under 18 needs a parent's consent, and because the app takes payments. Making an account asks the person to confirm they are 18 or over. There is no parental-consent flow. Legal review confirms this before stage 1.
-- **Offers and consent.** Whether having chatted or ordered is enough consent under Nigeria's data protection rules to send offers, or whether customers must opt in, is for the legal review (§24, question 1). Either way, every offer can be muted in one tap, the mute is recorded, and broadcasts reach only customers who have not muted.
-- **Digital goods in the app.** Apple and Google let an app take payment outside their own payment systems for physical goods and services used in person, not for digital goods (courses, e-books, subscriptions, digital downloads). A business's items marked digital are not offered for sale in the iPhone app; the app shows "Buy this on the web" with a link (§24, question 3).
-- **Phone codes cost money.** SMS costs per code, and WhatsApp's authentication messages cost per code too. Codes go by WhatsApp first, where it is cheaper; SMS limits are as in §5.1. The operator dashboard shows code sends, costs and failures by country. Who pays for these and for the browser's SMS fallback is §24, question 2.
+- **Offers and consent.** Offers need the customer's opt-in (above), which is what Nigeria's data protection rules expect for marketing. The legal review checks the words of the question.
+- **Digital goods in the app.** No special handling (founder, §24): every item a business sells, digital or not, is sold and paid for in the app as in the browser, through Taskiem's pay links. Apple and Google require their own payment systems for digital goods (courses, e-books, subscriptions, downloads) sold in an app. The founder accepted the risk that a store review rejects an update or removes the app over this; it is listed in §22 and revisited if a review raises it.
+- **Phone codes cost money.** SMS costs per code, and WhatsApp's authentication messages cost per code too. Codes go by WhatsApp first, where it is cheaper; SMS limits are as in §5.1. The operator dashboard shows code sends, costs and failures by country. **Businesses pay for all customer messaging** (settled in review, §24):
+  - a sign-in code for a person who came to Taskiem through a business's chat link, storefront or message counts against that business's plan;
+  - the browser's SMS fallback for a business's customer counts against that business;
+  - offers and broadcasts count against the business that sends them.
+
+  Personal accounts are free. A code for a person who came with no business (from Discover, the store or the website) is Taskiem's cost. Each business sees these in its plan's messages, as it sees its SMS today.
 
 ## 16. People chatting with people (a later stage, its own spec)
 
@@ -468,7 +474,7 @@ Each stage ships on its own, Android, iPhone and web together:
 
 **Before stage 2:**
 - the `taskiem_update` template's new wording approved by Meta (§12);
-- the answers to §24's questions 1 to 3.
+- the legal review of the offers question's words (§15).
 
 ## 21. Tests
 
@@ -479,7 +485,7 @@ Each stage ships on its own, Android, iPhone and web together:
   - a number bound to two accounts;
   - a personal session reaching no business route, and a business session reaching both;
   - a business requiring single sign-on, a passkey-only person and an administrator under required passkeys: each refused on switching until its own rule is met;
-  - a reissued number: an account in a business without a second proof reaches only the personal side; the 180-day question both ways; the set-aside account claimed with a second proof;
+  - a reissued number: an account in a business without a second proof reaches only the personal side; the 180-day question both ways; the set-aside account claimed with a second proof within 90 days, and deleted after;
   - changing a phone: orders under the old number still listed, new ones under the new, WhatsApp threads not re-matched until the new number writes.
 - **Customer conversations:**
   - a chat link opening the app and the browser;
@@ -487,7 +493,7 @@ Each stage ships on its own, Android, iPhone and web together:
   - a reply landing in the person's copy;
   - order, booking and pay cards on both sides;
   - Mute and Block both ways;
-  - a business writing first to a past customer: order messages unlimited; offers marked **Offer**, refused past 2 per customer per week, broadcasts counted per customer; **Mute offers** silencing offers but not orders;
+  - a business writing first to a past customer: order messages unlimited; offers marked **Offer**, only to opted-in customers, refused past 2 per customer per week, broadcasts counted per customer; **Stop offers** stopping offers but not orders;
   - deleting an account leaving the business's copy;
   - Block keeping both copies; STOP on an own WhatsApp line deleting only that line's messages;
   - media both ways, each side's copy erased alone;
@@ -509,7 +515,8 @@ Each stage ships on its own, Android, iPhone and web together:
   - signed in by code with no install;
   - push where allowed, SMS where not;
   - 390 and 360 px; axe in both themes.
-- **Digital goods:** an item marked digital is not sold in the iPhone app and shows **Buy this on the web**.
+- **Offers:** the opt-in asked once at the first chat or order and recorded; offers refused to a customer who said **No** or chose **Stop offers**; broadcasts reaching only opted-in customers.
+- **Costs:** a code, an SMS fallback and an offer each counted against the right business; a code for a person who came with no business counted as Taskiem's.
 - **Isolation:**
   - no personal route reaches another person's data;
   - no business sees a person's other businesses;
@@ -525,13 +532,13 @@ Each stage ships on its own, Android, iPhone and web together:
 | Businesses keep sending customers to their personal WhatsApp | The chat link on the storefront, receipts and updates; orders and payments that work better in Taskiem's chat than on a personal WhatsApp |
 | People expect WhatsApp's privacy | Business conversations are plainly marked as readable by Taskiem (§14); chats between people get their own decision (§16) |
 | Fraud and spam once anyone can sign up | Limits, reporting, verification marks, Taskiem-only payments (§15) |
-| Businesses' offers make customers mute the app | Offers marked as such, 2 per customer per week, **Mute offers** in one tap, offers paused for businesses muted far above the norm (§15) |
+| Businesses' offers make customers mute the app | Offers only to customers who opted in, marked as such, 2 per customer per week, **Stop offers** in one tap, offers paused for businesses stopped far above the norm (§15) |
 | Taskiem becomes a controller of consumers' personal data | Legal review before stage 1; the person's side kept apart from businesses' data (§14) |
 | The app becomes two products in one | One look; the switcher; a customer never sees business tools (§6) |
 | Phone codes by SMS cost money and are abused | WhatsApp first; limits per number, device and IP; the dashboard (§15) |
 | A reissued number reaches someone else's account | Second proofs for accounts in a business; the "new number?" question for old personal accounts (§5.4) |
 | The customer door becomes a way around a business's walls | One audited entry point with a fixed list of what it allows, one business at a time (§8.4) |
-| The app is removed from the App Store over payments | Digital goods not sold in the iPhone app (§15) |
+| A store rejects an update or removes the app over in-app payment for digital goods | Accepted by the founder (§15, §24); revisited if a review raises it |
 
 ## 23. Settled in review (2026-11-16)
 
@@ -540,18 +547,18 @@ Each stage ships on its own, Android, iPhone and web together:
 | 1 | The first screen's line | "Chat with the businesses you buy from, and run your own." (§5.1) |
 | 2 | Email sign-in's place | A small **Sign in with email** link under the phone box (§5.1) |
 | 3 | `@Taskiem` on You | A help conversation: a person's own orders and Taskiem's help, and **Start something**. It never acts in a business (§7) |
-| 4 | Businesses writing first | To anyone who has chatted or ordered with them, for any reason. Order messages are unlimited; offers are marked, limited to 2 per customer per week, and can be muted (§15). The limit of 2 is this spec's default, open to change |
+| 4 | Businesses writing first | To anyone who has chatted or ordered with them, for any reason. Order messages are unlimited; offers go only to customers who opted in (§24), are marked, limited to 2 per customer per week, and can be stopped (§15). The limit of 2 is this spec's default, open to change |
 | 5 | The browser's fallback by SMS | Yes: an SMS when the business answers and the browser cannot be notified, at most one per conversation per hour (§9) |
 | 6 | One customer on WhatsApp and the app | One thread with both lines; each message marked; replies go where the customer last wrote, and staff can switch (§11) |
 | 7 | Discover's default | On for businesses with a published storefront, which can turn it off; off for the rest (§10) |
 | 8 | Minimum age | 18, confirmed when making an account; no parental-consent flow; legal review to confirm (§15) |
 
-## 24. Still open (from the review of gaps, 2026-11-16)
+## 24. Settled in the review of gaps (2026-11-16)
 
-| # | Question | Default in this spec until answered |
+| # | Question | Answer |
 | --- | --- | --- |
-| 1 | **Offers and consent.** Is having chatted or ordered enough to send offers, or must customers opt in ("Get offers from Mama's Kitchen") under Nigeria's data protection rules? | Offers go to past customers who have not muted them (§15); the legal review decides |
-| 2 | **Who pays** for phone codes, the browser's SMS fallback, customer conversations, offers and broadcasts? Are customer conversations and offers counted in a business's plan? Are personal accounts free? | Personal accounts free. Codes paid by Taskiem. The browser's SMS fallback counted against the business's plan's messages, as its other SMS are |
-| 3 | **Digital goods.** Hide them in the iPhone app with **Buy this on the web**, or leave them out of the app on both phones? | Hidden in the iPhone app only, with **Buy this on the web** (§15) |
-| 4 | **The closed reply and unanswered times** (§8.6): on by default, with 30 minutes and 2 hours? | On, with those times |
-| 5 | **Set-aside accounts** (§5.4): 30 days to claim before deletion? | 30 days |
+| 1 | Offers and consent | **Opt in, asked once** at a customer's first chat or first order with a business: "Get offers from {business}?" Only **Yes** receives offers; order messages always come (§15) |
+| 2 | Who pays | **Businesses pay for all customer messaging**: codes for people who came through a business, the browser's SMS fallback for its customers, and its offers, all counted against its plan. Personal accounts are free; codes for people who came with no business are Taskiem's (§15) |
+| 3 | Digital goods | **No special handling**: sold and paid in the app like everything else. The store risk is accepted (§15, §22) |
+| 4 | The closed reply and unanswered times | **On by default**: the closed reply once a day, **Needs you** after 30 minutes, the owner told after 2 hours. Each business can change or turn off each (§8.6) |
+| 5 | Set-aside accounts | **90 days** to claim with a second proof, then deleted (§5.4) |

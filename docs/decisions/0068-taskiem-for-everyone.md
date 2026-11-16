@@ -37,7 +37,7 @@ The founder's direction: make the Taskiem app a full app for customers too, and 
 4. **A customer conversation has two copies,** the business's and the person's, as conversations between linked businesses do ([0061](0061-business-links.md)). Each side keeps, archives and deletes its own, photos, voice notes and files included. The business's copy is its customer thread, sealed under the customer's subject and kept under the business's retention. **Blocking deletes nothing:** it stops new messages, and the business's copy stays for disputes until its retention ends or the person asks that business for erasure. STOP on a business's own WhatsApp number keeps today's meaning there.
 5. **A business may write first to anyone who has chatted or ordered with it, for any reason,** in two kinds of message:
    - **About something of the customer's** (an order, a booking, an invoice, a delivery): no limit beyond the ordinary sending limits.
-   - **Anything else** (an offer, news, a broadcast): marked as an offer, at most 2 per customer per week, and mutable by the customer in one tap.
+   - **Anything else** (an offer, news, a broadcast): only to customers who **opted in**, asked once at their first chat or order with the business and recorded; marked as an offer, at most 2 per customer per week, and stopped by the customer in one tap.
 
    Customers and businesses can each block the other. Every conversation and listing can be reported to Taskiem's moderators.
 6. **Businesses with their own WhatsApp number keep it.** A customer who uses both WhatsApp and the app with the same verified phone is **one customer, in one thread**. Each message is marked with where it came from, and replies go where the customer last wrote. Matching needs the phone proved on both sides; a typed phone matches nothing.
@@ -61,7 +61,7 @@ The founder's direction: make the Taskiem app a full app for customers too, and 
 | A pool of shared WhatsApp numbers, a different one per business a customer chats with | Separate chats per business, but each number needs Meta's registration, templates and its own quality rating, and it still carries Taskiem's name, not the business's |
 | A separate app for customers | Two listings and two reviews, and one person is often both a customer and someone's staff. One app, whose sides follow what the person is, serves both |
 | Chat only in the app, with no browser chat | Customers who will not install an app before saying hello would go back to the owner's personal WhatsApp. The web chat already exists, so the browser costs little |
-| Businesses write first only about an order, booking or invoice, with no offers | Safer for customers while trust is new; the founder chose to let businesses reach past customers, with offers marked, limited and mutable |
+| Businesses write first only about an order, booking or invoice, with no offers | Safer for customers while trust is new; the founder chose to let businesses reach past customers, with offers only to those who opted in, marked and limited |
 | Workflows on a person's own side, with no workspace | Connections, secrets, approvals, billing and audit all belong to a tenant; a personal copy would rebuild most of the platform. A workflows workspace gives the same result with what exists |
 | A minimum age of 13 or 16, with parental consent below 18 | Nigeria's data protection rules treat under-18s as children whose data needs a parent's consent, and the app takes payments. 18 needs no consent flow |
 
@@ -87,14 +87,15 @@ The founder's direction: make the Taskiem app a full app for customers too, and 
   - `tenants.kind` (`business` or `workflows`);
   - the one read of a verified phone's orders across businesses.
 - **Taskiem becomes responsible for consumers' personal data,** not only businesses'. The terms, the privacy notice and the minimum age are reviewed by a lawyer before the first stage ships.
-- **Open, for the legal review and the founder** ([plan §24](../spec/taskiem-for-everyone.md#24-still-open-from-the-review-of-gaps-2026-11-16)): whether offers need customers' opt-in, who pays for codes and SMS, and how digital goods are kept out of the iPhone app's payments.
+- **Settled with the founder** ([plan §24](../spec/taskiem-for-everyone.md#24-settled-in-the-review-of-gaps-2026-11-16)): offers need the customer's opt-in; businesses pay for all customer messaging; digital goods get no special handling in the app, the risk of a store's review being accepted; a set-aside account can be claimed for 90 days.
 - **Safety at the scale of the public:**
   - reporting on every conversation and listing, which Apple and Google require of apps where people message each other;
   - limits on new conversations and on offers;
   - payment-fraud warnings;
   - moderation of Discover;
   - pausing a business's offers when customers mute or block it far above the norm.
-- **Cost:** SMS for phone codes and for browser chats that cannot be notified. WhatsApp is tried first for codes. Sends and failures by country are on the operator's dashboard.
+- **Cost:** codes (by WhatsApp first, else SMS), the browser's SMS fallback, offers and broadcasts. **Businesses pay for all customer messaging**, counted against their plans: codes for people who came through a business, the SMS fallback for its customers, and its offers. Personal accounts are free; codes for people who came with no business are Taskiem's. Sends, costs and failures by country are on the operator's dashboard.
+- **App stores:** digital goods are sold and paid in the app like everything else (founder). Apple and Google require their own payment systems for digital goods, so a store may reject an update or remove the app; the risk is accepted and revisited if a review raises it.
 - **The store listings and the first screen** change from "for your business" to "Chat with the businesses you buy from, and run your own."
 - **Stages,** each shipped on Android, iPhone and the web together:
   1. personal accounts and Start something;
