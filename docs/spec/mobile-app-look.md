@@ -325,8 +325,8 @@ Settings is one list on the ground (`lib/screens/signed_in.dart`):
   - notifications on or off, and whether they show what the message says,
     as switches;
   - What this phone tells you, which opens the rest;
-  - App lock, which opens its page, since it has a choice of times rather
-    than on or off.
+  - App lock as a switch: on locks every time Taskiem opens; the row opens
+    the choice of when (at once, after a minute, after half an hour).
 - Appearance as a switch of three.
 - Signing in: Passkeys and Your phones, each with its count.
 - The chats you work from: WhatsApp, Telegram and Slack, each with

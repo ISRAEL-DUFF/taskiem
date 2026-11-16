@@ -13,6 +13,7 @@ import 'package:taskiem/app/auth.dart';
 import 'package:taskiem/app/links.dart';
 import 'package:taskiem/app/prefs.dart';
 import 'package:taskiem/app/session.dart';
+import 'package:taskiem/kit/forms.dart' show TkSwitch;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/screens/signed_in.dart';
 import 'package:taskiem/theme/theme.dart';
@@ -161,6 +162,28 @@ void main() {
     expect(o.prefs.lock, isFalse);
     expect(find.textContaining('Set a screen lock on this phone first'), findsOneWidget);
     expect(o.u.asked, 0);
+  });
+
+  testWidgets('S1: the list\'s App lock switch: on locks at once, off turns it off, each with the phone\'s own unlock', (t) async {
+    final o = await open(t);
+    final sw = find.bySemanticsLabel('App lock').first;
+    await t.ensureVisible(sw);
+    await t.pumpAndSettle();
+    await t.tap(find.byWidgetPredicate((w) => w is TkSwitch && w.label == 'App lock'));
+    await settle(t);
+    expect(o.prefs.lock, isTrue);
+    expect(o.prefs.lockAfter, Duration.zero);
+    expect(o.u.asked, 1);
+    await t.tap(find.byWidgetPredicate((w) => w is TkSwitch && w.label == 'App lock'));
+    await settle(t);
+    expect(o.prefs.lock, isFalse);
+    expect(o.u.asked, 2);
+    o.u.has = false;
+    await t.tap(find.byWidgetPredicate((w) => w is TkSwitch && w.label == 'App lock'));
+    await settle(t);
+    expect(o.prefs.lock, isFalse, reason: 'no lock of its own on this phone');
+    await t.pump(const Duration(seconds: 5));
+    await t.pumpAndSettle();
   });
 
   test('S1: the lock\'s choice is kept, and the old always-on setting is not read', () async {

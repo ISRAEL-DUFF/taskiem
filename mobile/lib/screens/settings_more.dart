@@ -339,6 +339,19 @@ class _YouCardState extends _Section<YouCard> {
 
 // --- the lock ---
 
+/// The lock set to [after] (null: off), made with the phone's own unlock;
+/// what stopped it, if anything stopped it.
+Future<String?> chooseLock(Prefs prefs, Unlocker? u, Duration? after) async {
+  if (after == prefs.lockAfter) return null;
+  if (u != null) {
+    final has = await u.available();
+    if (!has && after != null) return 'Set a screen lock on this phone first: a fingerprint, face or PIN.';
+    if (has && !await stepOut(u.unlock)) return null;
+  }
+  await prefs.setLockAfter(after);
+  return null;
+}
+
 /// The app lock, as WhatsApp's: off until turned on, then locking at once,
 /// after a minute or after half an hour away. Every change is made with the
 /// phone's own unlock (a phone left on a counter cannot be made to open
@@ -356,19 +369,8 @@ class _LockCardState extends State<LockCard> {
   String? _error;
 
   Future<void> _choose(Duration? after) async {
-    final prefs = widget.prefs;
-    if (after == prefs.lockAfter) return;
-    final u = widget.unlocker;
-    if (u != null) {
-      final has = await u.available();
-      if (!has && after != null) {
-        if (mounted) setState(() => _error = 'Set a screen lock on this phone first: a fingerprint, face or PIN.');
-        return;
-      }
-      if (has && !await stepOut(u.unlock)) return;
-    }
-    if (mounted) setState(() => _error = null);
-    await prefs.setLockAfter(after);
+    final why = await chooseLock(widget.prefs, widget.unlocker, after);
+    if (mounted) setState(() => _error = why);
   }
 
   @override

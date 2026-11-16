@@ -115,6 +115,13 @@ class _SignedInScreenState extends State<SignedInScreen> {
       });
 
 
+  /// The lock's switch: on locks at once, off turns it off; a phone
+  /// without a lock of its own is told.
+  Future<void> _lock(Prefs prefs, bool on) async {
+    final why = await chooseLock(prefs, widget.unlocker, on ? Duration.zero : null);
+    if (why != null && mounted) showTkToast(context, why, error: true);
+  }
+
   /// A page of its own, slid in; back, what it changed is read again.
   Future<void> _open(Widget page) async {
     await Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
@@ -169,11 +176,16 @@ class _SignedInScreenState extends State<SignedInScreen> {
             if (prefs != null)
               ListenableBuilder(
                 listenable: prefs,
+                // A switch, as drawn: on locks at once; the row opens when
+                // it locks (at once, after a minute, after half an hour).
                 builder: (context, _) => TkListRow(
                   title: 'App lock',
-                  sub: prefs.lock ? (prefs.lockAfter == Duration.zero ? 'Asks every time it opens' : lockTimeLabel(prefs.lockAfter!)) : 'Off · fingerprint, face or PIN to open',
+                  sub: prefs.lock
+                      ? (prefs.lockAfter == Duration.zero ? 'Every time it opens · tap for when' : '${lockTimeLabel(prefs.lockAfter!)} away · tap for when')
+                      : 'Fingerprint, face or PIN to open',
                   icon: 'b-lock',
                   square: look.blue,
+                  trailing: TkSwitch(label: 'App lock', on: prefs.lock, onChanged: (on) => _lock(prefs, on)),
                   onTap: () => _open(SettingsPage(title: 'App lock', children: [LockCard(prefs: prefs, unlocker: widget.unlocker)])),
                 ),
               ),
