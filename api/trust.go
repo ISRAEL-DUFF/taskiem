@@ -289,9 +289,9 @@ func (s *Server) pauseOrders(ctx context.Context) error {
 		err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.Tenant}, func(tx pgx.Tx) error {
 			var month, monthBookings, today int64
 			if err := tx.QueryRow(ctx, `SELECT
-				count(*) FILTER (WHERE kind = 'order' AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),
+				count(*) FILTER (WHERE kind IN ('order', 'app') AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),
 				count(*) FILTER (WHERE kind = 'booking' AND created_at >= date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'),
-				count(*) FILTER (WHERE kind IN ('order', 'booking') AND created_at >= date_trunc('day', now() AT TIME ZONE 'Africa/Lagos') AT TIME ZONE 'Africa/Lagos')
+				count(*) FILTER (WHERE kind IN ('order', 'app', 'booking') AND created_at >= date_trunc('day', now() AT TIME ZONE 'Africa/Lagos') AT TIME ZONE 'Africa/Lagos')
 				FROM storefront_orders WHERE tenant_id = $1 AND created_at >= now() - interval '32 days'`, p.Tenant).Scan(&month, &monthBookings, &today); err != nil {
 				return err
 			}

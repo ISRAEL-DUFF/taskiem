@@ -354,7 +354,7 @@ func (s *Server) waMyPage(ctx context.Context, c *chat) error {
 	if err := chatTx(ctx, s, c, func(tx pgx.Tx) error {
 		now := time.Now().In(storefront.Lagos)
 		day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, storefront.Lagos)
-		return tx.QueryRow(ctx, `SELECT count(*) FROM storefront_orders WHERE tenant_id = $1 AND kind = 'order' AND created_at >= $2`, c.tenant.ID, day).Scan(&count)
+		return tx.QueryRow(ctx, `SELECT count(*) FROM storefront_orders WHERE tenant_id = $1 AND kind IN ('order', 'app') AND created_at >= $2`, c.tenant.ID, day).Scan(&count)
 	}); err != nil {
 		return err
 	}
@@ -1471,7 +1471,7 @@ func (s *Server) waShopOrderMove(ctx context.Context, c *chat, ref, move string)
 	}
 	status := c.t("wa.shop.status." + o.Status)
 	if move == "ready" {
-		if o.Kind != "order" && o.Kind != "trade" || o.Status != "accepted" && o.Status != "paid" {
+		if o.Kind != "order" && o.Kind != "app" && o.Kind != "trade" || o.Status != "accepted" && o.Status != "paid" {
 			return c.say(ctx, s, c.t("wa.shop.not_ready_now", "ref", ref, "status", status))
 		}
 		return s.shopAsk(ctx, c, &chatShop{Action: "ready", Reference: ref}, c.t("wa.shop.confirm_ready", "ref", ref))
@@ -1833,7 +1833,7 @@ func (s *Server) shopReady(ctx context.Context, c *chat, ref string) error {
 	if !ok || err != nil {
 		return err
 	}
-	if o.Kind != "order" && o.Kind != "trade" || o.Status != "accepted" && o.Status != "paid" {
+	if o.Kind != "order" && o.Kind != "app" && o.Kind != "trade" || o.Status != "accepted" && o.Status != "paid" {
 		return c.say(ctx, s, c.t("wa.shop.not_ready_now", "ref", ref, "status", c.t("wa.shop.status."+o.Status)))
 	}
 	sf, err := s.shopOf(ctx, c)

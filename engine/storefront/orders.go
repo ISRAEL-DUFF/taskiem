@@ -576,14 +576,28 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 		}
 	}
 	id := uuid.Must(uuid.NewV7())
+	// An order placed in the app is of the kind app, and an order or a
+	// booking placed there is linked to its person (taskiem-for-everyone
+	// §8.4); the action it names is the page's own.
+	storedKind := x.kind
+	var person *uuid.UUID
+	if sub.Channel == "app" {
+		if x.kind == "order" {
+			storedKind = "app"
+		}
+		if p, err := uuid.Parse(sub.PersonID); err == nil {
+			person = &p
+		}
+	}
 	// The submission names its action and front (fronts §5.5).
 	if tag, err := tx.Exec(ctx, `INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, basket,
 		total_kobo, fulfilment, payment, expires_at, status_key, deposit_kobo, service_id, service_name, starts_at, ends_at, price_change, note, zone, delivery_kobo,
-		action_id, front_id, answers, instalments, waitlist)
-		SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, a.id, a.front_id, $26, $27, $28
+		action_id, front_id, answers, instalments, waitlist, person_id)
+		SELECT $1, $2, $3, $29, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, a.id, a.front_id, $26, $27, $28, $30
 		  FROM storefront_actions a WHERE a.storefront_id = $3 AND `+actionOf("$25", "$4"),
 		id, x.tenant, x.storefront, x.kind, x.reference, x.statusHash, status, customer, subject, basket, sub.TotalKobo, fulfilment, payment, expires,
-		key, deposit, serviceID, serviceName, starts, ends, change, noteArg, zone, delivery, x.action, answers, max(1, min(MaxInstalments, sub.Instalments)), sub.Waitlist); err != nil {
+		key, deposit, serviceID, serviceName, starts, ends, change, noteArg, zone, delivery, x.action, answers, max(1, min(MaxInstalments, sub.Instalments)), sub.Waitlist,
+		storedKind, person); err != nil {
 		return Order{}, err
 	} else if tag.RowsAffected() == 0 {
 		return Order{}, fmt.Errorf("storefront: no %s action for this storefront", x.kind)
@@ -828,7 +842,13 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 	case ord.Payment == "on_delivery":
 		paymentStatus = "on_delivery"
 	}
-	body := map[string]any{"reference": ord.Reference, "kind": ord.Kind, "customer": ord.Customer, "basket": ord.Basket, "total_kobo": ord.TotalKobo,
+	// An order placed in the app runs the business's order workflow, as
+	// any order from its page does (taskiem-for-everyone §8.4).
+	runKind := ord.Kind
+	if runKind == "app" {
+		runKind = "order"
+	}
+	body := map[string]any{"reference": ord.Reference, "kind": runKind, "customer": ord.Customer, "basket": ord.Basket, "total_kobo": ord.TotalKobo,
 		"total": FormatNaira(ord.TotalKobo), "summary": Summary(ord.Basket), "fulfilment": ord.Fulfilment, "payment": map[string]any{"mode": ord.Payment, "status": paymentStatus}}
 	if ord.Zone != "" {
 		// The delivery area and its fee (dispatch D1), in the summary too.
@@ -869,7 +889,7 @@ func (o *Orders) startRun(ctx context.Context, tenant uuid.UUID, reference strin
 	st, err := o.Start(ctx, runtime.StartRequest{TenantID: tenant, WorkflowID: wf, Version: version, Environment: "prod",
 		Trigger: map[string]any{"type": "storefront", "body": trig, "storefront": map[string]any{"slug": slug, "name": name},
 			"submission": apart["submission"], "answers": apart["answers"]},
-		StartedBy: "storefront:" + ord.Reference, TriggerID: "storefront/" + ord.Kind, DedupKey: dedup})
+		StartedBy: "storefront:" + ord.Reference, TriggerID: "storefront/" + runKind, DedupKey: dedup})
 	note := ""
 	if le, ok := runtime.IsLimit(err); ok {
 		note, err = "Not started: the plan's limit "+le.Limit+" was reached.", nil
@@ -1377,7 +1397,7 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 			trade = &ord
 			return nil
 		}
-		if ord.Kind == "chat" {
+		if ord.Kind == "chat" || ord.Kind == "app" {
 			if strings.Contains(text, "{link}") {
 				link, err := o.ChatStatusLink(ctx, tx, tenant, ord)
 				if err != nil {
@@ -1447,6 +1467,10 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 			return nil, err
 		}
 		channels = []string{"whatsapp"}
+		if chat.Kind == "app" {
+			// One who ordered in the app is told in their conversation there.
+			channels = []string{"app"}
+		}
 	}
 	if channels == nil {
 		channels = []string{}

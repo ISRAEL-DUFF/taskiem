@@ -64,6 +64,10 @@ type Submission struct {
 	// Answers are the customer's answers to the action's own questions
 	// (fronts §5.5); only the questions its form asks are kept.
 	Answers map[string]any `json:"answers,omitempty"`
+	// PersonID is the person who placed an order or booking in the app
+	// (taskiem-for-everyone §8.4, Channel "app"): an order is then of the
+	// kind app, and either is linked to them.
+	PersonID string `json:"person_id,omitempty"`
 }
 
 // Booked is the slot a booking holds: Until is the end plus the service's

@@ -31,6 +31,13 @@ $$;
 -- +goose StatementEnd
 GRANT EXECUTE ON FUNCTION taskiem_person_business() TO taskiem_app, taskiem_dispatch;
 
+-- A person reaching a business through the customer door is audited as
+-- themself in the business's chain: actor_type person, their user id.
+-- (Down keeps such entries: the chain is append-only, so the old check
+-- comes back NOT VALID.)
+ALTER TABLE audit_log DROP CONSTRAINT audit_log_actor_type_check;
+ALTER TABLE audit_log ADD CONSTRAINT audit_log_actor_type_check CHECK (actor_type IN ('user', 'api_key', 'system', 'ai', 'end_user', 'platform_admin', 'agent', 'person'));
+
 -- The business's copy: a thread is on a line. An app thread is the
 -- person's (person_id), one per person per business; its
 -- phone_number_id is 'app'. The person stopping messages (Block) and the
@@ -494,3 +501,5 @@ ALTER TABLE customer_conversations DROP COLUMN person_blocked_at;
 ALTER TABLE customer_conversations DROP COLUMN person_id;
 ALTER TABLE customer_conversations DROP COLUMN line;
 DROP FUNCTION taskiem_person_business();
+ALTER TABLE audit_log DROP CONSTRAINT audit_log_actor_type_check;
+ALTER TABLE audit_log ADD CONSTRAINT audit_log_actor_type_check CHECK (actor_type IN ('user', 'api_key', 'system', 'ai', 'end_user', 'platform_admin', 'agent')) NOT VALID;
