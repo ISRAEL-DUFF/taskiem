@@ -193,7 +193,8 @@ test("a new person makes an account with their phone, then starts workflows and 
   await page.getByText("I sell things").click();
   // Two clicks make one business: the button stays off once it has started.
   await page.getByRole("button", { name: "Start the business" }).dblclick();
-  await expect(page).toHaveURL(/\/start$/);
+  // The new business's own start page, not /you/start where this began.
+  await expect(page).toHaveURL((u) => u.pathname === "/start");
   const mine = (await (await page.request.get("/v1/me/businesses")).json()) as { businesses: { name: string }[] };
   expect(mine.businesses.filter((b) => b.name === "Ngozi Fabrics")).toHaveLength(1);
   await expect(page.getByTestId("switcher-top")).toContainText("Ngozi Fabrics");
@@ -278,10 +279,15 @@ test("an owner signs in with their phone on a new device, proves it is them, swi
   // Still signed in: a wrong code is not a signing out.
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
 
-  // A business's page opened signed out: after the phone way in, this
-  // device proved, the one business opens on that page.
+  // A business's page opened signed out: a phone code alone never carries
+  // an earlier proof (a device id can be copied), so the second proof is
+  // asked again, and then the one business opens on that page.
   await page.request.post("/v1/auth/logout", { headers: H });
   await phoneIn(page, m, { from: "/members", wrongFirst: false });
+  const proof = page.getByRole("dialog", { name: "Prove it's you" });
+  await expect(proof).toBeVisible();
+  await proof.getByLabel("Your password").fill("correct horse battery");
+  await proof.getByRole("button", { name: "Confirm with my password" }).click();
   await expect(page).toHaveURL(/\/members$/);
   await expect(page.getByTestId("switcher")).toContainText(tenant);
   await page.request.post("/v1/auth/logout", { headers: H });
