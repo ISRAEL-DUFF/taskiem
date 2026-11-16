@@ -562,3 +562,35 @@ Each stage ships on its own, Android, iPhone and web together:
 | 3 | Digital goods | **No special handling**: sold and paid in the app like everything else. The store risk is accepted (§15, §22) |
 | 4 | The closed reply and unanswered times | **On by default**: the closed reply once a day, **Needs you** after 30 minutes, the owner told after 2 hours. Each business can change or turn off each (§8.6) |
 | 5 | Set-aside accounts | **90 days** to claim with a second proof, then deleted (§5.4) |
+
+## As built: stage 1, stream B
+
+The server's half of **Start something** (§18). Phone sign-in and personal sessions are stream A, built apart.
+
+**Data.** Migration `00449_tenant_kind.sql`: `tenants.kind` (`business` or `workflows`, default `business`, so every existing tenant is a business). `taskiem_link_findable` now also needs a business, so Explore, its sections and scores, and the links search never list a workflows workspace, and a business that becomes one drops out. `taskiem_dispatch` reads the column (listed in `engine/db/dispatch_columns.txt`).
+
+**One way to make a tenant.** `insertTenantTx` (`api/start.go`) makes the tenant of its kind, its owner's membership, the Default workspace and the `dev` and `prod` environments, for an owner who already exists; the web form (`createTenant`), chat sign-up and field agents (`makeBusiness`) all use it. A workflows workspace given no name is called "{owner's name}'s workflows", or "My workflows". `startAreasTx` writes a new tenant's areas as its own rows (Schools through its switch, a delivery business's set-up).
+
+**Endpoints.**
+- `POST /v1/me/start` `{kind: "business"|"workflows", name?, kinds?: ["shop"|"service"|"delivery"|"school"]}` → `201 {tenant_id, kind, name, user_id, tenants, token?}`. Workflows: name optional (2 to 80 characters when given), `kinds` refused, every area off. Business: name required (2 to 80, no links or emails); `kinds` as `/v1/signup` takes them, left out every area but Schools on, an empty list refused (400: start workflows instead). The signed-in person becomes its owner (no new account); `tenant_onboarding` source `app` for a bearer session, `signup` for a cookie one; audited `tenant.create`; the trial starts (`Billing.Ensure`). In the same transaction this session ends and its twin in the new tenant is made, as `/v1/me/switch` does (same signing-in moment, method, phone and expiry; audited `auth.switch`), answered as a token or a cookie the way the session came. Five a day per person (429), counted through `tenant_onboarding.channel_hash` and `taskiem_chat_signup_counts`. 403 for an API key, a field agent's session or an embed user; 409 for a single sign-on session (as switching).
+- `GET /v1/me` gains `tenant_kind`; `GET /v1/me/businesses` items gain `kind`. In `mobile/api.txt` (`startSomething`) and regenerated.
+
+**The kind follows the areas.** `PUT /v1/settings/areas` and `PUT /v1/settings/schools`: turning any area on in a workflows workspace makes it a business; ending with every area off makes a business workflows. Audited `tenant.kind` `{from, to}` after `settings.areas`.
+
+**Every door.**
+- Chat sign-up (WhatsApp, Telegram, the app's sign-up conversation): after the terms (first, for a person with an account), "Is this for a business, or for workflows?" with **A business** and **Workflows** (`su:kind:business`, `su:kind:workflows`; 1, 2, "business" and "workflows" typed also answer). Workflows asks only the person's name when unknown (Telegram still asks for their contact last), makes the workspace named after them with every area off, offers two starters (daily reminder, leave requests) and never asks about being found. A business goes on as before and its areas follow what it sells: food, provisions, fashion, phones → `shop`; salon, services → `service`; deliveries → `delivery`; school → `school` (Schools on, with Money); something else keeps every area but Schools, as before.
+- Slack: a workflows workspace. It still offers the Slack workspace's name, then makes it with every area off; nothing about selling or payments is asked.
+- Web `POST /v1/signup`: unchanged, except `kinds: []` makes `kind = workflows`.
+- Field agents, partners' sub-tenants and the API without `kinds`: unchanged (businesses).
+- New words in `engine/lang/messages` (`signup.ask_kind`, `signup.button_business`, `signup.button_workflows`, `signup.starters_workflows`, `signup.tpl.leave-request`), English copied unreviewed into the other languages.
+
+**Deviations.**
+- There is no `web` onboarding source: a web start is recorded as `signup` (so it has the first-run measure and the email check `signup` has), a phone's as `app`.
+- Slack asks no "business or workflows?" question: it always starts workflows, as §18.3 says.
+- `kind: "business"` with `kinds: []` is refused rather than made as a business with nothing on, which would contradict the kind following the areas.
+
+**Left over.**
+- Personal sessions (stream A): `startSomething` uses only the person; the twin-session statement is the same as switching's and scopes the old session's tenant, so when sessions may have no tenant it needs the same change as `/v1/me/switch` (and an invitee session today gets 401).
+- A cookie start by someone with no confirmed email (stream A's phone-only people) would meet the `signup` source's "confirm your email" rule; choose the source again when personal sessions land.
+- The web and app screens (Start something, the switcher's workflows mark, what a workspace opens on, "What you use") are the web and app streams'.
+- Taskiem Ops does not show the kind yet.
