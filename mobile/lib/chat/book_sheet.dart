@@ -245,9 +245,10 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
         _Step.time => () => setState(() => _step = _Step.service),
         _Step.service => null,
       },
-      crumb: _step == _Step.service ? null : 'Book with $_biz',
-      lead: _step == _Step.service ? ChatAvatar(name: _biz, size: 48, letterSize: 16) : null,
-      sub: _step == _Step.service ? 'Their services, as their storefront shows them' : (_step == _Step.time && s != null ? _serviceLine(s) : null),
+      // As drawn: the first step's small line over its title, by their logo.
+      crumb: _step == _Step.service ? 'Their services, as their storefront shows them' : 'Book with $_biz',
+      lead: _step == _Step.service ? ChatAvatar(name: _biz, size: 38, letterSize: 13) : null,
+      sub: _step == _Step.time && s != null ? _serviceLine(s) : null,
       overlay: _done == null ? null : TkSavedTick(words: _done!),
       footer: _step == _Step.time && _start != null
           ? TkCta(
@@ -286,7 +287,7 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
       case _Step.service:
         final look = TkLook.of(context);
         return ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           children: [
             if (!open)
               Padding(
@@ -316,7 +317,7 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
       case _Step.time:
         final times = _times;
         return ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 6),
           children: [
             if (_taken)
               Semantics(
@@ -375,7 +376,7 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
                   TkKitField(
                     label: 'Note for them',
                     hint: 'Optional',
-                    child: TkTextBox(controller: _note, lines: 2, max: 500, size: 15),
+                    child: TkTextBox(controller: _note, max: 500, size: 15, height: 46),
                   ),
                 ],
               ),
@@ -425,13 +426,13 @@ class _Chips extends StatelessWidget {
           child: GestureDetector(
             onTap: () => onPick(v.$1),
             child: Container(
-              constraints: const BoxConstraints(minHeight: 40),
-              padding: EdgeInsets.symmetric(horizontal: grid ? 4 : 14, vertical: grid ? 0 : 10),
+              constraints: BoxConstraints(minHeight: grid ? 40 : 36),
+              padding: EdgeInsets.symmetric(horizontal: grid ? 4 : 13, vertical: grid ? 0 : 8),
               // The days as wide as their words; the times filling their box.
               alignment: grid ? Alignment.center : null,
               // As drawn: the days round, the times in boxes.
               decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(grid ? 12 : 999)),
-              child: Text(v.$2, maxLines: 1, style: tkText(size: 14, weight: 600, color: ink)),
+              child: Text(v.$2, maxLines: 1, style: tkText(size: grid ? 14 : 13.5, weight: 600, color: ink)),
             ),
           ),
         ),

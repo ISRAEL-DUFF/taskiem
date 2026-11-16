@@ -896,12 +896,12 @@ class _Chips extends StatelessWidget {
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 180),
                         // Grows with large text.
+                        // As drawn: filled, no line, rounded.
                         constraints: const BoxConstraints(minHeight: 32),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
                         decoration: BoxDecoration(
-                          color: on ? (dark ? t.brandDark : t.text) : t.panel,
+                          color: on ? (dark ? t.brandDark : t.text) : (dark ? const Color(0xFF1A1B1A) : t.panel),
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: on ? const Color(0x00000000) : t.border),
                         ),
                         alignment: Alignment.center,
                         // `.tk-x-chip { gap: 8px }`: the name, then the count.
@@ -1009,7 +1009,7 @@ class _Frame extends StatelessWidget {
   }
 }
 
-/// `.tk-x-connect`: the pine pill (soft for Message), 34 px as drawn.
+/// `.tk-x-connect`: the pine pill (soft for Message), 30 px as drawn.
 class _Pill extends StatelessWidget {
   const _Pill({required this.label, this.onTap, this.soft = false, this.semantics});
   final String label;
@@ -1031,11 +1031,11 @@ class _Pill extends StatelessWidget {
         onTap: onTap,
         scale: 0.96,
         child: Container(
-          height: 34,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           alignment: Alignment.center,
           decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-          child: Text(label, style: tkText(size: 13.5, weight: 700, lineHeight: 1.2, color: ink)),
+          child: Text(label, style: tkText(size: 13, weight: 700, lineHeight: 1.2, color: ink)),
         ),
       ),
     ));
@@ -1182,7 +1182,7 @@ class _Card extends StatelessWidget {
                           listenable: pictures,
                           builder: (context, _) => ChatAvatar(name: c.name, logo: c.logo ? pictures.of(_logo(c)) : null, size: featured ? 38 : 48, letterSize: featured ? 13 : 16),
                         ),
-                        if ((c.links ?? 0) >= 3)
+                        if ((c.links ?? 0) >= 3 && !featured)
                           Positioned(
                             right: -2,
                             bottom: 0,

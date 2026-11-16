@@ -139,7 +139,6 @@ class _ApproveSheetState extends State<ApproveSheet> {
     ];
     final notes = <Widget>[
       if (ap.firstPayment == true) const CardPill('First payment to this account', CardTone.warn),
-      if (_stepUp != null) CardPill(passkeyOnly ? 'Needs your passkey' : 'Needs your passkey or a code', CardTone.plain),
       if (ap.levels > 1) CardPill('Level ${ap.level} of ${ap.levels}', CardTone.plain),
       if (ap.required > 1) CardPill('${ap.approvals} of ${ap.required} approvals', CardTone.plain),
     ];
@@ -153,30 +152,32 @@ class _ApproveSheetState extends State<ApproveSheet> {
       overlay: _saved ? TkSavedTick(words: _approve ? 'Approved' : 'Declined') : null,
       body: TkFormBody(
         children: [
-          Text(a.who != null ? '${a.who} asks: ${a.title}' : a.title, style: tkText(size: 16, weight: 600, color: t.text)),
-          Text('From ${ap.workflow}. Your decision and what you were shown are recorded.', style: tkFormNow(t)),
+          // As drawn: who asks for what, and under it, small, from where.
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(a.who != null ? '${a.who} asks: ${a.title}' : a.title, style: tkText(size: 15.5, weight: 600, lineHeight: 1.3, color: t.text)),
+              const SizedBox(height: 3),
+              Text('From ${ap.workflow}. Your decision and what you were shown are recorded.', style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
+            ],
+          ),
           if (notes.isNotEmpty) Wrap(spacing: 6, runSpacing: 6, children: notes),
           if (rows.isNotEmpty) TkFormGroup(children: [TkLines(rows)]),
           if (ap.firstPayment == true && _approve)
             TkCallout(
-              leading: TkSquare('warn', color: look.orange),
-              title: 'First payment to this account.',
-              sub: 'Not paid before. Check the account number and name with them before you approve.',
+              leading: TkSquare('b-alert', color: look.orange),
+              title: 'First payment to this account',
+              sub: 'Check the account number and name with them before you approve.',
               color: look.orange,
             ),
           TkFormGroup(
             children: [
               TkKitField(
                 label: 'A comment (optional, recorded)',
-                child: TkTextBox(controller: _comment, lines: 2, size: 15),
+                child: TkTextBox(controller: _comment, size: 15, height: 42),
               ),
             ],
           ),
-          if (_stepUp != null)
-            Text(
-              'Your phone asks for your passkey (your fingerprint, face or screen lock) when you ${_approve ? 'approve' : 'decline'}.',
-              style: tkFormNow(t),
-            ),
           if (_stepUp != null && !passkeyOnly && _useCode)
             TkFormGroup(
               children: [

@@ -179,13 +179,16 @@ class _TkFieldState extends State<TkField> {
     final t = TkTheme.tokens(context);
     final focused = _focus.hasFocus;
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    // In the app's own look (the sign-in card), as drawn: the words small
+    // and muted over the box, its corners rounder.
+    final own = TkAppLook.on(context);
     // The words and the field are one to a screen reader and a finger.
     return TapField(child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: Text(widget.label, style: tkText(size: 13, weight: 500, color: t.text)),
+          child: Text(widget.label, style: own ? tkText(size: 12.5, weight: 600, color: t.muted) : tkText(size: 13, weight: 500, color: t.text)),
         ),
         // `transition: background-color 0.18s ease, box-shadow 0.18s ease`
         AnimatedContainer(
@@ -195,8 +198,8 @@ class _TkFieldState extends State<TkField> {
           padding: const EdgeInsets.symmetric(horizontal: 12),
           alignment: Alignment.centerLeft,
           decoration: BoxDecoration(
-            color: focused ? t.fieldFocus : t.field,
-            borderRadius: BorderRadius.circular(Tk.radiusSm),
+            color: focused && !own ? t.fieldFocus : t.field,
+            borderRadius: BorderRadius.circular(own ? 12 : Tk.radiusSm),
             boxShadow: focused ? t.ring : const [],
           ),
           child: Material(
@@ -212,7 +215,7 @@ class _TkFieldState extends State<TkField> {
               onChanged: widget.onChanged,
               cursorColor: t.text,
               showCursor: !TkField.debugHideCaret,
-              style: tkText(size: 14, color: t.text),
+              style: tkText(size: own ? 15 : 14, color: t.text),
               decoration: const InputDecoration.collapsed(hintText: null),
               inputFormatters: widget.digits == null
                   ? const <TextInputFormatter>[]

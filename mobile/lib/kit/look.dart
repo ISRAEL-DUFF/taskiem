@@ -1268,6 +1268,7 @@ class TkActionTiles extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
+    final ink = TkTheme.of(context).mode == TkMode.dark ? t.text : t.brand;
     Widget tile(TkAction a) => TapArea(
       child: Semantics(
         button: true,
@@ -1286,9 +1287,10 @@ class TkActionTiles extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  TkIcon(a.icon, size: 20, stroke: 2, color: t.text),
+                  // As drawn: pine words and icon (lime's ink in the dark).
+                  TkIcon(a.icon, size: 20, stroke: 2, color: ink),
                   const SizedBox(height: 6),
-                  Text(a.label, textAlign: TextAlign.center, maxLines: 2, style: tkText(size: 12.5, weight: 600, lineHeight: 1.25, color: t.text)),
+                  Text(a.label, textAlign: TextAlign.center, maxLines: 2, style: tkText(size: 12.5, weight: 600, lineHeight: 1.25, color: ink)),
                 ],
               ),
             ),

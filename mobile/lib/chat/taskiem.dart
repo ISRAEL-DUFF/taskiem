@@ -18,6 +18,7 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
+import '../app/links.dart' show openInBrowser;
 import '../kit/motion.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
@@ -967,6 +968,9 @@ class TaskiemSignupBubble extends StatelessWidget {
     choice: null,
     pressable: pressable,
     onPress: (b) => onPress?.call(b.id ?? '', b.title),
+    // The terms, and any page it names, open in the browser tab.
+    onLink: (u) => openInBrowser(u),
+    anyLink: true,
   );
 }
 
@@ -982,11 +986,16 @@ class _TaskiemBubble extends StatefulWidget {
     required this.pressable,
     required this.onPress,
     this.onLink,
+    this.anyLink = false,
     this.known = const [],
     this.auth,
     this.now,
     this.onCustomer,
   });
+
+  /// Every web address in its words opens (signing up: the terms), not
+  /// only a connect link or a canvas.
+  final bool anyLink;
 
   /// What its words may name with "#" (refs.ts knownRefs).
   final List<KnownRef> known;
@@ -1058,7 +1067,7 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
     // A connect link or a workflow's canvas (§3.5) is pressed to open it;
     // other addresses stay words, as on the web.
     List<InlineSpan> linked(String text, TextStyle? style, TapGestureRecognizer Function(String, VoidCallback) tap) {
-      final links = widget.onLink == null ? const <({int start, int end, Uri uri})>[] : linksIn(text).where((l) => opensFromTaskiem(l.uri)).toList();
+      final links = widget.onLink == null ? const <({int start, int end, Uri uri})>[] : linksIn(text).where((l) => widget.anyLink || opensFromTaskiem(l.uri)).toList();
       if (links.isEmpty) return [TextSpan(text: text, style: style)];
       final out = <InlineSpan>[];
       var at = 0;
@@ -1135,7 +1144,7 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
           ],
         ),
         // Yours on pine: white words in the light theme, as a conversation's.
-        style: tkText(size: 16, lineHeight: 23 / 16, color: mine && TkTheme.of(context).mode == TkMode.light ? const Color(0xFFFFFFFF) : t.text),
+        style: tkText(size: 15, lineHeight: 1.38, color: mine && TkTheme.of(context).mode == TkMode.light ? const Color(0xFFFFFFFF) : t.text),
       ),
     );
     // TaskiemChat.tsx: a message's menu holds Copy (not one still going).
@@ -1157,7 +1166,8 @@ class _TaskiemBubbleState extends State<_TaskiemBubble> {
         stamp: stamp,
         inline: inline,
         children: [
-          if (!mine && widget.first) Text('Taskiem', style: tkText(size: 12, weight: 600, color: t.tintText)),
+          // As drawn: no name over Taskiem's words; this is its own
+          // conversation (a screen reader hears "Message from Taskiem").
           if (fold.folded)
             Semantics(
               button: true,

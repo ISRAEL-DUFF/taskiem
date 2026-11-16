@@ -970,7 +970,7 @@ class TkFormSheet extends StatelessWidget {
       crumb: crumb,
       overlay: overlay,
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
         children: [
           for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 12), children[i]],
         ],

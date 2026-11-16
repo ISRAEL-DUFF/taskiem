@@ -9,17 +9,18 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../theme/look.dart' show TkLook;
 import '../theme/theme.dart';
 import 'sign_in.dart';
 
 /// What a business says it does, in its own words (as the web's SIGNUP_KINDS),
 /// and the tile's shorter words and icon (as drawn).
 const signupKinds = <({String id, String label, String short, String icon})>[
-  (id: 'shop', label: 'I sell things', short: 'I sell things', icon: 'b-cart'),
+  (id: 'shop', label: 'I sell things', short: 'I sell things', icon: 'b-bag'),
   (id: 'service', label: 'I bill customers for a service', short: 'I bill for a service', icon: 'b-receipt'),
   (id: 'delivery', label: 'I deliver for businesses', short: 'I deliver for businesses', icon: 'b-bike'),
   (id: 'school', label: 'I run a school', short: 'I run a school', icon: 'schools'),
-  (id: 'workflows', label: 'Just workflows for now', short: 'Just workflows', icon: 'b-flow'),
+  (id: 'workflows', label: 'Just workflows for now', short: 'Just workflows', icon: 'b-route'),
 ];
 
 class SignUpScreen extends StatefulWidget {
@@ -119,7 +120,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final hint = tkHint(t);
     final words = tkText(size: 14, color: t.text);
     return ColoredBox(
-      color: t.bg,
+      color: TkLook.of(context).ground,
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -138,7 +139,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     children: [
                       Padding(
                         padding: const EdgeInsets.only(bottom: 6),
-                        child: ExcludeSemantics(child: Text('What does your business do?', style: tkText(size: 13, weight: 500, color: t.text))),
+                        child: ExcludeSemantics(child: Text('What does your business do?', style: tkText(size: 12.5, weight: 600, color: t.muted))),
                       ),
                       // As drawn: tiles, two to a row, an icon and short words.
                       LayoutBuilder(

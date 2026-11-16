@@ -13,7 +13,6 @@ import '../app/auth.dart';
 import '../app/links.dart';
 import '../kit/forms.dart' show errorWords, nairaKobo;
 import '../kit/kit.dart';
-import '../kit/list.dart' show TkPill;
 import '../kit/look.dart' show TkActionTiles;
 import '../kit/mobile.dart' show TkFormGroup;
 import '../kit/modal.dart' show openOrSay, showComingSoon, showTkModalChoices;
@@ -28,7 +27,7 @@ int _int(Object? v) => (v as num?)?.toInt() ?? 0;
 String _str(Object? v) => v as String? ?? '';
 
 const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const _weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 /// invoices.ts dateLabel: "24 Oct 2026" from 2026-10-24; "" when not a date.
 String dateLabel(String? d) {
@@ -195,27 +194,48 @@ class BillHero extends StatelessWidget {
       container: true,
       label: label,
       child: Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(color: t.brand, borderRadius: BorderRadius.circular(22)),
-        child: Row(
+        // As drawn: the state beside the kicker only; the amount and its
+        // line the card's whole width.
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(kicker.toUpperCase(), style: tkText(size: 11, weight: 700, letterSpacing: 0.88, color: t.brandDark)),
-                  const SizedBox(height: 4),
-                  Text(amount, style: tkText(size: 32, weight: 800, letterSpacing: -0.64, color: t.tkOnPine)),
-                  const SizedBox(height: 4),
-                  Text(sub, style: tkText(size: 14, color: t.tkOnPine.withValues(alpha: 0.82))),
-                ],
-              ),
+            Row(
+              children: [
+                Expanded(child: Text(kicker.toUpperCase(), style: tkText(size: 11, weight: 700, letterSpacing: 0.88, color: t.brandDark))),
+                if (pill != null) ...[const SizedBox(width: 8), _PinePill(pill!.text, tone: pill!.tone)],
+              ],
             ),
-            if (pill != null) ...[const SizedBox(width: 8), TkPill(pill!.text, tone: pill!.tone)],
+            const SizedBox(height: 4),
+            Text(amount, style: tkText(size: 32, weight: 800, letterSpacing: -0.64, color: t.tkOnPine)),
+            const SizedBox(height: 4),
+            Text(sub, style: tkText(size: 13, color: t.tkOnPine.withValues(alpha: 0.82))),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A state on the pine (as drawn): red-tinted for one past due or queried,
+/// lime for paid, else a light wash.
+class _PinePill extends StatelessWidget {
+  const _PinePill(this.text, {required this.tone});
+  final String text;
+  final CardTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final (bg, ink) = switch (tone) {
+      CardTone.warn || CardTone.danger => (const Color(0x40FF5A5A), const Color(0xFFFFB3B3)),
+      CardTone.lime => (const Color(0xFFC8F169), const Color(0xFF0D3B2E)),
+      _ => (const Color(0x26FFFFFF), const Color(0xFFFFFFFF)),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      child: Text(text, style: tkText(size: 12, weight: 700, color: ink)),
     );
   }
 }
@@ -386,7 +406,7 @@ class _InvoiceViewState extends State<InvoiceView> {
               if (_mode.isEmpty)
                 TkActionTiles([
                   if (widget.canEdit && owed) (icon: 'b-cash', label: 'Record a payment', semantics: null, onTap: () => setState(() => _mode = 'pay')),
-                  if (widget.canEdit && acts.voids) (icon: 'b-x', label: 'Cancel it', semantics: 'Cancel invoice', onTap: () => setState(() => _mode = 'void')),
+                  if (widget.canEdit && acts.voids) (icon: 'b-x-ring', label: 'Cancel it', semantics: 'Cancel invoice', onTap: () => setState(() => _mode = 'void')),
                   (
                     icon: 'b-receipt',
                     label: 'Open it',
@@ -643,7 +663,7 @@ class _BillViewState extends State<BillView> {
                       semantics: null,
                       onTap: b['disputed'] == true ? null : () => setState(() => _mode = 'query'),
                     ),
-                    (icon: 'b-check', label: 'Paid outside', semantics: 'I paid outside Taskiem', onTap: () => setState(() => _mode = 'paid')),
+                    (icon: 'b-check-ring', label: 'Paid outside', semantics: 'I paid outside Taskiem', onTap: () => setState(() => _mode = 'paid')),
                   ],
                   (icon: 'b-receipt', label: 'Open it', semantics: 'Open the bill', onTap: _open),
                 ]),

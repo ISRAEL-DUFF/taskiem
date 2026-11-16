@@ -249,7 +249,8 @@ class _TkSheetState extends State<TkSheet> with SingleTickerProviderStateMixin {
     void close() => Navigator.of(context).pop();
     final big = MediaQuery.textScalerOf(context).scale(10) > 15;
     final Widget headRow = Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
+                            // As drawn: 14 px from the sheet's edges.
+                            padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
                             child: Row(
                               children: [
                                 if (onBack != null && crumb == null) ...[
@@ -265,7 +266,8 @@ class _TkSheetState extends State<TkSheet> with SingleTickerProviderStateMixin {
                                   const SizedBox(width: 12),
                                 ],
                                 if (lead != null) ...[
-                                  SizedBox(width: 48, height: 48, child: ExcludeSemantics(child: lead)),
+                                  // Smaller with a line over the title (as drawn).
+                                  SizedBox(width: crumb != null ? 40 : 48, height: crumb != null ? 40 : 48, child: ExcludeSemantics(child: Center(child: lead))),
                                   const SizedBox(width: 12),
                                 ],
                                 Expanded(
@@ -486,7 +488,8 @@ class _Round extends StatelessWidget {
   }
 }
 
-/// `.tk-form-body`: a form in a sheet, scrolling: 18 px between its parts.
+/// `.tk-form-body`: a form in a sheet, scrolling: 12 px between its parts,
+/// 14 from the edges (as drawn).
 class TkFormBody extends StatelessWidget {
   const TkFormBody({super.key, required this.children});
   final List<Widget> children;
@@ -494,11 +497,11 @@ class TkFormBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 18), children[i]],
+          for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 12), children[i]],
         ],
       ),
     );
@@ -508,7 +511,8 @@ class TkFormBody extends StatelessWidget {
 /// `.tk-form-now`: a line of what is so, muted.
 TextStyle tkFormNow(TkTokens t) => tkText(size: 14, color: t.muted);
 
-/// `.tk-lines`: label and value rows, 10 px apart.
+/// Label and value rows, as drawn: small, the label muted, the value
+/// firm, 6 px apart.
 class TkLines extends StatelessWidget {
   const TkLines(this.rows, {super.key});
   final List<(String, String)> rows;
@@ -520,13 +524,13 @@ class TkLines extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < rows.length; i++) ...[
-          if (i > 0) const SizedBox(height: 10),
+          if (i > 0) const SizedBox(height: 6),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(rows[i].$1, style: tkText(size: 15, color: t.text)),
+              Text(rows[i].$1, style: tkText(size: 13.5, color: t.muted)),
               const SizedBox(width: 12),
-              Expanded(child: Text(rows[i].$2, textAlign: TextAlign.right, style: tkText(size: 15, weight: 700, color: t.text))),
+              Expanded(child: Text(rows[i].$2, textAlign: TextAlign.right, style: tkText(size: 13.5, weight: 600, color: t.text))),
             ],
           ),
         ],
@@ -791,14 +795,14 @@ class TkCta extends StatelessWidget {
           opacity: onTap == null ? 0.5 : 1,
           child: Container(
             constraints: const BoxConstraints(minHeight: 56),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             alignment: Alignment.center,
             decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (icon != null && !iconAfter) ...[TkIcon(icon!, size: 20, color: mark), const SizedBox(width: 8)],
-                Flexible(child: Text(label, textAlign: TextAlign.center, style: tkText(size: 16, weight: 700, lineHeight: 1.2, color: ink))),
+                Flexible(child: Text(label, textAlign: TextAlign.center, style: tkText(size: 15, weight: 700, lineHeight: 1.2, color: ink))),
                 if (icon != null && iconAfter) ...[const SizedBox(width: 8), TkIcon(icon!, size: 20, color: mark)],
               ],
             ),
@@ -822,7 +826,7 @@ class TkSheetFoot extends StatelessWidget {
     final pad = MediaQuery.paddingOf(context);
     return Container(
       // On the ground, no line over it.
-      padding: EdgeInsets.fromLTRB(20, bare ? 0 : 12, 20, 18 + pad.bottom),
+      padding: EdgeInsets.fromLTRB(14, bare ? 0 : 12, 14, 18 + pad.bottom),
       child: child,
     );
   }

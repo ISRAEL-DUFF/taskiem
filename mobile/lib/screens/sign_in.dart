@@ -9,6 +9,8 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter/material.dart' show InputDecoration, Material, MaterialType, TextField;
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../theme/look.dart' show TkLook;
+
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/passkey.dart';
@@ -46,7 +48,7 @@ class _SignInScreenState extends State<SignInScreen> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     return ColoredBox(
-      color: t.bg,
+      color: TkLook.of(context).ground,
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -527,19 +529,28 @@ class AuthCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    // As drawn: the card 14 px from the sides, 46 px up over the pine; its
+    // fields and soft buttons on the page's ground (black in the dark).
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 32),
       child: Transform.translate(
-        offset: const Offset(0, -40),
+        offset: const Offset(0, -46),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+          padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
           decoration: BoxDecoration(
-            color: t.panel,
+            color: look.card,
             borderRadius: BorderRadius.circular(24),
-            boxShadow: TkTheme.of(context).mode == TkMode.dark ? [BoxShadow(color: t.border, spreadRadius: 1)] : const [BoxShadow(color: Color(0x40000000), offset: Offset(0, 10), blurRadius: 30, spreadRadius: -14)],
+            boxShadow: dark ? null : const [BoxShadow(color: Color(0x40000000), offset: Offset(0, 10), blurRadius: 30, spreadRadius: -14)],
           ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+          child: TkAppLook(
+            child: TkTheme.recolour(
+              context,
+              (x) => x.copyWith(field: look.ground, panel: look.card),
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+            ),
+          ),
         ),
       ),
     );
@@ -563,7 +574,8 @@ class AuthTitle extends StatelessWidget {
   }
 }
 
-/// The brand on pine (.auth-side): the mark and the wordmark, then the line.
+/// The brand on pine, as drawn: Taskiem's mark on a lime tile, its name,
+/// then the line.
 class AuthSide extends StatelessWidget {
   const AuthSide({super.key});
 
@@ -574,20 +586,21 @@ class AuthSide extends StatelessWidget {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Container(
-        color: TkTheme.tokens(context).brand,
-        padding: EdgeInsets.fromLTRB(24, 28 + MediaQuery.paddingOf(context).top, 24, 64),
+        color: const Color(0xFF0D3B2E),
+        padding: EdgeInsets.fromLTRB(22, 60 + MediaQuery.paddingOf(context).top, 22, 70),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                SvgPicture.asset('assets/brand/mark.svg', width: 40, height: 40),
-                const SizedBox(width: 12),
-                SvgPicture.asset('assets/brand/wordmark-reversed.svg', height: 22, semanticsLabel: 'Taskiem'),
-              ],
+            Container(
+              width: 40,
+              height: 40,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: const Color(0xFFC8F169), borderRadius: BorderRadius.circular(12)),
+              child: const TkTaskiemMark(size: 22, color: Color(0xFF0D3B2E)),
             ),
-            // `gap: 12px` and the line's own 6 px above.
-            const SizedBox(height: 18),
+            const SizedBox(height: 8),
+            Semantics(header: true, child: Text('Taskiem', style: tkDisplay(size: 26, letterSpacing: -0.6, color: white))),
+            const SizedBox(height: 6),
             ConstrainedBox(
               // `max-width: 30ch`: thirty of the font's zeros.
               constraints: BoxConstraints(maxWidth: 30 * _zero(line)),

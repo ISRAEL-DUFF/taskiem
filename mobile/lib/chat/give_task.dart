@@ -364,8 +364,11 @@ class _WhoFace extends StatelessWidget {
 
 /// A choice as a small pill, pine when on (a role, a weekday).
 class TkPillChoice extends StatelessWidget {
-  const TkPillChoice({super.key, required this.label, required this.on, required this.onTap, this.semantics});
+  const TkPillChoice({super.key, required this.label, required this.on, required this.onTap, this.semantics, this.large = false});
   final String label;
+
+  /// As drawn: small inside a card (a role), large on the sheet (Busy till).
+  final bool large;
   final bool on;
   final VoidCallback onTap;
   final String? semantics;
@@ -386,10 +389,10 @@ class TkPillChoice extends StatelessWidget {
           onTap: onTap,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
-            constraints: const BoxConstraints(minHeight: 32),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            constraints: BoxConstraints(minHeight: large ? 38 : 28),
+            padding: EdgeInsets.symmetric(horizontal: large ? 14 : 10, vertical: large ? 9 : 5),
             decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-            child: Text(label, style: tkText(size: 13, weight: 600, color: ink)),
+            child: Text(label, style: tkText(size: large ? 14.5 : 12.5, weight: 600, color: ink)),
           ),
         ),
       ),

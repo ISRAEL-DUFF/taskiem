@@ -171,6 +171,7 @@ class _AvailabilitySheetState extends State<AvailabilitySheet> {
                           children: [
                             for (final (k, words, until) in tills)
                               TkPillChoice(
+                                large: true,
                                 label: words,
                                 semantics: 'Busy for $words'.replaceFirst('Busy for Till', 'Busy till').replaceFirst('Busy for Rest', 'Busy the rest'),
                                 on: _till == k && a['state'] == 'busy',
@@ -180,7 +181,7 @@ class _AvailabilitySheetState extends State<AvailabilitySheet> {
                                   _say('busy', until: until);
                                 },
                               ),
-                            TkPillChoice(label: 'Another time', on: _till == 'other', onTap: () => setState(() => _till = 'other')),
+                            TkPillChoice(large: true, label: 'Another time', on: _till == 'other', onTap: () => setState(() => _till = 'other')),
                           ],
                         ),
                         if (_till == 'other') ...[

@@ -791,16 +791,22 @@ class _LineRowState extends State<_LineRow> {
                         ],
                       )
                     else
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final c in _maps(ask['choices']))
-                            TkSmallButton(
-                              label: '${_str(c['name'])}${c['price_kobo'] != null ? ' · ${naira(_int(c['price_kobo']))}' : ''}',
-                              onPressed: busy ? null : () => widget.change({'op': 'choose', 'line': i, 'item_id': c['item_id']}),
-                            ),
-                        ],
+                      // As drawn: the choices two to a row.
+                      LayoutBuilder(
+                        builder: (context, box) => Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final c in _maps(ask['choices']))
+                              SizedBox(
+                                width: (box.maxWidth - 8) / 2,
+                                child: TkSmallButton(
+                                  label: '${_str(c['name'])}${c['price_kobo'] != null ? ' · ${naira(_int(c['price_kobo']))}' : ''}',
+                                  onPressed: busy ? null : () => widget.change({'op': 'choose', 'line': i, 'item_id': c['item_id']}),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                   ],
                 ),

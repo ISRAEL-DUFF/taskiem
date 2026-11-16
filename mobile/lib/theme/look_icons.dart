@@ -37,6 +37,13 @@ const tkLookIcons = <String, String>{
   'b-calendar': 'M6.5 5.5h11a2.5 2.5 0 0 1 2.5 2.5v10a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18V8a2.5 2.5 0 0 1 2.5-2.5zM4 10h16M8.5 3.5v4M15.5 3.5v4',
   'b-mail': 'M4 6h16v12H4zM4 7l8 6 8-6',
   'b-x': 'M6.5 6.5l11 11M17.5 6.5l-11 11',
+  // In a ring (as drawn on a sheet's tiles): cancel, done, a warning.
+  'b-x-ring': 'M21 12a9 9 0 1 1-18 0a9 9 0 1 1 18 0zM9 9l6 6M15 9l-6 6',
+  'b-check-ring': 'M21 12a9 9 0 1 1-18 0a9 9 0 1 1 18 0zM8 12.5l2.8 2.8L16 10',
+  'b-alert': 'M21 12a9 9 0 1 1-18 0a9 9 0 1 1 18 0zM12 7.5v5.5M12 16.5v.5',
+  // A shopping bag, and a route (signing up's kinds of business).
+  'b-bag': 'M6 8h12l-1 12H7L6 8zM9 8V7a3 3 0 0 1 6 0v1',
+  'b-route': 'M8 6a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM20 18a2 2 0 1 1-4 0a2 2 0 1 1 4 0zM8 6h7a3.5 3.5 0 0 1 0 7H9a3.5 3.5 0 0 0 0 7h7',
   'pause': 'M7 5h3.5v14H7zM13.5 5H17v14h-3.5z',
   'b-start': 'M6 4v16M6 5h11l-2 4 2 4H6',
   'b-qr': 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 14h2M14 18h2v2M18 18h2v2',

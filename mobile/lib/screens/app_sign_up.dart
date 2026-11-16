@@ -12,6 +12,7 @@ import '../app/auth.dart';
 import '../chat/taskiem.dart' show TaskiemSignupBubble;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../theme/look.dart' show TkLook;
 import '../theme/theme.dart';
 import 'sign_in.dart' show AuthButton, AuthCard, AuthLink, AuthSide, AuthTitle, CodeBoxes;
 
@@ -79,7 +80,7 @@ class _AppSignUpScreenState extends State<AppSignUpScreen> {
     final t = TkTheme.tokens(context);
     if (_s.step == AppSignupStep.chat || _s.step == AppSignupStep.ended) return _chat(t);
     return ColoredBox(
-      color: t.bg,
+      color: TkLook.of(context).ground,
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -193,8 +194,8 @@ class _AppSignUpScreenState extends State<AppSignUpScreen> {
                 ],
               ),
             ),
-            Container(
-              color: t.panel,
+            // As drawn: the answer and its button on the page, no bar.
+            Padding(
               padding: EdgeInsets.fromLTRB(12, 8, 12, 8 + pad.bottom),
               child: ended
                   ? Row(

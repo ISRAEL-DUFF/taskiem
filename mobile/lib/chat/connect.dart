@@ -19,6 +19,7 @@ import '../app/links.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/sheet.dart';
+import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import '../kit/look.dart' show TkCallout, TkSquare;
 import '../kit/mobile.dart' show TkChips, TkFormGroup, TkListRow, TkSection;
@@ -229,17 +230,34 @@ class _ConnectSheetState extends State<ConnectSheet> {
       final help = [if ((f['help'] as String? ?? '').isNotEmpty) f['help'] as String, if (where.isNotEmpty) 'Find it in $where.'].join(' ');
       final problem = problems[key] ?? '';
       final link = Uri.tryParse(f['link'] as String? ?? '');
+      final opens = link != null && link.host.isNotEmpty;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TkKitField(
             label: '${f['label']}${f['required'] == false ? ' (optional)' : ''}',
-            hint: help.isEmpty ? null : help,
+            hint: help.isEmpty || opens ? null : help,
             error: problem.isEmpty ? null : '${problem[0].toUpperCase()}${problem.substring(1)}.',
-            child: TkTextBox(controller: _box(key), lines: f['multiline'] == true ? 5 : 1, secret: f['secret'] == true, plain: true),
+            child: TkTextBox(controller: _box(key), lines: f['multiline'] == true ? 5 : 1, secret: f['secret'] == true, plain: true, size: 15, height: 46),
           ),
-          if (link != null && link.host.isNotEmpty)
-            Align(alignment: Alignment.centerLeft, child: TkLink(label: 'Open it', onTap: () => openInBrowser(link))),
+          // As drawn: where to find it, then Open it on the same line.
+          if (opens)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text.rich(
+                TextSpan(
+                  style: tkHint(t),
+                  children: [
+                    if (help.isNotEmpty) TextSpan(text: '$help '),
+                    WidgetSpan(
+                      alignment: PlaceholderAlignment.baseline,
+                      baseline: TextBaseline.alphabetic,
+                      child: TkLink(label: 'Open it', onTap: () => openInBrowser(link)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       );
     }
@@ -309,7 +327,7 @@ class _ConnectSheetState extends State<ConnectSheet> {
             TkCallout(
               leading: TkSquare('copy', color: look.orange),
               title: 'Copy ${one ? 'this address' : 'these addresses'} now',
-              sub: 'Paste ${one ? 'it' : 'each'} into $service. ${one ? 'It carries' : 'They carry'} a secret Taskiem made for this connection, and Taskiem refuses anything $service sends without it. It is shown only once; to get a new one, connect again.',
+              sub: 'Paste ${one ? 'it' : 'each'} into $service. ${one ? 'It is' : 'They are'} shown only once.',
               color: look.orange,
             ),
             for (final h in hooks)
@@ -319,15 +337,31 @@ class _ConnectSheetState extends State<ConnectSheet> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(color: t.field, borderRadius: BorderRadius.circular(12)),
-                    child: SelectableText(h.url, style: tkText(size: 13, lineHeight: 1.4, color: t.text).copyWith(fontFamily: 'monospace')),
+                    child: SelectableText(h.url, style: tkText(size: 13, lineHeight: 1.4, color: t.text).copyWith(fontFamily: 'monospace', fontFamilyFallback: const ['Menlo', 'Courier', 'Roboto Mono'])),
                   ),
+                  // As drawn: plain bold words.
                   Center(
-                    child: TkPlainButton(
-                      label: _copied.contains(h.trigger) ? 'Copied' : 'Copy the address',
-                      onTap: () async {
-                        await Clipboard.setData(ClipboardData(text: h.url));
-                        if (mounted) setState(() => _copied.add(h.trigger));
-                      },
+                    child: TapArea(
+                      child: Semantics(
+                        button: true,
+                        label: _copied.contains(h.trigger) ? 'Copied' : 'Copy the address',
+                        excludeSemantics: true,
+                        onTap: () async {
+                          await Clipboard.setData(ClipboardData(text: h.url));
+                          if (mounted) setState(() => _copied.add(h.trigger));
+                        },
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () async {
+                            await Clipboard.setData(ClipboardData(text: h.url));
+                            if (mounted) setState(() => _copied.add(h.trigger));
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                            child: Text(_copied.contains(h.trigger) ? 'Copied' : 'Copy the address', style: tkText(size: 14, weight: 700, color: t.text)),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],

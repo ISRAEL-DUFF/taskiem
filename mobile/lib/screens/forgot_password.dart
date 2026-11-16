@@ -12,6 +12,7 @@ import '../app/auth.dart';
 import '../app/links.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../theme/look.dart' show TkLook;
 import '../theme/theme.dart';
 import 'sign_in.dart';
 
@@ -32,7 +33,7 @@ class _AuthPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ColoredBox(
-    color: TkTheme.tokens(context).bg,
+    color: TkLook.of(context).ground,
     child: SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -53,7 +54,9 @@ class _Tile extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
-    final ink = done ? (dark ? t.brandDark : t.brand) : t.accent;
+    final look = TkLook.of(context);
+    // As drawn: the tick on lime, the envelope and the lock on blue.
+    final ink = done ? (dark ? t.brandDark : t.brand) : look.blueInk;
     return Align(
       alignment: Alignment.centerLeft,
       child: Padding(
@@ -63,7 +66,7 @@ class _Tile extends StatelessWidget {
           height: 50,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: done ? t.tkLimeSoft : t.accent.withValues(alpha: 0.13),
+            color: done ? t.tkLimeSoft : look.blue.withValues(alpha: dark ? 0.22 : 0.16),
             borderRadius: BorderRadius.circular(14),
           ),
           child: TkIcon(icon, size: 22, stroke: 2, color: ink),

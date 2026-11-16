@@ -434,6 +434,39 @@ over the app.
 A sheet made with `TkFormSheet` has one foot, not a foot inside a foot.
 A sheet's Cancel button is filled with the card, with no line around it.
 
+Checked again against the drawings, in both themes:
+
+- **Every sheet:**
+  - sits 14 px from the screen's edges, head, body and foot alike;
+  - a form's parts are 12 px apart;
+  - summary lines are small, with the label muted and the value firm.
+- **The sign-in screens:**
+  - the band has Taskiem's mark on a lime tile, then its name in words;
+  - fields have small muted labels and sit on the page's ground, which
+    is black in the dark;
+  - the envelope and the lock tiles are blue.
+- **An invoice or a bill:**
+  - the state sits beside the kicker on the pine, red-tinted when due;
+  - the tiles are pine, and Cancel and Paid outside are ringed icons.
+- **Taskiem's chat:**
+  - the briefing has its day on the greeting's line, and the week's bars
+    run across the card;
+  - NEEDS YOU sits over the alerts, each alert with a solid coloured
+    square and 34 px buttons;
+  - the approval card's Approve is pine (lime in the dark), 40 px.
+- **Approve:** carries no "needs your passkey" pill or line; the
+  fingerprint on the button says it.
+
+Left different on purpose:
+
+- Featured businesses keep a small Connect: it is how one links from
+  them.
+- Choose a new password and Password saved keep "Back to sign in": an
+  iPhone has no other way back.
+- Availability adds "Another time", to type one's own.
+- A customer's order keeps what changes it: − and +, the address, the
+  fee and how they pay.
+
 ## Order
 
 1. Orders and Money, and the chat's motion. Done.
