@@ -46,6 +46,7 @@ const PAGES = [
   "/settings/areas",
   "/settings/links",
   "/settings/links/profile",
+  "/settings/customers",
   "/bills",
   "/trade-orders",
   "/invoices",
@@ -387,6 +388,9 @@ for (const scheme of ["light", "dark"] as const)
 
       // Signed in, on You.
       await page.route("**/v1/me", (r) => r.fulfill(json(PERSON)));
+      // No chats yet, and no orders from shops (stage 2).
+      await page.route(/\/v1\/me\/chats(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0 })));
+      await page.route("**/v1/me/storefront-orders?*", (r) => r.fulfill(json({ orders: [], waiting: false })));
       await page.route("**/v1/me/invitations", (r) =>
         r.fulfill(json({ invitations: [{ tenant_id: "0192e2e0-0000-7000-8000-00000000b003", tenant: "Bola Stores", roles: ["staff"], invited_at: new Date().toISOString() }] })),
       );
@@ -413,6 +417,52 @@ for (const scheme of ["light", "dark"] as const)
       await page.getByTestId("start-business").click();
       await expect(page.getByLabel("Business name")).toBeVisible();
       await check("/you/start");
+      expect(found, found.join("\n\n")).toEqual([]);
+    });
+
+// A person's chat with a business and a chat link's page (taskiem-for-
+// everyone §8, §9), the server's answers stood in for (customer-chat.spec.ts
+// goes through them for real and through every tool).
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`a person's chat and a chat link pass axe and fit ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const found: string[] = [];
+      const check = async (where: string) => {
+        const vs = await axe(page);
+        if (vs.length > 0) found.push(describe(where, vs));
+        expect(await page.evaluate(() => document.documentElement.scrollWidth), where).toBeLessThanOrEqual(width);
+      };
+      const json = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+      const now = new Date().toISOString();
+      await page.route("**/v1/chat-links/a11ya11ya1", (r) =>
+        r.fulfill(json({ name: "Mama's Kitchen", area: "Yaba", open_now: true, takes_chats: true, code: "a11ya11ya1", link: "http://localhost/m/a11ya11ya1", words: "", app: "https://taskiem.test/app" })),
+      );
+      await page.goto("/m/a11ya11ya1");
+      await expect(page.getByTestId("chat-here")).toBeVisible();
+      await check("/m/{code}");
+      const chat = { id: "c1", business: "b1", name: "Mama's Kitchen", last: "Hello", last_mine: false, last_at: now, unread: 0, muted: false, archived: false, blocked: false, blocked_you: false, offers: "unasked", ask_offers: true, hours: { open: true, line: "Open now" } };
+      await page.route("**/v1/me", (r) => r.fulfill(json({ ...PERSON, businesses: [], second_proof: undefined })));
+      await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
+      await page.route("**/v1/me/chats/c1", (r) => r.fulfill(json(chat)));
+      await page.route("**/v1/me/chats/c1/messages", (r) =>
+        r.fulfill(
+          json({
+            messages: [
+              { id: "m1", mine: false, kind: "text", body: "Hello", read_at: null, created_at: now },
+              { id: "m2", mine: false, kind: "card", body: "Order", card: { type: "order", reference: "MK-1", title: "Order MK-1", line: "1 × Jollof rice", status: "received", total_kobo: 250_000 }, read_at: null, created_at: now },
+              { id: "m3", mine: true, kind: "text", body: "Thank you", read_at: now, created_at: now },
+            ],
+            more: false,
+          }),
+        ),
+      );
+      await page.route("**/v1/me/chats/c1/read", (r) => r.fulfill({ status: 204 }));
+      await page.route("**/v1/me/chats/c1/orders", (r) => r.fulfill(json({ orders: [] })));
+      await page.goto("/you/chats/c1");
+      await expect(page.getByTestId("offers-question")).toBeVisible();
+      await check("/you/chats/{id}");
       expect(found, found.join("\n\n")).toEqual([]);
     });
 
