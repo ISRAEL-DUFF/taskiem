@@ -641,14 +641,14 @@ The server's half of **Start something** (§18). Phone sign-in and personal sess
 - `kind: "business"` with `kinds: []` is refused rather than made as a business with nothing on, which would contradict the kind following the areas.
 
 **Left over.**
-- Personal sessions (stream A): `startSomething` uses only the person; the twin-session statement is the same as switching's and scopes the old session's tenant, so when sessions may have no tenant it needs the same change as `/v1/me/switch` (and an invitee session today gets 401).
+- ~~Personal sessions (stream A)~~: done when the streams were merged. The session now moves with `taskiem_auth_session_move` (a definer, so a personal session needs no tenant in scope), inside the tenant's own transaction since the review fixes (see "Review fixes: server").
 - A cookie start by someone with no confirmed email (stream A's phone-only people) would meet the `signup` source's "confirm your email" rule; choose the source again when personal sessions land.
 - The web and app screens (Start something, the switcher's workflows mark, what a workspace opens on, "What you use") are the web and app streams'.
 - Taskiem Ops does not show the kind yet.
 
 ### Streams A and B together
 
-Merged on 16 November 2026. **Start something** from a personal session moves the session with stream A's `taskiem_auth_session_move` after the tenant is made, as switching does, instead of inside the tenant's own transaction (a personal session has no tenant to scope). A business or workspace started by a person whose sign-in email is a placeholder (made with a phone, or in chat) is recorded with the onboarding source `app`, so the web sign-up's "confirm your email" holds never apply to someone with no email. `GET /v1/me/businesses` items carry `kind` beside stream A's `locked` and `lock`. Tested by `TestStartSomethingFromPersonal`.
+Merged on 16 November 2026. **Start something** from a personal session moves the session with stream A's `taskiem_auth_session_move`, as switching does (a definer: a personal session has no tenant to scope); since the review fixes this is inside the tenant's own transaction again, under a lock on the person. A business or workspace started by a person whose sign-in email is a placeholder (made with a phone, or in chat) is recorded with the onboarding source `app`, so the web sign-up's "confirm your email" holds never apply to someone with no email. `GET /v1/me/businesses` items carry `kind` beside stream A's `locked` and `lock`. Tested by `TestStartSomethingFromPersonal`.
 
 ## As built: stage 1, web
 
@@ -700,3 +700,29 @@ Built on branch `stage1-app` (`mobile/`), against streams A and B as merged; the
 ### Web and app together
 
 Merged on 16 November 2026. The parity pictures of the signed-out screens were taken again from the web (`sign-up` is now the way in at `/signup`; `sign-in` and its chat and wrong-password pictures are the email sign-in at `/login?with=email`), and the app's parity screens follow: `sign-up` is `WelcomeScreen`, and `sign-in` is `SignInScreen` with its link back to the phone way in. To match the web, the app's first screen gained the number box's placeholder (`TkField.hint`, the web's 72 % muted), the web's space under its heading (`AuthTitle(bottom: 8)`) and the web's space under **Sign in with email**. `/second-proof` is one of the paths that open the app, so the second-proof email link lands in it.
+
+### Review fixes: server
+
+Built on branch `stage1-fix-server` after a review of stage 1. Migration `00450_stage1_review_fixes.sql`.
+
+1. **Second proofs can no longer be gone round.**
+   - A session made by a code to the phone or chat (`auth_method` `phone` or `chat`) on a device with no second proof, of someone who could give one, adds no way of signing in: adding a passkey or authenticator, a password change by passkey or code, an email (`POST /v1/me/email`), a chat link or a PIN all answer 401 `second_proof_required` with `ways` (`refuseUnproved`, called by `proveFactor`). The session keeps its method and device when it switches or starts something, so a business or workspace session made from it is held the same. Tested by `TestStartThenAddFactorNeedsSecondProof`.
+   - Chat sign-in (`/v1/auth/chat/verify` and one-time chat links) on such a device, for a person in a business who could give a proof, gives a **personal session** (`personal: true`, `second_proof_required: true`, `ways`), recorded as `auth.chat_signin` with `second_proof: required`; with no proof possible it enters as before, recorded `second_proof: none_possible`. Chat sessions count as phone sessions for second proofs. A WhatsApp or Telegram binding whose account's phone is now another number signs no one in (`taskiem_auth_chat_user`, `taskiem_auth_chat_number_current`). Tested by `TestChatSigninNeedsSecondProof`, `TestChatSigninRefusesAChangedNumber`.
+   - Accepting an invitation from such a session joins the business but does not enter it: 200 with the invitation accepted and `{sign_in: "second_proof_required", ways}`; the person proves, then switches. Tested by `TestInvitationAcceptNeedsSecondProof`.
+2. **The PIN.** `POST /v1/auth/second-proof/pin` is limited per person and per address, and checks and counts a guess in one transaction holding the PIN's row (`taskiem_wa_pin_lock`), so guesses sent side by side cannot pass the five-try lock, and a right PIN while locked is refused. Tested with 60 parallel guesses.
+3. **More ways to prove.** A usable password counts (`POST /v1/auth/second-proof/password {password}`, limited as signing in is; `ways.password`: set, usable in a business of the person's, on a confirmed email where the server sends email), and so does the email link to a real email that is not yet confirmed. The person's own passkey proves a device without changing the session: `POST /v1/auth/second-proof/passkey/options` then `POST /v1/auth/second-proof/passkey {credential}` → `{device_proved: true}`. `user_devices.proved_by` gains `password`. Tested by `TestSecondProofByPasskeyAndPassword`.
+4. **Changing a phone** ends every other session of the person and forgets every other device's proof (`taskiem_auth_phone_change_fence`).
+5. **`POST /v1/me/phone/start`** no longer says a number is another account's: the code goes anyway, and verifying refuses it (409).
+6. **Change codes** another person asked for the same number, still pending or proved, are not replaced (429).
+7. **Start something** takes a lock on the person, counts the day's starts, makes the tenant and moves the session in one transaction: a second start at once waits and sees the first; a double request with one session makes one tenant. Tested by `TestStartSomethingIsAtomic` (12 at once from one session make 1; 8 sessions at once make 5).
+8. **Links**: a phone number names only a business (`taskiem_link_phone_business` leaves workspaces out), and a link code or shop address never reaches a workflows workspace (`taskiem_link_by_code`, `taskiem_link_request`). Tested by `TestLinksSkipWorkflowsWorkspaces`.
+9. **Onboarding source** is `app` exactly when the person's sign-in email is a placeholder, whatever the door; the email-sending holds (`needVerified` with `sendsEmail`) now also cover `app` tenants whose owner has no confirmed email, as chat sign-ups. Tested by `TestStartSomething`, `TestStartedByPhoneWaitsForEmail`.
+10. **Old "Just workflows for now" sign-ups** (every business area a row and off, Schools off) are made `kind = workflows` by 00450 (its Down leaves them so). Tested by `TestStage1FixesMigrationKinds`.
+11. **WhatsApp, then SMS**: `sent_via` already says how the code went (`whatsapp` only when WhatsApp took it; `sms` when asked for or when WhatsApp refused it); a person who gets nothing on WhatsApp asks again with `via: "sms"`. Documented; no change in behaviour.
+12. **Small**: `/v1/auth/second-proof/email/start` is audited (`auth.second_proof_link`); Slack's workflows sign-up asks "What should we call this workspace?" (`signup.ask_workspace`, `signup.workspace_bad`); the dead `newBusiness.Scope` is gone.
+
+**Answers the app and web rely on:**
+- 401 for a wrong or expired code on `/v1/auth/phone/verify` and `/v1/me/phone/verify` carries `code_wrong: true`; a used or expired ticket on `/v1/auth/phone/create` carries `ticket_expired: true`. The PIN's 401 keeps `tries_left`.
+- One rule reads a person's own number (`engine/phone.Normalise`), on the phone way in, a phone change and chat sign-in: spaces, dashes, dots and brackets dropped; `00` is `+`; `+234` then `0` drops the `0`; `0` and 10 digits is `+234` and the 10; 10 digits starting 7, 8 or 9 is `+234` and them; a Nigerian number is exactly `+234` and 10 digits starting 7, 8 or 9; any other `+` and 8 to 15 digits. Anything else is 400 `{error, phone_invalid: true}`. `sender.NormalisePhone` reads `+`, `00` and `0` numbers by the same rule (so `+234 0803…` works there too) and keeps its own reading of bare digits.
+
+**Not done:** the English copies of stage 1's chat words in `ha`, `ig`, `pcm` and `yo` stay, marked `reviewed: false`: `TestEveryEnglishMessageIsInEveryCatalogue` requires every catalogue to be complete, and an unreviewed entry is how drafts are marked. The two new Slack words are added the same way.
