@@ -139,6 +139,7 @@ class TkField extends StatefulWidget {
     this.onSubmitted,
     this.onChanged,
     this.digits,
+    this.hint,
   });
 
   final String label;
@@ -153,6 +154,9 @@ class TkField extends StatefulWidget {
 
   /// Only digits, at most this many (a code).
   final int? digits;
+
+  /// The web's `placeholder`: shown muted while the box is empty.
+  final String? hint;
 
   @override
   State<TkField> createState() => _TkFieldState();
@@ -212,7 +216,7 @@ class _TkFieldState extends State<TkField> {
               cursorColor: t.text,
               showCursor: !TkField.debugHideCaret,
               style: tkText(size: 14, color: t.text),
-              decoration: const InputDecoration.collapsed(hintText: null),
+              decoration: InputDecoration.collapsed(hintText: widget.hint, hintStyle: tkText(size: 14, color: t.muted.withValues(alpha: 0.72))),
               inputFormatters: widget.digits == null
                   ? const <TextInputFormatter>[]
                   : [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(widget.digits)],

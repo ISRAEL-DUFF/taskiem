@@ -164,14 +164,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
   }
 
   List<Widget> _phoneStep(TkTokens t) => [
-        const AuthTitle('Welcome to Taskiem'),
+        const AuthTitle('Welcome to Taskiem', bottom: 8),
         Padding(
-          padding: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.only(bottom: 18),
           child: Text('Chat with the businesses you buy from, and run your own.', style: tkText(size: 14, color: t.muted)),
         ),
         TkField(
           key: const ValueKey('phone'),
           label: 'Your phone number',
+          hint: '0803 123 4567',
           controller: _phone,
           keyboard: TextInputType.phone,
           autofill: const [AutofillHints.telephoneNumber],
@@ -185,7 +186,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
         if (error != null) ...[const SizedBox(height: 4), TkErrorBox(error!)] else const SizedBox(height: 16),
         TkButton(label: busy ? 'Sending…' : 'Continue', primary: true, minHeight: 44, enabled: !busy, onPressed: _send),
         Padding(
-          padding: const EdgeInsets.only(top: 12, bottom: 12),
+          // `.way-in-other`: 14 px above, nothing below.
+          padding: const EdgeInsets.only(top: 14),
           child: Center(child: TkLink(label: 'Sign in with email', onTap: widget.onEmail)),
         ),
       ];

@@ -350,13 +350,17 @@ class AuthCard extends StatelessWidget {
 
 /// The card's title (.auth-main .login h1).
 class AuthTitle extends StatelessWidget {
-  const AuthTitle(this.text, {super.key});
+  const AuthTitle(this.text, {super.key, this.bottom = 20});
   final String text;
+
+  /// The space under it: 20, as the web's `h1`; 8 where a line follows
+  /// it (the web's `.way-in-line`, `margin-top: -12px`).
+  final double bottom;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: EdgeInsets.only(bottom: bottom),
       child: Semantics(
         header: true,
         child: Text(text, style: tkText(size: 24, weight: 700, lineHeight: 1.2, letterSpacing: -0.24, color: TkTheme.tokens(context).text)),
