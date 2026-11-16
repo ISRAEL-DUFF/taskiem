@@ -19,7 +19,7 @@ import '../kit/list.dart' show TkEmpty, TkLoading;
 import '../kit/modal.dart';
 import '../kit/page.dart';
 import '../kit/polling.dart';
-import '../kit/sheet.dart' show TkKitField;
+import '../kit/sheet.dart' show TkKitField, showTkSheet;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show dayLabel;
@@ -1144,11 +1144,7 @@ class _TasksPageState extends State<TasksPage> with Polling {
   List<ListStaffTasksResponsePeopleItem> get _people => [for (final p in _maps(_mine?['people'])) ListStaffTasksResponsePeopleItem.fromJson(p)];
 
   Future<void> _give() async {
-    final given = await showTkModal<bool>(
-      context,
-      title: 'Give a task',
-      builder: (_) => GiveTask(auth: _auth, people: _people, now: widget.now),
-    );
+    final given = await showTkSheet<bool>(context, (_) => GiveTask(auth: _auth, people: _people, now: widget.now, title: 'Give a task'));
     if (given == true && mounted) {
       setState(() => _said = 'Task given. They hear in their chat.');
       await _load();

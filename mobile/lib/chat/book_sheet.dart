@@ -13,9 +13,10 @@ import '../app/auth.dart';
 import '../app/session.dart' show uuid4;
 import '../kit/motion.dart';
 import '../kit/forms.dart' show CloseSoon, errorWords;
-import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart';
+import '../kit/mobile.dart' show TkFormGroup, TkListRow, TkSection;
+import '../theme/look.dart' show TkLook;
 import '../kit/sheet.dart';
 import '../kit/tap_area.dart';
 import '../theme/theme.dart';
@@ -236,7 +237,8 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
     final t = TkTheme.tokens(context);
     final s = _service;
     final title = _step == _Step.confirm ? 'Check your booking' : (_step == _Step.time && s != null ? s['name'] as String? ?? '' : 'Book with $_biz');
-    return TkSheet(
+    // In the app's own look, as drawn: cards on the ground.
+    return TkAppLook(child: TkSheet(
       title: title,
       onBack: switch (_step) {
         _Step.confirm => () => setState(() => _step = _Step.time),
@@ -258,7 +260,7 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
           ? TkCta(label: _busy ? 'Booking…' : 'Book', onTap: _busy || (_phone?.text.trim() ?? '').isEmpty ? null : _book)
           : null,
       body: _body(t),
-    );
+    ));
   }
 
   Widget _body(TkTokens t) {
@@ -282,26 +284,33 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
     final open = data['open'] == true;
     switch (_step) {
       case _Step.service:
+        final look = TkLook.of(context);
         return ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           children: [
             if (!open)
               Padding(
-                padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+                padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
                 child: Text(data['closed'] as String? ?? '', style: tkFormNow(t)),
               ),
-            // ChatBook.tsx `.tk-stagger`: the services follow the sheet up.
-            for (final (i, s) in services.indexed)
-              TkIn.sheetRow(
-                index: i,
-                child: TkRow(
-                  name: s['name'] as String? ?? '',
-                  sub: [_serviceLine(s), if ((s['description'] as String? ?? '').isNotEmpty) s['description'] as String].join('\n'),
-                  icon: 'calendar',
-                  trailing: open ? TkIcon('chevron', size: 18, color: t.muted) : null,
-                  onTap: open ? () => _pick(s) : null,
-                ),
+            // As drawn: the services as rows on one card, each with its
+            // time and price; the card follows the sheet up.
+            TkIn.sheetRow(
+              index: 0,
+              child: TkSection(
+                inset: 56,
+                children: [
+                  for (final s in services)
+                    TkListRow(
+                      title: s['name'] as String? ?? '',
+                      sub: [_serviceLine(s), if ((s['description'] as String? ?? '').isNotEmpty) s['description'] as String].join(' · '),
+                      icon: 'b-calendar',
+                      square: look.violet,
+                      onTap: open ? () => _pick(s) : null,
+                    ),
+                ],
               ),
+            ),
           ],
         );
       case _Step.time:
@@ -353,18 +362,22 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
         final s = _service!;
         return TkFormBody(
           children: [
-            TkLines([(s['name'] as String? ?? '', servicePrice(s)), ('When', whenLabel(_start!)), ('How long', formatDuration(_int(s['minutes'])))]),
+            TkFormGroup(children: [TkLines([(s['name'] as String? ?? '', servicePrice(s)), ('When', whenLabel(_start!)), ('How long', formatDuration(_int(s['minutes'])))])]),
             Text(bookPayWords(_biz), style: tkFormNow(t)),
             if (_mayBook) ...[
-              TkKitField(
-                label: 'Phone number they can reach you on',
-                hint: 'Given to $_biz with the booking.',
-                child: TkTextBox(controller: _phone!, phone: true, hint: '0803 123 4567'),
-              ),
-              TkKitField(
-                label: 'Note for them',
-                hint: 'Optional',
-                child: TkTextBox(controller: _note, lines: 2, max: 500),
+              TkFormGroup(
+                children: [
+                  TkKitField(
+                    label: 'Phone number they can reach you on',
+                    hint: 'Given to $_biz with the booking.',
+                    child: TkTextBox(controller: _phone!, phone: true, hint: '0803 123 4567', size: 15, height: 46),
+                  ),
+                  TkKitField(
+                    label: 'Note for them',
+                    hint: 'Optional',
+                    child: TkTextBox(controller: _note, lines: 2, max: 500, size: 15),
+                  ),
+                ],
               ),
             ] else
               Text('Your role cannot book with other businesses. Ask the owner.', style: tkFormNow(t)),
@@ -374,12 +387,13 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
     }
   }
 
-  /// `.tk-book-head`: 8 px round, 14 px bold, muted.
+  /// As drawn: DAY and TIME, small capitals, muted.
   Widget _head(TkTokens t, String words) => Padding(
-    padding: const EdgeInsets.all(8),
+    padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
     child: Semantics(
       header: true,
-      child: Text(words, style: tkText(size: 14, weight: 700, color: t.muted)),
+      label: words,
+      child: ExcludeSemantics(child: Text(words.toUpperCase(), style: tkText(size: 11.5, weight: 700, letterSpacing: 0.6, color: t.muted))),
     ),
   );
 }
@@ -400,7 +414,7 @@ class _Chips extends StatelessWidget {
     final dark = TkTheme.of(context).mode == TkMode.dark;
     Widget chip((String, String) v) {
       final pressed = v.$1 == on;
-      final (bg, ink) = pressed ? (dark ? (t.brandDark, t.brandDarkText) : (t.brand, const Color(0xFFFFFFFF))) : (t.tkSoft, t.text);
+      final (bg, ink) = pressed ? (dark ? (t.brandDark, t.brandDarkText) : (t.brand, const Color(0xFFFFFFFF))) : (TkLook.of(context).card, t.text);
       return TapArea(
         child: Semantics(
           button: true,
@@ -411,11 +425,13 @@ class _Chips extends StatelessWidget {
           child: GestureDetector(
             onTap: () => onPick(v.$1),
             child: Container(
-              constraints: const BoxConstraints(minHeight: 36),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-              child: Text(v.$2, style: tkText(size: 14, weight: 600, color: ink)),
+              constraints: const BoxConstraints(minHeight: 40),
+              padding: EdgeInsets.symmetric(horizontal: grid ? 4 : 14, vertical: grid ? 0 : 10),
+              // The days as wide as their words; the times filling their box.
+              alignment: grid ? Alignment.center : null,
+              // As drawn: the days round, the times in boxes.
+              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(grid ? 12 : 999)),
+              child: Text(v.$2, maxLines: 1, style: tkText(size: 14, weight: 600, color: ink)),
             ),
           ),
         ),
@@ -431,7 +447,7 @@ class _Chips extends StatelessWidget {
         child: grid
             ? LayoutBuilder(
                 builder: (context, box) {
-                  final cols = ((box.maxWidth + 8) / (84 + 8)).floor().clamp(1, 99);
+                  final cols = ((box.maxWidth + 8) / (64 + 8)).floor().clamp(1, 99);
                   final w = (box.maxWidth - 8 * (cols - 1)) / cols;
                   return Wrap(
                     spacing: 8,
@@ -440,14 +456,7 @@ class _Chips extends StatelessWidget {
                   );
                 },
               )
-            : SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (var i = 0; i < values.length; i++) ...[if (i > 0) const SizedBox(width: 8), chip(values[i])],
-                  ],
-                ),
-              ),
+            : Wrap(spacing: 8, runSpacing: 8, children: [for (final v in values) chip(v)]),
       ),
     );
   }

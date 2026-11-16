@@ -115,7 +115,7 @@ void main() {
     final r = await open(t, (c, saved) => InvoiceView(auth: c.auth, invoice: _invoice, onSaved: saved));
     expect(find.text('₦35,000'), findsOneWidget);
     expect(find.text('TO PAY · DUE 20 NOV 2026'), findsOneWidget);
-    expect(find.text('₦10,000 of ₦45,000 paid.'), findsOneWidget);
+    expect(find.textContaining('₦10,000 of ₦45,000 paid'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Record a payment'));
     await t.pump();
     expect(find.text('35000'), findsOneWidget, reason: 'what is due, already in');

@@ -3,15 +3,17 @@
 // asking the same questions WhatsApp's sign-up asks, with its buttons. At the
 // end the business is ready and the app opens on it.
 
+import 'package:flutter/material.dart' show InputDecoration, Material, MaterialType, TextField;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../app/app_signup.dart';
 import '../app/auth.dart';
 import '../chat/taskiem.dart' show TaskiemSignupBubble;
+import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
-import 'sign_in.dart' show AuthCard, AuthSide, AuthTitle;
+import 'sign_in.dart' show AuthButton, AuthCard, AuthLink, AuthSide, AuthTitle, CodeBoxes;
 
 class AppSignUpScreen extends StatefulWidget {
   const AppSignUpScreen({super.key, required this.auth, this.onSignIn, this.onEmail, this.signup});
@@ -87,53 +89,39 @@ class _AppSignUpScreenState extends State<AppSignUpScreen> {
               children: [
                 const AuthTitle('Get started'),
                 if (_s.step == AppSignupStep.phone) ...[
-                  Text('Your business on Taskiem in a few minutes, as on WhatsApp. First, your WhatsApp number: we send a code to it.', style: tkHint(t)),
+                  Text('Your business on Taskiem in a few minutes, as on WhatsApp. First, your WhatsApp number: we send a code to it.', style: _lede(t)),
                   const SizedBox(height: 12),
-                  TkField(label: 'Your WhatsApp number', controller: _phone, keyboard: TextInputType.phone, autofill: const [AutofillHints.telephoneNumber]),
+                  TkField(label: 'Your WhatsApp number', controller: _phone, keyboard: TextInputType.phone, autofill: const [AutofillHints.telephoneNumber], minHeight: 44),
                   Padding(
                     padding: const EdgeInsets.only(top: 6, bottom: 12),
-                    child: Text('With the country code, e.g. +2348012345678', style: tkHint(t)),
+                    child: Text('With the country code, e.g. +2348012345678', style: tkText(size: 12.5, color: t.muted)),
                   ),
                   if (_s.error != null) TkErrorBox(_s.error!),
-                  TkButton(
-                    label: _s.busy ? 'Sending…' : 'Send me a code',
-                    primary: true,
-                    minHeight: 44,
-                    enabled: !_s.busy,
-                    onPressed: () => _s.sendCode(_phone.text),
-                  ),
+                  AuthButton(label: _s.busy ? 'Sending…' : 'Send me a code', enabled: !_s.busy, onTap: () => _s.sendCode(_phone.text)),
                 ] else if (_s.step == AppSignupStep.code) ...[
-                  Text(_s.sent ?? 'We sent a code to your WhatsApp.', style: tkHint(t)),
+                  Text(_s.sent ?? 'We sent a code to your WhatsApp.', style: _lede(t)),
                   const SizedBox(height: 12),
-                  TkField(label: 'The code', controller: _code, digits: 6, keyboard: TextInputType.number, autofill: const [AutofillHints.oneTimeCode]),
-                  const SizedBox(height: 12),
+                  CodeBoxes(controller: _code, onSubmitted: (_) => _s.verify(_code.text)),
+                  const SizedBox(height: 14),
                   if (_s.error != null) TkErrorBox(_s.error!),
-                  TkButton(
-                    label: _s.busy ? 'Checking…' : 'Continue',
-                    primary: true,
-                    minHeight: 44,
-                    enabled: !_s.busy,
-                    onPressed: () => _s.verify(_code.text),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Center(child: TkLink(label: 'Use another number', onTap: _s.busy ? null : _s.restart)),
-                  ),
+                  AuthButton(label: _s.busy ? 'Checking…' : 'Continue', enabled: !_s.busy, onTap: () => _s.verify(_code.text)),
+                  const SizedBox(height: 6),
+                  Center(child: AuthLink(label: 'Use another number', onTap: _s.busy ? null : _s.restart)),
                 ] else if (_s.step == AppSignupStep.signIn) ...[
                   if (_s.error != null) TkErrorBox(_s.error!),
-                  TkButton(label: 'Sign in', primary: true, minHeight: 44, onPressed: widget.onSignIn),
+                  AuthButton(label: 'Sign in', onTap: widget.onSignIn),
                 ],
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Wrap(
                   alignment: WrapAlignment.center,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text('Already on Taskiem? ', style: tkHint(t)),
-                    TkLink(label: 'Sign in', onTap: widget.onSignIn),
+                    Text('Already on Taskiem? ', style: tkText(size: 13.5, color: t.muted)),
+                    AuthLink(label: 'Sign in', onTap: widget.onSignIn, size: 13.5),
                   ],
                 ),
                 if (widget.onEmail != null)
-                  Center(child: TkLink(label: 'Sign up with email instead', onTap: widget.onEmail)),
+                  Center(child: AuthLink(label: 'Sign up with email instead', onTap: widget.onEmail, size: 13.5)),
               ],
             ),
           ],
@@ -141,6 +129,8 @@ class _AppSignUpScreenState extends State<AppSignUpScreen> {
       ),
     );
   }
+
+  TextStyle _lede(TkTokens t) => tkText(size: 14, lineHeight: 1.45, color: t.muted);
 
   /// The conversation with Taskiem: its questions on the left, the answers
   /// on the right, its buttons under its last question, a box to type in.
@@ -156,15 +146,26 @@ class _AppSignUpScreenState extends State<AppSignUpScreen> {
             Container(
               color: t.brand,
               padding: EdgeInsets.fromLTRB(16, pad.top + 12, 16, 12),
+              // As drawn: Taskiem's mark on lime, its name, and what this is.
               child: Row(
                 children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(color: Color(0xFFC8F169), shape: BoxShape.circle),
+                    child: TkTaskiemMark(size: 20, color: t.brand),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
-                    child: Semantics(
-                      header: true,
-                      child: Text('Taskiem', style: tkText(size: 17, weight: 600, color: t.tkOnPine)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Semantics(header: true, child: Text('Taskiem', style: tkText(size: 16, weight: 700, color: t.tkOnPine))),
+                        if (!ended) Text('Setting up your business', style: tkText(size: 12.5, color: t.tkOnPine.withValues(alpha: 0.75))),
+                      ],
                     ),
                   ),
-                  if (!ended) Text('Setting up your business', style: tkText(size: 12.5, color: t.tkOnPine)),
                 ],
               ),
             ),
@@ -198,16 +199,56 @@ class _AppSignUpScreenState extends State<AppSignUpScreen> {
               child: ended
                   ? Row(
                       children: [
-                        Expanded(child: TkButton(label: 'Start again', minHeight: 44, onPressed: _s.restart)),
+                        Expanded(child: AuthButton(label: 'Start again', soft: true, onTap: _s.restart)),
                         const SizedBox(width: 8),
-                        Expanded(child: TkButton(label: 'Sign in', minHeight: 44, onPressed: widget.onSignIn)),
+                        Expanded(child: AuthButton(label: 'Sign in', onTap: widget.onSignIn)),
                       ],
                     )
+                  // As drawn: the answer in a pill, sent with the round button.
                   : Row(
                       children: [
-                        Expanded(child: TkField(label: 'Your answer', controller: _answer)),
+                        Expanded(
+                          child: Semantics(
+                            label: 'Your answer',
+                            textField: true,
+                            child: Container(
+                              constraints: const BoxConstraints(minHeight: 46),
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              alignment: Alignment.centerLeft,
+                              decoration: BoxDecoration(color: t.field, borderRadius: BorderRadius.circular(999)),
+                              child: Material(
+                                type: MaterialType.transparency,
+                                child: TextField(
+                                  controller: _answer,
+                                  textInputAction: TextInputAction.send,
+                                  onSubmitted: (_) => _send(),
+                                  style: tkText(size: 15, color: t.text),
+                                  cursorColor: t.text,
+                                  showCursor: !TkField.debugHideCaret,
+                                  decoration: InputDecoration.collapsed(hintText: 'Your answer', hintStyle: tkText(size: 15, color: t.muted)),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                         const SizedBox(width: 8),
-                        TkButton(label: _s.busy ? '…' : 'Send', primary: true, minHeight: 44, enabled: !_s.busy, onPressed: _send),
+                        Semantics(
+                          button: true,
+                          enabled: !_s.busy,
+                          label: 'Send',
+                          onTap: _s.busy ? null : _send,
+                          excludeSemantics: true,
+                          child: TkPress(
+                            onTap: _s.busy ? null : _send,
+                            child: Container(
+                              width: 46,
+                              height: 46,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand, shape: BoxShape.circle),
+                              child: TkIcon('send', size: 20, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDarkText : const Color(0xFFC8F169)),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
             ),

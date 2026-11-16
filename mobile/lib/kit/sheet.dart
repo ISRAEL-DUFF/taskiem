@@ -748,7 +748,10 @@ class TkGhostButton extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 56),
           padding: const EdgeInsets.symmetric(horizontal: 18),
           alignment: Alignment.center,
-          decoration: BoxDecoration(color: t.panel, border: Border.all(color: t.borderStrong), borderRadius: BorderRadius.circular(999)),
+          // In the app's own look, as drawn: filled with the card, no line.
+          decoration: TkAppLook.on(context)
+              ? BoxDecoration(color: dark ? const Color(0xFF1A1B1A) : const Color(0xFFFFFFFF), borderRadius: BorderRadius.circular(999))
+              : BoxDecoration(color: t.panel, border: Border.all(color: t.borderStrong), borderRadius: BorderRadius.circular(999)),
           child: Text(label, style: tkText(size: 15, weight: 700, lineHeight: 1.2, color: danger ? t.danger : (dark ? t.text : t.brand))),
         ),
       ),

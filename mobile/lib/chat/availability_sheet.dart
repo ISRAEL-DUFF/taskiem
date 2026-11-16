@@ -10,7 +10,10 @@ import '../kit/forms.dart' show errorWords;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkLoading;
 import '../kit/sheet.dart';
-import '../kit/tap_area.dart';
+import '../kit/look.dart' show TkCallout, TkSquare;
+import '../kit/mobile.dart' show TkChips;
+import '../theme/look.dart' show TkLook;
+import 'give_task.dart' show TkPillChoice;
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'tools.dart' show availabilityWord;
@@ -60,14 +63,20 @@ class _AvailabilitySheetState extends State<AvailabilitySheet> {
     super.dispose();
   }
 
-  /// on, off or busy (the words the business's WhatsApp takes too).
-  Future<void> _say(String state) async {
+  /// The Busy till chip last chosen (as drawn: 1 hour, 2 hours, Till 5pm,
+  /// Rest of today), or 'other' with a time typed.
+  String? _till;
+
+  /// on, off or busy (the words the business's WhatsApp takes too); busy
+  /// till [until] when given, else till the time typed, if any.
+  Future<void> _say(String state, {String? until}) async {
+    final till = until ?? (_till == 'other' ? _until.text.trim() : '');
     setState(() => (_busy = true, _error = null));
     try {
       final r = await widget.auth.transport.send(
         'PUT',
         '/v1/availability',
-        body: {'state': state, if (state == 'busy' && _until.text.trim().isNotEmpty) 'until': _until.text.trim()},
+        body: {'state': state, if (state == 'busy' && till.isNotEmpty) 'until': till},
       );
       final next = (r as Map).cast<String, dynamic>();
       widget.onChanged?.call();
@@ -82,138 +91,120 @@ class _AvailabilitySheetState extends State<AvailabilitySheet> {
     }
   }
 
+  /// HH:MM in Lagos, [h] hours from now.
+  static String _inHours(int h) {
+    final l = DateTime.now().toUtc().add(Duration(hours: 1 + h));
+    return '${'${l.hour}'.padLeft(2, '0')}:${'${l.minute}'.padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final a = _a;
     final n = (a?['businesses'] as num?)?.toInt() ?? 0;
     final open = (a?['open'] as num?)?.toInt() ?? 0;
-    return TkSheet(
-      title: 'Availability',
-      overlay: _saved == null ? null : TkSavedTick(words: _saved!),
-      body: a == null
-          ? ListView(
-              children: [
-                if (_loadError != null)
-                  Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: TkErrorBox(_loadError!))
-                else
-                  const TkLoading(rows: 2, label: 'Checking your availability…'),
-              ],
-            )
-          : TkFormBody(
-              children: [
-                // `.tk-avail-now`: the state, large, and who sees it.
-                Semantics(
-                  container: true,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(availabilityWord(a), style: tkText(size: 18, weight: 700, color: t.text)),
-                      const SizedBox(height: 4),
-                      Text(
-                        n == 0
-                            ? 'No business has added you as its rider yet. Once one does, what you choose here is what they see.'
-                            : n == 1
-                            ? 'The business you deliver for sees this when it offers a delivery.'
-                            : 'The $n businesses you deliver for see this when they offer a delivery.',
-                        style: tkText(size: 13, weight: 500, color: t.muted),
-                      ),
-                    ],
-                  ),
-                ),
-                if (_error != null) TkErrorBox(_error!),
-                Semantics(
-                  container: true,
-                  label: 'Say whether you are free',
-                  explicitChildNodes: true,
-                  child: TkSegmented(
-                    choices: const [('on', 'Free', 'free'), ('busy', 'Busy', 'busy'), ('off', 'Off', 'off')],
-                    on: a['state'] as String? ?? 'free',
-                    onPick: _busy ? null : _say,
-                  ),
-                ),
-                TkKitField(
-                  label: 'Busy till (a time later today, like 3pm or 15:30)',
-                  // Not changed while a change is sent (the web's disabled).
-                  child: Opacity(
-                    opacity: _busy ? 0.6 : 1,
-                    child: TkTextBox(controller: _until, hint: 'Leave empty for the rest of the day (an hour at least)', max: 20, enabled: !_busy),
-                  ),
-                ),
-                if (open > 0)
-                  Text(
-                    'You hold $open ${open == 1 ? 'delivery' : 'deliveries'} now, so you are busy until they are delivered, whatever you choose.',
-                    style: tkHint(t),
-                  ),
-              ],
-            ),
-    );
-  }
-}
-
-/// styles.css `.segmented`: pill buttons on a soft track, the one chosen
-/// filled; on a phone each takes an equal share. A choice is (what it
-/// sends, its words, the state it shows as chosen).
-class TkSegmented extends StatelessWidget {
-  const TkSegmented({super.key, required this.choices, required this.on, required this.onPick});
-  final List<(String, String, String)> choices;
-  final String on;
-  final ValueChanged<String>? onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    final dark = TkTheme.of(context).mode == TkMode.dark;
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: t.codeBg, borderRadius: BorderRadius.circular(999)),
-      child: Row(
-        children: [
-          for (var i = 0; i < choices.length; i++) ...[
-            if (i > 0) const SizedBox(width: 4),
-            Expanded(
-              child: Builder(
-                builder: (context) {
-                  final (send, words, shows) = choices[i];
-                  final chosen = on == shows;
-                  final go = onPick == null ? null : () => onPick!(send);
-                  return TapArea(
-                    child: Semantics(
-                      button: true,
-                      toggled: chosen,
-                      enabled: go != null,
-                      label: words,
-                      onTap: go,
-                      excludeSemantics: true,
-                      child: GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: go,
-                        child: Container(
-                          constraints: const BoxConstraints(minHeight: 36),
-                          alignment: Alignment.center,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: chosen ? (dark ? t.brandDark : t.brand) : null,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            words,
-                            textAlign: TextAlign.center,
-                            style: tkText(
-                              size: 15,
-                              weight: 600,
-                              color: chosen ? (dark ? t.brandDarkText : const Color(0xFFFFFFFF)) : (go == null ? t.muted : t.navText),
-                            ),
-                          ),
+    final lagosHour = DateTime.now().toUtc().add(const Duration(hours: 1)).hour;
+    final tills = <(String, String, String)>[
+      ('1h', '1 hour', _inHours(1)),
+      ('2h', '2 hours', _inHours(2)),
+      if (lagosHour < 16) ('5pm', 'Till 5pm', '5pm'),
+      ('rest', 'Rest of today', ''),
+    ];
+    return TkAppLook(
+      child: TkSheet(
+        title: 'Availability',
+        overlay: _saved == null ? null : TkSavedTick(words: _saved!),
+        body: a == null
+            ? ListView(
+                children: [
+                  if (_loadError != null)
+                    Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: TkErrorBox(_loadError!))
+                  else
+                    const TkLoading(rows: 2, label: 'Checking your availability…'),
+                ],
+              )
+            : TkFormBody(
+                children: [
+                  // As drawn: the state, large, and who sees it.
+                  Semantics(
+                    container: true,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(availabilityWord(a), style: tkDisplay(size: 28, letterSpacing: -0.8, color: t.text)),
+                        const SizedBox(height: 6),
+                        Text(
+                          n == 0
+                              ? 'No business has added you as its rider yet. Once one does, what you choose here is what they see.'
+                              : n == 1
+                              ? 'The business you deliver for sees this when it offers a delivery.'
+                              : 'The $n businesses you deliver for see this when they offer a delivery.',
+                          style: tkText(size: 13.5, lineHeight: 1.4, color: t.muted),
                         ),
-                      ),
+                      ],
                     ),
-                  );
-                },
+                  ),
+                  if (_error != null) TkErrorBox(_error!),
+                  TkChips<String>(
+                    label: 'Say whether you are free',
+                    padding: EdgeInsets.zero,
+                    chips: const [('free', 'Free'), ('busy', 'Busy'), ('off', 'Off')],
+                    on: a['state'] as String? ?? 'free',
+                    onPick: (v) {
+                      if (_busy) return;
+                      _say(v == 'free' ? 'on' : v);
+                    },
+                  ),
+                  Semantics(
+                    container: true,
+                    label: 'Busy till',
+                    explicitChildNodes: true,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ExcludeSemantics(child: Text('Busy till', style: tkText(size: 13, weight: 600, color: t.muted))),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final (k, words, until) in tills)
+                              TkPillChoice(
+                                label: words,
+                                semantics: 'Busy for $words'.replaceFirst('Busy for Till', 'Busy till').replaceFirst('Busy for Rest', 'Busy the rest'),
+                                on: _till == k && a['state'] == 'busy',
+                                onTap: () {
+                                  if (_busy) return;
+                                  setState(() => _till = k);
+                                  _say('busy', until: until);
+                                },
+                              ),
+                            TkPillChoice(label: 'Another time', on: _till == 'other', onTap: () => setState(() => _till = 'other')),
+                          ],
+                        ),
+                        if (_till == 'other') ...[
+                          const SizedBox(height: 10),
+                          // Not changed while a change is sent (the web's disabled).
+                          Opacity(
+                            opacity: _busy ? 0.6 : 1,
+                            child: TkTextBox(controller: _until, hint: 'A time later today, like 3pm or 15:30', max: 20, enabled: !_busy, size: 15, height: 46),
+                          ),
+                          const SizedBox(height: 6),
+                          Text('Then press Busy.', style: tkText(size: 12.5, color: t.muted)),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (open > 0)
+                    TkCallout(
+                      leading: TkSquare('b-truck', color: look.orange),
+                      title: 'You hold $open ${open == 1 ? 'delivery' : 'deliveries'} now',
+                      sub: 'So you are busy until ${open == 1 ? 'it is' : 'they are'} delivered, whatever you choose.',
+                      color: look.orange,
+                    ),
+                ],
               ),
-            ),
-          ],
-        ],
       ),
     );
   }

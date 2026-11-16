@@ -253,11 +253,10 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('Choose who it is for.'), findsOneWidget);
     expect(given, isEmpty);
-    await t.tap(find.text('Choose…'));
-    await t.pumpAndSettle();
-    expect(find.text('Bola Ade'), findsOneWidget);
-    expect(find.text('Any owner'), findsNothing, reason: 'not the owner\'s role');
-    await t.tap(find.text('Any cashier'));
+    // As drawn: the people as faces, anyone in a role as chips.
+    expect(find.bySemanticsLabel('Bola Ade'), findsOneWidget);
+    expect(find.bySemanticsLabel('Any owner'), findsNothing, reason: 'not the owner\'s role');
+    await t.tap(find.bySemanticsLabel('Any cashier'));
     await t.pumpAndSettle();
     await t.tap(find.text('A photo when it is done'));
     await t.pump();

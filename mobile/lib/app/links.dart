@@ -2,6 +2,8 @@
 // the phone's own browser tab (Custom Tabs on Android, Safari's on an
 // iPhone), over the app and back to it when closed. Only web addresses.
 
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -65,6 +67,20 @@ Future<bool> Function(String phone) textPhone = (phone) async {
 Future<bool> Function(String email) mailTo = (email) async {
   try {
     return await launchUrl(Uri(scheme: 'mailto', path: email));
+  } on Object {
+    return false;
+  }
+};
+
+/// Opens the phone's email app at its inbox (a password reset's link waits
+/// there): Android's email app by MainActivity, the iPhone's Mail; false
+/// when nothing could. A test stands in for it.
+Future<bool> Function() openMailApp = () async {
+  try {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return await const MethodChannel('taskiem/window').invokeMethod<bool>('mail') ?? false;
+    }
+    return await launchUrl(Uri.parse('message://'));
   } on Object {
     return false;
   }

@@ -90,14 +90,23 @@ Future<void> _tap(WidgetTester t, String words) async {
   await t.pumpAndSettle();
 }
 
+/// The WhatsApp logo on the sign-in card (as drawn, not the web's button).
+Future<void> _tapLogo(WidgetTester t) async {
+  final logo = find.bySemanticsLabel('Sign in with a code on WhatsApp');
+  await t.ensureVisible(logo);
+  await t.pumpAndSettle();
+  await t.tap(logo);
+  await t.pumpAndSettle();
+}
+
 /// The app's screens by the web half's names.
 final screens = <String, Screen>{
   'sign-in': (build: () => SignInScreen(auth: fakeAuth()), drive: _none),
-  'sign-in-chat': (build: () => SignInScreen(auth: fakeAuth()), drive: (t) => _tap(t, 'Sign in with WhatsApp or Telegram')),
+  'sign-in-chat': (build: () => SignInScreen(auth: fakeAuth()), drive: (t) => _tapLogo(t)),
   'sign-in-chat-code': (
     build: () => SignInScreen(auth: fakeAuth()),
     drive: (t) async {
-      await _tap(t, 'Sign in with WhatsApp or Telegram');
+      await _tapLogo(t);
       await t.enterText(find.byType(TextField).first, '08031234567');
       await _tap(t, 'Send me a code');
     },
@@ -490,7 +499,7 @@ final screens = <String, Screen>{
   'sign-up': (
     build: () => SignUpScreen(auth: fakeAuth()),
     drive: (t) async {
-      await _tap(t, 'I bill customers for a service');
+      await _tap(t, 'I bill for a service');
       FocusManager.instance.primaryFocus?.unfocus();
       await t.pumpAndSettle();
     },
@@ -508,6 +517,10 @@ const appsOwnLook = {
   'chat-menu', 'chat-order', 'chat-order-review', 'chat-pick', 'chat-product', 'chat-reply', 'chat-sell', 'chat-taskiem',
   'chat-taskiem-approval', 'chat-taskiem-approve', 'chat-taskiem-cards', 'chat-tool-sheet', 'chat-tools', 'chat-tunde',
   'chats', 'chats-customers', 'chats-search', 'chats-starred', 'customer-chidi',
+  // Signing in, as drawn (docs/spec/mobile-app-look.md, "Signing in").
+  'sign-in', 'sign-in-chat', 'sign-in-chat-code', 'sign-in-wrong', 'sign-up',
+  // Find a business, as drawn (docs/spec/mobile-app-look.md).
+  'explore', 'explore-search', 'explore-start',
 };
 
 final kept = RegExp(r'^([a-z-]+)-(light|dark)-(\d+)x(\d+)\.png$');

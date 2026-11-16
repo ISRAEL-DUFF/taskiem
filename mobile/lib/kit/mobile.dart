@@ -21,7 +21,7 @@ import 'icon.dart';
 import 'kit.dart';
 import 'look.dart' show tkTabular;
 import 'list.dart' show TkLoading;
-import 'sheet.dart' show TkCta, TkGhostButton, TkSheet, TkSheetFoot;
+import 'sheet.dart' show TkCta, TkGhostButton, TkSheet;
 import 'tap_area.dart';
 import 'forms.dart' show TkSwitch;
 
@@ -975,14 +975,13 @@ class TkFormSheet extends StatelessWidget {
           for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 12), children[i]],
         ],
       ),
-      footer: TkSheetFoot(
-        bare: true,
-        child: Row(
-          children: [
-            if (second != null) ...[Expanded(child: TkGhostButton(label: second!, danger: secondDanger, onTap: onSecond)), const SizedBox(width: 10)],
-            Expanded(child: TkCta(label: action, onTap: onAction)),
-          ],
-        ),
+      // TkSheet sets it in its foot: not a second foot inside it.
+      bareFooter: true,
+      footer: Row(
+        children: [
+          if (second != null) ...[Expanded(child: TkGhostButton(label: second!, danger: secondDanger, onTap: onSecond)), const SizedBox(width: 10)],
+          Expanded(child: TkCta(label: action, onTap: onAction)),
+        ],
       ),
     ),
   );

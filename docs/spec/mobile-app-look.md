@@ -354,6 +354,86 @@ The other pages from Settings:
   and the next number. Then Getting paid (the connection, who pays the
   fee, part payments and automatic matching) and Credit terms.
 
+## Find a business and signing in
+
+Find a business (`lib/chat/explore.dart`) has ‹ Chats over a large title,
+then the search and the category chips. A card's logo carries how many
+businesses it is linked with as a badge ("12+", three and more; read as
+"Linked with 12+ businesses"), and its categories are small chips under
+its line. A Featured card's cover runs to its edges, with the logo, name
+and Connect under it; Connect stays because the card is how one links.
+
+Signing in (`lib/screens/sign_in.dart`) keeps the brand on pine with one
+card over its edge. Under Sign in, Forgot password? and the passkey are
+the WhatsApp and Telegram logos, round in their own colours, with "A code
+on WhatsApp or Telegram" under them. Either one asks for the number, and
+the code is typed into six boxes. These screens are no longer compared
+with the web's pictures.
+
+A forgotten password is done in the app (`lib/screens/forgot_password.dart`):
+
+1. **Reset your password:** the email, starting from what was typed on
+   the card. Email me a link sends POST /v1/auth/password/forgot.
+2. **Check your email:** the server's answer is the same for any email.
+   Below it are Open your email app (the inbox, not a new email), Send it
+   again, and Back to sign in.
+3. **Choose a new password:** the email's link,
+   `https://<server>/reset-password#token=…`, opens the app here. That
+   path is in the server's appPaths and in Android's intent filter. The
+   new password is typed twice and has at least 12 characters. Saving it
+   sends POST /v1/auth/password/reset and signs every session out.
+4. **Password saved:** the new password is already filled in, so the
+   person types their email and signs in.
+
+A link that comes while someone is signed in opens Choose a new password
+over the app.
+
+## Sheets and the chats, as drawn
+
+- **Sign up:** what the business does is five tiles, two to a row, each
+  with an icon and short words. Get started takes the code in six boxes,
+  and its chat has Taskiem's mark in the head and a round send button.
+- **Give this to someone** (`give_task.dart`) is a sheet:
+  - who it is for: the people as faces, then anyone in a role as chips;
+  - when: Any time, By a time, Daily or Weekly as a switch;
+  - the day and time to pick, each with its icon;
+  - a photo when it is done, as a switch.
+- **Book with a business:** the services are rows on one card. DAY and
+  TIME are small capitals over the chips, the times four to a row, and
+  the check step puts its lines and the fields on cards.
+- **Availability:**
+  - the state is large, with Free, Busy and Off as a switch;
+  - Busy till is chips: 1 hour, 2 hours, Till 5pm (until 4pm in Lagos),
+    Rest of today;
+  - "Another time" opens the box to type a time;
+  - deliveries held show as a warning.
+- **An invoice or a bill in the chat:** their actions are tiles
+  (`TkActionTiles`), not long buttons. An invoice has Record a payment,
+  Cancel it and Open it; a bill has Question it, Paid outside and Open
+  it. The lines sit on a card.
+- **Approve:**
+  - the authenticator's code is behind "Use a code from your
+    authenticator instead", and shows by itself once the phone has no
+    passkey or the server asks for it;
+  - a first payment is a warning;
+  - Approve carries the passkey's icon.
+- **Connect:** Live and Test are a switch, the keys sit on a card, and
+  More options is a row. Once connected, "Copy this address now" is a
+  warning and each address sits on a card.
+- **Taskiem's chat:**
+  - an alert card is compact, with a short main step (Reorder 10; its
+    full words go to screen readers);
+  - Give this to… is a person's icon, and Later is the ✕ in the corner;
+  - an approval card has an orange edge and kicker;
+  - the briefing's Got it is a lime pill;
+  - your own messages are white on pine.
+- **A customer's order:** Delivered and They pick it up are a switch.
+  The card has Ask them while questions wait, else Confirm, with Drop as
+  a bin beside it.
+
+A sheet made with `TkFormSheet` has one foot, not a foot inside a foot.
+A sheet's Cancel button is filled with the card, with no line around it.
+
 ## Order
 
 1. Orders and Money, and the chat's motion. Done.
@@ -364,3 +444,5 @@ The other pages from Settings:
 6. Team, riders and tables. **Done; waiting for the founder's word.**
 7. The chat: the conversation, the chats list, the tools. **Done; waiting for the founder's word.**
 8. The settings pages: done ("Settings" above).
+9. Find a business, signing in and a forgotten password: done (above).
+10. Signing up, the sheets and the two chats: done (above).

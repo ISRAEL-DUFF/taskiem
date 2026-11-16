@@ -16,7 +16,10 @@ import '../app/auth.dart';
 import '../app/passkey.dart';
 import '../kit/forms.dart' show RuneLimit;
 import '../kit/kit.dart';
+import '../kit/look.dart' show TkCallout, TkSquare;
+import '../kit/mobile.dart' show TkFormGroup;
 import '../kit/sheet.dart';
+import '../theme/look.dart' show TkLook;
 import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'alerts.dart';
@@ -62,6 +65,10 @@ class _ApproveSheetState extends State<ApproveSheet> {
   bool _saved = false;
   String? _error;
 
+  /// As drawn: the authenticator's code behind a link, shown once asked
+  /// for, when this phone has no passkey, or when the server asks again.
+  bool _useCode = false;
+
   bool get _approve => widget.decision == 'approved';
 
   @override
@@ -89,9 +96,9 @@ class _ApproveSheetState extends State<ApproveSheet> {
       Map<String, dynamic>? passkey;
       if (_stepUp != null && _code.text.isEmpty) {
         if (!await passkeys.available()) {
-          setState(() => _error = _stepUp == 'passkey'
+          setState(() => (_useCode = true, _error = _stepUp == 'passkey'
               ? 'This needs your passkey, and this phone cannot use one. Decide it on the web, on a device with your passkey.'
-              : 'This phone cannot use a passkey. Type a code from your authenticator app.');
+              : 'This phone cannot use a passkey. Type a code from your authenticator app.'));
           return;
         }
         passkey = await approvalPasskey(widget.auth, ap, widget.decision);
@@ -105,7 +112,7 @@ class _ApproveSheetState extends State<ApproveSheet> {
       // What the server asks for now is what the sheet asks next.
       final up = e.body['step_up'];
       setState(() {
-        if (up is String) _stepUp = up;
+        if (up is String) (_stepUp = up, _useCode = true);
         _error = e.message;
       });
     } on PasskeyCancelled {
@@ -138,7 +145,10 @@ class _ApproveSheetState extends State<ApproveSheet> {
     ];
     // With a confirmation asked, the phone's passkey, or a whole code.
     final ready = !_busy && !(_stepUp != null && !passkeyOnly && _code.text.isNotEmpty && _code.text.length != 6);
-    return TkSheet(
+    final look = TkLook.of(context);
+    // In the app's own look, as drawn: what it is on cards, the first
+    // payment as a warning, the code behind a link.
+    return TkAppLook(child: TkSheet(
       title: _approve ? 'Approve it?' : 'Decline it?',
       overlay: _saved ? TkSavedTick(words: _approve ? 'Approved' : 'Declined') : null,
       body: TkFormBody(
@@ -146,39 +156,60 @@ class _ApproveSheetState extends State<ApproveSheet> {
           Text(a.who != null ? '${a.who} asks: ${a.title}' : a.title, style: tkText(size: 16, weight: 600, color: t.text)),
           Text('From ${ap.workflow}. Your decision and what you were shown are recorded.', style: tkFormNow(t)),
           if (notes.isNotEmpty) Wrap(spacing: 6, runSpacing: 6, children: notes),
-          if (rows.isNotEmpty) TkLines(rows),
+          if (rows.isNotEmpty) TkFormGroup(children: [TkLines(rows)]),
           if (ap.firstPayment == true && _approve)
-            Semantics(
-              container: true,
-              // `.tk-form-now` is a wrapping flex row: the bold words, then the rest under them.
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  Text('First payment to this account.', style: tkText(size: 14, weight: 700, color: t.muted)),
-                  Text(
-                    'Your business has not paid it before. Check the account number and name with the person you are paying before you approve.',
-                    style: tkFormNow(t),
-                  ),
-                ],
-              ),
+            TkCallout(
+              leading: TkSquare('warn', color: look.orange),
+              title: 'First payment to this account.',
+              sub: 'Not paid before. Check the account number and name with them before you approve.',
+              color: look.orange,
             ),
-          TkKitField(
-            label: 'A comment (optional, recorded)',
-            child: TkTextBox(controller: _comment, lines: 2),
+          TkFormGroup(
+            children: [
+              TkKitField(
+                label: 'A comment (optional, recorded)',
+                child: TkTextBox(controller: _comment, lines: 2, size: 15),
+              ),
+            ],
           ),
           if (_stepUp != null)
             Text(
               'Your phone asks for your passkey (your fingerprint, face or screen lock) when you ${_approve ? 'approve' : 'decline'}.',
               style: tkFormNow(t),
             ),
-          if (_stepUp != null && !passkeyOnly)
-            TkKitField(
-              label: 'Or a code from your authenticator app',
-              hint: 'No passkey on this phone? Add one in Settings.',
-              child: TkTextBox(controller: _code, lines: 1, digits: 6),
+          if (_stepUp != null && !passkeyOnly && _useCode)
+            TkFormGroup(
+              children: [
+                TkKitField(
+                  label: 'Or a code from your authenticator app',
+                  hint: 'No passkey on this phone? Add one in Settings.',
+                  child: TkTextBox(controller: _code, lines: 1, digits: 6),
+                ),
+              ],
             ),
           if (_error != null) TkErrorBox(_error!),
+          if (_stepUp != null && !passkeyOnly && !_useCode)
+            Center(
+              child: TapArea(
+                child: Semantics(
+                  button: true,
+                  label: 'Use a code from your authenticator instead',
+                  onTap: () => setState(() => _useCode = true),
+                  excludeSemantics: true,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _useCode = true),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Text(
+                        'Use a code from your authenticator instead',
+                        style: tkText(size: 14, weight: 700, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
       footer: TkFootTwo(
@@ -186,9 +217,15 @@ class _ApproveSheetState extends State<ApproveSheet> {
         firstOwn: 38,
         secondOwn: 28,
         first: TkGhostButton(label: 'Not now', onTap: _busy ? null : () => Navigator.of(context).pop(false)),
-        second: TkCta(label: _approve ? 'Approve' : 'Decline', danger: !_approve, onTap: ready ? _confirm : null),
+        second: TkCta(
+          label: _approve ? 'Approve' : 'Decline',
+          danger: !_approve,
+          // The passkey it asks for, on the button (as drawn).
+          icon: _stepUp != null && _code.text.isEmpty ? 'fingerprint' : null,
+          onTap: ready ? _confirm : null,
+        ),
       ),
-    );
+    ));
   }
 }
 

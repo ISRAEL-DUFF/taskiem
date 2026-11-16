@@ -7,17 +7,19 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
+import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'sign_in.dart';
 
-/// What a business says it does, in its own words (as the web's SIGNUP_KINDS).
-const signupKinds = <({String id, String label})>[
-  (id: 'shop', label: 'I sell things'),
-  (id: 'service', label: 'I bill customers for a service'),
-  (id: 'delivery', label: 'I deliver for businesses'),
-  (id: 'school', label: 'I run a school'),
-  (id: 'workflows', label: 'Just workflows for now'),
+/// What a business says it does, in its own words (as the web's SIGNUP_KINDS),
+/// and the tile's shorter words and icon (as drawn).
+const signupKinds = <({String id, String label, String short, String icon})>[
+  (id: 'shop', label: 'I sell things', short: 'I sell things', icon: 'b-cart'),
+  (id: 'service', label: 'I bill customers for a service', short: 'I bill for a service', icon: 'b-receipt'),
+  (id: 'delivery', label: 'I deliver for businesses', short: 'I deliver for businesses', icon: 'b-bike'),
+  (id: 'school', label: 'I run a school', short: 'I run a school', icon: 'schools'),
+  (id: 'workflows', label: 'Just workflows for now', short: 'Just workflows', icon: 'b-flow'),
 ];
 
 class SignUpScreen extends StatefulWidget {
@@ -126,10 +128,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
             AuthCard(
               children: [
                 const AuthTitle('Start with Taskiem'),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text('Create your organisation. You can run your first workflow in a few minutes.', style: hint),
-                ),
                 TkField(label: 'Business or organisation name', controller: _tenant, autofocus: true, autofill: const [AutofillHints.organizationName], minHeight: 44),
                 const SizedBox(height: 16),
                 Semantics(
@@ -139,19 +137,21 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text('What does your business do?', style: tkText(size: 14, weight: 600, color: t.text)),
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: ExcludeSemantics(child: Text('What does your business do?', style: tkText(size: 13, weight: 500, color: t.text))),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Text('This sets up what you see first. Workflows, forms and chat are always there, and you can change it any time.', style: hint),
+                      // As drawn: tiles, two to a row, an icon and short words.
+                      LayoutBuilder(
+                        builder: (context, box) {
+                          final w = (box.maxWidth - 8) / 2;
+                          return Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [for (final k in signupKinds) SizedBox(width: w, child: _KindTile(kind: k, on: _kind == k.id, onTap: () => setState(() => _kind = k.id)))],
+                          );
+                        },
                       ),
-                      for (final k in signupKinds)
-                        TkChoiceRow(
-                          control: TkRadio(checked: _kind == k.id),
-                          label: Text(k.label, style: words),
-                          onTap: () => setState(() => _kind = k.id),
-                        ),
+                      const SizedBox(height: 16),
                     ],
                   ),
                 ),
@@ -176,22 +176,62 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     onTap: () => setState(() => _accept = !_accept),
                   ),
                 if (_error != null) ...[TkErrorBox(_error!)],
-                TkButton(label: _busy ? 'Creating…' : 'Create account', primary: true, minHeight: 44, enabled: !_busy, onPressed: _submit),
+                if (_error == null) const SizedBox(height: 4),
+                AuthButton(label: _busy ? 'Creating…' : 'Create account', enabled: !_busy, onTap: _submit),
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  // Inline on the web: it wraps when the words are large.
+                  padding: const EdgeInsets.only(top: 8),
+                  // It wraps when the words are large.
                   child: Wrap(
                     alignment: WrapAlignment.center,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text('Already have an account? ', style: hint),
-                      TkLink(label: 'Sign in', onTap: widget.onSignIn),
+                      Text('Already have an account? ', style: tkText(size: 13.5, color: t.muted)),
+                      AuthLink(label: 'Sign in', onTap: widget.onSignIn, size: 13.5),
                     ],
                   ),
                 ),
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A kind of business as a tile (as drawn): pine when chosen.
+class _KindTile extends StatelessWidget {
+  const _KindTile({required this.kind, required this.on, required this.onTap});
+  final ({String id, String label, String short, String icon}) kind;
+  final bool on;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final (bg, ink) = on ? (dark ? (t.brandDark, t.brandDarkText) : (t.brand, const Color(0xFFFFFFFF))) : (t.field, t.text);
+    return Semantics(
+      button: true,
+      selected: on,
+      inMutuallyExclusiveGroup: true,
+      label: kind.label,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: TkPress(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          constraints: const BoxConstraints(minHeight: 60),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
+          child: Row(
+            children: [
+              TkIcon(kind.icon, size: 20, color: ink),
+              const SizedBox(width: 10),
+              Expanded(child: Text(kind.short, style: tkText(size: 13.5, weight: 600, lineHeight: 1.25, color: ink))),
+            ],
+          ),
         ),
       ),
     );

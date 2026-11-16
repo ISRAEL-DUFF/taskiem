@@ -1253,3 +1253,60 @@ class TkStatTiles extends StatelessWidget {
     );
   }
 }
+
+/// One of a sheet's actions as a tile (as drawn): its icon over a short
+/// word; [semantics] says it in full.
+typedef TkAction = ({String icon, String label, String? semantics, VoidCallback? onTap});
+
+/// A sheet's actions as tiles side by side, sharing its width (Record a
+/// payment, Cancel it, Open it): the long buttons, as icons.
+class TkActionTiles extends StatelessWidget {
+  const TkActionTiles(this.actions, {super.key});
+  final List<TkAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    Widget tile(TkAction a) => TapArea(
+      child: Semantics(
+        button: true,
+        enabled: a.onTap != null,
+        label: a.semantics ?? a.label,
+        onTap: a.onTap,
+        excludeSemantics: true,
+        child: TkPress(
+          onTap: a.onTap,
+          child: Opacity(
+            opacity: a.onTap == null ? 0.5 : 1,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 64),
+              padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+              decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(16)),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TkIcon(a.icon, size: 20, stroke: 2, color: t.text),
+                  const SizedBox(height: 6),
+                  Text(a.label, textAlign: TextAlign.center, maxLines: 2, style: tkText(size: 12.5, weight: 600, lineHeight: 1.25, color: t.text)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (_large(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [for (var i = 0; i < actions.length; i++) ...[if (i > 0) const SizedBox(height: 8), tile(actions[i])]],
+      );
+    }
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [for (var i = 0; i < actions.length; i++) ...[if (i > 0) const SizedBox(width: 8), Expanded(child: tile(actions[i]))]],
+      ),
+    );
+  }
+}

@@ -11,7 +11,14 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/look.dart' show TkFace;
+import '../kit/mobile.dart';
 import '../kit/modal.dart';
+import '../kit/sheet.dart' show TkKitField, showTkSheet;
+import '../kit/tap_area.dart';
+import '../theme/look.dart' show TkLook, tkFaceFor;
+import '../kit/forms.dart' show TkSwitch;
+import 'approve.dart' show TkTextBox;
 import '../theme/theme.dart';
 import 'words.dart' show dayKey;
 
@@ -112,7 +119,8 @@ List<(String, String)> whoChoices(List<ListStaffTasksResponsePeopleItem> people)
   ];
 }
 
-/// GiveThis's press: the people, then the form; a word when it is given.
+/// GiveThis's press: the people, then the form as a sheet; a word when it
+/// is given.
 Future<void> giveThis(BuildContext context, Auth auth, TaskLink link) async {
   final List<ListStaffTasksResponsePeopleItem> people;
   try {
@@ -125,21 +133,20 @@ Future<void> giveThis(BuildContext context, Auth auth, TaskLink link) async {
     return;
   }
   if (!context.mounted) return;
-  final given = await showTkModal<bool>(
-    context,
-    title: 'Give this to someone',
-    builder: (_) => GiveTask(auth: auth, people: people, link: link),
-  );
+  final given = await showTkSheet<bool>(context, (_) => GiveTask(auth: auth, people: people, link: link));
   if (given == true && context.mounted) showTkToast(context, 'Task given. They hear in their chat.');
 }
 
-/// Tasks.tsx GiveTask: the form; it pops true once the task is given.
+/// Tasks.tsx GiveTask, as drawn: a sheet. What is to be done; who it is for
+/// as faces, then anyone in a role as chips; when, as a switch; the day and
+/// time to pick; a photo as a switch. It pops true once the task is given.
 class GiveTask extends StatefulWidget {
-  const GiveTask({super.key, required this.auth, required this.people, this.link, this.now});
+  const GiveTask({super.key, required this.auth, required this.people, this.link, this.now, this.title = 'Give this to someone'});
   final Auth auth;
   final List<ListStaffTasksResponsePeopleItem> people;
   final TaskLink? link;
   final DateTime Function()? now;
+  final String title;
 
   @override
   State<GiveTask> createState() => _GiveTaskState();
@@ -151,6 +158,12 @@ class _GiveTaskState extends State<GiveTask> {
   bool _tried = false;
   bool _busy = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _what.addListener(() => setState(() => _f.what = _what.text));
+  }
 
   @override
   void dispose() {
@@ -191,91 +204,209 @@ class _GiveTaskState extends State<GiveTask> {
     if (t != null) setState(() => _f.time = '${'${t.hour}'.padLeft(2, '0')}:${'${t.minute}'.padLeft(2, '0')}');
   }
 
+  /// "Fri 13 Nov" for a picked day.
+  String _dayWords(String key) {
+    final d = DateTime.tryParse(key);
+    if (d == null) return key;
+    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${days[d.weekday - 1]} ${d.day} ${months[d.month - 1]}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final problem = taskProblem(_f);
     final f = _f;
-    Widget field(String label, Widget child, {String? hint}) => Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(padding: const EdgeInsets.only(bottom: 6), child: Text(label, style: tkText(size: 13, weight: 500, color: t.text))),
-          child,
-          if (hint != null) Padding(padding: const EdgeInsets.only(top: 6), child: Text(hint, style: tkHint(t))),
-        ],
-      ),
-    );
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    final choices = whoChoices(widget.people);
+    final people = [for (final c in choices) if (c.$1.startsWith('user:')) c];
+    final roles = [for (final c in choices) if (c.$1.startsWith('role:')) c];
+    return TkFormSheet(
+      title: widget.title,
+      action: _busy ? 'Giving…' : 'Give the task',
+      onAction: _busy ? null : _give,
+      second: 'Cancel',
+      onSecond: () => Navigator.of(context).pop(false),
       children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: TkField(label: 'What is to be done', controller: _what, onChanged: (v) => setState(() => f.what = v)),
-        ),
-        field(
-          'Who it is for',
-          TkSelect(
-            label: 'Who it is for',
-            value: f.who,
-            choices: whoChoices(widget.people),
-            onChanged: (v) => setState(() => f.who = v),
-          ),
-          hint: 'For anyone in a role, the first to take it has it.',
-        ),
-        field(
-          'When',
-          TkSelect(
-            label: 'When',
-            value: f.when,
-            choices: const [('none', 'Any time'), ('by', 'By a time'), ('day', 'Every day'), ('week', 'Every week')],
-            onChanged: (v) => setState(() => f.when = v),
-          ),
-        ),
-        if (f.when == 'by') field('Day', TkPickBox(label: 'Day', shown: f.date, onTap: _pickDay)),
-        if (f.when == 'week')
-          field(
-            'On',
-            TkSelect(label: 'On', value: f.day, choices: weekdays, onChanged: (v) => setState(() => f.day = v)),
-          ),
-        if (f.when != 'none') field(f.when == 'by' ? 'By' : 'Due at', TkPickBox(label: f.when == 'by' ? 'By' : 'Due at', shown: f.time.isEmpty ? '--:--' : f.time, onTap: _pickTime)),
-        Semantics(
-          checked: f.photo,
-          child: TkChoiceRow(
-            radio: false,
-            control: TkCheckbox(checked: f.photo),
-            label: Text('A photo when it is done', style: tkText(size: 14, color: t.text)),
-            onTap: () => setState(() => f.photo = !f.photo),
-          ),
-        ),
-        if (_tried && problem != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Semantics(liveRegion: true, child: Text(problem, style: tkText(size: 14, color: t.danger))),
-          ),
-        if (_error != null) TkErrorBox(_error!),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        TkFormGroup(
           children: [
-            TkPlainButton(label: 'Give the task', primary: true, onTap: _busy ? null : _give),
-            TkPlainButton(label: 'Cancel', onTap: () => Navigator.of(context).pop(false)),
+            TkKitField(label: 'What is to be done', child: TkTextBox(controller: _what, max: 200, size: 15, height: 46)),
+            TkKitField(
+              label: 'Who it is for',
+              field: false,
+              hint: 'For anyone in a role, the first to take it has it.',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (people.isNotEmpty)
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final (v, name) in people) _WhoFace(name: name, on: f.who == v, onTap: () => setState(() => f.who = v)),
+                        ],
+                      ),
+                    ),
+                  if (roles.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [for (final (v, words) in roles) TkPillChoice(label: words, on: f.who == v, onTap: () => setState(() => f.who = v))],
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
+        TkChips<String>(
+          label: 'When',
+          padding: EdgeInsets.zero,
+          chips: const [('none', 'Any time'), ('by', 'By a time'), ('day', 'Daily'), ('week', 'Weekly')],
+          on: f.when,
+          onPick: (v) => setState(() => f.when = v),
+        ),
+        if (f.when != 'none')
+          TkFormGroup(
+            children: [
+              if (f.when == 'week')
+                TkKitField(
+                  label: 'On',
+                  field: false,
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [for (final (v, day) in weekdays) TkPillChoice(label: day.substring(0, 3), semantics: day, on: f.day == v, onTap: () => setState(() => f.day = v))],
+                  ),
+                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (f.when == 'by') ...[
+                    Expanded(child: TkKitField(label: 'Day', field: false, child: TkPickBox(label: 'Day', shown: _dayWords(f.date), icon: 'b-calendar', onTap: _pickDay))),
+                    const SizedBox(width: 10),
+                  ],
+                  Expanded(
+                    child: TkKitField(
+                      label: f.when == 'by' ? 'By' : 'Due at',
+                      field: false,
+                      child: TkPickBox(label: f.when == 'by' ? 'By' : 'Due at', shown: f.time.isEmpty ? '--:--' : f.time, icon: 'b-clock', onTap: _pickTime),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        TkSection(
+          inset: 56,
+          children: [
+            TkListRow(
+              title: 'A photo when it is done',
+              icon: 'b-camera',
+              square: TkLook.of(context).violet,
+              onTap: () => setState(() => f.photo = !f.photo),
+              trailing: TkSwitch(label: 'A photo when it is done', on: f.photo, onChanged: (v) => setState(() => f.photo = v)),
+            ),
+          ],
+        ),
+        if (_tried && problem != null) Semantics(liveRegion: true, child: Text(problem, style: tkText(size: 14, color: t.danger))),
+        if (_error != null) TkErrorBox(_error!),
       ],
+    );
+  }
+}
+
+/// A person to give it to, as a face with their first name (as drawn).
+class _WhoFace extends StatelessWidget {
+  const _WhoFace({required this.name, required this.on, required this.onTap});
+  final String name;
+  final bool on;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final ring = dark ? t.brandDark : t.brand;
+    return Semantics(
+      button: true,
+      selected: on,
+      label: name,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: TkPress(
+        onTap: onTap,
+        child: SizedBox(
+          width: 64,
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: on ? ring : const Color(0x00000000), width: 2)),
+                child: TkFace(tkInitials(name), size: 40, colors: tkFaceFor(name)),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                name.split(' ').first,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: tkText(size: 12, weight: on ? 700 : 500, color: on ? t.text : t.muted),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A choice as a small pill, pine when on (a role, a weekday).
+class TkPillChoice extends StatelessWidget {
+  const TkPillChoice({super.key, required this.label, required this.on, required this.onTap, this.semantics});
+  final String label;
+  final bool on;
+  final VoidCallback onTap;
+  final String? semantics;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final (bg, ink) = on ? (dark ? (t.brandDark, t.brandDarkText) : (t.brand, const Color(0xFFFFFFFF))) : (t.field, t.text);
+    return TapArea(
+      child: Semantics(
+        button: true,
+        selected: on,
+        label: semantics ?? label,
+        onTap: onTap,
+        excludeSemantics: true,
+        child: TkPress(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            constraints: const BoxConstraints(minHeight: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+            child: Text(label, style: tkText(size: 13, weight: 600, color: ink)),
+          ),
+        ),
+      ),
     );
   }
 }
 
 /// A field that opens a picker: the web's soft field with what is chosen.
 class TkPickBox extends StatelessWidget {
-  const TkPickBox({super.key, required this.label, required this.shown, required this.onTap, this.chevron = false});
+  const TkPickBox({super.key, required this.label, required this.shown, required this.onTap, this.chevron = false, this.icon});
   final String label;
   final String shown;
   final VoidCallback onTap;
   final bool chevron;
+
+  /// An icon at its end (a calendar, a clock), as drawn; the box is taller.
+  final String? icon;
 
   @override
   Widget build(BuildContext context) {
@@ -290,13 +421,14 @@ class TkPickBox extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: Container(
-          constraints: const BoxConstraints(minHeight: 36),
+          constraints: BoxConstraints(minHeight: icon == null ? 36 : 48),
           padding: const EdgeInsets.only(left: 12, right: 11),
-          decoration: BoxDecoration(color: t.field, borderRadius: BorderRadius.circular(Tk.radiusSm)),
+          decoration: BoxDecoration(color: t.field, borderRadius: BorderRadius.circular(icon == null ? Tk.radiusSm : 14)),
           child: Row(
             children: [
-              Expanded(child: Text(shown, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14, color: t.text))),
+              Expanded(child: Text(shown, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: icon == null ? 14 : 15, color: t.text))),
               if (chevron) TkIcon('chevron-down', size: 12, color: t.muted),
+              if (icon != null) TkIcon(icon!, size: 18, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.text),
             ],
           ),
         ),
