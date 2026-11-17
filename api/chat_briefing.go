@@ -16,6 +16,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/dispatch"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/links"
+	"github.com/israel-duff/taskiem/engine/schools"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/storefront"
 	"github.com/israel-duff/taskiem/engine/whatsapp"
@@ -168,6 +169,76 @@ type briefing struct {
 	// Tasks is the open tasks due today and late (staff_tasks.go), when
 	// there are any.
 	Tasks *taskCounts `json:"tasks,omitempty"`
+	// School is the current term's fees as they stand, for those who read
+	// the school (school.read), with schools on and a term current.
+	School *briefingSchool `json:"school,omitempty"`
+}
+
+// briefingSchool is the school's part of the briefing: the term's money
+// (schools.Overview), who owes, who is not cleared, what waits for this
+// person as the second person, and the last daily close.
+type briefingSchool struct {
+	Term             string `json:"term"`
+	ExpectedKobo     int64  `json:"expected_kobo"`
+	CollectedKobo    int64  `json:"collected_kobo"`
+	CollectedPercent int    `json:"collected_percent"`
+	ThisWeekKobo     int64  `json:"this_week_kobo"`
+	OverdueKobo      int64  `json:"overdue_kobo"`
+	Debtors          int    `json:"debtors"`
+	DebtorsKobo      int64  `json:"debtors_kobo"`
+	NotCleared       int    `json:"not_cleared"`
+	Cleared          int    `json:"cleared"`
+	Students         int    `json:"students"`
+	// Yesterday is the money that landed yesterday and what of it no
+	// invoice counts, from yesterday's close, when it was taken.
+	Yesterday *briefingSchoolDay `json:"yesterday,omitempty"`
+	// Waiting is the cash and discounts waiting for a second person that
+	// this person may decide (school.approve; never their own).
+	Waiting   *int                `json:"waiting,omitempty"`
+	LastClose *schools.CloseBrief `json:"last_close,omitempty"`
+}
+
+type briefingSchoolDay struct {
+	Day           string `json:"day"`
+	CollectedKobo int64  `json:"collected_kobo"`
+	Payments      int    `json:"payments"`
+	Unmatched     int    `json:"unmatched"`
+	Reconciles    bool   `json:"reconciles"`
+}
+
+// schoolBriefingTx is the school's part of the briefing; nil when schools
+// are off or no term is current.
+func (s *Server) schoolBriefingTx(ctx context.Context, tx pgx.Tx, p *Principal) (*briefingSchool, error) {
+	on, err := schools.Enabled(ctx, tx, p.TenantID)
+	if err != nil || !on {
+		return nil, err
+	}
+	cur, ok, err := s.schoolsSvc().CurrentTerm(ctx, tx, p.TenantID)
+	if err != nil || !ok {
+		return nil, err
+	}
+	ov, err := s.schoolsSvc().Overview(ctx, tx, p.TenantID, cur.ID)
+	if err != nil {
+		return nil, err
+	}
+	out := &briefingSchool{Term: ov.Term, ExpectedKobo: ov.ExpectedKobo, CollectedKobo: ov.CollectedKobo, CollectedPercent: ov.CollectedPercent,
+		ThisWeekKobo: ov.ThisWeekKobo, OverdueKobo: ov.OverdueKobo, Debtors: ov.Debtors, DebtorsKobo: ov.DebtorsKobo,
+		NotCleared: ov.Clearance.PartlyPaid + ov.Clearance.NotPaid, Cleared: ov.Clearance.Cleared, Students: ov.Clearance.Students, LastClose: ov.LastClose}
+	y := s.schoolsSvc().Yesterday()
+	if c, ok, err := s.schoolsSvc().CloseOf(ctx, tx, p.TenantID, y); err != nil {
+		return nil, err
+	} else if ok {
+		out.Yesterday = &briefingSchoolDay{Day: y.Format("2006-01-02"), CollectedKobo: c.MoneyIn.Kobo, Payments: c.MoneyIn.Count, Unmatched: c.Unmatched.Count, Reconciles: c.Reconciles}
+	}
+	if p.Can(PermSchoolApprove) {
+		var n int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM school_pending_postings WHERE tenant_id = $1 AND status = 'pending'
+			AND (requested_user IS NULL OR requested_user <> $2)`, p.TenantID, p.UserID).Scan(&n); err != nil {
+			return nil, err
+		}
+		out.Waiting = &n
+	}
+	return out, nil
 }
 
 type briefingSales struct {
@@ -191,9 +262,9 @@ func partOfDay(t time.Time) string {
 }
 
 // mayBrief is who gets the morning briefing: those who run the business
-// (the storefront or the money), not every member.
+// (the storefront, the money or the school), not every member.
 func mayBrief(p *Principal) bool {
-	return p.Can(PermStorefrontManage) || p.Can(PermInvoiceManage)
+	return p.Can(PermStorefrontManage) || p.Can(PermInvoiceManage) || p.Can(PermSchoolManage)
 }
 
 // getChatBriefing is GET /v1/chat-briefing: the person's morning briefing
@@ -291,6 +362,13 @@ func (s *Server) getChatBriefing(w http.ResponseWriter, r *http.Request) {
 			if tc.Today > 0 || tc.Late > 0 {
 				out.Tasks = &tc
 			}
+		}
+		if p.Can(PermSchoolRead) {
+			sb, err := s.schoolBriefingTx(ctx, tx, p)
+			if err != nil {
+				return err
+			}
+			out.School = sb
 		}
 		return nil
 	}); err != nil {

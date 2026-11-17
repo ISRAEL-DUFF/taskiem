@@ -1731,7 +1731,7 @@ class GetChatAlertsResponse {
 
 /// An alert as a chat card, with what its next step needs.
 class ChatAlert {
-  const ChatAlert({this.amountKobo, this.approval, required this.at, this.id, required this.key, required this.kind, required this.line, this.reference, this.reorder, required this.title, this.who});
+  const ChatAlert({this.amountKobo, this.approval, required this.at, this.id, required this.key, required this.kind, required this.line, this.reference, this.reorder, this.school, required this.title, this.who});
 
   final int? amountKobo;
   final Approval? approval;
@@ -1744,6 +1744,11 @@ class ChatAlert {
   final String line;
   final String? reference;
   final ChatAlertReorder? reorder;
+  /// school_approval: a school's request waiting for a second person (cash at
+  /// the desk, a discount), the student's name masked; for those with
+  /// school.approve, never their own. Decided with POST
+  /// /v1/schools/approvals/{id}.
+  final SchoolPosting? school;
   final String title;
   /// Who asked for the approval ("Tunde (cashier)")
   final String? who;
@@ -1758,6 +1763,7 @@ class ChatAlert {
         line: j['line'] as String,
         reference: j['reference'] == null ? null : j['reference'] as String,
         reorder: j['reorder'] == null ? null : ChatAlertReorder.fromJson(j['reorder'] as Map<String, dynamic>),
+        school: j['school'] == null ? null : SchoolPosting.fromJson(j['school'] as Map<String, dynamic>),
         title: j['title'] as String,
         who: j['who'] == null ? null : j['who'] as String,
       );
@@ -1772,6 +1778,7 @@ class ChatAlert {
         'line': line,
         'reference': ?reference,
         'reorder': ?reorder?.toJson(),
+        'school': ?school?.toJson(),
         'title': title,
         'who': ?who,
       };
@@ -1888,6 +1895,152 @@ class ChatAlertReorder {
         'seller_item_id': sellerItemId,
         'sizes': ?sizes,
         'supplier': supplier,
+      };
+}
+
+/// A request of the school (docs/schools.md#cash-and-transfers): a cash posting
+/// (pending, posted at once or after approval, or declined), or a discount, a
+/// discount amendment or a held term invoice waiting for a second person.
+class SchoolPosting {
+  const SchoolPosting({this.admissionNumber, required this.amountKobo, this.class_, this.decidedAt, this.decidedBy, this.decidedEmail, this.decisionReason, required this.details, required this.id, this.invoiceId, this.invoiceNumber, required this.kind, this.name, required this.requestedAt, required this.requestedBy, this.requestedEmail, this.requestedUser, this.result, required this.status, this.studentId, this.termId, this.yours});
+
+  final String? admissionNumber;
+  final int amountKobo;
+  final String? class_;
+  final DateTime? decidedAt;
+  final String? decidedBy;
+  final String? decidedEmail;
+  final String? decisionReason;
+  /// What was asked: how, date and note for a posting; kind, percent or
+  /// amount_kobo and reason for a discount; the amendment; send for a held
+  /// invoice
+  final Map<String, dynamic> details;
+  final String id;
+  final String? invoiceId;
+  final String? invoiceNumber;
+  final String kind;
+  /// The student's name, masked unless revealed
+  final String? name;
+  final DateTime requestedAt;
+  final String requestedBy;
+  /// The requester's sign-in email, when a person asked
+  final String? requestedEmail;
+  final String? requestedUser;
+  final SchoolPostingResult? result;
+  final String status;
+  final String? studentId;
+  final String? termId;
+  /// The caller asked for it, so they cannot decide it
+  final bool? yours;
+
+  factory SchoolPosting.fromJson(Map<String, dynamic> j) => SchoolPosting(
+        admissionNumber: j['admission_number'] == null ? null : j['admission_number'] as String,
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        class_: j['class'] == null ? null : j['class'] as String,
+        decidedAt: j['decided_at'] == null ? null : DateTime.parse(j['decided_at'] as String),
+        decidedBy: j['decided_by'] == null ? null : j['decided_by'] as String,
+        decidedEmail: j['decided_email'] == null ? null : j['decided_email'] as String,
+        decisionReason: j['decision_reason'] == null ? null : j['decision_reason'] as String,
+        details: j['details'] as Map<String, dynamic>,
+        id: j['id'] as String,
+        invoiceId: j['invoice_id'] == null ? null : j['invoice_id'] as String,
+        invoiceNumber: j['invoice_number'] == null ? null : j['invoice_number'] as String,
+        kind: j['kind'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+        requestedAt: DateTime.parse(j['requested_at'] as String),
+        requestedBy: j['requested_by'] as String,
+        requestedEmail: j['requested_email'] == null ? null : j['requested_email'] as String,
+        requestedUser: j['requested_user'] == null ? null : j['requested_user'] as String,
+        result: j['result'] == null ? null : SchoolPostingResult.fromJson(j['result'] as Map<String, dynamic>),
+        status: j['status'] as String,
+        studentId: j['student_id'] == null ? null : j['student_id'] as String,
+        termId: j['term_id'] == null ? null : j['term_id'] as String,
+        yours: j['yours'] == null ? null : j['yours'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'admission_number': ?admissionNumber,
+        'amount_kobo': amountKobo,
+        'class': ?class_,
+        'decided_at': ?decidedAt?.toUtc().toIso8601String(),
+        'decided_by': ?decidedBy,
+        'decided_email': ?decidedEmail,
+        'decision_reason': ?decisionReason,
+        'details': details,
+        'id': id,
+        'invoice_id': ?invoiceId,
+        'invoice_number': ?invoiceNumber,
+        'kind': kind,
+        'name': ?name,
+        'requested_at': requestedAt.toUtc().toIso8601String(),
+        'requested_by': requestedBy,
+        'requested_email': ?requestedEmail,
+        'requested_user': ?requestedUser,
+        'result': ?result?.toJson(),
+        'status': status,
+        'student_id': ?studentId,
+        'term_id': ?termId,
+        'yours': ?yours,
+      };
+}
+
+/// What a posting did, or an approved request made.
+class SchoolPostingResult {
+  const SchoolPostingResult({this.amendmentId, this.creditKobo, this.discountId, this.entryId, this.invoiceId, this.invoiceNumber, this.parts});
+
+  final String? amendmentId;
+  /// What was left as the family's credit
+  final int? creditKobo;
+  final String? discountId;
+  final String? entryId;
+  final String? invoiceId;
+  final String? invoiceNumber;
+  final List<SchoolPostingResultPartsItem>? parts;
+
+  factory SchoolPostingResult.fromJson(Map<String, dynamic> j) => SchoolPostingResult(
+        amendmentId: j['amendment_id'] == null ? null : j['amendment_id'] as String,
+        creditKobo: j['credit_kobo'] == null ? null : (j['credit_kobo'] as num).toInt(),
+        discountId: j['discount_id'] == null ? null : j['discount_id'] as String,
+        entryId: j['entry_id'] == null ? null : j['entry_id'] as String,
+        invoiceId: j['invoice_id'] == null ? null : j['invoice_id'] as String,
+        invoiceNumber: j['invoice_number'] == null ? null : j['invoice_number'] as String,
+        parts: j['parts'] == null ? null : (j['parts'] as List).map((e) => SchoolPostingResultPartsItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amendment_id': ?amendmentId,
+        'credit_kobo': ?creditKobo,
+        'discount_id': ?discountId,
+        'entry_id': ?entryId,
+        'invoice_id': ?invoiceId,
+        'invoice_number': ?invoiceNumber,
+        'parts': ?parts?.map((e) => e.toJson()).toList(),
+      };
+}
+
+class SchoolPostingResultPartsItem {
+  const SchoolPostingResultPartsItem({required this.amountKobo, required this.invoiceId, required this.number, this.receiptId, this.receiptNumber});
+
+  final int amountKobo;
+  final String invoiceId;
+  final String number;
+  final String? receiptId;
+  final String? receiptNumber;
+
+  factory SchoolPostingResultPartsItem.fromJson(Map<String, dynamic> j) => SchoolPostingResultPartsItem(
+        amountKobo: (j['amount_kobo'] as num).toInt(),
+        invoiceId: j['invoice_id'] as String,
+        number: j['number'] as String,
+        receiptId: j['receipt_id'] == null ? null : j['receipt_id'] as String,
+        receiptNumber: j['receipt_number'] == null ? null : j['receipt_number'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': amountKobo,
+        'invoice_id': invoiceId,
+        'number': number,
+        'receipt_id': ?receiptId,
+        'receipt_number': ?receiptNumber,
       };
 }
 
@@ -2121,7 +2274,7 @@ class TaskiemSayRequest {
 }
 
 class GetChatBriefingResponse {
-  const GetChatBriefingResponse({this.bookings, required this.day, this.deliveries, required this.key, this.low, required this.now, this.owedKobo, required this.part, required this.putOff, required this.ready, this.sales, this.staff, this.tasks});
+  const GetChatBriefingResponse({this.bookings, required this.day, this.deliveries, required this.key, this.low, required this.now, this.owedKobo, required this.part, required this.putOff, required this.ready, this.sales, this.school, this.staff, this.tasks});
 
   final int? bookings;
   final String day;
@@ -2136,6 +2289,12 @@ class GetChatBriefingResponse {
   final bool putOff;
   final bool ready;
   final GetChatBriefingResponseSales? sales;
+  /// The current term's fees as they stand (school.read; schools on and a term
+  /// current): collected of expected, this week's, overdue, who owes, who is
+  /// not cleared (partly paid or not paid), the cash and discounts waiting for
+  /// this person as the second person (school.approve; never their own), and
+  /// the last daily close.
+  final GetChatBriefingResponseSchool? school;
   /// Who is clocked in and who is late, when anyone is either (for those who
   /// run the people).
   final GetChatBriefingResponseStaff? staff;
@@ -2155,6 +2314,7 @@ class GetChatBriefingResponse {
         putOff: j['put_off'] as bool,
         ready: j['ready'] as bool,
         sales: j['sales'] == null ? null : GetChatBriefingResponseSales.fromJson(j['sales'] as Map<String, dynamic>),
+        school: j['school'] == null ? null : GetChatBriefingResponseSchool.fromJson(j['school'] as Map<String, dynamic>),
         staff: j['staff'] == null ? null : GetChatBriefingResponseStaff.fromJson(j['staff'] as Map<String, dynamic>),
         tasks: j['tasks'] == null ? null : GetChatBriefingResponseTasks.fromJson(j['tasks'] as Map<String, dynamic>),
       );
@@ -2171,6 +2331,7 @@ class GetChatBriefingResponse {
         'put_off': putOff,
         'ready': ready,
         'sales': ?sales?.toJson(),
+        'school': ?school?.toJson(),
         'staff': ?staff?.toJson(),
         'tasks': ?tasks?.toJson(),
       };
@@ -2216,6 +2377,124 @@ class DaySales {
         'day': day,
         'kobo': kobo,
         'label': label,
+      };
+}
+
+/// The current term's fees as they stand (school.read; schools on and a term
+/// current): collected of expected, this week's, overdue, who owes, who is not
+/// cleared (partly paid or not paid), the cash and discounts waiting for this
+/// person as the second person (school.approve; never their own), and the last
+/// daily close.
+class GetChatBriefingResponseSchool {
+  const GetChatBriefingResponseSchool({required this.cleared, required this.collectedKobo, required this.collectedPercent, required this.debtors, required this.debtorsKobo, required this.expectedKobo, this.lastClose, required this.notCleared, required this.overdueKobo, required this.students, required this.term, required this.thisWeekKobo, this.waiting, this.yesterday});
+
+  final int cleared;
+  final int collectedKobo;
+  final int collectedPercent;
+  final int debtors;
+  final int debtorsKobo;
+  final int expectedKobo;
+  final SchoolCloseBrief? lastClose;
+  final int notCleared;
+  final int overdueKobo;
+  final int students;
+  final String term;
+  final int thisWeekKobo;
+  final int? waiting;
+  /// The money that landed yesterday and what of it no invoice counts, from
+  /// yesterday's close, when it was taken.
+  final GetChatBriefingResponseSchoolYesterday? yesterday;
+
+  factory GetChatBriefingResponseSchool.fromJson(Map<String, dynamic> j) => GetChatBriefingResponseSchool(
+        cleared: (j['cleared'] as num).toInt(),
+        collectedKobo: (j['collected_kobo'] as num).toInt(),
+        collectedPercent: (j['collected_percent'] as num).toInt(),
+        debtors: (j['debtors'] as num).toInt(),
+        debtorsKobo: (j['debtors_kobo'] as num).toInt(),
+        expectedKobo: (j['expected_kobo'] as num).toInt(),
+        lastClose: j['last_close'] == null ? null : SchoolCloseBrief.fromJson(j['last_close'] as Map<String, dynamic>),
+        notCleared: (j['not_cleared'] as num).toInt(),
+        overdueKobo: (j['overdue_kobo'] as num).toInt(),
+        students: (j['students'] as num).toInt(),
+        term: j['term'] as String,
+        thisWeekKobo: (j['this_week_kobo'] as num).toInt(),
+        waiting: j['waiting'] == null ? null : (j['waiting'] as num).toInt(),
+        yesterday: j['yesterday'] == null ? null : GetChatBriefingResponseSchoolYesterday.fromJson(j['yesterday'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'cleared': cleared,
+        'collected_kobo': collectedKobo,
+        'collected_percent': collectedPercent,
+        'debtors': debtors,
+        'debtors_kobo': debtorsKobo,
+        'expected_kobo': expectedKobo,
+        'last_close': ?lastClose?.toJson(),
+        'not_cleared': notCleared,
+        'overdue_kobo': overdueKobo,
+        'students': students,
+        'term': term,
+        'this_week_kobo': thisWeekKobo,
+        'waiting': ?waiting,
+        'yesterday': ?yesterday?.toJson(),
+      };
+}
+
+/// A daily close as the list shows it.
+class SchoolCloseBrief {
+  const SchoolCloseBrief({required this.day, required this.id, required this.problems, required this.ranAt, required this.ranBy, required this.reconciles});
+
+  final String day;
+  final String id;
+  final int problems;
+  final DateTime ranAt;
+  final String ranBy;
+  final bool reconciles;
+
+  factory SchoolCloseBrief.fromJson(Map<String, dynamic> j) => SchoolCloseBrief(
+        day: j['day'] as String,
+        id: j['id'] as String,
+        problems: (j['problems'] as num).toInt(),
+        ranAt: DateTime.parse(j['ran_at'] as String),
+        ranBy: j['ran_by'] as String,
+        reconciles: j['reconciles'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'day': day,
+        'id': id,
+        'problems': problems,
+        'ran_at': ranAt.toUtc().toIso8601String(),
+        'ran_by': ranBy,
+        'reconciles': reconciles,
+      };
+}
+
+/// The money that landed yesterday and what of it no invoice counts, from
+/// yesterday's close, when it was taken.
+class GetChatBriefingResponseSchoolYesterday {
+  const GetChatBriefingResponseSchoolYesterday({required this.collectedKobo, required this.day, required this.payments, required this.reconciles, required this.unmatched});
+
+  final int collectedKobo;
+  final String day;
+  final int payments;
+  final bool reconciles;
+  final int unmatched;
+
+  factory GetChatBriefingResponseSchoolYesterday.fromJson(Map<String, dynamic> j) => GetChatBriefingResponseSchoolYesterday(
+        collectedKobo: (j['collected_kobo'] as num).toInt(),
+        day: j['day'] as String,
+        payments: (j['payments'] as num).toInt(),
+        reconciles: j['reconciles'] as bool,
+        unmatched: (j['unmatched'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'collected_kobo': collectedKobo,
+        'day': day,
+        'payments': payments,
+        'reconciles': reconciles,
+        'unmatched': unmatched,
       };
 }
 

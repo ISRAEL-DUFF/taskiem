@@ -49,7 +49,7 @@ const store = {
 };
 const tell = () => store.listeners.forEach((f) => f());
 // News worth a sound: a new order, money that came in, an approval.
-const NEWS = new Set(["new_order", "unmatched", "approval", "deal"]);
+const NEWS = new Set(["new_order", "unmatched", "approval", "school_approval", "deal"]);
 
 function loadAlerts() {
   if (typeof document !== "undefined" && document.visibilityState === "hidden")
@@ -337,6 +337,13 @@ function AlertCard({
         return {
           words: "Open the order",
           go: () => nav(`/chat?with=${customerKey(a.id ?? "")}`),
+        };
+      case "school_approval":
+        // A school's cash or discount for a second person: decided on the
+        // school's Payments page, as the web decides it.
+        return {
+          words: "Open the request",
+          go: () => nav("/schools/payments?status=pending"),
         };
       case "unmatched":
         return can("invoice.manage")

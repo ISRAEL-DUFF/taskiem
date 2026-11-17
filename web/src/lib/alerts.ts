@@ -12,6 +12,7 @@ export type AlertKind =
   | "confirm"
   | "unmatched"
   | "approval"
+  | "school_approval"
   | "deal"
   | "order_draft";
 
@@ -52,6 +53,7 @@ export const ALERT_LOOK: Record<
   confirm: { icon: "money", tone: "lime" },
   unmatched: { icon: "money", tone: "plain" },
   approval: { icon: "approvals", tone: "plain" },
+  school_approval: { icon: "approvals", tone: "plain" },
   deal: { icon: "money", tone: "warn" },
   order_draft: { icon: "chat", tone: "lime" },
 };

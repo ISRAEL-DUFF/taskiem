@@ -46,3 +46,4 @@
 /pro | not a page
 /send | not a page
 /void | not a page
+/schools/payments | app lib/school/school_money.dart
