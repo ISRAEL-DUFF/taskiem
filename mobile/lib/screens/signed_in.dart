@@ -3,6 +3,7 @@
 // on; then it moves behind the chat's menu.
 
 import '../chat/chat_link_page.dart' show ChatLinkPage;
+import '../chat/discover_settings.dart' show DiscoverSettingsPage;
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
@@ -272,6 +273,16 @@ class _SignedInScreenState extends State<SignedInScreen> {
                 square: look.teal,
                 onTap: () => _open(ChatLinkPage(auth: widget.auth)),
               ),
+              // Discover (taskiem-for-everyone §10): found by the public in
+              // the Taskiem app, apart from Explore.
+              if (widget.auth.can('storefront.manage'))
+                TkListRow(
+                  title: 'Discover',
+                  sub: 'Found by the public in the Taskiem app',
+                  icon: 'b-search',
+                  square: look.blue,
+                  onTap: () => _open(DiscoverSettingsPage(auth: widget.auth)),
+                ),
             ],
           ),
         // Owners and admins turn chat tools on for everyone.
