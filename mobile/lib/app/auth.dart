@@ -353,6 +353,12 @@ class Auth extends ChangeNotifier {
     await _forget();
   }
 
+  /// The account was deleted (`POST /v1/me/delete`): the server ended every
+  /// session and dropped its pushes, so nothing is asked of it; the phone
+  /// forgets the session, the person's settings, their notifications (keys
+  /// and those shown) and everything kept.
+  Future<void> forgetDeleted() => _forget();
+
   /// [personal]: what the sign-in said the session is, for when who it is
   /// cannot be read just now (offline): You opens, not a business.
   Future<void> _signedIn(String? token, {bool personal = false}) async {

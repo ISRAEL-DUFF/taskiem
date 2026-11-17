@@ -291,9 +291,10 @@ class Transport {
   }
 
   /// Sends a file as a multipart form (`file`, and the [fields] beside it)
-  /// and answers the JSON, as [send] does.
-  Future<Object?> upload(String path, {required List<int> bytes, required String filename, required String type, Map<String, String> fields = const {}, String field = 'file'}) async {
-    final req = http.MultipartRequest('POST', _uri(path))
+  /// and answers the JSON, as [send] does; [method] PUT where a file takes
+  /// another's place (the person's photo).
+  Future<Object?> upload(String path, {required List<int> bytes, required String filename, required String type, Map<String, String> fields = const {}, String field = 'file', String method = 'POST'}) async {
+    final req = http.MultipartRequest(method, _uri(path))
       ..headers['Accept'] = 'application/json'
       ..fields.addAll(fields)
       ..files.add(http.MultipartFile.fromBytes(field, bytes, filename: filename, contentType: MediaType.parse(type)));

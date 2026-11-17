@@ -20,10 +20,7 @@ import '../chat/approve.dart' show TkTextBox;
 import '../app/notify.dart' show PhoneNotifications, PushNote, youChatOf;
 import '../app/prefs.dart' show Prefs;
 import '../app/sound.dart' show chime;
-import '../kit/forms.dart' show TkSwitch;
 import '../theme/look.dart';
-import 'settings_more.dart' show SettingsPage;
-import 'signed_in.dart' show NotificationsCard;
 import '../chat/addresses.dart' show SavedAddressesPage;
 import '../chat/discover.dart' show DiscoverTab;
 import '../chat/my_chat.dart';
@@ -39,6 +36,8 @@ import 'home_tabs.dart';
 import 'second_proof.dart';
 import 'start_something.dart';
 import 'you_links.dart';
+import 'you_account.dart';
+import '../chat/composer.dart' show Pickers;
 import '../app/route.dart' show youRouteOf;
 import 'switcher.dart';
 
@@ -326,7 +325,7 @@ class _YouHomeState extends State<YouHome> {
         actions: [
           if (businesses.isNotEmpty) TkHeadButton(icon: 'loop', label: 'Switch', onTap: () => showSwitcher(context, auth)),
           const SizedBox(width: 6),
-          TkHeadButton(icon: 'settings', label: 'Settings', onTap: () => tkPush<void>(context, YouSettingsScreen(auth: auth, notify: widget.notify))),
+          TkHeadButton(icon: 'settings', label: 'Settings', onTap: () => tkPush<void>(context, YouSettingsScreen(auth: auth, notify: widget.notify, onOpenChat: _openId, now: widget.now))),
         ],
         children: [
           if (_invitations.isNotEmpty)
@@ -464,14 +463,23 @@ class _InvitationRow extends StatelessWidget {
   }
 }
 
-/// Settings on **You** (§7): who the person is, their phone with Change
-/// number, and signing out.
+/// Settings on **You** (§7): who the person is (their photo, only theirs),
+/// their phone with Change number, saved addresses, notifications, privacy,
+/// signing out and deleting the account.
 class YouSettingsScreen extends StatelessWidget {
-  const YouSettingsScreen({super.key, required this.auth, this.notify});
+  const YouSettingsScreen({super.key, required this.auth, this.notify, this.onOpenChat, this.pickers = const Pickers(), this.now = DateTime.now});
   final Auth auth;
 
   /// Notifications on this phone, for You.
   final PhoneNotifications? notify;
+
+  /// Opens a chat (Privacy's Ask to erase); else the chat is pushed here.
+  final OpenMyChat? onOpenChat;
+  final Pickers pickers;
+  final DateTime Function() now;
+
+  Future<void> _openChat(BuildContext context, String id, {String? notice, String draft = '', String? tool}) =>
+      tkPush<void>(context, MyChatScreen(data: MyChatData(auth, id, notice: notice, now: now), draft: draft, notify: notify, tool: tool));
 
   @override
   Widget build(BuildContext context) {
@@ -489,12 +497,14 @@ class YouSettingsScreen extends StatelessWidget {
                 children: [Text(label, style: tkHint(t)), Text(value, style: tkText(size: 15, weight: 500, color: t.text))],
               ),
             );
+        final look = TkLook.of(context);
         return TkScreen(
           title: 'Settings',
           children: [
             TkPanel(
               inset: 16,
               children: [
+                Padding(padding: const EdgeInsets.all(16), child: MyPhotoCard(auth: auth, pickers: pickers)),
                 line('Name', user?.name ?? ''),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
@@ -530,8 +540,36 @@ class YouSettingsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            if (notify != null) _YouNotifications(notify: notify!),
+            TkSection(
+              title: 'You and businesses',
+              inset: 56,
+              children: [
+                TkListRow(
+                  title: 'Notifications',
+                  sub: 'What businesses may tell you, and this phone',
+                  icon: 'b-bell',
+                  square: look.orange,
+                  onTap: () => tkPush<void>(context, YouNotificationsPage(auth: auth, notify: notify)),
+                ),
+                TkListRow(
+                  title: 'Privacy',
+                  sub: 'What businesses see, and having it erased',
+                  icon: 'b-lock',
+                  square: look.blue,
+                  onTap: () => tkPush<void>(
+                    context,
+                    YouPrivacyPage(auth: auth, onOpenChat: onOpenChat ?? (id, {notice, draft = '', tool}) => _openChat(context, id, notice: notice, draft: draft, tool: tool), now: now),
+                  ),
+                ),
+              ],
+            ),
             TkButton(label: 'Sign out', minHeight: 44, onPressed: auth.signOut),
+            TkSection(
+              inset: 56,
+              children: [
+                TkListRow(title: 'Delete your account', icon: 'b-x-ring', square: look.red, onTap: () => tkPush<void>(context, DeleteAccountScreen(auth: auth))),
+              ],
+            ),
           ],
         );
       },
@@ -742,40 +780,4 @@ class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
       ],
     );
   }
-}
-
-/// This phone's notifications on You: on or off, and a row to the rest
-/// (whether they say what came, your other devices).
-class _YouNotifications extends StatelessWidget {
-  const _YouNotifications({required this.notify});
-  final PhoneNotifications notify;
-
-  @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: notify,
-    builder: (context, _) {
-      final n = notify;
-      if (n.available != true && !n.noGoogle) return const SizedBox.shrink();
-      final look = TkLook.of(context);
-      final more = SettingsPage(title: 'Notifications on this phone', backLabel: 'Back to Settings', children: [NotificationsCard(notify: n)]);
-      return TkSection(
-        title: 'This phone',
-        inset: 56,
-        children: [
-          if (n.noGoogle)
-            TkListRow(title: 'Notifications', sub: 'This phone cannot get them', icon: 'b-bell', square: look.orange, onTap: () => tkPush<void>(context, more))
-          else ...[
-            TkListRow(
-              title: 'Notify me on this phone',
-              sub: 'When a business answers you',
-              icon: 'b-bell',
-              square: look.orange,
-              trailing: TkSwitch(label: 'Notify me on this phone', on: n.isOn, onChanged: n.busy ? null : (v) => v ? n.turnOn() : n.turnOff()),
-            ),
-            TkListRow(title: 'What this phone tells you', icon: 'b-bell', square: look.orange, onTap: () => tkPush<void>(context, more)),
-          ],
-        ],
-      );
-    },
-  );
 }
