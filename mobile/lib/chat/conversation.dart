@@ -1597,7 +1597,8 @@ Widget _maybeIntrinsic(bool on, Widget child) => on ? IntrinsicWidth(child: chil
 
 /// Your own bubble's words: white on pine in the light (the dark's deep
 /// green keeps the light words it has), lime where the web tints.
-Widget _ownWords(BuildContext context, bool on, Widget child) {
+@visibleForTesting
+Widget ownWords(BuildContext context, bool on, Widget child) {
   if (!on || TkTheme.of(context).mode == TkMode.dark) return child;
   const white = Color(0xFFFFFFFF);
   return TkTheme.recolour(
@@ -1612,8 +1613,12 @@ Widget _ownWords(BuildContext context, bool on, Widget child) {
       panel: const Color(0x1AFFFFFF),
       panel2: const Color(0x1AFFFFFF),
       border: const Color(0x33FFFFFF),
+      tkSoft: const Color(0x1AFFFFFF),
     ),
     child,
+    // Pills and a tag's letters in the bright inks: the light's dark green
+    // ink on a faint lime did not show on pine.
+    look: tkLookOnPine,
   );
 }
 
@@ -1903,7 +1908,7 @@ class _Bubble extends StatelessWidget {
                             borderRadius: radius,
                             boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 1)],
                           ),
-                    child: _ownWords(
+                    child: ownWords(
                       context,
                       mine && card == null,
                       Stack(

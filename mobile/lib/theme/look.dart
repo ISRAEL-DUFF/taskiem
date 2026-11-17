@@ -46,7 +46,10 @@ class TkLook {
   final Color glow;
 
   /// The look in force.
-  static TkLook of(BuildContext context) => TkTheme.of(context).mode == TkMode.dark ? tkLookDark : tkLookLight;
+  static TkLook of(BuildContext context) {
+    final theme = TkTheme.of(context);
+    return theme.look ?? (theme.mode == TkMode.dark ? tkLookDark : tkLookLight);
+  }
 }
 
 const tkLookLight = TkLook(
@@ -62,6 +65,30 @@ const tkLookLight = TkLook(
   redInk: Color(0xFFC81E3C),
   blueInk: Color(0xFF2559C9),
   violetInk: Color(0xFF5B45C9),
+  glow: Color(0x00000000),
+  ground: Color(0xFFF2F3F0),
+  card: Color(0xFFFFFFFF),
+  line: Color(0x12000000),
+  bar: Color(0xDBF8F9F7),
+  on: Color(0xFF0D3B2E),
+);
+
+/// The light look on pine (your own bubble in the light): the dark look's
+/// bright accents and inks, so a pill or a tag's letters show on the deep
+/// green as they do in the dark; the page's own colours stay the light's.
+const tkLookOnPine = TkLook(
+  lime: Color(0xFFB6F23A),
+  teal: Color(0xFF2FE0C0),
+  orange: Color(0xFFFF9A52),
+  red: Color(0xFFFF5A74),
+  blue: Color(0xFF7AA9FF),
+  violet: Color(0xFFA99BFF),
+  limeInk: Color(0xFFC8F169),
+  tealInk: Color(0xFF2FE0C0),
+  orangeInk: Color(0xFFFFB27A),
+  redInk: Color(0xFFFF8FA0),
+  blueInk: Color(0xFFA6C6FF),
+  violetInk: Color(0xFFC9C0FF),
   glow: Color(0x00000000),
   ground: Color(0xFFF2F3F0),
   card: Color(0xFFFFFFFF),
