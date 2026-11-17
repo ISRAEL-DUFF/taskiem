@@ -130,7 +130,7 @@ type Card struct {
 
 // CardTx reads the business's card in its own scope (tx): its profile's
 // name, tagline, area and logo, else its storefront's; the storefront's
-// hours. A photo the moderators rejected is left out.
+// hours. A photo the moderators rejected is left out (taskiem_business_photo).
 func CardTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain string, now time.Time) (Card, error) {
 	var c Card
 	if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenant).Scan(&c.Name); err != nil {
@@ -160,9 +160,6 @@ func CardTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain stri
 			c.Hours, c.OpenNow = &h, &open
 		}
 		c.Shop = sf.URL(previewDomain)
-		if len(m.Logo) > 0 {
-			c.Photo = &links.Photo{URLs: m.Logo}
-		}
 	}
 	if p.Name != "" {
 		c.Name = p.Name
@@ -175,6 +172,17 @@ func CardTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain stri
 	}
 	if p.Logo != nil && p.Logo.Moderation != "rejected" {
 		c.Photo = p.Logo
+	} else {
+		// The published page's logo, never one the moderators rejected
+		// (taskiem_business_photo, 00466: the one rule for a business's
+		// public photo, as Discover and Orders on You use it).
+		var urls map[string]string
+		if err := tx.QueryRow(ctx, `SELECT taskiem_business_photo($1)`, tenant).Scan(&urls); err != nil {
+			return c, err
+		}
+		if len(urls) > 0 {
+			c.Photo = &links.Photo{URLs: urls}
+		}
 	}
 	st, err := SettingsTx(ctx, tx, tenant)
 	if err != nil {
