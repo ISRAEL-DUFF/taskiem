@@ -446,6 +446,42 @@ class TaskiemApi {
     return PayMyChatOrderResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Search Discover (`POST /v1/discover/search`)
+  Future<DiscoverSearchResponse> discoverSearch({required DiscoverSearchRequest body}) async {
+    final j = await _t.send('POST', '/v1/discover/search', body: body.toJson());
+    return DiscoverSearchResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Discover's categories (`GET /v1/discover/categories`)
+  Future<DiscoverCategoriesResponse> discoverCategories() async {
+    final j = await _t.send('GET', '/v1/discover/categories');
+    return DiscoverCategoriesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A business's profile in Discover (`GET /v1/discover/{business}`)
+  Future<DiscoverProfile> discoverProfile({required String business}) async {
+    final j = await _t.send('GET', '/v1/discover/${Uri.encodeComponent(business)}');
+    return DiscoverProfile.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Report a business in Discover (`POST /v1/discover/{business}/report`)
+  Future<DiscoverReportResponse> discoverReport({required DiscoverReportRequest body, required String business}) async {
+    final j = await _t.send('POST', '/v1/discover/${Uri.encodeComponent(business)}/report', body: body.toJson());
+    return DiscoverReportResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The business's listing in Discover (`GET /v1/settings/discover`)
+  Future<DiscoverSettings> getDiscoverSettings() async {
+    final j = await _t.send('GET', '/v1/settings/discover');
+    return DiscoverSettings.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change the business's listing in Discover (`PUT /v1/settings/discover`)
+  Future<DiscoverSettings> putDiscoverSettings({required PutDiscoverSettingsRequest body}) async {
+    final j = await _t.send('PUT', '/v1/settings/discover', body: body.toJson());
+    return DiscoverSettings.fromJson(j as Map<String, dynamic>);
+  }
+
   /// React to a message (`PUT /v1/link-chats/{link}/messages/{id}/reaction`)
   Future<ReactLinkMessageResponse> reactLinkMessage({required ReactLinkMessageRequest body, required String link, required String id}) async {
     final j = await _t.send('PUT', '/v1/link-chats/${Uri.encodeComponent(link)}/messages/${Uri.encodeComponent(id)}/reaction', body: body.toJson());
@@ -4312,6 +4348,446 @@ class PayMyChatOrderResponse {
         'due_kobo': dueKobo,
         'reference': reference,
         'url': url,
+      };
+}
+
+class DiscoverSearchRequest {
+  const DiscoverSearchRequest({this.area, this.category, this.near, this.offset, this.q});
+
+  final String? area;
+  final String? category;
+  final DiscoverSearchRequestNear? near;
+  final int? offset;
+  final String? q;
+
+  factory DiscoverSearchRequest.fromJson(Map<String, dynamic> j) => DiscoverSearchRequest(
+        area: j['area'] == null ? null : j['area'] as String,
+        category: j['category'] == null ? null : j['category'] as String,
+        near: j['near'] == null ? null : DiscoverSearchRequestNear.fromJson(j['near'] as Map<String, dynamic>),
+        offset: j['offset'] == null ? null : (j['offset'] as num).toInt(),
+        q: j['q'] == null ? null : j['q'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': ?area,
+        'category': ?category,
+        'near': ?near?.toJson(),
+        'offset': ?offset,
+        'q': ?q,
+      };
+}
+
+class DiscoverSearchRequestNear {
+  const DiscoverSearchRequestNear({required this.lat, required this.lng});
+
+  final double lat;
+  final double lng;
+
+  factory DiscoverSearchRequestNear.fromJson(Map<String, dynamic> j) => DiscoverSearchRequestNear(
+        lat: (j['lat'] as num).toDouble(),
+        lng: (j['lng'] as num).toDouble(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'lat': lat,
+        'lng': lng,
+      };
+}
+
+class DiscoverSearchResponse {
+  const DiscoverSearchResponse({required this.more, required this.results});
+
+  final bool more;
+  final List<DiscoverResult> results;
+
+  factory DiscoverSearchResponse.fromJson(Map<String, dynamic> j) => DiscoverSearchResponse(
+        more: j['more'] as bool,
+        results: (j['results'] as List).map((e) => DiscoverResult.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'more': more,
+        'results': results.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// A business a search in Discover found.
+class DiscoverResult {
+  const DiscoverResult({required this.area, required this.business, required this.canChat, required this.category, required this.categoryName, this.km, required this.line, required this.name, required this.openNow, required this.photo});
+
+  final String area;
+  final String business;
+  /// It takes chats (the Chat button).
+  final bool canChat;
+  final String category;
+  final String categoryName;
+  /// How far it is, when the search gave `near` and the business its place.
+  final double? km;
+  /// The line under its name ("Open now, closes at 18:00", "Closed now. Opens
+  /// tomorrow at 09:00").
+  final String line;
+  final String name;
+  final bool openNow;
+  /// Its photo's sizes, by width.
+  final Map<String, dynamic> photo;
+
+  factory DiscoverResult.fromJson(Map<String, dynamic> j) => DiscoverResult(
+        area: j['area'] as String,
+        business: j['business'] as String,
+        canChat: j['can_chat'] as bool,
+        category: j['category'] as String,
+        categoryName: j['category_name'] as String,
+        km: j['km'] == null ? null : (j['km'] as num).toDouble(),
+        line: j['line'] as String,
+        name: j['name'] as String,
+        openNow: j['open_now'] as bool,
+        photo: j['photo'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': area,
+        'business': business,
+        'can_chat': canChat,
+        'category': category,
+        'category_name': categoryName,
+        'km': ?km,
+        'line': line,
+        'name': name,
+        'open_now': openNow,
+        'photo': photo,
+      };
+}
+
+class DiscoverCategoriesResponse {
+  const DiscoverCategoriesResponse({required this.categories});
+
+  final List<DiscoverCategoriesResponseCategoriesItem> categories;
+
+  factory DiscoverCategoriesResponse.fromJson(Map<String, dynamic> j) => DiscoverCategoriesResponse(
+        categories: (j['categories'] as List).map((e) => DiscoverCategoriesResponseCategoriesItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'categories': categories.map((e) => e.toJson()).toList(),
+      };
+}
+
+class DiscoverCategoriesResponseCategoriesItem {
+  const DiscoverCategoriesResponseCategoriesItem({required this.key, required this.name});
+
+  final String key;
+  final String name;
+
+  factory DiscoverCategoriesResponseCategoriesItem.fromJson(Map<String, dynamic> j) => DiscoverCategoriesResponseCategoriesItem(
+        key: j['key'] as String,
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'name': name,
+      };
+}
+
+/// A business's profile in Discover (its listing, with its hours' line and the
+/// person's own chat).
+class DiscoverProfile {
+  const DiscoverProfile({this.address, this.area, required this.business, required this.canChat, this.category, required this.categoryName, this.chat, required this.hasBook, required this.hasShop, required this.hours, required this.line, this.mapLink, required this.name, required this.openNow, this.photo, required this.photos, this.shop, this.tagline});
+
+  final String? address;
+  final String? area;
+  final String business;
+  /// Chat is offered (POST /v1/me/chats with from discover).
+  final bool canChat;
+  final String? category;
+  final String categoryName;
+  /// The person's own conversation with the business, when they have one.
+  final String? chat;
+  /// Book is offered, in the chat.
+  final bool hasBook;
+  /// Their shop is offered, in the chat.
+  final bool hasShop;
+  /// Opening hours, Monday first (as a storefront's).
+  final Map<String, dynamic> hours;
+  /// The line under its name ("Open now, closes at 18:00"; "" when it keeps no
+  /// hours).
+  final String line;
+  final String? mapLink;
+  final String name;
+  final bool openNow;
+  final DiscoverPhoto? photo;
+  final List<DiscoverPhoto> photos;
+  /// Its published storefront's address.
+  final String? shop;
+  final String? tagline;
+
+  factory DiscoverProfile.fromJson(Map<String, dynamic> j) => DiscoverProfile(
+        address: j['address'] == null ? null : j['address'] as String,
+        area: j['area'] == null ? null : j['area'] as String,
+        business: j['business'] as String,
+        canChat: j['can_chat'] as bool,
+        category: j['category'] == null ? null : j['category'] as String,
+        categoryName: j['category_name'] as String,
+        chat: j['chat'] == null ? null : j['chat'] as String,
+        hasBook: j['has_book'] as bool,
+        hasShop: j['has_shop'] as bool,
+        hours: j['hours'] as Map<String, dynamic>,
+        line: j['line'] as String,
+        mapLink: j['map_link'] == null ? null : j['map_link'] as String,
+        name: j['name'] as String,
+        openNow: j['open_now'] as bool,
+        photo: j['photo'] == null ? null : DiscoverPhoto.fromJson(j['photo'] as Map<String, dynamic>),
+        photos: (j['photos'] as List).map((e) => DiscoverPhoto.fromJson(e as Map<String, dynamic>)).toList(),
+        shop: j['shop'] == null ? null : j['shop'] as String,
+        tagline: j['tagline'] == null ? null : j['tagline'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'address': ?address,
+        'area': ?area,
+        'business': business,
+        'can_chat': canChat,
+        'category': ?category,
+        'category_name': categoryName,
+        'chat': ?chat,
+        'has_book': hasBook,
+        'has_shop': hasShop,
+        'hours': hours,
+        'line': line,
+        'map_link': ?mapLink,
+        'name': name,
+        'open_now': openNow,
+        'photo': ?photo?.toJson(),
+        'photos': photos.map((e) => e.toJson()).toList(),
+        'shop': ?shop,
+        'tagline': ?tagline,
+      };
+}
+
+class DiscoverPhoto {
+  const DiscoverPhoto({this.caption, required this.urls});
+
+  final String? caption;
+  /// The photo's sizes, by width.
+  final Map<String, dynamic> urls;
+
+  factory DiscoverPhoto.fromJson(Map<String, dynamic> j) => DiscoverPhoto(
+        caption: j['caption'] == null ? null : j['caption'] as String,
+        urls: j['urls'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'caption': ?caption,
+        'urls': urls,
+      };
+}
+
+class DiscoverReportRequest {
+  const DiscoverReportRequest({this.note, required this.reason});
+
+  final String? note;
+  final String reason;
+
+  factory DiscoverReportRequest.fromJson(Map<String, dynamic> j) => DiscoverReportRequest(
+        note: j['note'] == null ? null : j['note'] as String,
+        reason: j['reason'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'note': ?note,
+        'reason': reason,
+      };
+}
+
+class DiscoverReportResponse {
+  const DiscoverReportResponse({required this.reported, required this.words});
+
+  final bool reported;
+  final String words;
+
+  factory DiscoverReportResponse.fromJson(Map<String, dynamic> j) => DiscoverReportResponse(
+        reported: j['reported'] as bool,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'reported': reported,
+        'words': words,
+      };
+}
+
+/// A business's listing in Discover, its switch and what it lacks
+/// (taskiem-for-everyone §10).
+class DiscoverSettings {
+  const DiscoverSettings({this.area, this.category, this.chatOff, this.chosen, required this.default_, this.hidden, this.hours, required this.listed, required this.listing, this.location, required this.missing, this.missingLine, this.removedNote, required this.shown, this.workspace});
+
+  final String? area;
+  /// The listing's own category, when the business gave one.
+  final String? category;
+  final String? chatOff;
+  /// The business's own choice; null leaves it to the default.
+  final Object? chosen;
+  /// On with a published storefront.
+  final bool default_;
+  final String? hidden;
+  final Map<String, dynamic>? hours;
+  /// Listed now (its choice, else the default).
+  final bool listed;
+  final DiscoverListing listing;
+  final DiscoverLocation? location;
+  final List<String> missing;
+  final String? missingLine;
+  final String? removedNote;
+  final bool shown;
+  /// A workflows workspace, never listed.
+  final bool? workspace;
+
+  factory DiscoverSettings.fromJson(Map<String, dynamic> j) => DiscoverSettings(
+        area: j['area'] == null ? null : j['area'] as String,
+        category: j['category'] == null ? null : j['category'] as String,
+        chatOff: j['chat_off'] == null ? null : j['chat_off'] as String,
+        chosen: j['chosen'],
+        default_: j['default'] as bool,
+        hidden: j['hidden'] == null ? null : j['hidden'] as String,
+        hours: j['hours'] == null ? null : j['hours'] as Map<String, dynamic>,
+        listed: j['listed'] as bool,
+        listing: DiscoverListing.fromJson(j['listing'] as Map<String, dynamic>),
+        location: j['location'] == null ? null : DiscoverLocation.fromJson(j['location'] as Map<String, dynamic>),
+        missing: (j['missing'] as List).map((e) => e as String).toList(),
+        missingLine: j['missing_line'] == null ? null : j['missing_line'] as String,
+        removedNote: j['removed_note'] == null ? null : j['removed_note'] as String,
+        shown: j['shown'] as bool,
+        workspace: j['workspace'] == null ? null : j['workspace'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': ?area,
+        'category': ?category,
+        'chat_off': ?chatOff,
+        'chosen': ?chosen,
+        'default': default_,
+        'hidden': ?hidden,
+        'hours': ?hours,
+        'listed': listed,
+        'listing': listing.toJson(),
+        'location': ?location?.toJson(),
+        'missing': missing.map((e) => e).toList(),
+        'missing_line': ?missingLine,
+        'removed_note': ?removedNote,
+        'shown': shown,
+        'workspace': ?workspace,
+      };
+}
+
+/// A business's listing in Discover.
+class DiscoverListing {
+  const DiscoverListing({this.address, this.area, required this.business, required this.canChat, this.category, required this.hasBook, required this.hasShop, required this.hours, this.location, this.mapLink, required this.name, this.photo, required this.photos, this.shop, this.tagline});
+
+  final String? address;
+  final String? area;
+  final String business;
+  final bool canChat;
+  final String? category;
+  final bool hasBook;
+  final bool hasShop;
+  /// Opening hours, Monday first (as a storefront's).
+  final Map<String, dynamic> hours;
+  final DiscoverLocation? location;
+  final String? mapLink;
+  final String name;
+  final DiscoverPhoto? photo;
+  final List<DiscoverPhoto> photos;
+  /// Its published storefront's address.
+  final String? shop;
+  final String? tagline;
+
+  factory DiscoverListing.fromJson(Map<String, dynamic> j) => DiscoverListing(
+        address: j['address'] == null ? null : j['address'] as String,
+        area: j['area'] == null ? null : j['area'] as String,
+        business: j['business'] as String,
+        canChat: j['can_chat'] as bool,
+        category: j['category'] == null ? null : j['category'] as String,
+        hasBook: j['has_book'] as bool,
+        hasShop: j['has_shop'] as bool,
+        hours: j['hours'] as Map<String, dynamic>,
+        location: j['location'] == null ? null : DiscoverLocation.fromJson(j['location'] as Map<String, dynamic>),
+        mapLink: j['map_link'] == null ? null : j['map_link'] as String,
+        name: j['name'] as String,
+        photo: j['photo'] == null ? null : DiscoverPhoto.fromJson(j['photo'] as Map<String, dynamic>),
+        photos: (j['photos'] as List).map((e) => DiscoverPhoto.fromJson(e as Map<String, dynamic>)).toList(),
+        shop: j['shop'] == null ? null : j['shop'] as String,
+        tagline: j['tagline'] == null ? null : j['tagline'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'address': ?address,
+        'area': ?area,
+        'business': business,
+        'can_chat': canChat,
+        'category': ?category,
+        'has_book': hasBook,
+        'has_shop': hasShop,
+        'hours': hours,
+        'location': ?location?.toJson(),
+        'map_link': ?mapLink,
+        'name': name,
+        'photo': ?photo?.toJson(),
+        'photos': photos.map((e) => e.toJson()).toList(),
+        'shop': ?shop,
+        'tagline': ?tagline,
+      };
+}
+
+/// A place on the map.
+class DiscoverLocation {
+  const DiscoverLocation({required this.lat, required this.lng});
+
+  final double lat;
+  final double lng;
+
+  factory DiscoverLocation.fromJson(Map<String, dynamic> j) => DiscoverLocation(
+        lat: (j['lat'] as num).toDouble(),
+        lng: (j['lng'] as num).toDouble(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'lat': lat,
+        'lng': lng,
+      };
+}
+
+class PutDiscoverSettingsRequest {
+  const PutDiscoverSettingsRequest({this.area, this.category, this.clearHours, this.clearLocation, this.default_, this.hours, this.listed, this.location});
+
+  final String? area;
+  final String? category;
+  final bool? clearHours;
+  final bool? clearLocation;
+  final bool? default_;
+  final Map<String, dynamic>? hours;
+  final bool? listed;
+  final DiscoverLocation? location;
+
+  factory PutDiscoverSettingsRequest.fromJson(Map<String, dynamic> j) => PutDiscoverSettingsRequest(
+        area: j['area'] == null ? null : j['area'] as String,
+        category: j['category'] == null ? null : j['category'] as String,
+        clearHours: j['clear_hours'] == null ? null : j['clear_hours'] as bool,
+        clearLocation: j['clear_location'] == null ? null : j['clear_location'] as bool,
+        default_: j['default'] == null ? null : j['default'] as bool,
+        hours: j['hours'] == null ? null : j['hours'] as Map<String, dynamic>,
+        listed: j['listed'] == null ? null : j['listed'] as bool,
+        location: j['location'] == null ? null : DiscoverLocation.fromJson(j['location'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': ?area,
+        'category': ?category,
+        'clear_hours': ?clearHours,
+        'clear_location': ?clearLocation,
+        'default': ?default_,
+        'hours': ?hours,
+        'listed': ?listed,
+        'location': ?location?.toJson(),
       };
 }
 
