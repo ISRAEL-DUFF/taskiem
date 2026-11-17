@@ -469,6 +469,8 @@ func (s *Server) Handler() http.Handler {
 			s.customerDoorRoutes(r)                              // a person's chats with businesses (customer_door.go)
 			r.Get("/me/storefront-orders", s.myStorefrontOrders) // a person's own orders, by their phone (customer_links.go)
 			r.Post("/me/storefront-orders/confirm", s.confirmStorefrontOrders)
+			s.personOrderRoutes(r)              // Orders on You (person_orders.go)
+			s.personAddressRoutes(r)            // saved addresses (person_addresses.go)
 			r.Get("/me/devices", s.listDevices) // Your phones (devices.go)
 			r.Delete("/me/devices/{id}", s.removeDevice)
 			r.Get("/me/passkeys", s.listPasskeys)

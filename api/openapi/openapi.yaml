@@ -21102,6 +21102,13 @@ paths:
                 address:
                   type: string
                   maxLength: 300
+                landmark:
+                  type: string
+                  maxLength: 300
+                address_id:
+                  type: string
+                  format: uuid
+                  description: 'One of the person''s saved addresses (GET /v1/me/addresses): copied into the order in place of `address` and `landmark` (its area after the street; its landmark, and its phone for the rider, as the landmark). The business sees only that copy, never the saved list. 404 when it is not one of theirs.'
                 note:
                   type: string
                   maxLength: 500
@@ -21315,6 +21322,250 @@ paths:
                 properties:
                   confirmed:
                     type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/orders:
+    get:
+      operationId: myOrders
+      tags:
+      - You
+      summary: Your orders
+      description: 'Orders on You (taskiem-for-everyone §13): every order and booking the person has with any business,
+        newest first, each once. Those made in the app or the browser chat while signed in, and the storefront orders
+        and bookings made with their verified phone, once theirs (made after the phone was on the account, or
+        confirmed with "These are mine", POST /v1/me/storefront-orders/confirm). Orders still waiting for that are only
+        counted (`waiting_count`). Read across businesses through one narrow function that answers only what a row
+        shows. `next` is the cursor of the next page (`before`), null on the last. A personal session reaches it.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: before
+        in: query
+        description: The `next` of the page before.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      responses:
+        '200':
+          description: The orders
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [orders, next, waiting_count]
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PersonOrder'
+                  next:
+                    type: [string, 'null']
+                    description: The cursor of the next page; null on the last
+                  waiting_count:
+                    type: integer
+                    description: How many orders made with the person's phone before it was on their account wait for "These are mine"; nothing else of them is shown
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/orders/{business}/{reference}:
+    get:
+      operationId: myOrder
+      tags:
+      - You
+      summary: One of your orders
+      description: 'One of the person''s orders or bookings: its row, its lines, how it is fulfilled, the address on the
+        order (as it was copied there; never the person''s saved list) and the rider''s progress once a rider holds it.
+        Through a narrow door to that one order (`customer.order_detail`), audited in the business''s chain; it needs no
+        chat with the business. 404 for an order that is not the person''s; 403 `blocked` when the business blocked the
+        person; 409 `area_off` when it turned Orders off.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: business
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonOrderDetail'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/orders/{business}/{reference}/pay:
+    get:
+      operationId: payMyOrder
+      tags:
+      - You
+      summary: Pay for one of your orders
+      description: 'Through the door to the order (`customer.pay`), audited: its pay link (its status page, where it is
+        paid), while something is due. 409 when nothing is due, it is paid outside the app, or it is paid once they
+        accept it; 403 `blocked`; 404 for an order that is not the person''s.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: business
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The pay link
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [reference, url, due_kobo]
+                properties:
+                  reference:
+                    type: string
+                  url:
+                    type: string
+                  due_kobo:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/addresses:
+    get:
+      operationId: myAddresses
+      tags:
+      - You
+      summary: Your saved addresses
+      description: The person's saved addresses (§13), the default first. Kept on their side only; a business sees only
+        the address copied onto an order placed with one (`address_id`). Deleted with the account.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The addresses
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [addresses]
+                properties:
+                  addresses:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SavedAddress'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addMyAddress
+      tags:
+      - You
+      summary: Save an address
+      description: 'A new saved address: a name for it (Home, Work), the street and number, and optionally the area, a
+        landmark and a phone for the rider (read as a phone number, 400 `phone_invalid` otherwise). The first is the
+        default; `default: true` takes it from the others. Up to 20 (409).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedAddressIn'
+      responses:
+        '201':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedAddress'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/addresses/{id}:
+    put:
+      operationId: editMyAddress
+      tags:
+      - You
+      summary: Change a saved address
+      description: 'What is given is changed; `phone: ""` removes the phone. `default: true` makes it the default (`false`
+        is ignored: make another the default instead).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SavedAddressIn'
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedAddress'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteMyAddress
+      tags:
+      - You
+      summary: Delete a saved address
+      description: Deleting the default makes the newest one left the default. Orders placed with it keep their copy.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Deleted
         default:
           $ref: '#/components/responses/Error'
   /v1/me/start:
@@ -38400,6 +38651,182 @@ components:
         delivered_at:
           type: string
           format: date-time
+    PersonOrder:
+      type: object
+      additionalProperties: false
+      required: [business_id, business, reference, kind, state, summary, total_kobo, due_kobo, pay, made_at, chat_id]
+      description: One row of Orders on You.
+      properties:
+        business_id:
+          type: string
+          format: uuid
+        business:
+          type: string
+        photo:
+          $ref: '#/components/schemas/OrderPhoto'
+        reference:
+          type: string
+        kind:
+          type: string
+          enum: [order, booking]
+        state:
+          type: string
+          description: The order's status, as the business's order has it.
+        summary:
+          type: string
+          description: '"2 × Jollof rice, 1 × Chapman", or a booking''s service; up to 200 characters.'
+        total_kobo:
+          type: integer
+        due_kobo:
+          type: integer
+        pay:
+          type: boolean
+          description: Something is due now and can be paid in the app; GET /v1/me/orders/{business_id}/{reference}/pay is its link. Never while the business blocked the person or turned Orders off.
+        made_at:
+          type: string
+          format: date-time
+        chat_id:
+          type: [string, 'null']
+          format: uuid
+          description: 'The person''s chat with the business, for "Chat about this"; null when there is none (POST /v1/me/chats {business_id, from: "order"} starts it).'
+    OrderPhoto:
+      type: object
+      additionalProperties: false
+      required: [urls]
+      description: A business's photo, its sizes' addresses (as the chat's header has it).
+      properties:
+        urls:
+          type: object
+          additionalProperties:
+            type: string
+    PersonOrderDetail:
+      type: object
+      additionalProperties: false
+      required: [business_id, business, reference, kind, state, summary, total_kobo, due_kobo, pay, made_at, chat_id, lines, paid_kobo]
+      description: One of the person's orders, with what it holds.
+      properties:
+        business_id:
+          type: string
+          format: uuid
+        business:
+          type: string
+        photo:
+          $ref: '#/components/schemas/OrderPhoto'
+        reference:
+          type: string
+        kind:
+          type: string
+          enum: [order, booking]
+        state:
+          type: string
+        summary:
+          type: string
+        total_kobo:
+          type: integer
+        due_kobo:
+          type: integer
+        pay:
+          type: boolean
+        made_at:
+          type: string
+          format: date-time
+        chat_id:
+          type: [string, 'null']
+          format: uuid
+        lines:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [name, quantity, price_kobo, line_kobo]
+            properties:
+              name:
+                type: string
+              quantity:
+                type: integer
+              price_kobo:
+                type: integer
+              line_kobo:
+                type: integer
+        fulfilment:
+          type: string
+          enum: [pickup, delivery]
+        zone:
+          type: string
+        delivery_kobo:
+          type: integer
+        paid_kobo:
+          type: integer
+        address:
+          type: object
+          additionalProperties: false
+          required: [address]
+          description: The address on the order, as it was copied there when it was placed.
+          properties:
+            address:
+              type: string
+            landmark:
+              type: string
+        service_name:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        delivery:
+          $ref: '#/components/schemas/DeliveryProgress'
+    SavedAddress:
+      type: object
+      additionalProperties: false
+      required: [id, label, line, area, landmark, phone, default, created_at, updated_at]
+      description: One of the person's saved addresses.
+      properties:
+        id:
+          type: string
+          format: uuid
+        label:
+          type: string
+          description: Home, Work
+        line:
+          type: string
+          description: The street and number
+        area:
+          type: string
+        landmark:
+          type: string
+        phone:
+          type: [string, 'null']
+          description: A phone for the rider (E.164), when it is not the person's own
+        default:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    SavedAddressIn:
+      type: object
+      additionalProperties: false
+      properties:
+        label:
+          type: string
+          maxLength: 40
+        line:
+          type: string
+          maxLength: 200
+        area:
+          type: string
+          maxLength: 80
+        landmark:
+          type: string
+          maxLength: 200
+        phone:
+          type: string
+        default:
+          type: boolean
     CustomerChatSettings:
       type: object
       additionalProperties: false

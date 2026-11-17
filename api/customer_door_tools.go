@@ -396,32 +396,46 @@ func (s *Server) doorPay(w http.ResponseWriter, r *http.Request) {
 		if !mine {
 			return errDoorNone
 		}
-		o, err := s.Orders.GetOrder(r.Context(), tx, c.Business, ref)
-		if err != nil {
-			return err
-		}
-		if due = o.BalanceKobo(); due <= 0 {
-			return customerSendErr{http.StatusConflict, "Nothing is due on this order."}
-		}
-		if o.Payment == "none" {
-			return customerSendErr{http.StatusConflict, "They take payment for this outside the app. Ask them here how to pay."}
-		}
-		if o.Status == "received" && o.Payment == "after_accept" {
-			return customerSendErr{http.StatusConflict, "You pay once they accept your order. They will tell you here."}
-		}
-		if link, err = s.Orders.ChatStatusLink(r.Context(), tx, c.Business, o); err != nil {
-			return err
-		}
-		if link == "" {
-			return customerSendErr{http.StatusConflict, "This order cannot be paid in the app. Ask them here in the chat."}
-		}
-		return nil
+		var err error
+		link, due, err = s.payLinkTx(r.Context(), tx, c.Business, ref)
+		return err
 	})
 	if err != nil {
 		s.personFail(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"reference": ref, "url": link, "due_kobo": due})
+}
+
+// payLinkTx is the pay link of one of the person's orders or bookings
+// with business (the door into it open), while something is due and it
+// can be paid in the app; refused in plain words otherwise.
+func (s *Server) payLinkTx(ctx context.Context, tx pgx.Tx, business uuid.UUID, ref string) (string, int64, error) {
+	o, err := s.Orders.GetOrder(ctx, tx, business, ref)
+	if errors.Is(err, storefront.ErrNoOrder) {
+		return "", 0, errDoorNone
+	}
+	if err != nil {
+		return "", 0, err
+	}
+	due := o.BalanceKobo()
+	if due <= 0 {
+		return "", 0, customerSendErr{http.StatusConflict, "Nothing is due on this order."}
+	}
+	if o.Payment == "none" {
+		return "", 0, customerSendErr{http.StatusConflict, "They take payment for this outside the app. Ask them here how to pay."}
+	}
+	if o.Status == "received" && o.Payment == "after_accept" {
+		return "", 0, customerSendErr{http.StatusConflict, "You pay once they accept your order. They will tell you here."}
+	}
+	link, err := s.Orders.ChatStatusLink(ctx, tx, business, o)
+	if err != nil {
+		return "", 0, err
+	}
+	if link == "" {
+		return "", 0, customerSendErr{http.StatusConflict, "This order cannot be paid in the app. Ask them here in the chat."}
+	}
+	return link, due, nil
 }
 
 // orderLine is a line of an order placed in the app: an item, or one of a
@@ -461,20 +475,35 @@ func (s *Server) doorPlaceOrder(w http.ResponseWriter, r *http.Request) {
 		Fulfilment string      `json:"fulfilment"`
 		Zone       string      `json:"zone"`
 		Address    string      `json:"address"`
-		Note       string      `json:"note"`
+		Landmark   string      `json:"landmark"`
+		// AddressID: one of the person's saved addresses (§13), copied
+		// into the order in place of address and landmark.
+		AddressID *uuid.UUID `json:"address_id"`
+		Note      string     `json:"note"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	in.Address, in.Note = strings.TrimSpace(in.Address), strings.TrimSpace(in.Note)
+	in.Address, in.Landmark, in.Note = strings.TrimSpace(in.Address), strings.TrimSpace(in.Landmark), strings.TrimSpace(in.Note)
 	switch {
 	case len(in.Lines) == 0 || len(in.Lines) > 50:
 		writeErr(w, http.StatusBadRequest, "an order has 1 to 50 lines")
 		return
-	case len([]rune(in.Address)) > 300, len([]rune(in.Note)) > 500:
-		writeErr(w, http.StatusBadRequest, "the address is up to 300 characters, a note up to 500")
+	case len([]rune(in.Address)) > 300, len([]rune(in.Landmark)) > 300, len([]rune(in.Note)) > 500:
+		writeErr(w, http.StatusBadRequest, "the address and landmark are up to 300 characters each, a note up to 500")
 		return
+	}
+	to := deliverTo{Address: in.Address, Landmark: in.Landmark}
+	if in.AddressID != nil {
+		// Read in the person's own scope, before any door opens: the
+		// business is given the copy on its order, never the saved list.
+		a, err := s.savedAddress(ctx, person, *in.AddressID)
+		if err != nil {
+			s.personFail(w, r, err)
+			return
+		}
+		to = a.deliverTo()
 	}
 	if s.Orders == nil || len(s.Orders.InboxKey) == 0 {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "Orders cannot be placed here yet.", "code": "orders_closed"})
@@ -492,7 +521,7 @@ func (s *Server) doorPlaceOrder(w http.ResponseWriter, r *http.Request) {
 	var out doorOrder
 	var first bool
 	for range 3 {
-		out, first, err = s.placeAppOrder(ctx, person, chi.URLParam(r, "id"), key, *phone, in.Lines, in.Fulfilment, in.Zone, in.Address, in.Note)
+		out, first, err = s.placeAppOrder(ctx, person, chi.URLParam(r, "id"), key, *phone, in.Lines, in.Fulfilment, in.Zone, to, in.AddressID != nil, in.Note)
 		if !errors.Is(err, errReferenceTaken) {
 			break
 		}
@@ -519,10 +548,15 @@ func (s *Server) doorPlaceOrder(w http.ResponseWriter, r *http.Request) {
 // placeAppOrder places an order in one transaction through the door: the
 // shop read as it is now, the lines priced, the sealed submission into
 // the inbox, and the order's card in both copies of the conversation.
-func (s *Server) placeAppOrder(ctx context.Context, person uuid.UUID, chatID, key, phone string, lines []orderLine, fulfilment, zone, address, note string) (doorOrder, bool, error) {
+func (s *Server) placeAppOrder(ctx context.Context, person uuid.UUID, chatID, key, phone string, lines []orderLine, fulfilment, zone string, to deliverTo, saved bool, note string) (doorOrder, bool, error) {
 	var out doorOrder
 	first := false
-	err := s.doorOnce(ctx, person, chatID, "customer.order", map[string]any{"key": key}, func(tx pgx.Tx, c personChat) error {
+	address, landmark := to.Address, to.Landmark
+	detail := map[string]any{"key": key}
+	if saved {
+		detail["saved_address"] = true
+	}
+	err := s.doorOnce(ctx, person, chatID, "customer.order", detail, func(tx pgx.Tx, c personChat) error {
 		// One request of a key at a time: a repeat sent at once waits for
 		// the first, then finds its order.
 		if err := idemLockTx(ctx, tx, "app-order:"+person.String()+":"+c.Business.String()+":"+key); err != nil {
@@ -615,7 +649,7 @@ func (s *Server) placeAppOrder(ctx context.Context, person uuid.UUID, chatID, ke
 				zone = ""
 			}
 		case fulfilment == "pickup" && shop.Pickup:
-			zone, address = "", ""
+			zone, address, landmark = "", "", ""
 		case fulfilment == "" && !shop.Pickup && !shop.Delivery:
 		default:
 			return customerSendErr{http.StatusBadRequest, "Choose pickup or delivery, as they offer it."}
@@ -627,7 +661,7 @@ func (s *Server) placeAppOrder(ctx context.Context, person uuid.UUID, chatID, ke
 		}
 		ref := storefront.NewReference(shop.slug)
 		statusKey, hash := storefront.NewStatusKey()
-		sub := storefront.Submission{Kind: "order", Customer: storefront.Customer{Name: name, Phone: phone, Address: address, Message: note},
+		sub := storefront.Submission{Kind: "order", Customer: storefront.Customer{Name: name, Phone: phone, Address: address, Landmark: landmark, Message: note},
 			Basket: basket, TotalKobo: total, Fulfilment: fulfilment, Zone: zone, DeliveryKobo: fee, Payment: shop.Payment, Channel: "app",
 			PersonID: person.String(), StatusKey: statusKey, Submitted: time.Now().UTC()}
 		payload, err := storefront.SealSubmission(s.Orders.InboxKey, shop.sf, ref, sub)
