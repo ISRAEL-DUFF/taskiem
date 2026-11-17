@@ -614,7 +614,11 @@ func TestChatLinkOffersWhatsApp(t *testing.T) {
 	w := newDoorShopWorld(t)
 	withChatLinks(w.world)
 	anon := &client{t: t, base: w.base}
-	code := w.owner.must(200, "GET", "/v1/customers/chat-link", nil)["code"].(string)
+	link := w.owner.must(200, "GET", "/v1/customers/chat-link", nil)
+	code := link["code"].(string)
+	if own := link["settings"].(map[string]any)["own_number"]; own != nil {
+		t.Fatalf("own_number with no number of its own: %v", own)
+	}
 	card := anon.must(200, "GET", "/v1/chat-links/"+code, nil)
 	if card["whatsapp"] != nil || len(card["choices"].([]any)) != 1 || card["choices"].([]any)[0] != "taskiem" {
 		t.Fatalf("no number of its own: %s", toJSON(card))
@@ -630,7 +634,7 @@ func TestChatLinkOffersWhatsApp(t *testing.T) {
 		t.Fatalf("the page: %d %s", st, page)
 	}
 	settings := w.owner.must(200, "PUT", "/v1/customers/chat-settings", map[string]any{"link_whatsapp": false})
-	if settings["link_whatsapp"] != false {
+	if settings["link_whatsapp"] != false || settings["own_number"] != "+2348000000001" {
 		t.Fatalf("settings: %v", settings)
 	}
 	card = anon.must(200, "GET", "/v1/chat-links/"+code, nil)

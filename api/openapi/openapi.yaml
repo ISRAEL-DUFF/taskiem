@@ -32619,6 +32619,9 @@ components:
         link_whatsapp:
           type: boolean
           description: Whether the chat link offers Chat on WhatsApp, on the business's own number, beside Chat on Taskiem (on unless turned off; only for a business with its own number).
+        own_number:
+          type: string
+          description: 'The business''s own WhatsApp number, when it has one: where Chat on WhatsApp goes (taskiem-for-everyone §11). Settings offers the link_whatsapp switch only with it.'
     ChatLinkCard:
       type: object
       required: [name, takes_chats, code, link, words]

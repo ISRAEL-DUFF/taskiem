@@ -47,6 +47,9 @@ type Settings struct {
 	// business's own number, beside Chat on Taskiem (§11; on unless the
 	// business turns it off; only when it has a number of its own).
 	LinkWhatsApp bool `json:"link_whatsapp"`
+	// OwnNumber is the business's own WhatsApp number, when it has one
+	// (active): where Chat on WhatsApp goes, for Settings' switch.
+	OwnNumber string `json:"own_number,omitempty"`
 }
 
 // SettingsTx reads the business's settings, with the defaults where it
@@ -66,13 +69,17 @@ func SettingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Settings, err
 	if !orders {
 		st.TakesChats, st.OrdersOff = false, true
 	}
+	var own bool
+	var number string
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM whatsapp_numbers WHERE tenant_id = $1 AND status = 'active'),
+		COALESCE((SELECT display_number FROM whatsapp_numbers WHERE tenant_id = $1 AND status = 'active' AND display_number <> ''
+			ORDER BY updated_at DESC LIMIT 1), '')`, tenant).Scan(&own, &number); err != nil {
+		return st, err
+	}
+	st.OwnNumber = number
 	if st.LinkInUpdates != nil {
 		st.UpdatesLink = *st.LinkInUpdates
 		return st, nil
-	}
-	var own bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM whatsapp_numbers WHERE tenant_id = $1 AND status = 'active')`, tenant).Scan(&own); err != nil {
-		return st, err
 	}
 	st.UpdatesLink = !own
 	return st, nil
