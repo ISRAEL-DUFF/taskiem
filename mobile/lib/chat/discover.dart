@@ -44,6 +44,52 @@ const discoverReportReasons = [
   ('other', 'Something else'),
 ];
 
+/// The furthest a search pages (the server's `offset` is 0 to 200).
+const discoverMaxOffset = 200;
+
+/// "Open now" or "Closed now" (web/src/lib/discover.ts openNow).
+String openNowWords(bool open) => open ? 'Open now' : 'Closed now';
+
+/// How far away: "800 m away", "2.4 km away", "15 km away" (the web's
+/// kmWords).
+String kmWords(double? km) {
+  if (km == null || !km.isFinite || km < 0) return '';
+  if (km < 1) {
+    final m = ((km * 1000) / 100).round() * 100;
+    return '${m < 100 ? 100 : m} m away';
+  }
+  if (km < 10) return '${km.toStringAsFixed(1)} km away';
+  return '${km.round()} km away';
+}
+
+/// A result's line under its name: "Food and drinks · Yaba · 2.4 km away".
+String resultLine(DiscoverResult r) => [r.categoryName, r.area, kmWords(r.km)].where((x) => x.isNotEmpty).join(' · ');
+
+/// What the person searched, for the empty list (the web's nothingFound).
+String nothingFound({String q = '', String area = '', String? categoryName}) {
+  final what = [
+    if (q.trim().isNotEmpty) '“${q.trim()}”',
+    ?categoryName,
+    if (area.trim().isNotEmpty) 'in ${area.trim()}',
+  ].join(' ');
+  return what.isNotEmpty
+      ? 'No business found for $what. Try other words, or another area. Only businesses that chose to be found are listed.'
+      : 'No business is listed here yet. Only businesses that chose to be found are listed.';
+}
+
+/// A refused search, profile or report in a person's words (the web's
+/// discoverProblem); else the server's.
+String discoverProblem(Object e, String what) {
+  if (e is ApiError) {
+    if (e.status == 429) {
+      return what == 'report' ? 'You have sent a lot of reports. Please wait a while before you send another.' : 'You are searching too fast. Wait a moment and try again.';
+    }
+    if (e.status == 404 && what != 'search') return 'This business is not in Discover any more.';
+    if (e.status == 403) return 'Discover is for people signed in to their own account.';
+  }
+  return sayFailure(e);
+}
+
 /// The Discover tab on You.
 class DiscoverTab extends StatefulWidget {
   const DiscoverTab({super.key, required this.auth, required this.onOpenChat});
@@ -71,6 +117,10 @@ class _DiscoverTabState extends State<DiscoverTab> {
   /// Each search's number: an answer to an older one is let go.
   int _asked = 0;
   String _was = '';
+
+  /// The search the results are of: Show more pages through it, whatever
+  /// has been typed since.
+  DiscoverSearchRequest? _shown;
 
   @override
   void initState() {
@@ -106,39 +156,60 @@ class _DiscoverTabState extends State<DiscoverTab> {
     _wait = Timer(const Duration(milliseconds: 400), _search);
   }
 
-  DiscoverSearchRequest _request(int offset) {
+  /// The search as typed now: only what was given.
+  DiscoverSearchRequest _request() {
     final q = _q.text.trim(), area = _area.text.trim();
-    return DiscoverSearchRequest(q: q.isEmpty ? null : q, area: area.isEmpty ? null : area, category: _category, offset: offset == 0 ? null : offset);
+    return DiscoverSearchRequest(q: q.isEmpty ? null : q, area: area.isEmpty ? null : area, category: _category);
   }
 
   Future<void> _search() async {
     _wait?.cancel();
     _was = _shape;
     final n = ++_asked;
-    setState(() => _error = null);
+    final ask = _request();
+    // A page of the search before is let go with it.
+    setState(() => (_error = null, _loadingMore = false));
     try {
-      final r = await widget.auth.api.discoverSearch(body: _request(0));
+      final r = await widget.auth.api.discoverSearch(body: ask);
       if (!mounted || n != _asked) return;
-      setState(() => (_results = r.results, _more = r.more, _got = r.results.length));
+      setState(() => (_results = r.results, _more = r.more, _got = r.results.length, _shown = ask));
     } on Object catch (e) {
-      if (mounted && n == _asked) setState(() => _error = sayFailure(e));
+      if (!mounted || n != _asked) return;
+      // Nothing of the search before stays to page through.
+      setState(() => (_error = discoverProblem(e, 'search'), _results = null, _more = false, _shown = null));
     }
   }
 
   Future<void> _next() async {
-    final have = _results;
-    if (have == null || _loadingMore) return;
+    final have = _results, ask = _shown;
+    if (have == null || ask == null || _loadingMore || _got > discoverMaxOffset) return;
     final n = _asked;
     setState(() => _loadingMore = true);
     try {
-      final r = await widget.auth.api.discoverSearch(body: _request(_got));
+      final r = await widget.auth.api.discoverSearch(
+        body: DiscoverSearchRequest(q: ask.q, area: ask.area, category: ask.category, offset: _got),
+      );
       if (!mounted || n != _asked) return;
       final seen = {for (final x in have) x.business};
-      setState(() => (_results = [...have, ...r.results.where((x) => !seen.contains(x.business))], _more = r.more, _got = _got + r.results.length));
+      setState(() {
+        _results = [...have, ...r.results.where((x) => !seen.contains(x.business))];
+        _got = _got + r.results.length;
+        _more = r.more && _got <= discoverMaxOffset;
+      });
     } on Object catch (e) {
-      if (mounted) showTkToast(context, sayFailure(e), error: true);
+      if (mounted && n == _asked) showTkToast(context, discoverProblem(e, 'search'), error: true);
+    } finally {
+      // Always, so Show more can be pressed again; a newer search has
+      // already let it go.
+      if (mounted && n == _asked) setState(() => _loadingMore = false);
     }
-    if (mounted) setState(() => _loadingMore = false);
+  }
+
+  /// The empty list's words: what the shown search asked for.
+  String _nothingFound() {
+    final ask = _shown;
+    final cat = ask?.category == null ? null : _categories.where((c) => c.key == ask!.category).firstOrNull?.name;
+    return nothingFound(q: ask?.q ?? '', area: ask?.area ?? '', categoryName: cat);
   }
 
   void _pick(String? key) {
@@ -180,7 +251,7 @@ class _DiscoverTabState extends State<DiscoverTab> {
         if (_error != null) Semantics(liveRegion: true, child: TkErrorBox(_error!)),
         if (results == null && _error == null) const TkSkeleton(rows: 4, label: 'Finding businesses…'),
         if (results != null && results.isEmpty && _error == null)
-          const TkPanel(children: [TkEmpty(icon: 'search', title: 'No businesses found', line: 'Try other words, another area or another category.')]),
+          TkPanel(children: [TkEmpty(icon: 'search', title: 'No businesses found', line: _nothingFound())]),
         if (results != null && results.isNotEmpty)
           TkSection(
             children: [
@@ -188,17 +259,18 @@ class _DiscoverTabState extends State<DiscoverTab> {
                 TkListRow(
                   key: ValueKey('discover ${r.business}'),
                   title: r.name,
-                  sub: [r.categoryName, if (r.area.isNotEmpty) r.area, if (r.km != null) '${r.km!.toStringAsFixed(1)} km'].join(' · '),
+                  // The category, area and how far; the hours' line under it.
+                  sub: [resultLine(r), if (r.line.isNotEmpty) r.line].join('\n'),
                   face: BusinessFace(name: r.name, urls: r.photo, size: 40),
-                  status: r.openNow ? 'Open now' : 'Closed',
+                  status: openNowWords(r.openNow),
                   statusAccent: r.openNow ? (fill: look.lime, ink: look.limeInk) : null,
-                  semanticsLabel: '${r.name}, ${r.categoryName}${r.area.isEmpty ? '' : ', ${r.area}'}, ${r.openNow ? 'open now' : 'closed now'}',
+                  semanticsLabel: '${r.name}, ${resultLine(r)}, ${r.line.isNotEmpty ? r.line : openNowWords(r.openNow)}',
                   trailing: r.canChat ? TkSmallButton(label: 'Chat', primary: true, semantics: 'Chat with ${r.name}', onPressed: () => _chat(r)) : null,
                   onTap: () => _profile(r),
                 ),
             ],
           ),
-        if (results != null && _more) TkButton(label: _loadingMore ? 'Loading…' : 'Show more', minHeight: 44, enabled: !_loadingMore, onPressed: _next),
+        if (results != null && _more) TkButton(label: _loadingMore ? 'Loading…' : 'Show more businesses', minHeight: 44, enabled: !_loadingMore, onPressed: _next),
         if (results != null) Text('Businesses choose to be found here.', textAlign: TextAlign.center, style: tkHint(t)),
       ],
     );
@@ -222,6 +294,7 @@ class DiscoverProfileScreen extends StatefulWidget {
 class _DiscoverProfileScreenState extends State<DiscoverProfileScreen> {
   DiscoverProfile? _p;
   String? _error;
+  bool _gone = false;
   bool _busy = false;
 
   @override
@@ -233,9 +306,11 @@ class _DiscoverProfileScreenState extends State<DiscoverProfileScreen> {
   Future<void> _load() async {
     try {
       final p = await widget.auth.api.discoverProfile(business: widget.business);
-      if (mounted) setState(() => (_p = p, _error = null));
+      if (mounted) setState(() => (_p = p, _error = null, _gone = false));
     } on Object catch (e) {
-      if (mounted) setState(() => _error = sayFailure(e));
+      // Gone from Discover: said on its own card, nothing of it kept.
+      final gone = e is ApiError && e.status == 404;
+      if (mounted) setState(() => (_error = discoverProblem(e, 'profile'), _gone = gone, _p = gone ? null : _p));
     }
   }
 
@@ -249,6 +324,13 @@ class _DiscoverProfileScreenState extends State<DiscoverProfileScreen> {
     setState(() => _busy = false);
     // The chat it has now, for the next press.
     unawaited(_load());
+  }
+
+  /// Their shop's page on the web, in the browser tab.
+  void _visit(String url) {
+    final u = Uri.tryParse(url);
+    if (u == null) return;
+    unawaited(openOrSay(context, () => openInBrowser(u), 'Their page didn’t open. Try again.'));
   }
 
   @override
@@ -265,8 +347,20 @@ class _DiscoverProfileScreenState extends State<DiscoverProfileScreen> {
       backLabel: 'Back to Discover',
       onRefresh: _load,
       children: [
-        if (_error != null) TkErrorBox(_error!),
-        if (p == null && _error == null) const TkSkeleton(rows: 3, label: 'Loading their profile…'),
+        if (_gone)
+          TkPanel(
+            children: [
+              TkEmpty(
+                icon: 'search',
+                title: 'Not in Discover',
+                line: _error,
+                action: TkSmallButton(label: 'Back to Discover', onPressed: () => Navigator.of(context).maybePop()),
+              ),
+            ],
+          )
+        else if (_error != null)
+          TkErrorBox(_error!),
+        if (p == null && _error == null) const TkSkeleton(rows: 3, label: 'Loading the business…'),
         if (p != null) ...[
           TkTopCard(
             padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
@@ -283,13 +377,25 @@ class _DiscoverProfileScreenState extends State<DiscoverProfileScreen> {
                   child: Text([p.categoryName, if ((p.area ?? '').isNotEmpty) p.area!].join(' · '), textAlign: TextAlign.center, style: tkText(size: 13, color: t.muted)),
                 ),
                 const SizedBox(height: 10),
-                Center(child: CardPill(p.openNow ? 'Open now' : 'Closed now', p.openNow ? CardTone.lime : CardTone.plain)),
+                Center(child: CardPill(openNowWords(p.openNow), p.openNow ? CardTone.lime : CardTone.plain)),
                 if (p.line.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(p.line, textAlign: TextAlign.center, style: tkText(size: 13, color: t.muted))),
                 const SizedBox(height: 16),
                 if (canChat)
                   CardButton(label: _busy ? 'Opening the chat…' : 'Chat', semantics: 'Chat with ${p.name}', primary: true, busy: _busy, onTap: () => _chat())
-                else
-                  Text('${p.name} isn’t taking chats in Taskiem right now.', textAlign: TextAlign.center, style: tkText(size: 14, color: t.muted)),
+                else ...[
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      '${p.name} is not taking chats in Taskiem right now.${(p.shop ?? '').isNotEmpty ? ' You can still visit their page.' : ''}',
+                      textAlign: TextAlign.center,
+                      style: tkText(size: 14, color: t.muted),
+                    ),
+                  ),
+                  if ((p.shop ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    CardButton(label: 'Visit their page', onTap: () => _visit(p.shop!)),
+                  ],
+                ],
                 if (canChat && (p.hasShop || p.hasBook)) ...[
                   const SizedBox(height: 8),
                   Row(
@@ -306,7 +412,7 @@ class _DiscoverProfileScreenState extends State<DiscoverProfileScreen> {
           if (photos.isNotEmpty) _Photos(photos: photos, name: p.name),
           if (hours.isNotEmpty)
             TkSection(
-              title: 'Hours',
+              title: 'Opening hours',
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -329,26 +435,28 @@ class _DiscoverProfileScreenState extends State<DiscoverProfileScreen> {
                 ),
               ],
             ),
-          if ((p.address ?? '').isNotEmpty || (p.mapLink ?? '').isNotEmpty)
+          if ((p.address ?? '').isNotEmpty || (p.mapLink ?? '').isNotEmpty || (canChat && (p.shop ?? '').isNotEmpty))
             TkSection(
-              title: 'Where',
+              title: 'Where they are',
               inset: 56,
               children: [
                 if ((p.address ?? '').isNotEmpty) TkListRow(title: p.address!, icon: 'b-pin', square: look.orange, semanticsLabel: 'Address: ${p.address}'),
                 if ((p.mapLink ?? '').isNotEmpty)
                   TkListRow(
-                    title: 'Open in maps',
+                    title: 'Open in your map',
                     icon: 'b-route',
                     square: look.blue,
                     onTap: () => openOrSay(context, () => openInBrowser(Uri.parse(p.mapLink!)), 'The map didn’t open. Try again.'),
                   ),
+                // Their page, when the chat's buttons above don't say it.
+                if (canChat && (p.shop ?? '').isNotEmpty) TkListRow(title: 'Visit their page', icon: 'b-store', square: look.teal, onTap: () => _visit(p.shop!)),
               ],
             ),
           TkSection(
             inset: 56,
             children: [
               TkListRow(
-                title: 'Report this business',
+                title: 'Report ${p.name}',
                 icon: 'b-alert',
                 square: look.red,
                 onTap: () => showTkSheet<void>(context, (_) => DiscoverReportSheet(auth: widget.auth, business: p.business, name: p.name)),
@@ -431,10 +539,8 @@ class _DiscoverReportSheetState extends State<DiscoverReportSheet> {
       final note = _note.text.trim();
       final out = await widget.auth.api.discoverReport(business: widget.business, body: DiscoverReportRequest(reason: r, note: note.isEmpty ? null : note));
       if (mounted) setState(() => _done = out.words);
-    } on ApiError catch (e) {
-      if (mounted) setState(() => (_error = e.message, _busy = false));
     } on Object catch (e) {
-      if (mounted) setState(() => (_error = sayFailure(e), _busy = false));
+      if (mounted) setState(() => (_error = discoverProblem(e, 'report'), _busy = false));
     }
   }
 
