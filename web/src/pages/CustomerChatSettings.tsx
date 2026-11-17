@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { Sheet } from "../kit";
-import { buttonWords, offerCount, ORDERS_OFF_WORDS, type ChatLink, type ChatLinkSettings, type CustomerChatSettings as Replies } from "../lib/customerlinks";
+import { buttonWords, offerCount, ORDERS_OFF_WORDS, takesChatsHint, type ChatLink, type ChatLinkSettings, type CustomerChatSettings as Replies } from "../lib/customerlinks";
 import { phoneWords } from "../lib/customerchat";
 import { toast } from "../toast";
 import { ErrorBox, Field, PageHeader, Skeleton, useAction, useLoad } from "../ui";
@@ -144,7 +144,7 @@ function TakingChats() {
             <input type="checkbox" checked={s.takes_chats} disabled={act.busy || !!s.orders_off} onChange={(e) => save({ takes_chats: e.target.checked })} data-testid="takes-chats" />{" "}
             <span>Customers can start a chat with you</span>
           </label>
-          <p className="hint">Off: your link says you are not taking chats. Chats already open go on.</p>
+          <p className="hint" data-testid="takes-chats-hint">{takesChatsHint(s)}</p>
           <fieldset className="pc-choice" disabled={act.busy}>
             <legend>On your shop's page</legend>
             {(["both", "taskiem", "whatsapp"] as const).map((b) => (

@@ -70,6 +70,15 @@ export type CardAsk =
 export const ORDERS_OFF_WORDS =
   "Your Orders area is off, so chats are closed: customers cannot start a chat with you, and your link says so. Turn Orders on to take chats again.";
 
+/** The hint under "Customers can start a chat with you": what the link
+ * says with it off, which is Chat on WhatsApp alone while the link still
+ * offers the business's own number (§11). */
+export function takesChatsHint(s: Pick<ChatLinkSettings, "own_number" | "link_whatsapp">): string {
+  if (s.own_number && s.link_whatsapp !== false)
+    return "Off: your link offers Chat on WhatsApp only, on your own number, and no new chats start here. Chats already open go on.";
+  return "Off: your link says you are not taking chats. Chats already open go on.";
+}
+
 /** The line under an app customer's name. */
 export function appThreadLine(c: { line?: string; typing?: boolean; blocked?: boolean; stopped?: boolean; lines?: unknown[] }): string {
   if (c.typing) return "typing…";

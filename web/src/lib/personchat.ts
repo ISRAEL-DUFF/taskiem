@@ -305,11 +305,13 @@ export function whatsappHere(c: Pick<PersonChat, "lines">): string {
 }
 
 /** What the chat link offers (§11): Chat on Taskiem, Chat on WhatsApp, or
- * both; WhatsApp only with its link. Without choices (an older answer),
- * Taskiem while it takes chats. */
+ * both; WhatsApp only with its link, and only a wa.me link (it becomes a
+ * button's href). Without choices (an older answer), Taskiem while it takes
+ * chats. */
 export function linkChoices(c: Pick<ChatLinkCard, "choices" | "whatsapp" | "takes_chats">): { taskiem: boolean; whatsapp: string | null } {
   const ch = c.choices ?? (c.takes_chats ? ["taskiem"] : []);
-  return { taskiem: ch.includes("taskiem"), whatsapp: ch.includes("whatsapp") && c.whatsapp?.link ? c.whatsapp.link : null };
+  const link = c.whatsapp?.link ?? "";
+  return { taskiem: ch.includes("taskiem"), whatsapp: ch.includes("whatsapp") && link.startsWith("https://wa.me/") ? link : null };
 }
 
 /** A row's preview: what was said last, "You: " before ours. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appNote, appThreadLine, buttonWords, mayOffer, offerCount, ORDERS_OFF_WORDS } from "./customerlinks";
+import { appNote, appThreadLine, buttonWords, mayOffer, offerCount, ORDERS_OFF_WORDS, takesChatsHint } from "./customerlinks";
 
 describe("customers chatting in the app, the business's side", () => {
   it("names the storefront's button choices", () => {
@@ -40,5 +40,14 @@ describe("customers chatting in the app, the business's side", () => {
   it("says chats are closed while the Orders area is off, and how to open them", () => {
     expect(ORDERS_OFF_WORDS).toMatch(/Orders area is off, so chats are closed/);
     expect(ORDERS_OFF_WORDS).toMatch(/Turn Orders on/);
+  });
+});
+
+describe("taking chats, with the business's own number (§11)", () => {
+  it("says the link offers WhatsApp alone when chats in Taskiem are off and WhatsApp is still offered", () => {
+    expect(takesChatsHint({ own_number: "+2348000000020", link_whatsapp: true })).toMatch(/^Off: your link offers Chat on WhatsApp only/);
+    expect(takesChatsHint({ own_number: "+2348000000020" })).toMatch(/Chat on WhatsApp only/);
+    expect(takesChatsHint({ own_number: "+2348000000020", link_whatsapp: false })).toBe("Off: your link says you are not taking chats. Chats already open go on.");
+    expect(takesChatsHint({})).toBe("Off: your link says you are not taking chats. Chats already open go on.");
   });
 });

@@ -286,5 +286,8 @@ describe("one customer across the app and WhatsApp (§11)", () => {
     // An answer without choices: Taskiem while it takes chats.
     expect(linkChoices({ takes_chats: true })).toEqual({ taskiem: true, whatsapp: null });
     expect(linkChoices({ takes_chats: true, choices: ["whatsapp", "taskiem"] })).toEqual({ taskiem: true, whatsapp: null });
+    // Only a wa.me link becomes the button's href.
+    for (const link of ["javascript:alert(1)", "http://wa.me/2348000000001", "https://wa.me.evil.test/1", "https://example.com/wa.me/1", ""])
+      expect(linkChoices({ takes_chats: true, choices: ["whatsapp", "taskiem"], whatsapp: { number: wa.number, link } })).toEqual({ taskiem: true, whatsapp: null });
   });
 });
