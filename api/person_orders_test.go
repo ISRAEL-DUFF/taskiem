@@ -375,9 +375,10 @@ func TestSavedAddresses(t *testing.T) {
 		t.Fatalf("the saved address's name reached the business: %s", b)
 	}
 
-	// The account deleted (its sign-ins first: deleting an account has no
-	// route yet): its addresses and its list go; the business's order
-	// and the index's row stay.
+	// The users row deleted by hand (its sign-ins first; the route,
+	// POST /v1/me/delete, empties the row instead): its addresses and its
+	// list go; the business's order stays, and the index's row goes, the
+	// order marked as never claimable by phone (decision B, 00467).
 	for _, q := range []string{`DELETE FROM sessions WHERE user_id = $1`, `DELETE FROM user_phones WHERE user_id = $1`, `DELETE FROM users WHERE id = $1`} {
 		if _, err := w.env.DB.Admin.Exec(ctx, q, toluID); err != nil {
 			t.Fatalf("%s: %v", q, err)
@@ -391,7 +392,7 @@ func TestSavedAddresses(t *testing.T) {
 		Scan(&addresses, &kept, &person, &indexed); err != nil {
 		t.Fatal(err)
 	}
-	if addresses != 0 || kept != 1 || person != nil || indexed != 1 {
+	if addresses != 0 || kept != 1 || person != nil || indexed != 0 {
 		t.Fatalf("after deleting the account: addresses %d, order %d (person %v), index %d", addresses, kept, person, indexed)
 	}
 	if so := w.owner.must(200, "GET", "/v1/storefront/orders/"+ref+"?reveal=true", nil)["order"].(map[string]any); so["customer"].(map[string]any)["address"] != "12 Herbert Macaulay Way, Yaba" {

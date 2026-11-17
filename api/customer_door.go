@@ -86,6 +86,8 @@ func doorErr(err error) error {
 		return errDoorBlocked
 	case pe.Hint == "area_off":
 		return errDoorOff
+	case pe.Hint == "earlier":
+		return errOrderEarlier
 	case pe.Code == "P0002":
 		return errDoorNone
 	}
@@ -104,6 +106,8 @@ func (s *Server) personFail(w http.ResponseWriter, r *http.Request, err error) {
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "You blocked this business. Unblock it to write to them.", "you_blocked": true})
 	case errors.Is(err, errDoorOff):
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "This business has turned this off for now. Ask them here in the chat.", "area_off": true})
+	case errors.Is(err, errOrderEarlier):
+		writeJSON(w, http.StatusConflict, map[string]any{"error": "This order was made with your number before it was on your account, so it cannot be paid or opened here. Chat with the business about it.", "earlier": true})
 	case errors.Is(err, errDoorNone), errors.Is(err, pgx.ErrNoRows):
 		writeErr(w, http.StatusNotFound, "not found")
 	default:

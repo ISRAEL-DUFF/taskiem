@@ -21211,7 +21211,7 @@ paths:
       tags:
       - You
       summary: Pay for an order
-      description: 'Through the door (`customer.pay`): the pay link of one of the person''s own orders or bookings (its status page, where it is paid), while something is due. 409 when nothing is due, or it is paid once they accept it.'
+      description: 'Through the door (`customer.pay`): the pay link of one of the person''s own orders or bookings (its status page, where it is paid), while it can be paid now (the one rule Orders on You''s Pay follows). 409 "This order is closed." for a cancelled, declined, expired, completed or refunded order; 409 when nothing is due, it waits for a new price, it is paid outside the app, or it is paid once they accept it.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -21643,8 +21643,10 @@ paths:
       description: 'One of the person''s orders or bookings: its row, its lines, how it is fulfilled, the address on the
         order (as it was copied there; never the person''s saved list) and the rider''s progress once a rider holds it.
         Through a narrow door to that one order (`customer.order_detail`), audited in the business''s chain; it needs no
-        chat with the business. 404 for an order that is not the person''s; 403 `blocked` when the business blocked the
-        person; 409 `area_off` when it turned Orders off.'
+        chat with the business. An earlier order (made with the number before it was on this account) is its short row
+        alone (`earlier: true`, no lines), and no door is opened. 404 for an order that is not the person''s; 403
+        `blocked` when the business blocked the person; 409 `area_off` when it turned Orders off; 429 past the person''s
+        limit (a burst of 30, then one every 2 seconds, shared with the pay link).'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -21677,8 +21679,11 @@ paths:
       - You
       summary: Pay for one of your orders
       description: 'Through the door to the order (`customer.pay`), audited: its pay link (its status page, where it is
-        paid), while something is due. 409 when nothing is due, it is paid outside the app, or it is paid once they
-        accept it; 403 `blocked`; 404 for an order that is not the person''s.'
+        paid), while it can be paid now (storefront.PayableNow, the rule the list''s `pay` follows). 409 "This order is
+        closed." for a cancelled, declined, expired, completed or refunded order; 409 when it waits for a new price to be
+        confirmed, nothing is due, it is paid outside the app, or it is paid once they accept it; 409 `earlier` for an
+        order made with the number before it was on this account; 403 `blocked`; 404 for an order that is not the
+        person''s; 429 past the person''s limit.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -21825,6 +21830,338 @@ paths:
       responses:
         '204':
           description: Deleted
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/delete/start:
+    post:
+      operationId: deleteAccountStart
+      tags:
+      - You
+      summary: Ask for a code to delete your account
+      description: 'A six-digit code to the account''s phone (by WhatsApp, else SMS; `via: "sms"` asks for SMS), good
+        only for deleting the account (POST /v1/me/delete). 409 `owns_business` while the person owns a business (close
+        it, or make someone else its owner and have them remove you), 409 `in_business` while they hold a role in one
+        (its owner removes them), each with `businesses` (names); 409 `no_phone` for an account with no phone (it proves
+        itself with its passkey or password); 429 as other codes are limited. A personal session reaches it.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                via:
+                  type: string
+                  enum: [whatsapp, sms]
+      responses:
+        '202':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [sent_via, expires_in]
+                properties:
+                  sent_via:
+                    type: string
+                    enum: [whatsapp, sms]
+                  expires_in:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/delete/passkey/options:
+    post:
+      operationId: deleteAccountPasskeyOptions
+      tags:
+      - You
+      summary: A passkey challenge for deleting your account
+      description: WebAuthn assertion options (`publicKey`) for the person's own passkeys, good only for deleting the
+        account (POST /v1/me/delete with `credential`). 409 `no_passkey` without one.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The options
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [publicKey]
+                properties:
+                  publicKey:
+                    type: object
+                    additionalProperties: true
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/delete:
+    post:
+      operationId: deleteAccount
+      tags:
+      - You
+      summary: Delete your account
+      description: 'Deletes the account at once (taskiem-for-everyone §14), with `confirm: true` and a fresh proof:
+        `code` (from POST /v1/me/delete/start), `credential` (a passkey assertion for a challenge from POST
+        /v1/me/delete/passkey/options) or `password`. A session made by a code on a device with no second proof, of a
+        person who could give one, proves it first (401 `second_proof_required` with `ways`). Refused (409
+        `owns_business` or `in_business`, with `businesses`) while the person owns a business or holds a role in one.
+        Each business the person chatted with is told only "This customer left Taskiem" (a line in its thread, which
+        then takes no more messages), audited in its chain as `customer.left`; the businesses keep their own records
+        (orders, threads), which no longer name the person. The phone index loses every row under the person''s phone
+        and for their app orders, which are never claimable by the number''s next holder. Every session ends (the cookie
+        is cleared); the phone, devices, second proofs, codes, passkeys, chat bindings, chats, files, saved addresses,
+        devices for pushes, photo and settings go; the account row is emptied and kept so businesses'' records keep
+        their keys. Audited in the platform''s chain as `account.delete`. 401 `code_wrong` or `password_wrong`; 403
+        `reauth` without a proof; 400 without `confirm`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [confirm]
+              properties:
+                confirm:
+                  type: boolean
+                code:
+                  type: string
+                password:
+                  type: string
+                credential:
+                  $ref: '#/components/schemas/PasskeyCredential'
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [deleted, businesses_told]
+                properties:
+                  deleted:
+                    type: boolean
+                  businesses_told:
+                    type: integer
+                    description: How many businesses were told "This customer left Taskiem".
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/photo:
+    get:
+      operationId: myPhoto
+      tags:
+      - You
+      summary: Your photo
+      description: The person's own photo, 404 without one. Shown on their own side only; businesses are not shown it.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The photo
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putMyPhoto
+      tags:
+      - You
+      summary: Change your photo
+      description: 'A multipart form with `file`: a JPEG, PNG or WebP photo up to 10 MB, checked and cleaned (turned
+        upright, re-encoded at most 800 pixels wide, its metadata gone) and kept in the person''s own rows. 400 for a
+        file that is not a usable photo; 429 for too many at once.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [photo]
+                properties:
+                  photo:
+                    oneOf:
+                    - $ref: '#/components/schemas/MyPhoto'
+                    - type: 'null'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteMyPhoto
+      tags:
+      - You
+      summary: Remove your photo
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/notifications:
+    get:
+      operationId: myNotifications
+      tags:
+      - You
+      summary: Which pushes you get on You
+      description: The kinds of push the person's own devices get from businesses (all on until changed).
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/YouNotifications'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putMyNotifications
+      tags:
+      - You
+      summary: Change which pushes you get on You
+      description: The kinds given change. A kind turned off is neither pushed nor sent by SMS (the SMS a reply sends
+        when no device can be reached); the message is still in the chat.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                messages:
+                  type: boolean
+                updates:
+                  type: boolean
+                offers:
+                  type: boolean
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/YouNotifications'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/privacy:
+    get:
+      operationId: myPrivacy
+      tags:
+      - You
+      summary: Your privacy page
+      description: 'What a business the person chats with or orders from sees of them (their name and phone, not their
+        photo), the businesses that have their number (through a chat with them, or an order on Orders, with how many
+        and the latest), and how to ask a business to erase what it holds (today''s process: ask it in the chat; each
+        business keeps its own records under Nigeria''s Data Protection Act).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The page's data
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [shown_to_businesses, businesses, erase]
+                properties:
+                  shown_to_businesses:
+                    type: object
+                    additionalProperties: false
+                    required: [name, phone, photo]
+                    properties:
+                      name:
+                        type: string
+                      phone:
+                        type: [string, 'null']
+                      photo:
+                        type: boolean
+                        description: Always false; the person's photo stays on their own side.
+                  businesses:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [business_id, business, chat_id, orders, last_order_at]
+                      properties:
+                        business_id:
+                          type: string
+                          format: uuid
+                        business:
+                          type: string
+                        chat_id:
+                          type: [string, 'null']
+                          format: uuid
+                          description: The person's chat with it, where they can ask it to erase their details.
+                        orders:
+                          type: integer
+                        last_order_at:
+                          type: [string, 'null']
+                          format: date-time
+                  erase:
+                    type: object
+                    additionalProperties: false
+                    required: [words, how]
+                    properties:
+                      words:
+                        type: string
+                      how:
+                        type: string
+                        enum: [ask_in_chat]
         default:
           $ref: '#/components/responses/Error'
   /v1/me/start:
@@ -33559,6 +33896,11 @@ components:
             phone:
               type: [string, 'null']
               description: The person's own phone number (E.164), or null.
+            photo:
+              oneOf:
+              - $ref: '#/components/schemas/MyPhoto'
+              - type: 'null'
+              description: The person's own photo (GET /v1/me/photo), or null. Shown on their own side only; businesses are not shown it.
             id:
               type: string
               format: uuid
@@ -39124,22 +39466,29 @@ components:
         kind:
           type: string
           enum: [order, booking]
+        booking_type:
+          type: string
+          enum: [service, hire, space, class, tickets]
+          description: What kind of booking (bookings only).
         state:
           type: string
           description: The order's status, as the business's order has it.
         summary:
           type: string
-          description: '"2 × Jollof rice, 1 × Chapman", or a booking''s service; up to 200 characters.'
+          description: '"2 × Jollof rice, 1 × Chapman"; a booking''s service, a hire''s item and days ("Canopy, 3 days"), tickets ("2 tickets, Afrobeats Night"), a class''s places or a space; up to 200 characters. Empty for an earlier order.'
         total_kobo:
           type: integer
         due_kobo:
           type: integer
         pay:
           type: boolean
-          description: Something is due now and can be paid in the app; GET /v1/me/orders/{business_id}/{reference}/pay is its link. Never while the business blocked the person or turned Orders off.
+          description: Something is due now and can be paid in the app (one rule, storefront.PayableNow and taskiem_order_payable_now; never a cancelled, declined, expired, completed or refunded order); GET /v1/me/orders/{business_id}/{reference}/pay is its link. Never while the business blocked the person or turned Orders off, and never for an earlier order.
         made_at:
           type: string
           format: date-time
+        earlier:
+          type: boolean
+          description: 'An order made with the person''s number before it was verified on this account (the number may have been someone else''s): shown short only (business, reference, state, total, date), with no summary, nothing due and no Pay, even after "These are mine". Its detail is this row alone, its pay link is refused (409 `earlier`); "Chat about this" is the way to ask about it. Absent otherwise.'
         chat_id:
           type: [string, 'null']
           format: uuid
@@ -39158,7 +39507,7 @@ components:
       type: object
       additionalProperties: false
       required: [business_id, business, reference, kind, state, summary, total_kobo, due_kobo, pay, made_at, chat_id, lines, paid_kobo]
-      description: One of the person's orders, with what it holds.
+      description: One of the person's orders, with what it holds. An earlier order (`earlier`) is its row alone, with no lines.
       properties:
         business_id:
           type: string
@@ -39172,6 +39521,11 @@ components:
         kind:
           type: string
           enum: [order, booking]
+        booking_type:
+          type: string
+          enum: [service, hire, space, class, tickets]
+        earlier:
+          type: boolean
         state:
           type: string
         summary:
@@ -39232,6 +39586,33 @@ components:
           format: date-time
         delivery:
           $ref: '#/components/schemas/DeliveryProgress'
+    MyPhoto:
+      type: object
+      additionalProperties: false
+      required: [url, updated_at]
+      description: The person's own photo.
+      properties:
+        url:
+          type: string
+          description: GET it with the session (it changes when the photo does).
+        updated_at:
+          type: string
+          format: date-time
+    YouNotifications:
+      type: object
+      additionalProperties: false
+      required: [messages, updates, offers]
+      description: Which pushes the person's own devices get from businesses.
+      properties:
+        messages:
+          type: boolean
+          description: Someone at a business wrote to them.
+        updates:
+          type: boolean
+          description: A business's automatic words (an order's or a booking's news).
+        offers:
+          type: boolean
+          description: Offers from businesses they said yes to.
     SavedAddress:
       type: object
       additionalProperties: false

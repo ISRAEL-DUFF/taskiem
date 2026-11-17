@@ -45,8 +45,10 @@ type personOrder struct {
 	Business   string      `json:"business"`
 	Photo      *orderPhoto `json:"photo,omitempty"`
 	Reference  string      `json:"reference"`
-	// Kind: order or booking.
-	Kind string `json:"kind"`
+	// Kind: order or booking (a service, a hire, a space, a class or
+	// tickets: BookingType says which).
+	Kind        string `json:"kind"`
+	BookingType string `json:"booking_type,omitempty"`
 	// State: the order's status, as the business's order has it.
 	State string `json:"state"`
 	// Summary: "2 × Jollof rice, 1 × Chapman", or a booking's service.
@@ -57,6 +59,13 @@ type personOrder struct {
 	// GET /v1/me/orders/{business_id}/{reference}/pay is its link.
 	Pay    bool      `json:"pay"`
 	MadeAt time.Time `json:"made_at"`
+	// Earlier: a storefront order found through the person's phone, made
+	// before the phone was verified on this account (founder's decision
+	// A): shown short only (business, reference, state, total, date),
+	// with no summary, nothing due and no Pay, even after "These are
+	// mine"; its detail is only this row, and it cannot be paid here.
+	// "Chat about this" is how the person asks the business about it.
+	Earlier bool `json:"earlier,omitempty"`
 	// ChatID: the person's conversation with the business, when there is
 	// one ("Chat about this"); else POST /v1/me/chats {business_id,
 	// from: "order"} starts it.
@@ -125,7 +134,7 @@ func readOrderCursor(c string) (*time.Time, *string, error) {
 // personOrdersTx reads the person's orders (one business's, one order,
 // after a cursor) through taskiem_person_orders.
 func (s *Server) personOrdersTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, business *uuid.UUID, ref *string, beforeAt *time.Time, beforeRef *string, limit int) ([]personOrder, error) {
-	rows, err := tx.Query(ctx, `SELECT business_id, business, photo, reference, kind, state, summary, total_kobo, due_kobo, pay, made_at
+	rows, err := tx.Query(ctx, `SELECT business_id, business, photo, reference, kind, booking_type, state, summary, total_kobo, due_kobo, pay, made_at, earlier
 		FROM taskiem_person_orders($1, $2, $3, $4, $5, $6, $7)`, person, s.PhoneIndex.IndexKey(), business, ref, beforeAt, beforeRef, limit)
 	if err != nil {
 		return nil, err
@@ -133,7 +142,11 @@ func (s *Server) personOrdersTx(ctx context.Context, tx pgx.Tx, person uuid.UUID
 	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (personOrder, error) {
 		var o personOrder
 		var photo map[string]string
-		err := r.Scan(&o.BusinessID, &o.Business, &photo, &o.Reference, &o.Kind, &o.State, &o.Summary, &o.TotalKobo, &o.DueKobo, &o.Pay, &o.MadeAt)
+		var bt *string
+		err := r.Scan(&o.BusinessID, &o.Business, &photo, &o.Reference, &o.Kind, &bt, &o.State, &o.Summary, &o.TotalKobo, &o.DueKobo, &o.Pay, &o.MadeAt, &o.Earlier)
+		if bt != nil {
+			o.BookingType = *bt
+		}
 		if len(photo) > 0 {
 			o.Photo = &orderPhoto{URLs: photo}
 		}
@@ -244,10 +257,34 @@ func (s *Server) enterOrderTx(ctx context.Context, tx pgx.Tx, person, business u
 	return doorErr(err)
 }
 
+// Looking at one order and asking for its pay link each write an entry in
+// the business's audit chain, so they are limited per person: a burst of
+// orderLooksBurst, then one every orderLooksEvery.
+const (
+	orderLooksEvery = 2 * time.Second
+	orderLooksBurst = 30
+)
+
+// orderLookAllowed takes one of the person's looks at an order, or
+// answers 429.
+func (s *Server) orderLookAllowed(w http.ResponseWriter, person uuid.UUID) bool {
+	if s.limiter("person-order:"+person.String(), orderLooksEvery, orderLooksBurst).Allow() {
+		return true
+	}
+	writeErr(w, http.StatusTooManyRequests, "Too many tries. Wait a moment and try again.")
+	return false
+}
+
+// errOrderEarlier refuses the detail's door and the pay link of an
+// earlier order on the person's number (decision A).
+var errOrderEarlier = errors.New("an order made with this number before it was on the account")
+
 // myOrder is GET /v1/me/orders/{business}/{reference}: one of the
 // person's orders, with its lines, the address on it, and the rider's
 // progress. 403 blocked when the business blocked the person, 409
-// area_off when it turned Orders off.
+// area_off when it turned Orders off. An earlier order on the number
+// (made before the phone was verified on this account) is its short row
+// only, with earlier: true; no door is opened for it.
 func (s *Server) myOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	person, err := personOf(r)
@@ -258,6 +295,9 @@ func (s *Server) myOrder(w http.ResponseWriter, r *http.Request) {
 	business, ref, err := orderPath(r)
 	if err != nil {
 		s.personFail(w, r, err)
+		return
+	}
+	if !s.orderLookAllowed(w, person) {
 		return
 	}
 	var out personOrderDetail
@@ -271,6 +311,11 @@ func (s *Server) myOrder(w http.ResponseWriter, r *http.Request) {
 		}
 		out.personOrder = list[0]
 		out.Lines = []personOrderLine{}
+		if out.Earlier {
+			// Decision A: an earlier order on the number is its row only,
+			// and the door is not opened for it (nothing more is read).
+			return nil
+		}
 		if err := s.enterOrderTx(ctx, tx, person, business, ref, "customer.order_detail"); err != nil {
 			return err
 		}
@@ -321,9 +366,19 @@ func (s *Server) myOrderPay(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, errDoorNone)
 		return
 	}
+	if !s.orderLookAllowed(w, person) {
+		return
+	}
 	var link string
 	var due int64
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		// An earlier order on the number is not paid here (decision A):
+		// the door refuses it too (hint earlier).
+		if list, err := s.personOrdersTx(ctx, tx, person, &business, &ref, nil, nil, 1); err != nil {
+			return err
+		} else if len(list) == 1 && list[0].Earlier {
+			return errOrderEarlier
+		}
 		if err := s.enterOrderTx(ctx, tx, person, business, ref, "customer.pay"); err != nil {
 			return err
 		}

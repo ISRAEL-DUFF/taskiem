@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -407,6 +408,10 @@ func (s *Server) doorPay(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"reference": ref, "url": link, "due_kobo": due})
 }
 
+// errOrderClosed is what a person is told for a pay link of an order that
+// can no longer be paid (cancelled, declined, expired, refunded, done).
+const errOrderClosed = "This order is closed."
+
 // payLinkTx is the pay link of one of the person's orders or bookings
 // with business (the door into it open), while something is due and it
 // can be paid in the app; refused in plain words otherwise.
@@ -418,14 +423,21 @@ func (s *Server) payLinkTx(ctx context.Context, tx pgx.Tx, business uuid.UUID, r
 	if err != nil {
 		return "", 0, err
 	}
+	// The one rule Orders on You's Pay follows (storefront.PayableNow,
+	// taskiem_order_payable_now): a closed order is handed no link, and
+	// each other refusal says why.
 	due := o.BalanceKobo()
-	if due <= 0 {
+	switch {
+	case o.PayableNow():
+	case o.Status == "price_changed":
+		return "", 0, customerSendErr{http.StatusConflict, "This order waits for you to confirm a new price. Ask them here in the chat."}
+	case !slices.Contains(storefront.PayableStatuses, o.Status):
+		return "", 0, customerSendErr{http.StatusConflict, errOrderClosed}
+	case due <= 0:
 		return "", 0, customerSendErr{http.StatusConflict, "Nothing is due on this order."}
-	}
-	if o.Payment == "none" {
+	case o.Payment == "none":
 		return "", 0, customerSendErr{http.StatusConflict, "They take payment for this outside the app. Ask them here how to pay."}
-	}
-	if o.Status == "received" && o.Payment == "after_accept" {
+	default: // received, to be paid once accepted
 		return "", 0, customerSendErr{http.StatusConflict, "You pay once they accept your order. They will tell you here."}
 	}
 	link, err := s.Orders.ChatStatusLink(ctx, tx, business, o)
