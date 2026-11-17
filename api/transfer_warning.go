@@ -2,10 +2,10 @@ package api
 
 import (
 	"errors"
-	"regexp"
-	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/israel-duff/taskiem/engine/people"
 )
 
 // Paying a business is only ever through Taskiem's pay links (taskiem-for-
@@ -19,36 +19,15 @@ import (
 //     ("08031234567"), and
 //   - a word of banking: account, acct, a/c, bank, or a bank's name
 //     (opay, palmpay, moniepoint, kuda, gtbank, access, zenith, uba, first
-//     bank, and the others listed in bankWords).
+//     bank, and the others in people.AsksForTransfer).
 //
 // It cannot tell a personal account from a business's, so it warns on
 // both; the warning says to pay only through the pay link. Cards (an
 // order, a pay link) never warn: they are made from the business's own
-// records.
+// records. The rule itself is people.AsksForTransfer, which the checks
+// on strangers' messages in people chats reuse.
 
-// nubanRe finds ten digits standing alone, in groups or together.
-var nubanRe = regexp.MustCompile(`(?:^|[^0-9])([0-9](?:[ \-.]?[0-9]){9})(?:$|[^0-9])`)
-
-// bankWords are the words that make a ten-digit number an account number.
-var bankWords = regexp.MustCompile(`(?i)\b(account|acct|acc no|a/c|bank|opay|palmpay|palm pay|moniepoint|kuda|gtb|gtbank|guaranty|access|zenith|uba|first ?bank|fidelity|union bank|sterling|wema|alat|polaris|fcmb|stanbic|ecobank|keystone|providus|jaiz|globus|titan|unity bank|heritage|carbon|vfd|paga)\b`)
-
-func warnTransfer(text string) bool {
-	if len(text) < 10 {
-		return false
-	}
-	for _, m := range nubanRe.FindAllStringSubmatch(text, -1) {
-		digits := strings.Map(func(r rune) rune {
-			if r >= '0' && r <= '9' {
-				return r
-			}
-			return -1
-		}, m[1])
-		if len(digits) == 10 {
-			return bankWords.MatchString(text)
-		}
-	}
-	return false
-}
+func warnTransfer(text string) bool { return people.AsksForTransfer(text) }
 
 // typingErr reads the refusals of taskiem_customer_typing: the business
 // blocked the person (blocked), or the person blocked the business
