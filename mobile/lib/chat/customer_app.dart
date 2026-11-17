@@ -2,18 +2,20 @@
 // (docs/spec/taskiem-for-everyone.md §8.3, §15): the thread has no 24-hour
 // window and no templates, and replies can be rich. The + by the box sends
 // an order's card, a pay link, a booking offer, a product from the
-// catalogue, a photo or a file, or (to a customer who said yes) an offer.
+// catalogue, an invoice sent to them, the rider's progress on their order,
+// a photo or a file, or (to a customer who said yes) an offer.
 
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../kit/forms.dart' show errorWords;
-import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart';
+import '../kit/mobile.dart' show TkFormGroup, TkListRow, TkSection;
 import '../kit/modal.dart';
 import '../kit/sheet.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'attachments.dart';
@@ -26,13 +28,13 @@ List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereTyp
 String _str(Object? v) => v is String ? v : '';
 
 /// What + offers: what is sent, in words.
-enum RichKind { order, pay, booking, product, photo, file, offer }
+enum RichKind { order, pay, invoice, delivery, booking, product, photo, file, offer }
 
 /// The + by the box of an app customer's thread.
 Future<void> showRichReply(BuildContext context, CustomerData d, {Pickers pickers = const Pickers(), required TextEditingController box}) async {
   final c = d.chat;
   if (c == null) return;
-  final kind = await showTkSheet<RichKind>(context, (_) => _RichMenu(offers: c.offers == 'yes'));
+  final kind = await showTkSheet<RichKind>(context, (_) => _RichMenu(offers: c.offers == 'yes', invoices: d.chats.auth.can('invoice.manage')));
   if (kind == null || !context.mounted) return;
   switch (kind) {
     case RichKind.photo:
@@ -49,7 +51,7 @@ Future<void> showRichReply(BuildContext context, CustomerData d, {Pickers picker
       }
       box.clear();
       await d.send(words, offer: true);
-    case RichKind.order || RichKind.pay || RichKind.booking || RichKind.product:
+    case RichKind.order || RichKind.pay || RichKind.invoice || RichKind.delivery || RichKind.booking || RichKind.product:
       final card = await showTkSheet<ReplyCustomerRequestCard>(context, (_) => _CardPicker(d: d, kind: kind));
       if (card != null) await d.sendCard(card);
   }
@@ -65,39 +67,58 @@ Future<void> _file(BuildContext context, CustomerData d, PickedFile f) async {
 }
 
 class _RichMenu extends StatelessWidget {
-  const _RichMenu({required this.offers});
+  const _RichMenu({required this.offers, required this.invoices});
   final bool offers;
+  final bool invoices;
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    Widget row(RichKind k, String icon, String name, String sub) => TkRow(
-      name: name,
+    final look = TkLook.of(context);
+    Widget row(RichKind k, String icon, Color colour, String name, String sub) => TkListRow(
+      title: name,
       sub: sub,
       icon: icon,
-      trailing: TkIcon('chevron', size: 18, color: t.muted),
+      square: colour,
       onTap: () => Navigator.of(context).pop(k),
     );
-    return TkSheet(
-      title: 'Send',
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        children: [
-          row(RichKind.order, 'b-box', 'An order', 'Its card: what, the total, its state'),
-          row(RichKind.pay, 'money', 'A pay link', 'What’s due on an order, to pay in the app'),
-          row(RichKind.booking, 'calendar', 'A booking offer', 'A service they can book from the chat'),
-          row(RichKind.product, 'tag', 'A product', 'An item from your catalogue'),
-          row(RichKind.photo, 'image', 'A photo', 'Up to 10 MB'),
-          row(RichKind.file, 'file', 'A PDF', 'Up to 25 MB'),
-          if (offers) row(RichKind.offer, 'sparkle', 'Send as an offer', 'The words in the box, marked Offer. At most 2 a week.'),
-        ],
+    // As the chat's tools are drawn: each on its accent's square, the rows
+    // on cards on the sheet's ground.
+    return TkAppLook(
+      child: TkSheet(
+        title: 'Send',
+        crumb: 'To this customer, made from your own records',
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+          children: [
+            TkSection(
+              inset: 56,
+              children: [
+                row(RichKind.order, 'b-box', look.teal, 'An order', 'Its card: what, the total, its state'),
+                row(RichKind.pay, 'b-card', look.lime, 'A pay link', 'What’s due on an order, to pay in the app'),
+                if (invoices) row(RichKind.invoice, 'b-receipt', look.blue, 'An invoice', 'One you sent them: what’s due, and its page'),
+                row(RichKind.delivery, 'b-bike', look.blue, 'A delivery', 'How far the rider has got with their order'),
+                row(RichKind.booking, 'b-calendar', look.violet, 'A booking offer', 'A service they can book from the chat'),
+                row(RichKind.product, 'b-bag', look.orange, 'A product', 'An item from your catalogue'),
+              ],
+            ),
+            const SizedBox(height: 14),
+            TkSection(
+              inset: 56,
+              children: [
+                row(RichKind.photo, 'b-camera', look.teal, 'A photo', 'Up to 10 MB'),
+                row(RichKind.file, 'b-note', look.blue, 'A PDF', 'Up to 25 MB'),
+                if (offers) row(RichKind.offer, 'b-bolt', look.orange, 'Send as an offer', 'The words in the box, marked Offer. At most 2 a week.'),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Choosing what a card is of: one of the business's orders, a service, an
-/// item of its catalogue.
+/// Choosing what a card is of: one of the business's orders, an invoice, a
+/// service, an item of its catalogue.
 class _CardPicker extends StatefulWidget {
   const _CardPicker({required this.d, required this.kind});
   final CustomerData d;
@@ -113,6 +134,10 @@ class _CardPickerState extends State<_CardPicker> {
   final _reference = TextEditingController();
 
   Transport get _t => widget.d.chats.auth.transport;
+  RichKind get _k => widget.kind;
+
+  /// Chosen by an order's reference (an order, its pay link, its delivery).
+  bool get _byRef => _k == RichKind.order || _k == RichKind.pay || _k == RichKind.delivery;
 
   @override
   void initState() {
@@ -126,17 +151,21 @@ class _CardPickerState extends State<_CardPicker> {
     super.dispose();
   }
 
+  String _customer(Map<String, dynamic> r) => _str((r['customer'] as Map?)?['name']);
+
   Future<void> _load() async {
     try {
-      final rows = switch (widget.kind) {
+      var rows = switch (_k) {
         RichKind.booking => _maps(((await _t.send('GET', '/v1/storefront/services')) as Map)['items']),
         RichKind.product => _maps(((await _t.send('GET', '/v1/storefront/catalogue')) as Map)['items']).where((i) => _str(i['variant_of']).isEmpty).toList(),
+        // Only invoices sent: a draft or a voided one is not for customers.
+        RichKind.invoice => _maps(((await _t.send('GET', '/v1/invoices', query: {'limit': '200'})) as Map)['invoices']).where((i) => !const {'draft', 'void'}.contains(i['status'])).toList(),
         _ => _maps(((await _t.send('GET', '/v1/storefront/orders')) as Map)['orders']),
       };
-      // This customer's orders first, by the name in the book.
+      // This customer's first, by the name in the book.
       final name = widget.d.chat?.name ?? '';
-      if (widget.kind == RichKind.order || widget.kind == RichKind.pay) {
-        rows.sort((a, b) => (_str((b['customer'] as Map?)?['name']) == name ? 1 : 0) - (_str((a['customer'] as Map?)?['name']) == name ? 1 : 0));
+      if (_byRef || _k == RichKind.invoice) {
+        rows = [...rows.where((r) => _customer(r) == name), ...rows.where((r) => _customer(r) != name)];
       }
       if (mounted) setState(() => _rows = rows);
     } on ApiError catch (e) {
@@ -146,70 +175,102 @@ class _CardPickerState extends State<_CardPicker> {
     }
   }
 
+  String get _type => switch (_k) {
+    RichKind.pay => 'pay',
+    RichKind.delivery => 'delivery',
+    _ => 'order',
+  };
+
   void _pick(Map<String, dynamic> r) {
-    final k = widget.kind;
-    Navigator.of(context).pop(switch (k) {
+    Navigator.of(context).pop(switch (_k) {
       RichKind.booking => ReplyCustomerRequestCard(type: 'booking', serviceId: _str(r['id'])),
       RichKind.product => ReplyCustomerRequestCard(type: 'product', itemId: _str(r['id'])),
-      _ => ReplyCustomerRequestCard(type: k == RichKind.pay ? 'pay' : 'order', reference: _str(r['reference'])),
+      RichKind.invoice => ReplyCustomerRequestCard(type: 'invoice', invoiceId: _str(r['id'])),
+      _ => ReplyCustomerRequestCard(type: _type, reference: _str(r['reference'])),
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    final k = widget.kind;
-    final title = switch (k) {
+    final look = TkLook.of(context);
+    final title = switch (_k) {
       RichKind.booking => 'A booking offer',
       RichKind.product => 'A product',
       RichKind.pay => 'A pay link',
+      RichKind.invoice => 'An invoice',
+      RichKind.delivery => 'A delivery',
       _ => 'An order',
     };
     final rows = _rows;
-    final byRef = k == RichKind.order || k == RichKind.pay;
-    return TkSheet(
-      title: title,
-      footer: byRef ? TkCta(label: 'Send', onTap: () {
-        final r = _reference.text.trim();
-        if (r.isNotEmpty) Navigator.of(context).pop(ReplyCustomerRequestCard(type: k == RichKind.pay ? 'pay' : 'order', reference: r));
-      }) : null,
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        children: [
-          if (byRef)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
-              child: TkKitField(label: 'Order reference', hint: 'Or choose one of your orders below.', child: TkTextBox(controller: _reference, hint: 'MK-1042')),
-            ),
-          if (_error != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 8), child: TkErrorBox(_error!)),
-          if (rows == null && _error == null) const TkLoading(label: 'Loading…'),
-          if (rows != null && rows.isEmpty)
-            TkEmpty(
-              icon: k == RichKind.booking ? 'calendar' : 'b-box',
-              title: switch (k) {
-                RichKind.booking => 'No services to book',
-                RichKind.product => 'Nothing in your catalogue',
-                _ => 'No orders yet',
-              },
-              line: 'Add them in your shop first.',
-            ),
-          for (final r in rows ?? const <Map<String, dynamic>>[])
-            switch (k) {
-              RichKind.booking || RichKind.product => TkRow(
-                name: _str(r['name']),
-                sub: (r['price_kobo'] as num?) == null ? '' : naira((r['price_kobo'] as num).toInt()),
-                icon: k == RichKind.booking ? 'calendar' : 'tag',
-                onTap: () => _pick(r),
+    final name = widget.d.chat?.name ?? '';
+    int? kobo(Object? v) => (v as num?)?.toInt();
+    Widget row(Map<String, dynamic> r) => switch (_k) {
+      RichKind.booking || RichKind.product => TkListRow(
+        title: _str(r['name']),
+        sub: kobo(r['price_kobo']) == null ? '' : naira(kobo(r['price_kobo'])!),
+        icon: _k == RichKind.booking ? 'b-calendar' : 'b-bag',
+        square: _k == RichKind.booking ? look.violet : look.orange,
+        onTap: () => _pick(r),
+      ),
+      RichKind.invoice => TkListRow(
+        title: 'Invoice ${_str(r['number'])}',
+        sub: _customer(r).isEmpty ? 'A customer' : (_customer(r) == name ? '${_customer(r)} · this customer' : _customer(r)),
+        icon: 'b-receipt',
+        square: look.blue,
+        amount: kobo(r['due_kobo']) == null ? null : naira(kobo(r['due_kobo'])!),
+        status: invoiceWords(_str(r['status'])),
+        statusTone: doorTone(_str(r['status'])),
+        onTap: () => _pick(r),
+      ),
+      _ => TkListRow(
+        title: '${_str(r['reference'])} · ${_customer(r).isEmpty ? 'A customer' : _customer(r)}',
+        sub: yourOrderStatus(_str(r['status'])),
+        icon: _k == RichKind.delivery ? 'b-bike' : 'b-box',
+        square: _k == RichKind.delivery ? look.blue : look.teal,
+        amount: kobo(r['total_kobo']) == null ? null : naira(kobo(r['total_kobo'])!),
+        onTap: () => _pick(r),
+      ),
+    };
+    return TkAppLook(
+      child: TkSheet(
+        title: title,
+        crumb: 'Send',
+        footer: _byRef
+            ? TkCta(
+                label: 'Send',
+                onTap: () {
+                  final r = _reference.text.trim();
+                  if (r.isNotEmpty) Navigator.of(context).pop(ReplyCustomerRequestCard(type: _type, reference: r));
+                },
+              )
+            : null,
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+          children: [
+            if (_byRef) ...[
+              TkFormGroup(
+                children: [TkKitField(label: 'Order reference', hint: 'Or choose one of your orders below.', child: TkTextBox(controller: _reference, hint: 'MK-1042'))],
               ),
-              _ => TkRow(
-                name: '${_str(r['reference'])} · ${_str((r['customer'] as Map?)?['name']).isEmpty ? 'A customer' : _str((r['customer'] as Map?)?['name'])}',
-                sub: [yourOrderStatus(_str(r['status'])), if ((r['total_kobo'] as num?) != null) naira((r['total_kobo'] as num).toInt())].join(' · '),
-                icon: 'b-box',
-                onTap: () => _pick(r),
+              const SizedBox(height: 14),
+            ],
+            if (_error != null) TkErrorBox(_error!),
+            if (rows == null && _error == null) const TkLoading(label: 'Loading…'),
+            if (rows != null && rows.isEmpty)
+              TkEmpty(
+                icon: _k == RichKind.booking ? 'calendar' : 'b-box',
+                title: switch (_k) {
+                  RichKind.booking => 'No services to book',
+                  RichKind.product => 'Nothing in your catalogue',
+                  RichKind.invoice => 'No invoices sent yet',
+                  _ => 'No orders yet',
+                },
+                line: _k == RichKind.invoice ? 'Send them an invoice first.' : 'Add them in your shop first.',
               ),
-            },
-          Padding(padding: const EdgeInsets.fromLTRB(8, 12, 8, 0), child: Text('Taskiem makes the card from your own records.', style: tkHint(t))),
-        ],
+            if (rows != null && rows.isNotEmpty) TkSection(inset: 56, children: [for (final r in rows) row(r)]),
+            Padding(padding: const EdgeInsets.fromLTRB(4, 12, 4, 0), child: Text('Taskiem makes the card from your own records.', style: tkHint(t))),
+          ],
+        ),
       ),
     );
   }

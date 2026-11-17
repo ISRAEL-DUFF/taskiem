@@ -22,6 +22,9 @@ import 'package:taskiem/app/auth.dart';
 import 'package:taskiem/app/config.dart' show taskiemUrl;
 import 'package:taskiem/app/links.dart';
 import 'package:taskiem/app/session.dart';
+import 'package:taskiem/app/route.dart';
+import 'package:taskiem/chat/book_sheet.dart' show forgetServices;
+import 'package:taskiem/chat/door.dart';
 import 'package:taskiem/chat/my_chat.dart';
 import 'package:taskiem/kit/sheet.dart' show TkKitField;
 import 'package:taskiem/main.dart';
@@ -174,7 +177,7 @@ void main() {
         ? {'chats': [chat(id: 'c2', name: 'Bola Stores', archived: true, unread: 0)], 'unread': 0}
         : {'chats': [chat()], 'unread': 2};
     api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
-    api.routes['GET /v1/me/storefront-orders'] = (_) => {'orders': <Object>[], 'waiting': false};
+    api.routes['GET /v1/me/storefront-orders'] = (_) => {'orders': <Object>[], 'waiting': false, 'waiting_count': 0};
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), now: () => at)));
     await settle(t);
     expect(find.text('Mama’s Kitchen'), findsOneWidget);
@@ -510,12 +513,15 @@ void main() {
     api.routes['GET /v1/me/chats'] = (_) => {'chats': <Object>[], 'unread': 0};
     api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
     var confirmed = false;
+    // Only confirmed orders are listed; those made before the phone was on
+    // the account are only counted until "These are mine".
     api.routes['GET /v1/me/storefront-orders'] = (_) => {
       'orders': [
-        {'reference': 'MK-1042', 'state': 'accepted', 'total_kobo': 450000, 'made_at': '2026-11-15T10:00:00Z', 'business': 'Mama’s Kitchen', 'business_id': 'b1', 'waiting': false},
-        {'reference': 'BS-77', 'state': 'completed', 'total_kobo': 120000, 'made_at': '2026-10-01T10:00:00Z', 'business': 'Bola Stores', 'business_id': 'b2', 'waiting': !confirmed},
+        {'reference': 'MK-1042', 'state': 'accepted', 'total_kobo': 450000, 'made_at': '2026-11-15T10:00:00Z', 'business': 'Mama’s Kitchen', 'business_id': 'b1'},
+        if (confirmed) {'reference': 'BS-77', 'state': 'completed', 'total_kobo': 120000, 'made_at': '2026-10-01T10:00:00Z', 'business': 'Bola Stores', 'business_id': 'b2'},
       ],
       'waiting': !confirmed,
+      'waiting_count': confirmed ? 0 : 1,
     };
     api.routes['POST /v1/me/storefront-orders/confirm'] = (_) {
       confirmed = true;
@@ -527,7 +533,8 @@ void main() {
     expect(find.text('No chats yet'), findsOneWidget);
     expect(find.text('Your shop orders'), findsOneWidget);
     expect(find.textContaining('We found an order made with your number'), findsOneWidget);
-    await press(t, find.text('These are mine'));
+    expect(find.text('Bola Stores'), findsNothing, reason: 'nothing of a waiting order shows');
+    await press(t, find.text('It’s mine'));
     expect(api.sent('POST', '/v1/me/storefront-orders/confirm'), hasLength(1));
     expect(find.textContaining('We found an order'), findsNothing);
     expect(find.text('Bola Stores'), findsOneWidget);
@@ -560,6 +567,179 @@ void main() {
     await drain(t);
     final d = MyChatData(api.auth(), 'c1', follow: false, now: () => at);
     await expectLargeText(t, TaskiemApp(mode: TkMode.dark, home: MyChatScreen(data: d)), drive: settle);
+    await drain(t);
+  });
+
+  test('a push for You opens the person\'s chat over the chats: /you/chats/{id}', () {
+    final r = routeOf('/you/chats/c1');
+    expect(r.screen, RouteScreen.you);
+    expect(r.id, 'c1');
+    expect(routeOf('/you/chats/../x').screen, isNot(RouteScreen.you));
+  });
+
+  testWidgets('the head: their photo, what they proved in plain words; the transfer warning; the offers question passed over', (t) async {
+    phone(t);
+    final api = conversation(c: {
+      ...chat(),
+      'photo': {'urls': {'96': 'https://cdn.example/logo-96.webp', '256': 'https://cdn.example/logo-256.webp'}},
+      'verified': {'phone': true, 'business': false, 'payments': true, 'months': 8},
+    });
+    api.routes['GET /v1/me/chats/c1/messages'] = (_) => {
+      'messages': [
+        ...messages,
+        {'id': 'm5', 'mine': false, 'kind': 'text', 'body': 'Pay to 0123456789, GTBank, Bisi Ade', 'warn_transfer': true, 'read_at': null, 'created_at': '2026-11-16T09:08:00Z'},
+      ],
+      'more': false,
+    };
+    api.routes['PUT /v1/me/chats/c1'] = (r) => {...chat(ask: false), 'verified': {'phone': true, 'business': false, 'payments': true, 'months': 8}};
+    await openChat(t, api);
+    expect(find.bySemanticsLabel('Phone checked · Payments through Taskiem · Trading 8 months'), findsOneWidget);
+    expect(find.textContaining('Business checked'), findsNothing, reason: 'only what is so');
+    expect(find.byType(Image), findsWidgets, reason: 'their photo in the head');
+    expect(photoUrl({'96': 'https://cdn.example/logo-96.webp', '256': 'https://cdn.example/logo-256.webp'}, width: 80), 'https://cdn.example/logo-96.webp');
+    expect(photoUrl({'96': 'https://cdn.example/logo-96.webp', '256': 'https://cdn.example/logo-256.webp'}, width: 200), 'https://cdn.example/logo-256.webp');
+    expect(photoUrl({'96': 'javascript:alert(1)'}), isNull);
+    expect(verifiedWords(const PersonChatVerified(phone: false, business: true, payments: false, months: 0)), 'Business checked · New on Taskiem');
+
+    // The warning under their message asking for a transfer.
+    expect(find.bySemanticsLabel('Warning: $transferWarning'), findsOneWidget);
+    expect(find.text(transferWarning), findsOneWidget);
+
+    // Passed over: not asked again.
+    expect(find.text('Get offers from Mama’s Kitchen?'), findsOneWidget);
+    await press(t, find.bySemanticsLabel('Not now'));
+    expect(api.body(api.sent('PUT', '/v1/me/chats/c1').single), {'offers_asked': true});
+    expect(find.text('Get offers from Mama’s Kitchen?'), findsNothing);
+    await drain(t);
+  });
+
+  testWidgets('an answer about offers the business did not take is said', (t) async {
+    phone(t);
+    final api = conversation();
+    api.routes['PUT /v1/me/chats/c1'] = (_) => {...chat(ask: false), 'offers_refused': true};
+    await openChat(t, api);
+    await press(t, find.text('Yes'));
+    expect(find.textContaining('your answer about offers was not saved'), findsOneWidget);
+    await drain(t);
+  });
+
+  testWidgets('invoice and delivery cards; Your orders follows the rider; a booking offer opens that service', (t) async {
+    phone(t);
+    final opened = <Uri>[];
+    final was = openInBrowser;
+    openInBrowser = (u) async {
+      opened.add(u);
+      return true;
+    };
+    addTearDown(() => openInBrowser = was);
+    final api = conversation(c: chat(offers: 'no', ask: false));
+    api.routes['GET /v1/me/chats/c1/messages'] = (_) => {
+      'messages': [
+        {
+          'id': 'k1', 'mine': false, 'kind': 'card', 'body': 'Invoice INV-0007', 'read_at': null, 'created_at': '2026-11-16T09:00:00Z',
+          'card': {'type': 'invoice', 'invoice_id': 'inv1', 'reference': 'INV-0007', 'title': 'Invoice INV-0007', 'status': 'sent', 'total_kobo': 1250000, 'line': 'Catering for 40', 'url': 'https://app.taskiem.com/i/xyz'},
+        },
+        {
+          'id': 'k2', 'mine': false, 'kind': 'card', 'body': 'Delivery of MK-1042', 'read_at': null, 'created_at': '2026-11-16T09:01:00Z',
+          'card': {'type': 'delivery', 'reference': 'MK-1042', 'title': 'Delivery of MK-1042', 'status': 'picked_up', 'line': 'On its way to you', 'delivery': {'status': 'picked_up', 'line': 'On its way to you', 'accepted_at': '2026-11-16T08:40:00Z', 'picked_up_at': '2026-11-16T08:55:00Z'}},
+        },
+        {
+          'id': 'k3', 'mine': false, 'kind': 'card', 'body': 'Braids', 'read_at': null, 'created_at': '2026-11-16T09:02:00Z',
+          'card': {'type': 'booking', 'service_id': 's2', 'title': 'Braids', 'minutes': 90, 'total_kobo': 800000},
+        },
+      ],
+      'more': false,
+    };
+    api.routes['GET /v1/me/chats/c1/orders'] = (_) => {
+      'orders': [
+        {'reference': 'MK-1042', 'kind': 'app', 'status': 'dispatched', 'summary': '1 × Jollof rice', 'total_kobo': 450000, 'due_kobo': 0, 'pay': false, 'created_at': '2026-11-15T10:00:00Z',
+          'delivery': {'status': 'picked_up', 'line': 'On its way to you'}},
+      ],
+    };
+    api.routes['GET /v1/me/chats/c1/services'] = (_) => {
+      'open': true,
+      'services': [
+        {'id': 's1', 'name': 'Cornrows', 'minutes': 60, 'price_kobo': 500000},
+        {'id': 's2', 'name': 'Braids', 'minutes': 90, 'price_kobo': 800000},
+      ],
+    };
+    api.routes['GET /v1/me/chats/c1/services/s2/times'] = (_) => {
+      'day': '2026-11-17',
+      'days': ['2026-11-17'],
+      'service': {'id': 's2', 'name': 'Braids', 'minutes': 90},
+      'times': ['2026-11-17T09:00:00Z'],
+    };
+    // Their services as read in another test are not these.
+    forgetServices();
+    await openChat(t, api);
+    expect(find.text('₦12,500 due'), findsOneWidget);
+    expect(find.text('To pay'), findsOneWidget);
+    expect(find.text('On its way to you'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('Picked up: step 2 of 4')), findsOneWidget);
+
+    await press(t, find.text('Pay'));
+    expect(opened, [Uri.parse('https://app.taskiem.com/i/xyz')]);
+
+    await press(t, find.text('Your orders with them'));
+    expect(find.textContaining('On its way to you', findRichText: true), findsWidgets);
+    expect(find.text('On its way'), findsNWidgets(2), reason: 'the rider\'s step as its status, on the card and the row');
+    await press(t, find.bySemanticsLabel('Close').last);
+
+    // Book on the offer: that service's times at once, not the list.
+    await press(t, find.text('Book'));
+    expect(api.sent('GET', '/v1/me/chats/c1/services/s2/times'), hasLength(1));
+    expect(find.text('Cornrows'), findsNothing);
+    expect(find.text('10:00'), findsOneWidget);
+    await drain(t);
+  });
+
+  testWidgets('erased by the business: the box goes and it is said plainly; typing is not told while blocked', (t) async {
+    phone(t);
+    final api = conversation(c: chat(offers: 'no', ask: false));
+    api.routes['POST /v1/me/chats/c1/typing'] = (_) => answer({}, 204);
+    api.routes['POST /v1/me/chats/c1/messages'] = (_) => answer({'error': 'This business erased your details from its records, so this conversation is closed.'}, 409);
+    await openChat(t, api);
+    await t.enterText(find.byType(EditableText), 'Hello?');
+    await t.pump();
+    await press(t, find.bySemanticsLabel('Send'));
+    expect(find.text('This business erased your details from its records, so this conversation is closed.'), findsOneWidget);
+    expect(find.byType(EditableText), findsNothing, reason: 'nothing more can be sent');
+    await drain(t);
+
+    final blocked = conversation(c: chat(offers: 'no', ask: false, blockedYou: true));
+    blocked.routes['POST /v1/me/chats/c1/typing'] = (_) => answer({'error': 'This business is not taking messages from you.', 'blocked': true}, 403);
+    final d = await openChat(t, blocked);
+    d.typing();
+    await settle(t);
+    expect(blocked.sent('POST', '/v1/me/chats/c1/typing'), isEmpty);
+    expect(find.text('Mama’s Kitchen is not taking messages from you.'), findsOneWidget);
+    await drain(t);
+  });
+
+  testWidgets('a message whose answer never came goes again with the same client id', (t) async {
+    phone(t);
+    final api = conversation(c: chat(offers: 'no', ask: false));
+    var lost = true;
+    api.routes['POST /v1/me/chats/c1/messages'] = (r) {
+      if (lost) return answer({'error': 'Bad gateway'}, 502);
+      final b = api.body(r);
+      return answer({'id': 'm9', 'mine': true, 'kind': 'text', 'body': b['text'], 'read_at': null, 'created_at': '2026-11-16T10:29:00Z'}, 201);
+    };
+    await openChat(t, api);
+    await t.enterText(find.byType(EditableText), 'Two packs please');
+    await t.pump();
+    await press(t, find.bySemanticsLabel('Send'));
+    expect((t.widget(find.byType(EditableText)) as EditableText).controller.text, 'Two packs please', reason: 'given back');
+    lost = false;
+    await press(t, find.bySemanticsLabel('Send'));
+    final sent = api.sent('POST', '/v1/me/chats/c1/messages');
+    expect(sent, hasLength(2));
+    expect(api.body(sent[0])['client_id'], api.body(sent[1])['client_id']);
+    // Other words: a new id.
+    await t.enterText(find.byType(EditableText), 'And a drink');
+    await t.pump();
+    await press(t, find.bySemanticsLabel('Send'));
+    expect(api.body(api.sent('POST', '/v1/me/chats/c1/messages').last)['client_id'], isNot(api.body(sent[0])['client_id']));
     await drain(t);
   });
 }

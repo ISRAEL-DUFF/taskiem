@@ -8,6 +8,12 @@
 // - The phone is a device of the person in each business it is turned on in
 //   (PUT /v1/me/push, kind fcm); the switch is per business, as the server
 //   keeps devices.
+// - It is also a device of the person's own side, You
+//   (docs/spec/taskiem-for-everyone.md §9, "push on your side"): from a
+//   personal session PUT /v1/me/push registers it there (kinds ["you"]); from
+//   a business session the same with ?side=you, so a business answering the
+//   person's chat reaches them while they work in a business. Its pushes
+//   have no business and open /you/chats/{id}.
 // - A tap opens what the push is about, in its business (switched first).
 // - With the app open nothing shows from the system: a toast does, unless the
 //   conversation is the one on the screen.
@@ -24,7 +30,11 @@ import 'session.dart';
 /// The kinds of notification a device may take, in the web's order and words.
 const pushKinds = ['business', 'customers', 'orders', 'approvals', 'alerts'];
 
+/// The kind of a push on the person's own side (a business wrote to them).
+const youKind = 'you';
+
 const kindWords = {
+  'you': ('Chats with businesses', 'When a business you buy from writes to you'),
   'business': ('Businesses you work with', 'Messages from linked businesses'),
   'customers': ('Customers', 'When a customer writes'),
   'orders': ('Orders and money', 'New orders, bills, payments and reminders'),
@@ -43,7 +53,14 @@ class PushNote {
 
   String get link => data['link'] ?? '/chat';
   String get tag => data['tag'] ?? '';
-  String? get business => data['business'];
+  String? get business => (data['business'] ?? '').isEmpty ? null : data['business'];
+}
+
+/// The conversation on You a notification's link opens (`/you/chats/{id}`),
+/// or null.
+String? youChatOf(String? link) {
+  final m = RegExp(r'^/you/chats/([A-Za-z0-9\-]{1,80})$').firstMatch(link ?? '');
+  return m?[1];
 }
 
 /// What the phone's notifications are, behind one face: Firebase on a
@@ -100,7 +117,7 @@ class PhoneNotifications extends ChangeNotifier {
 
   // Who is signed in known later (offline at signing in): start then.
   void _authChanged() {
-    if (_wanted && auth.state == AuthState.signedIn && _tenant.isNotEmpty && _started != auth.session) unawaited(start());
+    if (_wanted && auth.state == AuthState.signedIn && _scope.isNotEmpty && _started != auth.session) unawaited(start());
   }
 
   /// The start running, which a second caller waits for (the home asks
@@ -141,6 +158,31 @@ class PhoneNotifications extends ChangeNotifier {
     return id == null ? null : view?.devices.where((d) => d.id == id).firstOrNull;
   }
 
+  /// A personal session: this phone's notifications are You's.
+  bool get personal => auth.personal;
+
+  /// From a business session: this phone is also a device of the person's
+  /// own side, so their chats with businesses reach it here.
+  bool youOn = false;
+
+  /// The person's own devices (You's), read from a business session.
+  PushDevices? youView;
+
+  /// The device this phone is on the person's own side: in a personal
+  /// session [mine].
+  PushDevice? get youMine {
+    if (personal) return mine;
+    final id = _youDevice;
+    return id == null ? null : youView?.devices.where((d) => d.id == id).firstOrNull;
+  }
+
+  /// Notifications for You are on here: from a personal session the switch
+  /// itself, from a business session the one for You.
+  bool get youIsOn => personal ? isOn : youOn;
+
+  String? _youDevice;
+  String? _youToken;
+
   /// A page to open, once the home is there: a tapped notification's.
   String? pending;
 
@@ -171,9 +213,14 @@ class PhoneNotifications extends ChangeNotifier {
   final _subs = <StreamSubscription<Object?>>[];
 
   String get _tenant => '${auth.me?.tenantId ?? ''}';
-  String get _onKey => 'push-on:$_tenant';
-  String get _tokenKey => 'push-token:$_tenant';
-  String get _askedKey => 'push-asked:$_tenant';
+
+  /// Whose keys this session's are: its business's, or `you` (personal).
+  String get _scope => personal ? youKind : _tenant;
+  String get _onKey => 'push-on:$_scope';
+  String get _tokenKey => 'push-token:$_scope';
+  String get _askedKey => 'push-asked:$_scope';
+  static const _youOnKey = 'push-on:$youKind';
+  static const _youTokenKey = 'push-token:$youKind';
 
   /// Starts what notifications need once signed in, for this session's
   /// business: Firebase, this phone's device, the taps.
@@ -193,8 +240,9 @@ class PhoneNotifications extends ChangeNotifier {
     _wanted = true;
     if (p == null || auth.session == _started) return;
     // Not before the business is known: its keys are per business (offline
-    // at signing in, me comes later and start runs again).
-    if (_tenant.isEmpty) return;
+    // at signing in, me comes later and start runs again). A personal
+    // session's are You's.
+    if (_scope.isEmpty) return;
     _started = auth.session;
     final at = auth.session;
     // Another business (or person): nothing of the last one's stands.
@@ -203,6 +251,10 @@ class PhoneNotifications extends ChangeNotifier {
     view = null;
     _device = null;
     _token = null;
+    youOn = false;
+    youView = null;
+    _youDevice = null;
+    _youToken = null;
     final AppConfig c;
     try {
       c = await auth.api.appConfig();
@@ -236,6 +288,10 @@ class PhoneNotifications extends ChangeNotifier {
     blocked = await p.permission() == PushPermission.denied;
     isOn = await keys.read(_onKey) == '1';
     _token = await keys.read(_tokenKey);
+    if (!personal) {
+      youOn = await keys.read(_youOnKey) == '1';
+      _youToken = await keys.read(_youTokenKey);
+    }
     if (at != auth.session) return;
     notifyListeners();
     if (isOn) {
@@ -251,10 +307,23 @@ class PhoneNotifications extends ChangeNotifier {
         // Offline: as it was.
       }
     }
+    // From a business, the person's own side too, while it is on here.
+    if (!personal && youOn) {
+      final now = await p.token();
+      if (now != null && at == auth.session) {
+        try {
+          await _registerYou(now, known: now == _youToken, replaces: now == _youToken ? null : _youToken);
+        } on ApiError catch (e) {
+          if (e.status == 404) await _forgetYou();
+        } on Object {
+          // Offline: as it was.
+        }
+      }
+    }
     await load();
   }
 
-  /// The person's devices.
+  /// The person's devices (and, from a business, their own side's).
   Future<void> load() async {
     try {
       view = await auth.api.listPush();
@@ -262,7 +331,73 @@ class PhoneNotifications extends ChangeNotifier {
     } on Object {
       // Shown when it can be.
     }
+    if (personal || available != true) return;
+    try {
+      youView = await auth.api.listPush(side: youKind);
+      notifyListeners();
+    } on Object {
+      // Shown when it can be.
+    }
   }
+
+  /// This phone on the person's own side, from a business session
+  /// (`?side=you`): the business's answers in their chats reach it here.
+  Future<void> _registerYou(String token, {bool known = false, String? replaces}) async {
+    final name = (await auth.store.device()).name;
+    final v = await auth.api.putPush(
+      side: youKind,
+      body: PutPushRequest(
+        kind: 'fcm',
+        token: token,
+        platform: platform!.platform,
+        kinds: const [youKind],
+        label: known ? null : name,
+        known: known ? true : null,
+        replaces: replaces,
+      ),
+    );
+    _youDevice = v.added;
+    _youToken = token;
+    youView = v;
+    youOn = true;
+    await _remember(youKind);
+    await keys.write(_youOnKey, '1');
+    await keys.write(_youTokenKey, token);
+    notifyListeners();
+  }
+
+  Future<void> _forgetYou() async {
+    youOn = false;
+    _youDevice = null;
+    await keys.write(_youOnKey, null);
+    await keys.write(_youTokenKey, null);
+    notifyListeners();
+  }
+
+  /// From a business session: the person's chats with businesses reach
+  /// this phone too, or no longer.
+  Future<void> setYou(bool on) => _run(() async {
+    final p = platform;
+    if (p == null || available != true) return;
+    if (personal) return on ? _turnOn() : _turnOff();
+    if (!on) {
+      final t = _youToken;
+      if (t != null) youView = await auth.api.deletePushEndpoint(side: youKind, body: DeletePushEndpointRequest(token: t));
+      await keys.write(_youOffKey, '1');
+      return _forgetYou();
+    }
+    await keys.write(_youOffKey, null);
+    final allowed = await p.ask();
+    blocked = allowed == PushPermission.denied;
+    if (allowed != PushPermission.granted) throw ApiError(0, {'error': _notAllowed(blocked)});
+    final t = await p.token();
+    if (t == null) throw ApiError(0, {'error': 'This phone could not be set up for notifications. Try again in a moment.'});
+    await _registerYou(t);
+  });
+
+  static String _notAllowed(bool blocked) => blocked
+      ? 'Notifications are off for Taskiem in this phone’s settings. Turn them on there (Settings, Apps, Taskiem, Notifications), then try again.'
+      : 'Notifications were not allowed. Turn this on again and choose Allow when the phone asks.';
 
   Future<void> _register(String token, {bool known = false, String? replaces}) async {
     final name = (await auth.store.device()).name;
@@ -274,6 +409,8 @@ class PhoneNotifications extends ChangeNotifier {
         label: known ? null : name,
         known: known ? true : null,
         replaces: replaces,
+        // On the person's own side, only You's kind.
+        kinds: personal ? const [youKind] : null,
       ),
     );
     _device = v.added;
@@ -287,16 +424,28 @@ class PhoneNotifications extends ChangeNotifier {
   }
 
   Future<void> _renew(String token) async {
-    if (!isOn || token == _token) return;
-    try {
-      await _register(token, replaces: _token);
-    } on Object {
-      // The next start tries again (the token kept is the old one).
+    if (isOn && token != _token) {
+      try {
+        await _register(token, replaces: _token);
+      } on Object {
+        // The next start tries again (the token kept is the old one).
+      }
+    }
+    if (!personal && youOn && token != _youToken) {
+      try {
+        await _registerYou(token, replaces: _youToken);
+      } on Object {
+        // The next start tries again.
+      }
     }
   }
 
-  /// Turns notifications on for this phone in this business.
-  Future<void> turnOn() => _run(() async {
+  /// Turns notifications on for this phone in this business (or on You,
+  /// in a personal session). From a business, the person's own chats with
+  /// businesses come too, unless they turned that off here.
+  Future<void> turnOn() => _run(_turnOn);
+
+  Future<void> _turnOn() async {
     final p = platform;
     if (p == null || available != true) return;
     await _remember();
@@ -313,14 +462,27 @@ class PhoneNotifications extends ChangeNotifier {
     final t = await p.token();
     if (t == null) throw ApiError(0, {'error': 'This phone could not be set up for notifications. Try again in a moment.'});
     await _register(t);
-  });
+    if (!personal && !youOn && await keys.read(_youOffKey) == null) {
+      try {
+        await _registerYou(t);
+      } on Object {
+        // The business's are on; You's can be turned on in Settings.
+      }
+    }
+  }
 
-  /// Turns them off for this phone in this business.
-  Future<void> turnOff() => _run(() async {
+  /// Turned off for You here by the person, from a business: not turned on
+  /// again with the business's.
+  static const _youOffKey = 'push-off:$youKind';
+
+  /// Turns them off for this phone in this business (or on You).
+  Future<void> turnOff() => _run(_turnOff);
+
+  Future<void> _turnOff() async {
     final t = _token;
     if (t != null) view = await auth.api.deletePushEndpoint(body: DeletePushEndpointRequest(token: t));
     await _forgetHere();
-  });
+  }
 
   Future<void> _forgetHere() async {
     isOn = false;
@@ -337,13 +499,22 @@ class PhoneNotifications extends ChangeNotifier {
 
   Future<void> setKind(String kind, bool take) => _run(() async {
     final d = mine;
-    if (d == null) return;
+    if (d == null || personal) return;
     final kinds = [for (final k in pushKinds) if (k == kind ? take : d.kinds.contains(k)) k];
     view = await auth.api.patchPush(id: d.id, body: PatchPushRequest(kinds: kinds));
   });
 
   Future<void> remove(String id) => _run(() async {
     view = await auth.api.deletePush(id: id);
+  });
+
+  /// Takes one of the person's own devices (You's) off, from a business.
+  Future<void> removeYou(String id) => _run(() async {
+    if (personal) {
+      view = await auth.api.deletePush(id: id);
+    } else {
+      youView = await auth.api.deletePush(side: youKind, id: id);
+    }
   });
 
   Future<void> _run(Future<void> Function() f) async {
@@ -387,6 +558,15 @@ class PhoneNotifications extends ChangeNotifier {
         // Forgetting the token below ends it all the same.
       }
     }
+    // The person's own side too, so their chats reach nobody else here.
+    final y = _youToken;
+    if (!personal && youOn && y != null) {
+      try {
+        await auth.api.deletePushEndpoint(side: youKind, body: DeletePushEndpointRequest(token: y));
+      } on Object {
+        // As above.
+      }
+    }
     await forgotten();
   }
 
@@ -397,6 +577,10 @@ class PhoneNotifications extends ChangeNotifier {
     _device = null;
     _token = null;
     view = null;
+    youOn = false;
+    _youDevice = null;
+    _youToken = null;
+    youView = null;
     pending = null;
     tapProblem = null;
     _started = -1;
@@ -421,6 +605,13 @@ class PhoneNotifications extends ChangeNotifier {
       }
     }
     await keys.write('push-businesses', null);
+    for (final k in [_youOnKey, _youTokenKey, _youOffKey, 'push-asked:$youKind']) {
+      try {
+        await keys.write(k, null);
+      } on Object {
+        // Gone while the app runs.
+      }
+    }
     notifyListeners();
   }
 
@@ -461,7 +652,8 @@ class PhoneNotifications extends ChangeNotifier {
   }
 
   void _arrived(PushNote n) {
-    // The conversation on the screen, in this business: it is there already.
+    // The conversation on the screen, in this business (or on You, which
+    // any session opens): it is there already.
     final mine = n.business == null || n.business == _tenant;
     if (mine && n.tag.isNotEmpty && n.tag == showing) return;
     onArrived?.call(n);
@@ -484,8 +676,8 @@ class PhoneNotifications extends ChangeNotifier {
 
   /// Remembers that this business has keys here, to forget them all on
   /// signing out.
-  Future<void> _remember() async {
-    final b = _tenant;
+  Future<void> _remember([String? scope]) async {
+    final b = scope ?? _scope;
     if (b.isEmpty) return;
     try {
       final list = (await keys.read('push-businesses') ?? '').split(',').where((x) => x.isNotEmpty).toSet();

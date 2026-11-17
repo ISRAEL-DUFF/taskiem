@@ -480,7 +480,7 @@ class NotificationsCard extends StatelessWidget {
             else ...[
               TkSwitchRow(
                 label: 'Notify me on this phone',
-                hint: 'Messages, orders and what needs you, even when Taskiem is closed.',
+                hint: n.personal ? 'When a business you buy from answers you, even when Taskiem is closed.' : 'Messages, orders and what needs you, even when Taskiem is closed.',
                 on: n.isOn,
                 onChanged: n.busy ? null : (v) => v ? n.turnOn() : n.turnOff(),
               ),
@@ -515,37 +515,80 @@ class NotificationsCard extends StatelessWidget {
                     ),
                 ],
               ],
-              if (others.isNotEmpty) ...[
+              // From a business: the person's own chats with businesses
+              // (You's), on this phone too.
+              if (!n.personal) ...[
                 const SizedBox(height: 16),
-                Text('Your other devices', style: tkText(size: 14, weight: 600, color: t.text)),
-                for (final d in others)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(d.label, style: tkText(size: 14, weight: 500, color: t.text)),
-                              Text(
-                                d.kind == 'fcm' ? (d.platform == 'ios' ? 'Taskiem app on an iPhone' : 'Taskiem app on Android') : 'Browser',
-                                style: tkHint(t),
-                              ),
-                            ],
-                          ),
-                        ),
-                        TkButton(label: 'Remove', onPressed: n.busy ? null : () => n.remove(d.id)),
-                      ],
-                    ),
-                  ),
+                TkSwitchRow(
+                  label: kindWords[youKind]!.$1,
+                  hint: 'When a business you buy from answers you, on You. They come here while you work in a business too.',
+                  on: n.youOn,
+                  onChanged: n.busy ? null : n.setYou,
+                ),
               ],
+              _Devices(
+                title: n.personal ? 'Your other devices' : 'Your other devices here',
+                devices: others,
+                busy: n.busy,
+                onRemove: n.remove,
+              ),
+              if (!n.personal)
+                _Devices(
+                  title: 'Your devices for You',
+                  devices: (n.youView?.devices ?? const <PushDevice>[]).where((d) => d.id != n.youMine?.id).toList(),
+                  busy: n.busy,
+                  onRemove: n.removeYou,
+                ),
             ],
           ],
         ),
       );
     },
   );
+}
+
+/// A list of the person's other devices that are notified, each with
+/// Remove.
+class _Devices extends StatelessWidget {
+  const _Devices({required this.title, required this.devices, required this.busy, required this.onRemove});
+  final String title;
+  final List<PushDevice> devices;
+  final bool busy;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    if (devices.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 16),
+        Text(title, style: tkText(size: 14, weight: 600, color: t.text)),
+        for (final d in devices)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(d.label, style: tkText(size: 14, weight: 500, color: t.text)),
+                      Text(
+                        d.kind == 'fcm' ? (d.platform == 'ios' ? 'Taskiem app on an iPhone' : 'Taskiem app on Android') : 'Browser',
+                        style: tkHint(t),
+                      ),
+                    ],
+                  ),
+                ),
+                TkSmallButton(label: 'Remove', semantics: 'Remove ${d.label}', onPressed: busy ? null : () => onRemove(d.id)),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 /// Passkeys (docs/spec/mobile-app-m4.md N6; the web's Account, Passkeys):

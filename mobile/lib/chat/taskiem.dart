@@ -27,6 +27,7 @@ import '../theme/theme.dart';
 import 'alerts.dart';
 import 'attachments.dart';
 import 'cards.dart';
+import 'chat_link_page.dart' show showCustomersSheet;
 import 'chats.dart';
 import 'composer.dart';
 import 'connect.dart';
@@ -537,6 +538,11 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
       return;
     }
 
+    // Customers: your chat link and an offer, in a sheet of their own.
+    if (tool.key == 'customers') {
+      unawaited(showCustomersSheet(context, widget.data.chats.auth));
+      return;
+    }
     if (tool.key == 'sell') {
       unawaited(showSellSheet(context, auth: widget.data.chats.auth, onSold: landed));
       return;

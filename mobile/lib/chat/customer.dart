@@ -19,11 +19,13 @@ import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
 import '../api/transport.dart';
+import '../app/session.dart' show uuid4;
 import '../kit/icon.dart';
 import '../kit/keyboard.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/tap_area.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'chats.dart';
 import 'attachments.dart';
@@ -51,6 +53,7 @@ String customerLetter(CustomerChat c) => c.name == c.phone || RegExp(r'^\+?\d').
 /// customerchat.ts replyNote: what the box says about how a reply goes.
 ({bool stop, String text})? replyNote(CustomerChat c) {
   if (c.line == 'app') {
+    if (c.phone.isEmpty) return (stop: true, text: 'This customer’s details were erased, so this conversation is closed.');
     if (c.blocked == true) return (stop: true, text: 'You blocked this customer. Unblock them to write to them.');
     if (c.stopped) return (stop: true, text: c.notice ?? 'This customer has stopped messages');
     return null;
@@ -142,9 +145,11 @@ class CustomerData extends ChangeNotifier {
   late final ChatFiles files = ChatFiles(chats.auth.transport, pathOf: (m) => '/v1/customer-chats/${Uri.encodeComponent(id)}/files/${Uri.encodeComponent(m.id)}');
   DateTime _typedAt = DateTime(2000);
 
-  /// Staff typing, told to an app customer at most every 3 seconds.
+  /// Staff typing, told to an app customer at most every 3 seconds; never
+  /// while either side has blocked the other (the server refuses it).
   void typing() {
-    if (!app) return;
+    final c = chat;
+    if (!app || c == null || c.stopped || c.blocked == true || c.phone.isEmpty) return;
     final at = chats.now();
     if (at.difference(_typedAt) < const Duration(seconds: 3)) return;
     _typedAt = at;
@@ -193,12 +198,21 @@ class CustomerData extends ChangeNotifier {
     }
   }
 
+  bool _reading = false;
+  bool _pulling = false;
+
   Future<void> _chat() async {
+    if (_reading) return;
+    _reading = true;
     try {
-      chat = await api.getCustomerChat(id: id);
+      final c = await api.getCustomerChat(id: id);
+      if (_disposed) return;
+      chat = c;
       _changed();
     } on Object catch (e) {
       _fail(e);
+    } finally {
+      _reading = false;
     }
   }
 
@@ -226,6 +240,9 @@ class CustomerData extends ChangeNotifier {
 
   /// The latest page; the customer's messages read as they are shown.
   Future<void> _pull({required bool first}) async {
+    // One read at a time: a slow answer never lands over a newer one.
+    if (_pulling && !first) return;
+    _pulling = true;
     try {
       final out = await api.listCustomerMessages(id: id);
       if (_disposed) return;
@@ -242,6 +259,8 @@ class CustomerData extends ChangeNotifier {
       }
     } on Object catch (e) {
       _fail(e);
+    } finally {
+      _pulling = false;
     }
   }
 
@@ -251,7 +270,7 @@ class CustomerData extends ChangeNotifier {
       // What the phone kept shows; said quietly.
       offline = true;
     } else {
-      error = e is ApiError ? e.message : (e is Offline ? 'You’re offline. The conversation shows when you’re back online.' : null);
+      error = e is ApiError ? e.message : (e is Offline ? 'You’re offline. The conversation shows when you’re back online.' : 'Something went wrong. Try again.');
     }
     _changed();
   }
@@ -265,14 +284,17 @@ class CustomerData extends ChangeNotifier {
       CustomerMessage(id: '', mine: true, kind: 'text', body: words, offer: offer ? true : null, createdAt: chats.now()),
       (client) => api.replyCustomer(id: id, body: ReplyCustomerRequest(text: words, clientId: client, offer: offer ? true : null)),
       words: words,
+      same: 'words:${offer ? 'offer:' : ''}$words',
     );
   }
 
-  /// A card to an app customer: an order, a pay link, a booking offer or a
-  /// product, made by the server from the business's own records.
+  /// A card to an app customer: an order, a pay link, an invoice, a
+  /// delivery, a booking offer or a product, made by the server from the
+  /// business's own records.
   Future<void> sendCard(ReplyCustomerRequestCard card) => _reply(
     CustomerMessage(id: '', mine: true, kind: 'card', body: '', createdAt: chats.now()),
     (client) => api.replyCustomer(id: id, body: ReplyCustomerRequest(card: card, clientId: client)),
+    same: 'card:${card.type}:${card.reference ?? ''}:${card.invoiceId ?? ''}:${card.serviceId ?? ''}:${card.itemId ?? ''}',
   );
 
   /// A photo, voice note or PDF to an app customer.
@@ -294,10 +316,17 @@ class CustomerData extends ChangeNotifier {
     file: f,
   );
 
-  Future<void> _reply(CustomerMessage shown, Future<CustomerMessage> Function(String client) go, {String? words, PickedFile? file}) async {
+  /// What went last with no answer (it may have reached the server), and
+  /// its client id: the same again goes with the same id, so the server
+  /// keeps one.
+  ({String what, String client})? _unsure;
+
+  Future<void> _reply(CustomerMessage shown, Future<CustomerMessage> Function(String client) go, {String? words, PickedFile? file, String? same}) async {
     final c = chat;
     if (c == null || c.stopped || c.blocked == true || c.phone.isEmpty || busy) return;
-    final client = '${DateTime.now().millisecondsSinceEpoch}-${++_localN}';
+    final again = _unsure;
+    final client = same != null && again != null && again.what == same ? again.client : '${DateTime.now().millisecondsSinceEpoch}-${++_localN}-${uuid4().substring(0, 8)}';
+    _unsure = null;
     final mine = CustomerLine(
       CustomerMessage(id: 'local-$client', mine: true, kind: shown.kind, body: shown.body, offer: shown.offer, attachment: shown.attachment, createdAt: shown.createdAt),
       local: true,
@@ -313,6 +342,9 @@ class CustomerData extends ChangeNotifier {
       unawaited(chats.load());
     } on Object catch (e) {
       messages = messages?.where((m) => m != mine).toList();
+      // No answer (or the server's own failure): it may have arrived, so
+      // the same again goes with the same id.
+      if (same != null && (e is! ApiError || e.status >= 500)) _unsure = (what: same, client: client);
       // Given back only while the screen is there to take it.
       if (!_back.isClosed && words != null) _back.add(words);
       _fail(e);
@@ -442,6 +474,9 @@ class _CustomerScreenState extends State<CustomerScreen> {
           final tooLong = c != null && !app && lateTooLong(_text.text, c.windowOpen);
           final owes = c == null ? '' : owesWords(c.owesKobo, c.openInvoices);
           final title = c == null ? 'Customer' : customerTitle(c);
+          final list = d.messages;
+          // The message after each: the last of a run has the tucked corner.
+          final nextOf = <String, CustomerLine>{for (var i = 0; list != null && i + 1 < list.length; i++) list[i].id: list[i + 1]};
           return Semantics(
             label: 'Conversation with ${c == null ? 'a customer' : title}',
             container: true,
@@ -503,7 +538,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                   ),
                                 ],
                               ),
-                        avatar: ChatAvatar(name: c == null ? 'Customer' : customerLetter(c), size: 42, letterSize: 15),
+                        avatar: ChatAvatar(name: c == null ? 'Customer' : customerLetter(c), size: 40, letterSize: 15),
                         title: title,
                         typing: c?.typing == true,
                         subtitle: d.offline
@@ -529,6 +564,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                             hasOlder: d.hasOlder,
                             onOlder: d.older,
                             errors: [?d.error],
+                            tail: app && c?.typing == true ? const TypingBubble() : null,
                             empty: Text(
                               app
                                   ? 'Nothing here yet. What this customer writes to you in the Taskiem app shows here.'
@@ -539,15 +575,18 @@ class _CustomerScreenState extends State<CustomerScreen> {
                               style: tkHint(t),
                             ),
                             render: (m, prev) {
-                              final first = prev == null || prev.m.mine != m.m.mine || prev.m.senderName != m.m.senderName;
+                              final first = prev == null || prev.m.mine != m.m.mine || prev.m.senderName != m.m.senderName || prev.m.card != null || m.m.card != null;
+                              final next = nextOf[m.id];
+                              final last = next == null || next.m.mine != m.m.mine || next.m.senderName != m.m.senderName || next.m.card != null;
                               if (app || m.m.card != null || m.m.attachment != null) {
-                                final meta = m.m.mine ? t.chatOutMeta : t.muted;
+                                final meta = m.m.mine && m.m.card == null ? t.chatOutMeta : t.muted;
                                 return Padding(
                                   padding: EdgeInsets.only(top: first ? 6 : 0),
                                   child: DoorBubble(
                                     id: m.id,
                                     mine: m.m.mine,
                                     first: first,
+                                    last: last,
                                     body: m.m.body,
                                     at: m.m.createdAt,
                                     files: d.files,
@@ -567,7 +606,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                   ),
                                 );
                               }
-                              return Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: _CustomerBubble(x: m, first: first));
+                              return Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: _CustomerBubble(x: m, first: first, last: last));
                             },
                           ),
                         ),
@@ -612,9 +651,10 @@ class _CustomerScreenState extends State<CustomerScreen> {
 /// A customer's message, or the business's reply with who sent it, and how
 /// far the reply got.
 class _CustomerBubble extends StatelessWidget {
-  const _CustomerBubble({required this.x, required this.first});
+  const _CustomerBubble({required this.x, required this.first, required this.last});
   final CustomerLine x;
   final bool first;
+  final bool last;
 
   @override
   Widget build(BuildContext context) {
@@ -639,6 +679,7 @@ class _CustomerBubble extends StatelessWidget {
     return BubbleFrame(
       mine: m.mine,
       first: first,
+      last: last,
       stamp: stamp,
       children: [
         if (m.mine && first && (m.senderName ?? '').isNotEmpty) Text(m.senderName!, style: tkText(size: 12, weight: 600, color: t.tintText)),
@@ -689,13 +730,17 @@ class _Note extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
     return Semantics(
       liveRegion: true,
       child: Container(
         margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(color: stop ? t.tkDangerBg : t.tkWarnBg, borderRadius: BorderRadius.circular(12)),
-        child: Text(text, style: tkText(size: 13, lineHeight: 1.4, color: stop ? t.tkDangerInk : t.tkWarnInk)),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        // As the app's chat draws a note: on a card, red-tinted when nothing
+        // can be sent, orange while a reply goes another way.
+        decoration: BoxDecoration(color: (stop ? look.red : look.orange).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(16)),
+        child: Text(text, style: tkText(size: 13.5, lineHeight: 1.4, color: dark ? t.text : (stop ? look.redInk : look.orangeInk))),
       ),
     );
   }
@@ -734,7 +779,7 @@ class _ReplyBox extends StatelessWidget {
                 child: Container(
                   width: 46,
                   height: 46,
-                  decoration: BoxDecoration(color: t.panel, shape: BoxShape.circle, boxShadow: lift),
+                  decoration: BoxDecoration(color: TkLook.of(context).card, shape: BoxShape.circle, boxShadow: lift),
                   alignment: Alignment.center,
                   child: TkIcon('plus', size: 22, stroke: 2, color: dark ? t.text : t.brand),
                 ),
@@ -746,7 +791,7 @@ class _ReplyBox extends StatelessWidget {
             child: Container(
               constraints: const BoxConstraints(minHeight: 46),
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              decoration: BoxDecoration(color: t.panel, borderRadius: BorderRadius.circular(24), boxShadow: lift),
+              decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(24), boxShadow: lift),
               child: TapField(child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
                 child: Material(

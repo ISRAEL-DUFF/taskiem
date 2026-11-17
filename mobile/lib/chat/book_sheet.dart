@@ -86,13 +86,16 @@ String bookPayWords(String business) => 'You pay $business at the appointment, o
 /// linkbook.ts linkServices: their services, read once a minute at most:
 /// the panel's tile and the sheet share the answer.
 final _cache = <String, ({DateTime at, Future<Map<String, dynamic>> got})>{};
+/// Forgets the services read (signing out, a test's start).
+void forgetServices() => _cache.clear();
+
 Future<Map<String, dynamic>> linkServices(Transport t, String link) => servicesAt(t, '/v1/link-chats/${Uri.encodeComponent(link)}');
 
 /// The services of the conversation at [base] (a linked business's, or a
 /// customer's chat on You: /v1/me/chats/{id}).
-Future<Map<String, dynamic>> servicesAt(Transport t, String base) {
+Future<Map<String, dynamic>> servicesAt(Transport t, String base, {bool fresh = false}) {
   final hit = _cache[base];
-  if (hit != null && DateTime.now().difference(hit.at) < const Duration(minutes: 1)) return hit.got;
+  if (!fresh && hit != null && DateTime.now().difference(hit.at) < const Duration(minutes: 1)) return hit.got;
   final got = t.send('GET', '$base/services').then((r) => r is Map ? r.cast<String, dynamic>() : <String, dynamic>{});
   got.catchError((Object _) {
     _cache.remove(base);
@@ -103,11 +106,15 @@ Future<Map<String, dynamic>> servicesAt(Transport t, String base) {
 }
 
 /// Opens Book; the future ends with what was booked, said.
-Future<String?> showBookSheet(BuildContext context, {required Auth auth, required String link, required String business, ValueChanged<String>? onBooked, String? customer}) =>
-    showTkSheet<String>(context, (_) => BookSheet(auth: auth, link: link, business: business, onBooked: onBooked, customer: customer));
+Future<String?> showBookSheet(BuildContext context, {required Auth auth, required String link, required String business, ValueChanged<String>? onBooked, String? customer, String? service}) =>
+    showTkSheet<String>(context, (_) => BookSheet(auth: auth, link: link, business: business, onBooked: onBooked, customer: customer, service: service));
 
 class BookSheet extends StatefulWidget {
-  const BookSheet({super.key, required this.auth, required this.link, required this.business, this.onBooked, this.customer});
+  const BookSheet({super.key, required this.auth, required this.link, required this.business, this.onBooked, this.customer, this.service});
+
+  /// Opened at this service (a booking offer's Book): its times at once,
+  /// Back to the rest.
+  final String? service;
   final Auth auth;
   final String link;
   final String business;
@@ -154,13 +161,25 @@ class _BookSheetState extends State<BookSheet> with CloseSoon {
   @override
   void initState() {
     super.initState();
-    servicesAt(_t, _base).then(
+    _read();
+  }
+
+  /// Their services; a booking offer's service not among those read in the
+  /// last minute is read afresh (it may be new).
+  void _read({bool fresh = false}) {
+    servicesAt(_t, _base, fresh: fresh).then(
       (d) {
+        final at = widget.service;
+        if (!fresh && at != null && !_maps(d['services']).any((x) => x['id'] == at)) return _read(fresh: true);
         if (!mounted) return;
+        _phone?.dispose();
         setState(() {
           _data = d;
           _phone = TextEditingController(text: d['phone'] as String? ?? '')..addListener(() => setState(() {}));
         });
+        // A booking offer's service: straight to its times, while it books.
+        final s = at == null || d['open'] != true ? null : _maps(d['services']).where((x) => x['id'] == at).firstOrNull;
+        if (s != null) _pick(s);
       },
       onError: (Object e) {
         if (mounted) setState(() => _loadError = errorWords(e));

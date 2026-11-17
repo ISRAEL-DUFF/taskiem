@@ -887,14 +887,41 @@ List<Widget> gapped(List<Widget> list, double gap) => [
 /// two lines: taken off a bubble's padding above and below.
 const bubbleLineDrift = 0.31;
 
+/// Your own bubble's words: white on pine in the light (the dark's deep
+/// green keeps the light words it has), lime where the web tints.
+Widget ownWords(BuildContext context, bool on, Widget child) {
+  if (!on || TkTheme.of(context).mode == TkMode.dark) return child;
+  const white = Color(0xFFFFFFFF);
+  return TkTheme.recolour(
+    context,
+    (t) => t.copyWith(
+      text: white,
+      muted: const Color(0xB3FFFFFF),
+      accent: const Color(0xFFC8F169),
+      tintText: const Color(0xFFC8F169),
+      tint: const Color(0x1AFFFFFF),
+      accentSoft: const Color(0x1AFFFFFF),
+      panel: const Color(0x1AFFFFFF),
+      panel2: const Color(0x1AFFFFFF),
+      border: const Color(0x33FFFFFF),
+    ),
+    child,
+  );
+}
+
 /// `.bubble`: a message's bubble, as wide as what it holds up to 84% of the
 /// thread (560 px at most), the tail's corner on the first of a run, its
 /// time in the corner of the last line ([inline]) or on a row of its own.
 class BubbleFrame extends StatelessWidget {
-  const BubbleFrame({super.key, required this.mine, required this.first, required this.stamp, required this.children, this.inline = true});
+  const BubbleFrame({super.key, required this.mine, required this.first, required this.stamp, required this.children, this.inline = true, this.last});
 
   final bool mine;
   final bool first;
+
+  /// In the app's own chat look (docs/spec/mobile-app-look.md, "The chat"):
+  /// 20 px round, the run's last bubble with its corner on the sender's
+  /// side tucked in, and your own words white on pine. Null: as the web's.
+  final bool? last;
   final Widget stamp;
   final List<Widget> children;
   final bool inline;
@@ -902,12 +929,20 @@ class BubbleFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    final radius = BorderRadius.only(
-      topLeft: Radius.circular(first && !mine ? 4 : 16),
-      topRight: Radius.circular(first && mine ? 4 : 16),
-      bottomLeft: const Radius.circular(16),
-      bottomRight: const Radius.circular(16),
-    );
+    final own = last != null;
+    final radius = own
+        ? BorderRadius.only(
+            topLeft: const Radius.circular(20),
+            topRight: const Radius.circular(20),
+            bottomLeft: Radius.circular(last! && !mine ? 6 : 20),
+            bottomRight: Radius.circular(last! && mine ? 6 : 20),
+          )
+        : BorderRadius.only(
+            topLeft: Radius.circular(first && !mine ? 4 : 16),
+            topRight: Radius.circular(first && mine ? 4 : 16),
+            bottomLeft: const Radius.circular(16),
+            bottomRight: const Radius.circular(16),
+          );
     return LayoutBuilder(
       builder: (context, box) {
         final max = (box.maxWidth * 0.84).clamp(0.0, 560.0);
@@ -922,7 +957,7 @@ class BubbleFrame extends StatelessWidget {
                   borderRadius: radius,
                   boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 1)],
                 ),
-                child: Stack(
+                child: ownWords(context, own && mine, Stack(
                   children: [
                     Padding(
                       // `padding: 8px 12px 6px`; on the right 11.5, as Chrome
@@ -940,7 +975,7 @@ class BubbleFrame extends StatelessWidget {
                     // `.stamp.inline { position: absolute; right: 9px; bottom: 5px }`
                     if (inline) Positioned(right: 9, bottom: 5, child: stamp),
                   ],
-                ),
+                )),
               ),
             ),
           ),

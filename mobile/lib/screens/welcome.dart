@@ -246,7 +246,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
         Padding(
           // `.way-in-other`: 14 px above, nothing below.
           padding: const EdgeInsets.only(top: 14),
-          child: Center(child: TkLink(label: 'Sign in with email', onTap: widget.onEmail)),
+          child: Center(child: AuthLink(label: 'Sign in with email', onTap: widget.onEmail, size: 13.5)),
         ),
       ];
 
@@ -289,11 +289,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
         onPressed: _verify,
       ),
       if (_sentVia != 'sms')
-        Center(child: TkLinkButton(label: 'Send by SMS instead', onPressed: busy ? null : () => _send(sms: true))),
-      if (_left <= 0) Center(child: TkLinkButton(label: 'Send a new code', onPressed: busy ? null : () => _send(sms: _sentVia == 'sms'))),
+        Center(child: AuthLink(label: 'Send by SMS instead', onTap: busy ? null : () => _send(sms: true))),
+      if (_left <= 0) Center(child: AuthLink(label: 'Send a new code', onTap: busy ? null : () => _send(sms: _sentVia == 'sms'))),
       Padding(
         padding: const EdgeInsets.only(bottom: 12),
-        child: Center(child: TkLinkButton(label: 'Use another number', onPressed: _back)),
+        child: Center(child: AuthLink(label: 'Use another number', onTap: _back)),
       ),
     ];
   }
@@ -345,7 +345,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
       TkButton(label: busy ? 'Creating…' : 'Create', primary: true, minHeight: 44, enabled: !busy, onPressed: _create),
       Padding(
         padding: const EdgeInsets.only(bottom: 12),
-        child: Center(child: TkLinkButton(label: 'Use another number', onPressed: _back)),
+        child: Center(child: AuthLink(label: 'Use another number', onTap: _back)),
       ),
     ];
   }

@@ -13,10 +13,14 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
-import '../chat/chats.dart' show ChatAvatar;
+import '../chat/cards.dart' show CardButton, CardPill;
+import '../chat/door.dart' show BusinessFace;
 import '../chat/my_chat.dart';
+import '../chat/words.dart' show CardTone;
 import '../kit/kit.dart';
+import '../kit/look.dart' show TkSquare, TkTopCard, tkTabular;
 import '../kit/mobile.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'you.dart' show ChangeNumberScreen;
 
@@ -58,40 +62,29 @@ class ChatLinkCardView extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final c = card;
     final urls = c.photo?['urls'];
-    final photo = urls is Map ? urls.values.whereType<String>().where((u) => u.startsWith('https://')).firstOrNull : null;
     final hours = hoursLines(c.hours);
-    final avatar = ChatAvatar(name: c.name, size: 72, letterSize: 26);
     return Semantics(
       container: true,
       label: 'About ${c.name}',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          if (photo != null)
-            ClipOval(
-              child: Image.network(photo, width: 72, height: 72, fit: BoxFit.cover, excludeFromSemantics: true, errorBuilder: (_, _, _) => avatar),
-            )
-          else
-            avatar,
+          BusinessFace(name: c.name, urls: urls is Map ? urls.cast<String, dynamic>() : null, size: 72, letterSize: 26),
           const SizedBox(height: 12),
-          Semantics(header: true, child: Text(c.name, textAlign: TextAlign.center, style: tkText(size: 22, weight: 700, lineHeight: 1.25, color: t.text))),
-          if ((c.tagline ?? '').isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(c.tagline!, textAlign: TextAlign.center, style: tkText(size: 14, color: t.muted))),
-          if ((c.area ?? '').isNotEmpty) Padding(padding: const EdgeInsets.only(top: 2), child: Text(c.area!, textAlign: TextAlign.center, style: tkHint(t))),
-          if (c.openNow != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(c.openNow! ? 'Open now' : 'Closed now', style: tkText(size: 14, weight: 600, color: c.openNow! ? t.ok : t.muted)),
-            ),
+          Semantics(header: true, child: Text(c.name, textAlign: TextAlign.center, style: tkDisplay(size: 24, lineHeight: 1.2, letterSpacing: -0.6, color: t.text))),
+          if ((c.tagline ?? '').isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: Text(c.tagline!, textAlign: TextAlign.center, style: tkText(size: 14, lineHeight: 1.4, color: t.muted))),
+          if ((c.area ?? '').isNotEmpty) Padding(padding: const EdgeInsets.only(top: 2), child: Text(c.area!, textAlign: TextAlign.center, style: tkText(size: 13, color: t.muted))),
+          if (c.openNow != null) Padding(padding: const EdgeInsets.only(top: 10), child: CardPill(c.openNow! ? 'Open now' : 'Closed now', c.openNow! ? CardTone.lime : CardTone.plain)),
           if (hours.isNotEmpty) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             for (final (day, line) in hours)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 1),
+                padding: const EdgeInsets.symmetric(vertical: 1.5),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     SizedBox(width: 44, child: Text(day, style: tkText(size: 13, color: t.muted))),
-                    Text(line, style: tkText(size: 13, color: t.text)),
+                    SizedBox(width: 120, child: Text(line, style: tkText(size: 13, color: t.text).copyWith(fontFeatures: tkTabular))),
                   ],
                 ),
               ),
@@ -189,22 +182,25 @@ class _ChatLinkScreenState extends State<ChatLinkScreen> {
     return TkScreen(
       title: c?.name ?? 'Chat link',
       children: [
-        if (!_loaded) Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Loading…', style: tkHint(t)))),
+        if (!_loaded) const TkSkeleton(rows: 2, label: 'Loading their card…'),
         if (_gone != null) LinkGone(words: _gone!),
         if (c != null && _gone == null)
-          TkPanel(
-            padding: const EdgeInsets.all(20),
-            children: [
-              ChatLinkCardView(card: c),
-              const SizedBox(height: 18),
-              if (c.takesChats)
-                TkButton(label: _busy ? 'Opening the chat…' : 'Chat with ${c.name}', primary: true, minHeight: 44, enabled: !_busy, onPressed: _start)
-              else
-                Text('${c.name} isn’t taking chats in Taskiem right now.', textAlign: TextAlign.center, style: tkText(size: 14, color: t.muted)),
-            ],
+          TkTopCard(
+            padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ChatLinkCardView(card: c),
+                const SizedBox(height: 18),
+                if (c.takesChats)
+                  CardButton(label: _busy ? 'Opening the chat…' : 'Chat with ${c.name}', primary: true, busy: _busy, onTap: _start)
+                else
+                  Text('${c.name} isn’t taking chats in Taskiem right now.', textAlign: TextAlign.center, style: tkText(size: 14, color: t.muted)),
+              ],
+            ),
           ),
         if (_error != null) TkErrorBox(_error!),
-        if (_needsPhone) TkButton(label: 'Add your phone', onPressed: () => tkPush<void>(context, ChangeNumberScreen(auth: widget.auth))),
+        if (_needsPhone) CardButton(label: 'Add your phone', onTap: () => tkPush<void>(context, ChangeNumberScreen(auth: widget.auth))),
       ],
     );
   }
@@ -218,13 +214,18 @@ class LinkGone extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return TkPanel(
+    final look = TkLook.of(context);
+    return TkTopCard(
       padding: const EdgeInsets.all(20),
-      children: [
-        Semantics(header: true, child: Text(linkGone, textAlign: TextAlign.center, style: tkText(size: 18, weight: 700, color: t.text))),
-        const SizedBox(height: 6),
-        Text(words.startsWith(linkGone) ? words.substring(linkGone.length).replaceFirst(RegExp(r'^[.\s]+'), '') : words, textAlign: TextAlign.center, style: tkText(size: 14, color: t.muted)),
-      ],
+      child: Column(
+        children: [
+          TkSquare('b-x', color: look.red, size: 40),
+          const SizedBox(height: 12),
+          Semantics(header: true, child: Text(linkGone, textAlign: TextAlign.center, style: tkDisplay(size: 20, lineHeight: 1.25, color: t.text))),
+          const SizedBox(height: 6),
+          Text(words.startsWith(linkGone) ? words.substring(linkGone.length).replaceFirst(RegExp(r'^[.\s]+'), '') : words, textAlign: TextAlign.center, style: tkText(size: 14, lineHeight: 1.4, color: t.muted)),
+        ],
+      ),
     );
   }
 }

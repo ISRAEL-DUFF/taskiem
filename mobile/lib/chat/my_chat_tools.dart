@@ -15,11 +15,13 @@ import '../api/transport.dart';
 import '../app/links.dart';
 import '../app/session.dart' show uuid4;
 import '../kit/forms.dart' show CloseSoon;
-import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart';
+import '../kit/look.dart' show tkTabular;
+import '../kit/mobile.dart' show TkFormGroup, TkListRow, TkPanel, TkSection;
 import '../kit/modal.dart';
 import '../kit/sheet.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show showBookSheet, whenLabel;
@@ -51,26 +53,35 @@ class _ToolsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    Widget row(String key, String icon, String title, String sub) => TkRow(
-      name: title,
+    final look = TkLook.of(context);
+    Widget row(String key, String icon, Color colour, String title, String sub) => TkListRow(
+      title: title,
       sub: sub,
       icon: icon,
-      trailing: TkIcon('chevron', size: 18, color: t.muted),
+      square: colour,
       onTap: () => Navigator.of(context).pop(key),
     );
-    return TkSheet(
-      title: 'With $name',
-      lead: ChatAvatar(name: name, size: 48, letterSize: 16),
-      sub: 'Order, book and pay here in the chat',
-      body: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        children: [
-          row('shop', 'b-box', 'Their shop', 'What they sell, at their shop’s prices'),
-          row('book', 'calendar', 'Book', 'Their services and free times'),
-          row('orders', 'orders', 'Your orders with them', 'What you ordered and booked here'),
-          row('pay', 'money', 'Pay', 'What’s due on your orders'),
-        ],
+    // As the chat's tools are drawn: each on its accent's square, the rows
+    // on one card on the sheet's ground.
+    return TkAppLook(
+      child: TkSheet(
+        title: 'With $name',
+        lead: ChatAvatar(name: name, size: 38, letterSize: 13),
+        crumb: 'Order, book and pay here in the chat',
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+          children: [
+            TkSection(
+              inset: 56,
+              children: [
+                row('shop', 'b-store', look.lime, 'Their shop', 'What they sell, at their shop’s prices'),
+                row('book', 'b-calendar', look.violet, 'Book', 'Their services and free times'),
+                row('orders', 'b-box', look.teal, 'Your orders with them', 'What you ordered and booked here'),
+                row('pay', 'b-card', look.orange, 'Pay', 'What’s due on your orders'),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -209,7 +220,7 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
     final s = _shop;
     final total = naira(_subtotal + _fee);
     final count = _count == 1 ? '1 item' : '$_count items';
-    return TkSheet(
+    return TkAppLook(child: TkSheet(
       title: _checkout ? 'Check your order' : 'Their shop',
       crumb: _checkout ? 'Their shop' : null,
       onBack: _checkout ? () => setState(() => _checkout = false) : null,
@@ -227,7 +238,7 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
           : _checkout
           ? _checkoutBody(t, s)
           : _list(t, s),
-    );
+    ));
   }
 
   Widget _list(TkTokens t, MyChatShopResponse s) {
@@ -247,98 +258,92 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
 
     String? left(int? n) => n == null ? null : 'Only $n left';
     final things = _things;
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      children: [
-        if (!s.open && (s.closed ?? '').isNotEmpty) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(s.closed!, style: tkFormNow(t))),
-        for (final i in s.items)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    final look = TkLook.of(context);
+    Widget item(ShopItem i) {
+      final sizes = i.sizes ?? const <ShopItemSizesItem>[];
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(i.name, style: tkText(size: 15, weight: 600, color: t.text)),
-                          Text(
-                            [if (i.priceKobo != null) naira(i.priceKobo!), if ((i.sizes ?? const []).isEmpty) ?left(i.fewLeft)].join(' · '),
-                            style: tkText(size: 13, color: (i.sizes ?? const []).isEmpty && i.fewLeft != null ? t.tkWarnInk : t.muted),
-                          ),
-                          if ((i.description ?? '').isNotEmpty) Text(i.description!, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkHint(t)),
-                        ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(i.name, style: tkText(size: 15.5, weight: 600, lineHeight: 1.3, color: t.text)),
+                      Text(
+                        [if (i.priceKobo != null) naira(i.priceKobo!), if (sizes.isEmpty) ?left(i.fewLeft)].join(' · '),
+                        style: tkText(size: 13, color: sizes.isEmpty && i.fewLeft != null ? look.orangeInk : t.muted).copyWith(fontFeatures: tkTabular),
                       ),
-                    ),
-                    if ((i.sizes ?? const []).isEmpty) stepper(things[i.id]!),
-                  ],
-                ),
-                for (final z in i.sizes ?? const <ShopItemSizesItem>[])
-                  Padding(
-                    padding: const EdgeInsets.only(left: 12, top: 6),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            [variantWords(z.variant), if (z.priceKobo != null && z.priceKobo != i.priceKobo) naira(z.priceKobo!), ?left(z.fewLeft)].join(' · '),
-                            style: tkText(size: 14, color: z.fewLeft != null ? t.tkWarnInk : t.text),
-                          ),
-                        ),
-                        stepper(things[z.id]!),
-                      ],
-                    ),
+                      if ((i.description ?? '').isNotEmpty) Text(i.description!, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted)),
+                    ],
                   ),
+                ),
+                if (sizes.isEmpty) stepper(things[i.id]!),
               ],
             ),
-          ),
+            for (final z in sizes)
+              Padding(
+                padding: const EdgeInsets.only(left: 12, top: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        [variantWords(z.variant), if (z.priceKobo != null && z.priceKobo != i.priceKobo) naira(z.priceKobo!), ?left(z.fewLeft)].join(' · '),
+                        style: tkText(size: 14, color: z.fewLeft != null ? look.orangeInk : t.text),
+                      ),
+                    ),
+                    stepper(things[z.id]!),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
+    // As drawn: what they sell as rows on one card, on the sheet's ground.
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+      children: [
+        if (!s.open && (s.closed ?? '').isNotEmpty) Padding(padding: const EdgeInsets.fromLTRB(4, 0, 4, 12), child: Text(s.closed!, style: tkFormNow(t))),
+        TkPanel(inset: 14, children: [for (final i in s.items) item(i)]),
       ],
     );
   }
 
   Widget _checkoutBody(TkTokens t, MyChatShopResponse s) {
     final th = _things;
+    Widget choice(bool on, String words, VoidCallback onTap) => TkChoiceRow(control: TkRadio(checked: on), label: Text(words, style: tkText(size: 15, color: t.text)), onTap: onTap);
     return TkFormBody(
       children: [
-        TkLines([
-          for (final e in _bag.entries) ('${e.value} × ${th[e.key]?.name ?? ''}', naira((th[e.key]?.price ?? 0) * e.value)),
-          if (_fee > 0) ('Delivery', naira(_fee)),
+        TkFormGroup(children: [
+          TkLines([
+            for (final e in _bag.entries) ('${e.value} × ${th[e.key]?.name ?? ''}', naira((th[e.key]?.price ?? 0) * e.value)),
+            if (_fee > 0) ('Delivery', naira(_fee)),
+          ]),
         ]),
         if (s.pickup || s.delivery)
-          TkKitField(
-            label: 'How you get it',
-            field: false,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (s.pickup)
-                  TkChoiceRow(control: TkRadio(checked: _fulfilment == 'pickup'), label: Text('I’ll pick it up', style: tkText(size: 15, color: t.text)), onTap: () => setState(() => _fulfilment = 'pickup')),
-                if (s.delivery)
-                  TkChoiceRow(control: TkRadio(checked: _fulfilment == 'delivery'), label: Text('Deliver it to me', style: tkText(size: 15, color: t.text)), onTap: () => setState(() => _fulfilment = 'delivery')),
-              ],
-            ),
+          TkFormGroup(
+            title: 'How you get it',
+            children: [
+              if (s.pickup) choice(_fulfilment == 'pickup', 'I’ll pick it up', () => setState(() => _fulfilment = 'pickup')),
+              if (s.delivery) choice(_fulfilment == 'delivery', 'Deliver it to me', () => setState(() => _fulfilment = 'delivery')),
+            ],
           )
         else
           Text('${d.name} will tell you here how you get it.', style: tkFormNow(t)),
-        if (_fulfilment == 'delivery' && s.zones.isNotEmpty)
-          TkKitField(
-            label: 'Deliver to',
-            field: false,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final z in s.zones)
-                  TkChoiceRow(
-                    control: TkRadio(checked: _zone == z.name),
-                    label: Text('${z.name} · ${naira(z.feeKobo)}', style: tkText(size: 15, color: t.text)),
-                    onTap: () => setState(() => _zone = z.name),
-                  ),
-              ],
-            ),
+        if (_fulfilment == 'delivery')
+          TkFormGroup(
+            title: 'Deliver to',
+            children: [
+              for (final z in s.zones) choice(_zone == z.name, '${z.name} · ${naira(z.feeKobo)}', () => setState(() => _zone = z.name)),
+              TkKitField(label: 'Address', child: TkTextBox(controller: _address, lines: 2, max: 300)),
+            ],
           ),
-        if (_fulfilment == 'delivery') TkKitField(label: 'Address', child: TkTextBox(controller: _address, lines: 2, max: 300)),
-        TkKitField(label: 'Note for them', hint: 'Optional', child: TkTextBox(controller: _note, lines: 2, max: 500)),
+        TkFormGroup(children: [TkKitField(label: 'Note for them', hint: 'Optional', child: TkTextBox(controller: _note, lines: 2, max: 500))]),
         Text(payWords(s.payment, d.name), style: tkFormNow(t)),
         if (_error != null) TkErrorBox(_error!),
       ],
@@ -391,33 +396,42 @@ class _MyOrdersSheetState extends State<MyOrdersSheet> {
     final t = TkTheme.tokens(context);
     final name = widget.d.name;
     final orders = _orders?.where((o) => !widget.due || o.pay).toList();
-    return TkSheet(
-      title: widget.due ? 'Pay $name' : 'Your orders with $name',
-      count: orders?.length,
-      body: orders == null
-          ? ListView(children: [if (_error != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: TkErrorBox(_error!)) else const TkLoading(label: 'Loading your orders…')])
-          : orders.isEmpty
-          ? ListView(
-              children: [
-                widget.due
-                    ? TkEmpty(icon: 'money', title: 'Nothing to pay', line: 'When something is due on an order with $name, you pay it here.')
-                    : TkEmpty(icon: 'orders', title: 'No orders with $name yet', line: 'Order from their shop or book with the button by the box.'),
-              ],
-            )
-          : ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              children: [
-                for (final o in orders)
-                  TkRow(
-                    name: o.kind == 'booking' ? (o.serviceName ?? o.summary) : o.summary,
-                    sub: [o.reference, yourOrderStatus(o.status), if (o.startsAt != null) whenLabel(o.startsAt!.toIso8601String()), naira(o.pay ? o.dueKobo : o.totalKobo) + (o.pay ? ' due' : '')].join(' · '),
-                    icon: o.kind == 'booking' ? 'calendar' : 'b-box',
-                    tone: o.pay ? CardTone.warn : null,
-                    trailing: o.pay ? TkSmallButton(label: 'Pay', primary: true, semantics: 'Pay ${naira(o.dueKobo)} for ${o.reference}', onPressed: () => payOrder(context, widget.d, o.reference)) : null,
+    return TkAppLook(
+      child: TkSheet(
+        title: widget.due ? 'Pay $name' : 'Your orders with $name',
+        count: orders?.length,
+        body: orders == null
+            ? ListView(children: [if (_error != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: TkErrorBox(_error!)) else const TkLoading(label: 'Loading your orders…')])
+            : orders.isEmpty
+            ? ListView(
+                children: [
+                  widget.due
+                      ? TkEmpty(icon: 'money', title: 'Nothing to pay', line: 'When something is due on an order with $name, you pay it here.')
+                      : TkEmpty(icon: 'orders', title: 'No orders with $name yet', line: 'Order from their shop or book with the button by the box.'),
+                ],
+              )
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+                children: [
+                  TkSection(
+                    children: [
+                      for (final o in orders)
+                        TkListRow(
+                          title: o.kind == 'booking' ? (o.serviceName ?? o.summary) : o.summary,
+                          sub: [o.reference, if (o.startsAt != null) whenLabel(o.startsAt!.toIso8601String()), if (o.delivery != null) o.delivery!.line].join(' · '),
+                          icon: o.kind == 'booking' ? 'b-calendar' : (o.delivery != null ? 'b-bike' : 'b-box'),
+                          tone: o.pay ? CardTone.warn : null,
+                          amount: naira(o.pay ? o.dueKobo : o.totalKobo) + (o.pay ? ' due' : ''),
+                          status: o.delivery != null ? deliveryStatus(o.delivery!.status) : yourOrderStatus(o.status),
+                          statusTone: o.delivery != null ? doorTone(o.delivery!.status) : doorTone(o.status),
+                          trailing: o.pay ? TkSmallButton(label: 'Pay', primary: true, semantics: 'Pay ${naira(o.dueKobo)} for ${o.reference}', onPressed: () => payOrder(context, widget.d, o.reference)) : null,
+                        ),
+                    ],
                   ),
-                Padding(padding: const EdgeInsets.fromLTRB(8, 12, 8, 0), child: Text('Orders you placed here, in this chat.', style: tkHint(t))),
-              ],
-            ),
+                  Padding(padding: const EdgeInsets.fromLTRB(4, 12, 4, 0), child: Text('Orders you placed here, in this chat.', style: tkHint(t))),
+                ],
+              ),
+      ),
     );
   }
 }

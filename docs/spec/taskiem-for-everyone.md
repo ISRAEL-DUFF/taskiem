@@ -1095,3 +1095,57 @@ Built on branch `stage2-fix-web`, on 1308508b (stage 1, main, stage 2 and both s
 - The list of chats carries no photo: a row shows the business's photo only once its chat was opened in the tab.
 - **Tell me when they answer** cannot be pressed through in the browser tests (the worker is blocked there); its request is the business flow's with `?side=you` and `kinds`.
 - The business's Invoice card is found by its number with `invoice.read`; a member who handles orders without it cannot send one.
+
+## As built: stage 2, app review fixes
+
+Built on branch `stage2-fix-app`, on 1308508b (stage 1, main's redesigned app, stage 2 and both server review streams merged). App only (`mobile/`); no server or `mobile/api.txt` change: every call is in the generated client already.
+
+**In the app's own look** (docs/spec/mobile-app-look.md, as main redid its own screens).
+- **A person's conversation** (`lib/chat/my_chat.dart`): the head on the conversation's ground as the business chats' (Back, the business's photo or letters, the name in Inter Tight, the hours line or "typing…", ⋯); three dots in a bubble while they type; bubbles 20 px round, a run's last one with its corner tucked, the person's own white on pine (they were dark on pine before). The first chat's notice, the blocked lines and the closed line are cards over the box; "Get offers from {business}?" is a card with **Yes**, **No** and ✕.
+- **Cards** (`lib/chat/door.dart`) stand free of the bubbles on the card's frame, as an order's does in a business chat: the kind and reference small in capitals with the state as a pill, the amount large ("₦4,500 due"), the line, and the button (pine; lime in the dark). Shared by both sides.
+- **The tools** (`lib/chat/my_chat_tools.dart`): the tools, their shop's items, Your orders and Pay are rows on one card on the sheet's ground, each tool on its accent's square; the check step's parts are form groups.
+- **You** (`lib/screens/you.dart`): the chats on one card (a business's photo where the list has it); **Your shop orders** counts only what waits for "These are mine" in amber (it counted every order), with **It's mine** / **These are mine** and "Nothing of them shows until you say so."; each order with its state as a pill.
+- **A chat link** (`lib/screens/chat_link.dart`): the business's card on the top card (photo through `photo.urls`, open now as a pill, the week's hours), **Chat with {business}** as the card's main button; "This link no longer works" on its own card.
+- **The Welcome screen's** links are the sign-in card's `AuthLink`s.
+- **The business's side** (`lib/chat/customer.dart`, `customer_app.dart`): app threads draw the same bubbles and cards, typing as three dots; the notes over the box are tinted cards; **Send** and its card picker are rows on cards with accent squares.
+- **Customer chats** (`lib/chat/chat_link_page.dart`, Settings > Customers > Customer chats): a settings page (`SettingsPage`): the link large on the top card with its QR code, the words to paste, **Share** and **Copy the link**, **Make a new link**; then **Chats in the app**, **When nobody answers** and **Send an offer** as settings cards.
+- **Tools > Customers** in the chat's tools panel (`tools.dart`, for `storefront.manage` or `order.handle`; the web's tile): a sheet with Your chat link (Share, Copy, **QR code and settings** to Customer chats) and **Send an offer** (`POST /v1/customer-chats/offers`, one `client_id` for the same words; "Sent to 12 customers. 3 skipped: …").
+
+**The API's new fields.**
+- `PersonChat.photo` in the head and the list (`photoUrl`: the smallest size at least twice the face's width, web addresses only; the letters until it loads or if it cannot); `verified` as one plain line under the head with a shield: "Phone checked · Business checked · Payments through Taskiem · Trading 8 months" (only what is so; "New on Taskiem" under a month).
+- `ask_offers`: the question shows only while it is true; ✕ sends `PUT {offers_asked: true}`. An answer the server did not take (`offers_refused`) is said: "{business} is not taking messages from you, so your answer about offers was not saved."
+- `warn_transfer`: under such a message, a red card: "Pay only through Taskiem's pay links. Taskiem never asks you to send money to a personal account."
+- Cards `invoice` (its number, what is due, **Pay** or **See the invoice** opening its page in the app's browser tab; states To pay, Part-paid, Overdue, Paid) and `delivery` (the rider's line and its four steps: Rider coming, Picked up, At your door, Delivered) on both sides; the business's **Send** gains **An invoice** (its sent invoices, this customer's first, drafts and void ones left out; `invoice_id`) and **A delivery** (an order's reference). `DoorOrder.delivery` shows on Your orders (the rider's line and step as the row's state).
+- A booking offer's **Book** opens that service's times (`BookSheet.service`); a service not among those read in the last minute is read afresh.
+- `StorefrontOrder.in_app`: **Write to them in the app** on the order's page (`POST /v1/customer-chats/app`), which opens the customer's thread (`Openers.customer`).
+- Chat settings `orders_off`: "Your Orders area is off, so customers can't start chats with you…", and **Take chats** cannot be turned on.
+- 409 for an erased customer: on the person's side the box goes and the server's words stay over it ("This business erased your details from its records, so this conversation is closed."); on the business's side an app thread with no phone says "This customer's details were erased, so this conversation is closed." with no box.
+- Typing is never told while either side has blocked the other (or the details were erased); a 403 or 409 to it is ignored as before.
+
+**Push on You** (`lib/app/notify.dart`, §9 decision B).
+- **A personal session**: `PhoneNotifications` works on the person's side (keys `push-*:you`): **Notify me on this phone** registers `PUT /v1/me/push {kind: "fcm", token, platform, kinds: ["you"]}` (no `side`: the session is personal); You asks once ("Get a notification when a business answers you?"), and You's Settings has the switch and **What this phone tells you**.
+- **A business session**: turning notifications on registers the phone with the business as before and also with `?side=you` (`kinds: ["you"]`), so a business answering the person's chat reaches them while they work in a business. **Chats with businesses** in Notifications on this phone turns that alone off (remembered: turning the business's on again does not bring it back) or on. Started again later, both are found by their token (`known`), a changed token replaces each (`replaces`), and one removed elsewhere (404) is forgotten.
+- **Signing out** deletes the business's registration and You's (`DELETE /v1/me/push` with the token, `?side=you` from a business session) before the session ends, then makes the token worthless; every `push-*` key goes.
+- **Opening one**: a push with no `business` and the link `/you/chats/{id}` opens that conversation over the chats in either session (`routeOf` → `RouteScreen.you`; a business session's `/v1/me/chats` is its person's); with the app open it is a toast with **Open**, and nothing while that conversation is on the screen (its tag `you:{id}`; `PushNote.business` is null for an empty one, so it is never taken for another business's).
+- **Android** has a channel `you`, "Chats with businesses".
+- **Notifications on this phone** lists the other devices of the side in use and, from a business, **Your devices for You** apart, each with Remove.
+
+**Fixed in review.**
+1. The person's own messages were dark words on pine in the light theme (`BubbleFrame` now takes the run's `last` and recolours your own words, as the business chats do).
+2. A conversation read every 4 seconds could have two reads in flight, a slow one landing over a newer one (both sides): one read at a time.
+3. A message whose answer never came (offline, a 5xx) was sent again with a new `client_id`, so the server kept two: the same words (or the same card) again reuse the id (both sides, Send an offer too). Ids gain a random part.
+4. The business's thread swallowed an error that was neither the server's nor offline (`error = null`): now "Something went wrong. Try again."
+5. A menu change that failed on the person's side left its error in the thread for good; it is said once as a toast (`actionError`).
+6. Typing was told while blocked or erased (refused by the server each time).
+7. Answers landing after a conversation closed were written into it (guarded).
+8. A push with `business: ""` was taken for another business's and toasted over its own conversation.
+9. Book's services were cached a minute per conversation, so a booking offer for a new service found nothing; the phone box's controller was not let go when the services were read again.
+10. Shop orders' amber count counted every order rather than those waiting.
+11. `test/notify_test.dart` failed on 1308508b (the push answers' new required `side`): its stand-in server keeps the business's devices and You's apart, by `side`.
+
+**Tests** (`flutter test`): `test/my_chats_test.dart` +7 (the route of a push on You; the head's words and photo, the transfer warning, the question passed over; offers refused; invoice and delivery cards, Your orders following the rider, a booking offer opening its service; erased and blocked typing; a resend keeping its client id), `test/customer_app_test.dart` +4 (an invoice and a delivery from **Send**, the client id kept; an erased customer; the Customers tool and Send an offer; Orders off), `test/notify_test.dart` +3 (a personal session's device; a business session registering You too, turned off apart, found again, both taken off at sign out; a push for You opened and quiet on its own screen). No parity entries: the web has no pictures of these screens.
+
+**Left over.**
+- The person's side still keeps nothing on the phone for offline (the business chats do); offline it says "Waiting for network…" and reads again.
+- Location messages, "Delete this chat", saved addresses (§13) as before.
+- Notifications on You come only once the server sends them (its `chatlinks.Tell`); the app's badge count on You is the server's.

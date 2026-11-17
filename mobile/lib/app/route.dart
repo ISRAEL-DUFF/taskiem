@@ -3,7 +3,7 @@
 // belongs to, and the screen over it, if any.
 
 /// What opens over the tab.
-enum RouteScreen { none, conversation, customer, taskiem, invoice, bill, purchase, tradeOrder, storefrontOrder }
+enum RouteScreen { none, conversation, customer, taskiem, invoice, bill, purchase, tradeOrder, storefrontOrder, you }
 
 /// The tabs: Chats, Today, Money, Orders.
 const tabChats = 0, tabToday = 1, tabMoney = 2, tabOrders = 3;
@@ -15,6 +15,10 @@ AppRoute routeOf(String path) {
   final uri = Uri.tryParse(path);
   if (uri == null) return (tab: tabToday, screen: RouteScreen.none, id: '');
   final p = uri.path;
+  // The person's own chat with a business (a push on You): over the chats,
+  // in whichever session is open (a business session is its person too).
+  final you = RegExp(r'^/you/chats/([A-Za-z0-9\-]{1,80})$').firstMatch(p);
+  if (you != null) return (tab: tabChats, screen: RouteScreen.you, id: you[1]!);
   if (p == '/chat') {
     final with_ = uri.queryParameters['with'];
     if (with_ == null || with_.isEmpty) return (tab: tabChats, screen: RouteScreen.none, id: '');

@@ -36,6 +36,7 @@ import 'chat/chats.dart';
 import 'chat/conversation.dart';
 import 'chat/customer.dart';
 import 'chat/links_screen.dart';
+import 'chat/my_chat.dart' show MyChatData, MyChatScreen;
 import 'chat/explore.dart' show showExplore;
 import 'chat/profile_screen.dart';
 import 'chat/live.dart';
@@ -234,7 +235,7 @@ class _RootState extends State<_Root> {
       AuthState.signedOut => _SignedOut(auth: auth, links: widget.links),
       AuthState.outdated => const _Outdated(),
       // A personal session: the person's own side (taskiem-for-everyone §7).
-      AuthState.signedIn when auth.personal => YouHome(key: ValueKey(auth.session), auth: auth, links: widget.links),
+      AuthState.signedIn when auth.personal => YouHome(key: ValueKey(auth.session), auth: auth, links: widget.links, notify: widget.notify, prefs: widget.prefs),
       AuthState.signedIn => _Home(key: ValueKey(auth.session), auth: auth, prefs: widget.prefs, unlocker: widget.unlocker, notify: widget.notify, links: widget.links),
     };
   }
@@ -439,6 +440,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     Openers.linkedBusinesses = _links;
     Openers.findBusiness = (context) => showExplore(context, chats: _chats, onOpen: (c) => _openConv(context, c));
     Openers.businessProfile = (context) => _profile(context, back: 'Back to Explore');
+    Openers.customer = (context, id) => Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => _OpenCustomer(chats: _chats, id: id, notify: widget.notify)));
     // Drafting an order needs table.edit; else their shop to look around.
     Openers.conversation = (context, link) {
       final c = _chats.conversations.where((x) => x.link == link).firstOrNull;
@@ -566,6 +568,8 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
         openTradeOrder(context, auth, id);
       case RouteScreen.storefrontOrder:
         openStorefrontOrder(context, auth, id);
+      case RouteScreen.you:
+        nav.push(TkRoute<void>(pageBuilder: (_, _, _) => MyChatScreen(data: MyChatData(auth, id), notify: widget.notify)));
     }
   }
 
@@ -580,6 +584,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     Openers.findBusiness = null;
     Openers.orderFrom = null;
     Openers.conversation = null;
+    Openers.customer = null;
     // Stopped now; let go once the screens closed with this session (which
     // may still hold them this frame) are gone.
     _chats.follow(false);
