@@ -9,7 +9,6 @@ import { clock, listTime } from "../lib/linkchat";
 import {
   aboutOrderDraft,
   cardsKey,
-  chatAboutWords,
   chatPreview,
   clientFor,
   closedNote,
@@ -23,22 +22,18 @@ import {
   photoURL,
   REPORT_REASONS,
   startProblem,
-  stateWords,
   stopOffersWords,
   TRANSFER_WARNING,
   trustWords,
-  waitingWords,
   withLatest,
   type DoorOrder,
   type KeptSend,
   type PersonChat,
   type PersonMessage,
-  type PhoneOrders,
 } from "../lib/personchat";
 import { browserEnv, enableYouPush, pushSupport, serverKey, thisSubscription, youPushOn } from "../lib/push";
-import { formatPrice } from "../lib/storefront";
 import { useThread } from "../lib/useThread";
-import { EmptyState, ErrorBox, fmtTime, Items, Row, Skeleton, useAction, useLoad } from "../ui";
+import { EmptyState, ErrorBox, fmtTime, Skeleton, useAction, useLoad } from "../ui";
 import { AppAttachmentView, AppCardView } from "./AppCards";
 import { BubbleShell, Ticks } from "./BubbleShell";
 import { ChatAvatar } from "./ChatAvatar";
@@ -133,7 +128,7 @@ export function PersonChatList() {
       {!data && !list.error && <Skeleton rows={2} label="Loading your chats…" />}
       {data && chats.length === 0 && (
         <EmptyState icon="chat">
-          {archived ? "No archived chats." : "Chats with businesses will show here. Open a business's chat link, or chat about an order below."}
+          {archived ? "No archived chats." : "Chats with businesses will show here. Find one in Discover, or open a business's chat link."}
         </EmptyState>
       )}
       {chats.length > 0 && (
@@ -169,72 +164,10 @@ export function PersonChatList() {
   );
 }
 
-/** Orders made with the person's phone on businesses' shops (§13): each
- * opens a chat with its business. Those made before the phone was on the
- * account are only counted, nothing else of them shown, until "These are
- * mine". */
-export function MyShopOrders() {
-  const list = useLoad(() => get<PhoneOrders>("/v1/me/storefront-orders?limit=10"), []);
-  const act = useAction();
-  const nav = useNavigate();
-  const orders = list.data?.orders ?? [];
-  const waiting = list.data?.waiting_count ?? 0;
-  if (!list.data || (orders.length === 0 && waiting === 0)) return null;
-  return (
-    <section className="card" aria-labelledby="you-shop-orders" data-testid="shop-orders">
-      <h2 id="you-shop-orders">Your orders from shops</h2>
-      <p className="hint">Orders made with your phone number on businesses' shops.</p>
-      {waiting > 0 && (
-        <div className="notice" role="status" data-testid="these-are-mine">
-          {waitingWords(waiting)}{" "}
-          <button
-            type="button"
-            className="small"
-            disabled={act.busy}
-            onClick={() =>
-              void act.run(async () => {
-                await post("/v1/me/storefront-orders/confirm");
-                list.reload();
-              }, "Thank you. They are yours now.")
-            }
-          >
-            These are mine
-          </button>
-        </div>
-      )}
-      <ErrorBox error={act.error} />
-      {orders.length > 0 && (
-        <Items label="Your orders from shops">
-          {orders.map((o) => {
-            const st = stateWords(o.state);
-            return (
-              <Row
-                key={`${o.business_id}-${o.reference}`}
-                icon="orders"
-                title={o.business}
-                side={formatPrice(o.total_kobo)}
-                sub={
-                  <span className="sub">
-                    {o.reference} · {fmtTime(o.made_at)}
-                    {st.label ? ` · ${st.label}` : ""}
-                  </span>
-                }
-                testid="shop-order"
-              >
-                <button type="button" className="small" onClick={() => nav(`/you/chats/new?business=${encodeURIComponent(o.business_id)}&ref=${encodeURIComponent(o.reference)}`)}>
-                  {chatAboutWords(o.business)}
-                </button>
-              </Row>
-            );
-          })}
-        </Items>
-      )}
-    </section>
-  );
-}
-
-/** /you/chats/new?code= (a chat link) or ?business=&ref= (an order): opens
- * the conversation, made or found, and goes to it. */
+/** /you/chats/new?code= (a chat link), ?business=&ref= (an order) or
+ * ?business=&from=discover (Discover, with &tool= for Their shop or Book):
+ * opens the conversation, made or found, and goes to it, with the tool
+ * open when one was asked for. */
 export function StartChat() {
   const loc = useLocation();
   const nav = useNavigate();
@@ -247,7 +180,9 @@ export function StartChat() {
     const code = q.get("code");
     const business = q.get("business");
     const ref = q.get("ref");
-    const body = code ? { code } : { business_id: business, from: ref ? "order" : "shop" };
+    const from = ref ? "order" : q.get("from") === "discover" ? "discover" : "shop";
+    const tool = q.get("tool");
+    const body = code ? { code } : { business_id: business, from };
     if (!code && !business) {
       setProblem("This page needs a business's chat link.");
       return;
@@ -255,10 +190,11 @@ export function StartChat() {
     post<PersonChat>("/v1/me/chats", body).then(
       (c) => {
         if (ref && !getDraft(draftKey(c.id))) setDraft(draftKey(c.id), aboutOrderDraft(ref));
-        nav(`/you/chats/${c.id}`, { replace: true, state: { notice: c.notice } });
+        nav(`/you/chats/${c.id}`, { replace: true, state: { notice: c.notice, tool: tool === "shop" || tool === "book" ? tool : undefined } });
       },
       (e: unknown) => {
-        if (e instanceof ApiError) setProblem(startProblem(e.status, e.body, e.message.replace(/^./, (x) => x.toUpperCase())));
+        if (e instanceof ApiError && !code && e.status === 404) setProblem("This business can't be reached by chat in Taskiem right now.");
+        else if (e instanceof ApiError) setProblem(startProblem(e.status, e.body, e.message.replace(/^./, (x) => x.toUpperCase())));
         else setProblem("The chat could not be opened. Check your connection and try again.");
       },
     );
@@ -312,7 +248,11 @@ export function PersonChatPage() {
   // as they are, it keeps its client_id, so it is not there twice.
   const kept = useRef<KeptSend | undefined>(undefined);
   const [notice, setNotice] = useState<string | undefined>(() => (loc.state as { notice?: string } | null)?.notice);
-  const [tool, setTool] = useState<{ key: PersonTool | "menu"; from?: DOMRect; item?: string; service?: string }>();
+  // A tool asked for on the way in (Their shop or Book from Discover).
+  const [tool, setTool] = useState<{ key: PersonTool | "menu"; from?: DOMRect; item?: string; service?: string } | undefined>(() => {
+    const t = (loc.state as { tool?: string } | null)?.tool;
+    return t === "shop" || t === "book" ? { key: t } : undefined;
+  });
   const [reporting, setReporting] = useState(false);
   const [orders, setOrders] = useState<DoorOrder[]>();
   const act = useAction();

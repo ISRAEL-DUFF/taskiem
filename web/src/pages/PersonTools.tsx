@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ApiError, get, postOnce } from "../api";
+import { ApiError, get, post, postOnce } from "../api";
 import { Icon } from "../icons";
 import { KitEmpty, KitField, KitLoading, Pill, Sheet } from "../kit";
 import { dayLabel, lagosTime, whenLabel } from "../lib/bookings";
@@ -22,6 +22,7 @@ import {
   type TheirShop,
 } from "../lib/personchat";
 import { formatPrice } from "../lib/storefront";
+import { addressLine, addressProblem, type SavedAddress } from "../lib/youorders";
 import { ErrorBox, useLoad } from "../ui";
 
 // The tools of a person's chat with a business (docs/spec/taskiem-for-
@@ -87,6 +88,16 @@ export function ShopSheet({
   const [fulfilment, setFulfilment] = useState<"pickup" | "delivery" | "">("");
   const [zone, setZone] = useState("");
   const [address, setAddress] = useState("");
+  const [landmark, setLandmark] = useState("");
+  // The person's saved addresses (§13): one is picked, or one is typed
+  // and, when they ask, saved. Without them (or when they cannot be read)
+  // the address is typed as before.
+  const saved = useLoad(() => get<{ addresses: SavedAddress[] }>("/v1/me/addresses").catch(() => ({ addresses: [] as SavedAddress[] })), []);
+  const addresses = saved.data?.addresses ?? [];
+  const [picked, setPicked] = useState<string>();
+  const [keep, setKeep] = useState(false);
+  const [keepAs, setKeepAs] = useState("Home");
+  const keptID = useRef("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
@@ -108,7 +119,11 @@ export function ShopSheet({
   const total = basketTotal(lines, fee);
   const ways = s ? [...(s.pickup ? (["pickup"] as const) : []), ...(s.delivery ? (["delivery"] as const) : [])] : [];
   const how = fulfilment || (ways.length === 1 ? ways[0] : "");
-  const ready = lines.length > 0 && (ways.length === 0 || (!!how && (how !== "delivery" || ((s?.zones.length ?? 0) === 0 || !!zone) && address.trim().length > 0)));
+  // The saved address chosen: the one picked, else the default.
+  const chosenID = picked ?? addresses.find((a) => a.default)?.id ?? addresses[0]?.id ?? "";
+  const chosen = addresses.find((a) => a.id === chosenID);
+  const hasAddress = !!chosen || address.trim().length > 0;
+  const ready = lines.length > 0 && (ways.length === 0 || (!!how && (how !== "delivery" || ((s?.zones.length ?? 0) === 0 || !!zone) && hasAddress)));
 
   const place = async () => {
     if (!ready || busy) return;
@@ -116,11 +131,28 @@ export function ShopSheet({
     setError(undefined);
     key.current ||= `order-${crypto.randomUUID()}`;
     try {
+      const delivering = how === "delivery";
+      let addressID = delivering && chosen ? chosen.id : "";
+      // "Save this address": saved once, then the order is placed with it.
+      if (delivering && !chosen && keep) {
+        if (!keptID.current) {
+          try {
+            const made = await post<SavedAddress>("/v1/me/addresses", { label: keepAs.trim() || "Home", line: address.trim(), area: zone, landmark: landmark.trim() });
+            keptID.current = made.id;
+          } catch (e) {
+            const said = addressProblem(e);
+            throw said ? new ApiError(400, `Your address was not saved. ${said}`) : e;
+          }
+        }
+        addressID = keptID.current;
+      }
       const out = await postOnce<{ order: DoorOrder }>(`${base(chat)}/orders`, key.current, {
         lines: lines.map((l) => ({ item_id: l.item_id, quantity: l.quantity })),
         fulfilment: how,
-        zone: how === "delivery" ? zone : "",
-        address: how === "delivery" ? address.trim() : "",
+        zone: delivering ? zone : "",
+        address: delivering && !addressID ? address.trim() : "",
+        ...(addressID ? { address_id: addressID } : {}),
+        ...(delivering && !addressID && landmark.trim() ? { landmark: landmark.trim() } : {}),
         note: note.trim(),
       });
       setPlaced(out.order);
@@ -233,10 +265,39 @@ export function ShopSheet({
               </select>
             </KitField>
           )}
-          {how === "delivery" && (
-            <KitField label="Your address">
-              <textarea rows={2} maxLength={300} value={address} onChange={(e) => (setAddress(e.target.value), (key.current = ""))} required />
-            </KitField>
+          {how === "delivery" && addresses.length > 0 && (
+            <fieldset className="pc-choice" data-testid="shop-saved-addresses">
+              <legend>Deliver to</legend>
+              {addresses.map((a) => (
+                <label key={a.id} className="switch-line">
+                  <input type="radio" name="saved-address" checked={chosenID === a.id} onChange={() => (setPicked(a.id), (key.current = ""))} />{" "}
+                  <span>
+                    <strong>{a.label}</strong> · {addressLine(a)}
+                  </span>
+                </label>
+              ))}
+              <label className="switch-line">
+                <input type="radio" name="saved-address" checked={!chosen} onChange={() => (setPicked(""), (key.current = ""))} /> <span>Another address</span>
+              </label>
+            </fieldset>
+          )}
+          {how === "delivery" && !chosen && (
+            <>
+              <KitField label="Your address">
+                <textarea rows={2} maxLength={300} value={address} onChange={(e) => (setAddress(e.target.value), (key.current = ""), (keptID.current = ""))} required />
+              </KitField>
+              <KitField label="Landmark" hint="Optional. Something a rider can find.">
+                <input type="text" maxLength={200} value={landmark} onChange={(e) => (setLandmark(e.target.value), (key.current = ""), (keptID.current = ""))} />
+              </KitField>
+              <label className="switch-line">
+                <input type="checkbox" checked={keep} onChange={(e) => (setKeep(e.target.checked), (key.current = ""))} data-testid="shop-keep-address" /> <span>Save this address</span>
+              </label>
+              {keep && (
+                <KitField label="Name it" hint="Such as Home or Work.">
+                  <input type="text" maxLength={40} value={keepAs} onChange={(e) => (setKeepAs(e.target.value), (keptID.current = ""))} />
+                </KitField>
+              )}
+            </>
           )}
           <KitField label="A note for them" hint="Optional">
             <textarea rows={2} maxLength={500} value={note} onChange={(e) => (setNote(e.target.value), (key.current = ""))} />

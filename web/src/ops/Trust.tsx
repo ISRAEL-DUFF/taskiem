@@ -514,7 +514,7 @@ export function Reports() {
                   <td>
                     {rep.business}
                     <div className="hint">
-                      {rep.kind === "form" ? "Hosted form" : "Page"}
+                      {rep.kind === "form" ? "Hosted form" : rep.kind === "discover" ? "Discover listing" : "Page"}
                       {rep.slug && (
                         <>
                           {" "}
@@ -554,14 +554,26 @@ export function Reports() {
                         </button>
                       ))}{" "}
                     <button aria-expanded={open === rep.id} onClick={() => setOpen(open === rep.id ? null : rep.id)}>
-                      Suspend or restore<span className="sr-only"> {rep.business}'s page</span>
+                      {rep.kind === "discover" ? (
+                        <>
+                          Remove or restore<span className="sr-only"> {rep.business}'s listing in Discover</span>
+                        </>
+                      ) : (
+                        <>
+                          Suspend or restore<span className="sr-only"> {rep.business}'s page</span>
+                        </>
+                      )}
                     </button>
                   </td>
                 </tr>
                 {open === rep.id && (
                   <tr>
                     <td colSpan={8}>
-                      <SuspendRestore tenant={rep.tenant_id} business={rep.business} />
+                      {rep.kind === "discover" ? (
+                        <DiscoverAction tenant={rep.tenant_id} business={rep.business} onDone={() => undefined} />
+                      ) : (
+                        <SuspendRestore tenant={rep.tenant_id} business={rep.business} />
+                      )}
                     </td>
                   </tr>
                 )}
@@ -585,5 +597,45 @@ function SuspendRestore({ tenant, business }: { tenant: string; business: string
       </label>
       <PageAction tenant={tenant} business={business} status={restore ? "suspended" : "published"} onDone={() => undefined} />
     </>
+  );
+}
+
+/** Take a business's listing out of Discover, or put it back
+ * (taskiem-for-everyone §10): a passkey step-up; removing needs a reason,
+ * which the owners are told. Its open reports are acted on, or dismissed. */
+export function DiscoverAction({ tenant, business, onDone }: { tenant: string; business: string; onDone: () => void }) {
+  const [reason, setReason] = useState("");
+  const [done, setDone] = useState("");
+  const act = useAction();
+  const run = (action: "remove" | "restore") =>
+    act.run(async () => {
+      if (action === "remove" && !confirm(`Take ${business} out of Discover? Customers no longer find it there until it is put back.`)) return;
+      await withStepUp(`ops.discover.${action}`, tenant, `/discover/${tenant}/${action}`, { reason: reason.trim() });
+      setReason("");
+      setDone(action === "remove" ? "Taken out of Discover. The owners are told, with your reason." : "Put back in Discover. The owners are told.");
+      onDone();
+    }, action === "remove" ? "Listing removed" : "Listing restored");
+  return (
+    <div className="card" data-testid="ops-discover-action">
+      <h2>Discover listing</h2>
+      <p className="hint">Removing hides the listing from Discover whatever the business chooses, until it is restored. Its chat link and page are not touched.</p>
+      {done && (
+        <div className="notice" role="status">
+          {done}
+        </div>
+      )}
+      <Field label="Reason (the owner is told when it is removed)">
+        <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
+      </Field>
+      <ErrorBox error={act.error} />
+      <div className="row-actions">
+        <button className="danger" disabled={act.busy || !reason.trim()} onClick={() => void run("remove")}>
+          Remove from Discover with passkey
+        </button>
+        <button disabled={act.busy} onClick={() => void run("restore")}>
+          Restore with passkey
+        </button>
+      </div>
+    </div>
   );
 }

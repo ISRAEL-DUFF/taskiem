@@ -180,6 +180,15 @@ export function Settings() {
           </Link>
         </div>
       )}
+      {can("storefront.manage") && (
+        <div className="card" data-testid="settings-discover">
+          <h2 style={{ marginTop: 0 }}>Discover</h2>
+          <p className="hint">Whether customers find you in the Taskiem app, and what your listing shows them.</p>
+          <Link className="button" to="/settings/discover">
+            Open Discover
+          </Link>
+        </div>
+      )}
       {can("member.manage") && <Security />}
       {me?.roles.includes("owner") && <SchoolsSwitch />}
       {advanced && <Environments editable={can("secret.manage")} />}

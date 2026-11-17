@@ -9,15 +9,18 @@ import { ErrorBox, PageHeader, Skeleton, useAction } from "../ui";
 import { Appearance, Invitations } from "./Account";
 import { PhoneSetting } from "./ChangeNumber";
 import { ChatLinkPage } from "./ChatLinkPage";
-import { MyShopOrders, PersonChatList, PersonChatPage, StartChat } from "./PersonChats";
+import { Discover, DiscoverBusiness } from "./Discover";
+import { PersonChatList, PersonChatPage, StartChat } from "./PersonChats";
 import { TermsBanner } from "./Signup";
 import { StartSomething } from "./StartSomething";
 import { ProofStep, SwitchList, Switcher, SwitchStep as SwitchStepHere, useSwitch } from "./Switch";
+import { SavedAddresses, YouOrder, YouOrders } from "./YouOrders";
 
 // You (docs/spec/taskiem-for-everyone.md §7): a person's own side, where a
-// session with no business lands. Chats with businesses (stage 2), Start
-// something, invitations waiting, and the person's own settings. A person
-// in a business switches to it from the top.
+// session with no business lands. Its tabs: Chats (chats with businesses,
+// Start something, invitations waiting), Orders (§13), Discover (§10) and
+// the person's own settings (with their saved addresses). A person in a
+// business switches to it from the top.
 
 /** The frame of the person's own side: the top bar, the tabs and the page. */
 export function YouApp() {
@@ -42,6 +45,8 @@ export function YouApp() {
           <NavLink to="/you" end>
             Chats
           </NavLink>
+          <NavLink to="/you/orders">Orders</NavLink>
+          <NavLink to="/you/discover">Discover</NavLink>
           <NavLink to="/you/settings">Settings</NavLink>
         </nav>
       </header>
@@ -49,6 +54,10 @@ export function YouApp() {
         <TermsBanner />
         <Routes>
           <Route path="/you" element={<YouHome />} />
+          <Route path="/you/orders" element={<YouOrders />} />
+          <Route path="/you/orders/:business/:reference" element={<YouOrder />} />
+          <Route path="/you/discover" element={<Discover />} />
+          <Route path="/you/discover/:business" element={<DiscoverBusiness />} />
           <Route path="/you/settings" element={<YouSettings />} />
           <Route path="/you/start" element={<StartSomething />} />
           <Route path="/you/chats/new" element={<StartChat />} />
@@ -143,7 +152,6 @@ function YouHome() {
         />
       )}
       <PersonChatList />
-      <MyShopOrders />
       <YourBusinesses />
     </>
   );
@@ -189,6 +197,7 @@ function YouSettings() {
           </div>
         </div>
       </section>
+      <SavedAddresses />
       <Appearance />
       <section className="card">
         <h2>Signing out</h2>

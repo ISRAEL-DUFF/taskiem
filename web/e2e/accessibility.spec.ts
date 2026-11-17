@@ -47,6 +47,7 @@ const PAGES = [
   "/settings/links",
   "/settings/links/profile",
   "/settings/customers",
+  "/settings/discover",
   "/bills",
   "/trade-orders",
   "/invoices",
@@ -391,6 +392,8 @@ for (const scheme of ["light", "dark"] as const)
       // No chats yet, and no orders from shops (stage 2).
       await page.route(/\/v1\/me\/chats(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0 })));
       await page.route("**/v1/me/storefront-orders?*", (r) => r.fulfill(json({ orders: [], waiting: false, waiting_count: 0 })));
+      // No saved addresses yet (Settings).
+      await page.route("**/v1/me/addresses", (r) => r.fulfill(json({ addresses: [] })));
       await page.route("**/v1/me/invitations", (r) =>
         r.fulfill(json({ invitations: [{ tenant_id: "0192e2e0-0000-7000-8000-00000000b003", tenant: "Bola Stores", roles: ["staff"], invited_at: new Date().toISOString() }] })),
       );
@@ -471,6 +474,67 @@ for (const scheme of ["light", "dark"] as const)
       await expect(page.getByTestId("tell-me-line")).toHaveText("We'll text you when they answer.");
       await expect(page.getByTestId("person-trust")).toHaveText("Phone checked · Business checked · Payments through Taskiem · Trading 1 year");
       await check("/you/chats/{id}");
+      expect(found, found.join("\n\n")).toEqual([]);
+    });
+
+// Orders, Discover and the saved addresses on You (taskiem-for-everyone
+// §7, §10, §13), the server's answers stood in for (discover-orders.spec.ts
+// goes through them on the real server too).
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`Orders, Discover and addresses on You pass axe and fit ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const found: string[] = [];
+      const check = async (where: string) => {
+        const vs = await axe(page);
+        if (vs.length > 0) found.push(describe(where, vs));
+        expect(await page.evaluate(() => document.documentElement.scrollWidth), where).toBeLessThanOrEqual(width);
+      };
+      const json = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+      const now = new Date().toISOString();
+      const b1 = "0192e2e0-0000-7000-8000-00000000b201";
+      const order = { business_id: b1, business: "Mama's Kitchen", reference: "MK-1", kind: "order", state: "awaiting_payment", summary: "2 × Jollof rice", total_kobo: 900_000, due_kobo: 900_000, pay: true, made_at: now, chat_id: "c1" };
+      await page.route("**/v1/me", (r) => r.fulfill(json({ ...PERSON, businesses: [], second_proof: undefined })));
+      await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
+      await page.route(/\/v1\/me\/orders(\?|$)/, (r) => r.fulfill(json({ orders: [order, { ...order, reference: "MK-0", state: "completed", due_kobo: 0, pay: false }], next: "x", waiting_count: 1 })));
+      await page.route(`**/v1/me/orders/${b1}/MK-1`, (r) =>
+        r.fulfill(json({ ...order, lines: [{ name: "Jollof rice", quantity: 2, price_kobo: 450_000, line_kobo: 900_000 }], fulfilment: "delivery", zone: "Yaba", paid_kobo: 0, address: { address: "12 Allen Avenue, Ikeja", landmark: "By the blue gate" }, delivery: { status: "accepted", line: "A rider is going to collect it" } })),
+      );
+      await page.route("**/v1/me/addresses", (r) =>
+        r.fulfill(json({ addresses: [{ id: "a1", label: "Home", line: "12 Allen Avenue", area: "Ikeja", landmark: "By the blue gate", phone: "+2348031234567", default: true, created_at: now, updated_at: now }] })),
+      );
+      await page.route("**/v1/discover/categories", (r) => r.fulfill(json({ categories: [{ key: "food", name: "Food and drinks" }, { key: "fashion", name: "Fashion" }] })));
+      await page.route("**/v1/discover/search", (r) =>
+        r.fulfill(json({ results: [{ business: b1, name: "Mama's Kitchen", photo: {}, category: "food", category_name: "Food and drinks", area: "Yaba", open_now: true, line: "Open now, closes at 18:00", can_chat: true }], more: true })),
+      );
+      await page.route(`**/v1/discover/${b1}`, (r) =>
+        r.fulfill(
+          json({ business: b1, name: "Mama's Kitchen", tagline: "Hot jollof", category: "food", category_name: "Food and drinks", area: "Yaba", address: "3 Montgomery Road", map_link: "https://maps.example.test", photos: [], hours: { days: [[{ open: "08:00", close: "18:00" }], null, null, null, null, null, null] }, open_now: true, line: "Open now, closes at 18:00", shop: "https://mamas.example.test", can_chat: true, has_shop: true, has_book: true }),
+        ),
+      );
+      await page.goto("/you/orders");
+      await expect(page.getByTestId("you-order")).toHaveCount(2);
+      await check("/you/orders");
+      await page.goto(`/you/orders/${b1}/MK-1`);
+      await expect(page.getByTestId("you-order-address")).toBeVisible();
+      await check("/you/orders/{business}/{reference}");
+      await page.goto("/you/discover");
+      await expect(page.getByTestId("discover-result")).toHaveCount(1);
+      await check("/you/discover");
+      await page.goto(`/you/discover/${b1}`);
+      await expect(page.getByTestId("discover-chat")).toBeVisible();
+      await check("/you/discover/{business}");
+      await page.getByTestId("discover-report").click();
+      await expect(page.getByTestId("discover-report-sheet")).toBeVisible();
+      await check("reporting a business");
+      await page.route(/\/v1\/me\/chats(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0 })));
+      await page.goto("/you/settings");
+      await expect(page.getByTestId("saved-address")).toBeVisible();
+      await check("/you/settings with addresses");
+      await page.getByRole("button", { name: "Change Home" }).click();
+      await expect(page.getByTestId("address-form")).toBeVisible();
+      await check("changing an address");
       expect(found, found.join("\n\n")).toEqual([]);
     });
 

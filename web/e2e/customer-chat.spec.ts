@@ -377,32 +377,39 @@ for (const width of [390, 360])
     const w = world();
     await page.route("**/v1/me", (r) => r.fulfill(json(PERSON)));
     await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
-    await page.route("**/v1/me/storefront-orders?*", (r) =>
+    await page.route(/\/v1\/me\/orders(\?|$)/, (r) =>
       r.fulfill(
         json({
-          // Confirmed orders only: those made before the number was on the
-          // account are only counted.
-          orders: [{ reference: "BS-7Q2R", state: "completed", total_kobo: 1_250_000, made_at: new Date().toISOString(), business: "Bola Stores", business_id: "b2" }],
-          waiting: true,
+          // Orders on You (stage 3): those made before the number was on
+          // the account are only counted.
+          orders: [
+            { business_id: "b2", business: "Bola Stores", reference: "BS-7Q2R", kind: "order", state: "completed", summary: "1 × Rice (50kg)", total_kobo: 1_250_000, due_kobo: 0, pay: false, made_at: new Date().toISOString(), chat_id: null },
+          ],
+          next: null,
           waiting_count: 2,
         }),
       ),
     );
     await page.route("**/v1/me/storefront-orders/confirm", (r) => r.fulfill(json({ confirmed: true })));
+    // No saved addresses: the address is typed at checkout.
+    await page.route("**/v1/me/addresses", (r) => r.fulfill(json({ addresses: [] })));
     await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ public_key: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" })));
     await page.route(/\/v1\/me\/chats(\/|$|\?)/, w.handle);
 
     await page.goto("/you");
     await expect(page.getByTestId("person-chat")).toContainText("Mama's Kitchen");
-    await expect(page.getByTestId("shop-orders")).toContainText("Chat with Bola Stores about this order");
+    await check(page, "/you", width);
+    // Orders on You: the waiting ones only counted, nothing else of them shown.
+    await page.getByRole("navigation", { name: "You" }).getByRole("link", { name: "Orders" }).click();
+    await expect(page.getByTestId("you-order").filter({ hasText: "Bola Stores" }).getByRole("button", { name: /Chat about this/ })).toBeVisible();
     await expect(page.getByTestId("these-are-mine")).toContainText("We found 2 orders made with your number before it was on your account. Are they yours?");
     await expect(page.getByTestId("these-are-mine").getByRole("button", { name: "These are mine" })).toBeVisible();
-    // Nothing of the waiting orders is shown.
-    await expect(page.getByTestId("shop-order")).toHaveCount(1);
-    await expect(page.getByTestId("shop-orders")).not.toContainText("BS-1A1A");
-    await check(page, "/you", width);
+    await expect(page.getByTestId("you-order")).toHaveCount(1);
+    await expect(page.getByTestId("you-order")).not.toContainText("BS-1A1A");
+    await check(page, "/you/orders", width);
     await page.screenshot({ path: `test-results/person-you-${width}.png` });
 
+    await page.goto("/you");
     await page.getByTestId("person-chat").click();
     await expect(page.getByTestId("person-head-line")).toHaveText("Open now, closes at 18:00");
     await expect(page.getByTestId("person-trust")).toHaveText("Phone checked · Payments through Taskiem · Trading 8 months");

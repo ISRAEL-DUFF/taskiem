@@ -2395,3 +2395,44 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
   .brand-name .nav-switcher { display: none; }
   .brand-name .nav-name-phone { display: block; }
 }
+
+/* Discover on You (pages/Discover.tsx): Explore's search pill and chips,
+   an area and Near me, then the businesses as rows; a business's profile.
+   Settings > Discover (pages/DiscoverSettings.tsx). Orders on You and the
+   saved addresses (pages/YouOrders.tsx). */
+.discover .tk-x-search { margin: 0 0 12px; }
+.discover-where { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 12px; }
+.discover-where .tk-field { flex: 1 1 auto; min-width: 0; margin: 0; }
+.discover-where .discover-near { flex: none; min-height: 44px; }
+.discover-where .discover-near svg { width: 16px; height: 16px; }
+.discover .tk-x-chip:disabled { opacity: 0.6; }
+.discover-count { margin: 4px 2px 10px; font-size: 15px; }
+.discover-name { color: inherit; font-weight: 600; }
+.discover-name:hover { text-decoration: underline; }
+.discover-more { display: block; width: 100%; margin-top: 12px; }
+.discover-who { display: flex; align-items: flex-start; gap: 14px; }
+.discover-who .grow { min-width: 0; }
+.discover-who h1 { margin: 0 0 2px; font-size: 22px; overflow-wrap: anywhere; }
+.discover-who p { margin: 2px 0; }
+.discover-tagline { color: var(--text); }
+.discover-open { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.discover-acts { margin-top: 14px; }
+.discover-acts svg { width: 16px; height: 16px; vertical-align: -3px; }
+.discover-photos { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; list-style: none; margin: 0; padding: 0 0 6px; }
+.discover-photos li { position: relative; flex: none; width: min(78%, 320px); scroll-snap-align: start; }
+.discover-photos img { display: block; width: 100%; height: 200px; object-fit: cover; border-radius: 16px; background: var(--panel-2); }
+.discover-caption { display: block; margin-top: 4px; font-size: 13px; color: var(--muted); }
+.discover-hours { list-style: none; margin: 0 0 8px; padding: 0; }
+.discover-hours li { padding: 4px 0; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.discover-hours li:last-child { border-bottom: 0; }
+.discover-report { margin: 8px 2px 0; }
+.discover-state { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.discover-preview-who { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.discover-preview-who .chat-avatar { width: 28px; height: 28px; font-size: 12px; flex: none; }
+.discover-type-place { margin-top: 12px; }
+.you-order-name { color: inherit; font-weight: 600; }
+.you-order-name:hover { text-decoration: underline; }
+.you-order-lines .num { text-align: right; font-variant-numeric: tabular-nums; }
+.address-form .switch-line { margin: 4px 0 12px; }
+.you-tabs { max-width: 100%; }
+.you-order-actions { margin: 12px 0; }
