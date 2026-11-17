@@ -60,7 +60,7 @@ Each person can make a link (and a QR code) to share, replaced at will, like a b
 Asked once, with plain words: "Find friends from your contacts? Their numbers are checked without being sent to us in readable form."
 
 - The app hashes each number (E.164) with a **contacts key** fetched from the server and rotated, and sends only the hashes, in batches, rate-limited. The server matches them against verified phones hashed with the same key and answers which hashes are people who allow being found that way. Nothing of the person's address book is stored: no hashes kept after the answer, no graph built.
-- Honest limit: a keyed hash of a phone number can be reversed by someone holding the key (Nigerian numbers are few enough to try them all), so this protects against leaks of what is sent, not against Taskiem itself. Stronger options (private set intersection, secure enclaves) exist and cost much more; §17 Q4.
+- Honest limit: a keyed hash of a phone number can be reversed by someone holding the key (Nigerian numbers are few enough to try them all), so this protects against leaks of what is sent, not against Taskiem itself. Stronger options (private set intersection, secure enclaves) exist and cost much more; §18 Q4.
 - Re-checked when the person opens Contacts, at most once a day.
 
 ### 5.4 Who can find me and message me
@@ -76,7 +76,7 @@ In You → Privacy:
 | Read ticks | On / Off (then I don't see others' either) | On |
 | Profile photo | Everyone / My contacts / Nobody | My contacts |
 
-The person's number is shown to people they chat with only if they choose to (§17 Q5). Names are shown; numbers are not, by default, which is the opposite of WhatsApp and safer for people meeting through Discover or groups.
+The person's number is shown to people they chat with only if they choose to (§18 Q5). Names are shown; numbers are not, by default, which is the opposite of WhatsApp and safer for people meeting through Discover or groups.
 
 ## 6. Encryption and where chats are kept
 
@@ -119,7 +119,7 @@ People who want chats only they can read will not get them here (WhatsApp offers
 
 - Text, photos, voice notes, files and location; replies, reactions, read ticks, typing, delete for me and delete for everyone (within a time limit), forward (with a "forwarded" mark), star.
 - **Requests.** A message from someone who is not a contact and has not chatted before arrives in **Requests**: the person sees the name, no photo unless allowed, and the first message, and can Accept, Delete or Block and report. Nothing tells the sender it was read until accepted. A sender can have a limited number of requests waiting (§8.2).
-- **Lists.** You's Chats tab holds business chats and people chats together, newest first, each marked by what it is (a business has its name and trust line; a person their name). §17 Q6 asks whether they should be split.
+- **Lists.** You's Chats tab holds business chats and people chats together, newest first, each marked by what it is (a business has its name and trust line; a person their name). §18 Q6 asks whether they should be split.
 - **Each copy is the person's.** As stage 2: each person keeps, archives and deletes their own. "Delete for everyone" removes it from the other person's copy on the server and their devices; a screenshot or a forward made before cannot be undone.
 
 ## 8. Safety at the scale of strangers
@@ -153,7 +153,7 @@ The minimum age is 18 (§23 of the plan). People chats do not change that.
 
 ## 9. Groups (stage 5b)
 
-- Up to 256 people at first (§17 Q7), with admins who add, remove and choose who can post.
+- Up to 256 people at first (§18 Q7), with admins who add, remove and choose who can post.
 - **Joining:** added by an admin who has them as a contact, or by a group's invite link; people can choose that only contacts may add them to groups.
 - **Kept on the server** like one-to-one chats; someone who joins sees the group from when they joined (§18 Q16).
 - **Ordering together** (§10.3) works in groups.
