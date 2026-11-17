@@ -166,6 +166,23 @@ function TakingChats() {
             "Reply in the Taskiem app", then your link, so customers can answer you.
             {s.link_in_updates === null ? " On by default when you have no WhatsApp number of your own." : ""}
           </p>
+          {s.own_number && (
+            <>
+              <label className="switch-line">
+                <input
+                  type="checkbox"
+                  checked={s.link_whatsapp ?? true}
+                  disabled={act.busy}
+                  onChange={(e) => save({ link_whatsapp: e.target.checked })}
+                  data-testid="link-whatsapp"
+                />{" "}
+                <span>Offer WhatsApp on your chat link</span>
+              </label>
+              <p className="hint">
+                Your link offers Chat on WhatsApp, on your own number {s.own_number}, beside Chat on Taskiem. A customer on both is one chat here.
+              </p>
+            </>
+          )}
         </>
       )}
     </section>
