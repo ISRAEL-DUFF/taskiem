@@ -162,7 +162,7 @@ func (s *Server) allRefsTx(ctx context.Context, tx pgx.Tx, p *Principal) ([]chat
 	}
 	if p.Can(PermOrders) {
 		rows, err := tx.Query(ctx, `SELECT `+customerChatCols+` FROM customer_conversations c
-			WHERE c.tenant_id = $1 ORDER BY c.last_message_at DESC LIMIT 100`, tenant)
+			WHERE c.tenant_id = $1 AND c.linked_to IS NULL ORDER BY c.last_message_at DESC LIMIT 100`, tenant)
 		if err != nil {
 			return nil, err
 		}

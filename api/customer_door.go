@@ -166,6 +166,10 @@ type personChat struct {
 	// Notice is said once, on starting: what the business sees of you,
 	// and that Taskiem may read business conversations to help (§14).
 	Notice string `json:"notice,omitempty"`
+	// Lines are where this conversation runs: the app, and WhatsApp once
+	// your chats with the business on its own WhatsApp number from your
+	// phone are shown here too (§11).
+	Lines []string `json:"lines"`
 }
 
 // chatHours is a business's opening line under its name.
@@ -188,21 +192,28 @@ type personMessage struct {
 	// WarnTransfer: the business's message asks for a transfer to an
 	// account (warnTransfer); the app warns that paying is only ever
 	// through Taskiem's pay links (§15).
-	WarnTransfer bool       `json:"warn_transfer,omitempty"`
-	ReadAt       *time.Time `json:"read_at"`
-	CreatedAt    time.Time  `json:"created_at"`
+	WarnTransfer bool `json:"warn_transfer,omitempty"`
+	// Line: in the app, or on WhatsApp (a message on the business's own
+	// WhatsApp number, shown here since it was yours, §11).
+	Line      string     `json:"line"`
+	ReadAt    *time.Time `json:"read_at"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 const personChatCols = `c.id, c.tenant_id, c.last_message_at, c.muted, c.archived, c.blocked_at IS NOT NULL, c.business_blocked_at IS NOT NULL, c.offers,
-	c.offers_asked_at IS NOT NULL,
+	c.offers_asked_at IS NOT NULL, c.whatsapp_since IS NOT NULL,
 	(SELECT count(*) FROM person_messages m WHERE m.person_id = c.person_id AND m.conversation_id = c.id AND NOT m.mine AND m.read_at IS NULL),
 	COALESCE((SELECT m.body FROM person_messages m WHERE m.person_id = c.person_id AND m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1), ''),
 	COALESCE((SELECT m.mine FROM person_messages m WHERE m.person_id = c.person_id AND m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1), false)`
 
 func scanPersonChat(r pgx.Row) (personChat, error) {
 	var c personChat
-	var asked bool
-	err := r.Scan(&c.ID, &c.Business, &c.LastAt, &c.Muted, &c.Archived, &c.Blocked, &c.BlockedYou, &c.Offers, &asked, &c.Unread, &c.Last, &c.LastMine)
+	var asked, whatsapp bool
+	err := r.Scan(&c.ID, &c.Business, &c.LastAt, &c.Muted, &c.Archived, &c.Blocked, &c.BlockedYou, &c.Offers, &asked, &whatsapp, &c.Unread, &c.Last, &c.LastMine)
+	c.Lines = []string{lineApp}
+	if whatsapp {
+		c.Lines = append(c.Lines, lineWhatsApp)
+	}
 	// Asked once (§15): not again once answered, or shown and passed over;
 	// never while either side blocked the other.
 	c.AskOffers = c.Offers == "unasked" && !asked && !c.Blocked && !c.BlockedYou
@@ -434,7 +445,8 @@ func (s *Server) startPersonChat(w http.ResponseWriter, r *http.Request) {
 		} else if !st.TakesChats {
 			return customerSendErr{http.StatusConflict, "This business is not taking chats in Taskiem right now."}
 		}
-		if _, _, err := s.appThreadTx(ctx, tx, tenant, person, *phone, name); err != nil {
+		thread, _, err := s.appThreadTx(ctx, tx, tenant, person, *phone, name)
+		if err != nil {
 			return err
 		}
 		var answer *bool
@@ -451,6 +463,11 @@ func (s *Server) startPersonChat(w http.ResponseWriter, r *http.Request) {
 		}
 		id = uuid.Must(uuid.NewV7())
 		if _, err := tx.Exec(ctx, `INSERT INTO person_conversations (id, person_id, tenant_id, offers) VALUES ($1, $2, $3, $4)`, id, person, tenant, offers); err != nil {
+			return err
+		}
+		// The business's WhatsApp thread of their verified phone, if it
+		// has one, is the same customer's (§11): the lines are joined.
+		if _, err := s.joinAppTx(ctx, tx, tenant, thread, false); err != nil {
 			return err
 		}
 		fresh = true
@@ -721,7 +738,7 @@ func (s *Server) personMessages(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		q := `SELECT id, mine, kind, body, sender_name, card, attachment, offer, read_at, created_at FROM person_messages WHERE person_id = $1 AND conversation_id = $2`
+		q := `SELECT id, mine, kind, body, sender_name, card, attachment, offer, read_at, created_at, line FROM person_messages WHERE person_id = $1 AND conversation_id = $2`
 		args := []any{person, c.ID}
 		if b, err := uuid.Parse(r.URL.Query().Get("before")); err == nil {
 			q += ` AND (created_at, id) < (SELECT created_at, id FROM person_messages WHERE person_id = $1 AND id = $3)`
@@ -733,7 +750,7 @@ func (s *Server) personMessages(w http.ResponseWriter, r *http.Request) {
 		}
 		list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (personMessage, error) {
 			var m personMessage
-			if err := r.Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt); err != nil {
+			if err := r.Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt, &m.Line); err != nil {
 				return m, err
 			}
 			m.WarnTransfer = !m.Mine && m.Kind != "card" && warnTransfer(m.Body)
@@ -843,9 +860,9 @@ func personRepeat(ctx context.Context, tx pgx.Tx, person, conv uuid.UUID, client
 		return nil, nil
 	}
 	var m personMessage
-	err := tx.QueryRow(ctx, `SELECT id, mine, kind, body, sender_name, card, attachment, offer, read_at, created_at FROM person_messages
+	err := tx.QueryRow(ctx, `SELECT id, mine, kind, body, sender_name, card, attachment, offer, read_at, created_at, line FROM person_messages
 		WHERE person_id = $1 AND conversation_id = $2 AND client_id = $3`, person, conv, clientID).
-		Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt)
+		Scan(&m.ID, &m.Mine, &m.Kind, &m.Body, &m.SenderName, &m.Card, &m.Attachment, &m.Offer, &m.ReadAt, &m.CreatedAt, &m.Line)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -856,7 +873,7 @@ func personRepeat(ctx context.Context, tx pgx.Tx, person, conv uuid.UUID, client
 // through the door, in one transaction; fresh is false for a repeat of a
 // client_id.
 func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text, clientID string, f *sentFile) (personMessage, bool, error) {
-	out := personMessage{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: text}
+	out := personMessage{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: text, Line: lineApp}
 	if f != nil {
 		out.Kind, out.Attachment = "media", f.view()
 	}
@@ -912,8 +929,9 @@ func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text,
 		if err != nil {
 			return err
 		}
+		// The app's messages only: those shown from WhatsApp are not sent here.
 		var n int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM person_messages WHERE person_id = $1 AND conversation_id = $2 AND mine AND created_at > now() - interval '1 minute'`,
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM person_messages WHERE person_id = $1 AND conversation_id = $2 AND mine AND line = 'app' AND created_at > now() - interval '1 minute'`,
 			person, c.ID).Scan(&n); err != nil {
 			return err
 		}
@@ -929,6 +947,12 @@ func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text,
 			tenant, person).Scan(&thread, &subject); err != nil {
 			return err
 		}
+		// Writing in the app joins the business's WhatsApp thread of their
+		// verified phone, when it has one and they are not joined (§11).
+		if _, err := s.joinAppTx(ctx, tx, tenant, thread, false); err != nil {
+			return err
+		}
+
 		if out.CreatedAt, _, err = s.writeAppMessageTx(ctx, tx, appMessage{id: out.ID, tenant: tenant, thread: thread, subject: subject, person: person,
 			fromPerson: true, kind: out.Kind, text: text, bizFile: bizFile, personFile: f, clientID: clientID}); err != nil {
 			return err

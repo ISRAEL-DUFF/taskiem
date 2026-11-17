@@ -567,12 +567,14 @@ func (s *Server) listOrderDrafts(w http.ResponseWriter, r *http.Request) {
 	var out []orderDraftView
 	var opts draftOptions
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-		chat, _, err := s.customerChatIn(ctx, tx, p.TenantID, chi.URLParam(r, "id"))
+		// Both lines' orders, for a customer with both (§11).
+		t, err := s.customerThreadIn(ctx, tx, p.TenantID, chi.URLParam(r, "id"))
 		if err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT * FROM (SELECT `+draftCols+draftFrom+` WHERE d.tenant_id = $1 AND d.conversation_id = $2
-			ORDER BY d.created_at DESC LIMIT 20) x ORDER BY created_at`, p.TenantID, chat.ID)
+		rows, err := tx.Query(ctx, `SELECT * FROM (SELECT `+draftCols+draftFrom+` WHERE d.tenant_id = $1 AND d.conversation_id = ANY ($2)
+			ORDER BY d.created_at DESC LIMIT 20) x ORDER BY created_at`, p.TenantID, t.ids())
+
 		if err != nil {
 			return err
 		}

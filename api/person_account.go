@@ -337,6 +337,12 @@ func (s *Server) deletePerson(ctx context.Context, person uuid.UUID, how, ip str
 				if _, err := tx.Exec(ctx, `UPDATE customer_conversations SET last_message_at = now(), waiting_since = NULL, wait_check_at = NULL WHERE id = $1`, id); err != nil {
 					return err
 				}
+				// The business's WhatsApp thread of their number is no longer
+				// joined with the app (§11): it is that number's again.
+				if _, err := s.partLinesTx(ctx, tx, b, id, &person, "left", false); err != nil {
+					return err
+				}
+
 			}
 			if len(ids) > 0 {
 				told++

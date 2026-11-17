@@ -255,13 +255,35 @@ func (s *Server) customerInbound(ctx context.Context, wa *whatsapp.Platform, num
 		if _, err = tx.Exec(ctx, `UPDATE customer_conversations SET last_inbound_at = now(), last_message_at = now(), archived = false WHERE id = $1`, id); err != nil {
 			return err
 		}
+		// One customer across the app and WhatsApp (§11): the number may be
+		// the verified phone of a person chatting with the business in the
+		// app. Joined, the message shows in their copy, and they wait for an
+		// answer on the joined thread (Needs you once per customer). In a
+		// savepoint: if joining fails, the message is kept all the same.
+		bell := id
+		s.savepoint(ctx, tx, "customer chat: joining the lines", func(sp pgx.Tx) error {
+			app, person, fresh, err := s.joinWhatsAppTx(ctx, sp, wa.Tenant, id, "+"+strings.TrimPrefix(number, "+"))
+			if err != nil || app == nil {
+				return err
+			}
+			bell = *app
+			if _, err := sp.Exec(ctx, `UPDATE customer_conversations SET archived = false,
+				wait_check_at = CASE WHEN waiting_since IS NULL THEN NULL ELSE wait_check_at END, waiting_since = COALESCE(waiting_since, now())
+				WHERE tenant_id = $1 AND id = $2`, wa.Tenant, *app); err != nil {
+				return err
+			}
+			if person == nil || fresh {
+				return nil
+			}
+			return s.mirrorWhatsAppTx(ctx, sp, wa.Tenant, *person, msg, true, text, "", person.String(), "person")
+		})
 		// The bell's notice in a savepoint: if telling fails, the message
 		// is kept all the same.
 		sp, err := tx.Begin(ctx)
 		if err != nil {
 			return err
 		}
-		if err := s.tellCustomerMessageTx(ctx, sp, wa.Tenant, id); err != nil {
+		if err := s.tellCustomerMessageTx(ctx, sp, wa.Tenant, bell); err != nil {
 			s.Logger.Warn("customer chat: telling the bell", "err", err)
 			return sp.Rollback(ctx)
 		}
@@ -357,7 +379,23 @@ type customerChatView struct {
 	Offers string `json:"offers,omitempty"`
 	// Typing: the customer is typing now (app, one thread only).
 	Typing *bool `json:"typing,omitempty"`
-	person *uuid.UUID
+	// Lines are the customer's lines in this thread: one, or both once the
+	// person in the app and the business's WhatsApp thread of their
+	// verified phone are one customer (§11). ID and Line are then the app
+	// thread's, which stands for the pair; the top-level window, stopped,
+	// blocked and notice are those of ReplyLine.
+	Lines []threadLine `json:"lines"`
+	// ReplyLine is where a reply goes unless another line is chosen: the
+	// line the customer last wrote on, or the other when that one cannot
+	// take messages.
+	ReplyLine string `json:"reply_line"`
+	person    *uuid.UUID
+	// linkedTo: a WhatsApp thread joined with this app thread; lastIn: when
+	// the customer last wrote on this line; numberChanged: the customer's
+	// app line moved to another number (§5.5).
+	linkedTo      *uuid.UUID
+	lastIn        *time.Time
+	numberChanged *time.Time
 	// The thread's page only: what the customer owes on open invoices.
 	OwesKobo *int64 `json:"owes_kobo,omitempty"`
 	Invoices *int   `json:"open_invoices,omitempty"`
@@ -381,6 +419,9 @@ type customerMessageView struct {
 	Card       *customerCard   `json:"card,omitempty"`
 	Attachment *chatAttachment `json:"attachment,omitempty"`
 	Offer      bool            `json:"offer,omitempty"`
+	// Line is where the message went: on WhatsApp (the business's own
+	// number) or in the app (§11: one thread may hold both).
+	Line string `json:"line,omitempty"`
 }
 
 // openCustomerText opens a sealed message or number, or "" when its
@@ -426,7 +467,7 @@ func (s *Server) customerName(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, 
 }
 
 const customerChatCols = `c.id, c.subject_id, c.who, c.last_inbound_at, c.last_message_at, c.stopped_at, c.archived, c.muted,
-	c.line, c.person_id, c.person_blocked_at IS NOT NULL, c.blocked_at IS NOT NULL,
+	c.line, c.person_id, c.person_blocked_at IS NOT NULL, c.blocked_at IS NOT NULL, c.linked_to, c.number_changed_at,
 	(SELECT count(*) FROM customer_messages m WHERE m.tenant_id = c.tenant_id AND m.conversation_id = c.id AND NOT m.mine AND m.read_at IS NULL),
 	(SELECT row(m.mine, m.body) FROM customer_messages m WHERE m.tenant_id = c.tenant_id AND m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1)`
 
@@ -451,17 +492,29 @@ func scanCustomerChatRaw(r pgx.Row) (customerChatRaw, error) {
 		Body []byte
 	}
 	if err := r.Scan(&x.v.ID, &x.subject, &x.who, &x.inbound, &x.v.LastAt, &x.stopped, &x.v.Archived, &x.v.Muted,
-		&x.v.Line, &x.v.person, &x.personBlocked, &x.v.Blocked, &x.v.Unread, &last); err != nil {
+		&x.v.Line, &x.v.person, &x.personBlocked, &x.v.Blocked, &x.v.linkedTo, &x.v.numberChanged, &x.v.Unread, &last); err != nil {
 		return x, err
 	}
+	x.v.lastIn = x.inbound
 	if last != nil {
 		x.lastMine, x.lastBody = &last.Mine, last.Body
 	}
 	return x, nil
 }
 
-// openCustomerChat opens a thread's number, name and last message.
+// openCustomerChat opens a thread's number, name and last message, as a
+// thread of its one line (combineLines joins two).
 func (s *Server) openCustomerChat(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x customerChatRaw) (customerChatView, error) {
+	v, err := s.openCustomerRow(ctx, tx, tenant, x)
+	if err != nil {
+		return v, err
+	}
+	v.Lines, v.ReplyLine = []threadLine{lineOf(v)}, v.Line
+	return v, nil
+}
+
+// openCustomerRow opens one line's row.
+func (s *Server) openCustomerRow(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x customerChatRaw) (customerChatView, error) {
 	v := x.v
 	var w struct {
 		Number json.RawMessage `json:"number"`
@@ -514,6 +567,9 @@ func (s *Server) openCustomerChat(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 		v.WindowUntil = &until
 		v.WindowOpen = time.Now().Before(until) && !v.Stopped
 	}
+	if v.numberChanged != nil && v.linkedTo == nil {
+		v.Notice = customerNumberChangedWords
+	}
 	return v, nil
 }
 
@@ -524,23 +580,11 @@ func (s *Server) listCustomerChats(w http.ResponseWriter, r *http.Request) {
 	archived := r.URL.Query().Get("archived") == "1"
 	out := []customerChatView{}
 	err := db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT `+customerChatCols+` FROM customer_conversations c
-			WHERE c.tenant_id = $1 AND c.archived = $2 ORDER BY c.last_message_at DESC LIMIT 200`, p.TenantID, archived)
-		if err != nil {
-			return err
-		}
-		raws, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (customerChatRaw, error) { return scanCustomerChatRaw(r) })
-		if err != nil {
-			return err
-		}
-		for _, x := range raws {
-			v, err := s.openCustomerChat(r.Context(), tx, p.TenantID, x)
-			if err != nil {
-				return err
-			}
-			out = append(out, v)
-		}
-		return nil
+		// One row per customer: a WhatsApp thread joined with an app thread
+		// is shown with it (§11).
+		var err error
+		out, _, err = s.customerThreadsTx(r.Context(), tx, p.TenantID, `AND c.archived = $2`, []any{archived}, 200)
+		return err
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -582,16 +626,28 @@ func (s *Server) getCustomerChat(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var v customerChatView
 	err := db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-		var subject string
-		var err error
-		if v, subject, err = s.customerChatIn(r.Context(), tx, p.TenantID, chi.URLParam(r, "id")); err != nil {
-			return err
-		}
-		due, n, err := owedBy(r.Context(), tx, p.TenantID, subject)
-		v.OwesKobo, v.Invoices = &due, &n
+		t, err := s.customerThreadIn(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"))
 		if err != nil {
 			return err
 		}
+		v = t.view
+		// What they owe, under each line's subject (one phone's, unless
+		// the number changed between them).
+		var due int64
+		var n int
+		seen := map[string]bool{}
+		for _, row := range []*customerRow{t.app, t.wa} {
+			if row == nil || seen[row.subject] {
+				continue
+			}
+			seen[row.subject] = true
+			d, k, err := owedBy(r.Context(), tx, p.TenantID, row.subject)
+			if err != nil {
+				return err
+			}
+			due, n = due+d, n+k
+		}
+		v.OwesKobo, v.Invoices = &due, &n
 		return appChatExtrasTx(r.Context(), tx, p.TenantID, &v)
 	})
 	if err != nil {
@@ -608,13 +664,15 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 	out := []customerMessageView{}
 	more := false
 	err := db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-		chat, _, err := s.customerChatIn(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"))
+		// Both lines' messages, in time order, each marked with its line.
+		t, err := s.customerThreadIn(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"))
 		if err != nil {
 			return err
 		}
-		q := `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at, card, attachment, offer FROM customer_messages
-			WHERE tenant_id = $1 AND conversation_id = $2`
-		args := []any{p.TenantID, chat.ID}
+		lines := t.lineOfRow()
+		q := `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at, card, attachment, offer, conversation_id FROM customer_messages
+			WHERE tenant_id = $1 AND conversation_id = ANY ($2)`
+		args := []any{p.TenantID, t.ids()}
 		if b, err := uuid.Parse(r.URL.Query().Get("before")); err == nil {
 			q += ` AND (created_at, id) < (SELECT created_at, id FROM customer_messages WHERE tenant_id = $1 AND id = $3)`
 			args = append(args, b)
@@ -630,8 +688,11 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 		}
 		raws, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (rawMsg, error) {
 			var x rawMsg
-			return x, r.Scan(&x.v.ID, &x.v.Mine, &x.v.Kind, &x.body, &x.v.SenderName, &x.v.SentAs, &x.v.Delivery, &x.v.Failure, &x.v.ReadAt, &x.v.CreatedAt,
-				&x.v.Card, &x.att, &x.v.Offer)
+			var conv uuid.UUID
+			err := r.Scan(&x.v.ID, &x.v.Mine, &x.v.Kind, &x.body, &x.v.SenderName, &x.v.SentAs, &x.v.Delivery, &x.v.Failure, &x.v.ReadAt, &x.v.CreatedAt,
+				&x.v.Card, &x.att, &x.v.Offer, &conv)
+			x.v.Line = lines[conv]
+			return x, err
 		})
 		if err != nil {
 			return err
@@ -666,25 +727,34 @@ func (s *Server) readCustomerChat(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return errCustomerChatNone
 		}
-		rows, err := tx.Query(r.Context(), `UPDATE customer_messages SET read_at = now()
-			WHERE tenant_id = $1 AND conversation_id = $2 AND NOT mine AND read_at IS NULL RETURNING id`, p.TenantID, id)
+		// Both lines of the customer's thread (§11).
+		rows, err := tx.Query(r.Context(), `SELECT id FROM customer_conversations WHERE tenant_id = $1
+			AND (id = $2 OR linked_to = $2 OR id = (SELECT x.linked_to FROM customer_conversations x WHERE x.tenant_id = $1 AND x.id = $2))`, p.TenantID, id)
+		if err != nil {
+			return err
+		}
+		ids, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		if err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			return errCustomerChatNone
+		}
+		rows, err = tx.Query(r.Context(), `UPDATE customer_messages SET read_at = now()
+			WHERE tenant_id = $1 AND conversation_id = ANY ($2) AND NOT mine AND read_at IS NULL RETURNING id`, p.TenantID, ids)
 		if err != nil {
 			return err
 		}
 		read, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
-		if err != nil {
+		if err != nil || len(read) == 0 {
 			return err
 		}
-		if len(read) > 0 {
-			// In the app, the customer's copy shows them read (§8.3).
-			return s.mirrorBusinessReadTx(r.Context(), tx, p.TenantID, id, read)
-		}
-		var ok bool
-		if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM customer_conversations WHERE tenant_id = $1 AND id = $2)`, p.TenantID, id).Scan(&ok); err != nil {
-			return err
-		}
-		if !ok {
-			return errCustomerChatNone
+		// In the app, the customer's copy shows them read (§8.3): their
+		// app messages, and those from WhatsApp it shows.
+		for _, thread := range ids {
+			if err := s.mirrorBusinessReadTx(r.Context(), tx, p.TenantID, thread, read); err != nil {
+				return err
+			}
 		}
 		return nil
 	})
@@ -715,7 +785,9 @@ func (s *Server) putCustomerChat(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return errCustomerChatNone
 		}
-		tag, err := tx.Exec(r.Context(), `UPDATE customer_conversations SET archived = COALESCE($3, archived), muted = COALESCE($4, muted) WHERE tenant_id = $1 AND id = $2`,
+		// Both lines of the customer's thread (§11).
+		tag, err := tx.Exec(r.Context(), `UPDATE customer_conversations SET archived = COALESCE($3, archived), muted = COALESCE($4, muted) WHERE tenant_id = $1
+			AND (id = $2 OR linked_to = $2 OR id = (SELECT x.linked_to FROM customer_conversations x WHERE x.tenant_id = $1 AND x.id = $2))`,
 			p.TenantID, id, req.Archived, req.Muted)
 		if err == nil && tag.RowsAffected() == 0 {
 			return errCustomerChatNone
@@ -745,9 +817,18 @@ func (s *Server) replyCustomer(w http.ResponseWriter, r *http.Request) {
 		// In the app only: a rich reply (§8.3) and an offer (§15).
 		Card  *cardAsk `json:"card"`
 		Offer bool     `json:"offer"`
+		// Line: whatsapp or app, for a customer with both (§11); left
+		// out, the line they last wrote on.
+		Line string `json:"line"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
+		return
+	}
+	switch req.Line {
+	case "", lineApp, lineWhatsApp:
+	default:
+		writeErr(w, http.StatusBadRequest, "line is whatsapp or app")
 		return
 	}
 	text := strings.TrimSpace(req.Text)
@@ -788,7 +869,7 @@ func (s *Server) replyCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	m, fresh, err := s.sendCustomer(ctx, p.TenantID, chi.URLParam(r, "id"), customerSend{Text: text, ClientID: req.ClientID, SenderID: p.Actor(), SenderName: sender,
-		Card: card, Offer: req.Offer})
+		Card: card, Offer: req.Offer, Line: req.Line, Default: req.Line == ""})
 	if err != nil {
 		s.customerSendFail(w, r, err)
 		return
@@ -811,6 +892,11 @@ type customerSend struct {
 	Card  *customerCard
 	Offer bool
 	File  *sentFile
+	// Line is the customer's line it goes on (§11): whatsapp or app. Left
+	// empty, the row named; with Default, the line they last wrote on.
+	// Cards, offers and files go in the app.
+	Line    string
+	Default bool
 }
 
 // customerSendErr is a send refused, with the status and words to answer.
@@ -869,12 +955,30 @@ func (s *Server) sendCustomer(ctx context.Context, tenant uuid.UUID, threadID st
 	var chat customerChatView
 	var subject, pnid, business string
 	var again *customerMessageView
+	var app *customerRow
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		var err error
-		if chat, subject, err = s.customerChatIn(ctx, tx, tenant, threadID); err != nil {
+		t, err := s.customerThreadIn(ctx, tx, tenant, threadID)
+		if err != nil {
 			return err
 		}
+		row := t.named
+		line := in.Line
+		if line == "" && (in.Card != nil || in.Offer || in.File != nil) && t.app != nil {
+			line = lineApp
+		}
+		if line == "" && in.Default {
+			line = t.view.ReplyLine
+		}
+		if line != "" {
+			if row = t.row(line); row == nil {
+				return noLineErr(line)
+			}
+		}
+		chat, subject, app = row.view, row.subject, t.app
 		if again, err = s.customerRepeat(ctx, tx, tenant, chat.ID, in.ClientID); err != nil || again != nil {
+			if again != nil {
+				again.Line = chat.Line
+			}
 			return err
 		}
 		if err := tx.QueryRow(ctx, `SELECT phone_number_id FROM customer_conversations WHERE id = $1`, chat.ID).Scan(&pnid); err != nil {
@@ -890,7 +994,9 @@ func (s *Server) sendCustomer(ctx context.Context, tenant uuid.UUID, threadID st
 	}
 	if chat.Line == lineApp {
 		// In the app: no window, no template, no WhatsApp (§8.3).
-		return s.sendCustomerApp(ctx, tenant, chat, subject, in)
+		m, fresh, err := s.sendCustomerApp(ctx, tenant, chat, subject, in)
+		m.Line = lineApp
+		return m, fresh, err
 	}
 	if in.Card != nil || in.Offer || in.File != nil {
 		return customerMessageView{}, false, customerSendErr{http.StatusConflict, "cards, offers and files go to customers who chat in the Taskiem app; this customer writes on WhatsApp"}
@@ -927,7 +1033,7 @@ func (s *Server) sendCustomer(ctx context.Context, tenant uuid.UUID, threadID st
 	// Written before it goes: the thread moves to the business's number
 	// now if it changed, and a second send of the same client_id finds
 	// this one rather than going again.
-	out := customerMessageView{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: text, SenderName: in.SenderName, SentAs: sentAs, Delivery: "sending"}
+	out := customerMessageView{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: text, SenderName: in.SenderName, SentAs: sentAs, Delivery: "sending", Line: lineWhatsApp}
 	err = db.InTenantTx(context.WithoutCancel(ctx), s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if wa.Config.PhoneNumberID != pnid {
 			var other bool
@@ -963,6 +1069,7 @@ func (s *Server) sendCustomer(ctx context.Context, tenant uuid.UUID, threadID st
 				m, err = s.customerRepeat(ctx, tx, tenant, chat.ID, in.ClientID)
 				return err
 			}); e == nil && m != nil {
+				m.Line = lineWhatsApp
 				return *m, false, nil
 			}
 		}
@@ -1016,6 +1123,11 @@ func (s *Server) sendCustomer(ctx context.Context, tenant uuid.UUID, threadID st
 		// Sent: it is in the thread as sending; it is not sent again.
 		s.Logger.Warn("customer chat: a message sent, not marked so", "err", err)
 	}
+	if app != nil {
+		// Joined with the app (§11): shown in the person's copy, marked on
+		// WhatsApp; an answer ends their wait.
+		s.afterWhatsAppReply(ctx, tenant, app.view, out, in)
+	}
 	return out, true, nil
 }
 
@@ -1064,7 +1176,8 @@ func (s *Server) customerChatsUnread(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var chats, msgs int
 	err := db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-		return tx.QueryRow(r.Context(), `SELECT count(DISTINCT m.conversation_id), count(*) FROM customer_messages m
+		// A customer with both lines is one chat (§11).
+		return tx.QueryRow(r.Context(), `SELECT count(DISTINCT COALESCE(c.linked_to, c.id)), count(*) FROM customer_messages m
 			JOIN customer_conversations c ON c.id = m.conversation_id AND c.tenant_id = m.tenant_id
 			WHERE m.tenant_id = $1 AND NOT m.mine AND m.read_at IS NULL AND NOT c.archived`, p.TenantID).Scan(&chats, &msgs)
 	})
@@ -1099,33 +1212,29 @@ func (s *Server) searchCustomerChats(w http.ResponseWriter, r *http.Request) {
 	hits := []hit{}
 	chats := []customerChatView{}
 	err := db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(r.Context(), `SELECT `+customerChatCols+` FROM customer_conversations c
-			WHERE c.tenant_id = $1 ORDER BY c.last_message_at DESC LIMIT 500`, p.TenantID)
-		if err != nil {
-			return err
-		}
-		raws, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (customerChatRaw, error) { return scanCustomerChatRaw(r) })
+		// One per customer (§11): a hit on either line is its thread's.
+		threads, threadOf, err := s.customerThreadsTx(r.Context(), tx, p.TenantID, "", nil, 500)
 		if err != nil {
 			return err
 		}
 		names := map[uuid.UUID]string{}
-		for _, x := range raws {
-			v, err := s.openCustomerChat(r.Context(), tx, p.TenantID, x)
-			if err != nil {
-				return err
-			}
+		for _, v := range threads {
 			names[v.ID] = v.Name
+			phones := v.Phone
+			for _, l := range v.Lines {
+				phones += " " + l.Phone
+			}
 			digits := strings.Map(func(r rune) rune {
 				if r >= '0' && r <= '9' {
 					return r
 				}
 				return -1
 			}, q)
-			if strings.Contains(strings.ToLower(v.Name), q) || (len(digits) >= 4 && strings.Contains(v.Phone, digits)) {
+			if strings.Contains(strings.ToLower(v.Name), q) || (len(digits) >= 4 && strings.Contains(phones, digits)) {
 				chats = append(chats, v)
 			}
 		}
-		rows, err = tx.Query(r.Context(), `SELECT conversation_id, id, mine, body, created_at FROM customer_messages
+		rows, err := tx.Query(r.Context(), `SELECT conversation_id, id, mine, body, created_at FROM customer_messages
 			WHERE tenant_id = $1 AND kind = 'text' ORDER BY created_at DESC LIMIT $2`, p.TenantID, customerSearchDepth)
 		if err != nil {
 			return err
@@ -1152,8 +1261,14 @@ func (s *Server) searchCustomerChats(w http.ResponseWriter, r *http.Request) {
 			if !strings.Contains(strings.ToLower(body), q) {
 				continue
 			}
-			x.h.Body, x.h.Name = body, names[x.h.ChatID]
+			thread, ok := threadOf[x.h.ChatID]
+			if !ok {
+				continue // a thread past the latest 500
+			}
+			x.h.ChatID = thread
+			x.h.Body, x.h.Name = body, names[thread]
 			hits = append(hits, x.h)
+
 		}
 		return nil
 	})

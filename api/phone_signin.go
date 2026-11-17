@@ -608,5 +608,9 @@ func (s *Server) phoneChangeVerify(w http.ResponseWriter, r *http.Request) {
 		detail["old"] = whatsapp.MaskNumber(old)
 	}
 	_ = s.auditEverywhere(ctx, p.UserID, "auth.phone_change", detail)
+	// Businesses' threads on their own WhatsApp numbers stay under the old
+	// number; the app line follows the new one (§5.5 item 4).
+	s.phoneChangedLines(ctx, p.UserID, number)
 	writeJSON(w, http.StatusOK, map[string]any{"phone": number})
+
 }

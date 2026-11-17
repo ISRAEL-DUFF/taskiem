@@ -512,12 +512,13 @@ type cardAsk struct {
 func (s *Server) cardFor(ctx context.Context, tenant uuid.UUID, thread string, ask cardAsk) (*customerCard, error) {
 	var card *customerCard
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		chat, subject, err := s.customerChatIn(ctx, tx, tenant, thread)
+		// Cards go on the app line, whichever line's id names the thread.
+		chat, subject, err := s.customerLineIn(ctx, tx, tenant, thread, lineApp)
+		if se := (customerSendErr{}); errors.As(err, &se) {
+			return customerSendErr{http.StatusConflict, "cards go to customers who chat in the Taskiem app; this customer writes on WhatsApp"}
+		}
 		if err != nil {
 			return err
-		}
-		if chat.Line != lineApp {
-			return customerSendErr{http.StatusConflict, "cards go to customers who chat in the Taskiem app; this customer writes on WhatsApp"}
 		}
 		switch ask.Type {
 		case "invoice":
@@ -689,11 +690,13 @@ func appChatExtrasTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, v *custom
 // appThreadIn is an app thread of the business in scope, with its
 // person; errCustomerChatNone for a WhatsApp thread or none.
 func (s *Server) appThreadIn(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id string) (customerChatView, string, error) {
-	chat, subject, err := s.customerChatIn(ctx, tx, tenant, id)
-	if err != nil {
+	// Either line's id names the customer's thread (§11).
+	chat, subject, err := s.customerLineIn(ctx, tx, tenant, id, lineApp)
+	if se := (customerSendErr{}); err != nil && !errors.As(err, &se) {
 		return chat, subject, err
 	}
-	if chat.Line != lineApp || chat.person == nil {
+
+	if err != nil || chat.Line != lineApp || chat.person == nil {
 		return chat, subject, customerSendErr{http.StatusConflict, "This is for customers who chat in the Taskiem app; on WhatsApp they send STOP."}
 	}
 	return chat, subject, nil
@@ -797,7 +800,7 @@ func (s *Server) customerFile(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var path, ctype, name, kind string
 	err := s.tx(r, func(tx pgx.Tx) error {
-		chat, _, err := s.customerChatIn(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"))
+		t, err := s.customerThreadIn(r.Context(), tx, p.TenantID, chi.URLParam(r, "id"))
 		if err != nil {
 			return err
 		}
@@ -807,7 +810,7 @@ func (s *Server) customerFile(w http.ResponseWriter, r *http.Request) {
 		}
 		var raw []byte
 		if err := tx.QueryRow(r.Context(), `SELECT attachment->>'path', attachment FROM customer_messages
-			WHERE tenant_id = $1 AND conversation_id = $2 AND id = $3 AND attachment ? 'path'`, p.TenantID, chat.ID, msg).Scan(&path, &raw); err != nil {
+			WHERE tenant_id = $1 AND conversation_id = ANY ($2) AND id = $3 AND attachment ? 'path'`, p.TenantID, t.ids(), msg).Scan(&path, &raw); err != nil {
 			return err
 		}
 		a, err := s.openAttachment(r.Context(), tx, p.TenantID, raw)
@@ -897,8 +900,10 @@ func (s *Server) openAppCustomerChat(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		v, _, err = s.customerChatIn(ctx, tx, p.TenantID, thread.String())
+		t, err := s.customerThreadIn(ctx, tx, p.TenantID, thread.String())
+		v = t.view
 		return err
+
 	})
 	if err != nil {
 		s.customerSendFail(w, r, err)
@@ -1437,7 +1442,16 @@ const customerOwnerNotice = "A customer has waited 2 hours for an answer"
 // claimed by a conditional update, so replicas running the sweep at once
 // tell once.
 func (s *Server) CustomerChatsTick(ctx context.Context) error {
+	// The app threads not yet looked at for their WhatsApp threads (§11):
+	// those there were before the lines were joined, then each new one.
+	joinErr := s.joinSweep(ctx)
+	return errors.Join(joinErr, s.ownersTick(ctx))
+}
+
+// ownersTick tells the owners of customers waiting 2 hours (CustomerChatsTick).
+func (s *Server) ownersTick(ctx context.Context) error {
 	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id, conversation_id, waiting_since FROM taskiem_customer_waiting('2 hours')`)
+
 	if err != nil {
 		return err
 	}
