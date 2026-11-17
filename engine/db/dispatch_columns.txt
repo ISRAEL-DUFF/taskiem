@@ -1193,14 +1193,17 @@ storefront_order_payments.tenant_id
 storefront_order_payments.undoes
 storefront_order_payments.woke_run
 storefront_orders.action_id
+storefront_orders.basket
 storefront_orders.created_at
 storefront_orders.deposit_kobo
 storefront_orders.ends_at
 storefront_orders.expires_at
+storefront_orders.extra_kobo
 storefront_orders.forgotten_at
 storefront_orders.front_id
 storefront_orders.id
 storefront_orders.kind
+storefront_orders.paid_kobo
 storefront_orders.pay_to_kobo
 storefront_orders.payment
 storefront_orders.payment_url

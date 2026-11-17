@@ -66,6 +66,16 @@ func (x *Index) indexKey() []byte {
 	return m.Sum(nil)
 }
 
+// IndexKey is the key the database is given to find a person's orders by
+// their verified phone (taskiem_person_orders); nil when the index is not
+// set up, which leaves the phone's orders out.
+func (x *Index) IndexKey() []byte {
+	if !x.Ready() {
+		return nil
+	}
+	return x.indexKey()
+}
+
 // Hash is a phone's (E.164) hash in the index. The database makes the
 // same from a person's verified phone in taskiem_customer_phone_orders.
 func (x *Index) Hash(e164 string) []byte {
