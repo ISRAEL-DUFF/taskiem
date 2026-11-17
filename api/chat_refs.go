@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -375,22 +376,36 @@ func (s *Server) chatCardTx(ctx context.Context, tx pgx.Tx, p *Principal, kind, 
 		if !p.Can(PermOrders) {
 			return chatCard{}, errForbidden
 		}
-		v, subject, err := s.customerChatIn(ctx, tx, tenant, id)
+		// The customer's thread, both lines (§11), by either line's id: the
+		// pair's id and name, what they owe and their orders under each
+		// line's subject.
+		t, err := s.customerThreadIn(ctx, tx, tenant, id)
 		if err != nil {
 			return chatCard{}, err
 		}
+		v := t.view
+		var subjects []string
+		for _, row := range []*customerRow{t.app, t.wa} {
+			if row != nil && !slices.Contains(subjects, row.subject) {
+				subjects = append(subjects, row.subject)
+			}
+		}
 		c := chatCard{chatRef: chatRef{Kind: kind, ID: v.ID.String(), Name: v.Name, Party: maskPhone(v.Phone), When: v.LastAt}}
 		if p.Can(PermInvoiceRead) {
-			due, _, err := owedBy(ctx, tx, tenant, subject)
-			if err != nil {
-				return chatCard{}, err
+			var due int64
+			for _, subject := range subjects {
+				d, _, err := owedBy(ctx, tx, tenant, subject)
+				if err != nil {
+					return chatCard{}, err
+				}
+				due += d
 			}
 			c.OwesKobo = &due
 		}
 		var n int
 		var last cardOrder
 		err = tx.QueryRow(ctx, `SELECT count(*) OVER (), reference, total_kobo, status, created_at FROM storefront_orders
-			WHERE tenant_id = $1 AND subject_id = $2 ORDER BY created_at DESC LIMIT 1`, tenant, subject).
+			WHERE tenant_id = $1 AND subject_id = ANY ($2) ORDER BY created_at DESC LIMIT 1`, tenant, subjects).
 			Scan(&n, &last.Reference, &last.TotalKobo, &last.Status, &last.When)
 		switch {
 		case errors.Is(err, pgx.ErrNoRows):

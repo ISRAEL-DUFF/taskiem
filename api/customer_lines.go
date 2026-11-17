@@ -14,6 +14,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/whatsapp"
 )
 
 // One customer across the app and the business's own WhatsApp number
@@ -111,8 +112,12 @@ func lineOpen(v customerChatView) bool {
 
 // replyLineOf is where a reply goes by default: the line the customer
 // last wrote on, or the other when that one cannot take a message and
-// the other can.
-func replyLineOf(app, wa customerChatView) (customerChatView, customerChatView) {
+// the other can. WhatsApp past its 24 hours takes a message only as the
+// approved template: while the template is not approved (templateOK) and
+// the app line is open, the reply goes in the app; with WhatsApp the only
+// line open it stays WhatsApp (and the reply is refused until the
+// template is approved, as before).
+func replyLineOf(app, wa customerChatView, templateOK func() bool) (customerChatView, customerChatView) {
 	last, other := app, wa
 	if wa.lastIn != nil && (app.lastIn == nil || wa.lastIn.After(*app.lastIn)) {
 		last, other = wa, app
@@ -120,13 +125,38 @@ func replyLineOf(app, wa customerChatView) (customerChatView, customerChatView) 
 	if !lineOpen(last) && lineOpen(other) {
 		return other, last
 	}
+	if last.Line == lineWhatsApp && !last.WindowOpen && lineOpen(last) && lineOpen(other) && (templateOK == nil || !templateOK()) {
+		return other, last
+	}
 	return last, other
+}
+
+// customerTemplateOK answers, asked at most once, whether the business's
+// own number may send the reply template now (taskiem_customer_reply
+// approved): what a reply on WhatsApp past the 24 hours needs.
+func (s *Server) customerTemplateOK(ctx context.Context, tenant uuid.UUID) func() bool {
+	var ok, asked bool
+	return func() bool {
+		if asked {
+			return ok
+		}
+		asked = true
+		if s.WhatsApp == nil {
+			return false
+		}
+		wa, err := s.WhatsApp.ForTenant(ctx, tenant)
+		if err != nil || wa == nil || !wa.Own() {
+			return false
+		}
+		ok = wa.TemplateUsable(ctx, whatsapp.TplCustomerReply) == nil
+		return ok
+	}
 }
 
 // combineLines is one customer's thread with both lines: the app thread's
 // id, name and settings; the latest message of either; unread across
 // both; the window, stops and notice of the line a reply goes on.
-func combineLines(app, wa customerChatView) customerChatView {
+func combineLines(app, wa customerChatView, templateOK func() bool) customerChatView {
 	v := app
 	if v.Name == "A customer" && wa.Name != "" {
 		v.Name = wa.Name
@@ -139,7 +169,7 @@ func combineLines(app, wa customerChatView) customerChatView {
 	}
 	v.Unread = app.Unread + wa.Unread
 	v.Lines = []threadLine{lineOf(app), lineOf(wa)}
-	reply, _ := replyLineOf(app, wa)
+	reply, _ := replyLineOf(app, wa, templateOK)
 	v.ReplyLine = reply.Line
 	v.WindowOpen, v.WindowUntil, v.Stopped, v.Blocked, v.Notice = reply.WindowOpen, reply.WindowUntil, reply.Stopped, reply.Blocked, reply.Notice
 	if wa.lastIn != nil && (v.lastIn == nil || wa.lastIn.After(*v.lastIn)) {
@@ -228,7 +258,7 @@ func (s *Server) customerThreadIn(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 	}
 	switch {
 	case t.app != nil && t.wa != nil:
-		t.view = combineLines(t.app.view, t.wa.view)
+		t.view = combineLines(t.app.view, t.wa.view, s.customerTemplateOK(ctx, tenant))
 	default:
 		t.view = t.named.view
 		t.view.Lines, t.view.ReplyLine = []threadLine{lineOf(t.view)}, t.view.Line
@@ -296,6 +326,7 @@ func (s *Server) customerThreadsTx(ctx context.Context, tx pgx.Tx, tenant uuid.U
 	}
 	out := make([]customerChatView, 0, len(raws))
 	threadOf := map[uuid.UUID]uuid.UUID{}
+	templateOK := s.customerTemplateOK(ctx, tenant)
 	for _, x := range raws {
 		v, err := s.openCustomerChat(ctx, tx, tenant, x)
 		if err != nil {
@@ -308,7 +339,7 @@ func (s *Server) customerThreadsTx(ctx context.Context, tx pgx.Tx, tenant uuid.U
 				return nil, nil, err
 			}
 			threadOf[w.ID] = v.ID
-			v = combineLines(v, w)
+			v = combineLines(v, w, templateOK)
 		}
 		out = append(out, v)
 	}
@@ -348,6 +379,12 @@ func (s *Server) joinLinesTx(ctx context.Context, tx pgx.Tx, tenant, app, wa, pe
 	if _, err := tx.Exec(ctx, `UPDATE customer_conversations SET link_checked_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, app); err != nil {
 		return false, err
 	}
+	// The pair is shown as the app thread is (archived or not): the
+	// WhatsApp row takes its state, so the list and the unread count agree.
+	if _, err := tx.Exec(ctx, `UPDATE customer_conversations w SET archived = a.archived FROM customer_conversations a
+		WHERE w.tenant_id = $1 AND w.id = $2 AND a.tenant_id = $1 AND a.id = $3`, tenant, wa, app); err != nil {
+		return false, err
+	}
 	detail := map[string]any{"linked": true, "whatsapp_thread": wa, "app_thread": app}
 	if err := s.lineAuditTx(ctx, tx, tenant, person, detail, asBusiness); err != nil {
 		return false, err
@@ -370,8 +407,12 @@ func (s *Server) joinLinesTx(ctx context.Context, tx pgx.Tx, tenant, app, wa, pe
 	if since.After(from) {
 		from = since
 	}
-	rows, err := tx.Query(ctx, `SELECT id, mine, body, COALESCE(sender_name, ''), read_at, created_at FROM customer_messages
-		WHERE tenant_id = $1 AND conversation_id = $2 AND created_at >= $3 ORDER BY created_at DESC LIMIT $4`, tenant, wa, from, whatsappHistoryMax)
+	// The business's replies only as WhatsApp took them: never one that
+	// failed or is still going (the customer never had it); one sent as the
+	// template in the words WhatsApp delivered.
+	rows, err := tx.Query(ctx, `SELECT id, mine, body, COALESCE(sender_name, ''), read_at, created_at, COALESCE(sent_as, '') FROM customer_messages
+		WHERE tenant_id = $1 AND conversation_id = $2 AND created_at >= $3 AND (NOT mine OR delivery IN ('sent', 'delivered', 'read'))
+		ORDER BY created_at DESC LIMIT $4`, tenant, wa, from, whatsappHistoryMax)
 	if err != nil {
 		return false, err
 	}
@@ -382,18 +423,28 @@ func (s *Server) joinLinesTx(ctx context.Context, tx pgx.Tx, tenant, app, wa, pe
 		sender   string
 		readAt   *time.Time
 		at       time.Time
+		sentAs   string
 		openedAs string
 	}
 	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (past, error) {
 		var x past
-		return x, r.Scan(&x.id, &x.mine, &x.body, &x.sender, &x.readAt, &x.at)
+		return x, r.Scan(&x.id, &x.mine, &x.body, &x.sender, &x.readAt, &x.at, &x.sentAs)
 	})
 	if err != nil {
 		return false, err
 	}
+	var business string
 	for i := range list {
 		if list[i].openedAs, err = s.openCustomerText(ctx, tx, tenant, list[i].body); err != nil {
 			return false, err
+		}
+		if list[i].mine && list[i].sentAs == "template" && list[i].openedAs != "" {
+			if business == "" {
+				if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, tenant).Scan(&business); err != nil {
+					return false, err
+				}
+			}
+			list[i].openedAs = templateWords(business, list[i].openedAs)
 		}
 	}
 	for _, x := range list {
@@ -485,10 +536,16 @@ func (s *Server) joinAppTx(ctx context.Context, tx pgx.Tx, tenant, app uuid.UUID
 	if err != nil {
 		return false, err
 	}
+	// Only a thread whose customer last wrote on WhatsApp after the phone
+	// became this person's (verified on their account), and after the
+	// thread's customer moved their app line to another number: a number
+	// that was someone else's joins its next owner only once they write
+	// from it (joinWhatsAppTx), never by the last owner's messages.
 	var wa uuid.UUID
 	err = tx.QueryRow(ctx, `SELECT id FROM customer_conversations WHERE tenant_id = $1 AND line = 'whatsapp' AND subject_id = $2
 		AND last_inbound_at IS NOT NULL AND linked_to IS NULL AND ($3::timestamptz IS NULL OR last_inbound_at > $3)
-		ORDER BY last_inbound_at DESC LIMIT 1`, tenant, subject, relink).Scan(&wa)
+		AND last_inbound_at > $4 AND (number_changed_at IS NULL OR last_inbound_at > number_changed_at)
+		ORDER BY last_inbound_at DESC LIMIT 1`, tenant, subject, relink, verified).Scan(&wa)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -507,18 +564,29 @@ func (s *Server) joinWhatsAppTx(ctx context.Context, tx pgx.Tx, tenant, wa uuid.
 	if err := tx.QueryRow(ctx, `SELECT linked_to FROM customer_conversations WHERE tenant_id = $1 AND id = $2`, tenant, wa).Scan(&app); err != nil {
 		return nil, nil, false, err
 	}
-	if app != nil {
-		err := tx.QueryRow(ctx, `SELECT person_id FROM customer_conversations WHERE tenant_id = $1 AND id = $2`, tenant, *app).Scan(&person)
-		return app, person, false, err
-	}
 	var p uuid.UUID
 	var verified time.Time
 	err = tx.QueryRow(ctx, `SELECT person_id, verified_at FROM taskiem_customer_link_person($1, $2)`, tenant, number).Scan(&p, &verified)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil, false, nil
-	}
-	if err != nil {
+	whose := !errors.Is(err, pgx.ErrNoRows)
+	if err != nil && whose {
 		return nil, nil, false, err
+	}
+	if app != nil {
+		if err := tx.QueryRow(ctx, `SELECT person_id FROM customer_conversations WHERE tenant_id = $1 AND id = $2`, tenant, *app).Scan(&person); err != nil {
+			return nil, nil, false, err
+		}
+		if whose && person != nil && *person == p {
+			return app, person, false, nil
+		}
+		// The number is no longer the joined person's verified phone (they
+		// changed it, and the change did not reach this business): parted
+		// now, so its next owner never reaches the last one's copy.
+		if err := s.numberMovedTx(ctx, tx, tenant, *app, person, "", true); err != nil {
+			return nil, nil, false, err
+		}
+	}
+	if !whose {
+		return nil, nil, false, nil
 	}
 	var a uuid.UUID
 	err = tx.QueryRow(ctx, `SELECT id FROM customer_conversations WHERE tenant_id = $1 AND line = 'app' AND person_id = $2
@@ -605,8 +673,12 @@ func (s *Server) afterWhatsAppReply(ctx context.Context, tenant uuid.UUID, app c
 // numberChanged when the person changed their phone (the WhatsApp thread
 // then says so). The person's copy keeps what it was shown, and shows no
 // more. asBusiness as for joinLinesTx; person nil once the account is
-// gone (nothing of theirs is reached).
+// gone (nothing of theirs is reached). It takes the business's link lock,
+// as a join does, so a sweep's join and a parting never cross.
 func (s *Server) partLinesTx(ctx context.Context, tx pgx.Tx, tenant, app uuid.UUID, person *uuid.UUID, why string, asBusiness bool) (bool, error) {
+	if err := customerLinkLock(ctx, tx, tenant); err != nil {
+		return false, err
+	}
 	var wa uuid.UUID
 	err := tx.QueryRow(ctx, `UPDATE customer_conversations SET linked_to = NULL, linked_at = NULL,
 		number_changed_at = CASE WHEN $3 THEN now() ELSE number_changed_at END
@@ -624,15 +696,53 @@ func (s *Server) partLinesTx(ctx context.Context, tx pgx.Tx, tenant, app uuid.UU
 	return err == nil, err
 }
 
+// numberMovedTx is §5.5 item 4 in one business: the person of an app
+// thread no longer has the number its WhatsApp thread is of. The app line
+// follows them (the thread's number is number, or their verified phone
+// now when number is ""), it is matched again only by a WhatsApp message
+// after this (relink_after), and the WhatsApp thread is parted from it and
+// says "This customer changed their number". asBusiness as for
+// joinLinesTx. The app thread is marked looked at, so the stale-link
+// sweep leaves it until the phone changes again.
+func (s *Server) numberMovedTx(ctx context.Context, tx pgx.Tx, tenant, app uuid.UUID, person *uuid.UUID, number string, asBusiness bool) error {
+	if _, err := tx.Exec(ctx, `UPDATE customer_conversations SET relink_after = now(), link_checked_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, app); err != nil {
+		return err
+	}
+	if number == "" && person != nil {
+		err := tx.QueryRow(ctx, `SELECT number FROM taskiem_customer_link_phone($1, $2)`, tenant, *person).Scan(&number)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+	}
+	if number != "" {
+		// The app line's number is the new one.
+		env, err := s.Store.PII.SealTx(ctx, tx, tenant, "phone", number)
+		if err != nil && !errors.Is(err, pii.ErrErased) {
+			return err
+		}
+		if err == nil {
+			raw, _ := json.Marshal(env)
+			if _, err := tx.Exec(ctx, `UPDATE customer_conversations SET who = jsonb_set(who, '{number}', $3::jsonb) WHERE tenant_id = $1 AND id = $2`, tenant, app, raw); err != nil {
+				return err
+			}
+		}
+	}
+	_, err := s.partLinesTx(ctx, tx, tenant, app, person, "number_changed", asBusiness)
+	return err
+}
+
 // phoneChangedLines is §5.5 item 4, after a person changed their phone:
 // in each business they chat with, the app line follows them (the
 // thread's number is the new one), the WhatsApp thread of the old number
 // is parted from it and says "This customer changed their number", and
 // the two are matched again only when the new number writes on WhatsApp.
-// Failures are logged: the phone has changed.
+// Each business in its own savepoint, so one's failure leaves the others
+// done; what fails is logged (the phone has changed) and caught by the
+// stale-link sweep (staleLinkSweep), which finds pairs whose person's
+// phone was verified after the pair was last looked at.
 func (s *Server) phoneChangedLines(ctx context.Context, person uuid.UUID, number string) {
 	err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT DISTINCT tenant_id FROM person_conversations WHERE person_id = $1`, person)
+		rows, err := tx.Query(ctx, `SELECT DISTINCT tenant_id FROM person_conversations WHERE person_id = $1 ORDER BY tenant_id`, person)
 		if err != nil {
 			return err
 		}
@@ -644,34 +754,128 @@ func (s *Server) phoneChangedLines(ctx context.Context, person uuid.UUID, number
 			return err
 		}
 		for _, b := range businesses {
-			var app uuid.UUID
-			err := tx.QueryRow(ctx, `UPDATE customer_conversations SET relink_after = now() WHERE tenant_id = $1 AND line = 'app' AND person_id = $2 RETURNING id`, b, person).Scan(&app)
-			if errors.Is(err, pgx.ErrNoRows) {
-				continue
-			}
-			if err != nil {
-				return err
-			}
-			// The app line's number is the new one.
-			env, err := s.Store.PII.SealTx(ctx, tx, b, "phone", number)
-			if err != nil && !errors.Is(err, pii.ErrErased) {
-				return err
-			}
-			if err == nil {
-				raw, _ := json.Marshal(env)
-				if _, err := tx.Exec(ctx, `UPDATE customer_conversations SET who = jsonb_set(who, '{number}', $3::jsonb) WHERE tenant_id = $1 AND id = $2`, b, app, raw); err != nil {
+			s.savepoint(ctx, tx, "customer chat: a changed phone's lines in a business", func(sp pgx.Tx) error {
+				var app uuid.UUID
+				err := sp.QueryRow(ctx, `SELECT id FROM customer_conversations WHERE tenant_id = $1 AND line = 'app' AND person_id = $2`, b, person).Scan(&app)
+				if errors.Is(err, pgx.ErrNoRows) {
+					return nil
+				}
+				if err != nil {
 					return err
 				}
-			}
-			if _, err := s.partLinesTx(ctx, tx, b, app, &person, "number_changed", false); err != nil {
-				return err
-			}
+				return s.numberMovedTx(ctx, sp, b, app, &person, number, false)
+			})
 		}
 		return nil
 	})
 	if err != nil {
 		s.Logger.Error("customer chat: a changed phone's lines", "err", err)
 	}
+}
+
+// staleLinkSweep finds joined pairs whose person's phone was verified
+// after the pair was last looked at, or who have no verified phone now
+// (taskiem_customer_link_stale): a phone change that phoneChangedLines
+// did not carry to this business. Each business in its own transaction,
+// each pair in a savepoint: a pair whose WhatsApp thread is no longer of
+// the person's phone is parted (numberMovedTx); one that still is, is
+// marked looked at. A pair that fails is logged and marked looked at (the
+// WhatsApp line's next message checks it again, joinWhatsAppTx).
+func (s *Server) staleLinkSweep(ctx context.Context) error {
+	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id, conversation_id FROM taskiem_customer_link_stale(200)`)
+	if err != nil {
+		return err
+	}
+	type due struct{ tenant, thread uuid.UUID }
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (due, error) {
+		var x due
+		return x, r.Scan(&x.tenant, &x.thread)
+	})
+	if err != nil {
+		return err
+	}
+	byTenant := map[uuid.UUID][]uuid.UUID{}
+	var order []uuid.UUID
+	for _, x := range list {
+		if _, ok := byTenant[x.tenant]; !ok {
+			order = append(order, x.tenant)
+		}
+		byTenant[x.tenant] = append(byTenant[x.tenant], x.thread)
+	}
+	var errs []error
+	for _, tenant := range order {
+		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			for _, app := range byTenant[tenant] {
+				sp, err := tx.Begin(ctx)
+				if err != nil {
+					return err
+				}
+				if err := s.checkLinkTx(ctx, sp, tenant, app); err != nil {
+					s.Logger.Warn("customer chat: a stale link", "tenant", tenant, "err", err)
+					if err := sp.Rollback(ctx); err != nil {
+						return err
+					}
+					if _, err := tx.Exec(ctx, `UPDATE customer_conversations SET link_checked_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, app); err != nil {
+						return err
+					}
+					continue
+				}
+				if err := sp.Commit(ctx); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			errs = append(errs, fmt.Errorf("tenant %s: %w", tenant, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// checkLinkTx looks again at a joined pair (staleLinkSweep): parted when
+// the WhatsApp thread is not of its person's verified phone now.
+func (s *Server) checkLinkTx(ctx context.Context, tx pgx.Tx, tenant, app uuid.UUID) error {
+	var person *uuid.UUID
+	var waSubject *string
+	err := tx.QueryRow(ctx, `SELECT a.person_id, (SELECT w.subject_id FROM customer_conversations w WHERE w.tenant_id = a.tenant_id AND w.linked_to = a.id)
+		FROM customer_conversations a WHERE a.tenant_id = $1 AND a.id = $2 AND a.line = 'app'`, tenant, app).Scan(&person, &waSubject)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if waSubject == nil {
+		// Parted meanwhile.
+		_, err := tx.Exec(ctx, `UPDATE customer_conversations SET link_checked_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, app)
+		return err
+	}
+	var number string
+	if person != nil {
+		err := tx.QueryRow(ctx, `SELECT number FROM taskiem_customer_link_phone($1, $2)`, tenant, *person).Scan(&number)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+	}
+	if number != "" {
+		subject, err := s.phoneSubject(ctx, tx, tenant, number)
+		if err != nil && !errors.Is(err, pii.ErrErased) {
+			return err
+		}
+		if err == nil && subject == *waSubject {
+			// Still theirs.
+			_, err := tx.Exec(ctx, `UPDATE customer_conversations SET link_checked_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, app)
+			return err
+		}
+	}
+	return s.numberMovedTx(ctx, tx, tenant, app, person, number, true)
+}
+
+// templateWords is what a reply sent as the taskiem_customer_reply
+// template says on WhatsApp: the person's copy shows what was delivered.
+func templateWords(business, text string) string {
+	return whatsapp.TplCustomerReply.Render(map[string]string{"business": business, "message": strings.Join(strings.Fields(text), " ")})
 }
 
 // partErasedLines parts the lines of the customers the business just

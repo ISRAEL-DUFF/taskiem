@@ -897,6 +897,9 @@ type customerSend struct {
 	// Cards, offers and files go in the app.
 	Line    string
 	Default bool
+	// pair: the rows of the customer's thread (both lines, §11), where a
+	// client_id is looked for (set by sendCustomer).
+	pair []uuid.UUID
 }
 
 // customerSendErr is a send refused, with the status and words to answer.
@@ -916,16 +919,20 @@ func (s *Server) customerSendFail(w http.ResponseWriter, r *http.Request, err er
 	s.customerChatFail(w, r, err)
 }
 
-// customerRepeat is the message a thread already has under clientID.
-func (s *Server) customerRepeat(ctx context.Context, tx pgx.Tx, tenant, chat uuid.UUID, clientID string) (*customerMessageView, error) {
+// customerRepeat is the message a customer's thread already has under
+// clientID, on either of its lines (chats: the thread's rows, §11): a
+// client_id is one per customer, so a repeat after the reply line moved
+// answers the first, on the line it went on (its Line).
+func (s *Server) customerRepeat(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, chats []uuid.UUID, clientID string) (*customerMessageView, error) {
 	if clientID == "" {
 		return nil, nil
 	}
 	var m customerMessageView
 	var body, att []byte
-	err := tx.QueryRow(ctx, `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at, card, attachment, offer FROM customer_messages
-		WHERE tenant_id = $1 AND conversation_id = $2 AND client_id = $3`, tenant, chat, clientID).
-		Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.Delivery, &m.Failure, &m.ReadAt, &m.CreatedAt, &m.Card, &att, &m.Offer)
+	err := tx.QueryRow(ctx, `SELECT m.id, m.mine, m.kind, m.body, m.sender_name, COALESCE(m.sent_as, ''), COALESCE(m.delivery, ''), COALESCE(m.failure, ''), m.read_at, m.created_at,
+		m.card, m.attachment, m.offer, c.line FROM customer_messages m JOIN customer_conversations c ON c.tenant_id = m.tenant_id AND c.id = m.conversation_id
+		WHERE m.tenant_id = $1 AND m.conversation_id = ANY ($2) AND m.client_id = $3 ORDER BY m.created_at LIMIT 1`, tenant, chats, clientID).
+		Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.Delivery, &m.Failure, &m.ReadAt, &m.CreatedAt, &m.Card, &att, &m.Offer, &m.Line)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -961,6 +968,12 @@ func (s *Server) sendCustomer(ctx context.Context, tenant uuid.UUID, threadID st
 		if err != nil {
 			return err
 		}
+		// A repeat first, on either line, before the line is chosen: the
+		// reply line may have moved since the first send.
+		in.pair = t.ids()
+		if again, err = s.customerRepeat(ctx, tx, tenant, in.pair, in.ClientID); err != nil || again != nil {
+			return err
+		}
 		row := t.named
 		line := in.Line
 		if line == "" && (in.Card != nil || in.Offer || in.File != nil) && t.app != nil {
@@ -975,12 +988,6 @@ func (s *Server) sendCustomer(ctx context.Context, tenant uuid.UUID, threadID st
 			}
 		}
 		chat, subject, app = row.view, row.subject, t.app
-		if again, err = s.customerRepeat(ctx, tx, tenant, chat.ID, in.ClientID); err != nil || again != nil {
-			if again != nil {
-				again.Line = chat.Line
-			}
-			return err
-		}
 		if err := tx.QueryRow(ctx, `SELECT phone_number_id FROM customer_conversations WHERE id = $1`, chat.ID).Scan(&pnid); err != nil {
 			return err
 		}
@@ -995,7 +1002,9 @@ func (s *Server) sendCustomer(ctx context.Context, tenant uuid.UUID, threadID st
 	if chat.Line == lineApp {
 		// In the app: no window, no template, no WhatsApp (§8.3).
 		m, fresh, err := s.sendCustomerApp(ctx, tenant, chat, subject, in)
-		m.Line = lineApp
+		if m.Line == "" {
+			m.Line = lineApp // a repeat says the line it went on
+		}
 		return m, fresh, err
 	}
 	if in.Card != nil || in.Offer || in.File != nil {
@@ -1035,6 +1044,11 @@ func (s *Server) sendCustomer(ctx context.Context, tenant uuid.UUID, threadID st
 	// this one rather than going again.
 	out := customerMessageView{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: text, SenderName: in.SenderName, SentAs: sentAs, Delivery: "sending", Line: lineWhatsApp}
 	err = db.InTenantTx(context.WithoutCancel(ctx), s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		// The same client_id sent at the same moment on the other line:
+		// the first kept answers.
+		if again, err = s.customerRepeatLocked(ctx, tx, tenant, in); err != nil || again != nil {
+			return err
+		}
 		if wa.Config.PhoneNumberID != pnid {
 			var other bool
 			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_conversations WHERE tenant_id = $1 AND phone_number_id = $2 AND subject_id = $3)`,
@@ -1060,16 +1074,18 @@ func (s *Server) sendCustomer(ctx context.Context, tenant uuid.UUID, threadID st
 			VALUES ($1, $2, $3, true, 'text', $4, $5, $6, $7, $8, 'sending') RETURNING created_at`,
 			out.ID, tenant, chat.ID, body, in.SenderID, in.SenderName, sentAs, client).Scan(&out.CreatedAt)
 	})
+	if err == nil && again != nil {
+		return *again, false, nil
+	}
 	if err != nil {
 		if isUnique(err) {
 			// The same send, at the same moment: that one goes.
 			var m *customerMessageView
 			if e := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 				var err error
-				m, err = s.customerRepeat(ctx, tx, tenant, chat.ID, in.ClientID)
+				m, err = s.customerRepeat(ctx, tx, tenant, in.pair, in.ClientID)
 				return err
 			}); e == nil && m != nil {
-				m.Line = lineWhatsApp
 				return *m, false, nil
 			}
 		}
@@ -1125,10 +1141,35 @@ func (s *Server) sendCustomer(ctx context.Context, tenant uuid.UUID, threadID st
 	}
 	if app != nil {
 		// Joined with the app (§11): shown in the person's copy, marked on
-		// WhatsApp; an answer ends their wait.
-		s.afterWhatsAppReply(ctx, tenant, app.view, out, in)
+		// WhatsApp, in the words WhatsApp delivered (the template's, when
+		// it went as the template); an answer ends their wait.
+		shown := out
+		if sentAs == "template" {
+			shown.Body = templateWords(business, text)
+		}
+		s.afterWhatsAppReply(ctx, tenant, app.view, shown, in)
 	}
 	return out, true, nil
+}
+
+// customerClientLock serializes sends of one client_id in a business, so
+// two sends of it at once on the customer's two lines (§11) never both go.
+func customerClientLock(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, clientID string) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('customer-client:' || $1::text || ':' || $2, 0))`, tenant, clientID)
+	return err
+}
+
+// customerRepeatLocked takes the client_id's lock and looks again, on
+// either line, for a message already kept under it: in the transaction
+// that keeps the message, so the look and the keeping are one.
+func (s *Server) customerRepeatLocked(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in customerSend) (*customerMessageView, error) {
+	if in.ClientID == "" {
+		return nil, nil
+	}
+	if err := customerClientLock(ctx, tx, tenant, in.ClientID); err != nil {
+		return nil, err
+	}
+	return s.customerRepeat(ctx, tx, tenant, in.pair, in.ClientID)
 }
 
 var errCustomerOnNewNumber = errors.New("this customer already has a conversation with the business's new WhatsApp number; answer them there")
@@ -1176,10 +1217,12 @@ func (s *Server) customerChatsUnread(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	var chats, msgs int
 	err := db.InTenantTx(r.Context(), s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
-		// A customer with both lines is one chat (§11).
+		// A customer with both lines is one chat (§11), archived or not as
+		// the list shows it: as its app thread is.
 		return tx.QueryRow(r.Context(), `SELECT count(DISTINCT COALESCE(c.linked_to, c.id)), count(*) FROM customer_messages m
 			JOIN customer_conversations c ON c.id = m.conversation_id AND c.tenant_id = m.tenant_id
-			WHERE m.tenant_id = $1 AND NOT m.mine AND m.read_at IS NULL AND NOT c.archived`, p.TenantID).Scan(&chats, &msgs)
+			LEFT JOIN customer_conversations a ON a.tenant_id = c.tenant_id AND a.id = c.linked_to
+			WHERE m.tenant_id = $1 AND NOT m.mine AND m.read_at IS NULL AND NOT COALESCE(a.archived, c.archived)`, p.TenantID).Scan(&chats, &msgs)
 	})
 	if err != nil {
 		s.fail(w, r, err)
