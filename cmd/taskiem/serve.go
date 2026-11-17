@@ -60,6 +60,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/moneydigest"
 	"github.com/israel-duff/taskiem/engine/moneylog"
+	"github.com/israel-duff/taskiem/engine/people"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/push"
@@ -1846,6 +1847,13 @@ func (e *engine) chat(srv *api.Server) {
 		// A business message on You: pushed to the person's own devices,
 		// else (a person's reply only) the SMS.
 		srv.Answered = &chatlinks.Tell{Pool: e.pool, Links: srv.ChatLinks, Messages: e.messages, Push: srv.PersonPusher()}
+	}
+	// Finding people (docs/spec/people-chatting.md §5): links, contact
+	// matching and adding contacts need the same key. The people chats
+	// (stream A) set Blocked and Chatting.
+	srv.People = &people.People{Pool: e.pool, Base: e.cfg.PublicURL}
+	if len(e.cfg.Messages.HashKey) == 32 {
+		srv.People.Key = e.cfg.Messages.HashKey
 	}
 	srv.AppGetURL, srv.UpdateChatTemplate = e.cfg.AppGetURL, e.cfg.UpdateChatTemplate
 	// A person's own sign-in code by SMS, through the same providers: no

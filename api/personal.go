@@ -38,6 +38,10 @@ var personalRoutes = regexp.MustCompile(`^(GET /v1/me|POST /v1/me/terms|GET /v1/
 	`GET /v1/me/orders(/[^/]+/[^/]+(/pay)?)?|(GET|POST) /v1/me/addresses|(PUT|DELETE) /v1/me/addresses/[^/]+|` +
 	// The person's account: deleting it, their photo, pushes, privacy (person_account.go).
 	`POST /v1/me/delete(/start|/passkey/options)?|(GET|PUT|DELETE) /v1/me/photo|(GET|PUT) /v1/me/notifications|GET /v1/me/privacy|` +
+	// Finding people: privacy towards people, contacts, the person's link,
+	// presence (people.go, stage 5a).
+	`(GET|PUT) /v1/me/privacy/people|(GET|POST) /v1/me/contacts|(PUT|DELETE) /v1/me/contacts/[^/]+|GET /v1/me/contacts/key|POST /v1/me/contacts/match|` +
+	`(GET|POST) /v1/me/link|GET /v1/me/link/qr|POST /v1/me/presence|` +
 
 	`GET /v1/me/storefront-orders|POST /v1/me/storefront-orders/confirm)$`)
 
@@ -45,9 +49,13 @@ var personalRoutes = regexp.MustCompile(`^(GET /v1/me|POST /v1/me/terms|GET /v1/
 // stage 3).
 var discoverPersonRoutes = regexp.MustCompile(`^(POST /v1/discover/search|GET /v1/discover/[^/]+|POST /v1/discover/[^/]+/report)$`)
 
+// peoplePersonRoutes are finding and seeing other people (people.go,
+// stage 5a).
+var peoplePersonRoutes = regexp.MustCompile(`^(POST /v1/people/lookup|GET /v1/people/links/[^/]+|GET /v1/people/[^/]+(/photo)?)$`)
+
 func personalAllowed(method, path string) bool {
 	route := method + " " + strings.TrimSuffix(path, "/")
-	return personalRoutes.MatchString(route) || discoverPersonRoutes.MatchString(route)
+	return personalRoutes.MatchString(route) || discoverPersonRoutes.MatchString(route) || peoplePersonRoutes.MatchString(route)
 }
 
 // deviceCookie names a browser, so a second proof made there holds for it

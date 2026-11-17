@@ -18,7 +18,9 @@ package api
 // name the person, and stay the businesses' records; every session ends;
 // their phone, devices, proofs, codes, passkeys and chat bindings go; their
 // own side goes (chats, files, saved addresses, devices for pushes, photo,
-// settings); the account's row is emptied (no name, email, password) and
+// settings), and so does what finding people kept (their privacy towards
+// people, contacts, link, presence; they leave every other person's
+// contacts, people-chatting §14); the account's row is emptied (no name, email, password) and
 // kept as a tombstone, so the businesses' records that name who did what
 // keep their keys. Audited in the platform's chain.
 
@@ -42,6 +44,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/ops"
+	"github.com/israel-duff/taskiem/engine/people"
 )
 
 // customerLeftWords is what a business's thread says once its customer
@@ -355,6 +358,13 @@ func (s *Server) deletePerson(ctx context.Context, person uuid.UUID, how, ip str
 		if err := tx.QueryRow(ctx, `SELECT taskiem_person_delete($1, $2)`, person, s.PhoneIndex.IndexKey()).Scan(&removed); err != nil {
 			return err
 		}
+		// Finding people (people-chatting §14): they leave every other
+		// person's contacts; their settings, contacts, link, presence and
+		// verdicts go.
+		left, err := people.ForgetTx(ctx, tx, person)
+		if err != nil {
+			return err
+		}
 		// The person's own side.
 		for _, q := range []string{
 			`DELETE FROM person_files WHERE person_id = $1`,
@@ -374,8 +384,8 @@ func (s *Server) deletePerson(ctx context.Context, person uuid.UUID, how, ip str
 			status = 'disabled', deleted_at = now() WHERE id = $1`, person, deletedEmail(person)); err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'person', $2, 'account.delete', $2, jsonb_build_object('how', $3::text, 'businesses_told', $4::int, 'index_rows', $5::bigint, 'ip', $6::text))`,
-			ops.PlatformChain, person.String(), how, told, removed, ip)
+		_, err = tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'person', $2, 'account.delete', $2, jsonb_build_object('how', $3::text, 'businesses_told', $4::int, 'index_rows', $5::bigint, 'ip', $6::text, 'contacts_left', $7::bigint))`,
+			ops.PlatformChain, person.String(), how, told, removed, ip, left)
 		return err
 	})
 	return told, err

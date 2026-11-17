@@ -193,3 +193,22 @@ deleteMyPhoto
 myNotifications
 putMyNotifications
 myPrivacy
+
+# Finding people (people-chatting §5, stage 5a): privacy towards people,
+# contacts, looking up a number, a person's link, contact matching and
+# presence. Photos and the QR code are the app's own image calls.
+myPeoplePrivacy
+putMyPeoplePrivacy
+myContacts
+addContact
+renameContact
+removeContact
+contactsKey
+matchContacts
+myPersonLink
+newPersonLink
+myPresence
+lookupPerson
+personByLink
+getPerson
+getPersonLinkCard

@@ -15420,6 +15420,89 @@ paths:
                 $ref: '#/components/schemas/Session'
         default:
           $ref: '#/components/responses/Error'
+  /v1/person-links/{code}:
+    get:
+      operationId: getPersonLinkCard
+      tags:
+      - You
+      summary: A person's card, by their link
+      description: 'For anyone, signed in or not: the name of the person a link names, and their photo only when they
+        show it to everyone (people-chatting §5.2), for the page the link opens. 410 `gone` for a link the person
+        replaced in the last 30 days ("This link no longer works"); 404 for any other code or a deleted account. Sixty
+        a minute per address.'
+      security: []
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [code, link, name, photo]
+                properties:
+                  code:
+                    type: string
+                  link:
+                    type: string
+                  name:
+                    type: string
+                  photo:
+                    oneOf:
+                    - type: 'null'
+                    - $ref: '#/components/schemas/PersonPhotoRef'
+                  app:
+                    type: string
+                    description: Where to get the Taskiem app, where it is listed.
+        '410':
+          description: The person made a new link
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [error, gone]
+                properties:
+                  error:
+                    type: string
+                  gone:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/person-links/{code}/photo:
+    get:
+      operationId: personLinkPhoto
+      tags:
+      - You
+      summary: A person's photo, by their link
+      description: For anyone, the photo of the person a link names when they show it to everyone; 404 otherwise.
+      security: []
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The photo
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
   /v1/chat-links/{code}:
     get:
       operationId: getChatLinkCard
@@ -22173,6 +22256,583 @@ paths:
                       how:
                         type: string
                         enum: [ask_in_chat]
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/privacy/people:
+    get:
+      operationId: myPeoplePrivacy
+      tags:
+      - You
+      summary: Your privacy towards people
+      description: 'Who can find the person by their number, find them from their contacts, message them, see their last
+        seen and online, and their photo; whether read ticks are on; and whether their number is shown to people they
+        chat with (people-chatting §5.4). The defaults until changed: find by number `contacts`, find from contacts on,
+        message `everyone` (as a request), last seen `contacts`, read ticks on, photo `contacts`, number not shown.
+        `contacts` means the people the person added to their own contacts.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeoplePrivacy'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putMyPeoplePrivacy
+      tags:
+      - You
+      summary: Change your privacy towards people
+      description: 'The settings given change; the others stay. Last seen and online are hidden both ways: a person who
+        does not show theirs to someone does not see theirs. Read ticks off means not seeing others'' either. 400 for
+        an audience that is not `everyone`, `contacts` or `nobody`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                find_by_number:
+                  $ref: '#/components/schemas/PeopleAudience'
+                find_from_contacts:
+                  type: boolean
+                message:
+                  $ref: '#/components/schemas/PeopleAudience'
+                last_seen:
+                  $ref: '#/components/schemas/PeopleAudience'
+                read_ticks:
+                  type: boolean
+                photo:
+                  $ref: '#/components/schemas/PeopleAudience'
+                show_number:
+                  type: boolean
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeoplePrivacy'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/contacts:
+    get:
+      operationId: myContacts
+      tags:
+      - You
+      summary: Your contacts on Taskiem
+      description: The people the person added (from a lookup by number, a link or contact matching), by the name shown
+        (the name they gave, else the person's own), each as the person may see them.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The contacts
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [contacts]
+                properties:
+                  contacts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PersonContact'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addContact
+      tags:
+      - You
+      summary: Add someone to your contacts
+      description: 'Adds a person the caller found by number (`POST /v1/people/lookup`), by link (`GET
+        /v1/people/links/{code}`) or by contact matching, with the `add_token` that answer gave (good for a day), and
+        a name to show them by. Adding again changes the source and, when given, the name. 403 `{add_token: true}`
+        without a good token; 400 for a name over 80 characters, oneself or more than 5000 contacts; 404 for a
+        deleted account; 503 where finding people is not set up.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [person_id, add_token, from]
+              properties:
+                person_id:
+                  type: string
+                  format: uuid
+                add_token:
+                  type: string
+                from:
+                  type: string
+                  enum: [number, link, contacts]
+                name:
+                  type: string
+                  maxLength: 80
+      responses:
+        '201':
+          description: The contact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonContact'
+        '403':
+          description: No good add token
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [error, add_token]
+                properties:
+                  error:
+                    type: string
+                  add_token:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/contacts/{person}:
+    put:
+      operationId: renameContact
+      tags:
+      - You
+      summary: Rename a contact
+      description: The name the person shows a contact by (empty or null for none, then the contact's own name). 404 when
+        they are not the person's contact.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: person
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name:
+                  type: [string, 'null']
+                  maxLength: 80
+      responses:
+        '200':
+          description: The contact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonContact'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeContact
+      tags:
+      - You
+      summary: Remove a contact
+      description: They are no longer among the person's contacts (so no longer "my contacts" in the person's settings).
+        They are not told. 404 when they were not.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: person
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/contacts/key:
+    get:
+      operationId: contactsKey
+      tags:
+      - You
+      summary: The key to hash your contacts with
+      description: 'Contact matching (people-chatting §5.3, opt-in): the week''s key (base64) the app hashes each of its
+        contacts'' numbers with, as SHA-256 of the key''s bytes, then `taskiem-contacts:` and the number in E.164, sent
+        as 64 hex digits; its id, sent back with the hashes; when to fetch a new one (hashes made with this key are
+        still answered for two days after); the most hashes a request and a day may carry; and the words to show
+        before asking for the contacts, with the method''s honest limit. Re-check at most once a day. 503 where
+        finding people is not set up.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The key
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [key_id, key, expires_at, hash, max_batch, max_per_day, words]
+                properties:
+                  key_id:
+                    type: string
+                  key:
+                    type: string
+                    description: 32 bytes, base64.
+                  expires_at:
+                    type: string
+                    format: date-time
+                  hash:
+                    type: string
+                  max_batch:
+                    type: integer
+                  max_per_day:
+                    type: integer
+                  words:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/contacts/match:
+    post:
+      operationId: matchContacts
+      tags:
+      - You
+      summary: Find people from your contacts
+      description: 'Which of the hashes sent (made with the key `key_id` names) are the verified phones of people who let
+        themselves be found from contacts, each as the person may see them with an `add_token`. Nothing of the request
+        is kept: the hashes are compared and forgotten; only how many were sent today is counted. The person themself
+        is never answered. 409 `{key_changed: true}` for a key no longer answered (fetch it again); 400 for more than
+        500 hashes or one that is not 64 hex digits; 429 past 5000 hashes or 20 requests a day, or too many from one
+        address.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [key_id, hashes]
+              properties:
+                key_id:
+                  type: string
+                hashes:
+                  type: array
+                  maxItems: 500
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: The people found
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [matches]
+                properties:
+                  matches:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [hash, person, add_token]
+                      properties:
+                        hash:
+                          type: string
+                        person:
+                          $ref: '#/components/schemas/PersonCard'
+                        add_token:
+                          type: string
+        '409':
+          description: The key changed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [error, key_changed]
+                properties:
+                  error:
+                    type: string
+                  key_changed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/link:
+    get:
+      operationId: myPersonLink
+      tags:
+      - You
+      summary: Your link
+      description: 'The person''s link, `https://<host>/p/{code}` (people-chatting §5.2), made the first time it is asked
+        for, with words to share it and its QR code''s address. Anyone opening it sees the person''s name, and their
+        photo when they show it to everyone; a signed-in person can start a chat (a request, unless known). 503 where
+        finding people is not set up.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The link
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonLink'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: newPersonLink
+      tags:
+      - You
+      summary: Make a new link
+      description: Replaces the person's link; the old one says "This link no longer works" for 30 days, then nothing.
+        Five a minute.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The new link
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonLink'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/link/qr:
+    get:
+      operationId: myPersonLinkQR
+      tags:
+      - You
+      summary: Your link as a QR code
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: format
+        in: query
+        schema:
+          type: string
+          enum: [svg, png]
+          default: svg
+      responses:
+        '200':
+          description: The QR code
+          content:
+            image/svg+xml:
+              schema:
+                type: string
+            image/png:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/presence:
+    post:
+      operationId: myPresence
+      tags:
+      - You
+      summary: Say you are here, or away
+      description: 'The app''s heartbeat while it is in front (`online: true`, about every 30 seconds; online for 75
+        seconds after each) and its goodbye when it goes to the background (`online: false`). Both set last seen.
+        Shown to others by their and the person''s last seen settings.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [online]
+              properties:
+                online:
+                  type: boolean
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/people/lookup:
+    post:
+      operationId: lookupPerson
+      tags:
+      - You
+      summary: Find someone by their number
+      description: 'The person whose verified phone a typed number is (read as the phone way in reads one), when their
+        "find me by my number" lets the caller find them: `{found: true, person, add_token}` (`self` for the caller''s
+        own number). Otherwise, the same answer for a number that is nobody''s and one whose person hides from the
+        caller: `{found: false, invite: {words, link}}`, "Not on Taskiem yet" and the words (with the caller''s own
+        link) to send from their phone by SMS or WhatsApp; Taskiem sends nothing. 400 `phone_invalid`; 429 past 50 a
+        day per person (`limit: day`) or too many at once or from one address (`limit: rate`).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+      responses:
+        '200':
+          description: Found, or not on Taskiem yet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonFound'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/people/links/{code}:
+    get:
+      operationId: personByLink
+      tags:
+      - You
+      summary: The person a link names
+      description: 'For the signed-in person opening someone''s link: that person as they may see them, with an
+        `add_token` (none for their own link). 410 `gone` for a link replaced in the last 30 days; 404 for any other.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The person
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonFound'
+        '410':
+          description: The person made a new link
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [error, gone]
+                properties:
+                  error:
+                    type: string
+                  gone:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/people/{id}:
+    get:
+      operationId: getPerson
+      tags:
+      - You
+      summary: Someone, as you may see them
+      description: 'A person by id as the caller may see them: their name ("Deleted account" for a deleted one), whether
+        each added the other, their photo, last seen and online where their settings allow (last seen hidden both
+        ways), whether read ticks go between them, and their number only when they chose to show it and the caller
+        is someone they chat with or added. 404 for no account.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The person
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonView'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/people/{id}/photo:
+    get:
+      operationId: personPhoto
+      tags:
+      - You
+      summary: Someone's photo
+      description: Their photo when their photo setting lets the caller see it (everyone, or their contacts when they
+        added the caller); 404 otherwise.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The photo
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
         default:
           $ref: '#/components/responses/Error'
   /v1/me/start:
@@ -39646,6 +40306,208 @@ components:
         updated_at:
           type: string
           format: date-time
+    PeopleAudience:
+      type: string
+      enum: [everyone, contacts, nobody]
+      description: Who a setting lets in. `contacts` is the people the person added to their own contacts.
+    PeoplePrivacy:
+      type: object
+      additionalProperties: false
+      required: [find_by_number, find_from_contacts, message, last_seen, read_ticks, photo, show_number]
+      description: A person's privacy towards other people (people-chatting §5.4).
+      properties:
+        find_by_number:
+          $ref: '#/components/schemas/PeopleAudience'
+        find_from_contacts:
+          type: boolean
+          description: People who have the person's number in their phone's contacts find them by contact matching.
+        message:
+          $ref: '#/components/schemas/PeopleAudience'
+        last_seen:
+          $ref: '#/components/schemas/PeopleAudience'
+        read_ticks:
+          type: boolean
+          description: Off means others do not see that the person read, and the person does not see theirs.
+        photo:
+          $ref: '#/components/schemas/PeopleAudience'
+        show_number:
+          type: boolean
+          description: The person's number is shown to people they chat with or added.
+    PersonPhotoRef:
+      type: object
+      additionalProperties: false
+      required: [url, updated_at]
+      properties:
+        url:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+    PersonCard:
+      type: object
+      additionalProperties: false
+      required: [id, name, deleted, contact_name, in_contacts, they_added_you, photo, last_seen_at, online, read_ticks]
+      description: A person as the viewer may see them, by that person's settings.
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Their own name; "Deleted account" for a deleted one.
+        deleted:
+          type: boolean
+        contact_name:
+          type: [string, 'null']
+          description: The name the viewer gave them in their contacts.
+        in_contacts:
+          type: boolean
+          description: The viewer added them.
+        they_added_you:
+          type: boolean
+          description: They added the viewer (so the viewer is among "my contacts" in their settings).
+        photo:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/PersonPhotoRef'
+          description: Only when their photo setting lets the viewer see it.
+        last_seen_at:
+          type: [string, 'null']
+          format: date-time
+          description: Only when their last seen setting lets the viewer see it and the viewer's lets them see the viewer's.
+        online:
+          type: [boolean, 'null']
+          description: Null when last seen is hidden.
+        read_ticks:
+          type: boolean
+          description: Read ticks go between them (both have them on).
+    PersonView:
+      type: object
+      additionalProperties: false
+      required: [id, name, deleted, contact_name, in_contacts, they_added_you, photo, last_seen_at, online, read_ticks, number]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Their own name; "Deleted account" for a deleted one.
+        deleted:
+          type: boolean
+        contact_name:
+          type: [string, 'null']
+          description: The name the viewer gave them in their contacts.
+        in_contacts:
+          type: boolean
+          description: The viewer added them.
+        they_added_you:
+          type: boolean
+          description: They added the viewer (so the viewer is among "my contacts" in their settings).
+        photo:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/PersonPhotoRef'
+          description: Only when their photo setting lets the viewer see it.
+        last_seen_at:
+          type: [string, 'null']
+          format: date-time
+          description: Only when their last seen setting lets the viewer see it and the viewer's lets them see the viewer's.
+        online:
+          type: [boolean, 'null']
+          description: Null when last seen is hidden.
+        read_ticks:
+          type: boolean
+          description: Read ticks go between them (both have them on).
+        number:
+          type: [string, 'null']
+          description: Their number (E.164), only when they chose to show it and the viewer is someone they chat with or added.
+    PersonContact:
+      type: object
+      additionalProperties: false
+      required: [id, name, deleted, contact_name, in_contacts, they_added_you, photo, last_seen_at, online, read_ticks, source, added_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Their own name; "Deleted account" for a deleted one.
+        deleted:
+          type: boolean
+        contact_name:
+          type: [string, 'null']
+          description: The name the viewer gave them in their contacts.
+        in_contacts:
+          type: boolean
+          description: The viewer added them.
+        they_added_you:
+          type: boolean
+          description: They added the viewer (so the viewer is among "my contacts" in their settings).
+        photo:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/PersonPhotoRef'
+          description: Only when their photo setting lets the viewer see it.
+        last_seen_at:
+          type: [string, 'null']
+          format: date-time
+          description: Only when their last seen setting lets the viewer see it and the viewer's lets them see the viewer's.
+        online:
+          type: [boolean, 'null']
+          description: Null when last seen is hidden.
+        read_ticks:
+          type: boolean
+          description: Read ticks go between them (both have them on).
+        source:
+          type: string
+          enum: [number, link, contacts, chat]
+        added_at:
+          type: string
+          format: date-time
+    PersonFound:
+      type: object
+      additionalProperties: false
+      required: [found]
+      description: 'A person found (by number or link): `found` with `person` and `add_token` (none for oneself, `self`);
+        or not on Taskiem yet, with the words to invite them.'
+      properties:
+        found:
+          type: boolean
+        self:
+          type: boolean
+        person:
+          $ref: '#/components/schemas/PersonCard'
+        add_token:
+          type: string
+          description: Proof for POST /v1/me/contacts, for a day.
+        invite:
+          type: object
+          additionalProperties: false
+          required: [words, link]
+          properties:
+            words:
+              type: string
+              description: What to send from the person's own phone (SMS or WhatsApp); Taskiem sends nothing.
+            link:
+              type: string
+              description: The person's own link; empty where links are not set up.
+    PersonLink:
+      type: object
+      additionalProperties: false
+      required: [code, url, created_at, words, qr]
+      properties:
+        code:
+          type: string
+        url:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        words:
+          type: string
+        qr:
+          type: string
+          description: The QR code's address (SVG; ?format=png for PNG).
     YouNotifications:
       type: object
       additionalProperties: false

@@ -44,6 +44,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/people"
 	"github.com/israel-duff/taskiem/engine/phoneindex"
 	"github.com/israel-duff/taskiem/engine/push"
 	"github.com/israel-duff/taskiem/engine/reach"
@@ -266,6 +267,10 @@ type Server struct {
 	// PhoneIndex finds a person's storefront orders by their verified
 	// phone (engine/phoneindex); nil: none are found.
 	PhoneIndex *phoneindex.Index
+	// People is finding people and what each may see of another
+	// (people.go, engine/people); nil: one with no key (no links, contact
+	// matching or adding contacts).
+	People *people.People
 	// Answered tells a person in the browser chat that a business answered
 	// them (engine/chatlinks.Tell); nil tells no one.
 	Answered chatlinks.Teller
@@ -419,6 +424,7 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/signup", s.signupOptions)
 		r.Get("/app/config", s.appConfig)              // the phone app's config (app_config.go)
 		r.Get("/chat-links/{code}", s.getChatLinkCard) // a business's card for its chat link (customer_links.go)
+		s.peoplePublicRoutes(r)                        // a person's card at their link (people.go)
 		if s.AllowSignup {
 			r.Post("/signup", s.signup) // self-serve signup (onboarding.go)
 		}
@@ -473,6 +479,7 @@ func (s *Server) Handler() http.Handler {
 			s.personOrderRoutes(r)              // Orders on You (person_orders.go)
 			s.personAddressRoutes(r)            // saved addresses (person_addresses.go)
 			s.personAccountRoutes(r)            // deleting the account, photo, pushes, privacy (person_account.go)
+			s.peopleRoutes(r)                   // finding people, contacts, the person's link, privacy towards people (people.go)
 			r.Get("/me/devices", s.listDevices) // Your phones (devices.go)
 			r.Delete("/me/devices/{id}", s.removeDevice)
 			r.Get("/me/passkeys", s.listPasskeys)
@@ -878,6 +885,8 @@ func (s *Server) Handler() http.Handler {
 		// A chat link's page, where no web app is served here to show it
 		// (customer_links.go).
 		r.Get("/m/{code}", s.chatLinkHTML)
+		// A person's link's page (people.go).
+		r.Get("/p/{code}", s.personLinkHTML)
 	}
 	return r
 }

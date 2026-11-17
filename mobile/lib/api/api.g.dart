@@ -834,6 +834,94 @@ class TaskiemApi {
     final j = await _t.send('GET', '/v1/me/privacy');
     return MyPrivacyResponse.fromJson(j as Map<String, dynamic>);
   }
+
+  /// Your privacy towards people (`GET /v1/me/privacy/people`)
+  Future<PeoplePrivacy> myPeoplePrivacy() async {
+    final j = await _t.send('GET', '/v1/me/privacy/people');
+    return PeoplePrivacy.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change your privacy towards people (`PUT /v1/me/privacy/people`)
+  Future<PeoplePrivacy> putMyPeoplePrivacy({required PutMyPeoplePrivacyRequest body}) async {
+    final j = await _t.send('PUT', '/v1/me/privacy/people', body: body.toJson());
+    return PeoplePrivacy.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your contacts on Taskiem (`GET /v1/me/contacts`)
+  Future<MyContactsResponse> myContacts() async {
+    final j = await _t.send('GET', '/v1/me/contacts');
+    return MyContactsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Add someone to your contacts (`POST /v1/me/contacts`)
+  Future<PersonContact> addContact({required AddContactRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/contacts', body: body.toJson());
+    return PersonContact.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Rename a contact (`PUT /v1/me/contacts/{person}`)
+  Future<PersonContact> renameContact({required RenameContactRequest body, required String person}) async {
+    final j = await _t.send('PUT', '/v1/me/contacts/${Uri.encodeComponent(person)}', body: body.toJson());
+    return PersonContact.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove a contact (`DELETE /v1/me/contacts/{person}`)
+  Future<void> removeContact({required String person}) async {
+    await _t.send('DELETE', '/v1/me/contacts/${Uri.encodeComponent(person)}');
+  }
+
+  /// The key to hash your contacts with (`GET /v1/me/contacts/key`)
+  Future<ContactsKeyResponse> contactsKey() async {
+    final j = await _t.send('GET', '/v1/me/contacts/key');
+    return ContactsKeyResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Find people from your contacts (`POST /v1/me/contacts/match`)
+  Future<MatchContactsResponse> matchContacts({required MatchContactsRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/contacts/match', body: body.toJson());
+    return MatchContactsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your link (`GET /v1/me/link`)
+  Future<PersonLink> myPersonLink() async {
+    final j = await _t.send('GET', '/v1/me/link');
+    return PersonLink.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a new link (`POST /v1/me/link`)
+  Future<PersonLink> newPersonLink() async {
+    final j = await _t.send('POST', '/v1/me/link');
+    return PersonLink.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Say you are here, or away (`POST /v1/me/presence`)
+  Future<void> myPresence({required MyPresenceRequest body}) async {
+    await _t.send('POST', '/v1/me/presence', body: body.toJson());
+  }
+
+  /// Find someone by their number (`POST /v1/people/lookup`)
+  Future<PersonFound> lookupPerson({required LookupPersonRequest body}) async {
+    final j = await _t.send('POST', '/v1/people/lookup', body: body.toJson());
+    return PersonFound.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// The person a link names (`GET /v1/people/links/{code}`)
+  Future<PersonFound> personByLink({required String code}) async {
+    final j = await _t.send('GET', '/v1/people/links/${Uri.encodeComponent(code)}');
+    return PersonFound.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Someone, as you may see them (`GET /v1/people/{id}`)
+  Future<PersonView> getPerson({required String id}) async {
+    final j = await _t.send('GET', '/v1/people/${Uri.encodeComponent(id)}');
+    return PersonView.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A person's card, by their link (`GET /v1/person-links/{code}`)
+  Future<GetPersonLinkCardResponse> getPersonLinkCard({required String code}) async {
+    final j = await _t.send('GET', '/v1/person-links/${Uri.encodeComponent(code)}');
+    return GetPersonLinkCardResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -7816,5 +7904,507 @@ class MyPrivacyResponseShownToBusinesses {
         'name': name,
         'phone': ?phone,
         'photo': photo,
+      };
+}
+
+/// A person's privacy towards other people (people-chatting §5.4).
+class PeoplePrivacy {
+  const PeoplePrivacy({required this.findByNumber, required this.findFromContacts, required this.lastSeen, required this.message, required this.photo, required this.readTicks, required this.showNumber});
+
+  final String findByNumber;
+  /// People who have the person's number in their phone's contacts find them by
+  /// contact matching.
+  final bool findFromContacts;
+  final String lastSeen;
+  final String message;
+  final String photo;
+  /// Off means others do not see that the person read, and the person does not
+  /// see theirs.
+  final bool readTicks;
+  /// The person's number is shown to people they chat with or added.
+  final bool showNumber;
+
+  factory PeoplePrivacy.fromJson(Map<String, dynamic> j) => PeoplePrivacy(
+        findByNumber: j['find_by_number'] as String,
+        findFromContacts: j['find_from_contacts'] as bool,
+        lastSeen: j['last_seen'] as String,
+        message: j['message'] as String,
+        photo: j['photo'] as String,
+        readTicks: j['read_ticks'] as bool,
+        showNumber: j['show_number'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'find_by_number': findByNumber,
+        'find_from_contacts': findFromContacts,
+        'last_seen': lastSeen,
+        'message': message,
+        'photo': photo,
+        'read_ticks': readTicks,
+        'show_number': showNumber,
+      };
+}
+
+class PutMyPeoplePrivacyRequest {
+  const PutMyPeoplePrivacyRequest({this.findByNumber, this.findFromContacts, this.lastSeen, this.message, this.photo, this.readTicks, this.showNumber});
+
+  final String? findByNumber;
+  final bool? findFromContacts;
+  final String? lastSeen;
+  final String? message;
+  final String? photo;
+  final bool? readTicks;
+  final bool? showNumber;
+
+  factory PutMyPeoplePrivacyRequest.fromJson(Map<String, dynamic> j) => PutMyPeoplePrivacyRequest(
+        findByNumber: j['find_by_number'] == null ? null : j['find_by_number'] as String,
+        findFromContacts: j['find_from_contacts'] == null ? null : j['find_from_contacts'] as bool,
+        lastSeen: j['last_seen'] == null ? null : j['last_seen'] as String,
+        message: j['message'] == null ? null : j['message'] as String,
+        photo: j['photo'] == null ? null : j['photo'] as String,
+        readTicks: j['read_ticks'] == null ? null : j['read_ticks'] as bool,
+        showNumber: j['show_number'] == null ? null : j['show_number'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'find_by_number': ?findByNumber,
+        'find_from_contacts': ?findFromContacts,
+        'last_seen': ?lastSeen,
+        'message': ?message,
+        'photo': ?photo,
+        'read_ticks': ?readTicks,
+        'show_number': ?showNumber,
+      };
+}
+
+class MyContactsResponse {
+  const MyContactsResponse({required this.contacts});
+
+  final List<PersonContact> contacts;
+
+  factory MyContactsResponse.fromJson(Map<String, dynamic> j) => MyContactsResponse(
+        contacts: (j['contacts'] as List).map((e) => PersonContact.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'contacts': contacts.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PersonContact {
+  const PersonContact({required this.addedAt, this.contactName, required this.deleted, required this.id, required this.inContacts, this.lastSeenAt, required this.name, this.online, this.photo, required this.readTicks, required this.source, required this.theyAddedYou});
+
+  final DateTime addedAt;
+  /// The name the viewer gave them in their contacts.
+  final Object? contactName;
+  final bool deleted;
+  final String id;
+  /// The viewer added them.
+  final bool inContacts;
+  /// Only when their last seen setting lets the viewer see it and the viewer's
+  /// lets them see the viewer's.
+  final Object? lastSeenAt;
+  /// Their own name; "Deleted account" for a deleted one.
+  final String name;
+  /// Null when last seen is hidden.
+  final Object? online;
+  /// Only when their photo setting lets the viewer see it.
+  final Object? photo;
+  /// Read ticks go between them (both have them on).
+  final bool readTicks;
+  final String source;
+  /// They added the viewer (so the viewer is among "my contacts" in their
+  /// settings).
+  final bool theyAddedYou;
+
+  factory PersonContact.fromJson(Map<String, dynamic> j) => PersonContact(
+        addedAt: DateTime.parse(j['added_at'] as String),
+        contactName: j['contact_name'],
+        deleted: j['deleted'] as bool,
+        id: j['id'] as String,
+        inContacts: j['in_contacts'] as bool,
+        lastSeenAt: j['last_seen_at'],
+        name: j['name'] as String,
+        online: j['online'],
+        photo: j['photo'],
+        readTicks: j['read_ticks'] as bool,
+        source: j['source'] as String,
+        theyAddedYou: j['they_added_you'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'added_at': addedAt.toUtc().toIso8601String(),
+        'contact_name': ?contactName,
+        'deleted': deleted,
+        'id': id,
+        'in_contacts': inContacts,
+        'last_seen_at': ?lastSeenAt,
+        'name': name,
+        'online': ?online,
+        'photo': ?photo,
+        'read_ticks': readTicks,
+        'source': source,
+        'they_added_you': theyAddedYou,
+      };
+}
+
+class AddContactRequest {
+  const AddContactRequest({required this.addToken, required this.from, this.name, required this.personId});
+
+  final String addToken;
+  final String from;
+  final String? name;
+  final String personId;
+
+  factory AddContactRequest.fromJson(Map<String, dynamic> j) => AddContactRequest(
+        addToken: j['add_token'] as String,
+        from: j['from'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+        personId: j['person_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'add_token': addToken,
+        'from': from,
+        'name': ?name,
+        'person_id': personId,
+      };
+}
+
+class RenameContactRequest {
+  const RenameContactRequest({this.name});
+
+  final Object? name;
+
+  factory RenameContactRequest.fromJson(Map<String, dynamic> j) => RenameContactRequest(
+        name: j['name'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': ?name,
+      };
+}
+
+class ContactsKeyResponse {
+  const ContactsKeyResponse({required this.expiresAt, required this.hash, required this.key, required this.keyId, required this.maxBatch, required this.maxPerDay, required this.words});
+
+  final DateTime expiresAt;
+  final String hash;
+  /// 32 bytes, base64.
+  final String key;
+  final String keyId;
+  final int maxBatch;
+  final int maxPerDay;
+  final String words;
+
+  factory ContactsKeyResponse.fromJson(Map<String, dynamic> j) => ContactsKeyResponse(
+        expiresAt: DateTime.parse(j['expires_at'] as String),
+        hash: j['hash'] as String,
+        key: j['key'] as String,
+        keyId: j['key_id'] as String,
+        maxBatch: (j['max_batch'] as num).toInt(),
+        maxPerDay: (j['max_per_day'] as num).toInt(),
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_at': expiresAt.toUtc().toIso8601String(),
+        'hash': hash,
+        'key': key,
+        'key_id': keyId,
+        'max_batch': maxBatch,
+        'max_per_day': maxPerDay,
+        'words': words,
+      };
+}
+
+class MatchContactsRequest {
+  const MatchContactsRequest({required this.hashes, required this.keyId});
+
+  final List<String> hashes;
+  final String keyId;
+
+  factory MatchContactsRequest.fromJson(Map<String, dynamic> j) => MatchContactsRequest(
+        hashes: (j['hashes'] as List).map((e) => e as String).toList(),
+        keyId: j['key_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'hashes': hashes.map((e) => e).toList(),
+        'key_id': keyId,
+      };
+}
+
+class MatchContactsResponse {
+  const MatchContactsResponse({required this.matches});
+
+  final List<MatchContactsResponseMatchesItem> matches;
+
+  factory MatchContactsResponse.fromJson(Map<String, dynamic> j) => MatchContactsResponse(
+        matches: (j['matches'] as List).map((e) => MatchContactsResponseMatchesItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'matches': matches.map((e) => e.toJson()).toList(),
+      };
+}
+
+class MatchContactsResponseMatchesItem {
+  const MatchContactsResponseMatchesItem({required this.addToken, required this.hash, required this.person});
+
+  final String addToken;
+  final String hash;
+  final PersonCard person;
+
+  factory MatchContactsResponseMatchesItem.fromJson(Map<String, dynamic> j) => MatchContactsResponseMatchesItem(
+        addToken: j['add_token'] as String,
+        hash: j['hash'] as String,
+        person: PersonCard.fromJson(j['person'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'add_token': addToken,
+        'hash': hash,
+        'person': person.toJson(),
+      };
+}
+
+/// A person as the viewer may see them, by that person's settings.
+class PersonCard {
+  const PersonCard({this.contactName, required this.deleted, required this.id, required this.inContacts, this.lastSeenAt, required this.name, this.online, this.photo, required this.readTicks, required this.theyAddedYou});
+
+  /// The name the viewer gave them in their contacts.
+  final Object? contactName;
+  final bool deleted;
+  final String id;
+  /// The viewer added them.
+  final bool inContacts;
+  /// Only when their last seen setting lets the viewer see it and the viewer's
+  /// lets them see the viewer's.
+  final Object? lastSeenAt;
+  /// Their own name; "Deleted account" for a deleted one.
+  final String name;
+  /// Null when last seen is hidden.
+  final Object? online;
+  /// Only when their photo setting lets the viewer see it.
+  final Object? photo;
+  /// Read ticks go between them (both have them on).
+  final bool readTicks;
+  /// They added the viewer (so the viewer is among "my contacts" in their
+  /// settings).
+  final bool theyAddedYou;
+
+  factory PersonCard.fromJson(Map<String, dynamic> j) => PersonCard(
+        contactName: j['contact_name'],
+        deleted: j['deleted'] as bool,
+        id: j['id'] as String,
+        inContacts: j['in_contacts'] as bool,
+        lastSeenAt: j['last_seen_at'],
+        name: j['name'] as String,
+        online: j['online'],
+        photo: j['photo'],
+        readTicks: j['read_ticks'] as bool,
+        theyAddedYou: j['they_added_you'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'contact_name': ?contactName,
+        'deleted': deleted,
+        'id': id,
+        'in_contacts': inContacts,
+        'last_seen_at': ?lastSeenAt,
+        'name': name,
+        'online': ?online,
+        'photo': ?photo,
+        'read_ticks': readTicks,
+        'they_added_you': theyAddedYou,
+      };
+}
+
+class PersonLink {
+  const PersonLink({required this.code, required this.createdAt, required this.qr, required this.url, required this.words});
+
+  final String code;
+  final DateTime createdAt;
+  /// The QR code's address (SVG; ?format=png for PNG).
+  final String qr;
+  final String url;
+  final String words;
+
+  factory PersonLink.fromJson(Map<String, dynamic> j) => PersonLink(
+        code: j['code'] as String,
+        createdAt: DateTime.parse(j['created_at'] as String),
+        qr: j['qr'] as String,
+        url: j['url'] as String,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': code,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'qr': qr,
+        'url': url,
+        'words': words,
+      };
+}
+
+class MyPresenceRequest {
+  const MyPresenceRequest({required this.online});
+
+  final bool online;
+
+  factory MyPresenceRequest.fromJson(Map<String, dynamic> j) => MyPresenceRequest(
+        online: j['online'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'online': online,
+      };
+}
+
+class LookupPersonRequest {
+  const LookupPersonRequest({required this.phone});
+
+  final String phone;
+
+  factory LookupPersonRequest.fromJson(Map<String, dynamic> j) => LookupPersonRequest(
+        phone: j['phone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'phone': phone,
+      };
+}
+
+/// A person found (by number or link): `found` with `person` and `add_token`
+/// (none for oneself, `self`); or not on Taskiem yet, with the words to invite
+/// them.
+class PersonFound {
+  const PersonFound({this.addToken, required this.found, this.invite, this.person, this.self});
+
+  /// Proof for POST /v1/me/contacts, for a day.
+  final String? addToken;
+  final bool found;
+  final PersonFoundInvite? invite;
+  final PersonCard? person;
+  final bool? self;
+
+  factory PersonFound.fromJson(Map<String, dynamic> j) => PersonFound(
+        addToken: j['add_token'] == null ? null : j['add_token'] as String,
+        found: j['found'] as bool,
+        invite: j['invite'] == null ? null : PersonFoundInvite.fromJson(j['invite'] as Map<String, dynamic>),
+        person: j['person'] == null ? null : PersonCard.fromJson(j['person'] as Map<String, dynamic>),
+        self: j['self'] == null ? null : j['self'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'add_token': ?addToken,
+        'found': found,
+        'invite': ?invite?.toJson(),
+        'person': ?person?.toJson(),
+        'self': ?self,
+      };
+}
+
+class PersonFoundInvite {
+  const PersonFoundInvite({required this.link, required this.words});
+
+  /// The person's own link; empty where links are not set up.
+  final String link;
+  /// What to send from the person's own phone (SMS or WhatsApp); Taskiem sends
+  /// nothing.
+  final String words;
+
+  factory PersonFoundInvite.fromJson(Map<String, dynamic> j) => PersonFoundInvite(
+        link: j['link'] as String,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'link': link,
+        'words': words,
+      };
+}
+
+class PersonView {
+  const PersonView({this.contactName, required this.deleted, required this.id, required this.inContacts, this.lastSeenAt, required this.name, this.number, this.online, this.photo, required this.readTicks, required this.theyAddedYou});
+
+  /// The name the viewer gave them in their contacts.
+  final Object? contactName;
+  final bool deleted;
+  final String id;
+  /// The viewer added them.
+  final bool inContacts;
+  /// Only when their last seen setting lets the viewer see it and the viewer's
+  /// lets them see the viewer's.
+  final Object? lastSeenAt;
+  /// Their own name; "Deleted account" for a deleted one.
+  final String name;
+  /// Their number (E.164), only when they chose to show it and the viewer is
+  /// someone they chat with or added.
+  final Object? number;
+  /// Null when last seen is hidden.
+  final Object? online;
+  /// Only when their photo setting lets the viewer see it.
+  final Object? photo;
+  /// Read ticks go between them (both have them on).
+  final bool readTicks;
+  /// They added the viewer (so the viewer is among "my contacts" in their
+  /// settings).
+  final bool theyAddedYou;
+
+  factory PersonView.fromJson(Map<String, dynamic> j) => PersonView(
+        contactName: j['contact_name'],
+        deleted: j['deleted'] as bool,
+        id: j['id'] as String,
+        inContacts: j['in_contacts'] as bool,
+        lastSeenAt: j['last_seen_at'],
+        name: j['name'] as String,
+        number: j['number'],
+        online: j['online'],
+        photo: j['photo'],
+        readTicks: j['read_ticks'] as bool,
+        theyAddedYou: j['they_added_you'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'contact_name': ?contactName,
+        'deleted': deleted,
+        'id': id,
+        'in_contacts': inContacts,
+        'last_seen_at': ?lastSeenAt,
+        'name': name,
+        'number': ?number,
+        'online': ?online,
+        'photo': ?photo,
+        'read_ticks': readTicks,
+        'they_added_you': theyAddedYou,
+      };
+}
+
+class GetPersonLinkCardResponse {
+  const GetPersonLinkCardResponse({this.app, required this.code, required this.link, required this.name, this.photo});
+
+  /// Where to get the Taskiem app, where it is listed.
+  final String? app;
+  final String code;
+  final String link;
+  final String name;
+  final Object? photo;
+
+  factory GetPersonLinkCardResponse.fromJson(Map<String, dynamic> j) => GetPersonLinkCardResponse(
+        app: j['app'] == null ? null : j['app'] as String,
+        code: j['code'] as String,
+        link: j['link'] as String,
+        name: j['name'] as String,
+        photo: j['photo'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'app': ?app,
+        'code': code,
+        'link': link,
+        'name': name,
+        'photo': ?photo,
       };
 }
