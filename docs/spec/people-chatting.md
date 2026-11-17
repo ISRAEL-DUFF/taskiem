@@ -1,6 +1,6 @@
 # People chatting with people (stage 5 of Taskiem for everyone)
 
-Status: **draft for review** (17 November 2026; encryption settled the same day, §17). Stage 5 of [Taskiem for everyone](taskiem-for-everyone.md) (§16, §20), under decision [0068](../decisions/0068-taskiem-for-everyone.md), which left this stage "its own plan and decisions". Nothing here is built. The questions in §18 are for the founder; a decision record (0069) follows the answers.
+Status: **plan, settled** (17 November 2026; every question settled the same day, §17; decision [0069](../decisions/0069-people-chatting-with-people.md) proposed). Stage 5 of [Taskiem for everyone](taskiem-for-everyone.md) (§16, §20), under decision [0068](../decisions/0068-taskiem-for-everyone.md), which left this stage "its own plan and decisions". Nothing here is built. The founder's answers are in §17.
 
 ## 1. Summary
 
@@ -60,7 +60,7 @@ Each person can make a link (and a QR code) to share, replaced at will, like a b
 Asked once, with plain words: "Find friends from your contacts? Their numbers are checked without being sent to us in readable form."
 
 - The app hashes each number (E.164) with a **contacts key** fetched from the server and rotated, and sends only the hashes, in batches, rate-limited. The server matches them against verified phones hashed with the same key and answers which hashes are people who allow being found that way. Nothing of the person's address book is stored: no hashes kept after the answer, no graph built.
-- Honest limit: a keyed hash of a phone number can be reversed by someone holding the key (Nigerian numbers are few enough to try them all), so this protects against leaks of what is sent, not against Taskiem itself. Stronger options (private set intersection, secure enclaves) exist and cost much more; §18 Q4.
+- Honest limit: a keyed hash of a phone number can be reversed by someone holding the key (Nigerian numbers are few enough to try them all), so this protects against leaks of what is sent, not against Taskiem itself. Stronger options (private set intersection, secure enclaves) exist and cost much more; §17 Q4.
 - Re-checked when the person opens Contacts, at most once a day.
 
 ### 5.4 Who can find me and message me
@@ -76,7 +76,7 @@ In You → Privacy:
 | Read ticks | On / Off (then I don't see others' either) | On |
 | Profile photo | Everyone / My contacts / Nobody | My contacts |
 
-The person's number is shown to people they chat with only if they choose to (§18 Q5). Names are shown; numbers are not, by default, which is the opposite of WhatsApp and safer for people meeting through Discover or groups.
+The person's number is shown to people they chat with only if they choose to (§17 Q5). Names are shown; numbers are not, by default, which is the opposite of WhatsApp and safer for people meeting through Discover or groups.
 
 ## 6. Encryption and where chats are kept
 
@@ -100,14 +100,14 @@ Three ways were weighed:
 - **Search** runs on the server across the person's own chats.
 - **Push** can carry the sender and the words, as the person's preview setting says.
 - **Files** get the checks business chats' files get (`engine/media`: the real type, PDFs without scripts, the malware scan), before the other side can open them.
-- **Shown plainly.** The app never calls people chats end-to-end encrypted. In a people chat's info: "Messages are stored securely by Taskiem. Taskiem does not read your chats with people except to keep you safe: when you report them, to stop spam, or when the law requires it" (wording for legal review, §18 Q13).
+- **Shown plainly.** The app never calls people chats end-to-end encrypted. In a people chat's info: "Messages are stored securely by Taskiem. Taskiem does not read your chats with people except to keep you safe: when you report them, to stop spam, or when the law requires it" (wording for legal review, §17 Q13).
 
 ### 6.3 What Taskiem does and does not do with people chats
 
-Readable by Taskiem's servers does not mean read. Proposed rules (§18 Q13–Q15):
+Readable by Taskiem's servers does not mean read. Proposed rules (§17 Q13–Q15):
 
 - **No one at Taskiem reads people chats** except a moderator handling a report of that chat, or under a lawful request (§8.5), each logged.
-- **No machine reads them for business features.** Order drafts, translations and reminders, which business chats get, are not run on people chats unless the person turns them on in that chat (§18 Q14).
+- **No machine reads them for business features.** Order drafts, translations and reminders, which business chats get, are not run on people chats unless the person turns them on in that chat (§17 Q14).
 - **Automated safety checks** may run on messages to stop spam, scams and abuse (§8.4), and keep nothing but their verdict.
 - **Never used to train models or for advertising.**
 
@@ -119,7 +119,7 @@ People who want chats only they can read will not get them here (WhatsApp offers
 
 - Text, photos, voice notes, files and location; replies, reactions, read ticks, typing, delete for me and delete for everyone (within a time limit), forward (with a "forwarded" mark), star.
 - **Requests.** A message from someone who is not a contact and has not chatted before arrives in **Requests**: the person sees the name, no photo unless allowed, and the first message, and can Accept, Delete or Block and report. Nothing tells the sender it was read until accepted. A sender can have a limited number of requests waiting (§8.2).
-- **Lists.** You's Chats tab holds business chats and people chats together, newest first, each marked by what it is (a business has its name and trust line; a person their name). §18 Q6 asks whether they should be split.
+- **Lists.** You's Chats tab holds business chats and people chats together, newest first, each marked by what it is (a business has its name and trust line; a person their name). §17 Q6 asks whether they should be split.
 - **Each copy is the person's.** As stage 2: each person keeps, archives and deletes their own. "Delete for everyone" removes it from the other person's copy on the server and their devices; a screenshot or a forward made before cannot be undone.
 
 ## 8. Safety at the scale of strangers
@@ -145,7 +145,7 @@ Signals from behaviour: how fast an account sends requests, how often they are d
 
 ### 8.5 Lawful requests
 
-Under Nigerian law (NDPA 2023, the Cybercrimes Act 2015) Taskiem may be required to give data. With B, that can include people chats' words. Taskiem answers only proper legal process, gives the least that is asked, tells the person where the law allows, and publishes how many requests it received. The process and the words in the privacy notice are agreed with a lawyer before 5a (§18 Q9).
+Under Nigerian law (NDPA 2023, the Cybercrimes Act 2015) Taskiem may be required to give data. With B, that can include people chats' words. Taskiem answers only proper legal process, gives the least that is asked, tells the person where the law allows, and publishes how many requests it received. The process and the words in the privacy notice are agreed with a lawyer before 5a (§17 Q9).
 
 ### 8.6 Age
 
@@ -153,9 +153,9 @@ The minimum age is 18 (§23 of the plan). People chats do not change that.
 
 ## 9. Groups (stage 5b)
 
-- Up to 256 people at first (§18 Q7), with admins who add, remove and choose who can post.
+- Up to 256 people at first (§17 Q7), with admins who add, remove and choose who can post.
 - **Joining:** added by an admin who has them as a contact, or by a group's invite link; people can choose that only contacts may add them to groups.
-- **Kept on the server** like one-to-one chats; someone who joins sees the group from when they joined (§18 Q16).
+- **Kept on the server** like one-to-one chats; someone who joins sees the group from when they joined (§17 Q16).
 - **Ordering together** (§10.3) works in groups.
 - **A business in a group:** not in this stage. A group can share a business's card and order from it (§10.3), but the business does not join a people group; it chats with the person who orders, in its own conversation.
 
@@ -198,19 +198,19 @@ Voice, then video, one-to-one, then group, over WebRTC through Taskiem's relays 
 - **Push:** a person's devices (stage 2's push on You), kinds for a person's message, a request, a group.
 - **Media:** checked and stored like business chats' media, per copy.
 - **Scale:** the business chat server sized for consumers: more connections, fan-out for groups, storage growth (people chats are kept), rate limits. A load test before stage 5b.
-- **Retention:** kept until the people delete them or their account (§18 Q12).
+- **Retention:** kept until the people delete them or their account (§17 Q12).
 
 ## 14. Privacy and data
 
 | What | Who keeps it | Deleted when |
 | --- | --- | --- |
-| A person's copy of a people chat, with its media | Taskiem, sealed under the person's key | The person deletes the chat or their account (or after the retention in §18 Q12) |
+| A person's copy of a people chat, with its media | Taskiem, sealed under the person's key | The person deletes the chat or their account (or after the retention in §17 Q12) |
 | A group's messages | Taskiem, sealed under the group's key | The group is deleted, or each message per the same retention |
 | Who talked to whom, when | Taskiem, with the messages | With them |
 | Contacts sent for matching | Nobody: answered and forgotten | At once |
 | Reports | Taskiem's moderators | Per the moderation policy |
 
-Deleting an account (stage 3) deletes the person's copies of people chats and their messages in groups' copies are shown as from "Deleted account" (§18 Q17); the other people keep their own copies.
+Deleting an account (stage 3) deletes the person's copies of people chats and their messages in groups' copies are shown as from "Deleted account" (§17 Q17); the other people keep their own copies.
 
 ## 15. Stages
 
@@ -229,28 +229,27 @@ Before 5a: the privacy notice and terms rewritten, including what Taskiem does w
 - **Lawful requests** for chats' words. Mitigation: the process in §8.5, legal review, the published count.
 - **Abuse by strangers,** including fraud ("send me money for this"). Mitigation: requests, limits, the transfer warning, automated checks on strangers' messages, reporting.
 - **Nobody comes.** People stay on WhatsApp. Mitigation: build only what businesses make better (sharing, ordering together, splitting) first; measure use before groups and calls.
-- **Cost:** consumer-scale storage, delivery, media and calls. Mitigation: retention (§18 Q12), media size limits, calls last.
+- **Cost:** consumer-scale storage, delivery, media and calls. Mitigation: retention (§17 Q12), media size limits, calls last.
 
 ## 17. Settled
 
+All settled by the founder on 17 November 2026; decision [0069](../decisions/0069-people-chatting-with-people.md) records them.
+
 | # | Question | Answer |
 | --- | --- | --- |
-| 1 | Encryption | **B: encrypted on the server, readable by Taskiem's servers**, as business chats (founder, 17 November 2026). Not end-to-end; said plainly (§6) |
+| 1 | Encryption | **B: encrypted on the server, readable by Taskiem's servers**, as business chats. Not end-to-end; said plainly (§6) |
+| 3 | Who can message me by default | Everyone, as a request |
+| 4 | Contact matching | Keyed hashes with a rotated key, stated honestly in the privacy notice |
+| 5 | Showing numbers | Hidden from people chatted with unless the person chooses to show it |
+| 6 | The Chats list | One list with businesses and people, each marked |
+| 7 | Group size at first | 256 |
+| 8 | Money between people | Share cards (Taskiem moves no money), and paying the business for your share when ordering together |
+| 9 | Lawful requests | The process in §8.5, agreed with a lawyer, with the privacy notice, before 5a |
+| 12 | Retention of people chats | Kept until the people delete them or their account |
+| 13 | What Taskiem does with people chats | No human reads them except for a report or a lawful request, each logged; never used to train models or for advertising; in the privacy notice |
+| 14 | Business features in people chats | Off (order drafts, translations); opt-in per chat later |
+| 15 | Automated safety checks | Yes, on strangers' messages (requests and new chats), keeping only the verdict |
+| 16 | Joining a group | See it from when you joined |
+| 17 | A deleted account's messages in groups | Kept, shown as "Deleted account" |
 
-## 18. Questions for the founder
-
-Still open (proposals in brackets). Q2, Q10 and Q11 of the first draft fell away with B: push carries the words as the person's setting says, there is no backup step, and the web works without a phone.
-
-3. **Who can message me by default:** everyone as a request, or contacts only? (Everyone, as a request.)
-4. **Contact matching:** keyed hashes with a rotated key, or private set intersection? (Keyed hashes, stated honestly in the privacy notice.)
-5. **Showing numbers:** hide a person's number from people they chat with unless they choose to show it? (Hide by default.)
-6. **The Chats list:** one list with businesses and people, or two? (One list, marked.)
-7. **Group size** at first: (256.)
-8. **Money between people:** share cards plus paying the business for your share, or a licensed partner wallet? (Share cards and pay-your-share now.)
-9. **Lawful requests:** the process in §8.5 and the privacy notice agreed with a lawyer before 5a. (Yes.)
-12. **Retention of people chats:** kept until the people delete them, or deleted after a time (e.g. 2 years) unless kept? (Kept until deleted, as WhatsApp's backups are; storage cost watched.)
-13. **What Taskiem does with people chats** (§6.3): no human reads them except for a report or a lawful request, each logged; never used for training or advertising. (Yes, and in the privacy notice.)
-14. **Business features in people chats** (order drafts, translations): off, or opt-in per chat? (Off; opt-in per chat later.)
-15. **Automated safety checks** on strangers' messages (requests and new chats) for scams: yes or no? (Yes, keeping only the verdict.)
-16. **Joining a group:** see its history from before you joined, or from when you joined? (From when you joined.)
-17. **A deleted account's messages in groups:** removed from the group, or kept as "Deleted account"? (Kept, as "Deleted account", so the group's conversation still makes sense.)
+Questions 2, 10 and 11 of the first draft fell away with B (push carries the words as the person's setting says; no backup step; the web works without a phone).
