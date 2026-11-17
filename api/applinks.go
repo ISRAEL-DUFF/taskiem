@@ -77,7 +77,10 @@ func (a AppLinks) PasskeyOrigins() []string {
 }
 
 // appPaths are the pages the app opens; everything else stays on the web.
-var appPaths = []string{"/chat", "/chat/*", "/m/*", "/second-proof", "/invoices/*", "/trade-orders/*", "/storefront/orders/*", "/bills/*", "/purchases/*", "/approvals", "/approvals/*", "/reset-password"}
+// You's pages (docs/spec/taskiem-for-everyone.md §7): its chats (a push
+// opens /you/chats/{id}), Orders and one order, Discover and a business's
+// profile. You's settings stay on the web.
+var appPaths = []string{"/chat", "/chat/*", "/m/*", "/you", "/you/chats/*", "/you/orders", "/you/orders/*", "/you/discover", "/you/discover/*", "/second-proof", "/invoices/*", "/trade-orders/*", "/storefront/orders/*", "/bills/*", "/purchases/*", "/approvals", "/approvals/*", "/reset-password"}
 
 // assetLinks is Android's Digital Asset Links: the app handles these links
 // and shares these sign-ins (passkeys).
