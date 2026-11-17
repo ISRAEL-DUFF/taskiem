@@ -393,7 +393,7 @@ class _Grid extends StatelessWidget {
 /// lime, stock and bills orange, money and invoices blue…).
 Color toolAccent(TkLook look, String key) => switch (key) {
   'sell' || 'money' || 'handover' => look.lime,
-  'products' || 'orders' || 'order' || 'statement' => look.teal,
+  'products' || 'orders' || 'order' || 'statement' || 'customers' => look.teal,
   'services' || 'tables' || 'briefing' || 'book' || 'availability' || 'tasks' => look.violet,
   'stock' || 'bills' || 'offer' => look.orange,
   'prices' || 'purchases' || 'invoices' || 'invoice-them' || 'clock-in' || 'clock-out' => look.blue,

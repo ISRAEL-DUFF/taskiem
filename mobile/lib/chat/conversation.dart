@@ -24,6 +24,7 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'cards.dart';
+import 'chat_link_page.dart' show showCustomersSheet;
 import 'chats.dart';
 import 'availability_sheet.dart' show showAvailabilitySheet;
 import 'book_sheet.dart' show bookLine, linkServices, showBookSheet;
@@ -906,6 +907,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
       );
       return;
     }
+    // Customers: your chat link and an offer, in a sheet of their own.
+    if (tool.key == 'customers') {
+      unawaited(showCustomersSheet(context, widget.data.chats.auth));
+      return;
+    }
     if (tool.key == 'sell') {
       unawaited(showSellSheet(context, auth: widget.data.chats.auth, onSold: landed));
       return;
@@ -1595,28 +1601,6 @@ const _lineDrift = 0.31;
 
 Widget _maybeIntrinsic(bool on, Widget child) => on ? IntrinsicWidth(child: child) : child;
 
-/// Your own bubble's words: white on pine in the light (the dark's deep
-/// green keeps the light words it has), lime where the web tints.
-Widget _ownWords(BuildContext context, bool on, Widget child) {
-  if (!on || TkTheme.of(context).mode == TkMode.dark) return child;
-  const white = Color(0xFFFFFFFF);
-  return TkTheme.recolour(
-    context,
-    (t) => t.copyWith(
-      text: white,
-      muted: const Color(0xB3FFFFFF),
-      accent: const Color(0xFFC8F169),
-      tintText: const Color(0xFFC8F169),
-      tint: const Color(0x1AFFFFFF),
-      accentSoft: const Color(0x1AFFFFFF),
-      panel: const Color(0x1AFFFFFF),
-      panel2: const Color(0x1AFFFFFF),
-      border: const Color(0x33FFFFFF),
-    ),
-    child,
-  );
-}
-
 /// lib/thread.ts startsRun: the first of a run has the bubble's tail.
 bool _startsRun(LinkMessage prev, LinkMessage m) {
   if (prev.kind == 'card' || m.kind == 'card') return true;
@@ -1903,7 +1887,7 @@ class _Bubble extends StatelessWidget {
                             borderRadius: radius,
                             boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 1)],
                           ),
-                    child: _ownWords(
+                    child: ownWords(
                       context,
                       mine && card == null,
                       Stack(

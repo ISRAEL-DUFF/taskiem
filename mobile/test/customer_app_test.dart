@@ -15,6 +15,9 @@ import 'package:taskiem/chat/chat_link_page.dart';
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/composer.dart';
 import 'package:taskiem/chat/customer.dart';
+import 'package:taskiem/kit/sheet.dart' show TkKitField;
+import 'package:taskiem/chat/tools.dart' show toolsFor;
+import 'package:taskiem/kit/kit.dart' show TkButton;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
@@ -263,7 +266,7 @@ void main() {
     await press(t, find.text('Chat with us, in Taskiem'));
     expect(api.body(api.sent('PUT', '/v1/customers/chat-settings').last), {'storefront_button': 'taskiem'});
 
-    await t.enterText(find.byType(EditableText).last, 'Closed for prayers. Back at 2pm.');
+    await t.enterText(find.descendant(of: find.ancestor(of: find.text('Your words'), matching: find.byType(TkKitField)), matching: find.byType(EditableText)), 'Closed for prayers. Back at 2pm.');
     await t.pump();
     await press(t, find.text('Save the words'));
     expect(api.body(api.sent('PUT', '/v1/settings/customer-chats').single), {'closed_words': 'Closed for prayers. Back at 2pm.'});
@@ -289,6 +292,130 @@ void main() {
     expect(find.text('Make a new link'), findsNothing);
     expect(find.text('The owner, or someone who manages your shop, changes these.'), findsOneWidget);
     await expectPressable(t);
+    await drain(t);
+  });
+
+  testWidgets('cards: an invoice of theirs and a delivery; the same reply again after no answer keeps its client id', (t) async {
+    phone(t);
+    final api = business();
+    final sent = <Map<String, dynamic>>[];
+    var lost = true;
+    api.routes['POST /v1/customer-chats/cc1/messages'] = (r) {
+      final b = api.body(r);
+      sent.add(b);
+      if (lost) return answer({'error': 'Bad gateway'}, 502);
+      return answer({
+        'id': 'r${sent.length}',
+        'mine': true,
+        'kind': 'card',
+        'body': 'Invoice INV-0007',
+        'card': {'type': 'invoice', 'invoice_id': 'inv7', 'reference': 'INV-0007', 'title': 'Invoice INV-0007', 'status': 'sent', 'total_kobo': 1250000},
+        'delivery': 'delivered',
+        'read_at': null,
+        'created_at': '2026-11-16T10:29:00Z',
+      }, 201);
+    };
+    api.routes['GET /v1/invoices'] = (_) => {
+      'invoices': [
+        {'id': 'inv1', 'number': 'INV-0001', 'status': 'paid', 'due_kobo': 0, 'customer': {'name': 'Bola Stores'}},
+        {'id': 'inv7', 'number': 'INV-0007', 'status': 'sent', 'due_kobo': 1250000, 'customer': {'name': 'Tolu Ade'}},
+        {'id': 'inv9', 'number': 'INV-0009', 'status': 'draft', 'due_kobo': 300000, 'customer': {'name': 'Tolu Ade'}},
+      ],
+    };
+    final chats = ChatsData(api.auth(permissions: const ['storefront.manage', 'order.handle', 'invoice.manage'], personal: false), now: () => at);
+    final d = CustomerData(chats, 'cc1', follow: false);
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: CustomerScreen(data: d, pickers: const _Pick())));
+    await settle(t);
+    final more = find.bySemanticsLabel('Send an order, a pay link, a booking, a product or a file');
+    await press(t, more);
+    expect(find.text('A delivery'), findsOneWidget);
+    await press(t, find.text('An invoice'));
+    expect(find.text('Invoice INV-0009'), findsNothing, reason: 'a draft is not for customers');
+    expect(find.text('Tolu Ade · this customer'), findsOneWidget, reason: 'theirs first');
+    await press(t, find.text('Invoice INV-0007'));
+    expect(sent.single['card'], {'type': 'invoice', 'invoice_id': 'inv7'});
+    expect(find.text('Bad gateway'), findsOneWidget);
+
+    lost = false;
+    await press(t, more);
+    await press(t, find.text('An invoice'));
+    await press(t, find.text('Invoice INV-0007'));
+    expect(sent, hasLength(2));
+    expect(sent[1]['client_id'], sent[0]['client_id'], reason: 'it may have arrived: the same id');
+    expect(find.text('₦12,500 due'), findsOneWidget);
+    expect(find.text('INVOICE'), findsOneWidget);
+    await drain(t);
+    d.dispose();
+  });
+
+  testWidgets('an erased customer: said plainly, no box', (t) async {
+    phone(t);
+    final api = business(c: {...thread(), 'phone': ''});
+    final d = await openThread(t, api);
+    expect(find.text('This customer’s details were erased, so this conversation is closed.'), findsOneWidget);
+    expect(find.byType(EditableText), findsNothing);
+    await drain(t);
+    d.dispose();
+  });
+
+  testWidgets('the Customers tool: your chat link to share, and an offer to those who said yes', (t) async {
+    phone(t);
+    final api = Api();
+    api.routes['GET /v1/customers/chat-link'] = (_) => {
+      'code': 'k7m2q9x4pz',
+      'url': 'https://app.taskiem.com/m/k7m2q9x4pz',
+      'created_at': '2026-11-16T08:00:00Z',
+      'words': 'Chat with Mama’s Kitchen on Taskiem: https://app.taskiem.com/m/k7m2q9x4pz',
+      'qr': '/v1/customers/chat-link/qr',
+      'settings': {'takes_chats': true, 'storefront_button': 'both', 'link_in_updates': null, 'updates_link': true},
+    };
+    var tries = 0;
+    api.routes['POST /v1/customer-chats/offers'] = (_) {
+      tries++;
+      if (tries == 1) return answer({'error': 'Bad gateway'}, 502);
+      return {'sent': 12, 'skipped': 3};
+    };
+    final shared = <String>[];
+    final was = shareWords;
+    shareWords = (w) async => shared.add(w);
+    addTearDown(() => shareWords = was);
+    final auth = api.auth(permissions: const ['order.handle'], personal: false);
+    expect(toolsFor(auth.can).map((x) => x.key), contains('customers'));
+    expect(toolsFor((_) => false).map((x) => x.key), isNot(contains('customers')));
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: Builder(builder: (context) => Center(child: TkButton(label: 'Open', onPressed: () => showCustomersSheet(context, auth))))));
+    await press(t, find.text('Open'));
+    expect(find.text('https://app.taskiem.com/m/k7m2q9x4pz'), findsOneWidget);
+    await press(t, find.text('Share the link'));
+    expect(shared, ['Chat with Mama’s Kitchen on Taskiem: https://app.taskiem.com/m/k7m2q9x4pz']);
+    await t.enterText(find.byType(EditableText).last, 'Small chops, 20% off this weekend');
+    await t.pump();
+    await press(t, find.text('Send the offer'));
+    expect(find.text('Bad gateway'), findsOneWidget);
+    await press(t, find.text('Send the offer'));
+    final sent = api.sent('POST', '/v1/customer-chats/offers');
+    expect(sent, hasLength(2));
+    expect(api.body(sent[1])['text'], 'Small chops, 20% off this weekend');
+    expect(api.body(sent[1])['client_id'], api.body(sent[0])['client_id'], reason: 'one offer, however often pressed');
+    expect(find.textContaining('Sent to 12 customers. 3 skipped'), findsOneWidget);
+    await drain(t);
+  });
+
+  testWidgets('Customer chats with the Orders area off: said, and chats cannot be turned on', (t) async {
+    phone(t, 2400);
+    final api = Api();
+    api.routes['GET /v1/customers/chat-link'] = (_) => {
+      'code': 'k7m2q9x4pz',
+      'url': 'https://app.taskiem.com/m/k7m2q9x4pz',
+      'created_at': '2026-11-16T08:00:00Z',
+      'words': 'Chat with us: https://app.taskiem.com/m/k7m2q9x4pz',
+      'qr': '/v1/customers/chat-link/qr',
+      'settings': {'takes_chats': false, 'orders_off': true, 'storefront_button': 'both', 'link_in_updates': null, 'updates_link': true},
+    };
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ChatLinkPage(auth: api.auth(permissions: const ['storefront.manage', 'order.handle'], personal: false))));
+    await settle(t);
+    expect(find.textContaining('Your Orders area is off'), findsOneWidget);
+    await press(t, find.bySemanticsLabel('Take chats in the Taskiem app').last);
+    expect(api.sent('PUT', '/v1/customers/chat-settings'), isEmpty);
     await drain(t);
   });
 }
