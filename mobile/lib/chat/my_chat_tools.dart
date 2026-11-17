@@ -27,6 +27,7 @@ import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show showBookSheet, whenLabel;
 import 'chats.dart' show ChatAvatar;
 import 'door.dart';
+import 'addresses.dart' show addressLine;
 import 'my_chat.dart';
 import 'order_sheet.dart' show BagBar, QtyStepper;
 import 'words.dart';
@@ -120,7 +121,15 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
   String _fulfilment = '';
   String? _zone;
   final _address = TextEditingController();
+  final _landmark = TextEditingController();
   final _note = TextEditingController();
+
+  /// The person's saved addresses (§13), offered for a delivery; the one
+  /// picked (null: an address typed), and whether a typed one is saved.
+  List<SavedAddress> _saved = const [];
+  String? _addressId;
+  bool _saveIt = false;
+  final _saveAs = TextEditingController();
   bool _busy = false;
   String? _error;
   String? _done;
@@ -144,12 +153,23 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
     }, onError: (Object e) {
       if (mounted) setState(() => _loadError = sayFailure(e));
     });
+    d.api.myAddresses().then((r) {
+      if (!mounted) return;
+      setState(() {
+        _saved = r.addresses;
+        _addressId = r.addresses.where((a) => a.default_).firstOrNull?.id ?? r.addresses.firstOrNull?.id;
+      });
+    }, onError: (Object _) {
+      // None offered: the address is typed.
+    });
     _address.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
     _address.dispose();
+    _landmark.dispose();
+    _saveAs.dispose();
     _note.dispose();
     super.dispose();
   }
@@ -183,11 +203,15 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
     final s = _shop!;
     if (_fulfilment == 'delivery') {
       if (s.zones.isNotEmpty && _zone == null) return setState(() => _error = 'Choose where to deliver to.');
-      if (_address.text.trim().isEmpty) return setState(() => _error = 'Write the address to deliver to.');
+      if (_addressId == null && _address.text.trim().isEmpty) return setState(() => _error = 'Write the address to deliver to.');
+      if (_addressId == null && _saveIt && _saveAs.text.trim().isEmpty) return setState(() => _error = 'Give the address a name (Home, Work) to save it.');
     }
+    final delivery = _fulfilment == 'delivery';
+    final saved = delivery ? _addressId : null;
+    final typed = delivery && saved == null;
     setState(() => (_busy = true, _error = null));
     final lines = [for (final e in _bag.entries) PlaceMyChatOrderRequestLinesItem(itemId: e.key, quantity: e.value)];
-    final shape = '${_bag.entries.map((e) => '${e.key}:${e.value}').join(',')}|$_fulfilment|$_zone|${_address.text.trim()}|${_note.text.trim()}';
+    final shape = '${_bag.entries.map((e) => '${e.key}:${e.value}').join(',')}|$_fulfilment|$_zone|$saved|${_address.text.trim()}|${_landmark.text.trim()}|${_note.text.trim()}';
     if (shape != _keyFor) {
       _key = 'order-${uuid4()}';
       _keyFor = shape;
@@ -200,13 +224,25 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
           lines: lines,
           fulfilment: _fulfilment.isEmpty ? null : _fulfilment,
           zone: _fulfilment == 'delivery' ? _zone : null,
-          address: _fulfilment == 'delivery' ? _address.text.trim() : null,
+          address: typed ? _address.text.trim() : null,
+          landmark: typed && _landmark.text.trim().isNotEmpty ? _landmark.text.trim() : null,
+          addressId: saved,
           note: _note.text.trim().isEmpty ? null : _note.text.trim(),
         ),
       );
       unawaited(d.refresh());
+      // Save this address: kept on the person's side once the order went.
+      var words = 'Order ${r.order.reference} sent to ${d.name}';
+      if (typed && _saveIt) {
+        try {
+          await d.api.addMyAddress(
+            body: SavedAddressIn(label: _saveAs.text.trim(), line: _address.text.trim(), landmark: _landmark.text.trim().isEmpty ? null : _landmark.text.trim()),
+          );
+        } on Object catch (e) {
+          words = '$words. The address wasn’t saved: ${sayFailure(e)}';
+        }
+      }
       if (!mounted) return;
-      final words = 'Order ${r.order.reference} sent to ${d.name}';
       setState(() => _done = words);
       closeSoon();
     } on Object catch (e) {
@@ -340,7 +376,31 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
             title: 'Deliver to',
             children: [
               for (final z in s.zones) choice(_zone == z.name, '${z.name} · ${naira(z.feeKobo)}', () => setState(() => _zone = z.name)),
-              TkKitField(label: 'Address', child: TkTextBox(controller: _address, lines: 2, max: 300)),
+            ],
+          ),
+        if (_fulfilment == 'delivery')
+          TkFormGroup(
+            title: _saved.isEmpty ? null : 'Address',
+            children: [
+              // A saved address (§13), or one typed here.
+              for (final a in _saved)
+                TkChoiceRow(
+                  control: TkRadio(checked: _addressId == a.id),
+                  label: Text('${a.label} · ${addressLine(a)}', style: tkText(size: 15, color: t.text)),
+                  onTap: () => setState(() => _addressId = a.id),
+                ),
+              if (_saved.isNotEmpty) choice(_addressId == null, 'Another address', () => setState(() => _addressId = null)),
+              if (_addressId == null) ...[
+                TkKitField(label: 'Address', child: TkTextBox(controller: _address, lines: 2, max: 300)),
+                TkKitField(label: 'Landmark', hint: 'Optional: what the rider looks for', child: TkTextBox(controller: _landmark, max: 200)),
+                TkChoiceRow(
+                  radio: false,
+                  control: TkCheckbox(checked: _saveIt),
+                  label: Text('Save this address', style: tkText(size: 15, color: t.text)),
+                  onTap: () => setState(() => _saveIt = !_saveIt),
+                ),
+                if (_saveIt) TkKitField(label: 'Name it', hint: 'Home, Work', child: TkTextBox(controller: _saveAs, max: 40)),
+              ],
             ],
           ),
         TkFormGroup(children: [TkKitField(label: 'Note for them', hint: 'Optional', child: TkTextBox(controller: _note, lines: 2, max: 500))]),
