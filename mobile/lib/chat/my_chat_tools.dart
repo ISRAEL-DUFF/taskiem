@@ -27,7 +27,7 @@ import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show showBookSheet, whenLabel;
 import 'chats.dart' show ChatAvatar;
 import 'door.dart';
-import 'addresses.dart' show addressLine;
+import 'addresses.dart' show addressLine, maxSavedAddresses, maxSavedLine;
 import 'my_chat.dart';
 import 'order_sheet.dart' show BagBar, QtyStepper;
 import 'words.dart';
@@ -129,6 +129,10 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
   List<SavedAddress> _saved = const [];
   String? _addressId;
   bool _saveIt = false;
+
+  /// The person chose an address (or Another address) before the saved
+  /// ones came: a late answer leaves the choice alone.
+  bool _chose = false;
   final _saveAs = TextEditingController();
   bool _busy = false;
   String? _error;
@@ -157,7 +161,10 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
       if (!mounted) return;
       setState(() {
         _saved = r.addresses;
-        _addressId = r.addresses.where((a) => a.default_).firstOrNull?.id ?? r.addresses.firstOrNull?.id;
+        // The default, unless the person chose already or is typing one.
+        if (!_chose && _address.text.trim().isEmpty) {
+          _addressId = r.addresses.where((a) => a.default_).firstOrNull?.id ?? r.addresses.firstOrNull?.id;
+        }
       });
     }, onError: (Object _) {
       // None offered: the address is typed.
@@ -204,7 +211,9 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
     if (_fulfilment == 'delivery') {
       if (s.zones.isNotEmpty && _zone == null) return setState(() => _error = 'Choose where to deliver to.');
       if (_addressId == null && _address.text.trim().isEmpty) return setState(() => _error = 'Write the address to deliver to.');
-      if (_addressId == null && _saveIt && _saveAs.text.trim().isEmpty) return setState(() => _error = 'Give the address a name (Home, Work) to save it.');
+      if (_canSave && _saveIt && _address.text.trim().length > maxSavedLine) {
+        return setState(() => _error = 'To save it, keep the address to $maxSavedLine letters.');
+      }
     }
     final delivery = _fulfilment == 'delivery';
     final saved = delivery ? _addressId : null;
@@ -233,10 +242,17 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
       unawaited(d.refresh());
       // Save this address: kept on the person's side once the order went.
       var words = 'Order ${r.order.reference} sent to ${d.name}';
-      if (typed && _saveIt) {
+      if (typed && _saveIt && _canSave) {
         try {
+          final name = _saveAs.text.trim();
           await d.api.addMyAddress(
-            body: SavedAddressIn(label: _saveAs.text.trim(), line: _address.text.trim(), landmark: _landmark.text.trim().isEmpty ? null : _landmark.text.trim()),
+            body: SavedAddressIn(
+              label: name.isEmpty ? 'Home' : name,
+              line: _address.text.trim(),
+              // The zone delivered to is its area, as the web's.
+              area: (_zone ?? '').isEmpty ? null : _zone,
+              landmark: _landmark.text.trim().isEmpty ? null : _landmark.text.trim(),
+            ),
           );
         } on Object catch (e) {
           words = '$words. The address wasn’t saved: ${sayFailure(e)}';
@@ -249,6 +265,11 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
       if (mounted) setState(() => (_error = sayFailure(e), _busy = false));
     }
   }
+
+  /// Another can be saved: fewer than the most a person keeps.
+  bool get _canSave => _saved.length < maxSavedAddresses;
+
+  void _choose(String? id) => setState(() => (_addressId = id, _chose = true));
 
   @override
   Widget build(BuildContext context) {
@@ -387,19 +408,23 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
                 TkChoiceRow(
                   control: TkRadio(checked: _addressId == a.id),
                   label: Text('${a.label} · ${addressLine(a)}', style: tkText(size: 15, color: t.text)),
-                  onTap: () => setState(() => _addressId = a.id),
+                  onTap: () => _choose(a.id),
                 ),
-              if (_saved.isNotEmpty) choice(_addressId == null, 'Another address', () => setState(() => _addressId = null)),
+              if (_saved.isNotEmpty) choice(_addressId == null, 'Another address', () => _choose(null)),
               if (_addressId == null) ...[
-                TkKitField(label: 'Address', child: TkTextBox(controller: _address, lines: 2, max: 300)),
+                // A saved address is at most 200 letters: so is one typed
+                // to be saved.
+                TkKitField(label: 'Address', child: TkTextBox(controller: _address, lines: 2, max: _saveIt && _canSave ? maxSavedLine : 300)),
                 TkKitField(label: 'Landmark', hint: 'Optional: what the rider looks for', child: TkTextBox(controller: _landmark, max: 200)),
-                TkChoiceRow(
-                  radio: false,
-                  control: TkCheckbox(checked: _saveIt),
-                  label: Text('Save this address', style: tkText(size: 15, color: t.text)),
-                  onTap: () => setState(() => _saveIt = !_saveIt),
-                ),
-                if (_saveIt) TkKitField(label: 'Name it', hint: 'Home, Work', child: TkTextBox(controller: _saveAs, max: 40)),
+                // Hidden at the most a person keeps.
+                if (_canSave)
+                  TkChoiceRow(
+                    radio: false,
+                    control: TkCheckbox(checked: _saveIt),
+                    label: Text('Save this address', style: tkText(size: 15, color: t.text)),
+                    onTap: () => setState(() => _saveIt = !_saveIt),
+                  ),
+                if (_saveIt && _canSave) TkKitField(label: 'Name it', hint: 'Home, unless you name it', child: TkTextBox(controller: _saveAs, max: 40)),
               ],
             ],
           ),

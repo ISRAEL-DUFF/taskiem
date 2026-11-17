@@ -25,6 +25,9 @@ import 'my_chat.dart' show sayFailure;
 /// How many addresses a person may keep.
 const maxSavedAddresses = 20;
 
+/// The longest street and number a saved address keeps.
+const maxSavedLine = 200;
+
 /// A saved address in a line: "12 Herbert Macaulay Way, Yaba".
 String addressLine(SavedAddress a) => [a.line, if (a.area.isNotEmpty) a.area].join(', ');
 
