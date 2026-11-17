@@ -166,16 +166,54 @@ export function nothingFound(s: DiscoverQuery, categoryName?: string, near?: boo
     : "No business is listed here yet. Only businesses that chose to be found are listed.";
 }
 
-/** A refused search or report, in a person's words. */
+/** A refused search, profile or report, in a person's words: the
+ * server's own sentence where it gives one for a person (a profile gone,
+ * a report refused), ours otherwise. */
 export function discoverProblem(e: unknown, what: "search" | "report" | "profile"): string | null {
   if (!(e instanceof ApiError)) return null;
+  const said = e.message.trim();
+  const sentence = /^[A-Z].*\.$/.test(said) ? said : "";
   if (e.status === 429)
-    return what === "report"
-      ? "You have sent a lot of reports. Please wait a while before you send another."
-      : "You are searching too fast. Wait a moment and try again.";
-  if (e.status === 404 && what !== "search") return "This business is not in Discover any more.";
+    return what === "report" ? sentence || "You have sent many reports. Try again later." : "You are searching too fast. Wait a moment and try again.";
+  if (e.status === 404 && what !== "search") return sentence || "This business is not in Discover any more.";
+  // Past the last page the server keeps (an offset beyond 200).
+  if (e.status === 400 && what === "search") return "That is as far as this search goes. Add a word or an area to find fewer businesses.";
   if (e.status === 403) return "Discover is for people signed in to their own account.";
   return null;
+}
+
+/** The furthest offset the server answers (400 past it). */
+export const DISCOVER_MAX_OFFSET = 200;
+
+/** Whether "Show more businesses" is offered: the server says there is
+ * more, and the next page (asked from the rows received, counted before
+ * any were dropped as found twice) is within the server's reach. */
+export function canShowMore(more: boolean, received: number): boolean {
+  return more && received > 0 && received <= DISCOVER_MAX_OFFSET;
+}
+
+/** The search as the address keeps it (?q=&area=&category=), so Back
+ * returns to it. The person's place is never put there. */
+export function searchFromParams(p: URLSearchParams): DiscoverQuery {
+  return { q: p.get("q") ?? "", area: p.get("area") ?? "", category: p.get("category") ?? "" };
+}
+
+/** The address's part for a search: only what was given. */
+export function searchToParams(s: DiscoverQuery): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (s.q.trim()) out.q = s.q;
+  if (s.area.trim()) out.area = s.area;
+  if (s.category) out.category = s.category;
+  return out;
+}
+
+/** The key a search's results are kept under: what was asked, trimmed. */
+export const searchKey = (s: DiscoverQuery) => JSON.stringify([s.q.trim(), s.area.trim(), s.category]);
+
+/** Rows put together: a business once, in the order they came. */
+export function addResults(cur: DiscoverResult[], page: DiscoverResult[]): DiscoverResult[] {
+  const have = new Set(cur.map((x) => x.business));
+  return [...cur, ...page.filter((x) => !have.has(x.business))];
 }
 
 /** Where the browser's place came from, refused or not available. */
@@ -262,3 +300,69 @@ export function standing(s: Pick<DiscoverSettings, "listed" | "shown" | "hidden"
 
 /** A map link for a place: opens the phone's map app. */
 export const mapLink = (p: DiscoverLocation) => `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`;
+
+/** The business's own listing as a search would show it: the parts of a
+ * result row, its hours line worked out as the server does. */
+export function previewResult(l: DiscoverListing, categoryName: string, now: Date = new Date()): DiscoverResult {
+  const h = hoursLine(l.hours, now);
+  return {
+    business: l.business,
+    name: l.name,
+    photo: l.photo?.urls ?? {},
+    category: l.category ?? "",
+    category_name: categoryName,
+    area: l.area ?? "",
+    open_now: h.open,
+    line: h.line,
+    can_chat: l.can_chat,
+  };
+}
+
+// --- hours, as the server words them (engine/discover HoursLine) ---
+
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+function minutesOf(s: string | undefined): number {
+  if (!s || !/^([01]\d|2[0-3]):[0-5]\d$/.test(s)) return -1;
+  return Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5));
+}
+
+/** Lagos's weekday (Monday 0) and minutes past midnight at a moment. */
+function lagosClock(now: Date): { day: number; mins: number } {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(now);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const day = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].indexOf(get("weekday"));
+  return { day: Math.max(0, day), mins: Number(get("hour")) * 60 + Number(get("minute")) };
+}
+
+type Spans = { open: string; close: string }[] | null | undefined;
+
+/** Whether hours have the business open now, and the line under its
+ * name: "Open now, closes at 18:00", "Closed now. Opens tomorrow at
+ * 09:00", or "" when it keeps no hours. The server's rule, for the
+ * listing's preview (a search's results carry the server's own line). */
+export function hoursLine(hours: { days?: Spans[] } | Record<string, unknown> | undefined, now: Date = new Date()): { open: boolean; line: string } {
+  const days = ((hours as { days?: Spans[] } | undefined)?.days ?? []) as Spans[];
+  const at = (d: number) => days[d] ?? [];
+  if (!Array.from({ length: 7 }, (_, d) => at(d)).some((d) => d.length > 0)) return { open: false, line: "" };
+  const { day, mins } = lagosClock(now);
+  const within = (sp: { open: string; close: string }, yesterday: boolean) => {
+    const o = minutesOf(sp.open);
+    const c = minutesOf(sp.close);
+    if (o < 0 || c < 0) return false;
+    return yesterday ? c < o && mins < c : mins >= o && (c <= o || mins < c);
+  };
+  const holds = at(day).find((sp) => within(sp, false)) ?? at((day + 6) % 7).find((sp) => within(sp, true));
+  if (holds) return { open: true, line: `Open now, closes at ${holds.close}` };
+  for (let add = 0; add <= 7; add++) {
+    const d = (day + add) % 7;
+    const spans = [...at(d)].sort((a, b) => minutesOf(a.open) - minutesOf(b.open));
+    for (const sp of spans) {
+      const o = minutesOf(sp.open);
+      if (o < 0 || (add === 0 && o <= mins)) continue;
+      const when = add === 0 ? `at ${sp.open}` : add === 1 ? `tomorrow at ${sp.open}` : add === 7 ? `next ${WEEKDAYS[d]} at ${sp.open}` : `on ${WEEKDAYS[d]} at ${sp.open}`;
+      return { open: false, line: `Closed now. Opens ${when}` };
+    }
+  }
+  return { open: false, line: "Closed now" };
+}
