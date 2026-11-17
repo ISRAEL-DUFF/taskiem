@@ -21253,13 +21253,16 @@ paths:
       - You
       summary: Search Discover
       description: 'Businesses the public may find in Discover (taskiem-for-everyone §10): by name, what they sell (`q`:
-        "rice", "hair", "cakes"; each word must match the start of a word of the listing, and a plural finds the
-        singular), `area` (part of the listing''s area) and `category` (a key of GET /v1/discover/categories). With `near`,
-        the person''s place for this search only, the nearest businesses that gave a place come first, each with `km`.
-        A POST so the place travels in the body: nothing of a search is kept or logged. Only businesses listed in
-        Discover with a category, an area, a photo and hours, not hidden by moderators. A number that could be a phone
-        finds nothing. 20 a page (`offset`, up to 200; `more` says another page waits). A personal session reaches it, and
-        so does a business session for its person; API keys are refused (403). 30 searches a minute per person (429).'
+        "rice", "hair", "cakes"; each word must match the start of a word of the listing, as typed or as a singular:
+        "cakes" finds "cake", "dresses" finds "dress", "buses" finds "bus"), `area` (the start of a word of the listing''s
+        area: "ikeja" finds "Ikeja GRA") and `category` (a key of GET /v1/discover/categories). Words that are all left
+        out ("the", "near me", single letters) find nothing. With `near`, the person''s place for this search only, the
+        nearest businesses that gave a place come first, each with `km`. A POST so the place travels in the body: nothing
+        of a search is kept or logged. Only businesses listed in Discover with a category, an area, a photo and hours,
+        not hidden. A number that could be a phone finds nothing. 20 a page (`offset`, 0 to 200, else 400; `more` is true
+        only while another page waits within 200). Each result keeps `line`, the hours line under its name. A personal
+        session reaches it, and so does a business session for its person; API keys are refused (403). 30 searches a
+        minute per person (429).'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -21355,7 +21358,8 @@ paths:
         offers a person: `can_chat` (Chat starts the conversation through the customer door: POST /v1/me/chats
         `{business_id, from: "discover"}`), `has_shop` and `has_book` (Their shop and Book, the chat''s tools, once the chat
         is open). `chat` is the person''s own conversation with the business when they have one. Read through the narrow
-        definer: nothing beyond the listing. 404 for a business that is not listed, or whose listing is hidden.'
+        definer: nothing beyond the listing. 404 for a business that is not listed, or whose listing is hidden, with the
+        words to show as they come: "This business is not in Discover any more."'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -21383,9 +21387,12 @@ paths:
       - You
       summary: Report a business in Discover
       description: 'A report on a listing to Taskiem''s moderators (taskiem-for-everyone §10, §15), beside the reports on
-        pages (GET /v1/ops/reports, kind `discover`). `reason` is one of the pages'' list. When three different people have
-        open reports from the last 30 days, the listing is hidden until a moderator looks. Three a day from one person
-        for one listing (429), and twelve reports every two hours in all. 404 for a business not in Discover.'
+        pages (GET /v1/ops/reports, kind `discover`). `reason` is one of the pages'' list. A report counts only from an
+        account at least 7 days old, and not from a person two or more of whose earlier Discover reports were dismissed
+        with none acted on. Three counting reports from different people in 30 days put the listing first in the
+        moderators'' queue; they hide it until a moderator looks only when one of them is `scam`. Three a day from one
+        person for one listing (429), and twelve Discover reports every two hours per person (429, counted by the
+        database). 404 "This business is not in Discover any more." for a business not in Discover.'
       security:
       - sessionCookie: []
         csrfHeader: []
