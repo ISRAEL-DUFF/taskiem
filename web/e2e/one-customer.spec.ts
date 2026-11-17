@@ -119,6 +119,23 @@ async function check(page: Page, where: string, width: number) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth), where).toBeLessThanOrEqual(width);
 }
 
+/** axe's colour check reaches these elements in the dark theme and passes
+ * them: none left undecided (a check that cannot see an element passes
+ * nothing). */
+async function contrastChecked(page: Page, selector: string) {
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await page.waitForTimeout(150);
+  await axe(page); // Loads axe, once the theme has settled.
+  const r = await page.evaluate(async (sel) => {
+    const w = window as unknown as { axe: { run: (ctx: object, opts: object) => Promise<Record<"passes" | "violations" | "incomplete", { nodes: unknown[] }[]>> } };
+    const out = await w.axe.run({ include: [[sel]] }, { runOnly: { type: "rule", values: ["color-contrast"] } });
+    return { passes: out.passes.flatMap((x) => x.nodes).length, violations: out.violations.flatMap((x) => x.nodes).length, incomplete: out.incomplete.flatMap((x) => x.nodes).length };
+  }, selector);
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  expect(r, `axe's colour check of ${selector} in the dark`).toEqual({ passes: expect.any(Number), violations: 0, incomplete: 0 });
+  expect(r.passes, selector).toBeGreaterThan(0);
+}
+
 type Chat = { id: string; name: string; line: string; reply_line?: string; lines?: { line: string; stopped: boolean; notice?: string }[] };
 const chatsOf = async (page: Page) => ((await (await page.request.get("/v1/customer-chats", { headers: H })).json()) as { chats: Chat[] }).chats;
 const settingsOf = async (page: Page) =>
@@ -127,6 +144,9 @@ const settingsOf = async (page: Page) =>
 test("one customer on WhatsApp and in the app: one thread with both lines, the reply's line, and the chat link's choice", async ({ browser }) => {
   test.setTimeout(240_000);
   const biz = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
+  // The console is light unless one picks otherwise: "system" follows the
+  // theme each check emulates, so the dark checks see the dark theme.
+  await biz.addInitScript(() => localStorage.setItem("taskiem-theme", "system"));
   const name = `Iya Basira ${letters()}`;
   const signup = await biz.request.post("/v1/signup", {
     headers: H,
@@ -217,6 +237,9 @@ test("one customer on WhatsApp and in the app: one thread with both lines, the r
   await expect.poll(() => shopSent.slice(wasSent).map((m) => m.text?.body)).toContain("I will send the menu on WhatsApp");
   expect(shopSent.slice(wasSent).every((m) => m.to.replace(/^\+/, "") === num.digits)).toBe(true);
   await check(biz, "a thread with both lines", 1280);
+  // The line at the top of our own bubbles reads on their green in the dark.
+  await expect(onWa.locator(".line-of")).toBeVisible();
+  await contrastChecked(biz, ".bubble.mine .line-of");
 
   // The person sees it, marked on WhatsApp; their app messages are not.
   const theirs = person.getByTestId("person-message").filter({ hasText: "I will send the menu" });
@@ -248,8 +271,73 @@ test("one customer on WhatsApp and in the app: one thread with both lines, the r
   await biz.reload();
   await expect(chooser.getByRole("radio", { name: "on WhatsApp" })).toBeDisabled();
   await expect(chooser.getByRole("radio", { name: "in the app" })).toBeChecked();
-  await expect(chooser.getByTestId("line-why")).toHaveText("Not on WhatsApp: They sent STOP on WhatsApp.");
+  await expect(chooser.getByTestId("line-why")).toHaveText("Not on WhatsApp: they sent STOP. Nothing can go there until they send START.");
   await check(biz, "a thread whose WhatsApp line sent STOP", 360);
+  // The list marks the stopped line, in words too.
+  await biz.goto("/chat");
+  await expect(biz.getByTestId("customer-chats").getByTestId("both-lines").locator("[data-off]")).toHaveText(/WhatsApp, stopped/);
+  await check(biz, "the list with a stopped line", 360);
+
+  // Stood in, the line's state as it changes while staff write.
+  const replies: string[] = [];
+  biz.on("request", (q) => {
+    if (q.method() === "POST" && q.url().includes(`/v1/customer-chats/${thread?.id}/messages`)) replies.push(q.postData() ?? "");
+  });
+  let stand: Record<string, unknown> = {};
+  const appL = (x: object = {}) => ({ line: "app", id: thread?.id, phone: num.e164, window_open: true, window_until: null, stopped: false, blocked: false, last_in_at: null, ...x });
+  const waL = (x: object = {}) => ({ line: "whatsapp", id: "00000000-0000-0000-0000-000000000001", phone: num.e164, window_open: true, window_until: null, stopped: false, blocked: false, last_in_at: null, ...x });
+  await biz.route(`**/v1/customer-chats/${thread?.id}`, async (r: Route) => {
+    if (r.request().method() !== "GET") return r.fallback();
+    const real = (await (await r.fetch()).json()) as Record<string, unknown>;
+    await r.fulfill({ json: { ...real, ...stand, stopped: false, blocked: false, notice: undefined } });
+  });
+  /** The stand-in from now on, once the open thread has read it. */
+  const standIn = async (s: Record<string, unknown>) => {
+    stand = s;
+    await biz.waitForResponse((r) => r.url().endsWith(`/v1/customer-chats/${thread?.id}`) && r.request().method() === "GET", { timeout: 15_000 });
+    await biz.waitForTimeout(100);
+  };
+  stand = { lines: [appL(), waL()], reply_line: "app", window_open: true, offers: "no" };
+  await biz.goto(`/chat?with=c-${thread?.id}`);
+  const box = pane.locator("#customer-text");
+  await expect(chooser.getByRole("radio", { name: "in the app" })).toBeChecked();
+  // Writing for the app: they write on WhatsApp meanwhile, and the line
+  // being written for stays.
+  await box.fill("Held for the app");
+  await standIn({ lines: [appL(), waL()], reply_line: "whatsapp", window_open: true, offers: "no" });
+  await expect(chooser.getByRole("radio", { name: "in the app" })).toBeChecked();
+  await expect(pane.getByTestId("line-moved")).toHaveCount(0);
+  // The app line shuts while writing: said, never moved quietly.
+  await standIn({ lines: [appL({ blocked: true }), waL()], reply_line: "whatsapp", window_open: true, offers: "no" });
+  await expect(pane.getByTestId("line-moved")).toHaveText("Now goes on WhatsApp: it can't go in the app now.");
+  await expect(pane.getByLabel(/^Reply to .* on WhatsApp$/)).toHaveValue("Held for the app");
+  await check(biz, "a reply whose line shut while it was written", 360);
+  await box.fill("");
+  await expect(pane.getByTestId("line-moved")).toHaveCount(0);
+
+  // Ticked to go as an offer, which goes in the app: WhatsApp's limit after
+  // its 24 hours does not hold for it.
+  await standIn({ lines: [appL(), waL({ window_open: false })], reply_line: "whatsapp", window_open: false, offers: "yes" });
+  await expect(chooser.getByRole("radio", { name: "on WhatsApp" })).toBeChecked();
+  await box.fill("Ten percent off ".repeat(60));
+  await expect(pane.getByTestId("customer-too-long")).toBeVisible();
+  await pane.getByTestId("customer-as-offer").check();
+  await expect(pane.getByTestId("customer-too-long")).toHaveCount(0);
+  // The app line shuts after the tick: refused with why, never sent on
+  // WhatsApp as a message; the words stay and the tick goes.
+  await box.fill("Ten percent off today");
+  await standIn({ lines: [appL({ blocked: true }), waL({ window_open: false })], reply_line: "whatsapp", window_open: false, offers: "yes" });
+  await expect(pane.getByTestId("customer-as-offer")).toHaveCount(0);
+  const repliesBefore = replies.length;
+  await box.press("Enter");
+  await expect(pane.getByRole("alert").filter({ hasText: "Not sent: an offer goes in the app, and it can't take a message now." })).toBeVisible();
+  await expect(box).toHaveValue("Ten percent off today");
+  await biz.waitForTimeout(300);
+  expect(replies.slice(repliesBefore)).toEqual([]);
+  await standIn({ lines: [appL(), waL({ window_open: false })], reply_line: "whatsapp", window_open: false, offers: "yes" });
+  await expect(pane.getByTestId("customer-as-offer")).not.toBeChecked();
+  await check(biz, "an offer refused", 360);
+  await biz.unroute(`**/v1/customer-chats/${thread?.id}`);
 
   // Stood in: WhatsApp past its 24 hours and the app blocked; the reply goes
   // on WhatsApp as a message they answer, as before.
@@ -264,7 +352,7 @@ test("one customer on WhatsApp and in the app: one thread with both lines, the r
   });
   await biz.reload();
   await expect(chooser.getByRole("radio", { name: "in the app" })).toBeDisabled();
-  await expect(chooser.getByTestId("line-why")).toHaveText("Not in the app: You blocked them in the app.");
+  await expect(chooser.getByTestId("line-why")).toHaveText("Not in the app: you blocked this customer there.");
   await expect(pane.getByTestId("customer-note")).toHaveText("More than a day since they last wrote: your reply goes as a WhatsApp message they answer to carry on.");
   await expect(pane.getByTestId("customer-line-states")).toHaveCount(0);
   await expect(pane.getByRole("button", { name: /Send a card/ })).toHaveCount(0);
@@ -276,8 +364,11 @@ test("one customer on WhatsApp and in the app: one thread with both lines, the r
   await biz.setViewportSize({ width: 390, height: 844 });
   await biz.goto("/settings/customers");
   await check(biz, "/settings/customers with its own number", 390);
+  // With WhatsApp offered, chats off leaves the link offering WhatsApp alone.
+  await expect(biz.getByTestId("takes-chats-hint")).toHaveText(/^Off: your link offers Chat on WhatsApp only, on your own number/);
   await biz.getByTestId("link-whatsapp").uncheck();
   await expect.poll(async () => (await settingsOf(biz)).link_whatsapp).toBe(false);
+  await expect(biz.getByTestId("takes-chats-hint")).toHaveText("Off: your link says you are not taking chats. Chats already open go on.");
   const anon = await (await browser.newContext({ viewport: { width: 360, height: 780 } })).newPage();
   await anon.goto(`/m/${link.code}`);
   await expect(anon.getByTestId("chat-here")).toHaveText("Chat here in your browser");
