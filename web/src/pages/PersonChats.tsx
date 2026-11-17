@@ -8,23 +8,34 @@ import { getDraft, setDraft } from "../lib/drafts";
 import { clock, listTime } from "../lib/linkchat";
 import {
   aboutOrderDraft,
+  cardsKey,
   chatAboutWords,
   chatPreview,
+  clientFor,
   closedNote,
+  erasedWords,
   headLine,
+  liveCard,
+  mayHaveArrived,
   mergeMessages,
   offersQuestion,
   personFileURL,
+  photoURL,
   REPORT_REASONS,
   startProblem,
   stateWords,
   stopOffersWords,
+  TRANSFER_WARNING,
+  trustWords,
+  waitingWords,
   withLatest,
   type DoorOrder,
+  type KeptSend,
   type PersonChat,
   type PersonMessage,
-  type PhoneOrder,
+  type PhoneOrders,
 } from "../lib/personchat";
+import { browserEnv, enableYouPush, pushSupport, serverKey, thisSubscription, youPushOn } from "../lib/push";
 import { formatPrice } from "../lib/storefront";
 import { useThread } from "../lib/useThread";
 import { EmptyState, ErrorBox, fmtTime, Items, Row, Skeleton, useAction, useLoad } from "../ui";
@@ -46,6 +57,8 @@ import { BookSheet, OrdersSheet, PayButton, ShopSheet, ToolsMenu, type PersonToo
 
 /** How often an open conversation and the list look for what is new. */
 const POLL_MS = 4000;
+/** How often the orders an open conversation's cards name are read again. */
+const ORDERS_MS = 15000;
 
 /** Where the person gets the Taskiem app: kept from the chat link's page,
  * the one place the server says. */
@@ -68,16 +81,44 @@ function appURL(): string | null {
 
 const draftKey = (id: string) => `person:${id}`;
 
+/** The businesses' photos, as their conversations gave them (the list of
+ * chats carries none): shown on their rows once a chat was opened here. */
+const PHOTOS_KEY = "taskiem.chat-photos";
+function photoOf(business: string): string | undefined {
+  try {
+    return (JSON.parse(sessionStorage.getItem(PHOTOS_KEY) ?? "{}") as Record<string, string>)[business];
+  } catch {
+    return undefined;
+  }
+}
+function keepPhoto(business: string, url: string | undefined) {
+  try {
+    const all = JSON.parse(sessionStorage.getItem(PHOTOS_KEY) ?? "{}") as Record<string, string>;
+    if ((all[business] ?? "") === (url ?? "")) return;
+    const next = Object.fromEntries(Object.entries(all).filter(([k]) => k !== business));
+    if (url) next[business] = url;
+    sessionStorage.setItem(PHOTOS_KEY, JSON.stringify(next));
+  } catch {
+    // Storage blocked: the row shows the letter.
+  }
+}
+
 /** The person's chats with businesses, latest first (archived ones apart). */
 export function PersonChatList() {
   const [archived, setArchived] = useState(false);
-  const list = useLoad(() => get<{ chats: PersonChat[]; unread: number }>(`/v1/me/chats${archived ? "?archived=1" : ""}`), [archived]);
+  // Each answer says which list it is, so a toggle never shows the other's
+  // rows while its own are on their way.
+  const list = useLoad(
+    () => get<{ chats: PersonChat[]; unread: number }>(`/v1/me/chats${archived ? "?archived=1" : ""}`).then((r) => ({ ...r, archived })),
+    [archived],
+  );
   const reload = list.reload;
   useEffect(() => {
     const t = setInterval(() => document.visibilityState === "visible" && reload(), POLL_MS * 2);
     return () => clearInterval(t);
   }, [reload]);
-  const chats = list.data?.chats ?? [];
+  const data = list.data?.archived === archived ? list.data : undefined;
+  const chats = data?.chats ?? [];
   return (
     <section className="card person-chats" aria-labelledby="you-chats">
       <div className="toolbar">
@@ -89,8 +130,8 @@ export function PersonChatList() {
         </button>
       </div>
       <ErrorBox error={list.error} />
-      {!list.data && !list.error && <Skeleton rows={2} label="Loading your chats…" />}
-      {list.data && chats.length === 0 && (
+      {!data && !list.error && <Skeleton rows={2} label="Loading your chats…" />}
+      {data && chats.length === 0 && (
         <EmptyState icon="chat">
           {archived ? "No archived chats." : "Chats with businesses will show here. Open a business's chat link, or chat about an order below."}
         </EmptyState>
@@ -104,6 +145,7 @@ export function PersonChatList() {
                 key={c.id}
                 to={`/you/chats/${c.id}`}
                 letter={c.name}
+                logo={photoOf(c.business)}
                 title={c.name}
                 time={listTime(c.last_at)}
                 preview={
@@ -128,21 +170,23 @@ export function PersonChatList() {
 }
 
 /** Orders made with the person's phone on businesses' shops (§13): each
- * opens a chat with its business; those made before the phone was on the
- * account wait for "These are mine". */
+ * opens a chat with its business. Those made before the phone was on the
+ * account are only counted, nothing else of them shown, until "These are
+ * mine". */
 export function MyShopOrders() {
-  const list = useLoad(() => get<{ orders: PhoneOrder[]; waiting: boolean }>("/v1/me/storefront-orders?limit=10"), []);
+  const list = useLoad(() => get<PhoneOrders>("/v1/me/storefront-orders?limit=10"), []);
   const act = useAction();
   const nav = useNavigate();
   const orders = list.data?.orders ?? [];
-  if (!list.data || orders.length === 0) return null;
+  const waiting = list.data?.waiting_count ?? 0;
+  if (!list.data || (orders.length === 0 && waiting === 0)) return null;
   return (
     <section className="card" aria-labelledby="you-shop-orders" data-testid="shop-orders">
       <h2 id="you-shop-orders">Your orders from shops</h2>
       <p className="hint">Orders made with your phone number on businesses' shops.</p>
-      {list.data.waiting && (
+      {waiting > 0 && (
         <div className="notice" role="status" data-testid="these-are-mine">
-          Some of these were made with your number before it was on your account. Are they yours?{" "}
+          {waitingWords(waiting)}{" "}
           <button
             type="button"
             className="small"
@@ -159,33 +203,32 @@ export function MyShopOrders() {
         </div>
       )}
       <ErrorBox error={act.error} />
-      <Items label="Your orders from shops">
-        {orders.map((o) => {
-          const st = stateWords(o.state);
-          return (
-            <Row
-              key={`${o.business_id}-${o.reference}`}
-              icon="orders"
-              title={o.business}
-              side={formatPrice(o.total_kobo)}
-              sub={
-                <span className="sub">
-                  {o.reference} · {fmtTime(o.made_at)}
-                  {st.label ? ` · ${st.label}` : ""}
-                  {o.waiting && <span className="block">Waiting for you to say it's yours</span>}
-                </span>
-              }
-              testid="shop-order"
-            >
-              {!o.waiting && (
+      {orders.length > 0 && (
+        <Items label="Your orders from shops">
+          {orders.map((o) => {
+            const st = stateWords(o.state);
+            return (
+              <Row
+                key={`${o.business_id}-${o.reference}`}
+                icon="orders"
+                title={o.business}
+                side={formatPrice(o.total_kobo)}
+                sub={
+                  <span className="sub">
+                    {o.reference} · {fmtTime(o.made_at)}
+                    {st.label ? ` · ${st.label}` : ""}
+                  </span>
+                }
+                testid="shop-order"
+              >
                 <button type="button" className="small" onClick={() => nav(`/you/chats/new?business=${encodeURIComponent(o.business_id)}&ref=${encodeURIComponent(o.reference)}`)}>
                   {chatAboutWords(o.business)}
                 </button>
-              )}
-            </Row>
-          );
-        })}
-      </Items>
+              </Row>
+            );
+          })}
+        </Items>
+      )}
     </section>
   );
 }
@@ -259,7 +302,15 @@ export function PersonChatPage() {
   const chat = useLoad(() => get<PersonChat>(`/v1/me/chats/${encodeURIComponent(id)}`), [id]);
   const [messages, setMessages] = useState<PersonMessage[]>();
   const [hasOlder, setHasOlder] = useState(false);
-  const [error, setError] = useState<unknown>();
+  // What the last look for news ran into (gone once a look works), and
+  // what a send ran into, apart.
+  const [pollError, setPollError] = useState<unknown>();
+  const [sendError, setSendError] = useState<unknown>();
+  // The business erased the person's details: the conversation is closed.
+  const [erased, setErased] = useState<string>();
+  // A send whose answer never came, its words back in the box: sent again
+  // as they are, it keeps its client_id, so it is not there twice.
+  const kept = useRef<KeptSend | undefined>(undefined);
   const [notice, setNotice] = useState<string | undefined>(() => (loc.state as { notice?: string } | null)?.notice);
   const [tool, setTool] = useState<{ key: PersonTool | "menu"; from?: DOMRect; item?: string; service?: string }>();
   const [reporting, setReporting] = useState(false);
@@ -278,7 +329,8 @@ export function PersonChatPage() {
       const out = await get<{ messages: PersonMessage[]; more: boolean }>(`${base}/messages`);
       setMessages((cur) => (first ? out.messages : withLatest(cur ?? [], out.messages, out.more)));
       if (first) setHasOlder(out.more);
-      if (document.visibilityState === "visible" && out.messages.some((m) => !m.mine && !m.read_at)) await post(`${base}/read`);
+      setPollError(undefined);
+      if (document.visibilityState === "visible" && out.messages.some((m) => !m.mine && !m.read_at)) await post(`${base}/read`).catch(() => undefined);
     },
     [base],
   );
@@ -286,10 +338,10 @@ export function PersonChatPage() {
   useEffect(() => {
     setMessages(undefined);
     thread.reset();
-    pull(true).catch(setError);
+    pull(true).catch(setPollError);
     const t = setInterval(() => {
       if (document.visibilityState !== "visible") return;
-      pull(false).catch(setError);
+      pull(false).catch(setPollError);
       reloadChat();
     }, POLL_MS);
     return () => clearInterval(t);
@@ -304,29 +356,53 @@ export function PersonChatPage() {
         setMessages((cur) => mergeMessages(cur ?? [], out.messages));
         setHasOlder(out.more);
       })
-      .catch(setError)
+      .catch(setPollError)
       .finally(() => (loadingOlder.current = false));
   };
 
-  // The orders the cards name, for their Pay: read once there are cards.
-  const hasOrderCards = !!messages?.some((m) => m.card?.reference);
+  // The orders the cards name, for their state, their rider and their
+  // Pay: read when a card names another order (or a new card comes), again
+  // every little while as long as there are such cards, and soon again
+  // when a read fails.
+  const ordersKey = cardsKey(messages);
   const loadOrders = useCallback(() => {
-    get<{ orders: DoorOrder[] }>(`${base}/orders`).then((r) => setOrders(r.orders), () => undefined);
+    get<{ orders: DoorOrder[] }>(`${base}/orders`).then(
+      (r) => setOrders(r.orders),
+      () => undefined,
+    );
   }, [base]);
   useEffect(() => {
-    if (hasOrderCards && !orders) loadOrders();
-  }, [hasOrderCards]);
+    if (!ordersKey) return;
+    let live = true;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const look = (tries: number) =>
+      get<{ orders: DoorOrder[] }>(`${base}/orders`).then(
+        (r) => live && setOrders(r.orders),
+        () => {
+          if (live && tries < 3) retry = setTimeout(() => void look(tries + 1), 3000 * (tries + 1));
+        },
+      );
+    void look(0);
+    const t = setInterval(() => document.visibilityState === "visible" && void look(3), ORDERS_MS);
+    return () => {
+      live = false;
+      clearInterval(t);
+      if (retry) clearTimeout(retry);
+    };
+  }, [ordersKey, base]);
 
-  // Typing: told at most every few seconds while words are typed.
+  // Typing: told at most every few seconds while words are typed. Refused
+  // while either side blocked the other (403, 409): nothing to say.
   const lastTyped = useRef(0);
   const typing = (v: string) => {
-    if (!v.trim() || Date.now() - lastTyped.current < 4000 || !c || c.blocked || c.blocked_you) return;
+    if (!v.trim() || Date.now() - lastTyped.current < 4000 || !c || c.blocked || c.blocked_you || erased) return;
     lastTyped.current = Date.now();
     void post(`${base}/typing`).catch(() => undefined);
   };
 
   const send = async (text: string, file?: File) => {
-    const client = `${Date.now()}-${++localN}`;
+    const client = file ? `${Date.now()}-${++localN}` : clientFor(kept.current, text, () => `${Date.now()}-${++localN}`);
+    kept.current = undefined;
     const preview = file ? await asDataURL(file) : undefined;
     const mine: PersonMessage = {
       id: `local-${client}`,
@@ -352,10 +428,17 @@ export function PersonChatPage() {
       } else out = await post<PersonMessage>(`${base}/messages`, { text, client_id: client });
       setMessages((cur) => mergeMessages((cur ?? []).filter((m) => m.id !== mine.id), [out]));
     } catch (e) {
-      // Not sent: the words come back to the box, and why is said.
+      // Not sent: the words come back to the box, and why is said. When
+      // the answer never came it may have got there: the same words sent
+      // again keep its client_id.
       setMessages((cur) => cur?.filter((m) => m.id !== mine.id));
-      if (text && !file) composer.setText((cur) => (cur === "" ? text : cur));
-      setError(e);
+      if (text && !file) {
+        composer.setText((cur) => (cur === "" ? text : cur));
+        if (e instanceof ApiError && mayHaveArrived(e.status)) kept.current = { text, client };
+      }
+      const closedNow = e instanceof ApiError ? erasedWords(e.status, e.message, "person") : null;
+      if (closedNow) setErased(closedNow);
+      else setSendError(e);
       reloadChat();
     }
   };
@@ -366,16 +449,31 @@ export function PersonChatPage() {
     sources: { "@": [], "#": [] },
     onType: typing,
     onSend: (s) => {
-      setError(undefined);
+      setSendError(undefined);
       void send(s.text, s.file);
     },
-    enabled: !!c && !c.blocked && !c.blocked_you,
+    enabled: !!c && !c.blocked && !c.blocked_you && !erased,
     closes: [!!tool, reporting],
   });
 
-  const change = (body: Record<string, boolean>, said: string) =>
+  // The offers question is asked once: answered, or shown and passed over
+  // (the person closes it, or leaves the chat without answering).
+  const offersShown = useRef(false);
+  const offersDone = useRef(false);
+  const askingOffers = !!c?.ask_offers && !c.blocked && !c.blocked_you;
+  if (askingOffers) offersShown.current = true;
+  useEffect(
+    () => () => {
+      if (offersShown.current && !offersDone.current) void put(base, { offers_asked: true }).catch(() => undefined);
+    },
+    [base],
+  );
+
+  const change = (body: Record<string, boolean>, said: string | false) =>
     act.run(async () => {
-      await put(base, body);
+      if ("offers" in body || "offers_asked" in body) offersDone.current = true;
+      const r = await put<PersonChat | undefined>(base, body);
+      if (r?.offers_refused) setNotice(`${c?.name ?? "This business"} is not taking messages from you, so your answer about offers was not kept.`);
       reloadChat();
     }, said);
   const block = async () => {
@@ -405,9 +503,14 @@ export function PersonChatPage() {
   };
 
   const name = c?.name ?? "the business";
-  const closed = c ? closedNote(c) : null;
+  const closed = erased ?? (c ? closedNote(c) : null);
   const app = appURL();
   const ordersByRef = new Map((orders ?? []).map((o) => [o.reference, o]));
+  const photo = photoURL(c?.photo);
+  const trust = trustWords(c?.verified);
+  useEffect(() => {
+    if (c?.business) keepPhoto(c.business, photo);
+  }, [c?.business, photo]);
   const openTool = (key: PersonTool, from?: DOMRect, extra?: { item?: string; service?: string }) => setTool({ key, from, ...extra });
 
   return (
@@ -416,9 +519,20 @@ export function PersonChatPage() {
       <ChatHead
         onBack={() => nav("/you")}
         menuLabel="More about this conversation"
-        avatar={<ChatAvatar name={name} />}
+        avatar={<ChatAvatar name={name} logo={photo} />}
         title={c?.name ?? "Chat"}
-        subtitle={c ? <span data-testid="person-head-line">{headLine(c)}</span> : undefined}
+        subtitle={
+          c ? (
+            <>
+              <span data-testid="person-head-line">{headLine(c)}</span>
+              {trust && (
+                <span className="pc-trust" data-testid="person-trust" title={trust}>
+                  {trust}
+                </span>
+              )}
+            </>
+          ) : undefined
+        }
         items={
           c
             ? (close) => (
@@ -463,7 +577,7 @@ export function PersonChatPage() {
           </button>
         </div>
       )}
-      <ErrorBox error={error ?? chat.error ?? act.error} />
+      <ErrorBox error={sendError ?? act.error ?? pollError ?? chat.error} />
       <ChatStream
         items={messages}
         thread={thread}
@@ -473,12 +587,14 @@ export function PersonChatPage() {
         startsRun={(prev, m) => !prev || prev.mine !== m.mine}
         empty={<>Say hello to {name}. They will answer here.</>}
         render={(m, { first }) => {
-          const card = m.card;
+          const ord = m.card?.reference && m.card.type !== "invoice" ? ordersByRef.get(m.card.reference) : undefined;
+          // An order's or a delivery's card shows where the order is now.
+          const card = m.card ? liveCard(m.card, ord) : undefined;
           const caption = m.attachment ? (["Photo", "Voice note", "File", m.attachment.name].includes(m.body) ? "" : m.body) : card ? "" : m.body;
-          const ord = card?.reference ? ordersByRef.get(card.reference) : undefined;
+          const warn = !m.mine && !!m.warn_transfer;
           // The time sits in the corner of the last line of words; under a card,
-          // a file or Stop offers it has a row of its own.
-          const inline = !!caption && !(m.offer && c?.offers === "yes");
+          // a file, a warning or Stop offers it has a row of its own.
+          const inline = !!caption && !(m.offer && c?.offers === "yes") && !warn;
           return (
             <BubbleShell
               id={m.id}
@@ -513,7 +629,7 @@ export function PersonChatPage() {
                 <AppCardView
                   card={card}
                   actions={
-                    card.type === "pay" && card.url ? (
+                    (card.type === "pay" || card.type === "invoice") && card.url ? (
                       <a className="tk-btn primary" href={card.url} target="_blank" rel="noopener noreferrer">
                         Pay<span className="sr-only"> {card.title}</span>
                       </a>
@@ -538,6 +654,12 @@ export function PersonChatPage() {
                   {inline && <span className={`stamp-gap${m.mine ? " mine" : ""}`} aria-hidden="true" />}
                 </span>
               )}
+              {warn && (
+                <span className="pc-transfer-warn" role="note" data-testid="transfer-warning">
+                  <Icon name="warn" />
+                  <span>{TRANSFER_WARNING}</span>
+                </span>
+              )}
               {m.offer && c?.offers === "yes" && (
                 <button type="button" className="link pc-stop-offers" onClick={() => void change({ offers: false }, `No more offers from ${name}. Messages about your orders still come.`)}>
                   {stopOffersWords(name)}
@@ -547,7 +669,7 @@ export function PersonChatPage() {
           );
         }}
         tail={
-          c?.ask_offers && !c.blocked && !c.blocked_you ? (
+          c && askingOffers ? (
             <div className="tk-alert pc-offers" role="group" aria-label={offersQuestion(c.name)} data-testid="offers-question">
               <span className="tk-alert-words">
                 <span className="tk-alert-title">{offersQuestion(c.name)}</span>
@@ -559,6 +681,9 @@ export function PersonChatPage() {
                 </button>
                 <button type="button" className="tk-alert-soft" disabled={act.busy} onClick={() => void change({ offers: false }, "No offers")}>
                   No
+                </button>
+                <button type="button" className="link" disabled={act.busy} onClick={() => void change({ offers_asked: true }, false)} data-testid="offers-not-now">
+                  Not now
                 </button>
               </span>
             </div>
@@ -591,6 +716,7 @@ export function PersonChatPage() {
           />
         )
       )}
+      {c && !closed && <TellMe />}
       {app && (
         <p className="pc-app-line" data-testid="get-app-line">
           <a href={app} target="_blank" rel="noopener noreferrer">
@@ -640,6 +766,54 @@ export function PersonChatPage() {
       )}
       {sure.node}
     </section>
+  );
+}
+
+/** "Tell me when they answer" (§9): this browser is registered as the
+ * person's own device, so a business's answer is pushed here (and not
+ * texted). Where the browser cannot take a push (an iPhone's browser not
+ * on the Home Screen, or the server has no keys), they are texted. */
+function TellMe() {
+  const [state, setState] = useState<"look" | "ask" | "busy" | "on" | "text" | "denied" | "failed">("look");
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      if (pushSupport(browserEnv()) !== "yes") return live && setState("text");
+      if (!(await serverKey())) return live && setState("text");
+      const on = youPushOn() && !!(await thisSubscription());
+      if (live) setState(on ? "on" : "ask");
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (state === "look") return null;
+  return (
+    <p className="pc-push-line" data-testid="tell-me-line" role="status">
+      {state === "ask" || state === "busy" || state === "failed" ? (
+        <>
+          {state === "failed" && "That did not work. "}
+          <button
+            type="button"
+            className="link"
+            disabled={state === "busy"}
+            data-testid="tell-me"
+            onClick={() => {
+              setState("busy");
+              void enableYouPush().then((r) => setState(r.ok ? "on" : r.why === "denied" ? "denied" : r.why === "failed" ? "failed" : "text"));
+            }}
+          >
+            Tell me when they answer
+          </button>
+        </>
+      ) : state === "on" ? (
+        "We'll tell you on this device when they answer."
+      ) : state === "denied" ? (
+        "Notifications are blocked in this browser, so we'll text you when they answer."
+      ) : (
+        "We'll text you when they answer."
+      )}
+    </p>
   );
 }
 

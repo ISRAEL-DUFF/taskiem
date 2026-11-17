@@ -7,6 +7,7 @@ import type { LinkService, LinkTimes } from "../lib/linkbook";
 import {
   basketTotal,
   changeBasket,
+  deliveryStep,
   fewLeftWords,
   itemsWords,
   minutesWords,
@@ -15,6 +16,7 @@ import {
   sizeWords,
   stateWords,
   type BasketLine,
+  type DeliveryProgress,
   type DoorOrder,
   type ShopItem,
   type TheirShop,
@@ -211,10 +213,10 @@ export function ShopSheet({
             <fieldset className="pc-choice">
               <legend>How do you want it?</legend>
               <label className="switch-line">
-                <input type="radio" name="fulfilment" checked={how === "pickup"} onChange={() => setFulfilment("pickup")} /> <span>I'll pick it up</span>
+                <input type="radio" name="fulfilment" checked={how === "pickup"} onChange={() => (setFulfilment("pickup"), (key.current = ""))} /> <span>I'll pick it up</span>
               </label>
               <label className="switch-line">
-                <input type="radio" name="fulfilment" checked={how === "delivery"} onChange={() => setFulfilment("delivery")} /> <span>Deliver it to me</span>
+                <input type="radio" name="fulfilment" checked={how === "delivery"} onChange={() => (setFulfilment("delivery"), (key.current = ""))} /> <span>Deliver it to me</span>
               </label>
             </fieldset>
           )}
@@ -571,6 +573,7 @@ export function OrdersSheet({ chat, business, from, only, onClose }: { chat: str
                   </span>
                   {st.label && <Pill tone={st.tone}>{st.label}</Pill>}
                 </span>
+                {o.delivery && <DeliveryLine d={o.delivery} />}
                 {o.pay && <PayButton chat={chat} order={o} />}
               </li>
             );
@@ -578,6 +581,21 @@ export function OrdersSheet({ chat, business, from, only, onClose }: { chat: str
         </ul>
       )}
     </Sheet>
+  );
+}
+
+/** Where the rider is with an order: the line and four steps. */
+function DeliveryLine({ d }: { d: DeliveryProgress }) {
+  const step = deliveryStep(d);
+  return (
+    <span className="pc-order-delivery" data-testid="order-delivery">
+      <span className="tk-row-sub">{d.line}</span>
+      <span className="app-card-steps" role="img" aria-label={`${d.line}: step ${step} of 4`}>
+        {[1, 2, 3, 4].map((n) => (
+          <span key={n} className={n <= step ? "done" : undefined} />
+        ))}
+      </span>
+    </span>
   );
 }
 

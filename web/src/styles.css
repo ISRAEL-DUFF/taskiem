@@ -48,6 +48,8 @@
   /* Money in and out in charts: told apart by colour-blind readers too (checked on both grounds). */
   --chart-in: #1f8060;
   --chart-out: #c9822f;
+  /* Behind a QR code: white in both themes, so a camera can read it. */
+  --qr-ground: #ffffff;
   --radius: 16px;
   --radius-sm: 8px;
   --shadow: 0 1px 2px rgba(14, 15, 12, 0.04);

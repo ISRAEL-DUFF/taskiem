@@ -24,6 +24,19 @@ import {
   stateWords,
   stopOffersWords,
   withLatest,
+  cardsKey,
+  cardState,
+  clientFor,
+  deliveryStep,
+  erasedWords,
+  liveCard,
+  mayHaveArrived,
+  photoURL,
+  tradingWords,
+  TRANSFER_WARNING,
+  trustWords,
+  waitingWords,
+  type AppCard,
   type PersonMessage,
 } from "./personchat";
 
@@ -154,5 +167,93 @@ describe("a person's chats with businesses", () => {
     expect(chatAboutWords("Mama's Kitchen")).toBe("Chat with Mama's Kitchen about this order");
     expect(aboutOrderDraft("MK-2X4F")).toBe("Hello, about my order MK-2X4F: ");
     expect(personFileURL("c 1", "m/2")).toBe("/v1/me/chats/c%201/files/m%2F2");
+  });
+});
+
+describe("stage 2's review fixes, the person's side", () => {
+  it("counts the orders waiting for These are mine, and shows nothing else of them", () => {
+    expect(waitingWords(3)).toBe("We found 3 orders made with your number before it was on your account. Are they yours?");
+    expect(waitingWords(1)).toBe("We found 1 order made with your number before it was on your account. Is it yours?");
+  });
+
+  it("says what a business has proved in plain words", () => {
+    expect(trustWords({ phone: true, business: false, payments: true, months: 8 })).toBe("Phone checked · Payments through Taskiem · Trading 8 months");
+    expect(trustWords({ phone: true, business: true, payments: false, months: 1 })).toBe("Phone checked · Business checked · Trading 1 month");
+    expect(trustWords({ phone: false, business: false, payments: false, months: 0 })).toBe("New on Taskiem");
+    expect(trustWords(undefined)).toBe("");
+    expect(tradingWords(12)).toBe("Trading 1 year");
+    expect(tradingWords(30)).toBe("Trading 2 years");
+  });
+
+  it("warns about transfers to an account in Taskiem's words", () => {
+    expect(TRANSFER_WARNING).toBe("Pay only through Taskiem's pay links. Taskiem never asks you to send money to a personal account.");
+  });
+
+  it("takes the photo at an avatar's size", () => {
+    expect(photoURL({ urls: { "800": "/b", "320": "/a" } })).toBe("/a");
+    expect(photoURL({ urls: { "2000": "/c" } })).toBe("/c");
+    expect(photoURL(undefined)).toBeUndefined();
+  });
+
+  it("says a conversation closed by an erasure plainly, on both sides", () => {
+    expect(erasedWords(409, "This business erased your details from its records, so this conversation is closed.", "person")).toBe(
+      "This business erased your details from its records, so this conversation is closed.",
+    );
+    expect(erasedWords(409, "this customer's details were erased", "business")).toBe("This customer's details were erased, so this conversation is closed.");
+    expect(erasedWords(409, "You blocked this business.", "person")).toBeNull();
+    expect(erasedWords(403, "erased", "person")).toBeNull();
+  });
+
+  it("keeps a send's client_id when its answer never came and the same words go again", () => {
+    expect(mayHaveArrived(0)).toBe(true);
+    expect(mayHaveArrived(502)).toBe(true);
+    expect(mayHaveArrived(409)).toBe(false);
+    let n = 0;
+    const fresh = () => `new-${++n}`;
+    expect(clientFor({ text: "Hello", client: "c1" }, "Hello", fresh)).toBe("c1");
+    expect(clientFor({ text: "Hello", client: "c1" }, "Hello there", fresh)).toBe("new-1");
+    expect(clientFor(undefined, "Hello", fresh)).toBe("new-2");
+  });
+
+  it("says how an order is paid, on delivery too", () => {
+    expect(payWords("on_delivery", "Mama's Kitchen")).toBe("You pay when it reaches you.");
+  });
+
+  it("names invoice and delivery cards, and follows an order's state and its rider", () => {
+    const delivery: AppCard = {
+      type: "delivery",
+      reference: "MK-1",
+      title: "Delivery of MK-1",
+      line: "A rider is going to collect it",
+      status: "accepted",
+      delivery: { status: "accepted", line: "A rider is going to collect it" },
+    };
+    expect(cardKicker(delivery)).toBe("Delivery");
+    expect(cardKicker({ type: "invoice", title: "Invoice INV-0001" })).toBe("Invoice");
+    expect(cardState(delivery)).toEqual({ label: "Rider coming", tone: "plain" });
+    expect(cardState({ type: "invoice", status: "part_paid" })).toEqual({ label: "Part-paid", tone: "warn" });
+    expect(deliveryStep({ status: "arrived" })).toBe(3);
+    const now = liveCard(delivery, { status: "on_the_way", delivery: { status: "picked_up", line: "On its way to you" } });
+    expect(now.status).toBe("picked_up");
+    expect(now.line).toBe("On its way to you");
+    expect(cardState(now).label).toBe("On the way");
+    const order: AppCard = { type: "order", reference: "MK-1", title: "Order MK-1", status: "received" };
+    expect(liveCard(order, { status: "paid" }).status).toBe("paid");
+    expect(liveCard(order, undefined)).toBe(order);
+    // A product's card is as it was sent.
+    const product: AppCard = { type: "product", title: "Rice", item_id: "i1" };
+    expect(liveCard(product, { status: "paid" })).toBe(product);
+  });
+
+  it("knows when the cards name other orders, so they are read again", () => {
+    const card = (id: string, reference: string, type: AppCard["type"] = "order") => msg(id, `2026-11-17T10:00:0${id}Z`, { kind: "card", card: { type, reference, title: reference } });
+    expect(cardsKey(undefined)).toBe("");
+    expect(cardsKey([msg("1", "2026-11-17T10:00:00Z")])).toBe("");
+    const a = cardsKey([card("1", "MK-2"), card("2", "MK-1")]);
+    expect(a).toBe("MK-1,MK-2|2");
+    // The same order's card again is news (its state may have moved).
+    expect(cardsKey([card("1", "MK-2"), card("2", "MK-1"), card("3", "MK-1", "delivery")])).toBe("MK-1,MK-2|3");
+    // Invoice and product cards are not orders.
+    expect(cardsKey([card("1", "INV-0001", "invoice")])).toBe("");
   });
 });

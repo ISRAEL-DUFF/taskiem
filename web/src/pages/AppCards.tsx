@@ -2,24 +2,28 @@ import type { ReactNode } from "react";
 import { Icon } from "../icons";
 import { Pill } from "../kit";
 import { fileSize } from "../lib/linkchat";
-import { cardFigure, cardKicker, stateWords, type AppAttachment, type AppCard } from "../lib/personchat";
+import { cardFigure, cardKicker, cardState, deliveryStep, type AppAttachment, type AppCard } from "../lib/personchat";
 
 // What an app conversation carries besides words (docs/spec/taskiem-for-
 // everyone.md §8.3, §8.5): a card (an order, a pay link, a booking or a
-// booking offer, a product) and a photo, voice note or file. The same on
-// the person's side and the business's; what can be done with a card is
-// given by the side that shows it.
+// booking offer, a product, an invoice, a delivery with the rider's
+// progress) and a photo, voice note or file. The same on the person's side
+// and the business's; what can be done with a card is given by the side
+// that shows it.
 
 const ICON: Record<AppCard["type"], string> = {
   order: "orders",
   pay: "money",
   booking: "calendar",
   product: "tag",
+  invoice: "invoices",
+  delivery: "package",
 };
 
 /** A card in a conversation; `actions` are the side's own buttons. */
 export function AppCardView({ card, actions }: { card: AppCard; actions?: ReactNode }) {
-  const st = stateWords(card.status);
+  const st = cardState(card);
+  const step = card.type === "delivery" && card.status ? deliveryStep({ status: card.status as "accepted" }) : 0;
   const figure = cardFigure(card);
   const label = `${cardKicker(card)}: ${card.title}`;
   return (
@@ -40,6 +44,13 @@ export function AppCardView({ card, actions }: { card: AppCard; actions?: ReactN
           </span>
         )}
       </span>
+      {step > 0 && (
+        <span className="app-card-steps" role="img" aria-label={`${st.label || "Delivery"}: step ${step} of 4`} data-testid="delivery-steps">
+          {[1, 2, 3, 4].map((n) => (
+            <span key={n} className={n <= step ? "done" : undefined} />
+          ))}
+        </span>
+      )}
       {actions && <span className="tk-ref-foot">{actions}</span>}
     </article>
   );

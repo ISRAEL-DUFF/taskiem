@@ -5,11 +5,28 @@
 
 import { formatPrice } from "./storefront";
 
+/** A delivery as its customer follows it, once a rider holds it (nothing
+ * of the rider). */
+export interface DeliveryProgress {
+  status: "accepted" | "picked_up" | "arrived" | "delivered";
+  /** "A rider is going to collect it", "On its way to you"… */
+  line: string;
+  accepted_at?: string;
+  picked_up_at?: string;
+  arrived_at?: string;
+  delivered_at?: string;
+}
+
 /** A card in a conversation: an order, its pay link, a booking (or a
- * booking offer), a product. The same on both sides. */
+ * booking offer), a product, an invoice, a delivery. The same on both
+ * sides. */
 export interface AppCard {
-  type: "order" | "pay" | "booking" | "product";
+  type: "order" | "pay" | "booking" | "product" | "invoice" | "delivery";
+  /** An order's reference; an invoice's number. */
   reference?: string;
+  invoice_id?: string;
+  /** A delivery card's progress, as it was when sent. */
+  delivery?: DeliveryProgress;
   title: string;
   line?: string;
   status?: string;
@@ -57,6 +74,20 @@ export interface PersonChat {
   hours?: ChatHours;
   /** Said once, on starting. */
   notice?: string;
+  /** One chat only: the business's photo (sizes by width). */
+  photo?: { urls?: Record<string, string> };
+  /** One chat only: what the business has proved (§15). */
+  verified?: BusinessTrust;
+  /** On a PUT: the answer to offers was not taken (they blocked you). */
+  offers_refused?: boolean;
+}
+
+/** What a business has proved, for the conversation's header. */
+export interface BusinessTrust {
+  phone: boolean;
+  business: boolean;
+  payments: boolean;
+  months: number;
 }
 
 /** A message of the person's copy. */
@@ -71,6 +102,8 @@ export interface PersonMessage {
   attachment?: AppAttachment;
   /** Marked Offer, with Stop offers under it. */
   offer?: boolean;
+  /** The business asks for a transfer to an account: warn (§15). */
+  warn_transfer?: boolean;
   read_at: string | null;
   created_at: string;
   /** Shown before the server answers. */
@@ -146,6 +179,8 @@ export interface DoorOrder {
   service_name?: string;
   starts_at?: string;
   pay: boolean;
+  /** The rider's progress, once a rider holds it. */
+  delivery?: DeliveryProgress;
   created_at: string;
 }
 
@@ -157,8 +192,77 @@ export interface PhoneOrder {
   made_at: string;
   business: string;
   business_id: string;
-  /** Made before the phone was on the account: "These are mine" first. */
+}
+
+/** GET /v1/me/storefront-orders: confirmed orders only; those made before
+ * the phone was on the account are only counted until "These are mine". */
+export interface PhoneOrders {
+  orders: PhoneOrder[];
   waiting: boolean;
+  waiting_count: number;
+}
+
+/** The question about orders made before the number was on the account. */
+export function waitingWords(n: number): string {
+  if (n === 1) return "We found 1 order made with your number before it was on your account. Is it yours?";
+  return `We found ${n} orders made with your number before it was on your account. Are they yours?`;
+}
+
+/** What a business has proved, in plain words for the header:
+ * "Phone checked · Payments through Taskiem · Trading 8 months". */
+export function trustWords(v: BusinessTrust | undefined): string {
+  if (!v) return "";
+  const out: string[] = [];
+  if (v.phone) out.push("Phone checked");
+  if (v.business) out.push("Business checked");
+  if (v.payments) out.push("Payments through Taskiem");
+  out.push(tradingWords(v.months));
+  return out.join(" · ");
+}
+
+/** "New on Taskiem", "Trading 1 month", "Trading 8 months", "Trading 2 years". */
+export function tradingWords(months: number): string {
+  if (!months || months < 1) return "New on Taskiem";
+  if (months < 12) return `Trading ${months} ${months === 1 ? "month" : "months"}`;
+  const y = Math.floor(months / 12);
+  return `Trading ${y} ${y === 1 ? "year" : "years"}`;
+}
+
+/** Under a business's message that asks for a transfer to an account. */
+export const TRANSFER_WARNING = "Pay only through Taskiem's pay links. Taskiem never asks you to send money to a personal account.";
+
+/** The business's photo at a size fit for an avatar. */
+export function photoURL(p: { urls?: Record<string, string> } | undefined): string | undefined {
+  const urls = p?.urls ?? {};
+  return urls["320"] ?? urls["800"] ?? Object.values(urls)[0];
+}
+
+/** A 409 that closes a conversation for good: the customer's details were
+ * erased. The server's own sentence, or ours when it gave a terse one. */
+export function erasedWords(status: number, message: string, side: "person" | "business"): string | null {
+  if (status !== 409 || !/erased/i.test(message)) return null;
+  const m = message.trim();
+  if (/^[A-Z].*\.$/.test(m)) return m;
+  return side === "person"
+    ? "This business erased your details from its records, so this conversation is closed."
+    : "This customer's details were erased, so this conversation is closed.";
+}
+
+/** Whether a send that failed may have reached the server all the same (the
+ * connection dropped, or the server failed after taking it): then a retry
+ * of the same words keeps its client_id, so it is not sent twice. */
+export const mayHaveArrived = (status: number) => status === 0 || status >= 500;
+
+/** A send whose answer never came: its words and client_id. */
+export interface KeptSend {
+  text: string;
+  client: string;
+}
+
+/** The client_id for words about to be sent: the kept one when the same
+ * words are sent again, else a fresh one. */
+export function clientFor(kept: KeptSend | undefined, text: string, fresh: () => string): string {
+  return kept && kept.text === text ? kept.client : fresh();
 }
 
 /** The person's own copy of a message's file. */
@@ -231,9 +335,80 @@ export function cardKicker(c: AppCard): string {
       return "Pay";
     case "booking":
       return c.reference ? "Booking" : "Book";
+    case "invoice":
+      return "Invoice";
+    case "delivery":
+      return "Delivery";
     default:
       return "Product";
   }
+}
+
+const DELIVERY_STEPS: DeliveryProgress["status"][] = ["accepted", "picked_up", "arrived", "delivered"];
+
+/** How far a delivery has got: the step (1 to 4) of 4, for its bar. */
+export function deliveryStep(d: Pick<DeliveryProgress, "status">): number {
+  return DELIVERY_STEPS.indexOf(d.status) + 1;
+}
+
+type Tone = "warn" | "lime" | "plain" | "danger";
+
+/** A delivery's state in a customer's words, with its pill's tone. */
+export function deliveryWords(status: string | undefined): { label: string; tone: Tone } {
+  switch (status) {
+    case "accepted":
+      return { label: "Rider coming", tone: "plain" };
+    case "picked_up":
+      return { label: "On the way", tone: "lime" };
+    case "arrived":
+      return { label: "At your address", tone: "lime" };
+    case "delivered":
+      return { label: "Delivered", tone: "lime" };
+    default:
+      return stateWords(status);
+  }
+}
+
+/** An invoice's state in a customer's words. */
+export function invoiceWords(status: string | undefined): { label: string; tone: Tone } {
+  switch (status) {
+    case "paid":
+      return { label: "Paid", tone: "lime" };
+    case "part_paid":
+      return { label: "Part-paid", tone: "warn" };
+    case "overdue":
+      return { label: "Overdue", tone: "danger" };
+    case "sent":
+    case "viewed":
+      return { label: "To pay", tone: "warn" };
+    default:
+      return stateWords(status);
+  }
+}
+
+/** A card's pill: its state as the card's kind says it. */
+export function cardState(c: Pick<AppCard, "type" | "status">): { label: string; tone: Tone } {
+  if (c.type === "delivery") return deliveryWords(c.status);
+  if (c.type === "invoice") return invoiceWords(c.status);
+  return stateWords(c.status);
+}
+
+/** A card as it is now: an order's or a delivery's card follows the
+ * person's order (its state, its rider) rather than what it said when sent. */
+export function liveCard(c: AppCard, o: Pick<DoorOrder, "status" | "delivery"> | undefined): AppCard {
+  if (!o) return c;
+  if (c.type === "delivery") return o.delivery ? { ...c, status: o.delivery.status, line: o.delivery.line, delivery: o.delivery } : c;
+  if (c.type === "order") return { ...c, status: o.status };
+  return c;
+}
+
+/** What the order and delivery cards of a thread name, to know when to read
+ * the orders again: the references, and the latest such card. Empty with none. */
+export function cardsKey(ms: { id: string; local?: boolean; card?: AppCard }[] | undefined): string {
+  const withCards = (ms ?? []).filter((m) => !m.local && m.card?.reference && (m.card.type === "order" || m.card.type === "delivery"));
+  if (withCards.length === 0) return "";
+  const refs = [...new Set(withCards.map((m) => m.card?.reference ?? ""))].sort();
+  return `${refs.join(",")}|${withCards[withCards.length - 1]?.id ?? ""}`;
 }
 
 /** A card's figure: its total, or the time a booking offer takes. */
@@ -297,6 +472,8 @@ export function payWords(payment: string, business: string): string {
       return "You pay when you order, by a pay link.";
     case "after_accept":
       return `You pay once ${business} accepts your order.`;
+    case "on_delivery":
+      return "You pay when it reaches you.";
     default:
       return `You pay ${business} as you agree with them.`;
   }

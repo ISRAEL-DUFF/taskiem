@@ -548,6 +548,20 @@ img.tk-live-tile { object-fit: cover; }
 .person-chats .toolbar { margin-bottom: 8px; }
 .app-card .app-card-figure { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
 .app-card .tk-ref-foot { flex-wrap: wrap; }
+/* A delivery card's progress: four steps, those done in the accent colour. */
+.app-card-steps { display: flex; gap: 4px; margin: 10px 0 0; }
+.app-card-steps span { flex: 1; height: 4px; border-radius: 999px; background: var(--border-strong); }
+.app-card-steps span.done { background: var(--accent); }
+.pc-order-delivery { display: flex; flex-direction: column; gap: 2px; }
+.pc-order-delivery .app-card-steps { margin-top: 4px; }
+/* Under a business's message asking for a transfer to an account. */
+.pc-transfer-warn { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0 2px; padding: 8px 10px; border-radius: 10px; background: var(--tint-warn); color: var(--tint-warn-text); font-size: 13px; font-weight: 600; line-height: 1.4; }
+.pc-transfer-warn svg { flex: none; width: 16px; height: 16px; margin-top: 1px; }
+/* The header's line of what the business has proved. */
+.pc-trust { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pc-push-line { margin: 0; padding: 4px 12px 6px; font-size: 13px; color: var(--muted); text-align: center; }
+.pc-push-line .link { font-size: 13px; }
+.pc-offers .tk-alert-acts .link { font-size: 13px; }
 .line-mark { font-weight: 400; color: var(--muted); font-size: 13px; }
 .customer-offer-line { margin: 0; padding: 6px 12px 0; font-size: 13px; }
 
@@ -563,7 +577,7 @@ img.tk-live-tile { object-fit: cover; }
 /* Your chat link, for the business: the QR code stays dark on white to scan. */
 .chat-link-box { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
 .chat-link-box > .grow { flex: 1 1 260px; min-width: 0; }
-.chat-link-qr { flex: none; width: 160px; height: 160px; background: #ffffff; border-radius: 12px; padding: 8px; border: 1px solid var(--border); }
+.chat-link-qr { flex: none; width: 160px; height: 160px; background: var(--qr-ground); border-radius: 12px; padding: 8px; border: 1px solid var(--border); }
 .chat-link-url { margin: 0 0 10px; overflow-wrap: anywhere; font-weight: 600; }
 .pc-done-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 18px; font-weight: 700; }
 .pc-done-tick { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 999px; background: var(--brand); color: var(--brand-dark); }
