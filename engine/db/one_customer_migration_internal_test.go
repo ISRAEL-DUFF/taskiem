@@ -53,3 +53,50 @@ func TestOneCustomerMigrationUpDownUp(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// 00470 (the review fixes) goes up, down and up again: Down drops the
+// stale-link definer and its column grants, and puts back the sweeps'
+// definers without their guard.
+func TestOneCustomerReviewMigrationUpDownUp(t *testing.T) {
+	dsn := emptyDatabase(t)
+	ctx := context.Background()
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlDB := stdlib.OpenDB(*cfg)
+	defer func() { _ = sqlDB.Close() }()
+	p, err := goose.NewProvider(goose.DialectPostgres, sqlDB, mustSub(migrations, "migrations"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.UpTo(ctx, 470); err != nil {
+		t.Fatal(err)
+	}
+	conn, err := pgx.Connect(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close(ctx) }()
+	langs := func() string {
+		t.Helper()
+		var s string
+		if err := conn.QueryRow(ctx, `SELECT string_agg(p.proname || ':' || l.lanname, ',' ORDER BY p.proname) FROM pg_proc p JOIN pg_language l ON l.oid = p.prolang
+			WHERE p.proname IN ('taskiem_customer_link_due', 'taskiem_customer_link_stale', 'taskiem_customer_waiting')`).Scan(&s); err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	if got := langs(); got != "taskiem_customer_link_due:plpgsql,taskiem_customer_link_stale:plpgsql,taskiem_customer_waiting:plpgsql" {
+		t.Fatalf("up: %s", got)
+	}
+	if _, err := p.DownTo(ctx, 469); err != nil {
+		t.Fatal(err)
+	}
+	if got := langs(); got != "taskiem_customer_link_due:sql,taskiem_customer_waiting:sql" {
+		t.Fatalf("down: %s", got)
+	}
+	if _, err := p.UpTo(ctx, 470); err != nil {
+		t.Fatal(err)
+	}
+}
