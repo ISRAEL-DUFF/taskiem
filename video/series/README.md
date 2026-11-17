@@ -114,6 +114,13 @@ Rules:
   does (serial numbers or IMEI, warranty, instalment sales). I have not
   confirmed these exist. We only show what the app does today.
 
+### Schools (fourth, different spine)
+Schools is a separate area of the app (fees, student account numbers, term
+invoices, debtors, clearance and a gate screen), mostly on the web's admin
+pages, and a school is not a shop. It follows the same Episode 0 and
+continuity pattern with its own ten chapters. Outline in
+[`schools/README.md`](schools/README.md).
+
 ### Later series
 In rough order of reach and fit: Beauty and personal care; Building
 materials (sizes and colours, lots of trade); Home and furniture; Farm
@@ -164,7 +171,8 @@ scripts, narration, and `NOTES.md` (what was verified against the app).
 
 ## 7. Decisions (17 November 2026)
 
-1. **Order of series:** Fashion, then Food, then Phones and gadgets.
+1. **Order of series:** Fashion, then Food, then Phones and gadgets; Schools
+   proposed fourth (added 17 November, to confirm).
 2. **Where viewers watch:** Instagram and TikTok, YouTube, and WhatsApp status
    and groups. So every episode is made in **two shapes**: vertical 9:16
    (Instagram, TikTok, WhatsApp; 30 to 60 s, a hook in the first 2 seconds,
