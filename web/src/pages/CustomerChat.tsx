@@ -5,7 +5,7 @@ import { Icon } from "../icons";
 import { Pill } from "../kit";
 import { naira } from "../lib/billing";
 import { appThreadLine, mayOffer, type CardAsk } from "../lib/customerlinks";
-import { bothLines, chosenLine, lineClosed, lineNote, lineStates, lineWords, listMark, replyLineBody, stoppedPreview, threadLines, type Line } from "../lib/customerlines";
+import { bothLines, chosenLine, lineClosed, lineMoved, lineNote, lineStates, lineWords, listMarks, offerRefused, replyLineBody, stoppedPreview, threadLines, type Line } from "../lib/customerlines";
 import { clientFor, erasedWords, mayHaveArrived, type AppCard, type KeptSend } from "../lib/personchat";
 import {
   customerKey,
@@ -90,7 +90,7 @@ export function CustomerRows({
       <ul className="chat-rows" aria-label={head} data-testid="customer-chats">
         {chats.map((c) => {
           const draft = drafts[`customer:${c.id}`];
-          const mark = listMark(c);
+          const marks = listMarks(c);
           return (
             <ChatRow
               key={c.id}
@@ -99,10 +99,15 @@ export function CustomerRows({
               title={
                 <>
                   {customerTitle(c)}
-                  {mark && (
+                  {marks.length > 0 && (
                     <span className="line-mark" data-testid={bothLines(c) ? "both-lines" : "in-the-app"}>
-                      {" "}
-                      · {mark}
+                      {marks.map((m) => (
+                        <span key={m.label} className={m.off ? "off" : undefined} data-off={m.off ? "" : undefined}>
+                          {" "}
+                          · {m.label}
+                          {m.off && <span className="sr-only">, stopped</span>}
+                        </span>
+                      ))}
                     </span>
                   )}
                 </>
@@ -339,20 +344,37 @@ export function CustomerPane({
       .finally(() => (loadingOlder.current = false));
   };
 
-  const draftKey = `customer:${id}`;
-  const [text, setText] = useState(() => getDraft(draftKey));
-  useEffect(() => setText(getDraft(draftKey)), [draftKey]);
-  useEffect(() => setDraft(draftKey, text), [draftKey, text]);
+  const c = chat.data;
+  // The draft is the customer's, whichever line's id opened them: keyed by
+  // the thread's own id as the server says it (a pair's is the app
+  // thread's), as the list reads it.
+  const draftKey = c ? `customer:${c.id}` : undefined;
+  const [text, setText] = useState("");
+  useEffect(() => {
+    if (draftKey) setText(getDraft(draftKey));
+  }, [draftKey]);
+  useEffect(() => {
+    if (draftKey) setDraft(draftKey, text);
+  }, [draftKey, text]);
   const box = useRef<HTMLTextAreaElement>(null);
   useAutoGrow(box, text);
 
-  const c = chat.data;
   // The customer's lines (taskiem-for-everyone §11): WhatsApp, the app, or
   // both. A reply goes on the line chosen, by default where they last wrote.
+  // Once the box has words the line in effect then is held: it never
+  // changes quietly under them (if it shuts, a note says where it goes now).
   const lines = c ? threadLines(c) : [];
   const both = lines.length > 1;
   const [picked, setPicked] = useState<Line>();
-  const replyLine: Line = c ? chosenLine(c, picked) : "whatsapp";
+  const [held, setHeld] = useState<Line>();
+  const wanted = picked ?? held;
+  const replyLine: Line = c ? chosenLine(c, wanted) : "whatsapp";
+  const writing = text.trim() !== "";
+  useEffect(() => {
+    if (!writing) setHeld(undefined);
+    else if (both) setHeld((h) => h ?? replyLine);
+  }, [writing, both, replyLine]);
+  const moved = c && writing ? lineMoved(c, wanted) : null;
   const cur = lines.find((l) => l.line === replyLine);
   const appLine = lines.find((l) => l.line === "app");
   // In the app (§8.3): no 24-hour window; cards, files, offers, typing and
@@ -361,13 +383,16 @@ export function CustomerPane({
   const appOpen = !!appLine && !lineClosed(appLine) && !erased;
   const note = erased ? { tone: "stop" as const, text: erased } : cur ? lineNote(cur) : null;
   const canSend = !!cur && !lineClosed(cur) && !erased;
-  const tooLong = !!cur && !app && lateTooLong(text, cur.window_open);
+  const [cards, setCards] = useState(false);
+  const [asOffer, setAsOffer] = useState(false);
+  const mayOfferNow = !!c && canSend && appOpen && (app || both) && mayOffer({ ...c, line: "app" });
+  // An offer goes in the app: the 24 hours' limit is of the line used.
+  const sendLine: Line = asOffer && mayOfferNow ? "app" : replyLine;
+  const tooLong = !!cur && sendLine === "whatsapp" && lateTooLong(text, cur.window_open);
   const states = c ? lineStates(c) : [];
   // Each bubble says where it went once the thread holds both lines.
   const markLines = both || new Set((messages ?? []).map((m) => m.line).filter(Boolean)).size > 1;
   const inApp = both ? " in the app" : "";
-  const [cards, setCards] = useState(false);
-  const [asOffer, setAsOffer] = useState(false);
   const filePick = useRef<HTMLInputElement>(null);
   const sure = useConfirm();
   const lastTyped = useRef(0);
@@ -385,11 +410,22 @@ export function CustomerPane({
     const plain = !extra?.card && !extra?.file;
     // Cards and files go in the app whatever line is chosen.
     if ((!words && !extra?.file && !extra?.card) || !(plain ? canSend : appOpen)) return;
+    // Ticked to go as an offer: it goes as one, in the app, or not at all.
+    // Never as a plain message (on WhatsApp, maybe) because the app line
+    // shut or they said no to offers after the tick: refused, with why, the
+    // tick taken off and the words kept, so sending again is a choice.
+    const offer = plain && asOffer;
+    if (offer && !mayOfferNow) {
+      setAsOffer(false);
+      setSendError(new Error(offerRefused(c ?? {}, appOpen) ?? "Not sent: it can't go as an offer now."));
+      return;
+    }
+    // Enter, as Send: nothing too long for WhatsApp after its 24 hours goes.
+    if (plain && tooLong) return;
     const fresh = () => `${Date.now()}-${++localN}`;
     const client = plain ? clientFor(kept.current, words, fresh) : fresh();
     if (plain) kept.current = undefined;
     const file = extra?.file;
-    const offer = !extra?.card && !file && asOffer && appOpen && mayOffer({ ...c, line: "app" });
     const line: Line = plain && !offer ? replyLine : "app";
     const mine: CustomerMessage = {
       id: `local-${client}`,
@@ -674,6 +710,11 @@ export function CustomerPane({
           appOpen={appOpen}
         />
       )}
+      {moved && canSend && (
+        <p className="customer-note warn" role="status" data-testid="line-moved">
+          {moved}
+        </p>
+      )}
       {note && (
         <p
           className={`customer-note ${note.tone}`}
@@ -693,7 +734,7 @@ export function CustomerPane({
           {LATE_REPLY_MAX} characters. This one is {lateLength(text)}.
         </p>
       )}
-      {canSend && appOpen && (app || both) && mayOffer({ ...c, line: "app" }) && (
+      {mayOfferNow && (
         <label className="switch-line customer-offer-line">
           <input type="checkbox" checked={asOffer} onChange={(e) => setAsOffer(e.target.checked)} data-testid="customer-as-offer" />{" "}
           <span>Send as an offer{inApp} (they said yes to offers; two a week at most)</span>

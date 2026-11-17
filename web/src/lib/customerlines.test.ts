@@ -7,7 +7,9 @@ import {
   lineNote,
   lineStates,
   lineWords,
-  listMark,
+  lineMoved,
+  listMarks,
+  offerRefused,
   replyLineBody,
   stoppedPreview,
   threadLines,
@@ -55,12 +57,31 @@ describe("one customer on both lines", () => {
   it("says why a line cannot take a reply, never for WhatsApp's 24 hours", () => {
     expect(lineClosed(wa())).toBeNull();
     expect(lineClosed(wa({ window_open: false }))).toBeNull();
-    expect(lineClosed(wa({ stopped: true }))).toBe("They sent STOP on WhatsApp");
-    expect(lineClosed(wa({ phone: "" }))).toBe("Their details were erased");
+    // The app's words, without the line's name: "Not on WhatsApp: {why}."
+    expect(lineClosed(wa({ stopped: true }))).toBe("they sent STOP. Nothing can go there until they send START");
+    expect(lineClosed(wa({ phone: "" }))).toBe("their details there were erased");
     expect(lineClosed(app())).toBeNull();
-    expect(lineClosed(app({ blocked: true, window_open: false }))).toBe("You blocked them in the app");
-    expect(lineClosed(app({ stopped: true, notice: "This customer left Taskiem" }))).toBe("This customer left Taskiem");
-    expect(lineClosed(app({ stopped: true }))).toBe("They stopped messages in the app");
+    expect(lineClosed(app({ blocked: true, window_open: false }))).toBe("you blocked this customer there");
+    expect(lineClosed(app({ stopped: true, notice: "This customer left Taskiem" }))).toBe("this customer left Taskiem");
+    expect(lineClosed(app({ stopped: true }))).toBe("this customer has stopped messages");
+  });
+
+  it("says when the line a reply was written for shut, never moving it quietly", () => {
+    const t = thread([app(), wa({ stopped: true })], "app");
+    expect(lineMoved(t, "whatsapp")).toBe("Now goes in the app: it can't go on WhatsApp now.");
+    expect(lineMoved(t, "app")).toBeNull();
+    expect(lineMoved(t, undefined)).toBeNull();
+    expect(lineMoved(thread([app({ blocked: true }), wa()], "whatsapp"), "app")).toBe("Now goes on WhatsApp: it can't go in the app now.");
+    // Held on the line in effect when writing began, though the server's
+    // reply line moved.
+    expect(chosenLine(thread([app(), wa()], "whatsapp"), "app")).toBe("app");
+    expect(lineMoved(thread([app()]), "whatsapp")).toBeNull();
+  });
+
+  it("refuses an offer that cannot go as one, never sending it as a message", () => {
+    expect(offerRefused({ offers: "yes" }, true)).toBeNull();
+    expect(offerRefused({ offers: "yes" }, false)).toMatch(/^Not sent: an offer goes in the app, and it can't take a message now\./);
+    expect(offerRefused({ offers: "no" }, true)).toMatch(/^Not sent: this customer no longer takes offers\./);
   });
 
   it("keeps the line chosen while it is open, else where the server says", () => {
@@ -92,9 +113,17 @@ describe("one customer on both lines", () => {
   });
 
   it("marks the list's row and its preview", () => {
-    expect(listMark(thread([app(), wa()]))).toBe("WhatsApp · App");
-    expect(listMark({ line: "app", phone: "", window_open: true, window_until: null, stopped: false })).toBe("in the app");
-    expect(listMark({ line: "whatsapp", phone: "", window_open: true, window_until: null, stopped: false })).toBe("");
+    expect(listMarks(thread([app(), wa()]))).toEqual([
+      { label: "WhatsApp", off: false },
+      { label: "App", off: false },
+    ]);
+    // A line that cannot take a message is marked (red, as the app's).
+    expect(listMarks(thread([app(), wa({ stopped: true })]))).toEqual([
+      { label: "WhatsApp", off: true },
+      { label: "App", off: false },
+    ]);
+    expect(listMarks({ line: "app", phone: "", window_open: true, window_until: null, stopped: false })).toEqual([{ label: "in the app", off: false }]);
+    expect(listMarks({ line: "whatsapp", phone: "", window_open: true, window_until: null, stopped: false })).toEqual([]);
     expect(stoppedPreview(thread([app(), wa()], "whatsapp"))).toBe("Sent STOP");
     expect(stoppedPreview(thread([app(), wa()], "app"))).toBe("Stopped messages");
   });
