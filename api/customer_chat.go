@@ -70,7 +70,7 @@ func (s *Server) customerThreadTx(ctx context.Context, tx pgx.Tx, wa *whatsapp.P
 	id := uuid.Must(uuid.NewV7())
 	err = tx.QueryRow(ctx, `INSERT INTO customer_conversations (id, tenant_id, phone_number_id, subject_id, who)
 		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (tenant_id, line, phone_number_id, subject_id) DO UPDATE
+		ON CONFLICT (tenant_id, phone_number_id, subject_id) WHERE line = 'whatsapp' DO UPDATE
 		SET who = CASE WHEN $6 THEN EXCLUDED.who ELSE customer_conversations.who END
 		RETURNING id`, id, tenant, wa.Config.PhoneNumberID, subject, who, profile != "").Scan(&id)
 	return id, subject, err
@@ -621,11 +621,12 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 		type rawMsg struct {
 			v    customerMessageView
 			body []byte
+			att  []byte
 		}
 		raws, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (rawMsg, error) {
 			var x rawMsg
 			return x, r.Scan(&x.v.ID, &x.v.Mine, &x.v.Kind, &x.body, &x.v.SenderName, &x.v.SentAs, &x.v.Delivery, &x.v.Failure, &x.v.ReadAt, &x.v.CreatedAt,
-				&x.v.Card, &x.v.Attachment, &x.v.Offer)
+				&x.v.Card, &x.att, &x.v.Offer)
 		})
 		if err != nil {
 			return err
@@ -636,6 +637,9 @@ func (s *Server) customerMessages(w http.ResponseWriter, r *http.Request) {
 		for i := len(raws) - 1; i >= 0; i-- {
 			x := raws[i]
 			if x.v.Body, err = s.openCustomerText(r.Context(), tx, p.TenantID, x.body); err != nil {
+				return err
+			}
+			if x.v.Attachment, err = s.openAttachment(r.Context(), tx, p.TenantID, x.att); err != nil {
 				return err
 			}
 			out = append(out, x.v)
@@ -827,10 +831,10 @@ func (s *Server) customerRepeat(ctx context.Context, tx pgx.Tx, tenant, chat uui
 		return nil, nil
 	}
 	var m customerMessageView
-	var body []byte
+	var body, att []byte
 	err := tx.QueryRow(ctx, `SELECT id, mine, kind, body, sender_name, COALESCE(sent_as, ''), COALESCE(delivery, ''), COALESCE(failure, ''), read_at, created_at, card, attachment, offer FROM customer_messages
 		WHERE tenant_id = $1 AND conversation_id = $2 AND client_id = $3`, tenant, chat, clientID).
-		Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.Delivery, &m.Failure, &m.ReadAt, &m.CreatedAt, &m.Card, &m.Attachment, &m.Offer)
+		Scan(&m.ID, &m.Mine, &m.Kind, &body, &m.SenderName, &m.SentAs, &m.Delivery, &m.Failure, &m.ReadAt, &m.CreatedAt, &m.Card, &att, &m.Offer)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -838,6 +842,9 @@ func (s *Server) customerRepeat(ctx context.Context, tx pgx.Tx, tenant, chat uui
 		return nil, err
 	}
 	if m.Body, err = s.openCustomerText(ctx, tx, tenant, body); err != nil {
+		return nil, err
+	}
+	if m.Attachment, err = s.openAttachment(ctx, tx, tenant, att); err != nil {
 		return nil, err
 	}
 	return &m, nil

@@ -271,8 +271,47 @@ type doorOrder struct {
 	ServiceName string     `json:"service_name,omitempty"`
 	StartsAt    *time.Time `json:"starts_at,omitempty"`
 	// Pay: something is due now; GET .../orders/{reference}/pay is its link.
-	Pay       bool      `json:"pay"`
-	CreatedAt time.Time `json:"created_at"`
+	Pay bool `json:"pay"`
+	// Delivery: the rider's progress, once a rider has taken it.
+	Delivery  *deliveryProgress `json:"delivery,omitempty"`
+	CreatedAt time.Time         `json:"created_at"`
+}
+
+// deliveryProgress is a delivery as its customer follows it: the rider's
+// step (accepted, picked_up, arrived, delivered), in words, with when each
+// step was reached. Nothing of the rider is shown.
+type deliveryProgress struct {
+	Status      string     `json:"status"`
+	Line        string     `json:"line"`
+	AcceptedAt  *time.Time `json:"accepted_at,omitempty"`
+	PickedUpAt  *time.Time `json:"picked_up_at,omitempty"`
+	ArrivedAt   *time.Time `json:"arrived_at,omitempty"`
+	DeliveredAt *time.Time `json:"delivered_at,omitempty"`
+}
+
+// deliveryLines are the rider's steps in a customer's words.
+var deliveryLines = map[string]string{
+	"accepted":  "A rider is going to collect it",
+	"picked_up": "On its way to you",
+	"arrived":   "The rider is at your address",
+	"delivered": "Delivered",
+}
+
+// deliveryProgressTx is an order's delivery as its customer follows it,
+// nil until a rider holds it; the business (or the door into it) in scope.
+func deliveryProgressTx(ctx context.Context, tx pgx.Tx, tenant, order uuid.UUID) (*deliveryProgress, error) {
+	var d deliveryProgress
+	err := tx.QueryRow(ctx, `SELECT status, accepted_at, picked_up_at, arrived_at, delivered_at FROM deliveries
+		WHERE tenant_id = $1 AND order_id = $2 AND status IN ('accepted', 'picked_up', 'arrived', 'delivered')`, tenant, order).
+		Scan(&d.Status, &d.AcceptedAt, &d.PickedUpAt, &d.ArrivedAt, &d.DeliveredAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	d.Line = deliveryLines[d.Status]
+	return &d, nil
 }
 
 func doorOrderOf(o storefront.Order) doorOrder {
@@ -316,7 +355,13 @@ func (s *Server) doorOrders(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return err
 			}
-			out = append(out, doorOrderOf(o))
+			x := doorOrderOf(o)
+			if o.Fulfilment == "delivery" {
+				if x.Delivery, err = deliveryProgressTx(r.Context(), tx, c.Business, o.ID); err != nil {
+					return err
+				}
+			}
+			out = append(out, x)
 		}
 		return nil
 	})
@@ -478,6 +523,11 @@ func (s *Server) placeAppOrder(ctx context.Context, person uuid.UUID, chatID, ke
 	var out doorOrder
 	first := false
 	err := s.doorOnce(ctx, person, chatID, "customer.order", map[string]any{"key": key}, func(tx pgx.Tx, c personChat) error {
+		// One request of a key at a time: a repeat sent at once waits for
+		// the first, then finds its order.
+		if err := idemLockTx(ctx, tx, "app-order:"+person.String()+":"+c.Business.String()+":"+key); err != nil {
+			return err
+		}
 		// The same request again: the order it placed, by its card.
 		if again, err := personRepeat(ctx, tx, person, c.ID, "order:"+key); err != nil || again != nil {
 			if again != nil && again.Card != nil {
@@ -509,6 +559,7 @@ func (s *Server) placeAppOrder(ctx context.Context, person uuid.UUID, chatID, ke
 			}
 		}
 		basket := make([]storefront.Line, 0, len(lines))
+		wanted := map[string]int64{}
 		var total int64
 		for _, l := range lines {
 			it, ok := byID[l.ItemID]
@@ -535,7 +586,9 @@ func (s *Server) placeAppOrder(ctx context.Context, person uuid.UUID, chatID, ke
 			if !available(it) || price == nil || *price < 1 {
 				return customerSendErr{http.StatusUnprocessableEntity, name + " is not available now."}
 			}
-			if it.Stock != nil && int64(l.Quantity) > *it.Stock {
+			// The same item on two lines counts as one.
+			wanted[it.ID] += int64(l.Quantity)
+			if it.Stock != nil && wanted[it.ID] > *it.Stock {
 				return customerSendErr{http.StatusUnprocessableEntity, fmt.Sprintf("Only %d of %s left.", *it.Stock, name)}
 			}
 			line := storefront.Line{ID: it.ID, Name: name, Quantity: l.Quantity, PriceKobo: *price, LineKobo: int64(l.Quantity) * *price}
@@ -603,6 +656,12 @@ func (s *Server) placeAppOrder(ctx context.Context, person uuid.UUID, chatID, ke
 			Line: storefront.Summary(basket), Status: "received", TotalKobo: &total})
 	})
 	return out, first, err
+}
+
+// idemLockTx holds an Idempotency-Key until the transaction ends.
+func idemLockTx(ctx context.Context, tx pgx.Tx, key string) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, key)
+	return err
 }
 
 // doorCardTx writes a card the person's own action made (an order, a
@@ -707,6 +766,11 @@ func (s *Server) bookInApp(ctx context.Context, person uuid.UUID, chatID, key, p
 	var got linkBooking
 	first := false
 	err := s.doorOnce(ctx, person, chatID, "customer.booking", map[string]any{"key": key, "service": serviceID}, func(tx pgx.Tx, c personChat) error {
+		// One request of a key at a time: a repeat sent at once waits for
+		// the first, then finds its booking (rather than its slot taken).
+		if err := idemLockTx(ctx, tx, "app-booking:"+person.String()+":"+c.Business.String()+":"+key); err != nil {
+			return err
+		}
 		// The same request again: the booking it made, by its card.
 		if again, err := personRepeat(ctx, tx, person, c.ID, "booking:"+key); err != nil || again != nil {
 			if again != nil && again.Card != nil {

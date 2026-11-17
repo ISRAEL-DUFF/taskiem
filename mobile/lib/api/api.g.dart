@@ -3328,10 +3328,15 @@ class ChatAttachment {
 }
 
 /// A card in an app conversation: an order (what, total, its state), a pay link
-/// (`url`), a booking (or a booking offer, by service), or a product.
+/// (`url`), a booking (or a booking offer, by service), a product, an invoice
+/// (`invoice_id`, its number in `reference`, what is due in `total_kobo`, its
+/// pay page in `url` while something is due), or a delivery (the rider's
+/// progress in `delivery`, as it was when sent).
 class CustomerCard {
-  const CustomerCard({this.itemId, this.line, this.minutes, this.reference, this.serviceId, this.status, required this.title, this.totalKobo, required this.type, this.url});
+  const CustomerCard({this.delivery, this.invoiceId, this.itemId, this.line, this.minutes, this.reference, this.serviceId, this.status, required this.title, this.totalKobo, required this.type, this.url});
 
+  final DeliveryProgress? delivery;
+  final String? invoiceId;
   final String? itemId;
   final String? line;
   final int? minutes;
@@ -3344,6 +3349,8 @@ class CustomerCard {
   final String? url;
 
   factory CustomerCard.fromJson(Map<String, dynamic> j) => CustomerCard(
+        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
+        invoiceId: j['invoice_id'] == null ? null : j['invoice_id'] as String,
         itemId: j['item_id'] == null ? null : j['item_id'] as String,
         line: j['line'] == null ? null : j['line'] as String,
         minutes: j['minutes'] == null ? null : (j['minutes'] as num).toInt(),
@@ -3357,6 +3364,8 @@ class CustomerCard {
       );
 
   Map<String, dynamic> toJson() => {
+        'delivery': ?delivery?.toJson(),
+        'invoice_id': ?invoiceId,
         'item_id': ?itemId,
         'line': ?line,
         'minutes': ?minutes,
@@ -3367,6 +3376,39 @@ class CustomerCard {
         'total_kobo': ?totalKobo,
         'type': type,
         'url': ?url,
+      };
+}
+
+/// A delivery as its customer follows it, once a rider holds it; nothing of the
+/// rider is shown.
+class DeliveryProgress {
+  const DeliveryProgress({this.acceptedAt, this.arrivedAt, this.deliveredAt, required this.line, this.pickedUpAt, required this.status});
+
+  final DateTime? acceptedAt;
+  final DateTime? arrivedAt;
+  final DateTime? deliveredAt;
+  /// "A rider is going to collect it", "On its way to you", "The rider is at
+  /// your address", "Delivered"
+  final String line;
+  final DateTime? pickedUpAt;
+  final String status;
+
+  factory DeliveryProgress.fromJson(Map<String, dynamic> j) => DeliveryProgress(
+        acceptedAt: j['accepted_at'] == null ? null : DateTime.parse(j['accepted_at'] as String),
+        arrivedAt: j['arrived_at'] == null ? null : DateTime.parse(j['arrived_at'] as String),
+        deliveredAt: j['delivered_at'] == null ? null : DateTime.parse(j['delivered_at'] as String),
+        line: j['line'] as String,
+        pickedUpAt: j['picked_up_at'] == null ? null : DateTime.parse(j['picked_up_at'] as String),
+        status: j['status'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'accepted_at': ?acceptedAt?.toUtc().toIso8601String(),
+        'arrived_at': ?arrivedAt?.toUtc().toIso8601String(),
+        'delivered_at': ?deliveredAt?.toUtc().toIso8601String(),
+        'line': line,
+        'picked_up_at': ?pickedUpAt?.toUtc().toIso8601String(),
+        'status': status,
       };
 }
 
@@ -3411,14 +3453,19 @@ class ReplyCustomerRequest {
 }
 
 class ReplyCustomerRequestCard {
-  const ReplyCustomerRequestCard({this.itemId, this.reference, this.serviceId, required this.type});
+  const ReplyCustomerRequestCard({this.invoiceId, this.itemId, this.reference, this.serviceId, required this.type});
 
+  final String? invoiceId;
   final String? itemId;
   final String? reference;
   final String? serviceId;
+  /// invoice: one of this customer's sent invoices (`invoice_id`); delivery:
+  /// the rider's progress on this customer's order (`reference`), once a rider
+  /// holds it.
   final String type;
 
   factory ReplyCustomerRequestCard.fromJson(Map<String, dynamic> j) => ReplyCustomerRequestCard(
+        invoiceId: j['invoice_id'] == null ? null : j['invoice_id'] as String,
         itemId: j['item_id'] == null ? null : j['item_id'] as String,
         reference: j['reference'] == null ? null : j['reference'] as String,
         serviceId: j['service_id'] == null ? null : j['service_id'] as String,
@@ -3426,6 +3473,7 @@ class ReplyCustomerRequestCard {
       );
 
   Map<String, dynamic> toJson() => {
+        'invoice_id': ?invoiceId,
         'item_id': ?itemId,
         'reference': ?reference,
         'service_id': ?serviceId,
@@ -3548,10 +3596,12 @@ class ListMyChatsResponse {
 /// One of a person's chats with a business, as their own side shows it
 /// (taskiem-for-everyone §7, §8).
 class PersonChat {
-  const PersonChat({required this.archived, required this.askOffers, required this.blocked, required this.blockedYou, required this.business, this.hours, required this.id, required this.last, required this.lastAt, required this.lastMine, required this.muted, required this.name, this.notice, required this.offers, this.typing, required this.unread});
+  const PersonChat({required this.archived, required this.askOffers, required this.blocked, required this.blockedYou, required this.business, this.hours, required this.id, required this.last, required this.lastAt, required this.lastMine, required this.muted, required this.name, this.notice, required this.offers, this.offersRefused, this.photo, this.typing, required this.unread, this.verified});
 
   final bool archived;
-  /// Ask it now (once, at the first chat or order).
+  /// Ask it now (once, at the first chat or order). False once answered, once
+  /// shown and passed over (`PUT {offers_asked: true}`), and while either side
+  /// blocked the other.
   final bool askOffers;
   /// You blocked the business.
   final bool blocked;
@@ -3572,9 +3622,18 @@ class PersonChat {
   final String? notice;
   /// Your answer to "Get offers from {business}?"
   final String offers;
+  /// On a PUT: the answer to offers was not taken, since the business is not
+  /// taking messages from you; the rest of the change was.
+  final bool? offersRefused;
+  /// One chat only, the business's photo (its logo; sizes by width in `urls`).
+  final PersonChatPhoto? photo;
   /// One chat only, the business is typing.
   final bool? typing;
   final int unread;
+  /// One chat only: what the business has proved, for the header (§15): its
+  /// phone, a check of the business, a payment provider connected (it is paid
+  /// through Taskiem's pay links), and whole months on Taskiem.
+  final PersonChatVerified? verified;
 
   factory PersonChat.fromJson(Map<String, dynamic> j) => PersonChat(
         archived: j['archived'] as bool,
@@ -3591,8 +3650,11 @@ class PersonChat {
         name: j['name'] as String,
         notice: j['notice'] == null ? null : j['notice'] as String,
         offers: j['offers'] as String,
+        offersRefused: j['offers_refused'] == null ? null : j['offers_refused'] as bool,
+        photo: j['photo'] == null ? null : PersonChatPhoto.fromJson(j['photo'] as Map<String, dynamic>),
         typing: j['typing'] == null ? null : j['typing'] as bool,
         unread: (j['unread'] as num).toInt(),
+        verified: j['verified'] == null ? null : PersonChatVerified.fromJson(j['verified'] as Map<String, dynamic>),
       );
 
   Map<String, dynamic> toJson() => {
@@ -3610,8 +3672,11 @@ class PersonChat {
         'name': name,
         'notice': ?notice,
         'offers': offers,
+        'offers_refused': ?offersRefused,
+        'photo': ?photo?.toJson(),
         'typing': ?typing,
         'unread': unread,
+        'verified': ?verified?.toJson(),
       };
 }
 
@@ -3631,6 +3696,59 @@ class PersonChatHours {
   Map<String, dynamic> toJson() => {
         'line': line,
         'open': open,
+      };
+}
+
+/// One chat only, the business's photo (its logo; sizes by width in `urls`).
+class PersonChatPhoto {
+  const PersonChatPhoto({this.height, this.id, this.moderation, this.urls, this.width});
+
+  final int? height;
+  final String? id;
+  final String? moderation;
+  final Map<String, dynamic>? urls;
+  final int? width;
+
+  factory PersonChatPhoto.fromJson(Map<String, dynamic> j) => PersonChatPhoto(
+        height: j['height'] == null ? null : (j['height'] as num).toInt(),
+        id: j['id'] == null ? null : j['id'] as String,
+        moderation: j['moderation'] == null ? null : j['moderation'] as String,
+        urls: j['urls'] == null ? null : j['urls'] as Map<String, dynamic>,
+        width: j['width'] == null ? null : (j['width'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'height': ?height,
+        'id': ?id,
+        'moderation': ?moderation,
+        'urls': ?urls,
+        'width': ?width,
+      };
+}
+
+/// One chat only: what the business has proved, for the header (§15): its
+/// phone, a check of the business, a payment provider connected (it is paid
+/// through Taskiem's pay links), and whole months on Taskiem.
+class PersonChatVerified {
+  const PersonChatVerified({required this.business, required this.months, required this.payments, required this.phone});
+
+  final bool business;
+  final int months;
+  final bool payments;
+  final bool phone;
+
+  factory PersonChatVerified.fromJson(Map<String, dynamic> j) => PersonChatVerified(
+        business: j['business'] as bool,
+        months: (j['months'] as num).toInt(),
+        payments: j['payments'] as bool,
+        phone: j['phone'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business': business,
+        'months': months,
+        'payments': payments,
+        'phone': phone,
       };
 }
 
@@ -3655,22 +3773,27 @@ class StartMyChatRequest {
 }
 
 class PutMyChatRequest {
-  const PutMyChatRequest({this.archived, this.muted, this.offers});
+  const PutMyChatRequest({this.archived, this.muted, this.offers, this.offersAsked});
 
   final bool? archived;
   final bool? muted;
   final bool? offers;
+  /// "Get offers from {business}?" was shown and passed over: it is not asked
+  /// again (`ask_offers` false). Answering it does the same.
+  final bool? offersAsked;
 
   factory PutMyChatRequest.fromJson(Map<String, dynamic> j) => PutMyChatRequest(
         archived: j['archived'] == null ? null : j['archived'] as bool,
         muted: j['muted'] == null ? null : j['muted'] as bool,
         offers: j['offers'] == null ? null : j['offers'] as bool,
+        offersAsked: j['offers_asked'] == null ? null : j['offers_asked'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
         'archived': ?archived,
         'muted': ?muted,
         'offers': ?offers,
+        'offers_asked': ?offersAsked,
       };
 }
 
@@ -3692,7 +3815,7 @@ class ListMyChatMessagesResponse {
 }
 
 class PersonMessage {
-  const PersonMessage({this.attachment, required this.body, this.card, required this.createdAt, required this.id, required this.kind, required this.mine, this.offer, this.readAt, this.senderName});
+  const PersonMessage({this.attachment, required this.body, this.card, required this.createdAt, required this.id, required this.kind, required this.mine, this.offer, this.readAt, this.senderName, this.warnTransfer});
 
   final ChatAttachment? attachment;
   final String body;
@@ -3708,6 +3831,10 @@ class PersonMessage {
   final Object? readAt;
   /// Who wrote it on the business's side (a first name), when someone did.
   final String? senderName;
+  /// The business's message asks for a transfer to an account (ten digits
+  /// standing alone with a banking word): warn that paying is only ever through
+  /// Taskiem's pay links (§15).
+  final bool? warnTransfer;
 
   factory PersonMessage.fromJson(Map<String, dynamic> j) => PersonMessage(
         attachment: j['attachment'] == null ? null : ChatAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
@@ -3720,6 +3847,7 @@ class PersonMessage {
         offer: j['offer'] == null ? null : j['offer'] as bool,
         readAt: j['read_at'],
         senderName: j['sender_name'] == null ? null : j['sender_name'] as String,
+        warnTransfer: j['warn_transfer'] == null ? null : j['warn_transfer'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
@@ -3733,6 +3861,7 @@ class PersonMessage {
         'offer': ?offer,
         'read_at': ?readAt,
         'sender_name': ?senderName,
+        'warn_transfer': ?warnTransfer,
       };
 }
 
@@ -3998,9 +4127,10 @@ class MyChatOrdersResponse {
 
 /// One of a person's orders or bookings with a business.
 class DoorOrder {
-  const DoorOrder({required this.createdAt, required this.dueKobo, required this.kind, required this.pay, required this.reference, this.serviceName, this.startsAt, required this.status, required this.summary, required this.totalKobo});
+  const DoorOrder({required this.createdAt, this.delivery, required this.dueKobo, required this.kind, required this.pay, required this.reference, this.serviceName, this.startsAt, required this.status, required this.summary, required this.totalKobo});
 
   final DateTime createdAt;
+  final DeliveryProgress? delivery;
   final int dueKobo;
   final String kind;
   /// Something is due now; its pay link is GET
@@ -4016,6 +4146,7 @@ class DoorOrder {
 
   factory DoorOrder.fromJson(Map<String, dynamic> j) => DoorOrder(
         createdAt: DateTime.parse(j['created_at'] as String),
+        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
         dueKobo: (j['due_kobo'] as num).toInt(),
         kind: j['kind'] as String,
         pay: j['pay'] as bool,
@@ -4029,6 +4160,7 @@ class DoorOrder {
 
   Map<String, dynamic> toJson() => {
         'created_at': createdAt.toUtc().toIso8601String(),
+        'delivery': ?delivery?.toJson(),
         'due_kobo': dueKobo,
         'kind': kind,
         'pay': pay,

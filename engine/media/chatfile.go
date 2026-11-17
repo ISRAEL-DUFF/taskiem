@@ -38,11 +38,13 @@ func CheckChatFile(data []byte) (string, []byte, error) {
 		return "", nil, err
 	}
 	if ctype != "" {
+		// Ogg by its own length; an Ogg whose length cannot be read, and
+		// the others, by size.
+		d, ok := time.Duration(0), false
 		if ctype == "audio/ogg" {
-			if d, ok := voice.OggDuration(clean); ok && d > MaxChatVoice {
-				return "", nil, fmt.Errorf("%w: a voice note longer than 5 minutes", ErrFile)
-			}
-		} else if len(clean) > MaxChatVoiceBytes {
+			d, ok = voice.OggDuration(clean)
+		}
+		if (ok && d > MaxChatVoice) || (!ok && len(clean) > MaxChatVoiceBytes) {
 			return "", nil, fmt.Errorf("%w: a voice note longer than 5 minutes", ErrFile)
 		}
 		return ctype, clean, nil

@@ -373,14 +373,75 @@ func (s *Server) purgeChatHistory(ctx context.Context) error {
 	if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_chat_history_purge()`); err != nil {
 		return err
 	}
-	// Customers' messages past their year (customer_chat.go).
-	if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_customer_messages_purge()`); err != nil {
+	// Customers' messages past their year (customer_chat.go), and the
+	// files of app conversations they held, in each business's storage.
+	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id, path FROM taskiem_customer_messages_purge()`)
+	if err != nil {
 		return err
+	}
+	type gone struct {
+		tenant uuid.UUID
+		path   string
+	}
+	files, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (gone, error) {
+		var g gone
+		return g, r.Scan(&g.tenant, &g.path)
+	})
+	if err != nil {
+		return err
+	}
+	byTenant := map[uuid.UUID][]string{}
+	for _, f := range files {
+		byTenant[f.tenant] = append(byTenant[f.tenant], f.path)
+	}
+	for tenant, paths := range byTenant {
+		s.dropChatFiles(ctx, tenant, paths)
 	}
 	// "At most once per ..." notices past their periods, sign-up offers past
 	// a day, chat-link sign-up codes that led to no chat (migration 00459).
-	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_customer_chat_notices_purge()`)
+	_, err = s.Store.Pool.Exec(ctx, `SELECT taskiem_customer_chat_notices_purge()`)
 	return err
+}
+
+// eraseChatFiles deletes from the business's storage the files of the app
+// conversations of erased customers (their subjects), and forgets where
+// they were and their names.
+func (s *Server) eraseChatFiles(ctx context.Context, tenant uuid.UUID, subjects []string) error {
+	var paths []string
+	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		const theirs = `FROM customer_conversations c WHERE m.tenant_id = $1 AND c.tenant_id = $1 AND c.id = m.conversation_id
+			AND c.subject_id = ANY ($2) AND m.attachment ? 'path'`
+		rows, err := tx.Query(ctx, `SELECT m.attachment ->> 'path' FROM customer_messages m, customer_conversations c
+			WHERE m.tenant_id = $1 AND c.tenant_id = $1 AND c.id = m.conversation_id AND c.subject_id = ANY ($2) AND m.attachment ? 'path'`, tenant, subjects)
+		if err != nil {
+			return err
+		}
+		if paths, err = pgx.CollectRows(rows, pgx.RowTo[string]); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `UPDATE customer_messages m SET attachment = (m.attachment - 'path' - 'name') || '{"erased": true}'::jsonb `+theirs, tenant, subjects)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	s.dropChatFiles(ctx, tenant, paths)
+	return nil
+}
+
+// dropChatFiles deletes files of app conversations from the business's
+// storage, a hundred at a time; one that cannot be deleted is logged.
+func (s *Server) dropChatFiles(ctx context.Context, tenant uuid.UUID, paths []string) {
+	if s.Media == nil || len(paths) == 0 {
+		return
+	}
+	for len(paths) > 0 {
+		n := min(100, len(paths))
+		if err := s.Media.Delete(context.WithoutCancel(ctx), tenant, media.PrivateBucket, paths[:n]); err != nil {
+			s.Logger.Warn("customer chats: files not deleted from storage", "tenant", tenant, "files", n, "err", err)
+		}
+		paths = paths[n:]
+	}
 }
 
 // --- the web as a channel ---

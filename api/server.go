@@ -72,6 +72,9 @@ type Server struct {
 	// (taskiem-for-everyone §9: the browser chat's SMS fallback, stream B);
 	// nil tells no one.
 	CustomerAnswered CustomerAnswerHook
+	// closedReplyFault, when set, fails the closed reply after it is
+	// claimed (tests: a failure keeps the customer's message).
+	closedReplyFault func() error
 	// OrderReadInline reads a customer's message for an order before the
 	// webhook answers, not in the background (tests).
 	OrderReadInline bool

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/google/uuid"
@@ -53,8 +54,38 @@ func TestCustomerDoorBookingAndLimits(t *testing.T) {
 	tolu.must(404, "GET", "/v1/me/chats/"+id+"/services/nope/times", nil)
 
 	book := map[string]any{"service_id": svc, "start": at, "note": "Long braids"}
-	b := tolu.must(201, "POST", "/v1/me/chats/"+id+"/bookings", book, "Idempotency-Key", "b1")["booking"].(map[string]any)
+	// The same booking sent four times at once: one booking, and each
+	// answer is it (never "that time was just taken").
+	var wg sync.WaitGroup
+	answers := make([]map[string]any, 4)
+	codes := make([]int, 4)
+	for i := range answers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			codes[i], answers[i] = tolu.do("POST", "/v1/me/chats/"+id+"/bookings", book, "Idempotency-Key", "b1")
+		}()
+	}
+	wg.Wait()
+	var b map[string]any
+	created := 0
+	for i, c := range codes {
+		if c == 201 {
+			created++
+			b = answers[i]["booking"].(map[string]any)
+		} else if c != 200 {
+			t.Fatalf("a booking sent at once: %v %v", codes, answers)
+		}
+	}
+	if created != 1 {
+		t.Fatalf("booked %d times: %v", created, codes)
+	}
 	ref := b["reference"].(string)
+	for _, a := range answers {
+		if a["booking"].(map[string]any)["reference"] != ref {
+			t.Fatalf("answers: %v", answers)
+		}
+	}
 	if b["service_name"] != "Hair braiding" || b["price_kobo"] != float64(800000) {
 		t.Fatalf("booked: %v", b)
 	}
@@ -81,6 +112,26 @@ func TestCustomerDoorBookingAndLimits(t *testing.T) {
 	if len(pm) != 1 || pm[0].(map[string]any)["card"].(map[string]any)["type"] != "booking" {
 		t.Fatalf("the booking's card: %v", pm)
 	}
+	// A booking made in the app is told in the conversation, not by SMS.
+	told, err := w.srv.Orders.NotifyCustomer(ctx, w.biz, ref, "Your braids are confirmed", "", "told:"+ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q := told["queued"].([]string); len(q) != 1 || q[0] != "app" {
+		t.Fatalf("told by: %v", told)
+	}
+	pm = tolu.must(200, "GET", "/v1/me/chats/"+id+"/messages", nil)["messages"].([]any)
+	if last := pm[len(pm)-1].(map[string]any); last["body"] != "Your braids are confirmed" || last["mine"] != false {
+		t.Fatalf("told in the chat: %v", pm)
+	}
+	var sms int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM platform_messages WHERE tenant_id = $1 AND channel = 'sms' AND text LIKE '%braids%'`, w.biz).Scan(&sms); err == nil && sms != 0 {
+		t.Fatalf("told by SMS too: %d", sms)
+	}
+	// The business sees it was made in the app.
+	if so := w.owner.must(200, "GET", "/v1/storefront/orders/"+ref, nil)["order"].(map[string]any); so["in_app"] != true {
+		t.Fatalf("the booking as the business sees it: %v", so)
+	}
 	// A booking offer from the business: the service, as a card.
 	var thread string
 	for _, c := range owner.must(200, "GET", "/v1/customer-chats", nil)["chats"].([]any) {
@@ -97,18 +148,23 @@ func TestCustomerDoorBookingAndLimits(t *testing.T) {
 		tolu.must(201, "POST", "/v1/me/chats/"+id+"/messages", map[string]any{"text": fmt.Sprintf("Message %d", i)})
 	}
 	tolu.must(429, "POST", "/v1/me/chats/"+id+"/messages", map[string]any{"text": "One too many"})
-	// And starts at most 5 chats an hour.
-	for range 4 {
-		if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO person_conversations (id, person_id, tenant_id) VALUES (gen_random_uuid(), $1, $2)`,
-			toluID, w.env.DB.SeedTenant(t, nil).ID); err != nil {
+	// And starts at most 5 chats an hour; chats a business opened by
+	// writing first are not the person's.
+	for i := range 6 {
+		if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO person_conversations (id, person_id, tenant_id, by_business) VALUES (gen_random_uuid(), $1, $2, $3)`,
+			toluID, w.env.DB.SeedTenant(t, nil).ID, i%2 == 1); err != nil {
 			t.Fatal(err)
 		}
 	}
-	other := w.tenant(t, "Ade Foods", "owner@ade.test")
-	verifyPhone(t, w.world, other, "phone", "business")
-	other.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "ade-foods", "draft": map[string]any{"name": "Ade Foods"}})
-	other.must(200, "POST", "/v1/storefront/publish", nil)
-	if e := tolu.must(429, "POST", "/v1/me/chats", map[string]any{"business_id": tenantIDNamed(t, w.world, "Ade Foods")}); !strings.Contains(e["error"].(string), "many new chats") {
+	shop := func(name, slug string) uuid.UUID {
+		other := w.tenant(t, name, "owner@"+slug+".test")
+		verifyPhone(t, w.world, other, "phone", "business")
+		other.must(200, "PUT", "/v1/storefront", map[string]any{"slug": slug, "draft": map[string]any{"name": name}})
+		other.must(200, "POST", "/v1/storefront/publish", nil)
+		return tenantIDNamed(t, w.world, name)
+	}
+	tolu.must(201, "POST", "/v1/me/chats", map[string]any{"business_id": shop("Ade Foods", "ade-foods")})
+	if e := tolu.must(429, "POST", "/v1/me/chats", map[string]any{"business_id": shop("Bola Foods", "bola-foods")}); !strings.Contains(e["error"].(string), "many new chats") {
 		t.Fatalf("the sixth chat: %v", e)
 	}
 }

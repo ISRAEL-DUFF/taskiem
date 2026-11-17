@@ -9811,12 +9811,15 @@ paths:
                   properties:
                     type:
                       type: string
-                      enum: [order, pay, booking, product]
+                      enum: [order, pay, booking, product, invoice, delivery]
+                      description: 'invoice: one of this customer''s sent invoices (`invoice_id`); delivery: the rider''s progress on this customer''s order (`reference`), once a rider holds it.'
                     reference:
                       type: string
                     item_id:
                       type: string
                     service_id:
+                      type: string
+                    invoice_id:
                       type: string
                 offer:
                   type: boolean
@@ -20441,9 +20444,12 @@ paths:
                   type: boolean
                 offers:
                   type: boolean
+                offers_asked:
+                  type: boolean
+                  description: '"Get offers from {business}?" was shown and passed over: it is not asked again (`ask_offers` false). Answering it does the same.'
       responses:
         '200':
-          description: The chat
+          description: 'The chat. Mute and archive are kept even when the business blocked you; then only `offers` is refused (`offers_refused`), or the whole request is (403 `blocked`) when it asked only that.'
           content:
             application/json:
               schema:
@@ -38114,10 +38120,43 @@ components:
           description: 'Your answer to "Get offers from {business}?"'
         ask_offers:
           type: boolean
-          description: Ask it now (once, at the first chat or order).
+          description: "Ask it now (once, at the first chat or order). False once answered, once shown and passed over (`PUT {offers_asked: true}`), and while either side blocked the other."
+        offers_refused:
+          type: boolean
+          description: 'On a PUT: the answer to offers was not taken, since the business is not taking messages from you; the rest of the change was.'
         typing:
           type: boolean
           description: One chat only, the business is typing.
+        photo:
+          type: object
+          description: One chat only, the business's photo (its logo; sizes by width in `urls`).
+          properties:
+            id:
+              type: string
+            width:
+              type: integer
+            height:
+              type: integer
+            urls:
+              type: object
+              additionalProperties:
+                type: string
+            moderation:
+              type: string
+        verified:
+          type: object
+          additionalProperties: false
+          required: [phone, business, payments, months]
+          description: 'One chat only: what the business has proved, for the header (§15): its phone, a check of the business, a payment provider connected (it is paid through Taskiem''s pay links), and whole months on Taskiem.'
+          properties:
+            phone:
+              type: boolean
+            business:
+              type: boolean
+            payments:
+              type: boolean
+            months:
+              type: integer
         hours:
           type: object
           additionalProperties: false
@@ -38159,6 +38198,9 @@ components:
         offer:
           type: boolean
           description: An offer (marked Offer, with Stop offers under it).
+        warn_transfer:
+          type: boolean
+          description: 'The business''s message asks for a transfer to an account (ten digits standing alone with a banking word): warn that paying is only ever through Taskiem''s pay links (§15).'
         read_at:
           type: [string, 'null']
           format: date-time
@@ -38169,13 +38211,17 @@ components:
       type: object
       additionalProperties: false
       required: [type, title]
-      description: 'A card in an app conversation: an order (what, total, its state), a pay link (`url`), a booking (or a booking offer, by service), or a product.'
+      description: 'A card in an app conversation: an order (what, total, its state), a pay link (`url`), a booking (or a booking offer, by service), a product, an invoice (`invoice_id`, its number in `reference`, what is due in `total_kobo`, its pay page in `url` while something is due), or a delivery (the rider''s progress in `delivery`, as it was when sent).'
       properties:
         type:
           type: string
-          enum: [order, pay, booking, product]
+          enum: [order, pay, booking, product, invoice, delivery]
         reference:
           type: string
+        invoice_id:
+          type: string
+        delivery:
+          $ref: '#/components/schemas/DeliveryProgress'
         title:
           type: string
         line:
@@ -38275,7 +38321,33 @@ components:
         pay:
           type: boolean
           description: Something is due now; its pay link is GET /v1/me/chats/{id}/orders/{reference}/pay.
+        delivery:
+          $ref: '#/components/schemas/DeliveryProgress'
         created_at:
+          type: string
+          format: date-time
+    DeliveryProgress:
+      type: object
+      additionalProperties: false
+      required: [status, line]
+      description: A delivery as its customer follows it, once a rider holds it; nothing of the rider is shown.
+      properties:
+        status:
+          type: string
+          enum: [accepted, picked_up, arrived, delivered]
+        line:
+          type: string
+          description: '"A rider is going to collect it", "On its way to you", "The rider is at your address", "Delivered"'
+        accepted_at:
+          type: string
+          format: date-time
+        picked_up_at:
+          type: string
+          format: date-time
+        arrived_at:
+          type: string
+          format: date-time
+        delivered_at:
           type: string
           format: date-time
     CustomerChatSettings:
@@ -40526,6 +40598,9 @@ components:
         kind:
           type: string
           enum: [order, enquiry, callback, booking, hire, space, tickets, class, quote, trade, chat, app]
+        in_app:
+          type: boolean
+          description: 'Made by a person in the Taskiem app: an order of the kind app, a booking made there, or an order confirmed in their app conversation. "Write to them in the app" (POST /v1/customer-chats/app) answers for these.'
         status:
           type: string
           enum: [received, awaiting_payment, paid, accepted, declined, expired, completed, cancelled, refund_due, no_show, price_changed, refunded, dispatched, on_the_way, arrived, proposed, changed]

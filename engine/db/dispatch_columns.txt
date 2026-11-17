@@ -273,6 +273,8 @@ customer_conversations.owner_told_at
 customer_conversations.person_blocked_at
 customer_conversations.person_id
 customer_conversations.tenant_id
+customer_conversations.wait_check_at
+customer_conversations.waiting_since
 customer_invoice_accounts.account_name
 customer_invoice_accounts.account_number
 customer_invoice_accounts.amount_kobo
@@ -361,8 +363,10 @@ customer_invoices.total_kobo
 customer_invoices.updated_at
 customer_invoices.void_reason
 customer_invoices.voided_at
+customer_messages.attachment
 customer_messages.expires_at
 customer_messages.id
+customer_messages.tenant_id
 customer_typing.person_id
 customer_typing.side
 customer_typing.tenant_id

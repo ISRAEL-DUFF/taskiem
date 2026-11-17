@@ -1065,7 +1065,7 @@ func (s *Server) confirmOrderDraft(w http.ResponseWriter, r *http.Request) {
 				BestTime: d.body.When, Message: d.body.Note},
 			Lines:      lines,
 			Fulfilment: d.body.Fulfilment, Zone: zoneOf(d.body.Zone, opts.Zones), DeliveryKobo: d.body.DeliveryKobo,
-			Pay: pay, By: p.Actor(),
+			Pay: pay, By: p.Actor(), PersonID: appPersonOf(chat),
 		})
 		if err != nil {
 			return err
@@ -1289,16 +1289,22 @@ func (s *Server) orderDraftAlerts(ctx context.Context, p *Principal) ([]chatAler
 // thread with the business. The same words about one order go once.
 func (s *Server) ChatNotify(ctx context.Context, tenant uuid.UUID, ord storefront.Order, text string) error {
 	var thread uuid.UUID
-	// An order placed in the app is told in the app conversation it came
-	// from (taskiem-for-everyone §8.4); one from WhatsApp, there first.
-	prefer := "whatsapp"
-	if ord.Kind == "app" {
-		prefer = lineApp
-	}
+	// Anything made in the app (an app order, a booking, an order confirmed
+	// in an app conversation) is told in that person's own app
+	// conversation, found by the person, never by the phone's subject,
+	// which a phone that changed hands shares with another person
+	// (taskiem-for-everyone §8.4). One from WhatsApp, in the WhatsApp
+	// thread of that number.
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT id FROM customer_conversations WHERE tenant_id = $1 AND subject_id = $2 AND blocked_at IS NULL
-			ORDER BY (line = $3) DESC, last_message_at DESC LIMIT 1`,
-			tenant, ord.CustomerID(), prefer).Scan(&thread)
+		if ord.PersonID != nil {
+			err := tx.QueryRow(ctx, `SELECT id FROM customer_conversations WHERE tenant_id = $1 AND line = 'app' AND person_id = $2 AND blocked_at IS NULL`,
+				tenant, *ord.PersonID).Scan(&thread)
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+		}
+		return tx.QueryRow(ctx, `SELECT id FROM customer_conversations WHERE tenant_id = $1 AND line = 'whatsapp' AND subject_id = $2
+			ORDER BY last_message_at DESC LIMIT 1`, tenant, ord.CustomerID()).Scan(&thread)
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return errors.New("orders: the customer has no conversation with the business")
