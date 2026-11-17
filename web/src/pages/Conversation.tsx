@@ -904,7 +904,7 @@ function Bubble({
           {onOpenDoc && (card.doc === "purchase" || card.doc === "bill") ? (
             <button
               type="button"
-              className="button small"
+              className="button small view"
               onClick={(e) =>
                 onOpenDoc(
                   card,
@@ -919,7 +919,7 @@ function Bubble({
               <span className="sr-only"> {card.reference}</span>
             </button>
           ) : (
-            <Link to={cardHref(card)} className="button small">
+            <Link to={cardHref(card)} className="button small view">
               {card.doc === "delivery" || card.doc === "dispatch"
                 ? "View delivery"
                 : card.doc === "order" || card.doc === "purchase"

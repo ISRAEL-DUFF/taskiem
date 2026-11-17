@@ -2,8 +2,8 @@
 // lib/refs.ts; docs/spec/chat-five-more-flows.md, phase 2 additions): an
 // invoice, a bill, an order, an order to a supplier or a customer, read
 // now, so a payment made since shows as paid. Its one action (send, remind,
-// message) and "Give this to…" work from it; Open and Pay lead to the tools'
-// screens (M5 to M8) and come with them.
+// message) and "Give this to…" work from it; Open and Pay lead to its
+// screen.
 
 import 'dart:math' as math;
 
@@ -16,8 +16,12 @@ import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../theme/theme.dart';
+import 'bills_page.dart' show openBill;
 import 'cards.dart' show CardPill;
 import 'give_task.dart';
+import 'invoices_page.dart' show openInvoice;
+import 'purchases_page.dart' show openPurchase;
+import 'storefront_orders_page.dart' show openStorefrontOrder;
 import 'words.dart';
 
 // --- lib/refs.ts, lib/mentions.ts ---
@@ -183,8 +187,9 @@ class _RefCardState extends State<RefCard> {
       return;
     }
     if (c.action == 'pay') {
-      // Paying is the bill's screen: coming with the tools.
-      showComingSoon(context);
+      // Paying is the bill's screen; the card read again on return.
+      await openBill(context, widget.auth, c.id);
+      if (mounted) await _read();
       return;
     }
     setState(() => _busy = true);
@@ -264,8 +269,23 @@ class _RefCardState extends State<RefCard> {
     final giving = c.kind != 'customer' && can('member.manage|invoice.manage');
     final action = c.action;
     final acts = <Widget>[
-      // Open shows it where it is worked on, a tool's screen: coming.
-      if (c.kind != 'customer') _Btn(label: 'Open', named: label, onTap: () => showComingSoon(context)),
+      // Open shows it where it is worked on, each on its own screen
+      // (ChatRefCard.tsx).
+      if (c.kind != 'customer')
+        _Btn(
+          label: 'Open',
+          named: label,
+          onTap: () async {
+            if (c.kind == 'order') return openStorefrontOrder(context, widget.auth, c.name);
+            await (c.kind == 'invoice'
+                ? openInvoice(context, widget.auth, c.id)
+                : c.kind == 'bill'
+                ? openBill(context, widget.auth, c.id)
+                : openPurchase(context, widget.auth, c.id));
+            // Paid or changed there: read again.
+            if (mounted) await _read();
+          },
+        ),
       if (giving)
         _Btn(label: 'Give this to…', named: label, onTap: () => giveThis(context, widget.auth, (kind: c.kind, id: c.id, name: c.name))),
       if (action != null && (action != 'message' || widget.onMessage != null))
@@ -463,6 +483,7 @@ class _Btn extends StatelessWidget {
       button: true,
       enabled: onTap != null,
       label: '$label $named',
+      onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,

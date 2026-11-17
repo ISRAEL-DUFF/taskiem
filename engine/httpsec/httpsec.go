@@ -27,6 +27,20 @@ func Set(h http.Header) {
 	h.Set("Content-Security-Policy", CSP)
 }
 
+// AnswerCSP is the Content-Security-Policy of answers from the hooks
+// path, whose text a workflow or a connector may have chosen: a browser
+// that opens one gets a sandboxed document with its own empty origin, so
+// it runs no script, loads nothing, reads no cookie of this origin, and
+// cannot be framed.
+const AnswerCSP = "sandbox; default-src 'none'; frame-ancestors 'none'"
+
+// SetAnswer writes the headers of an answer from the hooks path: Set's,
+// with AnswerCSP in place of the application's policy.
+func SetAnswer(h http.Header) {
+	Set(h)
+	h.Set("Content-Security-Policy", AnswerCSP)
+}
+
 // Headers is middleware that sets the security headers on every response.
 func Headers(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

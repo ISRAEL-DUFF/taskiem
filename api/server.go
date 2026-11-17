@@ -201,6 +201,9 @@ type Server struct {
 	// LoginBurst is how many sign-in attempts an address may make at once
 	// (then one every six seconds); default 10.
 	LoginBurst int
+	// AppLinks is which phone apps this server's links and passkeys belong
+	// to (applinks.go); empty serves no well-known files.
+	AppLinks AppLinks
 	// WebAuthn is the relying party for passkeys; empty turns them off.
 	WebAuthn webauthn.Config
 	// RequireAdminPasskeys holds members with administrative permissions to
@@ -217,6 +220,9 @@ type Server struct {
 	// AnchorKey is the public key audit anchors are signed with, published
 	// to tenants so they can check anchors themselves.
 	AnchorKey ed25519.PublicKey
+	// RetiredAnchorKeys are earlier anchor keys' public halves: anchors
+	// made before the key was changed verify with them.
+	RetiredAnchorKeys []ed25519.PublicKey
 	// WhatsApp is the platform number (spec 11); nil turns the channel off.
 	WhatsApp *whatsapp.Platform
 	// WhatsAppPublic answers numbers bound to no one; nil sends how to link.
@@ -311,6 +317,8 @@ func (s *Server) Handler() http.Handler {
 	r.Use(middleware.RequestID, s.realIP, observe, s.recoverer, s.securityHeaders, s.hsts, s.customDomains)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	r.Get("/readyz", s.ready)
+	r.Get("/.well-known/assetlinks.json", s.assetLinks)
+	r.Get("/.well-known/apple-app-site-association", s.appleSiteAssociation)
 	if s.Status != nil && s.Status.Page != nil {
 		// The public status page: no session, no tenant data, cacheable.
 		r.Get("/status", s.Status.Page.HTML)
@@ -343,6 +351,9 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/password/reset", s.resetPassword)
 		r.Post("/auth/chat/start", s.chatSigninStart) // signing in with the chat (chat_signin.go)
 		r.Post("/auth/chat/verify", s.chatSigninVerify)
+		r.Post("/signup/app/code", s.appSignupCode) // signing up in the app as on WhatsApp (app_signup.go)
+		r.Post("/signup/app/verify", s.appSignupVerify)
+		r.Post("/signup/app/turn", s.appSignupTurn)
 		r.Post("/auth/chat/link/peek", s.chatSigninLinkPeek)
 		r.Post("/auth/chat/link", s.chatSigninLink)
 		r.Post("/auth/invitation/options", s.invitationLinkOptions) // invitation links (invitationlinks.go)
@@ -377,6 +388,8 @@ func (s *Server) Handler() http.Handler {
 		r.Route("/embed/{app}", s.embedRoutes)
 		r.Group(func(r chi.Router) {
 			r.Use(s.authenticate)
+			// An unchanged answer is a 304 to an app that kept it (etag.go).
+			r.Use(etagJSON)
 			r.With(s.partnerPlan).Route("/partner", s.partnerRoutes) // partner admin API (partner.go)
 			r.Route("/billing", s.billingRoutes)                     // plans and subscriptions (billing.go)
 			r.Route("/keys", s.keyRoutes)                            // encryption keys and BYOK (keys.go)
@@ -388,8 +401,10 @@ func (s *Server) Handler() http.Handler {
 			r.Put("/me/passkey-only", s.setPasskeyOnly) // only sign in with my passkey (passkey_rule.go)
 			r.Post("/me/email/verify", s.verifyEmail)
 			r.Post("/me/email/verify/resend", s.resendVerification)
-			r.Post("/me/email", s.addEmail)       // Add your email (chat_doors.go)
-			r.Post("/me/chat-link", s.linkChat)   // a chat linked by an emailed link (chat_doors.go)
+			r.Post("/me/email", s.addEmail)     // Add your email (chat_doors.go)
+			r.Post("/me/chat-link", s.linkChat) // a chat linked by an emailed link (chat_doors.go)
+			r.Post("/me/chat-link/preview", s.previewChatLink)
+			r.Post("/me/chat-link/refuse", s.refuseChatLink)
 			r.Get("/onboarding", s.getOnboarding) // the getting-started checklist (onboarding.go)
 			r.With(s.need(PermWorkflowEdit)).Post("/onboarding/dismiss", s.dismissOnboarding)
 			r.Route("/agent", s.agentRoutes) // field agents' own work (agents.go)
@@ -623,6 +638,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/bookings", s.listStorefrontBookings)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/bookings/{reference}/cancel", s.cancelStorefrontBooking)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/bookings/{reference}/move", s.moveStorefrontBooking)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/bookings/{reference}/times", s.storefrontBookingTimes)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/domains", s.listStorefrontDomains)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/domains", s.addStorefrontDomain)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/domains/{id}/verify", s.verifyStorefrontDomain)

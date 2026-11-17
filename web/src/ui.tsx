@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type InputHTMLAttributes, type ReactNode, type RefObject } from "react";
 import { Link } from "react-router-dom";
 import { onScreen, toast } from "./toast";
 import { ApiError } from "./api";
@@ -75,12 +75,64 @@ export function Json({ value }: { value: unknown }) {
 /** A labelled field. data-technical marks one an owner meets only under
  * Advanced (no-technical-steps N5: the gate's word test leaves it out). */
 export function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode; "data-technical"?: boolean }) {
+  const id = useId();
   return (
     <label className="field">
-      <span>{label}</span>
-      {children}
+      <span id={id}>{label}</span>
+      <FieldLabel.Provider value={id}>{children}</FieldLabel.Provider>
       {hint && <div className="hint">{hint}</div>}
     </label>
+  );
+}
+
+/** The id of the label text of the field an input is in (Field, KitField):
+ * a control with a button beside it (PasswordInput) is named by that text
+ * alone, not by the label's whole content. */
+export const FieldLabel = createContext<string | undefined>(undefined);
+
+/** A password box with Show and Hide beside it, so what was typed can be
+ * checked before it is sent (sign-up above all). Hidden again when the form
+ * is sent, so a browser never offers to keep it as plain text. */
+export function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
+  const [shown, setShown] = useState(false);
+  const labelId = useContext(FieldLabel);
+  const id = useId();
+  const box = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const form = box.current?.form;
+    if (!form) return;
+    const hide = () => setShown(false);
+    form.addEventListener("submit", hide);
+    return () => form.removeEventListener("submit", hide);
+  }, []);
+  return (
+    <span className="pw-box">
+      <input
+        {...props}
+        ref={box}
+        id={props.id ?? id}
+        type={shown ? "text" : "password"}
+        aria-labelledby={props["aria-labelledby"] ?? labelId}
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
+      />
+      <button
+        type="button"
+        className="pw-toggle"
+        aria-controls={props.id ?? id}
+        title={shown ? "Hide the password" : "Show the password"}
+        onClick={(e) => {
+          // A click inside the field's label would otherwise focus the box
+          // after the button: keep the press on the button.
+          e.preventDefault();
+          setShown((v) => !v);
+        }}
+      >
+        <Icon name={shown ? "eye-off" : "eye"} />
+        <span>{shown ? "Hide" : "Show"}</span>
+      </button>
+    </span>
   );
 }
 

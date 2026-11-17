@@ -529,6 +529,11 @@
       "reviewed": true,
       "context": "Someone sent STOP: the business that messaged them last stops"
     },
+    "reach.stopped_dropped": {
+      "text": "You will no longer get updates from {business} here. Send START to get them again. What you were in the middle of here was dropped too.",
+      "reviewed": true,
+      "context": "Someone with a Taskiem account sent STOP while something of their own was waiting for an answer: the business that messaged them last stops, and what was waiting is dropped"
+    },
     "customer.resumed": {
       "text": "You can write to {business} here again, and they can reply.",
       "reviewed": true,
@@ -948,6 +953,26 @@
       "text": "Done: this chat is linked to your Taskiem account. Send help to see what you can do here.",
       "reviewed": true,
       "context": "Sent to the chat after its emailed link was opened and the chat is linked to the account"
+    },
+    "door.linked_told": {
+      "text": "A chat was linked to your Taskiem account: {chat}. Not you? Unlink it now in Account on the web.",
+      "reviewed": true,
+      "context": "Told to the account's chats after a chat was linked to it from an emailed link; {chat} names the chat, e.g. WhatsApp (+234…9001)"
+    },
+    "door.cooling": {
+      "text": "This chat was linked to your account less than 24 hours ago, so it cannot send a sign-in or password link yet. That keeps your account safe if someone else linked it. Sign in on the web the way you usually do: {link}",
+      "reviewed": true,
+      "context": "\"sign in\" or \"password\" from a chat linked from an emailed link in the last 24 hours"
+    },
+    "wa.password.off": {
+      "text": "Signing in with WhatsApp or Telegram is off for you, so this chat sends no password link. Reset your password from the sign-in page, with your email: {link}",
+      "reviewed": true,
+      "context": "\"password\" from someone who turned chat sign-in off"
+    },
+    "wa.password.unconfirmed": {
+      "text": "Your email is not confirmed yet, so this chat cannot send a password link. Send *email you@example.com* and open the link we email you. Then send *password* again.",
+      "reviewed": true,
+      "context": "\"password\" from someone whose email was never confirmed"
     },
     "door.tg_joined": {
       "text": "That number is your Taskiem account already, from WhatsApp. This Telegram is now linked to it too: your businesses are here. Send help, or new business to start another.",
@@ -1998,6 +2023,21 @@
       "text": "Cancelled.",
       "reviewed": true,
       "context": "cancel dropped what was in progress"
+    },
+    "wa.yes_stale": {
+      "text": "That button was for something earlier, so nothing was done. Send *yes* to confirm what is waiting now, or *cancel* to drop it.",
+      "reviewed": true,
+      "context": "Someone tapped a Yes button shown under an earlier summary while something else waits for their answer: nothing is confirmed"
+    },
+    "wa.yes_stale_none": {
+      "text": "That button was for something earlier. Nothing is waiting for an answer now.",
+      "reviewed": true,
+      "context": "Someone tapped a Yes button shown under an earlier summary and nothing waits for an answer"
+    },
+    "wa.yes_stale_public": {
+      "text": "That button was for something earlier, so nothing was started. Send *menu* to see what you can do here.",
+      "reviewed": true,
+      "context": "A customer on a business's public menu tapped a Yes button shown under an earlier summary: nothing is started"
     },
     "wa.cancelled_nothing_started": {
       "text": "Cancelled. Nothing was started.",
@@ -4280,7 +4320,7 @@
       "context": "No public URL for links"
     },
     "wa.signin.off": {
-      "text": "Signing in with WhatsApp or Telegram is off for you (Account on the web). Send *password* to sign in with an email and password instead.",
+      "text": "Signing in with WhatsApp or Telegram is off for you (Account on the web). Sign in on the web with your email and password: {link}",
       "reviewed": true,
       "context": "\"sign in\" from someone who turned chat sign-in off"
     },
@@ -6894,6 +6934,11 @@
       "reviewed": true,
       "context": "On the buyer's purchase order: why it waits"
     },
+    "order.link.credit_unchecked_note": {
+      "text": "Waiting: {business} could not check your credit just now, so this order was not accepted by itself. Someone there will look at it.",
+      "reviewed": true,
+      "context": "On the buyer's purchase order: why it waits when the seller's credit check could not be made"
+    },
     "order.link.over_limit_title": {
       "text": "Order {reference} waits: over your credit limit",
       "reviewed": true,
@@ -7498,6 +7543,51 @@
       "text": "Your order {reference} was not paid in time, so it is cancelled. Write to us to order again.",
       "reviewed": true,
       "context": "An order confirmed from a customer's WhatsApp message lapsed unpaid"
+    },
+    "rider.photo_kept_for": {
+      "text": "Photo kept as proof of delivery for {reference}. Thank you.",
+      "reviewed": true,
+      "context": "A rider's photo kept as proof, naming the order it was kept for"
+    },
+    "rider.photo_kept_which": {
+      "text": "Photo kept as proof of delivery for {reference}. If it is for another order, tap that order.",
+      "reviewed": true,
+      "context": "A rider's photo kept as proof when they have other orders at the door; each button below is another order's reference"
+    },
+    "rider.photo_moved": {
+      "text": "Done: the photo is now kept for {reference}.",
+      "reviewed": true,
+      "context": "A rider tapped another order's button: their photo was moved to that order"
+    },
+    "link.ended_open.mine": {
+      "text": "You ended the link with {name}. These were still open between you: {list}. They stay as they are and get no more updates here, so settle them with {name} directly.",
+      "reviewed": true,
+      "context": "A line in a business's conversation with a linked business, written when it ends the link while orders or invoices are still open between them; {list} names them"
+    },
+    "link.ended_open.theirs": {
+      "text": "{name} ended the link with your business. These were still open between you: {list}. They stay as they are and get no more updates here, so settle them with {name} directly.",
+      "reviewed": true,
+      "context": "The same line in the other business's conversation, when the business that ended the link is {name}"
+    },
+    "link.ended_open.orders": {
+      "text": "orders {refs}",
+      "reviewed": true,
+      "context": "Part of the list of what was still open when a link ended: the orders' references, separated by commas"
+    },
+    "link.ended_open.orders_more": {
+      "text": "orders {refs} and {more} more",
+      "reviewed": true,
+      "context": "The same, when there are more orders than are named"
+    },
+    "link.ended_open.invoices": {
+      "text": "invoices {refs}",
+      "reviewed": true,
+      "context": "Part of the list of what was still open when a link ended: the invoices' numbers, separated by commas"
+    },
+    "link.ended_open.invoices_more": {
+      "text": "invoices {refs} and {more} more",
+      "reviewed": true,
+      "context": "The same, when there are more invoices than are named"
     }
   }
 }

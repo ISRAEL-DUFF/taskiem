@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -441,6 +442,23 @@ func (s *Server) slackInteractions(w http.ResponseWriter, r *http.Request) {
 	var action, value string
 	if pl.Type == "block_actions" && len(pl.Actions) > 0 {
 		action, value = pl.Actions[0].ActionID, pl.Actions[0].Value
+	}
+	// A click on one of Taskiem's own buttons is read once: the same
+	// signed request sent again inside the signature's time window is a
+	// replay (Slack does not send a click twice), claimed as an event's id
+	// is (slack_chat.go). Two presses of one button differ in what Slack
+	// signs, so each is its own click.
+	if strings.HasPrefix(action, slackLink+".") || strings.HasPrefix(action, slackDecide+".") || strings.HasPrefix(action, slackReply+".") {
+		sum := sha256.Sum256([]byte(r.Header.Get("X-Slack-Request-Timestamp") + ":" + r.Header.Get("X-Slack-Signature")))
+		var fresh bool
+		if err := s.Store.Pool.QueryRow(r.Context(), `SELECT taskiem_slack_event_claim($1)`, "click:"+hex.EncodeToString(sum[:])).Scan(&fresh); err != nil {
+			writeErr(w, http.StatusInternalServerError, "try again")
+			return
+		}
+		if !fresh {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 	}
 	switch {
 	case strings.HasPrefix(action, slackLink+"."):

@@ -53,7 +53,7 @@ import {
 } from "./CustomerChat";
 import { customerID, customerKey } from "../lib/customerchat";
 import { useConfirm } from "./ConfirmSheet";
-import { Explore } from "./Explore";
+import { Explore, GetStarted } from "./Explore";
 import { HeadMenu } from "./ChatHead";
 import { useChatLive } from "./ChatLive";
 import { useDrafts } from "../lib/drafts";
@@ -839,10 +839,11 @@ export function ChatPage() {
               g.waiting.length +
               g.sent.length ===
             0 ? (
-            <EmptyState icon="chat">
-              No linked businesses yet. Search for a supplier or a customer that
-              is on Taskiem, and ask to link.
-            </EmptyState>
+            <GetStarted
+              manage={manage}
+              onExplore={() => startNew.current?.()}
+              onChanged={() => view.reload()}
+            />
           ) : (
             <>
               {g.asked.length > 0 && (

@@ -338,7 +338,8 @@ func (s *Server) cancelStaffInvite(w http.ResponseWriter, r *http.Request) {
 
 // removeStaff is POST /v1/staff/{user}/remove: every role the person holds
 // in the business goes, so their chat and the web no longer reach it. Not
-// oneself, an owner only by an owner, and never the last owner.
+// oneself, an owner only by an owner, never the last owner, and only by
+// someone who could take each of those roles away one by one (mayTakeRoles).
 func (s *Server) removeStaff(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	user, err := uuid.Parse(chi.URLParam(r, "user"))
@@ -360,17 +361,15 @@ func (s *Server) removeStaff(w http.ResponseWriter, r *http.Request) {
 		if len(roles) == 0 {
 			return pgx.ErrNoRows
 		}
-		if slices.Contains(roles, "owner") {
-			if !slices.Contains(p.Roles, "owner") {
-				return fmt.Errorf("%w: only an owner can remove an owner", errForbidden)
-			}
-			var owners int
-			if err := tx.QueryRow(r.Context(), `SELECT count(DISTINCT user_id) FROM memberships WHERE tenant_id = $1 AND role = 'owner'`, p.TenantID).Scan(&owners); err != nil {
-				return err
-			}
-			if owners <= 1 {
-				return fmt.Errorf("%w: a business keeps at least one owner", errConflict)
-			}
+		if slices.Contains(roles, "owner") && !slices.Contains(p.Roles, "owner") {
+			return fmt.Errorf("%w: only an owner can remove an owner", errForbidden)
+		}
+		// Removing someone takes every role they hold, so it needs the
+		// standing to take each (as DELETE /v1/members/{user}/roles/{role}),
+		// and never leaves the business without an owner.
+		slices.Sort(roles)
+		if err := mayTakeRoles(r.Context(), tx, p, user, roles); err != nil {
+			return err
 		}
 		if err := tx.QueryRow(r.Context(), `SELECT CASE WHEN name = '' THEN email ELSE name END FROM users WHERE id = $1`, user).Scan(&name); err != nil {
 			return err

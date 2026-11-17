@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -267,6 +268,13 @@ func (s *Server) answerLink(w http.ResponseWriter, r *http.Request) {
 		}
 		if other, err = links.AnswerTx(r.Context(), tx, id, answer, links.Actor{Type: p.ActorType(), ID: p.Actor()}); err != nil {
 			return err
+		}
+		if answer == links.End {
+			// Both sides are told which orders and invoices were still open
+			// between them: ending leaves those as they are.
+			if err := s.tellLinkEndedOpen(r.Context(), tx, p, id, other, name); err != nil {
+				return err
+			}
 		}
 		if l, err = links.GetTx(r.Context(), tx, id); errors.Is(err, links.ErrNotFound) {
 			// Declined, cancelled or unblocked: no longer shown.
@@ -770,6 +778,48 @@ func (s *Server) issueLinkAccounts(ctx context.Context, id, other uuid.UUID) {
 			s.Logger.Warn("links: issuing a linked customer's account", "tenant", seller, "link", id, "err", err)
 		}
 	}
+}
+
+// tellLinkEndedOpen writes, into both sides' conversations of a link p's
+// business has just ended, which orders and invoices were still open
+// between them (links.OpenDocsTx); nothing when none were. In English, as
+// the conversation's other lines from Taskiem are.
+func (s *Server) tellLinkEndedOpen(ctx context.Context, tx pgx.Tx, p *Principal, link, other uuid.UUID, otherName string) error {
+	open, err := links.OpenDocsTx(ctx, tx, p.TenantID, link, other)
+	if err != nil || !open.Any() {
+		return err
+	}
+	var me string
+	if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&me); err != nil {
+		return err
+	}
+	// A few of each by name, the rest counted: the line stays short.
+	some := func(id string, refs []string) string {
+		if len(refs) == 0 {
+			return ""
+		}
+		const show = 4
+		if len(refs) > show {
+			return tr(lang.EN, id+"_more", "refs", strings.Join(refs[:show], ", "), "more", strconv.Itoa(len(refs)-show))
+		}
+		return tr(lang.EN, id, "refs", strings.Join(refs, ", "))
+	}
+	var parts []string
+	for _, part := range []string{some("link.ended_open.orders", open.Orders), some("link.ended_open.invoices", open.Invoices)} {
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	list := strings.Join(parts, "; ")
+	fit := func(text string) string {
+		if r := []rune(text); len(r) > 300 {
+			return string(r[:299]) + "…"
+		}
+		return text
+	}
+	mine := fit(tr(lang.EN, "link.ended_open.mine", "name", otherName, "list", list))
+	theirs := fit(tr(lang.EN, "link.ended_open.theirs", "name", me, "list", list))
+	return links.TellEndedTx(ctx, tx, p.TenantID, link, mine, theirs, links.Sender{ID: p.Actor()})
 }
 
 // boolOrder sorts true first.

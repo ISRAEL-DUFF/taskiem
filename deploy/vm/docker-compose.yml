@@ -8,6 +8,15 @@
 # next update replaces it with the copy from the release being installed.
 #
 # Container steps are deliberately off: their only safe runner is Kubernetes.
+#
+# Every service has a memory limit (mem_limit) and a process limit
+# (pids_limit), the same as the Helm chart's where it has one
+# (deploy/helm/taskiem/values.yaml; deploy/compose_test.go compares them).
+# All containers share the VM's memory, and without limits the kernel
+# chooses what to kill when it runs out. The limits are ceilings, not
+# reservations: together they come to about 6 GiB, so a 4 GiB server can
+# still run out with the public pages or mail on. oom_score_adj then makes
+# the malware scanner the first to be killed and OpenBao the last.
 name: taskiem
 
 x-hardening: &hardening
@@ -21,6 +30,8 @@ services:
   caddy:
     <<: *hardening
     image: caddy:2.11.8@sha256:4fcafa98afd1c2e642e353e3c5cf9ddbe892fcee14bc990e7ba2c5b78e51f9cf
+    mem_limit: 256m
+    pids_limit: 256
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
       TASKIEM_DOMAIN: ${TASKIEM_DOMAIN:?set TASKIEM_DOMAIN in .env}
@@ -41,6 +52,10 @@ services:
     <<: *hardening
     image: ${OPENBAO_IMAGE:-openbao/openbao:2.7.1@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf}
     command: ["server"]
+    mem_limit: 512m
+    pids_limit: 256
+    # The keys to every secret: the last thing to kill.
+    oom_score_adj: -500
     environment:
       BAO_ADDR: http://127.0.0.1:8200
     env_file: [openbao-unseal.env]
@@ -60,6 +75,8 @@ services:
     <<: *hardening
     image: ${OPENBAO_IMAGE:-openbao/openbao:2.7.1@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf}
     entrypoint: ["sh", "-c"]
+    mem_limit: 64m
+    pids_limit: 32
     command:
       - |
         export BAO_TOKEN="$$TASKIEM_OPENBAO_TOKEN"
@@ -78,6 +95,8 @@ services:
   migrate:
     image: ${TASKIEM_IMAGE:?set TASKIEM_IMAGE in .env}
     command: ["migrate"]
+    mem_limit: 256m
+    pids_limit: 256
     env_file: [migrate.env]
     restart: "no"
     security_opt: ["no-new-privileges:true"]
@@ -87,6 +106,9 @@ services:
     <<: *hardening
     image: ${TASKIEM_IMAGE:?set TASKIEM_IMAGE in .env}
     command: ["serve", "--role", "all"]
+    # Code steps need room, as the chart's "all" role (2Gi).
+    mem_limit: 2g
+    pids_limit: 2048
     env_file: [taskiem.env, openbao.env]
     read_only: true
     cap_drop: [ALL]
@@ -117,6 +139,8 @@ services:
     profiles: [public]
     image: ${TASKIEM_IMAGE:?set TASKIEM_IMAGE in .env}
     command: ["serve", "--role", "public"]
+    mem_limit: 256m
+    pids_limit: 256
     env_file: [public.env]
     read_only: true
     cap_drop: [ALL]
@@ -141,6 +165,8 @@ services:
     profiles: [mail]
     image: ${TASKIEM_IMAGE:?set TASKIEM_IMAGE in .env}
     command: ["serve", "--role", "mail"]
+    mem_limit: 256m
+    pids_limit: 256
     env_file:
       # Optional: kits from before email triggers have no mail.env until
       # setup runs again.
@@ -162,11 +188,16 @@ services:
   # the public pages. Not published: only Taskiem reaches it, on the Compose
   # network (TASKIEM_CLAMD_ADDR=clamav:3310). Its own freshclam fetches
   # signature updates from the ClamAV mirrors; it needs about 1.5 GB of
-  # memory for them.
+  # memory for them, and up to 2.5 GB while it reloads them (the chart's
+  # limit). If the server runs out of memory it is the first to be killed:
+  # form files then wait and are tried again.
   clamav:
     <<: *hardening
     profiles: [public, mail]
     image: ${CLAMAV_IMAGE:-clamav/clamav:1.4.6@sha256:8ad6197396974726c35d017e50aaaaf4b91745726a04faec8480c203edd98052}
+    mem_limit: 2560m
+    pids_limit: 256
+    oom_score_adj: 500
     volumes:
       - clamav_db:/var/lib/clamav
     healthcheck:

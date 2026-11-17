@@ -124,6 +124,7 @@ func (s *Server) opsRoutes(r chi.Router) {
 		r.Get("/tenants", s.opsTenants)
 		r.Get("/tenants/{id}", s.opsTenant)
 		r.Post("/tenants/{id}/{action}", s.opsTenantAction)
+		s.opsFeaturedRoutes(r) // Explore's Featured row (explore_ops.go)
 		r.Get("/audit", s.opsAudit)
 		r.Get("/audit/verify", s.opsAuditVerify)
 		r.Get("/audit/export", s.opsAuditExport)
@@ -575,6 +576,7 @@ var opsStepUpOps = map[string]bool{
 	"ops.storefront.review": true, "ops.storefront.suspend": true, "ops.storefront.restore": true,
 	"ops.report.dismiss": true, "ops.report.action": true, "ops.report.contact": true,
 	"ops.agent.add": true, "ops.agent.suspend": true, "ops.agent.reactivate": true, "ops.agent.retire": true,
+	"ops.explore.feature": true, "ops.explore.unfeature": true,
 	"ops.tenant.suspend": true, "ops.tenant.resume": true,
 }
 

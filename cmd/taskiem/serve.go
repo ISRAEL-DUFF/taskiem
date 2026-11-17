@@ -93,6 +93,10 @@ type config struct {
 	OpenBaoAddr, OpenBaoToken, KMSKey string
 	WebDir                            string
 	AnchorKey, AnchorDir              string
+	// AnchorPublicKeys are retired anchor keys' public halves
+	// (TASKIEM_ANCHOR_PUBLIC_KEYS): anchors made before the key was
+	// changed still verify with them.
+	AnchorPublicKeys                  string
 	SecureCookies, TrustProxy, Signup bool
 	// AppMinVersion is the lowest phone app version served (TASKIEM_APP_MIN_VERSION).
 	AppMinVersion string
@@ -108,7 +112,14 @@ type config struct {
 	// Push is the VAPID key pair for chat push (TASKIEM_VAPID_PUBLIC_KEY,
 	// TASKIEM_VAPID_PRIVATE_KEY, TASKIEM_VAPID_SUBJECT): with none, no push is
 	// sent (docs/spec/chat-push.md).
-	Push       push.Config
+	Push push.Config
+	// FCM is the phone app's notifications (TASKIEM_FCM_CREDENTIALS, the
+	// Firebase service account's key; TASKIEM_FCM_CLIENT, the app's client
+	// values): with neither, the app is not notified (docs/spec/mobile-app-m4.md).
+	FCM *push.FCM
+	// AppLinks is the phone apps this server's links and passkeys belong to
+	// (TASKIEM_ANDROID_APP, TASKIEM_IOS_APP; docs/spec/mobile-app-m4.md N5).
+	AppLinks   api.AppLinks
 	Queues     []string
 	Cloud      cloudConfig
 	Connectors builtin.Options
@@ -167,6 +178,8 @@ type config struct {
 	Keys KeysConfig
 	// Shutdown is how the process stops on SIGTERM (docs/reliability.md).
 	Shutdown ShutdownConfig
+	// Wake is how workers are told of a new task (docs/spec/task-wake-ups.md).
+	Wake WakeConfig
 	// Status is the public status page and its admin API; Canary the
 	// synthetic end-to-end probe (docs/reliability.md).
 	Status StatusConfig
@@ -181,6 +194,29 @@ type config struct {
 type ShutdownConfig struct {
 	Delay       time.Duration // TASKIEM_SHUTDOWN_DELAY, default 0 (the chart sets 10s)
 	WorkerDrain time.Duration // TASKIEM_WORKER_DRAIN, default 30s
+}
+
+// WakeConfig is how workers are told of a new task
+// (docs/spec/task-wake-ups.md): after the scheduling transaction's commit,
+// at most once every Interval for a queue, or, with InTx, by the task
+// trigger inside the transaction as before decision 0067.
+type WakeConfig struct {
+	Interval time.Duration // TASKIEM_WAKE_INTERVAL, default 10ms
+	InTx     bool          // TASKIEM_WAKE_IN_TX, default false
+}
+
+func wakeConfig() (WakeConfig, error) {
+	c := WakeConfig{Interval: runtime.DefaultWakeInterval}
+	if v := os.Getenv("TASKIEM_WAKE_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d < time.Millisecond || d > time.Second {
+			return c, fmt.Errorf("TASKIEM_WAKE_INTERVAL must be a duration between 1ms and 1s, not %q", v)
+		}
+		c.Interval = d
+	}
+	var err error
+	c.InTx, err = envBool("TASKIEM_WAKE_IN_TX", false)
+	return c, err
 }
 
 func shutdownConfig() (ShutdownConfig, error) {
@@ -375,12 +411,12 @@ func chatWayIn(c *config) error {
 	for _, ch := range strings.Split(os.Getenv("TASKIEM_CHAT_SIGNUP"), ",") {
 		switch ch = strings.ToLower(strings.TrimSpace(ch)); ch {
 		case "":
-		case "whatsapp", "telegram", "slack":
+		case "whatsapp", "telegram", "slack", "app":
 			if !slices.Contains(c.ChatSignup.Channels, ch) {
 				c.ChatSignup.Channels = append(c.ChatSignup.Channels, ch)
 			}
 		default:
-			return fmt.Errorf("TASKIEM_CHAT_SIGNUP: %q is not a channel that signs people up (whatsapp, telegram, slack)", ch)
+			return fmt.Errorf("TASKIEM_CHAT_SIGNUP: %q is not a channel that signs people up (whatsapp, telegram, slack, app)", ch)
 		}
 	}
 	var err error
@@ -435,30 +471,31 @@ func loadConfig() (config, error) {
 	var bad []error
 	flag := envBools(&bad)
 	c := config{
-		DSN:           os.Getenv("TASKIEM_DATABASE_URL"),
-		DBRole:        env("TASKIEM_DATABASE_ROLE", "taskiem_app"),
-		Listen:        env("TASKIEM_LISTEN", ":8080"),
-		EdgeListen:    env("TASKIEM_EDGE_LISTEN", ":8081"),
-		MetricsListen: env("TASKIEM_METRICS_LISTEN", ":9090"),
-		KMS:           env("TASKIEM_KMS", "local"),
-		LocalKey:      os.Getenv("TASKIEM_LOCAL_KMS_KEY"),
-		AllowLocalKMS: flag("TASKIEM_ALLOW_LOCAL_KMS", false),
-		OpenBaoAddr:   os.Getenv("TASKIEM_OPENBAO_ADDR"),
-		OpenBaoToken:  os.Getenv("TASKIEM_OPENBAO_TOKEN"),
-		KMSKey:        env("TASKIEM_KMS_KEY", "taskiem"),
-		PublicURL:     strings.TrimRight(os.Getenv("TASKIEM_PUBLIC_URL"), "/"),
-		PasskeyRPID:   os.Getenv("TASKIEM_PASSKEY_RP_ID"),
-		HooksURL:      strings.TrimRight(os.Getenv("TASKIEM_HOOKS_URL"), "/"),
-		AnchorKey:     os.Getenv("TASKIEM_ANCHOR_KEY"),
-		AnchorDir:     os.Getenv("TASKIEM_ANCHOR_DIR"),
-		SMTPURL:       os.Getenv("TASKIEM_SMTP_URL"),
-		AlertFrom:     os.Getenv("TASKIEM_ALERT_FROM"),
-		WebDir:        os.Getenv("TASKIEM_WEB_DIR"),
-		SecureCookies: flag("TASKIEM_SECURE_COOKIES", true),
-		TrustProxy:    flag("TASKIEM_TRUST_PROXY", false),
-		Signup:        flag("TASKIEM_ALLOW_SIGNUP", false),
-		AppMinVersion: os.Getenv("TASKIEM_APP_MIN_VERSION"),
-		Queues:        strings.Split(env("TASKIEM_WORKER_QUEUES", "connector,sandbox,ai"), ","),
+		DSN:              os.Getenv("TASKIEM_DATABASE_URL"),
+		DBRole:           env("TASKIEM_DATABASE_ROLE", "taskiem_app"),
+		Listen:           env("TASKIEM_LISTEN", ":8080"),
+		EdgeListen:       env("TASKIEM_EDGE_LISTEN", ":8081"),
+		MetricsListen:    env("TASKIEM_METRICS_LISTEN", ":9090"),
+		KMS:              env("TASKIEM_KMS", "local"),
+		LocalKey:         os.Getenv("TASKIEM_LOCAL_KMS_KEY"),
+		AllowLocalKMS:    flag("TASKIEM_ALLOW_LOCAL_KMS", false),
+		OpenBaoAddr:      os.Getenv("TASKIEM_OPENBAO_ADDR"),
+		OpenBaoToken:     os.Getenv("TASKIEM_OPENBAO_TOKEN"),
+		KMSKey:           env("TASKIEM_KMS_KEY", "taskiem"),
+		PublicURL:        strings.TrimRight(os.Getenv("TASKIEM_PUBLIC_URL"), "/"),
+		PasskeyRPID:      os.Getenv("TASKIEM_PASSKEY_RP_ID"),
+		HooksURL:         strings.TrimRight(os.Getenv("TASKIEM_HOOKS_URL"), "/"),
+		AnchorKey:        os.Getenv("TASKIEM_ANCHOR_KEY"),
+		AnchorDir:        os.Getenv("TASKIEM_ANCHOR_DIR"),
+		AnchorPublicKeys: os.Getenv("TASKIEM_ANCHOR_PUBLIC_KEYS"),
+		SMTPURL:          os.Getenv("TASKIEM_SMTP_URL"),
+		AlertFrom:        os.Getenv("TASKIEM_ALERT_FROM"),
+		WebDir:           os.Getenv("TASKIEM_WEB_DIR"),
+		SecureCookies:    flag("TASKIEM_SECURE_COOKIES", true),
+		TrustProxy:       flag("TASKIEM_TRUST_PROXY", false),
+		Signup:           flag("TASKIEM_ALLOW_SIGNUP", false),
+		AppMinVersion:    os.Getenv("TASKIEM_APP_MIN_VERSION"),
+		Queues:           strings.Split(env("TASKIEM_WORKER_QUEUES", "connector,sandbox,ai"), ","),
 		Connectors: builtin.Options{
 			PaystackURL: os.Getenv("TASKIEM_PAYSTACK_URL"),
 			TermiiURL:   os.Getenv("TASKIEM_TERMII_URL"),
@@ -559,6 +596,9 @@ func loadConfig() (config, error) {
 	if _, err := c.anchorSigner(); err != nil {
 		return c, err
 	}
+	if _, err := audit.ParsePublicKeys(c.AnchorPublicKeys); err != nil {
+		return c, fmt.Errorf("TASKIEM_ANCHOR_PUBLIC_KEYS must be base64 Ed25519 public keys, separated by commas: %w", err)
+	}
 	limits, err := runtime.LimitsFromEnv(os.LookupEnv)
 	if err != nil {
 		return c, err
@@ -588,6 +628,12 @@ func loadConfig() (config, error) {
 	if err := c.Push.Validate(); err != nil {
 		return c, err
 	}
+	if c.FCM, err = push.ParseFCM(os.Getenv("TASKIEM_FCM_CREDENTIALS"), os.Getenv("TASKIEM_FCM_CLIENT")); err != nil {
+		return c, err
+	}
+	if c.AppLinks, err = api.ParseAppLinks(os.Getenv("TASKIEM_ANDROID_APP"), os.Getenv("TASKIEM_IOS_APP")); err != nil {
+		return c, err
+	}
 	if c.AI, err = ai.ConfigFromEnv(os.LookupEnv); err != nil {
 		return c, err
 	}
@@ -598,6 +644,9 @@ func loadConfig() (config, error) {
 		return c, err
 	}
 	if c.Shutdown, err = shutdownConfig(); err != nil {
+		return c, err
+	}
+	if c.Wake, err = wakeConfig(); err != nil {
 		return c, err
 	}
 	if c.Status, err = statusConfig(); err != nil {
@@ -814,7 +863,8 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 		BYOKCacheTTL: cfg.Keys.CacheTTL, DestroyAfter: cfg.Keys.DestroyAfter,
 		Platform: secrets.PlatformClients{"iswallet": cfg.ISWallet.credentials()}}
 	e := &engine{cfg: cfg, log: log, pool: pool, registry: reg, vault: vault, connectors: src, linkOps: linkOps,
-		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, PayoutSent: bills, HooksURL: cfg.HooksURL}}
+		store: &runtime.Store{Pool: pool, Registry: reg, PII: vault, Defaults: &cfg.Limits, Billing: cfg.Billing.On, MoneyLog: &moneylog.Log{Pool: pool, PII: vault}, PayoutSent: bills, HooksURL: cfg.HooksURL,
+			WakeInterval: cfg.Wake.Interval, WakeInTx: cfg.Wake.InTx}}
 	e.stock = &stock.Stock{Pool: pool, Table: &storefront.XenibaseStock{Pool: pool, Registry: reg, Vault: vault, Guard: &egress.Guard{Logger: log}},
 		MoneyLog: &moneylog.Log{Pool: pool, PII: vault}}
 	stockOps.Set(e.stock)
@@ -839,8 +889,8 @@ func newEngine(ctx context.Context, cfg config, log *slog.Logger) (*engine, erro
 	if e.email != nil {
 		emailOps.Set(e.email)
 	}
-	if cfg.Push.Enabled() {
-		e.push = &push.Sender{Config: cfg.Push, Guard: &egress.Guard{Logger: log}}
+	if cfg.Push.Enabled() || cfg.FCM != nil {
+		e.push = &push.Sender{Config: cfg.Push, FCM: cfg.FCM, Guard: &egress.Guard{Logger: log}}
 	}
 	if cfg.WhatsApp != nil {
 		// The templates' url buttons open the web app and the form host
@@ -1159,12 +1209,20 @@ func serve(ctx context.Context, args []string) error {
 	for _, w := range dsnWarnings("TASKIEM_DATABASE_URL", cfg.DSN) {
 		log.Warn(w)
 	}
+	if hooksShareConsole(cfg.PublicURL, cfg.HooksURL) {
+		log.Warn("webhooks are served from the same host as the console: workflows choose what /hooks answers, so in production give it a host of its own (TASKIEM_HOOKS_URL, docs/operations.md#webhooks)",
+			"public_url", cfg.PublicURL, "hooks_url", cfg.HooksURL)
+	}
 	db.RetryWindow = cfg.Cloud.RetryWindow
 
 	is := func(r string) bool { return *role == r || *role == "all" }
 	runCtx, stopRun, draining := drainOnShutdown(ctx, cfg, log)
 	defer stopRun()
-	ready := readiness(draining, e.pool)
+	var readyNotes []string
+	if off := cfg.anchoringOff(); off != "" && is("scheduler") {
+		readyNotes = append(readyNotes, off)
+	}
+	ready := readiness(draining, e.pool, readyNotes...)
 	alerter, err := cfg.alerter(e, log)
 	if err != nil {
 		return fmt.Errorf("serve: %w", err)
@@ -1194,11 +1252,13 @@ func serve(ctx context.Context, args []string) error {
 		if signer, _ := cfg.anchorSigner(); signer != nil {
 			srv.AnchorKey = signer.PublicKey()
 		}
+		srv.RetiredAnchorKeys, _ = audit.ParsePublicKeys(cfg.AnchorPublicKeys)
 		rp, err := cfg.relyingParty()
 		if err != nil {
 			return err
 		}
 		srv.WebAuthn, srv.RequireAdminPasskeys = rp, cfg.RequireAdminPasskeys && rp.RPID != ""
+		srv.AppLinks = cfg.AppLinks
 		srv.PublicURL = cfg.PublicURL
 		srv.HooksURL = cfg.HooksURL
 		if srv.OAuthClients, err = oauthClients(e.registry, log); err != nil {
@@ -1442,7 +1502,7 @@ func serve(ctx context.Context, args []string) error {
 			a := &audit.Anchorer{Pool: e.pool, Signer: signer, Dir: cfg.AnchorDir, Logger: log}
 			tasks = append(tasks, a.Run)
 		} else {
-			log.Warn("TASKIEM_ANCHOR_KEY or TASKIEM_ANCHOR_DIR unset: audit chain heads are not anchored outside the database")
+			log.Warn(cfg.anchoringOff())
 		}
 	}
 	if *role == "orchestrator" {
@@ -1523,8 +1583,10 @@ func serve(ctx context.Context, args []string) error {
 // letting workers drain.
 // readiness answers /readyz: 503 while draining or while the database
 // does not answer a ping within 2 seconds, so load balancers stop sending
-// requests that could only fail.
-func readiness(draining *atomic.Bool, pool *pgxpool.Pool) http.HandlerFunc {
+// requests that could only fail. When ready it answers "ok", then one line
+// for each note: something an operator should know that does not stop the
+// role serving, such as audit anchoring being off.
+func readiness(draining *atomic.Bool, pool *pgxpool.Pool, notes ...string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if draining.Load() {
 			http.Error(w, "draining", http.StatusServiceUnavailable)
@@ -1537,7 +1599,26 @@ func readiness(draining *atomic.Bool, pool *pgxpool.Pool) http.HandlerFunc {
 			return
 		}
 		_, _ = w.Write([]byte("ok"))
+		for _, n := range notes {
+			_, _ = w.Write([]byte("\n" + n))
+		}
 	}
+}
+
+// anchoringOff says why audit anchoring is off, or nothing when it is on.
+// The scheduler role anchors only with both the key and the directory.
+func (c config) anchoringOff() string {
+	var unset []string
+	if c.AnchorKey == "" {
+		unset = append(unset, "TASKIEM_ANCHOR_KEY")
+	}
+	if c.AnchorDir == "" {
+		unset = append(unset, "TASKIEM_ANCHOR_DIR")
+	}
+	if len(unset) == 0 {
+		return ""
+	}
+	return "audit anchoring: off (" + strings.Join(unset, " and ") + " unset): audit chain heads are not signed or kept outside the database"
 }
 
 func drainOnShutdown(ctx context.Context, cfg config, log *slog.Logger) (context.Context, context.CancelFunc, *atomic.Bool) {
@@ -1727,7 +1808,10 @@ func (c config) relyingParty() (webauthn.Config, error) {
 	if u.Hostname() != rp && !strings.HasSuffix(u.Hostname(), "."+rp) {
 		return webauthn.Config{}, fmt.Errorf("TASKIEM_PASSKEY_RP_ID %q must be the host of TASKIEM_PUBLIC_URL or a domain above it", rp)
 	}
-	return webauthn.Config{RPID: rp, RPName: "Taskiem", Origins: []string{u.Scheme + "://" + u.Host}}, nil
+	// The Android app's passkeys come from its own origin; an iPhone app's
+	// from the web's (its associated domain).
+	origins := append([]string{u.Scheme + "://" + u.Host}, c.AppLinks.PasskeyOrigins()...)
+	return webauthn.Config{RPID: rp, RPName: "Taskiem", Origins: origins}, nil
 }
 
 // chat gives a server the chat channels: the Telegram bot, and the key
@@ -1799,4 +1883,25 @@ func setTelegramWebhook(ctx context.Context, tg *telegram.Platform, publicURL st
 		case <-time.After(wait):
 		}
 	}
+}
+
+// hooksShareConsole reports whether /hooks is reached at the same host as
+// the console and the API. Answers there are made safe for browsers
+// (engine/ingest), but a host of its own is the stronger wall: nothing a
+// workflow answers with then shares an origin with a signed-in person. A
+// machine's own address (a developer's laptop) is not worth a warning.
+func hooksShareConsole(publicURL, hooksURL string) bool {
+	pu, err := url.Parse(publicURL)
+	if err != nil || pu.Host == "" {
+		return false
+	}
+	hu, err := url.Parse(hooksURL)
+	if err != nil || !strings.EqualFold(pu.Host, hu.Host) {
+		return false
+	}
+	host := pu.Hostname()
+	if ip := net.ParseIP(host); host == "localhost" || ip != nil && ip.IsLoopback() {
+		return false
+	}
+	return true
 }

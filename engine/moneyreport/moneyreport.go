@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/csvsafe"
 	"github.com/israel-duff/taskiem/engine/invoicing"
 )
 
@@ -93,6 +94,16 @@ type Summary struct {
 	// the stretch of its first entry, as it counts in the period.
 	Unit    string   `json:"unit"`
 	Buckets []Bucket `json:"buckets"`
+	// OtherCurrencies is the period's money that is not naira, by
+	// currency: in the log, in none of the sums above.
+	OtherCurrencies []OtherCurrency `json:"other_currencies,omitempty"`
+}
+
+// OtherCurrency counts a period's movements in a currency other than
+// naira. Their amounts are not added up with naira's.
+type OtherCurrency struct {
+	Currency  string `json:"currency"`
+	Movements int    `json:"movements"`
 }
 
 // Bucket is one stretch of a period: its settled money in and out, and how
@@ -152,8 +163,16 @@ func Summarise(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to time.T
 	if err != nil {
 		return s, err
 	}
+	// Naira only: money in another currency is counted apart, not summed.
+	other, err := tx.Query(ctx, `SELECT m.currency, count(*)::int FROM (`+latest+`) m WHERE m.currency <> 'NGN' GROUP BY m.currency ORDER BY m.currency`, tenant, from, to)
+	if err != nil {
+		return s, err
+	}
+	if s.OtherCurrencies, err = pgx.CollectRows(other, pgx.RowToStructByPos[OtherCurrency]); err != nil {
+		return s, err
+	}
 	rows, err := tx.Query(ctx, `SELECT m.movement, m.channel, m.direction, m.status, m.amount, COALESCE(m.fee_kobo, 0), m.fee_kobo IS NOT NULL, m.first_at
-		FROM (`+latest+`) m`, tenant, from, to)
+		FROM (`+latest+`) m WHERE m.currency = 'NGN'`, tenant, from, to)
 	if err != nil {
 		return s, err
 	}
@@ -271,16 +290,10 @@ func Naira(kobo int64) string {
 
 func day(t time.Time) string { return t.In(Lagos).Format("2006-01-02") }
 
-// text guards a text cell against formula injection (CSV injection), as
-// table exports do: a value a spreadsheet would run as a formula gets a
-// leading apostrophe. Statement lines and rails' references are not
-// Taskiem's words. Amounts are written by Naira and stay numbers.
-func text(v string) string {
-	if v != "" && strings.ContainsRune("=+-@\t\r", rune(v[0])) {
-		return "'" + v
-	}
-	return v
-}
+// text guards a text cell against formula injection with the guard every
+// export shares (engine/csvsafe). Statement lines and rails' references
+// are not Taskiem's words. Amounts are written by Naira and stay numbers.
+func text(v string) string { return csvsafe.Text(v) }
 
 // The invoices and storefront orders a movement is counted towards, each
 // as its numbers joined by spaces (matches not undone).
@@ -525,7 +538,7 @@ func ExportJournal(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, from, to ti
 	rows, err := tx.Query(ctx, `SELECT m.movement, COALESCE(m.occurred_at, m.recorded_at), m.direction, m.kind, m.amount, COALESCE(m.fee_kobo, 0),
 			m.channel, m.reference, COALESCE(m.description, m.note, ''), COALESCE(m.category, ''),
 			`+matchedInvoices+`, `+matchedOrders+`, `+invoicedKobo+`, `+orderedKobo+`, m.net, `+customersMoney+`
-		FROM (`+latest+`) m WHERE m.status = 'settled' AND m.amount > 0
+		FROM (`+latest+`) m WHERE m.status = 'settled' AND m.amount > 0 AND m.currency = 'NGN'
 		ORDER BY COALESCE(m.occurred_at, m.recorded_at), m.movement`, tenant, from, to)
 	if err != nil {
 		return err

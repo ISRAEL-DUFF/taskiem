@@ -307,3 +307,95 @@ func (s *Server) markStorefrontRefunded(w http.ResponseWriter, r *http.Request) 
 	maskCustomer(&o.Customer)
 	writeJSON(w, http.StatusOK, map[string]any{"order": o})
 }
+
+// storefrontBookingTimes is GET /v1/storefront/bookings/{reference}/times?day=:
+// the days with a free time for the booking's service, and the free times
+// of one day (?day=, or the first with any), the booking's own time free
+// to it and not offered. It lets the owner move a booking to a time that
+// can be had, as the customer's own page does.
+func (s *Server) storefrontBookingTimes(w http.ResponseWriter, r *http.Request) {
+	if s.Orders == nil {
+		s.fail(w, r, pgx.ErrNoRows)
+		return
+	}
+	day := r.URL.Query().Get("day")
+	if day != "" {
+		if _, err := time.ParseInLocation(time.DateOnly, day, storefront.Lagos); err != nil {
+			writeErr(w, http.StatusBadRequest, "day is a date like 2026-11-13")
+			return
+		}
+	}
+	tenant := principalFrom(r.Context()).TenantID
+	out := linkTimesOut{Days: []string{}, Times: []time.Time{}}
+	err := s.tx(r, func(tx pgx.Tx) error {
+		o, err := s.Orders.GetOrder(r.Context(), tx, tenant, chi.URLParam(r, "reference"))
+		if err != nil {
+			return err
+		}
+		if o.ServiceID == "" || o.StartsAt == nil {
+			return fmt.Errorf("%w: this order is not a booking", errConflict)
+		}
+		b, err := theirBookingTx(r.Context(), tx, tenant, "")
+		if err != nil {
+			return err
+		}
+		it, svc, ok := findLinkService(b.services, o.ServiceID)
+		if !ok {
+			return fmt.Errorf("%w: its service is no longer offered", errConflict)
+		}
+		out.Service = serviceOut(it)
+		now := time.Now()
+		from, to := bookingWindow(b.avail, now)
+		busy, err := busyTx(r.Context(), tx, b.storefront, from, to)
+		if err != nil {
+			return err
+		}
+		busy = withoutOwn(busy, o.ServiceID, *o.StartsAt)
+		for _, date := range b.avail.Dates(now) {
+			var slots []time.Time
+			for _, t := range b.avail.Slots(svc, date, now, busy) {
+				if !t.Equal(*o.StartsAt) {
+					slots = append(slots, t)
+				}
+			}
+			if len(slots) == 0 {
+				continue
+			}
+			key := date.Format(time.DateOnly)
+			if key == day || (day == "" && len(out.Days) == 0) {
+				out.Day = key
+				for _, t := range slots {
+					out.Times = append(out.Times, t.UTC())
+				}
+			}
+			out.Days = append(out.Days, key)
+		}
+		return nil
+	})
+	if errors.Is(err, storefront.ErrNoOrder) {
+		err = pgx.ErrNoRows
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// withoutOwn is busy with one booking at service and start taken out:
+// its own time is free to it when it moves.
+func withoutOwn(busy []storefront.Busy, service string, start time.Time) []storefront.Busy {
+	out := make([]storefront.Busy, 0, len(busy))
+	done := false
+	for _, b := range busy {
+		if !done && b.Service == service && b.Start.Equal(start) {
+			done = true
+			if b.Count <= 1 {
+				continue
+			}
+			b.Count--
+		}
+		out = append(out, b)
+	}
+	return out
+}

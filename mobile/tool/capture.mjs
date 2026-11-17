@@ -5,6 +5,10 @@
 //
 //   node mobile/tool/capture.mjs <name> <path> [email]
 //   EXPLORE=1 node mobile/tool/capture.mjs explore /chat
+//   TOOLS=1 node mobile/tool/capture.mjs chat-tools "/chat?with=taskiem"
+//   ORDER=1 node mobile/tool/capture.mjs chat-order "/chat?with=<Bayo's link>"
+//   PRODUCT=1 node mobile/tool/capture.mjs chat-product "/chat?with=taskiem"
+//   STAFF=1 node mobile/tool/capture.mjs chat-sell "/chat?with=taskiem"
 //
 // Needs the demo world running (serve-demo.sh, seed.ts) and Playwright.
 import fs from "node:fs";
@@ -54,6 +58,43 @@ if (process.env.EXPLORE) {
   await p.getByTestId("new-chat").click();
   await p.waitForTimeout(4000);
   await p.getByTestId("explore-search").fill("rice");
+  await p.waitForTimeout(3000);
+}
+// TOOLS=1: the tools panel opened (every tool's list read for its tile),
+// then the Products sheet.
+if (process.env.TOOLS) {
+  await p.getByRole("button", { name: "Open tools" }).click();
+  await p.waitForTimeout(4000);
+  await p.getByTestId("tools-panel").getByRole("button", { name: /^Products/ }).click();
+  await p.waitForTimeout(3000);
+}
+// ORDER=1: their shop opened from the tools panel, one item in the bag,
+// and the review.
+if (process.env.ORDER) {
+  await p.getByRole("button", { name: "Open tools" }).click();
+  await p.waitForTimeout(3000);
+  await p.getByTestId("tools-panel").getByRole("button", { name: /^Their shop/ }).click();
+  await p.waitForTimeout(4000);
+  await p.getByRole("button", { name: /^One more / }).first().click();
+  await p.getByRole("button", { name: "Review order" }).click();
+  await p.waitForTimeout(3000);
+}
+// PRODUCT=1: Products from the tools panel, its first row's form, then
+// Add product.
+if (process.env.PRODUCT) {
+  await p.getByRole("button", { name: "Open tools" }).click();
+  await p.waitForTimeout(3000);
+  await p.getByTestId("tools-panel").getByRole("button", { name: /^Products/ }).click();
+  await p.waitForTimeout(3000);
+  await p.getByTestId("tool-sheet").locator("li button").first().click();
+  await p.waitForTimeout(4000);
+}
+// STAFF=1: Sell from the tools panel (Handover is staff's alone: the demo
+// world's owner has none).
+if (process.env.STAFF) {
+  await p.getByRole("button", { name: "Open tools" }).click();
+  await p.waitForTimeout(3000);
+  await p.getByTestId("tools-panel").getByRole("button", { name: /^Sell/ }).click();
   await p.waitForTimeout(3000);
 }
 fs.writeFileSync(path.join(out, "answers.json"), JSON.stringify({ at, answers }, null, 1));

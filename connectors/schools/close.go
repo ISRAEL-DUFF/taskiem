@@ -47,7 +47,7 @@ func (a *actions) dailyClose(ctx context.Context, req connector.Request) (connec
 		return out
 	}
 	out := map[string]any{"id": x.ID.String(), "day": x.Day, "ran_at": x.RanAt.UTC().Format(time.RFC3339), "reconciles": x.Reconciles, "problems": x.Problems,
-		"money_in": sum(x.MoneyIn), "into_accounts": sum(x.IntoAccounts), "at_the_desk": sum(x.AtTheDesk), "matched_auto": sum(x.MatchedAuto), "matched_person": sum(x.MatchedPerson),
+		"money_in": sum(x.MoneyIn), "into_accounts": sum(x.IntoAccounts), "at_the_desk": sum(x.AtTheDesk), "recorded_late": sum(x.RecordedLate), "matched_auto": sum(x.MatchedAuto), "matched_person": sum(x.MatchedPerson),
 		"unmatched": sum(x.Unmatched), "lookback_found": sum(x.LookbackFound), "pending": len(x.Pending), "claims": len(x.Claims),
 		"problem_list": items(x.ProblemList), "pending_list": items(x.Pending), "claim_list": items(x.Claims), "unmatched_list": items(x.UnmatchedList),
 		"text": schools.CloseText(x, link), "date": schools.CloseDate(x), "summary": schools.CloseSummary(x)}

@@ -448,7 +448,10 @@ func (c *client) withdraw(ctx context.Context, req connector.Request, path strin
 	if ae := breetError(err); ae != nil && ae.status < 500 && ae.says("duplicate withdrawal") {
 		out, ferr := c.fetchWithdrawal(ctx, req, ref)
 		if errors.Is(ferr, connector.ErrNotFound) {
-			return connector.Response{}, fmt.Errorf("breet: %s, and no withdrawal has reference %s: %w", ae.Error(), ref, effects.ErrFatal)
+			// Our own earlier attempt, or another withdrawal of the same
+			// amount to the same address: Breet has not confirmed that the
+			// lookup by externalId would show ours, so a person decides.
+			return connector.Response{}, fmt.Errorf("breet: %s, and Breet shows no withdrawal under reference %s; check it in Breet, then resolve the step: %w", ae.Error(), ref, effects.ErrIndeterminate)
 		}
 		if ferr != nil {
 			return connector.Response{}, ferr
@@ -518,6 +521,14 @@ func (c *client) getWithdrawal(ctx context.Context, req connector.Request) (conn
 		return connector.Response{}, fatal("get_withdrawal needs withdrawal_id or external_id")
 	}
 	out, err := c.fetchWithdrawal(ctx, req, id)
+	if req.Reconciling && errors.Is(err, connector.ErrNotFound) {
+		// Not "not found": Breet documents the path with a withdrawal's id,
+		// and has not confirmed that an externalId is found there. "Not
+		// found" would send a second withdrawal, which cannot be taken
+		// back, so the step parks for a person (docs/integrations/breet.md).
+		return connector.Response{}, fmt.Errorf("breet shows no withdrawal under reference %s, but Breet has not confirmed that this lookup finds one by externalId: check it in Breet, then resolve the step: %w",
+			id, effects.ErrIndeterminate)
+	}
 	if err != nil {
 		return connector.Response{}, err
 	}

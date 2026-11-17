@@ -40,6 +40,51 @@ type Mover interface {
 	OrderLines(ctx context.Context, tenant, order uuid.UUID, reference string, lines []Line) (short []string, err error)
 }
 
+// Returner puts back the stock an order took when it ends with its goods
+// still on the shelf: declined, cancelled, left refund due or not paid
+// for in time (engine/stock). ReturnOrderTx records it in the transaction
+// that ends the order, once however often it is asked; SendReturns sends
+// it to the table afterwards (the stock sweep sends what it could not).
+type Returner interface {
+	ReturnOrderTx(ctx context.Context, tx pgx.Tx, tenant, order uuid.UUID, reference string) error
+	SendReturns(ctx context.Context, tenant, order uuid.UUID) error
+}
+
+// returnStockTx puts an ended order's stock back, in the transaction that
+// ended it. Stock lowered without movements (an order accepted before
+// stock was kept by movements) is not put back.
+func (o *Orders) returnStockTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, ord Order) error {
+	r, ok := o.Moves.(Returner)
+	if !ok || (ord.Kind != "order" && ord.Kind != "trade" && ord.Kind != "chat") {
+		return nil
+	}
+	return r.ReturnOrderTx(ctx, tx, tenant, ord.ID, ord.Reference)
+}
+
+// sendReturns sends an ended order's stock back to the table at once; a
+// failure is the stock sweep's to send again.
+func (o *Orders) sendReturns(ctx context.Context, tenant, order uuid.UUID) {
+	if r, ok := o.Moves.(Returner); ok {
+		if err := r.SendReturns(context.WithoutCancel(ctx), tenant, order); err != nil {
+			o.log().Warn("storefront: an ended order's stock is not back in the table yet", "order", order, "err", err)
+		}
+	}
+}
+
+// sendReturnsOf is sendReturns for an order by its reference.
+func (o *Orders) sendReturnsOf(ctx context.Context, tenant uuid.UUID, reference string) {
+	if _, ok := o.Moves.(Returner); !ok {
+		return
+	}
+	var id uuid.UUID
+	if err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT id FROM storefront_orders WHERE tenant_id = $1 AND reference = $2`, tenant, reference).Scan(&id)
+	}); err != nil {
+		return
+	}
+	o.sendReturns(ctx, tenant, id)
+}
+
 // XenibaseStock is Stock over the tenant's data tables connection,
 // through the connector and the egress guard, so any role can use it.
 type XenibaseStock struct {

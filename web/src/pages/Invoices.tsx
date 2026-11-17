@@ -330,7 +330,7 @@ function WaitingCard({
       data-testid="waiting-payment"
     >
       <h2 id={title}>
-        <span className="sf-price">{amountWords(p.amount_kobo)}</span>{" "}
+        <span className="sf-price">{amountWords(p.amount_kobo, p.currency)}</span>{" "}
         <span className="hint">{kindWords(p.kind)}</span>
       </h2>
       <dl className="kv">

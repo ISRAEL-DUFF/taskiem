@@ -282,8 +282,8 @@ events:
         =[body.?settlementAmount.orValue(null)].map(v, v != null && string(v) != '' ? dyn(int(math.round(double(v) * 100.0))) : dyn(null))[0]
       status: >-
         =[body.?status.orValue(null)].map(v, v == null ? '' : string(v).upperAscii())
-        .map(s, s == 'SUCCESS' ? 'approved' : s in ['PENDING', 'INITIAL', ''] ? 'pending'
-        : s.startsWith('REVERS') ? 'reversed' : 'declined')[0]
+        .map(s, s == 'SUCCESS' ? 'approved' : s in ['FAIL', 'CLOSE', 'CANCEL'] ? 'declined'
+        : s.startsWith('REVERS') ? 'reversed' : 'pending')[0]
       terminal: >-
         =[body.?sn.orValue(null)].map(t, t != null && string(t) != '' ? dyn(string(t)) : dyn(null))[0]
       occurred_at: >-

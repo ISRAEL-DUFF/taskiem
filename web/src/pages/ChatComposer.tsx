@@ -530,6 +530,10 @@ export function ComposerView<R>({
               c.o.scope?.supplies ? () => c.openTool("order") : undefined
             }
             onClose={() => c.setTool(undefined)}
+            onTools={() => {
+              c.setTool(undefined);
+              c.setToolsOpen(true);
+            }}
             onSaved={() => {
               // The server tells the change as a diary line in the person's
               // Taskiem conversation (chat_changes.go): shown there at once;

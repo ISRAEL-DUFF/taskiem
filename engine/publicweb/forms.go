@@ -914,22 +914,49 @@ func mapsPin(s string) (string, bool) {
 		return fmt.Sprintf("https://www.google.com/maps?q=%.6f,%.6f", lat, lng), false
 	}
 	u, err := url.Parse(s)
-	if err != nil || u.Scheme != "https" || len(s) > 300 {
+	if err != nil || u.Scheme != "https" || len(s) > 300 || u.User != nil || u.Port() != "" {
 		return "", true
 	}
-	host := strings.ToLower(u.Hostname())
-	for _, h := range mapHosts {
-		if host == h || strings.HasSuffix(host, "."+h) {
+	// The exact host of a maps app, and on a host that serves other
+	// things too only its maps paths: staff and riders open this link,
+	// so it must not be any page (sites.google.com) or a redirect
+	// (google.com/url?q=) that happens to be Google's.
+	paths, ok := mapHosts[strings.ToLower(u.Hostname())]
+	if !ok {
+		return "", true
+	}
+	if len(paths) == 0 {
+		return u.String(), false
+	}
+	for _, p := range paths {
+		if p == "/" && (u.Path == "" || u.Path == "/") || p != "/" && (u.Path == p || strings.HasPrefix(u.Path, p+"/")) {
 			return u.String(), false
 		}
 	}
 	return "", true
 }
 
-var (
-	latLong  = regexp.MustCompile(`^(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$`)
-	mapHosts = []string{"google.com", "maps.google.com", "goo.gl", "maps.app.goo.gl", "maps.apple.com", "openstreetmap.org", "waze.com"}
-)
+var latLong = regexp.MustCompile(`^(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)$`)
+
+// mapHosts are the hosts a map pin's link may be on, each with the paths
+// taken there (none: any path). What the maps apps' own Share gives:
+// maps.app.goo.gl and goo.gl/maps (Google Maps), www.google.com/maps
+// (its address bar, and what Taskiem makes of a shared location),
+// maps.google.com, maps.apple.com, and OpenStreetMap's and Waze's links.
+var mapHosts = map[string][]string{
+	"maps.app.goo.gl":       nil,
+	"goo.gl":                {"/maps"},
+	"www.google.com":        {"/maps"},
+	"google.com":            {"/maps"},
+	"maps.google.com":       {"/", "/maps", "/place", "/dir", "/search"},
+	"maps.apple.com":        nil,
+	"www.openstreetmap.org": nil,
+	"openstreetmap.org":     nil,
+	"osm.org":               nil,
+	"waze.com":              {"/ul", "/live-map"},
+	"www.waze.com":          {"/ul", "/live-map"},
+	"ul.waze.com":           {"/ul"},
+}
 
 // chooseZone marks the delivery area named (exactly as offered) chosen;
 // false when it is none of them.

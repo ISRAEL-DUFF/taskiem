@@ -201,7 +201,7 @@ class TaskiemApi {
     await _t.send('POST', '/v1/customer-chats/${Uri.encodeComponent(id)}/read');
   }
 
-  /// Archive a customer's conversation, or bring it back (`PUT /v1/customer-chats/{id}`)
+  /// Archive or mute a customer's conversation, or undo either (`PUT /v1/customer-chats/{id}`)
   Future<void> putCustomerChat({required PutCustomerChatRequest body, required String id}) async {
     await _t.send('PUT', '/v1/customer-chats/${Uri.encodeComponent(id)}', body: body.toJson());
   }
@@ -284,8 +284,8 @@ class TaskiemApi {
   }
 
   /// Businesses to browse (`GET /v1/explore`)
-  Future<ExploreResult> explore({String? q, String? section, String? offset}) async {
-    final j = await _t.send('GET', '/v1/explore', query: {'q': ?q, 'section': ?section, 'offset': ?offset});
+  Future<ExploreResult> explore({String? q, String? section, String? category, String? ids, String? offset}) async {
+    final j = await _t.send('GET', '/v1/explore', query: {'q': ?q, 'section': ?section, 'category': ?category, 'ids': ?ids, 'offset': ?offset});
     return ExploreResult.fromJson(j as Map<String, dynamic>);
   }
 
@@ -416,29 +416,113 @@ class TaskiemApi {
     final j = await _t.send('PUT', '/v1/settings/chat-tools', body: body.toJson());
     return ChatToolsSetting.fromJson(j as Map<String, dynamic>);
   }
+
+  /// The devices (browsers and phones) this person allowed to be notified when the app is closed (`GET /v1/me/push`)
+  Future<PushDevices> listPush() async {
+    final j = await _t.send('GET', '/v1/me/push');
+    return PushDevices.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Allow this browser or phone to be notified (`PUT /v1/me/push`)
+  Future<PushDevices> putPush({required PutPushRequest body}) async {
+    final j = await _t.send('PUT', '/v1/me/push', body: body.toJson());
+    return PushDevices.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Rename a device, switch its preview, or set the kinds of notification it takes (`PATCH /v1/me/push/{id}`)
+  Future<PushDevices> patchPush({required PatchPushRequest body, required String id}) async {
+    final j = await _t.send('PATCH', '/v1/me/push/${Uri.encodeComponent(id)}', body: body.toJson());
+    return PushDevices.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Take a browser off (`DELETE /v1/me/push/{id}`)
+  Future<PushDevices> deletePush({required String id}) async {
+    final j = await _t.send('DELETE', '/v1/me/push/${Uri.encodeComponent(id)}');
+    return PushDevices.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// This browser or phone takes itself off (`DELETE /v1/me/push`)
+  Future<PushDevices> deletePushEndpoint({required DeletePushEndpointRequest body}) async {
+    final j = await _t.send('DELETE', '/v1/me/push', body: body.toJson());
+    return PushDevices.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
-  const AppConfig({required this.minVersion, required this.passkeys, required this.signup});
+  const AppConfig({this.chatSignup, required this.minVersion, required this.passkeys, this.push, required this.signup});
 
+  /// Whether the app may sign people up as on WhatsApp (`app` in
+  /// TASKIEM_CHAT_SIGNUP, with WhatsApp and terms).
+  final bool? chatSignup;
   /// The lowest app version this server serves (TASKIEM_APP_MIN_VERSION; 0.1.0
   /// when unset).
   final String minVersion;
   /// Whether passkeys are on (a relying party and its origins are configured).
   final bool passkeys;
+  /// Present when phones can be notified (Firebase is set up). The app starts
+  /// Firebase with these public client values, so turning notifications on
+  /// needs no new build.
+  final AppConfigPush? push;
   /// Whether self-serve signup is open (TASKIEM_ALLOW_SIGNUP).
   final bool signup;
 
   factory AppConfig.fromJson(Map<String, dynamic> j) => AppConfig(
+        chatSignup: j['chat_signup'] == null ? null : j['chat_signup'] as bool,
         minVersion: j['min_version'] as String,
         passkeys: j['passkeys'] as bool,
+        push: j['push'] == null ? null : AppConfigPush.fromJson(j['push'] as Map<String, dynamic>),
         signup: j['signup'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
+        'chat_signup': ?chatSignup,
         'min_version': minVersion,
         'passkeys': passkeys,
+        'push': ?push?.toJson(),
         'signup': signup,
+      };
+}
+
+/// Present when phones can be notified (Firebase is set up). The app starts
+/// Firebase with these public client values, so turning notifications on needs
+/// no new build.
+class AppConfigPush {
+  const AppConfigPush({required this.fcm});
+
+  final AppConfigPushFcm fcm;
+
+  factory AppConfigPush.fromJson(Map<String, dynamic> j) => AppConfigPush(
+        fcm: AppConfigPushFcm.fromJson(j['fcm'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'fcm': fcm.toJson(),
+      };
+}
+
+class AppConfigPushFcm {
+  const AppConfigPushFcm({required this.apiKey, this.appIdAndroid, this.appIdIos, required this.projectId, required this.senderId});
+
+  final String apiKey;
+  final String? appIdAndroid;
+  final String? appIdIos;
+  final String projectId;
+  final String senderId;
+
+  factory AppConfigPushFcm.fromJson(Map<String, dynamic> j) => AppConfigPushFcm(
+        apiKey: j['api_key'] as String,
+        appIdAndroid: j['app_id_android'] == null ? null : j['app_id_android'] as String,
+        appIdIos: j['app_id_ios'] == null ? null : j['app_id_ios'] as String,
+        projectId: j['project_id'] as String,
+        senderId: j['sender_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'api_key': apiKey,
+        'app_id_android': ?appIdAndroid,
+        'app_id_ios': ?appIdIos,
+        'project_id': projectId,
+        'sender_id': senderId,
       };
 }
 
@@ -1458,13 +1542,15 @@ class ListCustomerChatsResponse {
 }
 
 class CustomerChat {
-  const CustomerChat({required this.archived, required this.id, required this.last, required this.lastAt, required this.lastMine, required this.name, this.openInvoices, this.owesKobo, required this.phone, required this.stopped, required this.unread, required this.windowOpen, this.windowUntil});
+  const CustomerChat({required this.archived, required this.id, required this.last, required this.lastAt, required this.lastMine, this.muted, required this.name, this.openInvoices, this.owesKobo, required this.phone, required this.stopped, required this.unread, required this.windowOpen, this.windowUntil});
 
   final bool archived;
   final String id;
   final String last;
   final DateTime lastAt;
   final bool lastMine;
+  /// Nobody is told of its messages (no bell item, no push).
+  final bool? muted;
   /// The customer's name in the business's book, or their number.
   final String name;
   final int? openInvoices;
@@ -1486,6 +1572,7 @@ class CustomerChat {
         last: j['last'] as String,
         lastAt: DateTime.parse(j['last_at'] as String),
         lastMine: j['last_mine'] as bool,
+        muted: j['muted'] == null ? null : j['muted'] as bool,
         name: j['name'] as String,
         openInvoices: j['open_invoices'] == null ? null : (j['open_invoices'] as num).toInt(),
         owesKobo: j['owes_kobo'] == null ? null : (j['owes_kobo'] as num).toInt(),
@@ -1502,6 +1589,7 @@ class CustomerChat {
         'last': last,
         'last_at': lastAt.toUtc().toIso8601String(),
         'last_mine': lastMine,
+        'muted': ?muted,
         'name': name,
         'open_invoices': ?openInvoices,
         'owes_kobo': ?owesKobo,
@@ -2335,16 +2423,19 @@ class CustomerMessage {
 }
 
 class PutCustomerChatRequest {
-  const PutCustomerChatRequest({required this.archived});
+  const PutCustomerChatRequest({this.archived, this.muted});
 
-  final bool archived;
+  final bool? archived;
+  final bool? muted;
 
   factory PutCustomerChatRequest.fromJson(Map<String, dynamic> j) => PutCustomerChatRequest(
-        archived: j['archived'] as bool,
+        archived: j['archived'] == null ? null : j['archived'] as bool,
+        muted: j['muted'] == null ? null : j['muted'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
-        'archived': archived,
+        'archived': ?archived,
+        'muted': ?muted,
       };
 }
 
@@ -3106,64 +3197,84 @@ class StockMovement {
 }
 
 class ExploreResult {
-  const ExploreResult({this.area, this.blind, required this.delivery, required this.deliveryMore, required this.fresh, required this.more, required this.near, required this.nearMore, required this.results});
+  const ExploreResult({this.across, this.acrossMore, this.area, this.blind, this.categories, this.categoryMore, required this.delivery, required this.deliveryMore, this.featured, required this.fresh, this.inCategory, this.known, required this.more, required this.near, required this.nearMore, this.popular, this.popularMore, required this.results, this.trusted, this.trustedMore});
 
+  /// Across Nigeria, in Near you's place when no business in our area can be
+  /// shown or our area is not set (the fullest cards first)
+  final List<ExploreCard>? across;
+  final bool? acrossMore;
   /// Our own area, as near you reads it (the first page only)
   final String? area;
   final ExploreResultBlind? blind;
+  final List<ExploreResultCategoriesItem>? categories;
+  final bool? categoryMore;
   /// Businesses that deliver for others, those covering our area first
   final List<ExploreCard> delivery;
   final bool deliveryMore;
+  final List<ExploreCard>? featured;
   final List<ExploreCard> fresh;
+  final List<ExploreCard>? inCategory;
+  /// section=known, the businesses asked for that may still be shown, as they
+  /// are now, in the order asked
+  final List<ExploreCard>? known;
   final bool more;
   final List<ExploreCard> near;
   final bool nearMore;
+  final List<ExploreCard>? popular;
+  final bool? popularMore;
   final List<ExploreCard> results;
+  final List<ExploreCard>? trusted;
+  final bool? trustedMore;
 
   factory ExploreResult.fromJson(Map<String, dynamic> j) => ExploreResult(
+        across: j['across'] == null ? null : (j['across'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        acrossMore: j['across_more'] == null ? null : j['across_more'] as bool,
         area: j['area'] == null ? null : j['area'] as String,
         blind: j['blind'] == null ? null : ExploreResultBlind.fromJson(j['blind'] as Map<String, dynamic>),
+        categories: j['categories'] == null ? null : (j['categories'] as List).map((e) => ExploreResultCategoriesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        categoryMore: j['category_more'] == null ? null : j['category_more'] as bool,
         delivery: (j['delivery'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
         deliveryMore: j['delivery_more'] as bool,
+        featured: j['featured'] == null ? null : (j['featured'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
         fresh: (j['fresh'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        inCategory: j['in_category'] == null ? null : (j['in_category'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        known: j['known'] == null ? null : (j['known'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
         more: j['more'] as bool,
         near: (j['near'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
         nearMore: j['near_more'] as bool,
+        popular: j['popular'] == null ? null : (j['popular'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        popularMore: j['popular_more'] == null ? null : j['popular_more'] as bool,
         results: (j['results'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        trusted: j['trusted'] == null ? null : (j['trusted'] as List).map((e) => ExploreCard.fromJson(e as Map<String, dynamic>)).toList(),
+        trustedMore: j['trusted_more'] == null ? null : j['trusted_more'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
+        'across': ?across?.map((e) => e.toJson()).toList(),
+        'across_more': ?acrossMore,
         'area': ?area,
         'blind': ?blind?.toJson(),
+        'categories': ?categories?.map((e) => e.toJson()).toList(),
+        'category_more': ?categoryMore,
         'delivery': delivery.map((e) => e.toJson()).toList(),
         'delivery_more': deliveryMore,
+        'featured': ?featured?.map((e) => e.toJson()).toList(),
         'fresh': fresh.map((e) => e.toJson()).toList(),
+        'in_category': ?inCategory?.map((e) => e.toJson()).toList(),
+        'known': ?known?.map((e) => e.toJson()).toList(),
         'more': more,
         'near': near.map((e) => e.toJson()).toList(),
         'near_more': nearMore,
+        'popular': ?popular?.map((e) => e.toJson()).toList(),
+        'popular_more': ?popularMore,
         'results': results.map((e) => e.toJson()).toList(),
-      };
-}
-
-class ExploreResultBlind {
-  const ExploreResultBlind({required this.kind, required this.shown});
-
-  final String kind;
-  final String shown;
-
-  factory ExploreResultBlind.fromJson(Map<String, dynamic> j) => ExploreResultBlind(
-        kind: j['kind'] as String,
-        shown: j['shown'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'kind': kind,
-        'shown': shown,
+        'trusted': ?trusted?.map((e) => e.toJson()).toList(),
+        'trusted_more': ?trustedMore,
       };
 }
 
 class ExploreCard {
-  const ExploreCard({this.about, this.area, this.available, required this.business, required this.captions, this.delivers, this.deliveryAreas, required this.logo, required this.name, required this.photos, this.slug, required this.state, this.tagline, required this.v, this.vehicle});
+  const ExploreCard({this.about, this.area, this.available, required this.business, required this.captions, this.categories, this.delivers, this.deliveryAreas, this.links, required this.logo, required this.name, required this.photos, this.slug, required this.state, this.tagline, required this.v, this.vehicle});
 
   final String? about;
   final String? area;
@@ -3172,9 +3283,14 @@ class ExploreCard {
   final String business;
   /// Its photos' captions, in order ("" for a photo with none)
   final List<String> captions;
+  /// The categories it picked (keys of Explore's categories)
+  final List<String>? categories;
   /// It delivers for other businesses (a rider)
   final bool? delivers;
   final List<String>? deliveryAreas;
+  /// Popular only, its links made in the last 90 days, rounded down (3, 5, then
+  /// tens) and shown with a "+"; never under 3
+  final int? links;
   /// Whether it has a logo, at GET /v1/explore/{business}/logo
   final bool logo;
   final String name;
@@ -3195,8 +3311,10 @@ class ExploreCard {
         available: j['available'] == null ? null : j['available'] as String,
         business: j['business'] as String,
         captions: (j['captions'] as List).map((e) => e as String).toList(),
+        categories: j['categories'] == null ? null : (j['categories'] as List).map((e) => e as String).toList(),
         delivers: j['delivers'] == null ? null : j['delivers'] as bool,
         deliveryAreas: j['delivery_areas'] == null ? null : (j['delivery_areas'] as List).map((e) => e as String).toList(),
+        links: j['links'] == null ? null : (j['links'] as num).toInt(),
         logo: j['logo'] as bool,
         name: j['name'] as String,
         photos: (j['photos'] as num).toInt(),
@@ -3213,8 +3331,10 @@ class ExploreCard {
         'available': ?available,
         'business': business,
         'captions': captions.map((e) => e).toList(),
+        'categories': ?categories?.map((e) => e).toList(),
         'delivers': ?delivers,
         'delivery_areas': ?deliveryAreas?.map((e) => e).toList(),
+        'links': ?links,
         'logo': logo,
         'name': name,
         'photos': photos,
@@ -3223,6 +3343,44 @@ class ExploreCard {
         'tagline': ?tagline,
         'v': v,
         'vehicle': ?vehicle,
+      };
+}
+
+class ExploreResultBlind {
+  const ExploreResultBlind({required this.kind, required this.shown});
+
+  final String kind;
+  final String shown;
+
+  factory ExploreResultBlind.fromJson(Map<String, dynamic> j) => ExploreResultBlind(
+        kind: j['kind'] as String,
+        shown: j['shown'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kind': kind,
+        'shown': shown,
+      };
+}
+
+class ExploreResultCategoriesItem {
+  const ExploreResultCategoriesItem({required this.key, required this.n, required this.name});
+
+  final String key;
+  /// How many businesses we may find in it
+  final int n;
+  final String name;
+
+  factory ExploreResultCategoriesItem.fromJson(Map<String, dynamic> j) => ExploreResultCategoriesItem(
+        key: j['key'] as String,
+        n: (j['n'] as num).toInt(),
+        name: j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'n': n,
+        'name': name,
       };
 }
 
@@ -4136,5 +4294,181 @@ class PutChatToolsRequest {
 
   Map<String, dynamic> toJson() => {
         'chat_tools': chatTools,
+      };
+}
+
+class PushDevices {
+  const PushDevices({this.added, required this.browsers, required this.devices, required this.kinds, required this.max, required this.phones});
+
+  /// The browser a PUT just added or updated
+  final String? added;
+  /// Browsers can be notified on this server (its VAPID keys)
+  final bool browsers;
+  final List<PushDevice> devices;
+  /// The kinds of notification a device may take, in the order to show them
+  final List<String> kinds;
+  final int max;
+  /// Phones can be notified on this server (Firebase)
+  final bool phones;
+
+  factory PushDevices.fromJson(Map<String, dynamic> j) => PushDevices(
+        added: j['added'] == null ? null : j['added'] as String,
+        browsers: j['browsers'] as bool,
+        devices: (j['devices'] as List).map((e) => PushDevice.fromJson(e as Map<String, dynamic>)).toList(),
+        kinds: (j['kinds'] as List).map((e) => e as String).toList(),
+        max: (j['max'] as num).toInt(),
+        phones: j['phones'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'added': ?added,
+        'browsers': browsers,
+        'devices': devices.map((e) => e.toJson()).toList(),
+        'kinds': kinds.map((e) => e).toList(),
+        'max': max,
+        'phones': phones,
+      };
+}
+
+class PushDevice {
+  const PushDevice({required this.createdAt, required this.id, required this.kind, required this.kinds, required this.label, this.lastOkAt, this.lastSentAt, this.platform, required this.preview});
+
+  final DateTime createdAt;
+  final String id;
+  /// A browser (webpush) or the phone app (fcm)
+  final String kind;
+  /// The kinds of notification it takes
+  final List<String> kinds;
+  final String label;
+  final Object? lastOkAt;
+  final Object? lastSentAt;
+  final Object? platform;
+  final bool preview;
+
+  factory PushDevice.fromJson(Map<String, dynamic> j) => PushDevice(
+        createdAt: DateTime.parse(j['created_at'] as String),
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        kinds: (j['kinds'] as List).map((e) => e as String).toList(),
+        label: j['label'] as String,
+        lastOkAt: j['last_ok_at'],
+        lastSentAt: j['last_sent_at'],
+        platform: j['platform'],
+        preview: j['preview'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'id': id,
+        'kind': kind,
+        'kinds': kinds.map((e) => e).toList(),
+        'label': label,
+        'last_ok_at': ?lastOkAt,
+        'last_sent_at': ?lastSentAt,
+        'platform': ?platform,
+        'preview': preview,
+      };
+}
+
+class PutPushRequest {
+  const PutPushRequest({this.endpoint, this.keys, this.kind, this.kinds, this.known, this.label, this.platform, this.preview, this.replaces, this.token});
+
+  final String? endpoint;
+  final PutPushRequestKeys? keys;
+  final String? kind;
+  /// The kinds of notification the device takes; left out, a new device takes
+  /// the defaults (all for owners and admins, all but alerts for others)
+  final Object? kinds;
+  /// Only find this device (a page that lost which one it is); one the server
+  /// does not have is not added again (404)
+  final bool? known;
+  final String? label;
+  final String? platform;
+  /// Whether the notification says what the message says (default on)
+  final Object? preview;
+  /// The same device's previous address (a browser's renewed subscription, or
+  /// the app's token before Firebase changed it)
+  final String? replaces;
+  /// The app's Firebase registration token (kind fcm)
+  final String? token;
+
+  factory PutPushRequest.fromJson(Map<String, dynamic> j) => PutPushRequest(
+        endpoint: j['endpoint'] == null ? null : j['endpoint'] as String,
+        keys: j['keys'] == null ? null : PutPushRequestKeys.fromJson(j['keys'] as Map<String, dynamic>),
+        kind: j['kind'] == null ? null : j['kind'] as String,
+        kinds: j['kinds'],
+        known: j['known'] == null ? null : j['known'] as bool,
+        label: j['label'] == null ? null : j['label'] as String,
+        platform: j['platform'] == null ? null : j['platform'] as String,
+        preview: j['preview'],
+        replaces: j['replaces'] == null ? null : j['replaces'] as String,
+        token: j['token'] == null ? null : j['token'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'endpoint': ?endpoint,
+        'keys': ?keys?.toJson(),
+        'kind': ?kind,
+        'kinds': ?kinds,
+        'known': ?known,
+        'label': ?label,
+        'platform': ?platform,
+        'preview': ?preview,
+        'replaces': ?replaces,
+        'token': ?token,
+      };
+}
+
+class PutPushRequestKeys {
+  const PutPushRequestKeys({required this.auth, required this.p256dh});
+
+  final String auth;
+  final String p256dh;
+
+  factory PutPushRequestKeys.fromJson(Map<String, dynamic> j) => PutPushRequestKeys(
+        auth: j['auth'] as String,
+        p256dh: j['p256dh'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'auth': auth,
+        'p256dh': p256dh,
+      };
+}
+
+class PatchPushRequest {
+  const PatchPushRequest({this.kinds, this.label, this.preview});
+
+  final Object? kinds;
+  final Object? label;
+  final Object? preview;
+
+  factory PatchPushRequest.fromJson(Map<String, dynamic> j) => PatchPushRequest(
+        kinds: j['kinds'],
+        label: j['label'],
+        preview: j['preview'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'kinds': ?kinds,
+        'label': ?label,
+        'preview': ?preview,
+      };
+}
+
+class DeletePushEndpointRequest {
+  const DeletePushEndpointRequest({this.endpoint, this.token});
+
+  final String? endpoint;
+  final String? token;
+
+  factory DeletePushEndpointRequest.fromJson(Map<String, dynamic> j) => DeletePushEndpointRequest(
+        endpoint: j['endpoint'] == null ? null : j['endpoint'] as String,
+        token: j['token'] == null ? null : j['token'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'endpoint': ?endpoint,
+        'token': ?token,
       };
 }

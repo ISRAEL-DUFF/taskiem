@@ -1,0 +1,20 @@
+{
+  "trigger": "event",
+  "body": {
+    "eventType": "SUCCESSFUL_TRANSACTION",
+    "eventData": {
+      "product": {
+        "reference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+        "type": "API_NOTIFICATION"
+      },
+      "transactionReference": "MNFY|20261006200044|000090",
+      "paymentReference": "tsk_ab12cd34ef56gh78ij90kl12mn34op56",
+      "amountPaid": "500.00",
+      "currency": "NGN",
+      "paymentStatus": "PARTIALLY_PAID",
+      "totalPayable": "1500.50"
+    }
+  },
+  "event": "",
+  "name": "a part payment is not the payment received: get_payment says pending too"
+}

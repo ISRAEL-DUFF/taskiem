@@ -26,6 +26,7 @@ import 'package:taskiem/api/transport.dart';
 import 'package:taskiem/app/auth.dart';
 import 'package:taskiem/app/session.dart';
 import 'package:taskiem/kit/kit.dart';
+import 'package:taskiem/kit/list.dart' show TkRow;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/chat/chats.dart';
@@ -89,17 +90,23 @@ Future<void> _tap(WidgetTester t, String words) async {
   await t.pumpAndSettle();
 }
 
+/// The WhatsApp logo on the sign-in card (as drawn, not the web's button).
+Future<void> _tapLogo(WidgetTester t) async {
+  final logo = find.bySemanticsLabel('Sign in with a code on WhatsApp');
+  await t.ensureVisible(logo);
+  await t.pumpAndSettle();
+  await t.tap(logo);
+  await t.pumpAndSettle();
+}
+
 /// The app's screens by the web half's names.
 final screens = <String, Screen>{
   'sign-in': (build: () => SignInScreen(auth: fakeAuth()), drive: _none),
-  'sign-in-chat': (
-    build: () => SignInScreen(auth: fakeAuth()),
-    drive: (t) => _tap(t, 'Sign in with WhatsApp or Telegram'),
-  ),
+  'sign-in-chat': (build: () => SignInScreen(auth: fakeAuth()), drive: (t) => _tapLogo(t)),
   'sign-in-chat-code': (
     build: () => SignInScreen(auth: fakeAuth()),
     drive: (t) async {
-      await _tap(t, 'Sign in with WhatsApp or Telegram');
+      await _tapLogo(t);
       await t.enterText(find.byType(TextField).first, '08031234567');
       await _tap(t, 'Send me a code');
     },
@@ -155,6 +162,18 @@ final screens = <String, Screen>{
   'explore': (
     build: () {
       final f = Fixture('explore');
+      return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Find a business to link with'));
+      await _loaded(t);
+      await _loaded(t);
+    },
+  ),
+  'explore-start': (
+    build: () {
+      final f = Fixture('explore-start');
       return ChatsScreen(data: ChatsData(f.auth(), now: () => f.at));
     },
     drive: (t) async {
@@ -249,6 +268,67 @@ final screens = <String, Screen>{
     },
     drive: _loaded,
   ),
+  // The tools panel over Taskiem's conversation (M5), and a tool's sheet.
+  'chat-tools': (
+    build: () {
+      final f = Fixture('chat-tools');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Open tools'));
+      await _loaded(t);
+    },
+  ),
+  'chat-tool-sheet': (
+    build: () {
+      final f = Fixture('chat-tools');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Open tools'));
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel(RegExp('^Products')));
+      await _loaded(t);
+    },
+  ),
+  'chat-product': (
+    build: () {
+      final f = Fixture('chat-product');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Open tools'));
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel(RegExp('^Products')));
+      await _loaded(t);
+      await t.tap(find.byType(TkRow).first);
+      await _loaded(t);
+    },
+  ),
+  'chat-sell': (
+    build: () {
+      final f = Fixture('chat-sell');
+      final chats = ChatsData(f.auth(), now: () => f.at)..load();
+      return TaskiemScreen(data: TaskiemData(chats, follow: false));
+    },
+    drive: (t) async {
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel('Open tools'));
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel(RegExp('^Sell')));
+      await _loaded(t);
+      await t.tap(find.bySemanticsLabel(RegExp('^One more ')).first);
+      await _loaded(t);
+    },
+  ),
+  'chat-order': (build: () => _conversation('chat-order', 'Bayo Rice Mills'), drive: (t) => _shop(t)),
+  'chat-order-review': (build: () => _conversation('chat-order', 'Bayo Rice Mills'), drive: (t) => _shop(t, review: true)),
   'chat-taskiem-cards': (
     build: () {
       final f = Fixture('chat-taskiem');
@@ -419,11 +499,28 @@ final screens = <String, Screen>{
   'sign-up': (
     build: () => SignUpScreen(auth: fakeAuth()),
     drive: (t) async {
-      await _tap(t, 'I bill customers for a service');
+      await _tap(t, 'I bill for a service');
       FocusManager.instance.primaryFocus?.unfocus();
       await t.pumpAndSettle();
     },
   ),
+};
+
+/// Screens drawn in the app's own look rather than the web's (docs/spec/
+/// mobile-app-look.md, "Cards in a conversation"): the cards and tags in a
+/// conversation. Each is still built and driven, so it still fails on an
+/// error or an overflow, but it is no longer compared with the web's picture.
+const appsOwnLook = {
+  'chat-bayo', 'chat-deal', 'chat-deal-counter', 'chat-tag', 'chat-tag-hash', 'chat-tagged',
+  // The chat in the app's own look (docs/spec/mobile-app-look.md, "The chat").
+  'chat-attach', 'chat-caption', 'chat-delete', 'chat-files', 'chat-files-end', 'chat-head-menu', 'chat-info-media', 'chat-long',
+  'chat-menu', 'chat-order', 'chat-order-review', 'chat-pick', 'chat-product', 'chat-reply', 'chat-sell', 'chat-taskiem',
+  'chat-taskiem-approval', 'chat-taskiem-approve', 'chat-taskiem-cards', 'chat-tool-sheet', 'chat-tools', 'chat-tunde',
+  'chats', 'chats-customers', 'chats-search', 'chats-starred', 'customer-chidi',
+  // Signing in, as drawn (docs/spec/mobile-app-look.md, "Signing in").
+  'sign-in', 'sign-in-chat', 'sign-in-chat-code', 'sign-in-wrong', 'sign-up',
+  // Find a business, as drawn (docs/spec/mobile-app-look.md).
+  'explore', 'explore-search', 'explore-start',
 };
 
 final kept = RegExp(r'^([a-z-]+)-(light|dark)-(\d+)x(\d+)\.png$');
@@ -433,8 +530,7 @@ void main() {
   setUp(() => TkField.debugHideCaret = true);
   tearDown(() => TkField.debugHideCaret = false);
 
-  final files = Directory('test/parity/web').listSync().whereType<File>().toList()
-    ..sort((a, b) => a.path.compareTo(b.path));
+  final files = Directory('test/parity/web').listSync().whereType<File>().toList()..sort((a, b) => a.path.compareTo(b.path));
   test('every screen the web half keeps has an app screen', () {
     for (final f in files) {
       final m = kept.firstMatch(f.uri.pathSegments.last);
@@ -457,12 +553,18 @@ void main() {
       // Shadows as the app draws them (flutter_test makes them solid shapes
       // otherwise), from the first frame; put back before the test ends.
       debugDisableShadows = false;
-      await tester.pumpWidget(RepaintBoundary(
-        key: shot,
-        child: TaskiemApp(mode: mode, home: screens[m.group(1)]!.build()),
-      ));
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: shot,
+          child: TaskiemApp(mode: mode, home: screens[m.group(1)]!.build()),
+        ),
+      );
       await tester.pumpAndSettle();
       await screens[m.group(1)]!.drive(tester);
+      if (appsOwnLook.contains(m.group(1))) {
+        debugDisableShadows = true;
+        return;
+      }
       final boundary = tester.renderObject(find.byKey(shot)) as RenderRepaintBoundary;
       final result = await tester.runAsync(() async {
         final app = await boundary.toImage();
@@ -478,8 +580,11 @@ void main() {
         return share;
       });
       debugDisableShadows = true;
-      expect(result, lessThan(allowed),
-          reason: '$name: the app looks different from the web (${(result! * 100).toStringAsFixed(2)}% of the screen); see build/parity/');
+      expect(
+        result,
+        lessThan(allowed),
+        reason: '$name: the app looks different from the web (${(result! * 100).toStringAsFixed(2)}% of the screen); see build/parity/',
+      );
     });
   }
 }
@@ -489,8 +594,7 @@ Future<ui.Image> _decode(Uint8List png) async {
   return (await codec.getNextFrame()).image;
 }
 
-Future<Uint8List> _rgba(ui.Image i) async =>
-    (await i.toByteData(format: ui.ImageByteFormat.rawRgba))!.buffer.asUint8List();
+Future<Uint8List> _rgba(ui.Image i) async => (await i.toByteData(format: ui.ImageByteFormat.rawRgba))!.buffer.asUint8List();
 
 /// The share of pixels that differ, as web/e2e/parity.spec.ts counts them.
 double differs(Uint8List a, Uint8List b, int w, int h) {
@@ -567,4 +671,29 @@ Future<void> _hold(WidgetTester t) async {
   await _loaded(t);
   await t.longPress(find.textContaining('Good morning ma', findRichText: true));
   await t.pumpAndSettle();
+  // The reactions' pill is placed once the menu is measured.
+  await t.pump(const Duration(milliseconds: 50));
+  await t.pumpAndSettle();
+}
+
+/// Their shop from the tools panel, the first item it can add in the bag;
+/// with [review], its review.
+Future<void> _shop(WidgetTester t, {bool review = false}) async {
+  await _loaded(t);
+  await t.tap(find.bySemanticsLabel('Open tools'));
+  await _loaded(t);
+  await t.tap(find.bySemanticsLabel(RegExp('^Their shop')));
+  await _loaded(t);
+  // At large text the head can fill the sheet: the first row scrolled to.
+  final more = find.bySemanticsLabel(RegExp('^One more '));
+  for (var i = 0; i < 20 && more.evaluate().isEmpty; i++) {
+    await t.drag(find.byType(Scrollable).last, const Offset(0, -80));
+    await t.pumpAndSettle();
+  }
+  await t.tap(more.first);
+  await _loaded(t);
+  if (review) {
+    await t.tap(find.bySemanticsLabel('Review order'));
+    await _loaded(t);
+  }
 }

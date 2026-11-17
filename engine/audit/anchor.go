@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -285,10 +286,37 @@ func ReadAnchors(r io.Reader) ([]Anchor, error) {
 	}
 }
 
+// SignedByAny reports whether one of pubs signed the anchor. A platform
+// that has changed its anchor key keeps the retired public keys, so the
+// anchors made before the change still verify.
+func (a Anchor) SignedByAny(pubs []ed25519.PublicKey) bool {
+	for _, pub := range pubs {
+		if a.VerifySignature(pub) {
+			return true
+		}
+	}
+	return false
+}
+
+// ParsePublicKeys reads anchor public keys (base64 Ed25519) separated by
+// commas or spaces.
+func ParsePublicKeys(list string) ([]ed25519.PublicKey, error) {
+	var out []ed25519.PublicKey
+	for _, f := range strings.FieldsFunc(list, func(r rune) bool { return r == ',' || r == ' ' || r == '\n' || r == '\t' }) {
+		b, err := base64.StdEncoding.DecodeString(f)
+		if err != nil || len(b) != ed25519.PublicKeySize {
+			return nil, fmt.Errorf("audit: %q is not a base64 Ed25519 public key", f)
+		}
+		out = append(out, ed25519.PublicKey(b))
+	}
+	return out, nil
+}
+
 // VerifyWithAnchors verifies an export as Verify does, then checks each
-// anchor: its signature (when pub is given), and that the export's entry at
-// the anchored sequence number has the anchored hash.
-func VerifyWithAnchors(r io.Reader, anchors []Anchor, pub ed25519.PublicKey) (Result, error) {
+// anchor: its signature against pubs (when any is given; with none, no
+// signature is checked), and that the export's entry at the anchored
+// sequence number has the anchored hash.
+func VerifyWithAnchors(r io.Reader, anchors []Anchor, pubs ...ed25519.PublicKey) (Result, error) {
 	want := map[int64]string{}
 	for _, a := range anchors {
 		want[a.Seq] = a.Hash
@@ -304,8 +332,8 @@ func VerifyWithAnchors(r io.Reader, anchors []Anchor, pub ed25519.PublicKey) (Re
 	}
 	for _, a := range anchors {
 		switch {
-		case pub != nil && !a.VerifySignature(pub):
-			res.FirstBroken, res.Reason = a.Seq, fmt.Sprintf("the anchor at entry %d (%s) is not signed by this key", a.Seq, a.At)
+		case len(pubs) > 0 && !a.SignedByAny(pubs):
+			res.FirstBroken, res.Reason = a.Seq, fmt.Sprintf("the anchor at entry %d (%s) is not signed by this key (key id %s); if the anchor key was changed since, give the retired public key too", a.Seq, a.At, a.KeyID)
 		case got[a.Seq] == "":
 			res.FirstBroken, res.Reason = a.Seq, fmt.Sprintf("entry %d, anchored %s, is missing from the export", a.Seq, a.At)
 		case got[a.Seq] != a.Hash:

@@ -7,11 +7,13 @@ import {
   type ReactNode,
 } from "react";
 import { get, post, type Me } from "./api";
+import { endSession, keepSigningOut, NOT_SIGNED_OUT } from "./lib/signout";
 import { passkeyLogin } from "./passkeys";
 import { toast } from "./toast";
 import { claimTab, forgetTab } from "./lib/tabOwner";
-import { disablePush } from "./lib/push";
+import { disablePush, setPushScope } from "./lib/push";
 import { setAppBadge } from "./lib/badge";
+import { forgetViewed } from "./lib/explore";
 
 interface Auth {
   me: Me | null | undefined; // undefined while loading
@@ -26,6 +28,17 @@ const Ctx = createContext<Auth | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
+  // A sign-out the server has not answered yet: the session cookie may
+  // still be good, so the sign-in page is not shown until it has.
+  const [leaving, setLeaving] = useState<"no" | "trying" | "stuck">("no");
+  const signedOut = useCallback(() => {
+    setLeaving("no");
+    setMe(null);
+  }, []);
+  useEffect(() => {
+    if (leaving !== "stuck") return;
+    return keepSigningOut(endSession, signedOut);
+  }, [leaving, signedOut]);
   const refresh = useCallback(
     () =>
       get<Me>("/v1/me").then(
@@ -33,6 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // A session that ran out keeps the tab's drafts for the same
           // person; someone else signing in here does not see them.
           claimTab(m.user?.id ?? "");
+          // This browser's notification device is per business (lib/push.ts).
+          setPushScope(m.tenant_id);
           setMe(m);
         },
         () => setMe(null),
@@ -66,16 +81,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     logout: async () => {
       // This browser stops being notified for this person (it needs the session).
-      await disablePush().catch(() => undefined);
+      await disablePush(true).catch(() => undefined);
       setAppBadge(0);
-      await post("/v1/auth/logout").catch(() => undefined);
+      setLeaving("trying");
+      const ended = await endSession();
       // What the person had half written, what was not yet sent, the gate's
       // checks and a business session are theirs alone: they do not wait
-      // for whoever signs in next in this tab.
+      // for whoever signs in next in this tab. This much can be cleared
+      // whether or not the server was reached.
       forgetTab();
-      setMe(null);
+      forgetViewed();
+      if (ended) signedOut();
+      else setLeaving("stuck");
     },
   };
+  if (leaving === "stuck")
+    return (
+      <Ctx.Provider value={value}>
+        <div className="login card" role="alert">
+          <h1>Not signed out yet</h1>
+          <p>{NOT_SIGNED_OUT}.</p>
+          <p className="hint">
+            Until then, anyone who opens Taskiem on this device is still
+            signed in as you. We will keep trying.
+          </p>
+          <button
+            className="primary"
+            onClick={() =>
+              void endSession().then((ended) => {
+                if (ended) signedOut();
+              })
+            }
+          >
+            Try again
+          </button>
+        </div>
+      </Ctx.Provider>
+    );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

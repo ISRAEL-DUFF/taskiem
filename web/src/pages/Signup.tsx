@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { get, post, type TermsAsked } from "../api";
 import { useAuth } from "../auth";
 import { useOnboarding } from "../onboarding";
-import { ErrorBox, Field, useAction } from "../ui";
+import { ErrorBox, Field, useAction, PasswordInput } from "../ui";
 
 /** What a business says it does, in its own words (lib/areas.ts has the
  * parts each switches on). */
@@ -113,8 +113,7 @@ export function Signup() {
           label="Password"
           hint="At least 12 characters. A short sentence is easy to remember."
         >
-          <input
-            type="password"
+          <PasswordInput
             value={f.password}
             onChange={set("password")}
             required

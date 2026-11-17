@@ -49,12 +49,27 @@ type Credit struct {
 	Changed bool
 }
 
+// LockCreditTx makes the weighing of a link's credit, and the accepting
+// of its orders, one at a time until tx ends: a check waits for an order
+// of the same link being accepted and then counts it, so two orders that
+// together pass the limit are not both accepted by themselves. Taken
+// after the order's own row lock, by every path that accepts.
+func LockCreditTx(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem link credit ' || $1::text || ' ' || $2::text, 0))`, seller, link)
+	return err
+}
+
 // CreditCheckTx checks a new order from a linked buyer against the limit
 // the seller in scope set for the link, and flags it (or clears its flag)
-// accordingly. Only an order not yet accepted is checked.
+// accordingly. Only an order not yet accepted is checked. It holds the
+// link's credit lock (LockCreditTx) until tx ends: to accept an order
+// within its limit, check and accept in one transaction.
 func CreditCheckTx(ctx context.Context, tx pgx.Tx, seller uuid.UUID, ref string) (Order, Credit, error) {
 	o, err := GetOrderTx(ctx, tx, ref, true)
 	if err != nil {
+		return o, Credit{}, err
+	}
+	if err := LockCreditTx(ctx, tx, seller, o.LinkID); err != nil {
 		return o, Credit{}, err
 	}
 	var flagged *time.Time

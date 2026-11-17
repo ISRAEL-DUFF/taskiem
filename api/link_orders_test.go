@@ -582,6 +582,24 @@ func TestLinkedOrdersMatchedAndPlaced(t *testing.T) {
 		}
 	}
 	seller.must(400, "POST", "/v1/trade-orders", map[string]any{"link": sellerLink, "lines": []any{map[string]any{"item": "Palm oil", "quantity": 1}}})
+	// Sent again after a request that timed out (the same key): the same
+	// order, and the buyer has one purchase order of it, not two.
+	oil := map[string]any{"link": sellerLink, "lines": []any{map[string]any{"item": "Palm oil", "quantity": 3, "price_kobo": 3000000}}}
+	once := seller.must(201, "POST", "/v1/trade-orders", oil, "Idempotency-Key", "oil-1")["order"].(map[string]any)
+	twice := seller.must(201, "POST", "/v1/trade-orders", oil, "Idempotency-Key", "oil-1")["order"].(map[string]any)
+	if twice["reference"] != once["reference"] || twice["id"] != once["id"] {
+		t.Fatalf("the same request again made another order: %v then %v", once["reference"], twice["reference"])
+	}
+	oils := 0
+	for _, x := range buyer.must(200, "GET", "/v1/stock/purchases", nil)["purchases"].([]any) {
+		if p := x.(map[string]any); p["reference"] == once["reference"] {
+			oils++
+		}
+	}
+	if oils != 1 {
+		t.Fatalf("the buyer has %d purchase orders of one order", oils)
+	}
+	seller.must(400, "POST", "/v1/trade-orders", oil, "Idempotency-Key", "not a key!")
 	buyer.must(200, "PUT", "/v1/stock/suppliers/"+sup+"/link", map[string]any{"link_id": nil})
 	seller.must(409, "POST", "/v1/trade-orders", map[string]any{"link": sellerLink, "lines": []any{map[string]any{"item_id": sGarri, "quantity": 1}}})
 }

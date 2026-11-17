@@ -179,3 +179,73 @@ func TestDailyCloseFlagsWhatDoesNotReconcile(t *testing.T) {
 		t.Fatalf("by default yesterday: %+v %v", got, err)
 	}
 }
+
+// Money recorded on a day for an earlier day is in exactly one close: the
+// earlier day's when that close had not run yet, else the close of the
+// day it was recorded on, as its own figure. A frozen close is never
+// rewritten, and a close taken later for an old day does not count the
+// money a second time.
+func TestDailyCloseCountsMoneyRecordedLate(t *testing.T) {
+	w := newCashWorld(t)
+	tn := w.env.Tenant
+	base := time.Now()
+	at := func(days int) { w.s.Now = func() time.Time { return base.Add(time.Duration(days) * 24 * time.Hour) } }
+	d0 := w.s.Yesterday().AddDate(0, 0, 1)
+	day := func(n int) time.Time { return d0.AddDate(0, 0, n) }
+	post := func(student string, kobo int64, dated time.Time) {
+		t.Helper()
+		if _, _, err := w.s.PostPayment(ctx, tn, schools.PostingIn{Student: student, AmountKobo: kobo, How: "cash", Date: dated.Format(time.DateOnly)}, "user:ada"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	closeDay := func(d time.Time) schools.Close {
+		t.Helper()
+		var c schools.Close
+		w.in(func(tx pgx.Tx) error {
+			var err error
+			c, _, err = w.s.CloseDay(ctx, tx, tn, d, "user:ada")
+			return err
+		})
+		return c
+	}
+	// The next morning: ₦10,000 for yesterday is posted before
+	// yesterday's close runs, so that close counts it; ₦40,000 for
+	// yesterday is posted after, and yesterday's close is frozen.
+	at(1)
+	post("GCA/001", 1_000_000, day(0))
+	c0 := closeDay(day(0))
+	if c0.MoneyIn.Kobo != 1_000_000 || c0.RecordedLate.Count != 0 {
+		t.Fatalf("the first day's close %+v", c0)
+	}
+	post("GCA/001", 4_000_000, day(0))
+	// And ₦5,000 for a day long before any close was taken.
+	post("GCA/002", 500_000, day(-5))
+	post("GCA/002", 200_000, day(1))
+	at(2)
+	c1 := closeDay(day(1))
+	if c1.RecordedLate.Count != 2 || c1.RecordedLate.Kobo != 4_500_000 {
+		t.Fatalf("recorded late: %+v", c1.RecordedLate)
+	}
+	if c1.MoneyIn.Count != 3 || c1.MoneyIn.Kobo != 4_700_000 || c1.AtTheDesk.Kobo != 4_700_000 {
+		t.Fatalf("the second day's money in %+v", c1)
+	}
+	if text := schools.CloseText(c1, "https://app.test"); !strings.Contains(text, "₦45,000 recorded for earlier days") {
+		t.Fatalf("the text does not say it:\n%s", text)
+	}
+	if again := closeDay(day(0)); again.MoneyIn.Kobo != 1_000_000 || again.ID != c0.ID {
+		t.Fatalf("the frozen close changed: %+v", again)
+	}
+	// The old day closed afterwards does not count what the second day's
+	// close already carries.
+	if old := closeDay(day(-5)); old.MoneyIn.Count != 0 || old.RecordedLate.Count != 0 {
+		t.Fatalf("the old day's close counted the money again: %+v", old)
+	}
+	// Every kobo is in exactly one close.
+	var total int64
+	for _, c := range []schools.Close{c0, c1} {
+		total += c.MoneyIn.Kobo
+	}
+	if total != 5_700_000 {
+		t.Fatalf("the closes carry %d of the 5700000 posted", total)
+	}
+}

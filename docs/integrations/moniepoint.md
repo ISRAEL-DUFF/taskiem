@@ -49,6 +49,8 @@ Monnify posts events to the URLs set under Developer → Webhook URLs (Transacti
 | `SETTLEMENT` | the settlement reference |
 | `MANDATE_UPDATE` | the external mandate reference |
 
+**When a checkout payment counts.** `payment.received` is raised for a `SUCCESSFUL_TRANSACTION` only when its `paymentStatus` is `PAID` or `OVERPAID` (or the notification carries none), with `amountPaid`, what the payer actually sent. A `PARTIALLY_PAID` notification raises nothing: the payment is still pending, which is also what `get_payment` answers for it (`FAILED`, `ABANDONED`, `CANCELLED` and `EXPIRED` are failed, `REVERSED` refunded, anything else pending), so the event and the lookup never disagree. What Monnify does with the part paid is for Monnify to say; Taskiem counts the payment when the lookup or a later notification says it is paid.
+
 Monnify resends an unacknowledged webhook up to 10 times, five minutes apart, and recommends confirming every payment with `get_transaction` before giving value.
 
 ## To confirm with Monnify before go-live
@@ -61,3 +63,4 @@ Monnify resends an unacknowledged webhook up to 10 times, five minutes apart, an
 6. Whether `REVERSED` and `EXPIRED` can be the status of a single transfer at initiation.
 7. IP whitelisting: Monnify asks for production IPs to be whitelisted before disbursements go live (`D06` otherwise), and sends webhooks from 35.242.133.146.
 8. A sandbox account with a disbursement wallet, a contract code and two-factor authorisation off for API transfers.
+9. Whether every `SUCCESSFUL_TRANSACTION` notification carries `paymentStatus`, and whether one is sent for each part of a part payment (the connector takes a notification without it as paid, as before, and ignores `PARTIALLY_PAID`).

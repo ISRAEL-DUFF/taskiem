@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -60,6 +61,8 @@ type Limits struct {
 	MaxResponse  int    // bytes of one provider response body; default 4 MiB
 	MaxHTTPCalls int    // per call; default 20
 	MaxLogs      int    // bytes of log lines kept per call; default 16 KiB
+	MaxLogLine   int    // bytes kept of one log line; default 2 KiB
+	MaxLogLines  int    // log lines kept per call; default 100
 	// MaxCompiled is how many compiled modules the runtime keeps; the
 	// least recently used beyond it are closed once no call uses them,
 	// and compiled again when next needed. Default 32.
@@ -86,6 +89,8 @@ func (l Limits) withDefaults() Limits {
 	def(&l.MaxResponse, 4<<20)
 	def(&l.MaxHTTPCalls, 20)
 	def(&l.MaxLogs, 16<<10)
+	def(&l.MaxLogLine, 2<<10)
+	def(&l.MaxLogLines, 100)
 	def(&l.MaxCompiled, 32)
 	if l.MaxCallTime <= 0 {
 		l.MaxCallTime = 30 * time.Second
@@ -405,6 +410,7 @@ type call struct {
 	httpN    int
 	sent     bool // a request may have reached the provider
 	logBytes int
+	logLines int
 	ctx      context.Context // for outbound requests
 }
 
@@ -591,22 +597,72 @@ const logMargin = 256
 // logRoom is how many bytes of log lines the call may still keep.
 func (c *call) logRoom() int { return max(c.lim.MaxLogs-c.logBytes, 0) }
 
+// log writes one line a module logged to the platform's log: without the
+// call's secret values (a module may log its own credentials; the step's
+// result is scrubbed of them, and so must this be), with personal data
+// masked, and bounded: one line by MaxLogLine, a call by MaxLogLines
+// lines and MaxLogs bytes.
 func (c *call) log(s string) {
 	s = strings.TrimRight(s, "\n")
-	room := c.logRoom()
-	if s == "" || room == 0 || c.req.Logger == nil {
+	total := c.logRoom()
+	if s == "" || total == 0 || c.req.Logger == nil {
 		return
 	}
-	if len(s) <= room {
+	if c.logLines >= c.lim.MaxLogLines {
+		c.logBytes = c.lim.MaxLogs
+		c.req.Logger.Info("connector log", "line", "…[further lines dropped]")
+		return
+	}
+	c.logLines++
+	room := min(total, c.lim.MaxLogLine)
+	// Secrets and personal data are taken out of a bounded prefix before
+	// it is cut, so one straddling the cut does not leave its start.
+	long := len(s) > room
+	s = pii.Redact(scrubSecrets(s[:min(len(s), room+logMargin)], c.req.Secrets))
+	if !long && len(s) <= room {
 		c.logBytes += len(s)
-		c.req.Logger.Info("connector log", "line", pii.Redact(s))
+		c.req.Logger.Info("connector log", "line", s)
 		return
 	}
-	// Over the cap: mask a bounded prefix, then cut it to what is left.
-	s = pii.Redact(s[:min(len(s), room+logMargin)])
-	s = strings.ToValidUTF8(s[:min(len(s), room)], "")
-	c.logBytes = c.lim.MaxLogs
+	s = trimSecretStart(strings.ToValidUTF8(s[:min(len(s), room)], ""), c.req.Secrets)
+	if room == total {
+		c.logBytes = c.lim.MaxLogs
+	} else {
+		c.logBytes += room
+	}
 	c.req.Logger.Info("connector log", "line", s+" …[truncated]")
+}
+
+// minSecret is the shortest secret value looked for: shorter ones would
+// mask ordinary text (the worker's scrub uses the same bound).
+const minSecret = 4
+
+// scrubSecrets replaces each secret value in s, longest first.
+func scrubSecrets(s string, secrets []string) string {
+	if len(secrets) == 0 {
+		return s
+	}
+	sorted := slices.Clone(secrets)
+	slices.SortFunc(sorted, func(a, b string) int { return len(b) - len(a) })
+	for _, v := range sorted {
+		if len(v) >= minSecret {
+			s = strings.ReplaceAll(s, v, "[secret]")
+		}
+	}
+	return s
+}
+
+// trimSecretStart drops from the end of a cut line the start of a secret
+// that the cut went through (the rest of it lay past what was read).
+func trimSecretStart(s string, secrets []string) string {
+	for _, v := range secrets {
+		for k := min(len(v)-1, len(s)); k >= minSecret; k-- {
+			if strings.HasSuffix(s, v[:k]) {
+				return s[:len(s)-k]
+			}
+		}
+	}
+	return s
 }
 
 type logWriter struct{ c *call }

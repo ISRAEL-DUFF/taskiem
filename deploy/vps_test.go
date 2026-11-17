@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -16,6 +17,8 @@ import (
 type vps struct {
 	t                         *testing.T
 	dir, kit, state, bin, log string
+	// env is added to taskiem-vps's environment.
+	env []string
 }
 
 func newVPS(t *testing.T) *vps {
@@ -56,15 +59,31 @@ func newVPS(t *testing.T) *vps {
 	stub("docker", `img=$(sed -n "s/^TASKIEM_IMAGE='\(.*\)'$/\1/p" "$TASKIEM_VPS_KIT/.env" 2>/dev/null)
 case "$*" in
   *" up "*|*" up") echo "up $img $(head -1 "$TASKIEM_VPS_KIT/docker-compose.yml")" >>"$CALLS"; [ "$img" != taskiem:broken ] ;;
+  *" stop openbao"*) echo "stop openbao" >>"$CALLS" ;;
   *"ps -q"*) echo cid ;;
   *"config --services"*) echo taskiem ;;
-  "image inspect"*) case "${@: -1}" in taskiem:good) echo revA ;; taskiem:broken) echo revB ;; taskiem:good2) echo revC ;; esac ;;
+  "image inspect"*) case "${@: -1}" in taskiem:good) echo revA ;; taskiem:broken) echo revB ;; taskiem:good2|taskiem:other-channel|taskiem:unstated) echo revC ;; taskiem:old) echo revA ;; esac ;;
   inspect*) [ "$img" = taskiem:broken ] && echo unhealthy || echo healthy ;;
 esac
 `)
 	// curl: the kit tarballs codeload would serve; everything else answers.
-	stub("curl", `for a in "$@"; do case $a in https://codeload.github.com/*) echo "kit ${a##*/}" >>"$CALLS"; cat "$KITS/${a##*/}.tgz"; exit 0 ;; esac; done
+	stub("curl", `for a in "$@"; do case $a in https://codeload.github.com/*) echo "kit ${a##*/}" >>"$CALLS"; cat "$KITS/${a##*/}.tgz"; exit 0 ;;
+  https://alerts.test/*) [ -z "${ALERTS_DOWN:-}" ] || exit 22; echo "alert $(tr -d '\n')" >>"$CALLS"; exit 0 ;; esac; done
 exit 0
+`)
+	// cosign: CI's signed statement of the channel a release was promoted
+	// to and its release number, as verify-attestation prints it (a DSSE
+	// envelope whose payload is the statement, base64).
+	stub("cosign", `[ "$1" = verify-attestation ] || exit 0
+echo "cosign $*" >>"$CALLS"
+for a in "$@"; do case $a in
+  taskiem:good) st='{"channel":"staging","release":10}' ;;
+  taskiem:good2) st='{"channel":"staging","release":12}' ;;
+  taskiem:old) st='{"channel":"staging","release":5}' ;;
+  taskiem:other-channel) st='{"channel":"production","release":99}' ;;
+esac; done
+[ -n "${st:-}" ] || { echo "Error: no matching attestations" >&2; exit 1; }
+printf '{"payloadType":"application/vnd.in-toto+json","payload":"%s"}\n' "$(printf '{"predicate":%s}' "$st" | base64 -w0)"
 `)
 	stub("id", `[ "${1:-}" = -u ] && { echo 0; exit 0; }; exec /usr/bin/id "$@"
 `)
@@ -108,6 +127,7 @@ func (v *vps) run(image string, args ...string) (string, error) {
 		"TASKIEM_VPS_KIT="+v.kit, "TASKIEM_VPS_ETC="+filepath.Join(v.dir, "etc"), "TASKIEM_VPS_STATE="+v.state,
 		"TASKIEM_VPS_BIN="+v.bin, "TASKIEM_VPS_NO_TIMERS=1", "TASKIEM_VPS_KIT_SOURCE=",
 		"TASKIEM_VPS_IMAGE_OVERRIDE="+image, "CALLS="+v.log, "KITS="+filepath.Join(v.dir, "kits"))
+	cmd.Env = append(cmd.Env, v.env...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -204,5 +224,271 @@ func TestVPSRollbackRestoresTheKit(t *testing.T) {
 	}
 	if ups := v.ups(); ups[len(ups)-1] != "taskiem:good # kit revA" {
 		t.Errorf("rollback started %q, want taskiem:good with revA's kit", ups[len(ups)-1])
+	}
+}
+
+// TestVPSTakesOnlyNewerReleasesOfItsChannel: a signature alone says CI
+// built an image, not that it was released to this server's channel or
+// that it is newer than what runs. Whoever can move the channel tag in the
+// registry could otherwise make a production server install any main build
+// or an old release. The server takes a release only with CI's signed
+// statement naming its channel and a release number above the running
+// one; a person may go back with --allow-downgrade, which is logged.
+func TestVPSTakesOnlyNewerReleasesOfItsChannel(t *testing.T) {
+	v := newVPS(t)
+	v.env = []string{"TASKIEM_VPS_TEST_RELEASES=1"}
+	v.write(filepath.Join(v.dir, "etc", "vps.conf"), "CHANNEL='staging'\n")
+	current := func() string { return v.read(filepath.Join(v.state, "current")) }
+
+	if out, err := v.run("taskiem:good2", "update", "--now"); err != nil || current() != "taskiem:good2" {
+		t.Fatalf("a newer release of the channel: %v: %s", err, out)
+	}
+	if got := v.read(filepath.Join(v.state, "current-release")); got != "12" {
+		t.Errorf("recorded release = %q, want 12", got)
+	}
+	for image, want := range map[string]string{
+		"taskiem:old":           "not newer",
+		"taskiem:other-channel": "staging channel",
+		"taskiem:unstated":      "staging channel",
+	} {
+		out, err := v.run(image, "update", "--now")
+		if err == nil || current() != "taskiem:good2" || !strings.Contains(out, want) {
+			t.Errorf("%s: err %v, now running %s, said: %s", image, err, current(), out)
+		}
+	}
+	// The timer does not try a refused release again on every tick.
+	_, _ = v.run("taskiem:old", "update", "--auto") // refused, and remembered
+	if current() != "taskiem:good2" {
+		t.Errorf("the timer took an older release: now running %s", current())
+	}
+	before, _ := os.ReadFile(v.log)
+	if out, err := v.run("taskiem:old", "update", "--auto"); err != nil {
+		t.Errorf("a refused release on the timer: %v: %s", err, out)
+	}
+	if after, _ := os.ReadFile(v.log); len(after) != len(before) {
+		t.Errorf("the refused release was checked again: %s", after[len(before):])
+	}
+	// The timer may not downgrade; a person may, and it is logged.
+	if out, err := v.run("taskiem:old", "update", "--auto", "--allow-downgrade"); err == nil {
+		t.Errorf("--auto --allow-downgrade was accepted: %s", out)
+	}
+	out, err := v.run("taskiem:old", "update", "--now", "--allow-downgrade")
+	if err != nil || current() != "taskiem:old" || !strings.Contains(out, "allow-downgrade") {
+		t.Fatalf("--allow-downgrade: %v, now running %s: %s", err, current(), out)
+	}
+	if got := v.read(filepath.Join(v.state, "current-release")); got != "5" {
+		t.Errorf("recorded release after the downgrade = %q, want 5", got)
+	}
+	// Rolling back restores the release number with the release.
+	if out, err := v.run("", "rollback"); err != nil || current() != "taskiem:good2" {
+		t.Fatalf("rollback: %v: %s", err, out)
+	}
+	if got := v.read(filepath.Join(v.state, "current-release")); got != "12" {
+		t.Errorf("recorded release after rollback = %q, want 12", got)
+	}
+}
+
+// alerts is the alerts that reached the webhook.
+func (v *vps) alerts() []string {
+	b, _ := os.ReadFile(v.log)
+	var out []string
+	for _, l := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(l, "alert ") {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+// TestVPSResendsAnAlertThatDidNotGoOut: the check alerts when the set of
+// problems changes and remembers the set. It used to remember it even when
+// the alert could not be sent, so an outage that took the alert channel
+// down with it was never reported. The set is now remembered only once an
+// alert got through; until then every check tries again.
+func TestVPSResendsAnAlertThatDidNotGoOut(t *testing.T) {
+	v := newVPS(t)
+	v.write(filepath.Join(v.dir, "etc", "vps.conf"), "ALERT_WEBHOOK='https://alerts.test/hook'\n")
+	v.write(filepath.Join(v.state, "update-failed"), "taskiem:broken\n")
+
+	v.env = []string{"ALERTS_DOWN=1"}
+	out, err := v.run("", "check")
+	if err == nil || !strings.Contains(out, "could not be sent") {
+		t.Fatalf("check with the alert channel down: %v: %s", err, out)
+	}
+	if b, _ := os.ReadFile(filepath.Join(v.state, "alerts")); len(b) != 0 {
+		t.Fatalf("the problems were remembered though nobody was told: %q", b)
+	}
+	v.env = nil
+	if _, err := v.run("", "check"); err == nil {
+		t.Fatal("the check passed with a problem outstanding")
+	}
+	if got := v.alerts(); len(got) != 1 || !strings.Contains(got[0], "taskiem:broken") {
+		t.Fatalf("alerts once the channel is back = %q, want the one that did not go out", got)
+	}
+	// Told once: the same problems do not alert again.
+	_, _ = v.run("", "check")
+	if got := v.alerts(); len(got) != 1 {
+		t.Errorf("the same problems alerted again: %q", got)
+	}
+}
+
+// TestVPSBackupWaitsForAnUpdate: the backup stops OpenBao and copies its
+// storage; an update restarts the stack. The production upgrade window
+// (01:00-05:00) covers the 02:30 backup, so they share one lock: a backup
+// does not touch OpenBao while an update holds it, and an update does not
+// start while a backup runs.
+func TestVPSBackupWaitsForAnUpdate(t *testing.T) {
+	v := newVPS(t)
+	v.write(filepath.Join(v.dir, "etc", "backup.env"), "RESTIC_REPOSITORY='/tmp/none'\n")
+	// Something holds the lock, as a running update does.
+	lock, err := os.OpenFile(filepath.Join(v.state, "update.lock"), os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = lock.Close() }()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		t.Fatal(err)
+	}
+	v.env = []string{"TASKIEM_VPS_LOCK_WAIT=1"}
+	out, err := v.run("taskiem:good", "backup")
+	if err == nil || !strings.Contains(out, "update") {
+		t.Errorf("backup during an update: %v: %s", err, out)
+	}
+	if b, _ := os.ReadFile(v.log); strings.Contains(string(b), "stop openbao") {
+		t.Errorf("the backup stopped OpenBao while an update held the lock: %s", b)
+	}
+	// And the other way: an update does not start while the lock is held.
+	if out, err := v.run("taskiem:good2", "update", "--now"); err != nil || len(v.ups()) != 0 {
+		t.Errorf("update while the lock is held: %v, restarts %q: %s", err, v.ups(), out)
+	}
+	_ = lock.Close()
+	// Released: the backup runs, and releases the lock when done.
+	if out, err := v.run("taskiem:good", "backup"); err != nil {
+		t.Fatalf("backup with the lock free: %v: %s", err, out)
+	}
+	if b, _ := os.ReadFile(v.log); !strings.Contains(string(b), "stop openbao") {
+		t.Errorf("the backup did not copy OpenBao: %s", b)
+	}
+}
+
+// TestVPSFirstPasswordGoesToARootOnlyFile: on an unattended install with no
+// SMTP there is nobody at a terminal and no email to carry a link. The
+// owner's first password used to be printed to standard output, which
+// cloud-init and CI keep in their logs; it is written to a file only root
+// can read, and only the file's path is said.
+func TestVPSFirstPasswordGoesToARootOnlyFile(t *testing.T) {
+	for _, tool := range []string{"bash", "setsid"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("%s is not installed", tool)
+		}
+	}
+	script, err := filepath.Abs("vm/taskiem-vps")
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	// The function alone, with the script's log: no terminal (setsid).
+	cmd := exec.Command("setsid", "bash", "-c", `set -Eeuo pipefail
+source <(sed -n '/^log() /p; /^hand_over_password() /,/^}/p' "$0")
+hand_over_password owner@acme.test s3cret-first-password`, script)
+	cmd.Env = append(os.Environ(), "TASKIEM_VPS_ROOT_HOME="+home)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	if strings.Contains(string(out), "s3cret-first-password") {
+		t.Errorf("the password is in the output: %s", out)
+	}
+	files, _ := filepath.Glob(filepath.Join(home, "taskiem-owner-password-*.txt"))
+	if len(files) != 1 || !strings.Contains(string(out), files[0]) {
+		t.Fatalf("files %q; output does not name the file: %s", files, out)
+	}
+	info, err := os.Stat(files[0])
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("mode %v, want 0600 (%v)", info.Mode().Perm(), err)
+	}
+	if b, _ := os.ReadFile(files[0]); !strings.Contains(string(b), "s3cret-first-password") || !strings.Contains(string(b), "owner@acme.test") {
+		t.Errorf("file: %s", b)
+	}
+	// And the password is never an argument of a command.
+	src, _ := os.ReadFile(script)
+	if strings.Contains(string(src), `TASKIEM_BOOTSTRAP_PASSWORD="$pw" taskiem`) || strings.Contains(string(src), `-e TASKIEM_BOOTSTRAP_PASSWORD="$pw"`) {
+		t.Error("the first password is passed on a command line")
+	}
+}
+
+// TestInstallerChecksWhatItInstalls: the installer runs as root. It takes
+// Docker from Docker's signed apt repository (not the get.docker.com
+// script), refuses a kit that does not match its checksum, and the timers'
+// oneshot units cannot hang for ever holding the update lock.
+func TestInstallerChecksWhatItInstalls(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash is not installed")
+	}
+	src, err := os.ReadFile("vm/install.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(src), "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "#") && strings.Contains(line, "get.docker.com") {
+			t.Errorf("the installer pipes the Docker convenience script into a shell: %s", line)
+		}
+	}
+	d := t.TempDir()
+	kit := filepath.Join(d, "taskiem-main", "deploy", "vm")
+	if err := os.MkdirAll(kit, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(kit, "taskiem-vps"), []byte("# the kit\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tgz := filepath.Join(d, "kit.tgz")
+	if out, err := exec.Command("tar", "-czf", tgz, "-C", d, "taskiem-main").CombinedOutput(); err != nil {
+		t.Fatalf("tar: %v: %s", err, out)
+	}
+	sum, err := exec.Command("sha256sum", tgz).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	good := strings.Fields(string(sum))[0]
+	if err := os.MkdirAll(filepath.Join(d, "stubs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// curl -fsSL -o FILE URL: serves the tarball.
+	if err := os.WriteFile(filepath.Join(d, "stubs", "curl"), []byte("#!/usr/bin/env bash\nwhile [ $# -gt 0 ]; do [ \"$1\" = -o ] && { cp \"$KIT_TGZ\" \"$2\"; exit 0; }; shift; done\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script, _ := filepath.Abs("vm/install.sh")
+	fetch := func(sum string) (string, string, error) {
+		dest := t.TempDir()
+		cmd := exec.Command("bash", "-c", `set -Eeuo pipefail
+REPO_SLUG=x/y
+source <(sed -n '/^log() /p; /^die() /p; /^fetch_kit() /,/^}/p' "$0")
+fetch_kit main "$1" "$2"`, script, sum, dest)
+		cmd.Env = append(os.Environ(), "PATH="+filepath.Join(d, "stubs")+":"+os.Getenv("PATH"), "KIT_TGZ="+tgz)
+		out, err := cmd.CombinedOutput()
+		return dest, string(out), err
+	}
+	if dest, out, err := fetch(good); err != nil {
+		t.Errorf("the right checksum: %v: %s", err, out)
+	} else if _, err := os.Stat(filepath.Join(dest, "taskiem-vps")); err != nil {
+		t.Errorf("the kit was not unpacked: %v", err)
+	}
+	dest, out, err := fetch(strings.Repeat("0", 64))
+	if err == nil || !strings.Contains(out, "does not match its checksum") {
+		t.Errorf("a wrong checksum: %v: %s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "taskiem-vps")); err == nil {
+		t.Error("a kit with the wrong checksum was unpacked")
+	}
+	units, _ := filepath.Glob("vm/systemd/*.service")
+	if len(units) == 0 {
+		t.Fatal("no units")
+	}
+	for _, u := range units {
+		b, _ := os.ReadFile(u)
+		if strings.Contains(string(b), "Type=oneshot") && !strings.Contains(string(b), "\nTimeoutStartSec=") {
+			t.Errorf("%s: a oneshot with no TimeoutStartSec can hang for ever", u)
+		}
 	}
 }

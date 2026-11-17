@@ -43,7 +43,7 @@ The web app shows both guides, step by step, under **Forward mail here from your
 | `forwarded_by` | The mailbox that forwarded it by a filter, when the provider says (Gmail does) |
 | `truncated` | `true` when `text` (100,000 characters) or `html` (200,000) was cut |
 
-`trigger.email` is `{address, received_at, auth}`, where `auth` is what the receiving server found: `spf` (the sender's server check), `dkim` (the domains whose signatures verified), `dmarc` (the From domain's published policy) and `aligned`. `aligned` is true when a signature or the SPF check belongs to the From address's domain, so the sender is not forged.
+`trigger.email` is `{address, received_at, auth}`, where `auth` is what the receiving server found: `spf` (the sender's server check), `dkim` (the domains whose signatures verified), `dmarc` (the From domain's published policy) and `aligned`. `aligned` is true when a signature or the SPF check belongs to the From address's domain, so the sender is not forged. It is proven of the message's one From address, the one a signature covers: a message with two From lines is never accepted.
 
 The sender and recipients (`email` and `name`), the subject, the text, the HTML and the files' names are sealed as personal data at the start of the run, like a form's personal answers. Steps read them as usual. The run's history and the web app show them masked to members without `pii.reveal`.
 
@@ -53,13 +53,14 @@ A step gets a file through the `email` connector's **Get a link to an attachment
 
 Each of these is recorded with its reason and listed in the tab:
 
-- **Mail from a sender not on the list.** The list trusts a sender only when the message proves it (`aligned`), so a forged From does not pass.
+- **Mail from a sender not on the list.** The list trusts a sender only when the message proves it (`aligned`), so a forged From does not pass. What is proven is who wrote the message, not that they sent it to this address: someone who holds a genuine signed message from a listed sender can send that same message here once (a second copy starts nothing, see below). The signature also covers only the headers the sender's provider chose to sign, usually From, To, Subject, Date and Message-ID, and the whole body; do not let a workflow act on other headers.
 - **Automatic mail:** out-of-office replies (`Auto-Submitted`, `Precedence: auto_reply`), delivery reports (no return address), and Taskiem's own mail (its sending address, or a message carrying `X-Taskiem-Run`). This ends loops between a workflow that sends email and an address that runs it.
 - **Forwarding confirmations** from Gmail, Zoho Mail, Yahoo Mail and Outlook, when the message proves it comes from them. They are shown, not run (see above).
+- **A message that repeats a header it may carry once:** From, Sender, Reply-To, To, Cc, Bcc, Subject, Date, Message-ID, In-Reply-To or References (RFC 5322). The mail server refuses it outright (`550`, "The message has more than one From line…"), so it is not stored or listed: a signature covers the lowest of two such lines and a reader takes the top one, so a second From would pass as a proven sender. The large mailbox providers refuse such mail too.
 - **A message that cannot be read** as email.
 - **The plan's run limits**, as for any run.
 
-The same message delivered twice starts one run (by its Message-ID, or the whole message when it has none). One address takes at most 60 messages an hour, and one business 300. Past that, the sending server is asked to try again later, and it does, for days.
+The same message delivered twice starts one run. A message whose DKIM signature verifies for its From domain is known by what the signature covers (its body hash and signed headers), so a copy with a new Message-ID or other lines added around it is still the same message; other mail is known by its Message-ID, or by the whole message when it has none. The record of a message is kept as long as the workflow's list of mail, so a copy sent weeks later starts nothing either. One address takes at most 60 messages an hour, and one business 300. Past that, the sending server is asked to try again later, and it does, for days.
 
 ## For operators
 
@@ -67,7 +68,8 @@ The `mail` role (`serve --role mail`, or inside `all` with `TASKIEM_MAIL_ENABLED
 
 - takes mail only for addresses of live email triggers, refusing anything else at `RCPT` (`550`), so nothing is accepted and bounced later; a connection that names five unknown addresses is closed with `421` (the sender retries later), so one connection cannot look up addresses without end;
 - checks SPF, DKIM and DMARC and records the results with the message, but filters nothing by content: most mail comes already filtered by the mailbox that forwards it;
-- offers STARTTLS and takes messages up to 25 MB, with at most 200 connections at once;
+- offers STARTTLS and takes messages up to 25 MB, with at most 200 connections at once and 10 from one remote address (the rest are answered `421`), so one host cannot keep other senders out;
+- ends a connection that says nothing for 30 seconds before it starts a message, takes at most 60 messages a minute from one address, and receives at most 8 messages at once (a message is held in memory until it is stored); a sender over a limit is answered `451` and sends again later, as mail servers do. Each limit is a [setting](operations.md#configuration) (`TASKIEM_MAIL_MAX_CONNECTIONS`, `TASKIEM_MAIL_MAX_CONNECTIONS_PER_ADDRESS`, `TASKIEM_MAIL_MESSAGES_PER_MINUTE`, `TASKIEM_MAIL_MAX_TRANSFERS`, `TASKIEM_MAIL_IDLE_TIMEOUT`);
 - like the public host, connects as `taskiem_public`, holds only the public key, and leaves messages sealed in the inbox, which the api role drains every 2 seconds. A message is acknowledged (`250`) only once it is stored.
 
 To set it up ([settings](operations.md#configuration)):
@@ -80,6 +82,6 @@ To set it up ([settings](operations.md#configuration)):
 
 On the VM kit, `taskiem-vps setup` does all of this from one answer ([one VM](vm.md#email-triggers)); the [staging runbook](runbooks/staging.md#9-email-triggers) walks through it. On Kubernetes, the chart's `mail` values do ([Kubernetes](kubernetes.md#email-triggers)).
 
-Prometheus counts SMTP outcomes as `taskiem_ingest_deliveries_total{kind="email_smtp", result="accepted|unknown_recipient|deferred"}` and what came of each message as `{kind="email", result="started|refused|confirmation"}`.
+Prometheus counts SMTP outcomes as `taskiem_ingest_deliveries_total{kind="email_smtp", result="accepted|unknown_recipient|deferred|too_many_connections|rate_limited|busy"}` and what came of each message as `{kind="email", result="started|refused|confirmation"}`.
 
 Check it from anywhere with `swaks --to <address> --server mx.in.example.com`, or by sending an ordinary email.

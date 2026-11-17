@@ -820,3 +820,69 @@ func TestSplitDiscountsNeedASecondPerson(t *testing.T) {
 		t.Fatalf("an amendment with a standing discount: %v %+v", err, needs)
 	}
 }
+
+// Money that becomes credit is weighed too: with no invoice open, cash
+// posted in parts under the threshold adds up for the student, and the
+// part that brings it to the threshold waits for a second person.
+func TestCashThatBecomesCreditNeedsASecondPerson(t *testing.T) {
+	w := newCashWorld(t)
+	fifty := int64(5_000_000)
+	w.setCashThreshold(&fifty)
+	// Enrolled after the term was invoiced: nothing is open for her.
+	n := w.student("Ngozi Obi", "GCA/003", w.j1, nil)
+	if p, err := w.post("GCA/003", 4_500_000, "cash", "user:ada"); err != nil || p.Status != schools.StatePosted {
+		t.Fatalf("the first posting: %v %+v", err, p)
+	}
+	for i := 2; i <= 5; i++ {
+		if _, err := w.post("GCA/003", 4_500_000, "cash", "user:ada"); !errors.Is(err, schools.ErrNeedsApproval) {
+			t.Fatalf("posting %d went in without a second person: %v", i, err)
+		}
+	}
+	var credit int64
+	w.in(func(tx pgx.Tx) error {
+		var err error
+		credit, err = invoicing.CreditOf(ctx, tx, w.env.Tenant, "key:"+schools.StudentKey(n.ID))
+		return err
+	})
+	if credit != 4_500_000 {
+		t.Fatalf("credit without a second person = %d, want 4500000", credit)
+	}
+	// Backdated cash is weighed by when it was posted, not the date given.
+	if _, _, err := w.s.PostPayment(ctx, w.env.Tenant, schools.PostingIn{Student: "GCA/003", AmountKobo: 400_000, How: "cash", Date: "2026-01-05"}, "user:ada"); err != nil {
+		t.Fatalf("a small backdated posting: %v", err)
+	}
+	if _, _, err := w.s.PostPayment(ctx, w.env.Tenant, schools.PostingIn{Student: "GCA/003", AmountKobo: 100_000, How: "cash", Date: "2026-01-05"}, "user:ada"); !errors.Is(err, schools.ErrNeedsApproval) {
+		t.Fatalf("a backdated posting that reaches the threshold went in without a second person: %v", err)
+	}
+}
+
+// Postings made at the same moment for one student are weighed one after
+// another: together at the threshold, only those under it go in.
+func TestCashPostedAtOnceNeedsASecondPerson(t *testing.T) {
+	w := newCashWorld(t)
+	fifty := int64(5_000_000)
+	w.setCashThreshold(&fifty)
+	const n = 8
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, errs[i] = w.s.PostPayment(ctx, w.env.Tenant, schools.PostingIn{Student: "GCA/001", AmountKobo: 3_000_000, How: "cash"}, "user:ada")
+		}()
+	}
+	wg.Wait()
+	posted := 0
+	for _, err := range errs {
+		switch {
+		case err == nil:
+			posted++
+		case !errors.Is(err, schools.ErrNeedsApproval):
+			t.Fatalf("a posting: %v", err)
+		}
+	}
+	if posted != 1 {
+		t.Fatalf("%d postings of ₦30,000 went in at once without a second person, want 1", posted)
+	}
+}

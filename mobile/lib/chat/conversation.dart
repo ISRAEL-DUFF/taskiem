@@ -15,14 +15,34 @@ import '../app/auth.dart';
 import '../app/sound.dart';
 import '../api/transport.dart';
 import '../app/session.dart' show uuid4;
+import '../kit/motion.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
+import '../kit/mobile.dart' show tkInitials;
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'cards.dart';
 import 'chats.dart';
+import 'availability_sheet.dart' show showAvailabilitySheet;
+import 'book_sheet.dart' show bookLine, linkServices, showBookSheet;
+import 'money_sheets.dart' show InvoiceAdd;
+import 'order_sheet.dart';
+import 'bills_page.dart' show openBill;
+import 'invoices_page.dart' show openInvoice;
+import 'purchases_page.dart' show openPurchase;
+import 'statement_page.dart' show openStatement;
+import 'tool_forms.dart' show toolDetail;
+import '../app/store.dart' show KeptOut;
+import '../kit/sheet.dart' show TkCta, TkSheet, showTkSheet;
 import 'composer.dart';
+import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
+import 'tool_sheet.dart';
+import 'storefront_orders_page.dart' show openStorefrontOrder;
+import 'trade_orders_page.dart' show openTradeOrder;
+import 'tools.dart';
+import 'tools_panel.dart';
 import 'thread.dart';
 import 'live.dart';
 import 'menu.dart';
@@ -62,6 +82,39 @@ class Outgoing {
   final PickedFile? file;
   bool failed = false;
   String? error;
+
+  /// On its way to the server now.
+  bool sending = false;
+
+  /// As the phone keeps it until it is sent (lib/app/store.dart).
+  KeptOut kept(String conv) => (
+    id: clientId,
+    conv: conv,
+    at: at,
+    json: {
+      'text': body,
+      if (reply != null) 'reply': reply!.toJson(),
+      if (tags.isNotEmpty) 'tags': [for (final t in tags) t.toJson()],
+      if (file != null) 'file': {'name': file!.name, 'type': file!.type},
+    },
+    file: file?.bytes,
+  );
+
+  /// One kept from before (the app closed before it went).
+  static Outgoing fromKept(KeptOut k) {
+    final j = k.json;
+    final f = j['file'] is Map ? (j['file'] as Map).cast<String, dynamic>() : null;
+    return Outgoing(
+      k.id,
+      j['text'] as String? ?? '',
+      k.at,
+      reply: j['reply'] is Map ? LinkMessage.fromJson((j['reply'] as Map).cast<String, dynamic>()) : null,
+      tags: [for (final t in (j['tags'] as List? ?? const [])) SendLinkMessageRequestMentionsItem.fromJson((t as Map).cast<String, dynamic>())],
+      file: f == null || k.file == null
+          ? null
+          : PickedFile(bytes: k.file!, name: f['name'] as String? ?? 'file', type: f['type'] as String? ?? 'application/octet-stream'),
+    );
+  }
 }
 
 /// linkchat.ts Quote: a message as the one answering it quotes it.
@@ -144,20 +197,20 @@ class ConversationData extends ChangeNotifier {
     for (final m in messages ?? const <LinkMessage>[]) ThreadMessage(m),
     // Not after a window away from the newest page.
     if (!detached)
-    for (final o in outbox)
-      ThreadMessage(
-        LinkMessage(
-          id: 'local-${o.clientId}',
-          link: conv.link,
-          mine: true,
-          kind: 'text',
-          body: o.body.isEmpty ? null : o.body,
-          attachment: o.file?.attachment,
-          reply: o.reply == null ? null : quoteOf(o.reply!),
-          createdAt: o.at,
+      for (final o in outbox)
+        ThreadMessage(
+          LinkMessage(
+            id: 'local-${o.clientId}',
+            link: conv.link,
+            mine: true,
+            kind: 'text',
+            body: o.body.isEmpty ? null : o.body,
+            attachment: o.file?.attachment,
+            reply: o.reply == null ? null : quoteOf(o.reply!),
+            createdAt: o.at,
+          ),
+          out: o,
         ),
-        out: o,
-      ),
   ];
 
   /// The conversation's price list and whose it is ("ours" or "theirs");
@@ -226,8 +279,49 @@ class ConversationData extends ChangeNotifier {
     api.linkTyping(link: conv.link).catchError((Object _) {});
   }
 
+  /// Offline: what shows is what the phone kept.
+  bool offline = false;
+
+  /// The messages and the unsent ones the phone kept: shown at once.
+  void _restore() {
+    final local = chats.auth.local;
+    if (local == null) return;
+    try {
+      final kept = [for (final j in local.messages(conv.link)) LinkMessage.fromJson(j)];
+      if (kept.isNotEmpty && messages == null) {
+        messages = kept;
+        hasOlder = true;
+        final unseen = kept.where((m) => !m.mine && m.readAt == null).toList();
+        unread = unseen.isEmpty ? null : (id: unseen.first.id, count: unseen.length);
+        _moments();
+        epoch++;
+      }
+      for (final k in local.outbox(conv.link)) {
+        if (outbox.any((o) => o.clientId == k.id)) continue;
+        outbox.add(Outgoing.fromKept(k));
+      }
+    } on Object {
+      // Kept by an older app, or damaged: the server's answer will do.
+    }
+    _changed();
+  }
+
+  /// What shows now, kept for next time (the newest, to the limit).
+  void _keep() {
+    final local = chats.auth.local;
+    final list = messages;
+    if (local == null || list == null || detached) return;
+    try {
+      local.keepMessages(conv.link, [for (final m in list.length > 200 ? list.sublist(list.length - 200) : list) m.toJson()]);
+    } on Object {
+      // Not kept this time.
+    }
+  }
+
   /// Opens at [focus], or at the newest page; then follows it.
   Future<void> open() async {
+    if (focus == null) _restore();
+    chats.openOutboxes.add(conv.link);
     unawaited(_tagSources());
     if (focus != null) {
       try {
@@ -350,14 +444,25 @@ class ConversationData extends ChangeNotifier {
       final unseen = out.messages.where((m) => !m.mine && m.readAt == null).toList();
       unread = unseen.isEmpty ? null : (id: unseen.first.id, count: unseen.length);
       messages = out.messages;
+      offline = false;
       _moments();
+      _keep();
       _changed();
+      // Written while offline, kept: sent now.
+      for (final o in [...outbox]) {
+        if (!o.sending) unawaited(_send(o));
+      }
       await _markRead(out.messages);
     } on ApiError catch (e) {
       error = e.message;
       _changed();
     } on Offline {
-      error = 'You’re offline. The conversation shows when you’re back online.';
+      if (messages != null) {
+        // What the phone kept shows; said quietly.
+        offline = true;
+      } else {
+        error = 'You’re offline. The conversation shows when you’re back online.';
+      }
       _changed();
     }
   }
@@ -399,6 +504,7 @@ class ConversationData extends ChangeNotifier {
       }
     } else if (e is LiveGone && e.link == conv.link) {
       messages = messages?.where((x) => x.id != e.id).toList();
+      chats.auth.local?.dropMessage(conv.link, e.id);
       _changed();
     }
   }
@@ -416,8 +522,29 @@ class ConversationData extends ChangeNotifier {
   Future<void> pull() async {
     if (detached) return;
     final last = messages?.isNotEmpty == true ? messages!.last.createdAt : null;
-    final out = await api.linkMessages(link: conv.link, after: last?.toUtc().toIso8601String());
+    final List<LinkMessage> got;
+    final bool? typingNow;
+    try {
+      final out = await api.linkMessages(link: conv.link, after: last?.toUtc().toIso8601String());
+      got = out.messages;
+      typingNow = out.typing;
+    } on Offline {
+      if (!offline && !_disposed) {
+        offline = true;
+        _changed();
+      }
+      return;
+    }
     if (_disposed) return;
+    if (offline) {
+      // Back: what was written meanwhile goes, and the newest page is read.
+      offline = false;
+      for (final o in [...outbox]) {
+        if (!o.sending) unawaited(_send(o));
+      }
+      _changed();
+    }
+    final out = (messages: got, typing: typingNow);
     final was = typing;
     typing = out.typing ?? false;
     if (out.messages.isEmpty) {
@@ -458,6 +585,19 @@ class ConversationData extends ChangeNotifier {
     }
     messages = byId.values.toList()..sort((a, b) => a.createdAt.compareTo(b.createdAt));
     _moments();
+    _keepSoon();
+  }
+
+  bool _keepQueued = false;
+
+  /// Kept once for a burst of changes (at the end of this turn of work).
+  void _keepSoon() {
+    if (_keepQueued || chats.auth.local == null) return;
+    _keepQueued = true;
+    scheduleMicrotask(() {
+      _keepQueued = false;
+      if (!_disposed) _keep();
+    });
   }
 
   /// The message the burst is round (a good moment, for 900 ms).
@@ -523,6 +663,8 @@ class ConversationData extends ChangeNotifier {
     // Sent from away from the newest page: back to it, where it shows.
     if (detached) unawaited(openNewest());
     outbox.add(o);
+    // Kept until it has gone: closed, offline, it is sent later.
+    chats.auth.local?.keepOut(o.kept(conv.link));
     _changed();
     await _send(o);
   }
@@ -536,10 +678,13 @@ class ConversationData extends ChangeNotifier {
 
   void discard(Outgoing o) {
     outbox.remove(o);
+    chats.auth.local?.dropOut(o.clientId);
     _changed();
   }
 
   Future<void> _send(Outgoing o) async {
+    if (o.sending) return;
+    o.sending = true;
     try {
       final f = o.file;
       final LinkMessage sent;
@@ -560,17 +705,27 @@ class ConversationData extends ChangeNotifier {
         )).message;
       }
       outbox.remove(o);
+      chats.auth.local?.dropOut(o.clientId);
       _merge([sent]);
       // Our own copy of what we sent: shown without fetching it back.
-      if (f != null) chats.files.keep(sent.id, f.bytes);
+      if (f != null) chats.files.keep(sent.id, f.bytes, link: conv.link);
       unawaited(chats.load());
     } on ApiError catch (e) {
       o.failed = true;
       // lib/outbox.ts sendError.
       o.error = e.status == 429 ? 'You are sending too fast. Wait a moment and tap Retry.' : (e.message.isEmpty ? 'It could not be sent.' : e.message);
     } on Offline {
+      // Kept with its clock: it goes by itself when the connection is back.
+      o.error = null;
+      offline = true;
+    } on Object {
+      // Anything else (an answer that could not be read, say): the message
+      // must not stay "sending" for ever. Retry sends the same client id,
+      // so a message the server did keep is not sent twice.
       o.failed = true;
-      o.error = 'There is no connection. Tap Retry when you are back online.';
+      o.error = 'It could not be sent.';
+    } finally {
+      o.sending = false;
     }
     _changed();
   }
@@ -580,6 +735,7 @@ class ConversationData extends ChangeNotifier {
 
   void _swap(LinkMessage m) {
     messages = messages?.map((x) => x.id == m.id ? m : x).toList();
+    _keepSoon();
     _changed();
   }
 
@@ -631,6 +787,7 @@ class ConversationData extends ChangeNotifier {
     try {
       await api.hideLinkMessage(link: conv.link, id: m.id);
       messages = messages?.where((x) => x.id != m.id).toList();
+      chats.auth.local?.dropMessage(conv.link, m.id);
       _changed();
       unawaited(chats.load());
       return true;
@@ -647,7 +804,9 @@ class ConversationData extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (_keepQueued) _keep();
     _disposed = true;
+    chats.openOutboxes.remove(conv.link);
     _timer?.cancel();
     _ticks?.cancel();
     _cheerOff?.cancel();
@@ -687,8 +846,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
   late final CardActs _acts = CardActs(
     auth: widget.data.chats.auth,
     onDone: () => widget.data.pull(),
-    // A document's own screen comes with the tools (M5 to M8).
-    onOpen: widget.onOpenDoc ?? (_) => showComingSoon(context),
+    // A document opens on its screen, or in its tool's sheet.
+    onOpen: widget.onOpenDoc ?? _openDoc,
     ask: (title, ok) => showTkConfirm(context, title: title, ok: ok, danger: true),
     said: (words) {
       if (mounted) showTkToast(context, words);
@@ -703,13 +862,226 @@ class _ConversationScreenState extends State<ConversationScreen> {
     _words = _text.text;
     _text.addListener(_typed);
     if (widget.data.messages == null) widget.data.open();
+    // Their services, for Book (ChatTools.tsx useLinkServices).
+    if (widget.data.chats.chatTools) {
+      linkServices(widget.data.chats.auth.transport, widget.data.conv.link).then((s) {
+        if (mounted) setState(() => _services = s);
+      }, onError: (Object _) {});
+    }
   }
+
+  /// Their services, once read: Book shows only when they offer some.
+  Map<String, dynamic>? _services;
 
   @override
   void dispose() {
     _tags.dispose();
+    _tools.dispose();
     _text.dispose();
     super.dispose();
+  }
+
+  // The tools panel (ChatTools.tsx), about this business only.
+  late final _tools = ToolsController(chats: widget.data.chats, scope: widget.data.conv.link, business: widget.data.conv.name)..clearSlash = _text.clear;
+
+  /// ChatTools.tsx: a tool opened from the panel; "/" and its word, put away.
+  void _openTool(Tool tool, {String? openId}) {
+    _tools.close();
+    // Sell, the handover and availability have sheets of their own: not a
+    // list.
+    // Done: the diary line it leaves here, read at once.
+    void landed() => unawaited(widget.data.pull().catchError((Object _) {}));
+    if (tool.key == 'availability') {
+      // The tile reads it again; the diary line the server writes lands.
+      unawaited(
+        showAvailabilitySheet(
+          context,
+          auth: widget.data.chats.auth,
+          onChanged: () {
+            // Changed: read now, not only once five seconds old.
+            _tools.refresh(tool);
+            landed();
+          },
+        ),
+      );
+      return;
+    }
+    if (tool.key == 'sell') {
+      unawaited(showSellSheet(context, auth: widget.data.chats.auth, onSold: landed));
+      return;
+    }
+    if (tool.key == 'handover') {
+      unawaited(showHandoverSheet(context, auth: widget.data.chats.auth, onSent: landed));
+      return;
+    }
+    final d = widget.data;
+    final supplies = _supplies;
+    showToolSheet(
+      context,
+      tools: _tools,
+      tool: tool,
+      openId: openId,
+      // Saved: the server tells it as a diary line in Taskiem's
+      // conversation; said where it went, with the way there.
+      onSaved: (_) {
+        unawaited(d.pull().catchError((Object _) {}));
+        if (!mounted) return;
+        showTkToast(context, 'Saved. The change is in your Taskiem chat.', action: 'Open', onAction: () => widget.onOpenLink?.call('taskiem'));
+      },
+      detail: toolDetail(
+        d.chats.auth,
+        link: d.conv.link,
+        pickers: widget.pickers,
+        // Reorder: the sheet closes; their shop opens with its lines.
+        onReorder: supplies
+            ? (p) {
+                Navigator.of(context).pop();
+                _order(OrderStart(last: p));
+              }
+            : null,
+      ),
+      footer: tool.key == 'purchases' && supplies
+          ? Builder(
+              builder: (sheet) => TkCta(
+                label: 'New order',
+                onTap: () {
+                  Navigator.of(sheet).pop();
+                  _order();
+                },
+              ),
+            )
+          : null,
+    );
+  }
+
+  /// Conversation.tsx openDoc: a card's document in its tool's sheet.
+  void _openDoc(LinkDocCard card) {
+    // linkchat.ts cardHref: an order or a delivery has its own screen.
+    if (card.doc == 'order' || card.doc == 'delivery') {
+      openTradeOrder(context, widget.data.chats.auth, card.id ?? card.reference);
+      return;
+    }
+    if (card.doc == 'dispatch') {
+      openStorefrontOrder(context, widget.data.chats.auth, card.reference);
+      return;
+    }
+    // linkchat.ts cardHref: an invoice on its screen; a purchase or a bill
+    // in its tool's sheet (Conversation.tsx openDoc), else on its screen.
+    final auth = widget.data.chats.auth;
+    final key = card.id ?? card.reference;
+    if (card.doc == 'invoice') {
+      openInvoice(context, auth, key);
+      return;
+    }
+    final tool = tools.where((x) => x.key == (card.doc == 'purchase' ? 'purchases' : 'bills')).firstOrNull;
+    if (tool != null && card.id != null) {
+      _openTool(tool, openId: card.id);
+    } else if (card.doc == 'purchase') {
+      openPurchase(context, auth, key);
+    } else {
+      openBill(context, auth, key);
+    }
+  }
+
+  /// Conversation.tsx Invoice them: a new invoice to this business; it
+  /// reaches them on Taskiem as a bill, and the diary line lands here.
+  Future<void> _invoiceThem() async {
+    final d = widget.data;
+    _tools.close();
+    await showTkSheet<void>(
+      context,
+      (sheet) => TkSheet(
+        title: 'Invoice ${d.conv.name}',
+        body: InvoiceAdd(
+          auth: d.chats.auth,
+          to: (name: d.conv.name, key: 'link:${d.conv.business}'),
+          onCancel: () => Navigator.of(sheet).pop(),
+          onSaved: (line) {
+            unawaited(d.pull().catchError((Object _) {}));
+            if (line != null) showTkToast(sheet, line);
+            Navigator.of(sheet).pop();
+          },
+        ),
+      ),
+    );
+  }
+
+  /// ChatComposer.tsx's OrderSheet: their shop, to order from when we may
+  /// (drafting needs table.edit; sending and the supplier,
+  /// storefront.manage), else to look around.
+  Future<void> _order([OrderStart? start]) async {
+    final d = widget.data;
+    _tools.close();
+    await showOrderSheet(
+      context,
+      chats: d.chats,
+      link: d.conv.link,
+      business: d.conv.name,
+      start: start,
+      // Only from a business that sells to us, with leave to order;
+      // else their shop to look around.
+      browse: !_supplies,
+      // Sent: its card in the conversation now, and among Your orders.
+      onSent: (_) {
+        unawaited(d.pull().catchError((Object _) {}));
+        for (final t in tools.where((t) => t.key == 'purchases')) {
+          _tools.refresh(t);
+        }
+      },
+    );
+  }
+
+  /// ChatComposer.tsx's BookSheet: their services, a time, a booking;
+  /// its card here after.
+  Future<void> _book() async {
+    final d = widget.data;
+    _tools.close();
+    await showBookSheet(context, auth: d.chats.auth, link: d.conv.link, business: d.conv.name, onBooked: (_) => unawaited(d.pull().catchError((Object _) {})));
+  }
+
+  /// Conversation.tsx supplies: we buy from them (their prices are
+  /// theirs), and may draft (table.edit), send and keep the supplier
+  /// (storefront.manage).
+  bool get _supplies {
+    final d = widget.data;
+    final can = d.chats.auth.can;
+    return d.priceWhose == 'theirs' && can('table.edit') && can('storefront.manage');
+  }
+
+  /// Conversation.tsx businessTiles and the panel's own (Their shop): what
+  /// is between us and them. Their shop and the tiles of M7 and M8 say they
+  /// are coming until their sheets are here.
+  ({List<ExtraTile> lead, List<ExtraTile> extras}) _tiles() {
+    final d = widget.data;
+    final can = d.chats.auth.can;
+    // We buy from them: the Order sheet (drafting needs table.edit; sending
+    // and the supplier, storefront.manage).
+    final supplies = d.priceWhose == 'theirs' && can('table.edit') && can('storefront.manage');
+
+    return (
+      lead: [
+        (key: 'order', title: 'Their shop', icon: 'plus', line: 'From ${d.conv.name}', onPick: () => _order()),
+        // Book, after it: their services, shown only when they offer any.
+        if (((_services?['services'] as List?) ?? const []).isNotEmpty)
+          (key: 'book', title: 'Book', icon: 'calendar', line: bookLine(_services!), onPick: () => _book()),
+      ],
+      extras: [
+        if (supplies) (key: 'offer', title: 'Make an offer', icon: 'tag', line: 'Your price for an order', onPick: () => _order(const OrderStart(offer: true))),
+        if (can('invoice.manage'))
+          (key: 'invoice-them', title: 'Invoice them', icon: 'invoices', line: 'A new invoice to ${d.conv.name}', onPick: () => _invoiceThem()),
+        if (can('invoice.read'))
+          (
+            key: 'statement',
+            title: 'Statement',
+            icon: 'money',
+            line: 'What is owed each way',
+            onPick: () {
+              _tools.close();
+              openStatement(context, d.chats.auth, d.conv.link);
+            },
+          ),
+      ],
+    );
   }
 
   // Tags (Mentions.tsx useMentions), shared with Taskiem's conversation.
@@ -737,6 +1109,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
       d.chats.setDraft(d.conv.link, d.chats.chatTools && RegExp(r'^/\S*$').hasMatch(_words) ? '' : _words);
     }
     _tags.typed();
+    // "/" and a word as the whole message: the panel, filtered by it ("/invoice/"
+    // picks a thing to tag instead).
+    _tools.typed(_tags.query?.mark == '/' ? '' : _text.text);
   }
 
   /// What "@" and "#" offer here: the price list's items on sale, our own
@@ -765,13 +1140,16 @@ class _ConversationScreenState extends State<ConversationScreen> {
       // offer (§4).
       services: [
         if (!tools)
-        for (final x in d.services)
-          TagSuggestion(
-            kind: 'service',
-            id: x.id,
-            name: x.name,
-            sub: [x.priceKobo != null ? naira(x.priceKobo!) : 'Price on the day', if (x.durationMinutes != null && x.durationMinutes! > 0) '${x.durationMinutes} min'].join(' · '),
-          ),
+          for (final x in d.services)
+            TagSuggestion(
+              kind: 'service',
+              id: x.id,
+              name: x.name,
+              sub: [
+                x.priceKobo != null ? naira(x.priceKobo!) : 'Price on the day',
+                if (x.durationMinutes != null && x.durationMinutes! > 0) '${x.durationMinutes} min',
+              ].join(' · '),
+            ),
       ],
       businesses: [
         for (final o in d.chats.conversations)
@@ -1030,13 +1408,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
       child: Semantics(
         label: 'Conversation with ${c.name}',
         container: true,
-        child: CustomPaint(
+        child: WallpaperBox(
           // `.chat-mode .chat-pane { background: var(--chat-pattern), var(--chat-wallpaper) }`
-          painter: Wallpaper(t.chatWallpaper, t.chatDoodle),
+          ground: t.chatWallpaper,
+          doodle: t.chatDoodle,
           child: Column(
             children: [
               ColoredBox(
-                color: t.panel,
+                // The head on the conversation's own ground.
+                color: t.chatWallpaper,
                 child: Padding(
                   padding: EdgeInsets.only(top: pad.top),
                   child: ListenableBuilder(
@@ -1045,9 +1425,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       onBack: widget.onBack,
                       avatar: ChatAvatar(name: c.name, logo: c.logo ? d.chats.logo(c.business) : null, size: 40, letterSize: 15),
                       title: c.name,
-                      subtitle: d.headLine,
+                      subtitle: d.offline ? 'Waiting for network…' : d.headLine,
                       typing: d.typingNow,
-                      actions: [ChatHeadBar.iconButton('Search this conversation', TkIcon('search', size: 18, color: t.text), _search)],
+                      actions: [ChatHeadBar.iconButton('Search this conversation', TkIcon('b-search', size: 18, stroke: 2.2, color: t.text), _search)],
                       onAvatar: _contact,
                       onMore: _more,
                     ),
@@ -1061,7 +1441,22 @@ class _ConversationScreenState extends State<ConversationScreen> {
               // The tools' picker floats over the thread from the box, 8 px
               // above it, its shadow over the box too (`.composer > .tk-picker`).
               ListenableBuilder(listenable: d, builder: (context, _) => _tags.anchor(context)),
+              ToolsAnchor(
+                tools: _tools,
+                panel: (context, room) {
+                  final tiles = _tiles();
+                  return ToolsPanel(
+                    tools: _tools,
+                    onOpen: _openTool,
+                    lead: tiles.lead,
+                    extras: tiles.extras,
+                    recent: d.chats.prefs?.recentTools ?? const [],
+                    maxHeight: room,
+                  );
+                },
+              ),
               Composer(
+                tools: d.chats.chatTools ? _tools : null,
                 key: composerKey,
                 text: _text,
                 replying: _reply == null ? null : previewLine(_reply!, c.name),
@@ -1123,11 +1518,23 @@ class _ConversationScreenState extends State<ConversationScreen> {
       current[key] = card;
       newest.add(x.id);
     }
+    // The message after each: the last of a run has the tucked corner.
+    final nextOf = <String, ThreadMessage>{};
+    final list = items ?? const <ThreadMessage>[];
+    for (var i = 0; i + 1 < list.length; i++) {
+      nextOf[list[i].id] = list[i + 1];
+    }
     return ThreadView<ThreadMessage>(
       // Opened afresh (at a message, or back at the newest): placed afresh.
       key: ValueKey(d.epoch),
       items: items,
       of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
+      // Conversation.tsx: a diary line lands, a card arrives (`tk-arrive`).
+      arrival: (m) => runs.containsKey(m.id) || member.contains(m.id)
+          ? TkArrival.diary
+          : m.m.kind == 'card'
+          ? TkArrival.card
+          : TkArrival.bubble,
       now: now,
       unread: d.unread,
       hasOlder: d.hasOlder,
@@ -1137,8 +1544,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
       onLatest: d.toLatest,
       empty: Text('No messages yet. Say hello to ${d.conv.name}.', style: tkHint(t)),
       errors: [?d.error, ?_acts.error, ?d.actionError],
+      // Theirs typing: three dots in a bubble at the end.
+      tail: d.typingNow ? const TypingBubble() : null,
       render: (m, prev) {
         if (member.contains(m.id)) return null;
+        final next = nextOf[m.id];
         final lead = runs[m.id];
         if (lead != null) return _DiaryRun(run: lead, other: d.conv.name, onOpen: _acts.onOpen);
         final first = prev == null || _startsRun(prev.m, m.m);
@@ -1149,6 +1559,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
             m: m,
             other: d.conv.name,
             first: first,
+            last: next == null || diary(next.m) || _startsRun(m.m, next.m) || dayLabel(m.m.createdAt, now) != dayLabel(next.m.createdAt, now),
             now: now,
             latest: newest.contains(m.id),
             current: card == null ? null : current['${card.doc}:${card.reference}'],
@@ -1163,6 +1574,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
             onReact: _write ? (e) => d.react(m.m, e) : null,
             taps: _taps[m.id] ?? 0,
             live: d.chats.chatTools ? (items: d.priceList, whose: d.priceWhose, stock: d.stock) : null,
+            onOrder: (id) => _order(OrderStart(itemId: id)),
             onOpenLink: widget.onOpenLink,
             cheer: d.cheer == m.id,
             refs: (auth: d.chats.auth, link: d.conv.link),
@@ -1182,6 +1594,28 @@ const _diaryRun = Duration(minutes: 5);
 const _lineDrift = 0.31;
 
 Widget _maybeIntrinsic(bool on, Widget child) => on ? IntrinsicWidth(child: child) : child;
+
+/// Your own bubble's words: white on pine in the light (the dark's deep
+/// green keeps the light words it has), lime where the web tints.
+Widget _ownWords(BuildContext context, bool on, Widget child) {
+  if (!on || TkTheme.of(context).mode == TkMode.dark) return child;
+  const white = Color(0xFFFFFFFF);
+  return TkTheme.recolour(
+    context,
+    (t) => t.copyWith(
+      text: white,
+      muted: const Color(0xB3FFFFFF),
+      accent: const Color(0xFFC8F169),
+      tintText: const Color(0xFFC8F169),
+      tint: const Color(0x1AFFFFFF),
+      accentSoft: const Color(0x1AFFFFFF),
+      panel: const Color(0x1AFFFFFF),
+      panel2: const Color(0x1AFFFFFF),
+      border: const Color(0x33FFFFFF),
+    ),
+    child,
+  );
+}
 
 /// lib/thread.ts startsRun: the first of a run has the bubble's tail.
 bool _startsRun(LinkMessage prev, LinkMessage m) {
@@ -1251,6 +1685,7 @@ class _Bubble extends StatelessWidget {
     required this.m,
     required this.other,
     required this.first,
+    this.last = true,
     required this.now,
     required this.acts,
     required this.changed,
@@ -1269,6 +1704,7 @@ class _Bubble extends StatelessWidget {
     this.onOpenLink,
     this.cheer = false,
     this.refs,
+    this.onOrder,
   });
 
   /// Where the cards of what it names are read.
@@ -1280,6 +1716,9 @@ class _Bubble extends StatelessWidget {
   /// With chat tools: what a tagged thing's card reads (the price list,
   /// whose it is, our stock).
   final ({List<PriceItem> items, String whose, List<StockItem> stock})? live;
+
+  /// Order on a live card: their shop, opened on its item.
+  final ValueChanged<String>? onOrder;
 
   /// A tagged business opens its conversation.
   final ValueChanged<String>? onOpenLink;
@@ -1302,6 +1741,9 @@ class _Bubble extends StatelessWidget {
   final ValueChanged<String>? onReact;
   final String other;
   final bool first;
+
+  /// The last of its run: its corner on the sender's side tucked in.
+  final bool last;
   final DateTime now;
   final CardActs acts;
   final VoidCallback changed;
@@ -1327,6 +1769,8 @@ class _Bubble extends StatelessWidget {
     final card = msg.kind == 'card' ? msg.card : null;
     final inline = card == null && body.isNotEmpty && msg.preview == null && !failed;
     final reacted = (msg.reactions?.isNotEmpty ?? false) && out == null;
+    // A voice note alone: its time ends its row (as drawn).
+    final voiceOnly = msg.attachment?.kind == 'voice' && body.isEmpty && msg.preview == null;
     final stamp = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1373,49 +1817,45 @@ class _Bubble extends StatelessWidget {
     final fold = reveal(body, taps);
     Widget text = TapsOwner(
       builder: (context, tap) => Text.rich(
-      TextSpan(
-        children: [
-          // Mentions.tsx MentionText: a business (its conversation), an
-          // item with its price; `.bubble .mention`: 600, the tint's ink.
-          for (final p in tagParts(fold.shown, msg.mentions))
-            if (p.tag == null)
-              TextSpan(text: p.text)
-            else
-              TextSpan(
-                style: TextStyle(color: t.tintText, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]),
-                children: [
-                  TextSpan(
-                    text: p.text,
-                    recognizer: p.tag!.kind == 'business' && p.tag!.link != null && onOpenLink != null
-                        ? tap(p.tag!.link!, () => onOpenLink!(p.tag!.link!))
-                        : null,
+        TextSpan(
+          children: [
+            // Mentions.tsx MentionText: a business (its conversation), an
+            // item with its price; `.bubble .mention`: 600, the tint's ink.
+            for (final p in tagParts(fold.shown, msg.mentions))
+              if (p.tag == null)
+                TextSpan(text: p.text)
+              else
+                // A tag as a chip (docs/spec/mobile-app-look.md): a product
+                // with its small square and price, a business with its face;
+                // a business's opens its conversation.
+                WidgetSpan(
+                  alignment: PlaceholderAlignment.middle,
+                  child: TagChip(
+                    tag: p.tag!,
+                    words: p.text,
+                    onTap: p.tag!.kind == 'business' && p.tag!.link != null && onOpenLink != null ? () => onOpenLink!(p.tag!.link!) : null,
                   ),
-                  if (p.tag!.kind == 'item' && p.tag!.priceKobo != null)
-                    TextSpan(
-                      text: ' (${naira(p.tag!.priceKobo!)}${(p.tag!.unit ?? '').isNotEmpty ? ' a ${p.tag!.unit}' : ''})',
-                      style: tkText(size: 13, weight: 600, color: t.muted),
-                    ),
-                ],
+                ),
+            if (fold.folded) ...[
+              const TextSpan(text: '… '),
+              TextSpan(
+                text: 'Read more',
+                style: TextStyle(color: t.accent, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]),
               ),
-          if (fold.folded) ...[
-            const TextSpan(text: '… '),
-            TextSpan(
-              text: 'Read more',
-              style: TextStyle(color: t.accent, fontWeight: FontWeight.w600, fontVariations: const [FontVariation('wght', 600)]),
-            ),
+            ],
+            // `.stamp-gap`: room kept at the end of the text for the time.
+            if (inline)
+              WidgetSpan(
+                // 1 px tall: at the line's bottom it leaves the line as it is
+                // (on the baseline, Flutter cannot size it in a bubble sized
+                // to its content).
+                alignment: PlaceholderAlignment.bottom,
+                child: SizedBox(width: mine ? 62 : 42, height: 1),
+              ),
           ],
-          // `.stamp-gap`: room kept at the end of the text for the time.
-          if (inline)
-            WidgetSpan(
-              // 1 px tall: at the line's bottom it leaves the line as it is
-              // (on the baseline, Flutter cannot size it in a bubble sized
-              // to its content).
-              alignment: PlaceholderAlignment.bottom,
-              child: SizedBox(width: mine ? 74 : 52, height: 1),
-            ),
-        ],
-      ),
-      style: tkText(size: 16, lineHeight: 23 / 16, color: t.text),
+        ),
+        // White on your own pine bubble in the light.
+        style: tkText(size: 15, lineHeight: 1.38, color: mine && TkTheme.of(context).mode == TkMode.light ? const Color(0xFFFFFFFF) : t.text),
       ),
     );
     if (fold.folded) {
@@ -1425,16 +1865,18 @@ class _Bubble extends StatelessWidget {
         child: GestureDetector(onTap: onMore, child: text),
       );
     }
+    // Rounder, 20 px; a run shares one tucked corner, at its end on the
+    // sender's side (docs/spec/mobile-app-look.md, "The chat").
     final radius = BorderRadius.only(
-      topLeft: Radius.circular(first && !mine ? 4 : 16),
-      topRight: Radius.circular(first && mine ? 4 : 16),
-      bottomLeft: const Radius.circular(16),
-      bottomRight: const Radius.circular(16),
+      topLeft: const Radius.circular(20),
+      topRight: const Radius.circular(20),
+      bottomLeft: Radius.circular(last && !mine ? 6 : 20),
+      bottomRight: Radius.circular(last && mine ? 6 : 20),
     );
     final bubble = LayoutBuilder(
       builder: (context, box) {
         // `max-width: min(84%, 560px)`; a card's bubble is `min(86%, 420px)` wide.
-        final max = card != null ? (box.maxWidth * 0.86).clamp(0.0, 420.0) : (box.maxWidth * 0.84).clamp(0.0, 560.0);
+        final max = card != null ? (box.maxWidth * 0.86).clamp(0.0, 420.0) : (box.maxWidth * 0.86).clamp(0.0, 560.0);
         return Align(
           alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
           child: ConstrainedBox(
@@ -1452,109 +1894,116 @@ class _Bubble extends StatelessWidget {
                 child: Semantics(
                   label: mine ? null : (first && msg.senderName != null ? '${msg.senderName}: ' : null),
                   child: Container(
-                    decoration: BoxDecoration(
-                      color: mine ? t.chatOut : t.chatIn,
-                      borderRadius: radius,
-                      boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 1)],
-                    ),
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        if (card != null)
-                          // `.bubble.card-bubble { padding: 6px }`: the frame, then the time.
-                          Padding(
-                            padding: const EdgeInsets.all(6),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                CardFrame(
-                                  card: card,
-                                  current: current,
-                                  mine: mine,
-                                  now: now,
-                                  title: cardLine(card, mine, other),
-                                  actions: [viewButton(card, acts), if (latest && (!mine || isDelivery(card))) ...cardActions(card, acts, changed)],
-                                  // A deal to answer (theirs, the newest of its order).
-                                  deal: latest && !mine && dealSide(card) != null
-                                      ? DealActions(key: ValueKey('deal-${msg.id}'), card: card, side: dealSide(card)!, acts: acts, now: now)
-                                      : null,
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 1),
-                                  child: Align(alignment: Alignment.centerRight, child: stamp),
-                                ),
-                              ],
-                            ),
-                          )
-                        else
-                          Padding(
-                            // `padding: 8px 12px 6px`, with two corrections: on the
-                            // right 11.5, as Chrome fits a line its measure says
-                            // is a hundredth of a pixel wider; above and below
-                            // 0.31 less, as Flutter's lines are a whole 23 px and
-                            // Chrome's 22.69 (exact for two lines; a thread
-                            // otherwise drifts a pixel every three lines).
-                            // `.bubble.has-reactions { padding-bottom: 13px }` more.
-                            padding: EdgeInsets.fromLTRB(12, 8 - _lineDrift, 11.5, 6 - _lineDrift + (reacted ? 13 : 0)),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (msg.forwarded == true)
-                                  Text(
-                                    'Forwarded',
-                                    style: tkText(size: 12, color: t.muted).copyWith(fontStyle: FontStyle.italic),
+                    // A card is its own message, on the card's frame, not
+                    // a bubble's (docs/spec/mobile-app-look.md).
+                    decoration: card != null
+                        ? cardDecoration(context, mine: mine, first: first)
+                        : BoxDecoration(
+                            color: mine ? t.chatOut : t.chatIn,
+                            borderRadius: radius,
+                            boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 1)],
+                          ),
+                    child: _ownWords(
+                      context,
+                      mine && card == null,
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          if (card != null)
+                            // The card, then the time.
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CardFrame(
+                                    card: card,
+                                    current: current,
+                                    mine: mine,
+                                    now: now,
+                                    title: cardLine(card, mine, other),
+                                    view: viewButton(card, acts),
+                                    actions: [if (latest && (!mine || isDelivery(card))) ...cardActions(card, acts, changed)],
+                                    // A deal to answer (theirs, the newest of its order).
+                                    deal: latest && !mine && dealSide(card) != null
+                                        ? DealActions(key: ValueKey('deal-${msg.id}'), card: card, side: dealSide(card)!, acts: acts, now: now)
+                                        : null,
                                   ),
-                                if (msg.reply != null) _Quote(reply: msg.reply!, mine: mine, other: other),
-                                if (msg.attachment != null) AttachmentView(m: msg, files: files, other: other, room: max - 24, local: out?.file),
-                                if (live != null && liveTag(msg.mentions) != null)
-                                  LiveCard(m: liveTag(msg.mentions)!, items: live!.items, whose: live!.whose, stock: live!.stock),
-                                if (body.isNotEmpty) text,
-                                // Conversation.tsx: the invoices, bills and orders it
-                                // names, each as its card, read now.
-                                if (refs != null)
-                                  for (final x in docMentions(msg.mentions))
-                                    RefCard(
-                                      key: ValueKey('${x.kind}:${x.name}'),
-                                      auth: refs!.auth,
-                                      now: now,
-                                      load: () => refs!.auth.api.linkChatCard(link: refs!.link, kind: x.kind, name: x.name),
-                                    ),
-                                if (msg.preview != null) _PreviewCard(p: msg.preview!),
-                                if (!inline)
                                   Padding(
-                                    // `.stamp { margin-top: 1px }`, which collapses
-                                    // into an attachment's larger bottom margin.
-                                    padding: EdgeInsets.only(top: msg.attachment != null && body.isEmpty ? 0 : 1),
+                                    padding: const EdgeInsets.only(top: 1),
                                     child: Align(alignment: Alignment.centerRight, child: stamp),
                                   ),
-                              ],
-                            ),
-                          ),
-                        // `.stamp.inline { position: absolute; right: 9px; bottom: 5px }`
-                        // (14 px with reactions under it).
-                        if (inline) Positioned(right: 9, bottom: reacted ? 14 : 5, child: stamp),
-                        // `.bubble-chevron`, shown while its menu is open.
-                        if (menuOpen)
-                          Positioned(
-                            top: 1,
-                            right: 2,
-                            child: Container(
-                              width: 22,
-                              height: 22,
-                              decoration: BoxDecoration(
-                                color: cssMix(mine ? t.chatOut : t.chatIn, const Color(0x00000000), 0.85),
-                                shape: BoxShape.circle,
-                                boxShadow: const [BoxShadow(color: Color(0x0A0E0F0C), offset: Offset(0, 1), blurRadius: 2)],
+                                ],
                               ),
-                              alignment: Alignment.center,
-                              child: TkIcon('down', size: 16, color: meta),
+                            )
+                          else
+                            Padding(
+                              // `padding: 8px 12px 6px`, with two corrections: on the
+                              // right 11.5, as Chrome fits a line its measure says
+                              // is a hundredth of a pixel wider; above and below
+                              // 0.31 less, as Flutter's lines are a whole 23 px and
+                              // Chrome's 22.69 (exact for two lines; a thread
+                              // otherwise drifts a pixel every three lines).
+                              // `.bubble.has-reactions { padding-bottom: 13px }` more.
+                              padding: EdgeInsets.fromLTRB(12, 8 - _lineDrift, 11.5, 7 - _lineDrift),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (msg.forwarded == true)
+                                    Text(
+                                      'Forwarded',
+                                      style: tkText(size: 12, color: t.muted).copyWith(fontStyle: FontStyle.italic),
+                                    ),
+                                  if (msg.reply != null) _Quote(reply: msg.reply!, mine: mine, other: other),
+                                  if (msg.attachment != null) AttachmentView(m: msg, files: files, other: other, room: max - 24, local: out?.file, stamp: voiceOnly ? stamp : null),
+                                  if (body.isNotEmpty) text,
+                                  // Conversation.tsx: the invoices, bills and orders it
+                                  // names, each as its card, read now.
+                                  if (refs != null)
+                                    for (final x in docMentions(msg.mentions))
+                                      RefCard(
+                                        key: ValueKey('${x.kind}:${x.name}'),
+                                        auth: refs!.auth,
+                                        now: now,
+                                        load: () => refs!.auth.api.linkChatCard(link: refs!.link, kind: x.kind, name: x.name),
+                                      ),
+                                  if (msg.preview != null) _PreviewCard(p: msg.preview!),
+                                  if (!inline && !voiceOnly)
+                                    Padding(
+                                      // `.stamp { margin-top: 1px }`, which collapses
+                                      // into an attachment's larger bottom margin.
+                                      padding: EdgeInsets.only(top: msg.attachment != null && body.isEmpty ? 0 : 1),
+                                      child: Align(alignment: Alignment.centerRight, child: stamp),
+                                    ),
+                                ],
+                              ),
                             ),
-                          ),
-                        // `.tk-cheer`: a good moment's ring, 6 px out.
-                        if (cheer) const Positioned(left: -6, top: -6, right: -6, bottom: -6, child: IgnorePointer(child: CheerRing())),
-                      ],
+                          // `.stamp.inline { position: absolute; right: 9px; bottom: 5px }`
+                          // (14 px with reactions under it).
+                          if (inline) Positioned(right: 12, bottom: 6, child: stamp),
+                          // `.bubble-chevron`, shown while its menu is open.
+                          if (menuOpen)
+                            Positioned(
+                              top: 1,
+                              right: 2,
+                              child: Container(
+                                width: 22,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  color: cssMix(mine ? t.chatOut : t.chatIn, const Color(0x00000000), 0.85),
+                                  shape: BoxShape.circle,
+                                  boxShadow: const [BoxShadow(color: Color(0x0A0E0F0C), offset: Offset(0, 1), blurRadius: 2)],
+                                ),
+                                alignment: Alignment.center,
+                                child: TkIcon('down', size: 16, color: meta),
+                              ),
+                            ),
+                          // `.tk-cheer`: a good moment's ring, 6 px out.
+                          if (cheer) const Positioned(left: -6, top: -6, right: -6, bottom: -6, child: IgnorePointer(child: CheerRing())),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1564,8 +2013,35 @@ class _Bubble extends StatelessWidget {
         );
       },
     );
-    final held = BubbleHold(label: mine ? 'Your message' : 'Message from $other', onHold: out == null ? onHold : null, onReply: out == null ? onReply : null, child: bubble);
-    final placed = held;
+    final held = BubbleHold(
+      label: mine ? 'Your message' : 'Message from $other',
+      onHold: out == null ? onHold : null,
+      onReply: out == null ? onReply : null,
+      child: bubble,
+    );
+    // A product or service tagged: its card on its own, over the message
+    // (docs/spec/mobile-app-look.md, "Cards in a conversation").
+    final tagged = live != null ? liveTag(msg.mentions) : null;
+    final placed = tagged == null
+        ? held
+        : Column(
+            crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            children: [
+              LayoutBuilder(
+                builder: (context, box) => Align(
+                  alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    width: (box.maxWidth * 0.86).clamp(0.0, 420.0),
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                    decoration: cardDecoration(context, mine: mine, first: first),
+                    child: LiveCard(m: tagged, items: live!.items, whose: live!.whose, stock: live!.stock, onOrder: onOrder),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 4),
+              held,
+            ],
+          );
     if (!failed) return placed;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -1626,10 +2102,18 @@ class _PreviewCard extends StatelessWidget {
       link: true,
       button: true,
       label: '${p.title}, ${p.host}',
+      onTap: () async {
+        final url = Uri.tryParse(p.url);
+        final ok = url != null && await openInBrowser(url);
+        if (!ok && context.mounted) showTkToast(context, 'That link could not be opened.', error: true);
+      },
       excludeSemantics: true,
       child: GestureDetector(
         onTap: () async {
-          final ok = await openInBrowser(Uri.parse(p.url));
+          // The address came in the other party's message: one that is
+          // not an address is not opened, and says so.
+          final url = Uri.tryParse(p.url);
+          final ok = url != null && await openInBrowser(url);
           if (!ok && context.mounted) showTkToast(context, 'That link could not be opened.', error: true);
         },
         child: Container(
@@ -1670,24 +2154,27 @@ class _Quote extends StatelessWidget {
       LinkMessage(id: reply.pairId, link: '', mine: reply.mine, kind: reply.kind, body: reply.body, card: reply.card, createdAt: DateTime(2000)),
       other,
     );
+    final look = TkLook.of(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    // A lime bar and the sender's name; on your own bubble, a light veil.
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.fromLTRB(8, 5, 8, 5),
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(9, 5, 9, 5),
       decoration: BoxDecoration(
-        color: t.accentSoft,
-        border: Border(left: BorderSide(color: t.accent, width: 4)),
-        borderRadius: BorderRadius.circular(6),
+        color: mine ? const Color(0x1AFFFFFF) : t.tkSoft,
+        border: Border(left: BorderSide(color: look.lime, width: 3)),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(reply.mine ? 'You' : other, style: tkText(size: 12.5, weight: 600, color: mine ? t.chatOutMeta : t.tintText)),
+          Text(reply.mine ? 'You' : other, style: tkText(size: 12.5, weight: 700, color: mine || dark ? look.lime : look.limeInk)),
           const SizedBox(height: 1),
           Text(
             line,
-            maxLines: 3,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: tkText(size: 13.5, color: mine ? t.chatOutMeta : cssMix(t.text, t.muted, 0.75)),
+            style: tkText(size: 13, color: mine ? t.chatOutMeta : cssMix(t.text, t.muted, 0.75)),
           ),
         ],
       ),
@@ -1716,8 +2203,9 @@ class _Overhung extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Padding(padding: const EdgeInsets.only(bottom: 11), child: child),
-        Positioned(bottom: -1, left: mine ? null : 6, right: mine ? 6 : null, child: below!),
+        // The chips hang from the bubble's foot, 6 px over it, as drawn.
+        Padding(padding: const EdgeInsets.only(bottom: 18), child: child),
+        Positioned(bottom: 0, left: 10, child: below!),
       ],
     );
   }
@@ -1740,34 +2228,35 @@ class _Reactions extends StatelessWidget {
         children: [
           for (final r in list) ...[
             if (r != list.first) const SizedBox(width: 3),
-            Semantics(
-              container: true,
-              button: onReact != null,
-              label: '${reactionWords(r)}. ${r.mine == true ? 'Tap to take yours back.' : 'Tap to react the same.'}',
-              excludeSemantics: true,
-              child: GestureDetector(
-                onTap: onReact == null ? null : () => onReact!(r.emoji),
-                child: Container(
-                  constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-                  padding: const EdgeInsets.symmetric(horizontal: 5),
-                  decoration: BoxDecoration(
-                    color: r.mine == true ? t.tint : t.panel,
-                    borderRadius: BorderRadius.circular(999),
-                    boxShadow: [
-                      BoxShadow(color: t.chatWallpaper, spreadRadius: 2),
-                      BoxShadow(color: t.chatShadow, offset: const Offset(0, 1), blurRadius: 2),
-                    ],
-                  ),
-                  alignment: Alignment.center,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(r.emoji, style: tkText(size: 14, lineHeight: 1)),
-                      if (r.count > 1) ...[
-                        const SizedBox(width: 3),
-                        Text('${r.count}', style: tkText(size: 11.5, weight: 600, lineHeight: 1, color: r.mine == true ? t.tintText : t.muted)),
+            PopIn(
+              key: ValueKey('react ${r.emoji}'),
+              child: Semantics(
+                container: true,
+                button: onReact != null,
+                label: '${reactionWords(r)}. ${r.mine == true ? 'Tap to take yours back.' : 'Tap to react the same.'}',
+                excludeSemantics: true,
+                child: GestureDetector(
+                  onTap: onReact == null ? null : () => onReact!(r.emoji),
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    decoration: BoxDecoration(
+                      color: r.mine == true
+                          ? Color.alphaBlend(TkLook.of(context).lime.withValues(alpha: 0.22), TkLook.of(context).card)
+                          : TkLook.of(context).card,
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: const [BoxShadow(color: Color(0x26000000), offset: Offset(0, 1), blurRadius: 3)],
+                    ),
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(r.emoji, style: tkText(size: 13, lineHeight: 1)),
+                        // "👍 1", as drawn (docs/spec/mobile-app-look.md, "The chat").
+                        const SizedBox(width: 4),
+                        Text('${r.count}', style: tkText(size: 12, weight: 600, lineHeight: 1, color: r.mine == true ? t.tintText : t.text)),
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -1775,6 +2264,89 @@ class _Reactions extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// A tag in a message's text, as a chip: a product or service with its
+/// letters on a small square of its accent and its price, a business with
+/// its face; pressed (a business), its conversation.
+class TagChip extends StatelessWidget {
+  const TagChip({super.key, required this.tag, required this.words, this.onTap});
+  final LinkMention tag;
+
+  /// The words as written ("Rice, 50kg bag").
+  final String words;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final business = tag.kind == 'business';
+    final name = words.replaceFirst(RegExp(r'^[#@]'), '');
+    final accents = [
+      (look.violet, look.violetInk),
+      (look.orange, look.orangeInk),
+      (look.blue, look.blueInk),
+      (look.teal, look.tealInk),
+      (look.lime, look.limeInk),
+    ];
+    final (fill, ink) = accents[name.codeUnits.fold<int>(0, (a, c) => (a * 31 + c) & 0x7fffffff) % accents.length];
+    final price = tag.kind == 'item' && tag.priceKobo != null ? naira(tag.priceKobo!) : null;
+    final chip = Container(
+      margin: const EdgeInsets.symmetric(vertical: 1),
+      padding: const EdgeInsets.fromLTRB(2, 2, 9, 2),
+      decoration: BoxDecoration(color: t.text.withValues(alpha: 0.07), borderRadius: BorderRadius.circular(999)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 240),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 20,
+              height: 20,
+              alignment: Alignment.center,
+              decoration: business
+                  ? BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: tkFaceFor(name)),
+                    )
+                  : BoxDecoration(color: fill.withValues(alpha: 0.22), borderRadius: BorderRadius.circular(7)),
+              child: Text(
+                tkInitials(name),
+                textScaler: TextScaler.noScaling,
+                style: tkText(size: 8.5, weight: 800, lineHeight: 1, color: business ? const Color(0xFFFFFFFF) : ink),
+              ),
+            ),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: tkText(size: 14.5, weight: 600, lineHeight: 1.3, color: t.text),
+              ),
+            ),
+            if (price != null) ...[
+              const SizedBox(width: 5),
+              // The name gives way first; the price keeps up to half the chip.
+              Flexible(
+                child: Text(price, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 12, weight: 500, lineHeight: 1.3, color: t.muted)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+    final said = '${business ? '@' : '#'}$name${price != null ? ', $price${(tag.unit ?? '').isNotEmpty ? ' a ${tag.unit}' : ''}' : ''}';
+    if (onTap == null) return Semantics(label: said, excludeSemantics: true, child: chip);
+    return Semantics(
+      link: true,
+      label: said,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: GestureDetector(onTap: onTap, child: chip),
     );
   }
 }

@@ -36,6 +36,8 @@ export interface BusinessProfile {
   delivers: boolean;
   vehicle: string;
   delivery_areas: string[];
+  /** The one or two categories it is found by in Explore (keys of CATEGORY_NAMES). */
+  categories?: string[];
 }
 
 /** The words of the profile the owner edits (PUT /v1/business-profile). */
@@ -47,6 +49,7 @@ export interface ProfileWords {
   delivers: boolean;
   vehicle: string;
   delivery_areas: string[];
+  categories: string[];
 }
 
 /** The delivery areas typed as one line, "Lekki, Ajah, VI", as a list. */

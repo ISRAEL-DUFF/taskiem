@@ -424,6 +424,10 @@
       "text": "Ba za ka ƙara samun labarai daga {business} a nan ba. Aika START don sake samun su.",
       "reviewed": false
     },
+    "reach.stopped_dropped": {
+      "text": "You will no longer get updates from {business} here. Send START to get them again. What you were in the middle of here was dropped too.",
+      "reviewed": false
+    },
     "customer.resumed": {
       "text": "Za ka iya sake rubuta wa {business} a nan, kuma za su iya ba ka amsa.",
       "reviewed": false
@@ -758,6 +762,22 @@
     },
     "door.linked": {
       "text": "An gama: wannan hira ta haɗu da asusunka na Taskiem. Aika help don ganin abin da za ka iya yi a nan.",
+      "reviewed": false
+    },
+    "door.linked_told": {
+      "text": "A chat was linked to your Taskiem account: {chat}. Not you? Unlink it now in Account on the web.",
+      "reviewed": false
+    },
+    "door.cooling": {
+      "text": "This chat was linked to your account less than 24 hours ago, so it cannot send a sign-in or password link yet. That keeps your account safe if someone else linked it. Sign in on the web the way you usually do: {link}",
+      "reviewed": false
+    },
+    "wa.password.off": {
+      "text": "Signing in with WhatsApp or Telegram is off for you, so this chat sends no password link. Reset your password from the sign-in page, with your email: {link}",
+      "reviewed": false
+    },
+    "wa.password.unconfirmed": {
+      "text": "Your email is not confirmed yet, so this chat cannot send a password link. Send *email you@example.com* and open the link we email you. Then send *password* again.",
       "reviewed": false
     },
     "door.tg_joined": {
@@ -1598,6 +1618,18 @@
     },
     "wa.cancelled": {
       "text": "An soke.",
+      "reviewed": false
+    },
+    "wa.yes_stale": {
+      "text": "That button was for something earlier, so nothing was done. Send *yes* to confirm what is waiting now, or *cancel* to drop it.",
+      "reviewed": false
+    },
+    "wa.yes_stale_none": {
+      "text": "That button was for something earlier. Nothing is waiting for an answer now.",
+      "reviewed": false
+    },
+    "wa.yes_stale_public": {
+      "text": "That button was for something earlier, so nothing was started. Send *menu* to see what you can do here.",
       "reviewed": false
     },
     "wa.cancelled_nothing_started": {
@@ -3425,7 +3457,7 @@
       "reviewed": false
     },
     "wa.signin.off": {
-      "text": "Shiga da WhatsApp ko Telegram a kashe yake a gare ka (Account a yanar gizo). Aika *password* don shiga da imel da kalmar sirri maimakon haka.",
+      "text": "Signing in with WhatsApp or Telegram is off for you (Account on the web). Sign in on the web with your email and password: {link}",
       "reviewed": false
     },
     "wa.signin.passkey": {
@@ -5516,6 +5548,10 @@
       "text": "Yana jira: wannan oda ya wuce bashin {limit} da {business} suke ba ka (kana bin {owed}). Biya lissafinka, ko ka roƙe su su karɓa.",
       "reviewed": false
     },
+    "order.link.credit_unchecked_note": {
+      "text": "Waiting: {business} could not check your credit just now, so this order was not accepted by itself. Someone there will look at it.",
+      "reviewed": false
+    },
     "order.link.over_limit_title": {
       "text": "Oda {reference} yana jira: ya wuce iyakar bashinka",
       "reviewed": false
@@ -5997,6 +6033,42 @@
     },
     "customer.chat_expired": {
       "text": "Ba ka biya odar ka {reference} a kan lokaci ba, don haka an soke ta. Rubuto mana don sake yin oda.",
+      "reviewed": false
+    },
+    "rider.photo_kept_for": {
+      "text": "Photo kept as proof of delivery for {reference}. Thank you.",
+      "reviewed": false
+    },
+    "rider.photo_kept_which": {
+      "text": "Photo kept as proof of delivery for {reference}. If it is for another order, tap that order.",
+      "reviewed": false
+    },
+    "rider.photo_moved": {
+      "text": "Done: the photo is now kept for {reference}.",
+      "reviewed": false
+    },
+    "link.ended_open.mine": {
+      "text": "You ended the link with {name}. These were still open between you: {list}. They stay as they are and get no more updates here, so settle them with {name} directly.",
+      "reviewed": false
+    },
+    "link.ended_open.theirs": {
+      "text": "{name} ended the link with your business. These were still open between you: {list}. They stay as they are and get no more updates here, so settle them with {name} directly.",
+      "reviewed": false
+    },
+    "link.ended_open.orders": {
+      "text": "orders {refs}",
+      "reviewed": false
+    },
+    "link.ended_open.orders_more": {
+      "text": "orders {refs} and {more} more",
+      "reviewed": false
+    },
+    "link.ended_open.invoices": {
+      "text": "invoices {refs}",
+      "reviewed": false
+    },
+    "link.ended_open.invoices_more": {
+      "text": "invoices {refs} and {more} more",
       "reviewed": false
     }
   }

@@ -91,6 +91,13 @@ func (s *Server) waPublic(ctx context.Context, wa *whatsapp.Platform, number str
 	if in.Flow != "" {
 		return true, s.waPublicFlowDone(ctx, wa, number, in, sess)
 	}
+	// A tapped Yes is for the summary it was shown under.
+	if yes, stale := staleYes(in.Reply, pubAsk(sess.data)); yes {
+		if stale || sess.state != stateConfirming {
+			return true, say(tr(s.chooseLang(ctx, tenant, number, "").Tag, "wa.yes_stale_public"))
+		}
+		in.Reply = "yes"
+	}
 	text := in.Text
 	if in.Reply != "" {
 		text = in.Reply
@@ -124,7 +131,7 @@ func (s *Server) waPublic(ctx context.Context, wa *whatsapp.Platform, number str
 			}
 			return true, say(tr(l, "wa.cancelled_nothing_started"))
 		}
-		return true, say(tr(l, "wa.public.confirm_reminder"), confirmButtonsIn(l)...)
+		return true, say(tr(l, "wa.public.confirm_reminder"), pubConfirmButtons(l, sess.data)...)
 	}
 	if n, err := strconv.Atoi(cmd); err == nil && n >= 1 && n <= len(items) {
 		return true, s.waPublicChoose(ctx, wa, number, items[n-1], say)
@@ -293,6 +300,24 @@ func (s *Server) waPublicFlowDone(ctx context.Context, wa *whatsapp.Platform, nu
 	return s.waPublicConfirm(ctx, wa, number, data, say)
 }
 
+// pubAsk names a public session's summary for its Yes button: the start
+// of the nonce made when the summary is shown.
+func pubAsk(d pubData) string {
+	if len(d.Nonce) < 12 {
+		return ""
+	}
+	return d.Nonce[:12]
+}
+
+// pubConfirmButtons are Yes and Cancel under a public menu's summary.
+func pubConfirmButtons(l lang.Tag, d pubData) []whatsapp.Button {
+	bs := confirmButtonsIn(l)
+	if ask := pubAsk(d); ask != "" {
+		bs[0].ID = yesPrefix + ask
+	}
+	return bs
+}
+
 func (s *Server) waPublicConfirm(ctx context.Context, wa *whatsapp.Platform, number string, data pubData, say func(string, ...whatsapp.Button) error) error {
 	data.Nonce = uuid.NewString()
 	if err := s.pubSave(ctx, wa.Tenant, number, stateConfirming, data); err != nil {
@@ -307,7 +332,7 @@ func (s *Server) waPublicConfirm(ctx context.Context, wa *whatsapp.Platform, num
 	if len(lines) > 0 {
 		msg = tr(l, "wa.public.confirm_inputs", "label", data.Label, "inputs", strings.Join(lines, "\n"))
 	}
-	return say(msg, confirmButtonsIn(l)...)
+	return say(msg, pubConfirmButtons(l, data)...)
 }
 
 // waPublicStart starts the confirmed run as whatsapp_public:<number>.

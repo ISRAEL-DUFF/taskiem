@@ -168,11 +168,21 @@ func (p *Poller) poll(ctx context.Context, t pollTarget, conn *connector.Connect
 	if polled != nil && now.Sub(*polled) < spec.Poll.Interval() {
 		return 0, nil
 	}
-	n, pollErr := p.fetchAndDeliver(ctx, t, conn, spec, since.Add(-overlap))
+	n, through, pollErr := p.fetchAndDeliver(ctx, t, conn, spec, since.Add(-overlap))
 	err = db.InTenantTx(ctx, p.Store.Pool, []uuid.UUID{t.tenant}, func(tx pgx.Tx) error {
 		if pollErr != nil {
 			_, err := tx.Exec(ctx, `UPDATE trigger_polls SET polled_at = $4, last_error = $5 WHERE connector = $1 AND trigger_name = $2 AND connection = $3`,
 				t.connector, t.trigger, t.connection, now, clip(pollErr.Error()))
+			return err
+		}
+		if !through.IsZero() && through.Before(now) {
+			// The provider had more than one poll reads: only what was
+			// delivered is behind us. The next tick carries on from
+			// exactly there (since is stored ahead by the overlap the next
+			// poll takes off, so that a backlog thicker than the overlap
+			// still moves), and is due at once (polled_at stays).
+			_, err := tx.Exec(ctx, `UPDATE trigger_polls SET since = $4, last_error = NULL WHERE connector = $1 AND trigger_name = $2 AND connection = $3`,
+				t.connector, t.trigger, t.connection, through.Add(overlap))
 			return err
 		}
 		_, err := tx.Exec(ctx, `UPDATE trigger_polls SET since = $4, polled_at = $4, last_error = NULL WHERE connector = $1 AND trigger_name = $2 AND connection = $3`,
@@ -193,19 +203,31 @@ func clip(s string) string {
 }
 
 // fetchAndDeliver runs the poll action from since and delivers each
-// record as the provider's webhook would.
-func (p *Poller) fetchAndDeliver(ctx context.Context, t pollTarget, conn *connector.Connector, spec connector.TriggerSpec, since time.Time) (int, error) {
+// record as the provider's webhook would. through is the time up to which
+// the action listed everything, when it says it could not list it all
+// (the trigger's poll.through); zero otherwise.
+func (p *Poller) fetchAndDeliver(ctx context.Context, t pollTarget, conn *connector.Connector, spec connector.TriggerSpec, since time.Time) (n int, through time.Time, err error) {
+	n, through, err = p.fetchAndDeliverAll(ctx, t, conn, spec, since)
+	if err != nil {
+		// Not all of it was delivered: stay where the poll was.
+		return n, time.Time{}, err
+	}
+	return n, through, nil
+}
+
+func (p *Poller) fetchAndDeliverAll(ctx context.Context, t pollTarget, conn *connector.Connector, spec connector.TriggerSpec, since time.Time) (int, time.Time, error) {
+	var through time.Time
 	action, ok := conn.Actions[spec.Poll.Action]
 	if !ok {
-		return 0, fmt.Errorf("no action %s", spec.Poll.Action)
+		return 0, through, fmt.Errorf("no action %s", spec.Poll.Action)
 	}
 	use := secrets.WithUse(ctx, secrets.Use{Kind: secrets.KindConnection, Purpose: "ingest.poll"})
 	creds, err := p.Connections.Credentials(use, t.tenant, ScheduleEnvironment, conn.Manifest.ID, t.connection)
 	if errors.Is(err, secrets.ErrNotFound) || errors.Is(err, secrets.ErrAmbiguous) {
-		return 0, nil // nothing to ask with: readiness says so to the business
+		return 0, through, nil // nothing to ask with: readiness says so to the business
 	}
 	if err != nil {
-		return 0, err
+		return 0, through, err
 	}
 	secret := creds[spec.Verify.SecretField]
 	g := p.Egress
@@ -226,13 +248,24 @@ func (p *Poller) fetchAndDeliver(ctx context.Context, t pollTarget, conn *connec
 	resp, err := action.Execute(actx, req)
 	cancel()
 	if err != nil {
-		return 0, err
+		return 0, through, err
 	}
 	v, err := pollExprs.Eval(spec.Poll.Items, map[string]any{"output": resp.Output})
 	if err != nil {
-		return 0, fmt.Errorf("items: %w", err)
+		return 0, through, fmt.Errorf("items: %w", err)
 	}
 	items, _ := v.([]any)
+	if spec.Poll.Through != "" {
+		tv, err := pollExprs.Eval(spec.Poll.Through, map[string]any{"output": resp.Output})
+		if err != nil {
+			return 0, through, fmt.Errorf("through: %w", err)
+		}
+		if s, _ := tv.(string); s != "" {
+			if through, err = time.Parse(time.RFC3339, s); err != nil {
+				return 0, through, fmt.Errorf("through: %w", err)
+			}
+		}
+	}
 	n := 0
 	for _, item := range items {
 		ev, err := pollExprs.Eval(spec.Poll.Event, map[string]any{"item": item})
@@ -242,11 +275,11 @@ func (p *Poller) fetchAndDeliver(ctx context.Context, t pollTarget, conn *connec
 		}
 		body, err := json.Marshal(map[string]any{"event": event, "data": item})
 		if err != nil {
-			return n, err
+			return n, through, err
 		}
 		header, sig, err := connector.SignBody(spec.Verify, secret, body)
 		if err != nil {
-			return n, err
+			return n, through, err
 		}
 		path := "/" + t.tenant.String() + "/connectors/" + t.connector + "/" + t.trigger + "?env=" + ScheduleEnvironment
 		if t.connection != "" {
@@ -258,11 +291,11 @@ func (p *Poller) fetchAndDeliver(ctx context.Context, t pollTarget, conn *connec
 		rec := httptest.NewRecorder()
 		p.Hooks.ServeHTTP(rec, req)
 		if rec.Code >= 300 {
-			return n, fmt.Errorf("delivering a polled %s: %d %s", event, rec.Code, clip(rec.Body.String()))
+			return n, through, fmt.Errorf("delivering a polled %s: %d %s", event, rec.Code, clip(rec.Body.String()))
 		}
 		n++
 	}
-	return n, nil
+	return n, through, nil
 }
 
 // moneyTargets adds to targets each active prod connection's polled

@@ -110,6 +110,10 @@ func TestExploreBrowse(t *testing.T) {
 	if s, hdr, body := ada.getRaw(t, "/v1/explore/"+dangoteID+"/photos/0"); s != 200 || !strings.HasPrefix(hdr.Get("Content-Type"), "image/") || len(body) == 0 || hdr.Get("Cache-Control") != "private, max-age=3600" {
 		t.Errorf("a photo: %d %v", s, hdr)
 	}
+	// Asked for by its version: kept as long as the phone keeps what it read.
+	if s, hdr, _ := ada.getRaw(t, "/v1/explore/"+dangoteID+"/photos/0?v="+d["v"].(string)); s != 200 || hdr.Get("Cache-Control") != "private, max-age=2592000, immutable" {
+		t.Errorf("a photo by its version: %d %v", s, hdr.Get("Cache-Control"))
+	}
 	for path, want := range map[string]int{
 		"/v1/explore/" + dangoteID + "/logo":      200,
 		"/v1/explore/" + dangoteID + "/photos/2":  200,

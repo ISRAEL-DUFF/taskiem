@@ -279,12 +279,26 @@ containerSteps:
       requests: { cpu: 100m, memory: 128Mi }
       limits: { memory: 512Mi }
 
-# Restrict traffic: ingress only to the API and edge ports (and metrics from
-# the monitoring namespace); egress is left to the egress guard and to your
-# own policies, since connectors call many providers.
+# Restrict traffic. Inbound: only the API and edge ports (and metrics from
+# the monitoring namespace). Outbound: the public host and the mail role,
+# which face the internet, reach only DNS and the database; the other
+# roles' egress is left to the egress guard and to your own policies, since
+# connectors call many providers. Needs a CNI that enforces NetworkPolicy.
 networkPolicy:
   enabled: false
   monitoringNamespace: monitoring
+  # The ingress controller's namespace (for example ingress-nginx). Set, the
+  # API and edge ports take traffic only from it; empty, from anywhere.
+  ingressNamespace: ""
+  # Where the public host and the mail role may reach the database: its
+  # addresses as CIDRs (for example ["10.20.0.5/32"]) and its port. Empty,
+  # they may reach that port anywhere except the link-local range (cloud
+  # metadata).
+  databaseCIDRs: []
+  databasePort: 5432
+  # Extra addresses for DNS, for a node-local resolver that is not a pod
+  # (for example ["169.254.20.10/32"]). Cluster DNS pods are always allowed.
+  dnsCIDRs: []
   # The namespace of the proxy that issues the public host's certificates
   # on demand, which calls /tls/ask on its metrics port (docs/public-host.md).
   tlsProxyNamespace: ""

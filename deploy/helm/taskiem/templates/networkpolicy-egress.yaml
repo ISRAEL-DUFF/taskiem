@@ -1,0 +1,52 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $root := . -}}
+{{- $np := .Values.networkPolicy -}}
+{{- range $role := list "public" "mail" }}
+{{- if (index $root.Values $role).enabled }}
+---
+# The {{ $role }} pods take traffic from the internet and hold no platform
+# secret. They call two things: DNS and the database. Nothing else leaves
+# them, so a pod that is broken into cannot reach the API pods, OpenBao,
+# other services in the cluster or the cloud's metadata address.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "taskiem.fullname" $root }}-{{ $role }}-egress
+  labels:
+    {{- include "taskiem.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "taskiem.selectorLabels" $root | nindent 6 }}
+      app.kubernetes.io/component: {{ $role }}
+  policyTypes: [Egress]
+  egress:
+    # DNS: the cluster's resolver, in whichever namespace it runs.
+    - to:
+        - namespaceSelector: {}
+        {{- range $np.dnsCIDRs }}
+        - ipBlock: { cidr: {{ . | quote }} }
+        {{- end }}
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    # The database, on its port only.
+    - to:
+        {{- if $np.databaseCIDRs }}
+        {{- range $np.databaseCIDRs }}
+        - ipBlock: { cidr: {{ . | quote }} }
+        {{- end }}
+        {{- else }}
+        # networkPolicy.databaseCIDRs is empty: the database port anywhere
+        # but the link-local range, where cloud metadata lives.
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [169.254.0.0/16]
+        - namespaceSelector: {}
+        {{- end }}
+      ports:
+        - { protocol: TCP, port: {{ $np.databasePort }} }
+{{- end }}
+{{- end }}
+{{- end }}

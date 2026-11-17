@@ -96,6 +96,9 @@ type signupState struct {
 	Suggest string `json:"suggest,omitempty"`
 	// Agreed is when the person replied Yes to the terms.
 	Agreed *time.Time `json:"agreed,omitempty"`
+	// Proof is the digest of the app's sign-up token (app_signup.go): each
+	// answer in the app carries the token.
+	Proof string `json:"proof,omitempty"`
 }
 
 // signupChat is a message in a sign-up.
@@ -111,6 +114,9 @@ type signupChat struct {
 	// slack is the Slack user writing and the token their business's
 	// Slack connection takes, on Slack (slack_install.go).
 	slack *slackSignup
+	// madeTenant and madeOwner are the business this message made, and its
+	// owner (set by signupMake).
+	madeTenant, madeOwner uuid.UUID
 }
 
 func (sc *signupChat) t(id string, kv ...string) string { return tr(sc.lang, id, kv...) }
@@ -308,8 +314,12 @@ func (s *Server) signupOpen(ctx context.Context, sc *signupChat, number string) 
 // signupNumber is the number a sign-up is proven by, when the channel
 // gives one before the end: the WhatsApp number writing.
 func signupNumber(sc *signupChat) string {
-	if sc.ch.Name() == "whatsapp" {
+	switch sc.ch.Name() {
+	case "whatsapp":
 		return sc.addr
+	case "app":
+		// Proven by a code sent on WhatsApp (app_signup.go).
+		return strings.TrimPrefix(sc.addr, "app:")
 	}
 	return ""
 }
@@ -628,6 +638,9 @@ func (s *Server) signupMake(ctx context.Context, sc *signupChat, st *signupState
 				}
 			case "slack":
 				err = join(tx, tenant, owner)
+			case "app":
+				// Proven by the code the app's sign-up sent on WhatsApp.
+				err = tx.QueryRow(ctx, `SELECT taskiem_chat_bind_whatsapp_proven($1, $2)`, owner, number).Scan(&outcome)
 			default:
 				err = tx.QueryRow(ctx, `SELECT taskiem_chat_bind_whatsapp($1, $2)`, owner, number).Scan(&outcome)
 			}
@@ -646,7 +659,7 @@ func (s *Server) signupMake(ctx context.Context, sc *signupChat, st *signupState
 	if err != nil || !took {
 		return err
 	}
-	tenant, _, err := s.makeBusiness(ctx, nb)
+	tenant, owner, err := s.makeBusiness(ctx, nb)
 	if be := (errSignupBind{}); errors.As(err, &be) {
 		signupCount(channel, "exists")
 		return s.suSay(ctx, sc, sc.t("signup.number_taken", "where", s.accountWhere()))
@@ -676,6 +689,8 @@ func (s *Server) signupMake(ctx context.Context, sc *signupChat, st *signupState
 		s.Logger.Warn("chat sign-up: asking about being found", "err", err)
 	}
 	signupCount(channel, "created")
+	// What was made, for the app's sign-up to sign its owner in (app_signup.go).
+	sc.madeTenant, sc.madeOwner = tenant, owner
 	return s.signupDone(ctx, sc, st)
 }
 

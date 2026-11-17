@@ -105,16 +105,20 @@ func Enqueue(ctx context.Context, tx pgx.Tx, it OutboxItem, dedup string) (bool,
 	return err == nil && tag.RowsAffected() == 1, err
 }
 
+// OutboxLease is how long a claimed item is its claimer's: no other
+// sender takes it meanwhile. A variable for tests.
+var OutboxLease = 5 * time.Minute
+
 // ClaimOutbox claims up to limit due items of a tenant (only those in ids,
-// when given) for five minutes, so no other sender takes them meanwhile.
+// when given) for OutboxLease, so no other sender takes them meanwhile.
 func ClaimOutbox(ctx context.Context, pool *pgxpool.Pool, tenant uuid.UUID, limit int, ids []uuid.UUID) ([]OutboxItem, error) {
 	var out []OutboxItem
 	err := db.InTenantTx(ctx, pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `UPDATE whatsapp_outbox o SET attempts = o.attempts + 1, next_attempt_at = now() + interval '5 minutes'
+		rows, err := tx.Query(ctx, `UPDATE whatsapp_outbox o SET attempts = o.attempts + 1, next_attempt_at = now() + $3::interval
 			WHERE o.id IN (SELECT id FROM whatsapp_outbox WHERE status = 'pending' AND next_attempt_at <= now()
 			  AND ($2::uuid[] IS NULL OR id = ANY ($2)) ORDER BY next_attempt_at LIMIT $1 FOR UPDATE SKIP LOCKED)
 			RETURNING o.id, o.tenant_id, o.channel, o.kind, coalesce(o.user_id, '00000000-0000-0000-0000-000000000000'), o.contact_id, o.reach_reference,
-			  o.run_id, o.step_id, o.level, o.alert_id, o.attempts, o.invoice_id, o.entry_id, o.digest_id`, limit, ids)
+			  o.run_id, o.step_id, o.level, o.alert_id, o.attempts, o.invoice_id, o.entry_id, o.digest_id`, limit, ids, OutboxLease.String())
 		if err != nil {
 			return err
 		}
@@ -127,7 +131,29 @@ func ClaimOutbox(ctx context.Context, pool *pgxpool.Pool, tenant uuid.UUID, limi
 	return out, err
 }
 
-// FinishOutbox records how an attempt went: sent; dropped when moot; dead
+// OutboxBatch is how many items a sender claims at a time: few enough
+// that even with every send as slow as the Graph API's timeout allows,
+// the batch is done well inside OutboxLease.
+const OutboxBatch = 10
+
+// HoldOutbox is called before an item is sent: it reports whether the
+// item is still its claimer's, and if so takes a fresh lease on it. An
+// item claimed again meanwhile (its attempts have moved on), finished, or
+// gone is no longer ours: it must not be sent. The lease having run out
+// with no one else taking it is still ours.
+func HoldOutbox(ctx context.Context, pool *pgxpool.Pool, it OutboxItem) (bool, error) {
+	held := false
+	err := db.InTenantTx(ctx, pool, []uuid.UUID{it.Tenant}, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, `UPDATE whatsapp_outbox SET next_attempt_at = now() + $3::interval
+			WHERE id = $1 AND status = 'pending' AND attempts = $2`, it.ID, it.Attempts, OutboxLease.String())
+		held = tag.RowsAffected() == 1
+		return err
+	})
+	return held, err
+}
+
+// FinishOutbox records how an attempt went (nothing, when the item was
+// claimed again since: the later claimer's attempt is the one recorded): sent; dropped when moot; dead
 // when the error cannot get better by waiting (a template held back by
 // the allowance, a reply with no template outside the window) or after
 // the last attempt; otherwise due again after a backoff.
@@ -136,15 +162,15 @@ func FinishOutbox(ctx context.Context, pool *pgxpool.Pool, it OutboxItem, sendEr
 		var err error
 		switch {
 		case sendErr == nil:
-			_, err = tx.Exec(ctx, `UPDATE whatsapp_outbox SET status = 'sent', finished_at = now(), last_error = NULL WHERE id = $1`, it.ID)
+			_, err = tx.Exec(ctx, `UPDATE whatsapp_outbox SET status = 'sent', finished_at = now(), last_error = NULL WHERE id = $1 AND status = 'pending' AND attempts = $2`, it.ID, it.Attempts)
 		case errors.Is(sendErr, ErrFellBack):
-			_, err = tx.Exec(ctx, `UPDATE whatsapp_outbox SET status = 'sent', finished_at = now(), last_error = $2 WHERE id = $1`, it.ID, clipErr(sendErr))
+			_, err = tx.Exec(ctx, `UPDATE whatsapp_outbox SET status = 'sent', finished_at = now(), last_error = $2 WHERE id = $1 AND status = 'pending' AND attempts = $3`, it.ID, clipErr(sendErr), it.Attempts)
 		case errors.Is(sendErr, ErrNothingToSend):
-			_, err = tx.Exec(ctx, `UPDATE whatsapp_outbox SET status = 'dropped', finished_at = now(), last_error = $2 WHERE id = $1`, it.ID, clipErr(sendErr))
+			_, err = tx.Exec(ctx, `UPDATE whatsapp_outbox SET status = 'dropped', finished_at = now(), last_error = $2 WHERE id = $1 AND status = 'pending' AND attempts = $3`, it.ID, clipErr(sendErr), it.Attempts)
 		case errors.Is(sendErr, ErrTemplateBlocked), errors.Is(sendErr, ErrWindowClosed), it.Attempts >= OutboxMaxAttempts:
-			_, err = tx.Exec(ctx, `UPDATE whatsapp_outbox SET status = 'dead', finished_at = now(), last_error = $2 WHERE id = $1`, it.ID, clipErr(sendErr))
+			_, err = tx.Exec(ctx, `UPDATE whatsapp_outbox SET status = 'dead', finished_at = now(), last_error = $2 WHERE id = $1 AND status = 'pending' AND attempts = $3`, it.ID, clipErr(sendErr), it.Attempts)
 		default:
-			_, err = tx.Exec(ctx, `UPDATE whatsapp_outbox SET last_error = $2, next_attempt_at = $3 WHERE id = $1`, it.ID, clipErr(sendErr), now.Add(OutboxBackoff(it.Attempts)))
+			_, err = tx.Exec(ctx, `UPDATE whatsapp_outbox SET last_error = $2, next_attempt_at = $3 WHERE id = $1 AND status = 'pending' AND attempts = $4`, it.ID, clipErr(sendErr), now.Add(OutboxBackoff(it.Attempts)), it.Attempts)
 		}
 		return err
 	})
@@ -213,6 +239,11 @@ func (p *Platform) Queue(ctx context.Context, tenant, alert uuid.UUID, members [
 		items = nil
 	}
 	for _, it := range items {
+		// Only what is still ours: a slow send before this one may have
+		// outlasted the lease, and the notifier taken the rest.
+		if held, err := HoldOutbox(ctx, p.Pool, it); err != nil || !held {
+			continue
+		}
 		sendErr := p.SendAlertItem(ctx, it)
 		if ferr := FinishOutbox(ctx, p.Pool, it, sendErr, p.now()); ferr != nil && p.Logger != nil {
 			p.Logger.Error("whatsapp: outbox", "err", ferr)

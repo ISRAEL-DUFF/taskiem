@@ -1,8 +1,8 @@
 // Approve or Decline, confirmed (web/src/pages/ChatAlerts.tsx ApproveSheet):
 // what it is, what the person was shown, a comment, and the confirmation
-// its rules ask for (a code from their authenticator; a passkey once the
-// app has them, M4); the server refuses a decision without it, and what it
-// asks for is what the sheet asks next. POST /v1/approvals/{run}/{step}.
+// its rules ask for (the phone's passkey, or a code from their
+// authenticator; M4 N6); the server refuses a decision without it, and what
+// it asks for is what the sheet asks next. POST /v1/approvals/{run}/{step}.
 
 import 'dart:async';
 
@@ -13,8 +13,13 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
+import '../app/passkey.dart';
+import '../kit/forms.dart' show RuneLimit;
 import '../kit/kit.dart';
+import '../kit/look.dart' show TkCallout, TkSquare;
+import '../kit/mobile.dart' show TkFormGroup;
 import '../kit/sheet.dart';
+import '../theme/look.dart' show TkLook;
 import '../kit/tap_area.dart';
 import '../theme/theme.dart';
 import 'alerts.dart';
@@ -24,16 +29,21 @@ import 'words.dart';
 /// The approve sheet; it closes with true once decided.
 /// The decision, as the sheet sends it (POST /v1/approvals/{run}/{step}):
 /// approved or rejected, with its comment and the code a rule asks for.
-Future<void> decideApproval(Auth auth, Approval ap, String decision, {String comment = '', String code = ''}) =>
-    auth.transport.send(
-      'POST',
-      '/v1/approvals/${ap.runId}/${Uri.encodeComponent(ap.stepId)}',
-      body: {
-        'decision': decision,
-        if (comment.trim().isNotEmpty) 'comment': comment.trim(),
-        if (code.isNotEmpty) 'totp': code,
-      },
-    );
+Future<void> decideApproval(Auth auth, Approval ap, String decision, {String comment = '', String code = '', Map<String, dynamic>? passkey}) => auth.transport.send(
+  'POST',
+  '/v1/approvals/${ap.runId}/${Uri.encodeComponent(ap.stepId)}',
+  body: {
+    'decision': decision,
+    if (comment.trim().isNotEmpty) 'comment': comment.trim(),
+    if (code.isNotEmpty) 'totp': code,
+    'passkey': ?passkey,
+  },
+);
+
+/// The phone's passkey for this decision (operation approval.decide, its
+/// run, step and decision as the target).
+Future<Map<String, dynamic>> approvalPasskey(Auth auth, Approval ap, String decision) =>
+    passkeyProof(auth, 'approval.decide', '${ap.runId}/${ap.stepId}/$decision');
 
 class ApproveSheet extends StatefulWidget {
   const ApproveSheet({super.key, required this.a, required this.decision, required this.auth});
@@ -54,6 +64,10 @@ class _ApproveSheetState extends State<ApproveSheet> {
   bool _busy = false;
   bool _saved = false;
   String? _error;
+
+  /// As drawn: the authenticator's code behind a link, shown once asked
+  /// for, when this phone has no passkey, or when the server asks again.
+  bool _useCode = false;
 
   bool get _approve => widget.decision == 'approved';
 
@@ -77,7 +91,19 @@ class _ApproveSheetState extends State<ApproveSheet> {
       _error = null;
     });
     try {
-      await decideApproval(widget.auth, ap, widget.decision, comment: _comment.text, code: _code.text);
+      // Asked for a confirmation and no code typed: the phone's passkey,
+      // where the phone has one; else the code is what it needs.
+      Map<String, dynamic>? passkey;
+      if (_stepUp != null && _code.text.isEmpty) {
+        if (!await passkeys.available()) {
+          setState(() => (_useCode = true, _error = _stepUp == 'passkey'
+              ? 'This needs your passkey, and this phone cannot use one. Decide it on the web, on a device with your passkey.'
+              : 'This phone cannot use a passkey. Type a code from your authenticator app.'));
+          return;
+        }
+        passkey = await approvalPasskey(widget.auth, ap, widget.decision);
+      }
+      await decideApproval(widget.auth, ap, widget.decision, comment: _comment.text, code: _code.text, passkey: passkey);
       setState(() => _saved = true);
       // The tick draws, then the sheet goes and the card with it.
       await Future<void>.delayed(const Duration(milliseconds: 1200));
@@ -86,9 +112,11 @@ class _ApproveSheetState extends State<ApproveSheet> {
       // What the server asks for now is what the sheet asks next.
       final up = e.body['step_up'];
       setState(() {
-        if (up is String) _stepUp = up;
+        if (up is String) (_stepUp = up, _useCode = true);
         _error = e.message;
       });
+    } on PasskeyCancelled {
+      // Closed the phone's passkey sheet: the decision waits.
     } on Offline {
       setState(() => _error = 'You’re offline. Try again when you’re back online.');
     } finally {
@@ -111,46 +139,78 @@ class _ApproveSheetState extends State<ApproveSheet> {
     ];
     final notes = <Widget>[
       if (ap.firstPayment == true) const CardPill('First payment to this account', CardTone.warn),
-      if (_stepUp != null) CardPill(passkeyOnly ? 'Needs your passkey' : 'Needs your passkey or a code', CardTone.plain),
       if (ap.levels > 1) CardPill('Level ${ap.level} of ${ap.levels}', CardTone.plain),
       if (ap.required > 1) CardPill('${ap.approvals} of ${ap.required} approvals', CardTone.plain),
     ];
-    final ready = !_busy && !(_stepUp != null && (passkeyOnly || _code.text.length != 6));
-    return TkSheet(
+    // With a confirmation asked, the phone's passkey, or a whole code.
+    final ready = !_busy && !(_stepUp != null && !passkeyOnly && _code.text.isNotEmpty && _code.text.length != 6);
+    final look = TkLook.of(context);
+    // In the app's own look, as drawn: what it is on cards, the first
+    // payment as a warning, the code behind a link.
+    return TkAppLook(child: TkSheet(
       title: _approve ? 'Approve it?' : 'Decline it?',
       overlay: _saved ? TkSavedTick(words: _approve ? 'Approved' : 'Declined') : null,
       body: TkFormBody(
         children: [
-          Text(a.who != null ? '${a.who} asks: ${a.title}' : a.title, style: tkText(size: 16, weight: 600, color: t.text)),
-          Text('From ${ap.workflow}. Your decision and what you were shown are recorded.', style: tkFormNow(t)),
+          // As drawn: who asks for what, and under it, small, from where.
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(a.who != null ? '${a.who} asks: ${a.title}' : a.title, style: tkText(size: 15.5, weight: 600, lineHeight: 1.3, color: t.text)),
+              const SizedBox(height: 3),
+              Text('From ${ap.workflow}. Your decision and what you were shown are recorded.', style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
+            ],
+          ),
           if (notes.isNotEmpty) Wrap(spacing: 6, runSpacing: 6, children: notes),
-          if (rows.isNotEmpty) TkLines(rows),
+          if (rows.isNotEmpty) TkFormGroup(children: [TkLines(rows)]),
           if (ap.firstPayment == true && _approve)
-            Semantics(
-              container: true,
-              // `.tk-form-now` is a wrapping flex row: the bold words, then the rest under them.
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  Text('First payment to this account.', style: tkText(size: 14, weight: 700, color: t.muted)),
-                  Text(
-                    'Your business has not paid it before. Check the account number and name with the person you are paying before you approve.',
-                    style: tkFormNow(t),
+            TkCallout(
+              leading: TkSquare('b-alert', color: look.orange),
+              title: 'First payment to this account',
+              sub: 'Check the account number and name with them before you approve.',
+              color: look.orange,
+            ),
+          TkFormGroup(
+            children: [
+              TkKitField(
+                label: 'A comment (optional, recorded)',
+                child: TkTextBox(controller: _comment, size: 15, height: 42),
+              ),
+            ],
+          ),
+          if (_stepUp != null && !passkeyOnly && _useCode)
+            TkFormGroup(
+              children: [
+                TkKitField(
+                  label: 'Or a code from your authenticator app',
+                  hint: 'No passkey on this phone? Add one in Settings.',
+                  child: TkTextBox(controller: _code, lines: 1, digits: 6),
+                ),
+              ],
+            ),
+          if (_error != null) TkErrorBox(_error!),
+          if (_stepUp != null && !passkeyOnly && !_useCode)
+            Center(
+              child: TapArea(
+                child: Semantics(
+                  button: true,
+                  label: 'Use a code from your authenticator instead',
+                  onTap: () => setState(() => _useCode = true),
+                  excludeSemantics: true,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => setState(() => _useCode = true),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Text(
+                        'Use a code from your authenticator instead',
+                        style: tkText(size: 14, weight: 700, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand),
+                      ),
+                    ),
                   ),
-                ],
+                ),
               ),
             ),
-          TkKitField(label: 'A comment (optional, recorded)', child: TkTextBox(controller: _comment, lines: 2)),
-          if (_stepUp != null && !passkeyOnly)
-            TkKitField(
-              label: 'Or a code from your authenticator app',
-              hint: 'No authenticator yet? Add one under Account on the web.',
-              child: TkTextBox(controller: _code, lines: 1, digits: 6),
-            ),
-          if (passkeyOnly)
-            Text('This needs your passkey, and this phone cannot use one yet. Decide it on a device with your passkey.', style: tkFormNow(t)),
-          if (_error != null) TkErrorBox(_error!),
         ],
       ),
       footer: TkFootTwo(
@@ -158,16 +218,37 @@ class _ApproveSheetState extends State<ApproveSheet> {
         firstOwn: 38,
         secondOwn: 28,
         first: TkGhostButton(label: 'Not now', onTap: _busy ? null : () => Navigator.of(context).pop(false)),
-        second: TkCta(label: _approve ? 'Approve' : 'Decline', danger: !_approve, onTap: ready ? _confirm : null),
+        second: TkCta(
+          label: _approve ? 'Approve' : 'Decline',
+          danger: !_approve,
+          // The passkey it asks for, on the button (as drawn).
+          icon: _stepUp != null && _code.text.isEmpty ? 'fingerprint' : null,
+          onTap: ready ? _confirm : null,
+        ),
       ),
-    );
+    ));
   }
 }
 
 /// `.tk-field textarea` / `input`: the soft filled box, 17 px semibold, and
 /// Chromium's resize grip in a text area's corner, as the web is seen.
 class TkTextBox extends StatefulWidget {
-  const TkTextBox({super.key, required this.controller, this.lines = 1, this.digits, this.height = 54, this.size = 17, this.hint, this.money = false, this.secret = false, this.plain = false});
+  const TkTextBox({
+    super.key,
+    required this.controller,
+    this.lines = 1,
+    this.digits,
+    this.height = 54,
+    this.size = 17,
+    this.hint,
+    this.money = false,
+    this.signed = false,
+    this.secret = false,
+    this.plain = false,
+    this.phone = false,
+    this.max,
+    this.enabled = true,
+  });
   final TextEditingController controller;
   final int lines;
 
@@ -182,12 +263,25 @@ class TkTextBox extends StatefulWidget {
   /// A price typed (`inputmode="decimal"`).
   final bool money;
 
+  /// A number that may be below nothing (`inputmode="text"` on the web):
+  /// the keypad with its minus.
+  final bool signed;
+
   /// A key (`type="password"`): hidden as typed.
   final bool secret;
 
   /// Pasted as it is (`autocomplete="off" spellcheck="false"`): no
   /// suggestions, no corrections.
   final bool plain;
+
+  /// A phone number (`type="tel"`): the phone's dial pad.
+  final bool phone;
+
+  /// `maxLength`: at most this many characters.
+  final int? max;
+
+  /// False: shown, not to be typed in (`disabled`).
+  final bool enabled;
 
   /// Only digits, at most this many (a code).
   final int? digits;
@@ -215,51 +309,69 @@ class _TkTextBoxState extends State<TkTextBox> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final area = widget.lines > 1;
-    return TapField(child: Container(
-      constraints: BoxConstraints(minHeight: widget.height),
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: area ? 14 : 0),
-      alignment: Alignment.centerLeft,
-      decoration: BoxDecoration(
-        color: _focus.hasFocus ? t.fieldFocus : t.field,
-        border: Border.all(color: const Color(0x00000000), width: 1.5),
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: _focus.hasFocus ? t.ring : const [],
-      ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Material(
-            type: MaterialType.transparency,
-            child: TextField(
-              controller: widget.controller,
-              focusNode: _focus,
-              minLines: widget.lines,
-              maxLines: area ? null : 1,
-              obscureText: widget.secret && !area,
-              autocorrect: !(widget.secret || widget.plain),
-              enableSuggestions: !(widget.secret || widget.plain),
-              keyboardType: widget.digits != null
-                  ? TextInputType.number
-                  : widget.money
-                  ? const TextInputType.numberWithOptions(decimal: true)
-                  : (area ? TextInputType.multiline : TextInputType.text),
-              autofillHints: widget.digits != null ? const [AutofillHints.oneTimeCode] : null,
-              inputFormatters: widget.digits == null
-                  ? const <TextInputFormatter>[]
-                  : [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(widget.digits)],
-              cursorColor: t.text,
-              showCursor: !TkField.debugHideCaret,
-              style: tkText(size: widget.size, weight: 600, lineHeight: 1.5, color: t.text),
-              decoration: InputDecoration.collapsed(
-                hintText: widget.hint,
-                hintStyle: tkText(size: widget.size, weight: 600, lineHeight: 1.5, color: t.muted.withValues(alpha: t.muted.a * 0.72)),
+    return TapField(
+      child: Container(
+        constraints: BoxConstraints(minHeight: widget.height),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: area ? 14 : 0),
+        alignment: Alignment.centerLeft,
+        decoration: BoxDecoration(
+          color: _focus.hasFocus ? t.fieldFocus : t.field,
+          border: Border.all(color: const Color(0x00000000), width: 1.5),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: _focus.hasFocus ? t.ring : const [],
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Material(
+              type: MaterialType.transparency,
+              child: TextField(
+                controller: widget.controller,
+                enabled: widget.enabled,
+                focusNode: _focus,
+                minLines: widget.lines,
+                maxLines: area ? null : 1,
+                obscureText: widget.secret && !area,
+                autocorrect: !(widget.secret || widget.plain),
+                enableSuggestions: !(widget.secret || widget.plain),
+                keyboardType: widget.digits != null
+                    ? TextInputType.number
+                    : widget.phone
+                    ? TextInputType.phone
+                    : widget.signed
+                    ? const TextInputType.numberWithOptions(decimal: true, signed: true)
+                    : widget.money
+                    ? const TextInputType.numberWithOptions(decimal: true)
+                    : (area ? TextInputType.multiline : TextInputType.text),
+                autofillHints: widget.digits != null ? const [AutofillHints.oneTimeCode] : null,
+                inputFormatters: [
+                  if (widget.digits != null) ...[FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(widget.digits)],
+                  if (widget.max != null) RuneLimit(widget.max!),
+                ],
+                cursorColor: t.text,
+                showCursor: !TkField.debugHideCaret,
+                style: tkText(size: widget.size, weight: 600, lineHeight: 1.5, color: t.text),
+                decoration: InputDecoration.collapsed(
+                  hintText: widget.hint,
+                  hintStyle: tkText(
+                    size: widget.size,
+                    weight: 600,
+                    lineHeight: 1.5,
+                    color: t.muted.withValues(alpha: t.muted.a * 0.72),
+                  ),
+                ),
               ),
             ),
-          ),
-          if (area) Positioned(right: -14, bottom: -12, child: CustomPaint(size: const Size(9, 9), painter: _Grip(t.muted))),
-        ],
+            if (area)
+              Positioned(
+                right: -14,
+                bottom: -12,
+                child: CustomPaint(size: const Size(9, 9), painter: _Grip(t.muted)),
+              ),
+          ],
+        ),
       ),
-    ));
+    );
   }
 }
 

@@ -354,7 +354,21 @@ func TestRidersPay(t *testing.T) {
 	if v := ada.must(200, "GET", "/v1/riders/pay", nil); v["workflow_id"] != wf {
 		t.Fatalf("view %v", v)
 	}
-	run := ada.must(202, "POST", "/v1/riders/pay", nil)
+	run := ada.must(202, "POST", "/v1/riders/pay", nil, "Idempotency-Key", "pay-1")
+	// Pressed again after a request that timed out (the same key): the
+	// same payout, not a second one. Pressed afresh while that payout is
+	// still open: refused, in plain words.
+	if again := ada.must(202, "POST", "/v1/riders/pay", nil, "Idempotency-Key", "pay-1"); again["run_id"] != run["run_id"] || again["batch_id"] != run["batch_id"] {
+		t.Fatalf("the same request again started another payout: %v then %v", run, again)
+	}
+	if e := ada.must(409, "POST", "/v1/riders/pay", nil, "Idempotency-Key", "pay-2"); !strings.Contains(fmt.Sprint(e["error"]), "already being paid") {
+		t.Fatalf("a second payout while one is open: %v", e)
+	}
+	ada.must(409, "POST", "/v1/riders/pay", nil)
+	var started int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM runs WHERE workflow_id = $1`, wf).Scan(&started); err != nil || started != 1 {
+		t.Fatalf("payout runs started: %d %v", started, err)
+	}
 	defer func() {
 		// With a second person needed for prod alone, a change to weekly
 		// pay waits for them: prod keeps the version it has.

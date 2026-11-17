@@ -179,6 +179,17 @@ type Server struct {
 	// FormPerForm limits one form's submissions from every address
 	// together; nil uses FormSubmissionsPerForm (500 an hour).
 	FormPerForm *formguard.Limiter
+	// FormCodes limits verification codes asked for per client address;
+	// nil uses FormCodesPerIP.
+	FormCodes *formguard.Limiter
+	// FormUploads limits bodies with files to forms that take files, per
+	// client address, before they are read; nil uses FormUploadsPerIP.
+	// UploadsAtOncePerIP and UploadsAtOncePerForm cap those arriving at
+	// once (0: FormUploadsAtOncePerIP, FormUploadsAtOncePerForm).
+	FormUploads          *formguard.Limiter
+	UploadsAtOncePerIP   int
+	UploadsAtOncePerForm int
+	uploads              uploadGauge
 	// Invoices reads the invoices businesses send their customers, for
 	// their pages on the form host, /i/{token} (invoice.go); nil: none.
 	Invoices Invoices
@@ -253,6 +264,14 @@ func (s *Server) Handler() http.Handler {
 	if s.FormSubmissions == nil {
 		b := FormSubmissionsPerIP
 		s.FormSubmissions = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	if s.FormCodes == nil {
+		b := FormCodesPerIP
+		s.FormCodes = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
+	}
+	if s.FormUploads == nil {
+		b := FormUploadsPerIP
+		s.FormUploads = formguard.NewLimiter(b.Rate, b.Burst, SubmissionLimiterSize, 2*time.Hour)
 	}
 	if s.FormPerForm == nil {
 		b := FormSubmissionsPerForm
@@ -340,11 +359,14 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		s.page(w, r, http.StatusTooManyRequests, "unavailable", pageData{Title: "Too many requests"})
 		return
 	}
-	if strings.HasPrefix(r.URL.Path, previewPrefix) {
+	host := hostOf(r)
+	// A brand preview is a page of the form host only: on a business's
+	// own address it would show another member's name and look as if it
+	// were that business's (the sealed preview is not bound to a host).
+	if strings.HasPrefix(r.URL.Path, previewPrefix) && s.FormHost != "" && host == s.FormHost {
 		s.servePreview(w, r)
 		return
 	}
-	host := hostOf(r)
 	if s.FormHost != "" && host == s.FormHost {
 		s.routeForms(w, r)
 		return

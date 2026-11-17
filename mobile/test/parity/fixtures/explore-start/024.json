@@ -1,0 +1,424 @@
+{
+ "results": [],
+ "near": [
+  {
+   "business": "01a1cc22-8835-7982-af30-d991abf8ce92",
+   "name": "Akoka Print Hub",
+   "area": "Yaba, Lagos",
+   "tagline": "Menus, flyers and banners",
+   "about": "Menus, flyers, stickers and roll-up banners, printed while you wait near UNILAG gate.",
+   "logo": true,
+   "photos": 1,
+   "captions": [
+    "Menus, laminated"
+   ],
+   "state": "none",
+   "v": "ee5f400b",
+   "categories": [
+    "services"
+   ]
+  },
+  {
+   "business": "01a1cc22-6632-784e-bd40-13c302f7a3dd",
+   "name": "FreshPress Juices",
+   "area": "Yaba, Lagos",
+   "tagline": "Cold-pressed juice and smoothies",
+   "about": "Cold-pressed juice from Nigerian fruit: pineapple, watermelon, tiger nut and zobo. Bottled daily for gyms and caf\u00e9s.",
+   "logo": true,
+   "photos": 2,
+   "captions": [
+    "Watermelon and ginger",
+    "Orange and carrot"
+   ],
+   "state": "none",
+   "v": "67b794dc",
+   "categories": [
+    "food"
+   ]
+  },
+  {
+   "business": "01a1cc22-0e7c-7457-a1ff-f5ef38f3bdda",
+   "name": "Kola's Bakery",
+   "area": "Yaba, Lagos",
+   "tagline": "Bread and cakes, baked at dawn",
+   "about": "A family bakery since 2009. We supply hotels, caf\u00e9s and shops around Yaba and Surulere every morning.",
+   "logo": true,
+   "photos": 4,
+   "captions": [
+    "Agege bread, out of the oven at 5am",
+    "Birthday cakes to order",
+    "Croissants for caf\u00e9s",
+    "Cupcakes for parties"
+   ],
+   "state": "asked_us",
+   "v": "6fff12b3",
+   "categories": [
+    "food"
+   ]
+  },
+  {
+   "business": "01a1cc22-43cc-75c2-b358-2185b486c64e",
+   "name": "Mallam Musa Suya Spot",
+   "area": "Yaba, Lagos",
+   "tagline": "Suya, kilishi and yaji spice",
+   "about": "Beef and chicken suya grilled every evening on Herbert Macaulay Way. Yaji spice by the kilo for kitchens.",
+   "logo": true,
+   "photos": 2,
+   "captions": [
+    "The grill, from 5pm",
+    "Yaji spice, ground fresh"
+   ],
+   "state": "none",
+   "v": "c745108d"
+  },
+  {
+   "business": "01a1cc22-54e7-7bf7-a3df-b0cd0bf560ad",
+   "name": "Small Chops by Bisi",
+   "area": "Yaba, Lagos",
+   "tagline": "Puff-puff, samosa and spring rolls",
+   "about": "Small chops trays for parties and office meetings. Puff-puff, samosa, spring rolls, gizdodo and peppered snail.",
+   "logo": true,
+   "photos": 2,
+   "captions": [
+    "A tray for 50",
+    "Samosa and spring rolls"
+   ],
+   "state": "none",
+   "v": "18866b0d"
+  },
+  {
+   "business": "01a1cc22-7780-7b06-89b2-916a97a421af",
+   "name": "Yaba Gas Refill",
+   "area": "Yaba, Lagos",
+   "tagline": "Cooking gas, delivered in an hour",
+   "about": "12.5kg and 50kg cylinders refilled and delivered around Yaba, Akoka and Ebute Metta. Open from 7am.",
+   "logo": true,
+   "photos": 1,
+   "captions": [
+    "Our riders bring the cylinder to you"
+   ],
+   "state": "none",
+   "v": "99c5791c"
+  }
+ ],
+ "near_more": false,
+ "fresh": [
+  {
+   "business": "01a1cc22-cbfd-78b8-9be4-0f99b4095859",
+   "name": "Grace Catering Supplies",
+   "area": "Surulere, Lagos",
+   "tagline": "Chafing dishes, coolers and trays",
+   "about": "Chafing dishes, food warmers, coolers and trays to buy or hire for events.",
+   "logo": true,
+   "photos": 1,
+   "captions": [
+    "Chafing dishes to hire"
+   ],
+   "state": "none",
+   "v": "1fbc3033"
+  },
+  {
+   "business": "01a1cc22-bb25-7876-a584-360bd4831470",
+   "name": "Spice Route Abuja",
+   "area": "Wuse, Abuja",
+   "tagline": "Spices and seasonings, wholesale",
+   "about": "Crayfish, ogiri, iru, curry and thyme by the kilo for kitchens across Nigeria.",
+   "logo": true,
+   "photos": 1,
+   "captions": [
+    "Our spice room"
+   ],
+   "state": "none",
+   "v": "d6153255"
+  },
+  {
+   "business": "01a1cc22-aa6a-76b2-b4f2-58b4cbac0c53",
+   "name": "Ogun Palm Oil Co.",
+   "area": "Abeokuta, Ogun",
+   "tagline": "Red palm oil, pressed in Ogun",
+   "about": "Pure red palm oil in 5L, 25L and drums, pressed at our mill in Abeokuta and delivered to Lagos weekly.",
+   "logo": true,
+   "photos": 1,
+   "captions": [
+    "25L kegs, sealed"
+   ],
+   "state": "none",
+   "v": "54e76f8a"
+  },
+  {
+   "business": "01a1cc22-991b-7183-872b-ed616f428fdd",
+   "name": "Epe Fresh Fish",
+   "area": "Epe, Lagos",
+   "tagline": "Catfish, croaker and prawns",
+   "about": "Live catfish and fresh croaker from the Epe lagoon, cleaned and cut for restaurants.",
+   "logo": true,
+   "photos": 2,
+   "captions": [
+    "Prawns from Epe",
+    "Catfish, live or smoked"
+   ],
+   "state": "none",
+   "v": "055d9de6"
+  },
+  {
+   "business": "01a1cc22-8835-7982-af30-d991abf8ce92",
+   "name": "Akoka Print Hub",
+   "area": "Yaba, Lagos",
+   "tagline": "Menus, flyers and banners",
+   "about": "Menus, flyers, stickers and roll-up banners, printed while you wait near UNILAG gate.",
+   "logo": true,
+   "photos": 1,
+   "captions": [
+    "Menus, laminated"
+   ],
+   "state": "none",
+   "v": "ee5f400b"
+  },
+  {
+   "business": "01a1cc22-7780-7b06-89b2-916a97a421af",
+   "name": "Yaba Gas Refill",
+   "area": "Yaba, Lagos",
+   "tagline": "Cooking gas, delivered in an hour",
+   "about": "12.5kg and 50kg cylinders refilled and delivered around Yaba, Akoka and Ebute Metta. Open from 7am.",
+   "logo": true,
+   "photos": 1,
+   "captions": [
+    "Our riders bring the cylinder to you"
+   ],
+   "state": "none",
+   "v": "99c5791c"
+  },
+  {
+   "business": "01a1cc22-6632-784e-bd40-13c302f7a3dd",
+   "name": "FreshPress Juices",
+   "area": "Yaba, Lagos",
+   "tagline": "Cold-pressed juice and smoothies",
+   "about": "Cold-pressed juice from Nigerian fruit: pineapple, watermelon, tiger nut and zobo. Bottled daily for gyms and caf\u00e9s.",
+   "logo": true,
+   "photos": 2,
+   "captions": [
+    "Watermelon and ginger",
+    "Orange and carrot"
+   ],
+   "state": "none",
+   "v": "67b794dc"
+  },
+  {
+   "business": "01a1cc22-54e7-7bf7-a3df-b0cd0bf560ad",
+   "name": "Small Chops by Bisi",
+   "area": "Yaba, Lagos",
+   "tagline": "Puff-puff, samosa and spring rolls",
+   "about": "Small chops trays for parties and office meetings. Puff-puff, samosa, spring rolls, gizdodo and peppered snail.",
+   "logo": true,
+   "photos": 2,
+   "captions": [
+    "A tray for 50",
+    "Samosa and spring rolls"
+   ],
+   "state": "none",
+   "v": "18866b0d"
+  },
+  {
+   "business": "01a1cc22-43cc-75c2-b358-2185b486c64e",
+   "name": "Mallam Musa Suya Spot",
+   "area": "Yaba, Lagos",
+   "tagline": "Suya, kilishi and yaji spice",
+   "about": "Beef and chicken suya grilled every evening on Herbert Macaulay Way. Yaji spice by the kilo for kitchens.",
+   "logo": true,
+   "photos": 2,
+   "captions": [
+    "The grill, from 5pm",
+    "Yaji spice, ground fresh"
+   ],
+   "state": "none",
+   "v": "c745108d"
+  },
+  {
+   "business": "01a1cc22-3233-7dd6-b2d6-7e8d29c9591a",
+   "name": "Ifeoma Packaging",
+   "area": "Lagos Island",
+   "tagline": "Food packs, cups and bags",
+   "about": "Takeaway packs, paper bags, cups and branded boxes for restaurants and bakeries. Next-day delivery on the mainland.",
+   "logo": true,
+   "photos": 3,
+   "captions": [
+    "Takeaway packs, by the carton",
+    "Paper bags with your logo",
+    "Cups and lids"
+   ],
+   "state": "requested",
+   "v": "ed07b26e"
+  },
+  {
+   "business": "01a1cc22-0e7c-7457-a1ff-f5ef38f3bdda",
+   "name": "Kola's Bakery",
+   "area": "Yaba, Lagos",
+   "tagline": "Bread and cakes, baked at dawn",
+   "about": "A family bakery since 2009. We supply hotels, caf\u00e9s and shops around Yaba and Surulere every morning.",
+   "logo": true,
+   "photos": 4,
+   "captions": [
+    "Agege bread, out of the oven at 5am",
+    "Birthday cakes to order",
+    "Croissants for caf\u00e9s",
+    "Cupcakes for parties"
+   ],
+   "state": "asked_us",
+   "v": "6fff12b3"
+  }
+ ],
+ "more": false,
+ "delivery": [],
+ "delivery_more": false,
+ "area": "Yaba, Lagos",
+ "featured": [
+  {
+   "business": "01a1cc22-cbfd-78b8-9be4-0f99b4095859",
+   "name": "Grace Catering Supplies",
+   "area": "Surulere, Lagos",
+   "tagline": "Chafing dishes, coolers and trays",
+   "about": "Chafing dishes, food warmers, coolers and trays to buy or hire for events.",
+   "logo": true,
+   "photos": 1,
+   "captions": [
+    "Chafing dishes to hire"
+   ],
+   "state": "none",
+   "v": "1fbc3033",
+   "categories": [
+    "food",
+    "wholesale"
+   ]
+  },
+  {
+   "business": "01a1cc22-bb25-7876-a584-360bd4831470",
+   "name": "Spice Route Abuja",
+   "area": "Wuse, Abuja",
+   "tagline": "Spices and seasonings, wholesale",
+   "about": "Crayfish, ogiri, iru, curry and thyme by the kilo for kitchens across Nigeria.",
+   "logo": true,
+   "photos": 1,
+   "captions": [
+    "Our spice room"
+   ],
+   "state": "none",
+   "v": "d6153255",
+   "categories": [
+    "food"
+   ]
+  }
+ ],
+ "trusted": [
+  {
+   "business": "01a1cc22-aa6a-76b2-b4f2-58b4cbac0c53",
+   "name": "Ogun Palm Oil Co.",
+   "area": "Abeokuta, Ogun",
+   "tagline": "Red palm oil, pressed in Ogun",
+   "about": "Pure red palm oil in 5L, 25L and drums, pressed at our mill in Abeokuta and delivered to Lagos weekly.",
+   "logo": true,
+   "photos": 1,
+   "captions": [
+    "25L kegs, sealed"
+   ],
+   "state": "none",
+   "v": "54e76f8a",
+   "categories": [
+    "farm"
+   ]
+  }
+ ],
+ "trusted_more": false,
+ "popular": [
+  {
+   "business": "01a1cc22-991b-7183-872b-ed616f428fdd",
+   "name": "Epe Fresh Fish",
+   "area": "Epe, Lagos",
+   "tagline": "Catfish, croaker and prawns",
+   "about": "Live catfish and fresh croaker from the Epe lagoon, cleaned and cut for restaurants.",
+   "logo": true,
+   "photos": 2,
+   "captions": [
+    "Prawns from Epe",
+    "Catfish, live or smoked"
+   ],
+   "state": "none",
+   "v": "055d9de6",
+   "categories": [
+    "food"
+   ],
+   "links": 20
+  }
+ ],
+ "popular_more": false,
+ "categories": [
+  {
+   "key": "food",
+   "name": "Food and drinks",
+   "n": 5
+  },
+  {
+   "key": "building",
+   "name": "Building materials",
+   "n": 0
+  },
+  {
+   "key": "fashion",
+   "name": "Fashion",
+   "n": 0
+  },
+  {
+   "key": "phones",
+   "name": "Phones and gadgets",
+   "n": 0
+  },
+  {
+   "key": "electrical",
+   "name": "Electrical and electronics",
+   "n": 0
+  },
+  {
+   "key": "beauty",
+   "name": "Beauty and personal care",
+   "n": 0
+  },
+  {
+   "key": "farm",
+   "name": "Farm produce",
+   "n": 1
+  },
+  {
+   "key": "health",
+   "name": "Health and pharmacy",
+   "n": 0
+  },
+  {
+   "key": "home",
+   "name": "Home and furniture",
+   "n": 0
+  },
+  {
+   "key": "auto",
+   "name": "Cars and spare parts",
+   "n": 0
+  },
+  {
+   "key": "logistics",
+   "name": "Delivery and logistics",
+   "n": 0
+  },
+  {
+   "key": "wholesale",
+   "name": "Wholesale and distribution",
+   "n": 1
+  },
+  {
+   "key": "services",
+   "name": "Services",
+   "n": 1
+  }
+ ],
+ "across": [],
+ "across_more": false,
+ "in_category": [],
+ "category_more": false
+}

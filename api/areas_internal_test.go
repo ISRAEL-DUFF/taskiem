@@ -68,6 +68,8 @@ func init() {
 	}
 	alwaysOn["POST /v1/forms/{id}/links"] = "links to a form, not business links"
 	alwaysOn["POST /v1/me/chat-link"] = "links a person's own chat account"
+	alwaysOn["POST /v1/me/chat-link/preview"] = "links a person's own chat account"
+	alwaysOn["POST /v1/me/chat-link/refuse"] = "links a person's own chat account"
 	alwaysOn["POST /v1/auth/chat/link"] = "a sign-in link sent in chat (chat_signin.go), not business links"
 	alwaysOn["POST /v1/auth/chat/link/peek"] = "a sign-in link sent in chat (chat_signin.go), not business links"
 }

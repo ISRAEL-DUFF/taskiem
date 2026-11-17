@@ -14,8 +14,10 @@ import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../app/lock.dart' show stepOut;
 import '../api/api.g.dart';
 import '../api/transport.dart';
+import '../app/store.dart' show keepMediaBytes, keptMedia;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
@@ -125,7 +127,8 @@ class ChatFiles extends ChangeNotifier {
   static String path(LinkMessage m) => '/v1/link-chats/${Uri.encodeComponent(m.link)}/files/${Uri.encodeComponent(m.id)}';
 
   /// A file we just sent: kept as it is, a photo's size read from it.
-  Future<void> keep(String id, Uint8List bytes) async {
+  Future<void> keep(String id, Uint8List bytes, {String? link}) async {
+    if (link != null) unawaited(keepMediaBytes('/v1/link-chats/${Uri.encodeComponent(link)}/files/${Uri.encodeComponent(id)}', bytes));
     Size? size;
     try {
       final codec = await ui.instantiateImageCodec(bytes);
@@ -158,7 +161,11 @@ class ChatFiles extends ChangeNotifier {
 
   Future<ChatFile?> fetch(LinkMessage m) async {
     try {
-      final b = Uint8List.fromList(await transport.bytes(path(m)));
+      // Kept on the phone (a message's file never changes): at once, and
+      // offline too; else from the server, then kept.
+      final kept = await keptMedia(path(m));
+      final b = kept ?? Uint8List.fromList(await transport.bytes(path(m)));
+      if (kept == null) unawaited(keepMediaBytes(path(m), b));
       Size? size;
       if (m.attachment?.kind == 'photo') {
         final codec = await ui.instantiateImageCodec(b);
@@ -192,9 +199,9 @@ Size photoSize(Size natural, double room) {
 typedef FileHandOff = Future<void> Function(Uint8List bytes, String name, String type, Rect? from);
 
 FileHandOff handOffFile = (bytes, name, type, from) async {
-  await SharePlus.instance.share(
+  await stepOut(() => SharePlus.instance.share(
     ShareParams(files: [XFile.fromData(bytes, mimeType: type, name: name)], fileNameOverrides: [name], sharePositionOrigin: from),
-  );
+  ));
 };
 
 /// Conversation.tsx AttachmentView's link: a photo opens full size, as the
@@ -242,6 +249,7 @@ class _PhotoView extends StatelessWidget {
               child: Semantics(
                 button: true,
                 label: 'Close',
+                onTap: () => Navigator.of(context).maybePop(),
                 excludeSemantics: true,
                 child: TkPress(
                   onTap: () => Navigator.of(context).maybePop(),
@@ -258,7 +266,7 @@ class _PhotoView extends StatelessWidget {
 
 /// The attachment in its bubble.
 class AttachmentView extends StatelessWidget {
-  const AttachmentView({super.key, required this.m, required this.files, required this.other, required this.room, this.local});
+  const AttachmentView({super.key, required this.m, required this.files, required this.other, required this.room, this.local, this.stamp});
 
   final LinkMessage m;
 
@@ -270,6 +278,9 @@ class AttachmentView extends StatelessWidget {
 
   /// The width the bubble's content may take.
   final double room;
+
+  /// A voice note's time and ticks, at the end of its row (as drawn).
+  final Widget? stamp;
 
   @override
   Widget build(BuildContext context) {
@@ -315,7 +326,16 @@ class AttachmentView extends StatelessWidget {
                     alignment: Alignment.centerLeft,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.memory(f.bytes, width: s.width, height: s.height, fit: BoxFit.fill, gaplessPlayback: true, excludeFromSemantics: true),
+                      child: Image.memory(
+                        f.bytes,
+                        width: s.width,
+                        height: s.height,
+                        // Decoded at the size it is shown, not the camera's.
+                        cacheWidth: (s.width * MediaQuery.devicePixelRatioOf(context)).round(),
+                        fit: BoxFit.fill,
+                        gaplessPlayback: true,
+                        excludeFromSemantics: true,
+                      ),
                     ),
                   ),
                 ),
@@ -327,7 +347,7 @@ class AttachmentView extends StatelessWidget {
       case 'voice':
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
-          child: VoicePlayer(m: m, files: files, label: m.mine ? 'Your voice note' : 'Voice note from $other', width: room < 260 ? room : 260),
+          child: VoicePlayer(m: m, files: files, label: m.mine ? 'Your voice note' : 'Voice note from $other', width: room, trailing: stamp),
         );
       default:
         return _fileRow(t, a, onTap: (from) => _open(context, a, from));
@@ -347,36 +367,41 @@ class AttachmentView extends StatelessWidget {
   /// `.chat-file`: the file's icon, its name, its size, on panel-2.
   Widget _fileRow(TkTokens t, LinkMessageAttachment a, {void Function(Rect from)? onTap}) => Padding(
     padding: const EdgeInsets.only(top: 2, bottom: 4),
-    child: Semantics(
-      button: true,
-      label: '${attachmentLabel(a)}, ${fileSize(a.size)}',
-      excludeSemantics: true,
-      child: Builder(
-        builder: (context) => GestureDetector(
-          onTap: onTap == null
-              ? null
-              : () {
-                  final box = context.findRenderObject() as RenderBox?;
-                  onTap(box == null ? Rect.zero : box.localToGlobal(Offset.zero) & box.size);
-                },
-          child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: t.panel2, borderRadius: BorderRadius.circular(8)),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TkIcon('file', size: 22, color: t.text),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(attachmentLabel(a), style: tkText(size: 14, weight: 600, color: t.text)),
+    child: Builder(
+      builder: (context) {
+        // Opened from where it is (the viewer grows from the row).
+        final open = onTap == null
+            ? null
+            : () {
+                final box = context.findRenderObject() as RenderBox?;
+                onTap(box == null ? Rect.zero : box.localToGlobal(Offset.zero) & box.size);
+              };
+        return Semantics(
+          button: true,
+          label: '${attachmentLabel(a)}, ${fileSize(a.size)}',
+          onTap: open,
+          excludeSemantics: true,
+          child: GestureDetector(
+            onTap: open,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: t.panel2, borderRadius: BorderRadius.circular(8)),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TkIcon('file', size: 22, color: t.text),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(attachmentLabel(a), style: tkText(size: 14, weight: 600, color: t.text)),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(fileSize(a.size), style: tkText(size: 13, color: m.mine ? t.chatOutMeta : t.muted)),
+                ],
+              ),
             ),
-            const SizedBox(width: 8),
-            Text(fileSize(a.size), style: tkText(size: 13, color: m.mine ? t.chatOutMeta : t.muted)),
-          ],
-        ),
-      ),
-        ),
-      ),
+          ),
+        );
+      },
     ),
   );
 }
@@ -417,22 +442,23 @@ class _LocalPhotoState extends State<_LocalPhoto> {
         label: 'Your photo',
         child: ClipRRect(
           borderRadius: BorderRadius.circular(8),
-          child: Image.memory(widget.file.bytes, width: s.width, height: s.height, fit: BoxFit.fill, gaplessPlayback: true),
+          child: Image.memory(widget.file.bytes, width: s.width, height: s.height, cacheWidth: (s.width * MediaQuery.devicePixelRatioOf(context)).round(), fit: BoxFit.fill, gaplessPlayback: true),
         ),
       ),
     );
   }
 }
 
-/// A voice note in Chromium's audio player, as the web shows it: a pill
-/// with play, the time played of the time it lasts, the track, the volume
-/// and the menu; light or dark with the page.
+/// A voice note: play, its bars filling as it plays, and how long it is.
 class VoicePlayer extends StatefulWidget {
-  const VoicePlayer({super.key, required this.m, required this.files, required this.label, this.width = 260});
+  const VoicePlayer({super.key, required this.m, required this.files, required this.label, this.width = 260, this.trailing});
   final LinkMessage m;
   final ChatFiles files;
   final String label;
   final double width;
+
+  /// The message's time and ticks, last in the row.
+  final Widget? trailing;
 
   @override
   State<VoicePlayer> createState() => _VoicePlayerState();
@@ -488,29 +514,78 @@ class _VoicePlayerState extends State<VoicePlayer> {
 
   @override
   Widget build(BuildContext context) {
-    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final t = TkTheme.tokens(context);
+    final progress = _length.inMilliseconds == 0 ? 0.0 : (_at.inMilliseconds / _length.inMilliseconds).clamp(0.0, 1.0);
+    // A lime play button, bars that fill as it plays, and the time
+    // (docs/spec/mobile-app-look.md, "The chat").
     return Semantics(
       label: widget.label,
       button: true,
       value: '${_clock(_at)} of ${_clock(_length)}',
       onTapHint: _playing ? 'Pause' : 'Play',
+      onTap: _toggle,
       excludeSemantics: true,
       child: TkPress(
         onTap: _toggle,
         scale: 1,
-        child: CustomPaint(
-          size: Size(widget.width, 54),
-          painter: _ChromeAudio(
-            dark: dark,
-            playing: _playing,
-            time: '${_clock(_at)} / ${_clock(_length)}',
-            progress: _length.inMilliseconds == 0 ? 0 : _at.inMilliseconds / _length.inMilliseconds,
-            loaded: _length > Duration.zero,
+        child: SizedBox(
+          width: widget.width,
+          height: 48,
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: const BoxDecoration(color: Color(0xFFC8F169), shape: BoxShape.circle),
+                alignment: Alignment.center,
+                child: TkIcon(_playing ? 'pause' : 'play', size: 16, fill: true, color: const Color(0xFF0D3B2E)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: CustomPaint(
+                  size: const Size(double.infinity, 26),
+                  painter: _VoiceBars(seed: widget.m.id.hashCode, progress: progress, color: t.text),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(_clock(_at > Duration.zero ? _at : _length), style: tkText(size: 12, lineHeight: 1, color: widget.m.mine ? t.chatOutMeta : t.muted).copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+              if (widget.trailing != null) ...[
+                const SizedBox(width: 10),
+                Padding(padding: const EdgeInsets.only(top: 18), child: widget.trailing),
+              ],
+            ],
           ),
         ),
       ),
     );
   }
+}
+
+/// A voice note's bars: the same for a note each time it is drawn, the
+/// part played full and the rest soft.
+class _VoiceBars extends CustomPainter {
+  _VoiceBars({required this.seed, required this.progress, required this.color});
+  final int seed;
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const gap = 2.0, w = 3.0;
+    final n = ((size.width + gap) / (w + gap)).floor();
+    var x = seed & 0x7fffffff;
+    final p = Paint()..isAntiAlias = true;
+    for (var i = 0; i < n; i++) {
+      x = (x * 1103515245 + 12345) & 0x7fffffff;
+      final h = 5 + (x % 1000) / 1000 * (size.height - 5);
+      final left = i * (w + gap);
+      p.color = (i + 0.5) / n <= progress ? color : color.withValues(alpha: 0.4);
+      canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(left, (size.height - h) / 2, w, h), const Radius.circular(1.5)), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_VoiceBars old) => old.progress != progress || old.color != color || old.seed != seed;
 }
 
 /// The file's ending, by its type, so the phone's player reads it.
@@ -522,86 +597,3 @@ String _ext(String? type) => switch (type) {
 };
 
 String _clock(Duration d) => '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
-
-/// Chromium's audio controls as they draw at the web's 260 × 54: measured
-/// from the web's pictures (test/parity/web/chat-files-*).
-class _ChromeAudio extends CustomPainter {
-  _ChromeAudio({required this.dark, required this.playing, required this.time, required this.progress, required this.loaded});
-  final bool dark;
-  final bool playing;
-  final String time;
-  final double progress;
-  final bool loaded;
-
-  static const _lightBg = Color(0xFFF1F3F4);
-  static const _darkBg = Color(0xFF373837);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final ink = dark ? const Color(0xFFFFFFFF) : const Color(0xFF000000);
-    final track = dark ? const Color(0xFF5F605F) : const Color(0xFFC0C2C3);
-    final quiet = dark ? const Color(0xFF747474) : const Color(0xFFA8A9AA);
-    final p = Paint()..isAntiAlias = true;
-    canvas.drawRRect(RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(size.height / 2)), p..color = dark ? _darkBg : _lightBg);
-    // Play (Material play_arrow), or pause: 10 × 12 at 22, 21.
-    p.color = ink;
-    if (playing) {
-      canvas.drawRect(const Rect.fromLTWH(23, 21, 3, 12), p);
-      canvas.drawRect(const Rect.fromLTWH(29, 21, 3, 12), p);
-    } else {
-      canvas.drawPath(
-        Path()
-          ..moveTo(22, 21)
-          ..lineTo(32, 27)
-          ..lineTo(22, 33)
-          ..close(),
-        p,
-      );
-    }
-    // The time: "0:00 / 0:07".
-    final tp = TextPainter(
-      text: TextSpan(
-        text: time,
-        style: TextStyle(fontFamily: 'Inter', fontFamilyFallback: tkFallback, fontSize: 13, height: 1, color: ink),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    tp.paint(canvas, Offset(47, 27 - tp.height / 2));
-    // The track, 41 × 4, and what has played of it.
-    const bar = Rect.fromLTWH(129, 25, 41, 4);
-    canvas.drawRRect(RRect.fromRectAndRadius(bar, const Radius.circular(2)), p..color = track);
-    if (loaded && progress > 0) {
-      final done = Rect.fromLTWH(bar.left, bar.top, bar.width * progress.clamp(0, 1), bar.height);
-      canvas.drawRRect(RRect.fromRectAndRadius(done, const Radius.circular(2)), p..color = ink);
-      canvas.drawCircle(Offset(done.right, bar.center.dy), 5, p);
-    }
-    // The volume (Material volume_down), quiet until the note is loaded.
-    canvas.save();
-    canvas.translate(194, 20);
-    canvas.scale(16 / 13.5, 14 / 16);
-    canvas.translate(-5, -4);
-    canvas.drawPath(
-      Path()
-        ..moveTo(5, 9)
-        ..lineTo(5, 15)
-        ..lineTo(9, 15)
-        ..lineTo(14, 20)
-        ..lineTo(14, 4)
-        ..lineTo(9, 9)
-        ..close()
-        ..moveTo(16, 7.97)
-        ..arcToPoint(const Offset(16, 16.02), radius: const Radius.circular(4.5))
-        ..close(),
-      p..color = loaded ? ink : quiet,
-    );
-    canvas.restore();
-    // The menu (Material more_vert): three dots in 4 × 14 at 232, 20.
-    p.color = ink;
-    for (final y in [21.75, 27.0, 32.25]) {
-      canvas.drawCircle(Offset(233.75, y), 1.75, p);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ChromeAudio old) => old.dark != dark || old.playing != playing || old.time != time || old.progress != progress || old.loaded != loaded;
-}

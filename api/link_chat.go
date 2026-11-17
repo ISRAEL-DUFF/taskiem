@@ -42,6 +42,7 @@ func (s *Server) linkChatRoutes(r chi.Router) {
 	paced := s.linkWriteLimit
 	r.Get("/chat/stream", s.chatStream)
 	r.Get("/link-chats", s.listLinkChats)
+	r.Get("/link-chats/changes", s.linkChatChanges)
 	r.Get("/link-chats/search", s.searchLinkChats)
 	r.Get("/link-chats/thread", s.linkThread)
 	r.Get("/link-chats/starred", s.starredLinkMessages)
@@ -113,6 +114,86 @@ func (s *Server) listLinkChats(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		s.fail(w, r, linkErr(err))
 		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// linkChangesBatch is the most messages one answer of changes carries.
+const linkChangesBatch = 500
+
+// linkChangesLookBack is how far behind now an answer's cursor stays: a
+// change stamped a moment before another may commit after it (the stream's
+// look-back, chat_stream.go), so it is read again next time rather than
+// missed. Read twice, a change is the same.
+const linkChangesLookBack = 10 * time.Second
+
+type linkChangesOut struct {
+	// Messages changed since (written, read, reacted to), as their pages
+	// carry them.
+	Messages []links.Message `json:"messages"`
+	// Gone are the messages deleted for this side since.
+	Gone []linkGone `json:"gone"`
+	// Until is where the next ask goes on from (?since=).
+	Until time.Time `json:"until"`
+	// More: a full batch; ask again from Until at once.
+	More bool `json:"more"`
+}
+
+type linkGone struct {
+	ID   uuid.UUID `json:"id"`
+	Link uuid.UUID `json:"link"`
+}
+
+// linkChatChanges is GET /v1/link-chats/changes?since=: what changed in the
+// conversations since a time, for a phone that kept them while it was
+// closed or offline (docs/spec/mobile-app-explore-and-offline.md K3). With
+// no since, nothing changed is listed: the answer's until is where to begin.
+func (s *Server) linkChatChanges(w http.ResponseWriter, r *http.Request) {
+	p := principalFrom(r.Context())
+	now := time.Now()
+	out := linkChangesOut{Messages: []links.Message{}, Gone: []linkGone{}, Until: now.Add(-linkChangesLookBack)}
+	v := r.URL.Query().Get("since")
+	if v == "" {
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	since, err := time.Parse(time.RFC3339Nano, v)
+	if err != nil {
+		s.fail(w, r, fmt.Errorf("%w: since is a time (RFC 3339)", errBadRequest))
+		return
+	}
+	if err := s.tx(r, func(tx pgx.Tx) error {
+		refs, err := links.ChangedRefsTx(r.Context(), tx, p.TenantID, since, linkChangesBatch)
+		if err != nil {
+			return err
+		}
+		var pairs []uuid.UUID
+		for _, c := range refs {
+			if c.Hidden {
+				out.Gone = append(out.Gone, linkGone{ID: c.Pair, Link: c.Link})
+			} else {
+				pairs = append(pairs, c.Pair)
+			}
+		}
+		if out.Messages, err = links.MessagesByPairTx(r.Context(), tx, p.TenantID, pairs); err != nil {
+			return err
+		}
+		if err := links.DecorateTx(r.Context(), tx, p.TenantID, viewerOf(p), out.Messages); err != nil {
+			return err
+		}
+		if len(refs) == linkChangesBatch {
+			// More waiting: on from the last of these.
+			out.More = true
+			out.Until = refs[len(refs)-1].At
+		}
+		return nil
+	}); err != nil {
+		s.fail(w, r, linkErr(err))
+		return
+	}
+	// Never back before where this ask began.
+	if out.Until.Before(since) {
+		out.Until = since
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -446,7 +527,7 @@ func (s *Server) sendLinkAs(ctx context.Context, p *Principal, link uuid.UUID, t
 	o.MaxPerDay = lim.LinkMessagesDaily
 	var m links.Message
 	var other uuid.UUID
-	var from string
+	var tenantName string
 	err = db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{p.TenantID}, func(tx pgx.Tx) error {
 		var name string
 		if p.UserID != uuid.Nil {
@@ -454,7 +535,7 @@ func (s *Server) sendLinkAs(ctx context.Context, p *Principal, link uuid.UUID, t
 				return err
 			}
 		}
-		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&from); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT name FROM tenants WHERE id = $1`, p.TenantID).Scan(&tenantName); err != nil {
 			return err
 		}
 		from := links.Sender{ID: p.Actor(), FirstName: firstWord(name)}
@@ -462,13 +543,27 @@ func (s *Server) sendLinkAs(ctx context.Context, p *Principal, link uuid.UUID, t
 			from = *as
 		}
 		var err error
-		m, other, err = links.SendWithTx(ctx, tx, p.TenantID, link, text, from, actorOf(p), o)
-		return err
+		if m, other, err = links.SendWithTx(ctx, tx, p.TenantID, link, text, from, actorOf(p), o); err != nil {
+			return err
+		}
+		// Its push, queued in the message's own transaction (now in the
+		// receiver's scope: SendWithTx crossed to it): it is sent once this
+		// commits, and a restart loses nothing.
+		// In a savepoint: a push that cannot be queued never loses the message.
+		sp, err := tx.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		if err := s.pushMessageTx(ctx, sp, other, link, p.TenantID, tenantName, m); err != nil {
+			s.Logger.Warn("push: queueing a message", "tenant", other, "err", err)
+			return sp.Rollback(ctx)
+		}
+		return sp.Commit(ctx)
 	})
 	if err != nil {
 		return m, err
 	}
-	s.tellLinkMessage(ctx, other, link, p.TenantID, from, m)
+	s.tellLinkMessage(ctx, other, link, tenantName, m)
 	return m, nil
 }
 
@@ -503,7 +598,8 @@ func linkMessageLine(l lang.Tag, m links.Message, withRef bool) string {
 // tellLinkMessage tells the people of the business a message went to who
 // write in its conversations, on their phones, unless it muted the
 // conversation: "[Dangote Stores] Musa: …".
-func (s *Server) tellLinkMessage(ctx context.Context, to, link, fromTenant uuid.UUID, from string, m links.Message) {
+// Its push was queued with the message (pushMessageTx).
+func (s *Server) tellLinkMessage(ctx context.Context, to, link uuid.UUID, from string, m links.Message) {
 	s.background(ctx, "link message", func(ctx context.Context) {
 		var muted bool
 		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{to}, func(tx pgx.Tx) error {
@@ -516,8 +612,6 @@ func (s *Server) tellLinkMessage(ctx context.Context, to, link, fromTenant uuid.
 		words := func(l lang.Tag) (string, string) {
 			return "[" + whatsapp.SafeText(from) + "]", whatsapp.SafeText(linkMessageLine(l, m, true))
 		}
-		// A push first (it is quick and goes to each browser at once), then the phones.
-		s.pushMessage(ctx, to, link, fromTenant, from, m)
 		s.tellHoldersSent(ctx, to, []string{PermChatTrade}, "msg:"+m.PairID.String(), "/chat?with="+link.String(), words, nil, s.keepSent(ctx, to, link, m.PairID))
 	})
 }
@@ -1001,7 +1095,10 @@ func (s *Server) linkFile(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", ctype)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Cache-Control", "private, max-age=3600")
+	// An attachment's bytes never change, but its message can be deleted:
+	// kept a day, so a deleted one does not linger in a browser's cache
+	// (the phone keeps its own copy, and wipes it with the message).
+	w.Header().Set("Cache-Control", "private, max-age=86400")
 	disp := "inline"
 	if a.Kind == "file" {
 		disp = "attachment"

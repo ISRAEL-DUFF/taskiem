@@ -30,6 +30,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/alerts"
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/moneylog"
@@ -252,6 +253,10 @@ type Delivery struct {
 	// pending (being paid), bank or cash (paid).
 	ConfirmedAt *time.Time `json:"confirmed_at,omitempty"`
 	FeePaid     string     `json:"fee_paid,omitempty"`
+	// FinishedAt is when what follows Delivered was carried through: the
+	// order completed (and paid, for cash), its workflow and its customer
+	// told. Nil on a delivered delivery: a second tap or the sweep does it.
+	FinishedAt *time.Time `json:"-"`
 	// proofPath is the photo's place in the business's storage.
 	proofPath string
 	// paidHow carries how the fee was paid to the paid card (confirm.go).
@@ -264,14 +269,15 @@ func (x Delivery) ProofPath() string { return x.proofPath }
 const deliveryCols = `d.id, d.order_id, o.reference, d.rider_id, d.status, d.offered_by, d.offered_at, d.expires_at, d.answered_at, d.accepted_at,
 	d.picked_up_at, d.arrived_at, d.delivered_at, d.released_at, d.fee_kobo, COALESCE(d.paid_how, ''), COALESCE(d.proof, ''), COALESCE(d.location, ''),
 	d.rating, COALESCE(o.zone, ''), d.link_order_id, d.confirmed_at,
-	COALESCE((SELECT CASE WHEN p.status = 'paid' THEN p.how WHEN p.status = 'pending' THEN 'pending' END FROM rider_payouts p WHERE p.id = d.payout_id), '')`
+	COALESCE((SELECT CASE WHEN p.status = 'paid' THEN p.how WHEN p.status = 'pending' THEN 'pending' END FROM rider_payouts p WHERE p.id = d.payout_id), ''),
+	d.finished_at`
 
 func scanDelivery(r pgx.Row) (Delivery, error) {
 	var x Delivery
 	var rating *int16
 	err := r.Scan(&x.ID, &x.OrderID, &x.Reference, &x.RiderID, &x.Status, &x.OfferedBy, &x.OfferedAt, &x.ExpiresAt, &x.AnsweredAt, &x.AcceptedAt,
 		&x.PickedUpAt, &x.ArrivedAt, &x.DeliveredAt, &x.ReleasedAt, &x.FeeKobo, &x.PaidHow, &x.proofPath, &x.Location, &rating, &x.Zone, &x.LinkOrderID,
-		&x.ConfirmedAt, &x.FeePaid)
+		&x.ConfirmedAt, &x.FeePaid, &x.FinishedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return x, ErrNoDelivery
 	}
@@ -744,6 +750,8 @@ func (d *Dispatch) Press(ctx context.Context, tenant, delivery uuid.UUID, action
 func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Delivery, ord storefront.Order, action string, opt *pressOpt) (Tap, []func() error, error) {
 	t := Tap{Delivery: x}
 	var after []func() error
+	// paid is the cash payment this tap counted.
+	var paid *storefront.Counted
 	moved := ""
 	set := func(status, col string, orderStatus string) error {
 		q := `UPDATE deliveries SET status = $2, ` + col + ` = now(), answered_at = COALESCE(answered_at, now()) WHERE id = $1`
@@ -778,6 +786,14 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 		if !inner {
 			after = append(after, f)
 		}
+	}
+	// A tap on a delivery already delivered carries through what should
+	// have followed the first (finish), when that did not happen.
+	again := func() []func() error {
+		if x.Status != "delivered" || x.FinishedAt != nil || inner {
+			return nil
+		}
+		return []func() error{func() error { return d.finish(ctx, tenant, x.ID, nil) }}
 	}
 	switch action {
 	case Accept:
@@ -867,7 +883,7 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 		after = append(after, func() error { return d.door(ctx, tenant, x.ID, ord, seq) })
 	case Cash:
 		if x.PaidHow == "cash" || already("delivered") {
-			return t, nil, nil
+			return t, again(), nil
 		}
 		if x.Status != "arrived" && x.Status != "picked_up" {
 			return t, nil, fmt.Errorf("%w: %s is not at the door with you", ErrMove, ord.Reference)
@@ -880,11 +896,11 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 			return t, nil, err
 		}
 		ord = c.Order
-		after = append(after, func() error { return d.Orders.Paid(ctx, tenant, c) })
+		paid = &c
 		fallthrough
 	case Delivered:
 		if already("delivered") {
-			return t, nil, nil
+			return t, again(), nil
 		}
 		if x.Status != "arrived" && x.Status != "picked_up" {
 			return t, nil, fmt.Errorf("%w: %s is not at the door with you", ErrMove, ord.Reference)
@@ -901,7 +917,26 @@ func (d *Dispatch) press(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Del
 		if err := d.queue(ctx, tx, tenant, x.ID, x.RiderID, StageDone, ""); err != nil {
 			return t, nil, err
 		}
-		tell(func() error { return d.complete(ctx, tenant, x, ord) })
+		if inner {
+			// The business's own side completes its order, through the link.
+			if _, err := tx.Exec(ctx, `UPDATE deliveries SET finished_at = now() WHERE id = $1`, x.ID); err != nil {
+				return t, nil, err
+			}
+			if paid != nil {
+				c := *paid
+				after = append(after, func() error { return d.Orders.Paid(ctx, tenant, c) })
+			}
+			break
+		}
+		// The order is completed with the tap, in its transaction, so a
+		// delivered delivery never has an order still open. What cannot be
+		// in it (the paid flow, the workflow and the customer told) runs
+		// after the commit (finish), and is repeated by a second tap or the
+		// sweep until it has succeeded.
+		if _, _, err := d.Orders.DecideTx(ctx, tx, tenant, ord.Reference, "complete", "", "rider:"+x.RiderID.String()); err != nil && !errors.Is(err, storefront.ErrDecision) {
+			return t, nil, err
+		}
+		after = append(after, func() error { return d.finish(ctx, tenant, x.ID, paid) })
 	default:
 		return t, nil, fmt.Errorf("%w: %q", ErrMove, action)
 	}
@@ -957,6 +992,81 @@ func (d *Dispatch) mirrorPress(ctx context.Context, tx pgx.Tx, tenant uuid.UUID,
 		x.Rider = opt.member + " (" + x.Rider + ")"
 	}
 	return d.ourCard(ctx, tx, tenant, *r.LinkID, opt.pair, x, stage, false)
+}
+
+// finish carries through what follows a Delivered tap, after its
+// transaction: cash taken at the door runs the order's paid flow (paid,
+// the payment the tap counted; nil when repeated), the order is completed
+// if it is not yet, its run is told, and the customer, with the link to
+// rate it. Each part happens once however often it is asked (the order's
+// status, the signal's and the message's keys), so a second tap and the
+// sweep repeat it until it has all succeeded; then the delivery is marked
+// finished. An order that can no longer be completed (cancelled since)
+// is left as it is.
+func (d *Dispatch) finish(ctx context.Context, tenant, delivery uuid.UUID, paid *storefront.Counted) error {
+	var x Delivery
+	var ord storefront.Order
+	if err := d.tx(ctx, tenant, func(tx pgx.Tx) error {
+		var err error
+		if x, err = scanDelivery(tx.QueryRow(ctx, `SELECT `+deliveryCols+` FROM deliveries d JOIN storefront_orders o ON o.id = d.order_id
+			WHERE d.tenant_id = $1 AND d.id = $2`, tenant, delivery)); err != nil {
+			return err
+		}
+		ord, err = d.Orders.GetOrder(ctx, tx, tenant, x.Reference)
+		return err
+	}); err != nil {
+		return err
+	}
+	if x.Status != "delivered" || x.FinishedAt != nil {
+		return nil
+	}
+	if x.PaidHow == "cash" {
+		c := storefront.Counted{Order: ord, Became: true}
+		if paid != nil {
+			c = *paid
+		}
+		if err := d.Orders.Paid(ctx, tenant, c); err != nil {
+			return err
+		}
+	}
+	err := d.complete(ctx, tenant, x, ord)
+	if err != nil && !errors.Is(err, storefront.ErrDecision) {
+		return err
+	}
+	if err != nil {
+		d.log().Warn("dispatch: a delivered order was not completed", "reference", ord.Reference, "err", err)
+	}
+	return d.tx(ctx, tenant, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE deliveries SET finished_at = now() WHERE tenant_id = $1 AND id = $2 AND finished_at IS NULL`, tenant, delivery)
+		return err
+	})
+}
+
+// finishDelivered finishes a business's deliveries left delivered and not
+// finished (the process died, or the database failed, after the tap was
+// saved): each on its own, so one that fails holds no other back. A
+// minute is left for the tap's own work.
+func (d *Dispatch) finishDelivered(ctx context.Context, tenant uuid.UUID) error {
+	var ids []uuid.UUID
+	if err := d.tx(ctx, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT id FROM deliveries WHERE tenant_id = $1 AND status = 'delivered' AND finished_at IS NULL
+			AND delivered_at <= now() - interval '1 minute' AND delivered_at > now() - interval '7 days' ORDER BY delivered_at LIMIT 100`, tenant)
+		if err != nil {
+			return err
+		}
+		ids, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		return err
+	}); err != nil {
+		return err
+	}
+	var errs []error
+	for _, id := range ids {
+		if err := d.finish(ctx, tenant, id, nil); err != nil {
+			d.log().Warn("dispatch: finishing a delivered delivery", "tenant", tenant, "delivery", id, "err", err)
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // complete completes a delivered order as the owner's "delivered" does,
@@ -1067,71 +1177,128 @@ func (d *Dispatch) Sweep(ctx context.Context) error {
 			d.log().Warn("dispatch: sweep", "tenant", t, "err", err)
 			errs = append(errs, err)
 		}
+		if err := d.finishDelivered(ctx, t); err != nil {
+			errs = append(errs, err)
+		}
 	}
 	return errors.Join(errs...)
 }
 
+// sweepTenant sweeps one business. Each expired offer is passed in a
+// transaction of its own, and so are the quiet riders, the remittances
+// and the ratings: an error in one (a delivery that cannot be passed on)
+// is logged and counted, and holds back nothing else, this tick or the
+// next.
 func (d *Dispatch) sweepTenant(ctx context.Context, tenant uuid.UUID) error {
-	return d.tx(ctx, tenant, func(tx pgx.Tx) error {
-		s, err := GetSettings(ctx, tx, tenant)
+	var s Settings
+	var expired []uuid.UUID
+	// A business that turned its Online shop off is told nothing by the
+	// sweep (quiet riders, low ratings); deliveries already out are still
+	// carried through, and cash handed in still matched
+	// (docs/spec/business-areas.md §5: background jobs).
+	shopOn := true
+	if err := d.tx(ctx, tenant, func(tx pgx.Tx) error {
+		var err error
+		if s, err = GetSettings(ctx, tx, tenant); err != nil {
+			return err
+		}
+		if shopOn, err = areas.Enabled(ctx, tx, tenant, areas.Storefront); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `SELECT id FROM deliveries WHERE tenant_id = $1 AND status = 'offered' AND expires_at <= now() ORDER BY expires_at, id`, tenant)
 		if err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT `+deliveryCols+` FROM deliveries d JOIN storefront_orders o ON o.id = d.order_id
-			WHERE d.tenant_id = $1 AND d.status = 'offered' AND d.expires_at <= now() FOR UPDATE OF d`, tenant)
-		if err != nil {
-			return err
+		expired, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+		return err
+	}); err != nil {
+		return err
+	}
+	var errs []error
+	failed := 0
+	for _, id := range expired {
+		if err := d.tx(ctx, tenant, func(tx pgx.Tx) error { return d.passTx(ctx, tx, tenant, id) }); err != nil {
+			failed++
+			d.log().Warn("dispatch: an expired offer was not passed on", "tenant", tenant, "delivery", id, "err", err)
+			errs = append(errs, fmt.Errorf("delivery %s: %w", id, err))
 		}
-		passed, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (Delivery, error) { return scanDelivery(r) })
-		if err != nil {
-			return err
-		}
-		for _, x := range passed {
-			if _, err := tx.Exec(ctx, `UPDATE deliveries SET status = 'passed', answered_at = now() WHERE id = $1`, x.ID); err != nil {
-				return err
+	}
+	if failed > 0 {
+		d.log().Warn("dispatch: expired offers left for the next sweep", "tenant", tenant, "failed", failed, "of", len(expired))
+	}
+	for _, part := range []func(tx pgx.Tx) error{
+		func(tx pgx.Tx) error {
+			if !shopOn {
+				return nil
 			}
-			// Three unanswered in a day (Lagos) and they are not answering.
-			if _, err := tx.Exec(ctx, `UPDATE riders SET missed = CASE WHEN missed_on = (now() AT TIME ZONE 'Africa/Lagos')::date THEN missed + 1 ELSE 1 END,
-				missed_on = (now() AT TIME ZONE 'Africa/Lagos')::date WHERE id = $1`, x.RiderID); err != nil {
-				return err
-			}
-			if _, err := tx.Exec(ctx, `UPDATE riders SET not_answering_since = now() WHERE id = $1 AND missed >= 3 AND not_answering_since IS NULL`, x.RiderID); err != nil {
-				return err
-			}
-			if err := d.queue(ctx, tx, tenant, x.ID, x.RiderID, StageWithdrawn, ""); err != nil {
-				return err
-			}
-			if err := d.mirrorStep(ctx, tx, tenant, x, "passed", true); err != nil {
-				return err
-			}
-			ord, err := d.Orders.GetOrder(ctx, tx, tenant, x.Reference)
+			held, err := d.ListTx(ctx, tx, tenant, ListFilter{Open: true})
 			if err != nil {
 				return err
 			}
-			if err := d.next(ctx, tx, tenant, x, ord); err != nil {
-				return err
+			for _, x := range held {
+				switch x.Late {
+				case "pickup":
+					err = d.raiseQuiet(ctx, tx, tenant, x, "has not picked up", s.PickupMinutes)
+				case "arrival":
+					err = d.raiseQuiet(ctx, tx, tenant, x, "has not arrived with", s.ArriveMinutes)
+				}
+				if err != nil {
+					return err
+				}
 			}
-		}
-		held, err := d.ListTx(ctx, tx, tenant, ListFilter{Open: true})
-		if err != nil {
+			return nil
+		},
+		func(tx pgx.Tx) error {
+			_, err := d.MatchRemittances(ctx, tx, tenant)
 			return err
-		}
-		for _, x := range held {
-			switch x.Late {
-			case "pickup":
-				err = d.raiseQuiet(ctx, tx, tenant, x, "has not picked up", s.PickupMinutes)
-			case "arrival":
-				err = d.raiseQuiet(ctx, tx, tenant, x, "has not arrived with", s.ArriveMinutes)
+		},
+		func(tx pgx.Tx) error {
+			if !shopOn {
+				return nil
 			}
-			if err != nil {
-				return err
-			}
+			return d.lowRatings(ctx, tx, tenant, s)
+		},
+	} {
+		if err := d.tx(ctx, tenant, part); err != nil {
+			errs = append(errs, err)
 		}
-		if _, err := d.MatchRemittances(ctx, tx, tenant); err != nil {
-			return err
-		}
-		return d.lowRatings(ctx, tx, tenant, s)
-	})
+	}
+	return errors.Join(errs...)
+}
+
+// passTx passes one offer not answered in its window, on to the next
+// rider; nothing when it was answered meanwhile.
+func (d *Dispatch) passTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID) error {
+	x, err := scanDelivery(tx.QueryRow(ctx, `SELECT `+deliveryCols+` FROM deliveries d JOIN storefront_orders o ON o.id = d.order_id
+		WHERE d.tenant_id = $1 AND d.id = $2 AND d.status = 'offered' AND d.expires_at <= now() FOR UPDATE OF d`, tenant, id))
+	if errors.Is(err, ErrNoDelivery) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE deliveries SET status = 'passed', answered_at = now() WHERE id = $1`, x.ID); err != nil {
+		return err
+	}
+	// Three unanswered in a day (Lagos) and they are not answering.
+	if _, err := tx.Exec(ctx, `UPDATE riders SET missed = CASE WHEN missed_on = (now() AT TIME ZONE 'Africa/Lagos')::date THEN missed + 1 ELSE 1 END,
+		missed_on = (now() AT TIME ZONE 'Africa/Lagos')::date WHERE id = $1`, x.RiderID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE riders SET not_answering_since = now() WHERE id = $1 AND missed >= 3 AND not_answering_since IS NULL`, x.RiderID); err != nil {
+		return err
+	}
+	if err := d.queue(ctx, tx, tenant, x.ID, x.RiderID, StageWithdrawn, ""); err != nil {
+		return err
+	}
+	if err := d.mirrorStep(ctx, tx, tenant, x, "passed", true); err != nil {
+		return err
+	}
+	ord, err := d.Orders.GetOrder(ctx, tx, tenant, x.Reference)
+	if err != nil {
+		return err
+	}
+	return d.next(ctx, tx, tenant, x, ord)
 }
 
 func (d *Dispatch) raiseQuiet(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Delivery, what string, minutes int) error {

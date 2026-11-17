@@ -19,7 +19,11 @@ import '../app/links.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/sheet.dart';
+import '../kit/tap_area.dart';
 import '../theme/theme.dart';
+import '../kit/look.dart' show TkCallout, TkSquare;
+import '../kit/mobile.dart' show TkChips, TkFormGroup, TkListRow, TkSection;
+import '../theme/look.dart' show TkLook;
 import 'approve.dart' show TkTextBox;
 import 'words.dart' show clock;
 
@@ -226,22 +230,42 @@ class _ConnectSheetState extends State<ConnectSheet> {
       final help = [if ((f['help'] as String? ?? '').isNotEmpty) f['help'] as String, if (where.isNotEmpty) 'Find it in $where.'].join(' ');
       final problem = problems[key] ?? '';
       final link = Uri.tryParse(f['link'] as String? ?? '');
+      final opens = link != null && link.host.isNotEmpty;
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TkKitField(
             label: '${f['label']}${f['required'] == false ? ' (optional)' : ''}',
-            hint: help.isEmpty ? null : help,
+            hint: help.isEmpty || opens ? null : help,
             error: problem.isEmpty ? null : '${problem[0].toUpperCase()}${problem.substring(1)}.',
-            child: TkTextBox(controller: _box(key), lines: f['multiline'] == true ? 5 : 1, secret: f['secret'] == true, plain: true),
+            child: TkTextBox(controller: _box(key), lines: f['multiline'] == true ? 5 : 1, secret: f['secret'] == true, plain: true, size: 15, height: 46),
           ),
-          if (link != null && link.host.isNotEmpty)
-            Align(alignment: Alignment.centerLeft, child: TkLink(label: 'Open it', onTap: () => openInBrowser(link))),
+          // As drawn: where to find it, then Open it on the same line.
+          if (opens)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text.rich(
+                TextSpan(
+                  style: tkHint(t),
+                  children: [
+                    if (help.isNotEmpty) TextSpan(text: '$help '),
+                    WidgetSpan(
+                      alignment: PlaceholderAlignment.baseline,
+                      baseline: TextBaseline.alphabetic,
+                      child: TkLink(label: 'Open it', onTap: () => openInBrowser(link)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       );
     }
 
-    return TkSheet(
+    final open = [for (final m in modes) if (m.available) m];
+    // In the app's own look, as drawn: the kind as a switch (Live, Test),
+    // the values on a card, More options as a row.
+    return TkAppLook(child: TkSheet(
       title: 'Connect ${c.name} to ${widget.view.business}',
       body: TkFormBody(
         children: [
@@ -249,50 +273,39 @@ class _ConnectSheetState extends State<ConnectSheet> {
             'Copy each value from ${c.name} and paste it here. Taskiem checks it with ${c.name} before saving it, and it never appears in your chat.',
             style: tkFormNow(t),
           ),
-          if (modes.length > 1)
-            Semantics(
-              container: true,
+          if (open.length > 1)
+            TkChips<String>(
               label: 'Which kind?',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              padding: EdgeInsets.zero,
+              chips: [for (final m in open) (m.mode, m.label.split(' (').first)],
+              on: chosen,
+              onPick: (v) => setState(() => _mode = v),
+            ),
+          if (main.isNotEmpty) TkFormGroup(children: [...main.map(field)]),
+          if (more.isNotEmpty) ...[
+            Semantics(
+              expanded: _more,
+              child: TkSection(
+                inset: 56,
                 children: [
-                  Text('Which kind?', style: tkText(size: 13, weight: 600, color: t.muted)),
-                  const SizedBox(height: 8),
-                  for (final m in modes)
-                    Opacity(
-                      opacity: m.available ? 1 : 0.45,
-                      child: Semantics(
-                        checked: chosen == m.mode,
-                        enabled: m.available,
-                        child: TkChoiceRow(
-                          control: TkRadio(checked: chosen == m.mode),
-                          label: Text(m.label, style: tkText(size: 14, color: t.text)),
-                          onTap: m.available ? () => setState(() => _mode = m.mode) : () {},
-                        ),
-                      ),
-                    ),
+                  TkListRow(
+                    title: _more ? 'Fewer options' : 'More options',
+                    semanticsLabel: 'More options',
+                    icon: 'b-key',
+                    square: TkLook.of(context).violet,
+                    onTap: () => setState(() => _more = !_more),
+                  ),
                 ],
               ),
             ),
-          ...main.map(field),
-          if (more.isNotEmpty) ...[
-            Semantics(
-              button: true,
-              expanded: _more,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => setState(() => _more = !_more),
-                child: Text('More options', style: tkText(size: 14, weight: 600, color: t.accent)),
-              ),
-            ),
-            if (_more) ...more.map(field),
+            if (_more) TkFormGroup(children: [...more.map(field)]),
           ],
           if (_error != null) TkErrorBox(_error!),
           Text('This link works once, until ${clock(widget.view.expiresAt)}.', style: tkHint(t)),
         ],
       ),
       footer: TkCta(label: _busy ? 'Checking…' : 'Connect ${c.name}', onTap: _busy || blocked ? null : _connect),
-    );
+    ));
   }
 
   /// Connect.tsx Connected, with MadeWebhooks.
@@ -300,35 +313,55 @@ class _ConnectSheetState extends State<ConnectSheet> {
     final hooks = done.webhooks ?? const <ConnectionWebhook>[];
     final service = done.connected;
     final one = hooks.length == 1;
-    return TkSheet(
+    final look = TkLook.of(context);
+    return TkAppLook(child: TkSheet(
       title: '$service is connected',
       body: TkFormBody(
         children: [
           Semantics(
             liveRegion: true,
-            child: Text('$service is connected to ${done.business}. Taskiem has told your chat, and carries on there.', style: tkText(size: 15, color: t.text)),
+            child: Text('$service is connected to ${done.business}. Taskiem has told your chat, and carries on there.', style: tkFormNow(t)),
           ),
           if (hooks.isNotEmpty) ...[
-            Text(
-              'Copy ${one ? 'this address' : 'these addresses'} now and paste ${one ? 'it' : 'each'} into $service. ${one ? 'It carries' : 'They carry'} a secret Taskiem made for this connection, and Taskiem refuses anything $service sends without it. It is shown only once; to get a new one, connect again.',
-              style: tkText(size: 14, weight: 600, color: t.text),
+            // As drawn: what to do now as a warning, each address on a card.
+            TkCallout(
+              leading: TkSquare('copy', color: look.orange),
+              title: 'Copy ${one ? 'this address' : 'these addresses'} now',
+              sub: 'Paste ${one ? 'it' : 'each'} into $service. ${one ? 'It is' : 'They are'} shown only once.',
+              color: look.orange,
             ),
             for (final h in hooks)
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              TkFormGroup(
                 children: [
-                  Text('${h.title}: ${h.where}', style: tkFormNow(t)),
-                  const SizedBox(height: 6),
-                  SelectableText(h.url, style: tkText(size: 13, color: t.text)),
-                  const SizedBox(height: 6),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TkPlainButton(
-                      label: _copied.contains(h.trigger) ? 'Copied' : 'Copy the address',
-                      onTap: () async {
-                        await Clipboard.setData(ClipboardData(text: h.url));
-                        if (mounted) setState(() => _copied.add(h.trigger));
-                      },
+                  Text('${h.title}: ${h.where}', style: tkText(size: 13, color: t.muted)),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: t.field, borderRadius: BorderRadius.circular(12)),
+                    child: SelectableText(h.url, style: tkText(size: 13, lineHeight: 1.4, color: t.text).copyWith(fontFamily: 'monospace', fontFamilyFallback: const ['Menlo', 'Courier', 'Roboto Mono'])),
+                  ),
+                  // As drawn: plain bold words.
+                  Center(
+                    child: TapArea(
+                      child: Semantics(
+                        button: true,
+                        label: _copied.contains(h.trigger) ? 'Copied' : 'Copy the address',
+                        excludeSemantics: true,
+                        onTap: () async {
+                          await Clipboard.setData(ClipboardData(text: h.url));
+                          if (mounted) setState(() => _copied.add(h.trigger));
+                        },
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () async {
+                            await Clipboard.setData(ClipboardData(text: h.url));
+                            if (mounted) setState(() => _copied.add(h.trigger));
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                            child: Text(_copied.contains(h.trigger) ? 'Copied' : 'Copy the address', style: tkText(size: 14, weight: 700, color: t.text)),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -337,6 +370,6 @@ class _ConnectSheetState extends State<ConnectSheet> {
         ],
       ),
       footer: TkCta(label: 'Done', onTap: () => Navigator.of(context).pop(true)),
-    );
+    ));
   }
 }

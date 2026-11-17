@@ -29,6 +29,11 @@ flutter analyze
 | `assets/brand/*.svg`: the mark and wordmarks | `web/public/brand/relay/` | the same command |
 | `assets/fonts/Inter-*.ttf`: Inter, one file per alphabet | the web's `@fontsource-variable/inter` files | `python3 mobile/tool/fonts.py` (with fontTools and brotli) |
 
+`assets/fonts/InterTight-*.ttf` are not generated: Google Fonts' Inter Tight,
+for the headings and figures of the pages away from the chat
+([mobile-app-look.md](../docs/spec/mobile-app-look.md)), licence in
+`assets/fonts/LICENSE-OFL-InterTight.txt`.
+
 Never edit these by hand. `go test ./tools/mobilegen` fails when the theme
 or the brand files are not the web's.
 

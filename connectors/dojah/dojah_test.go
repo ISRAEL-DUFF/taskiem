@@ -2,6 +2,7 @@ package dojah
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/israel-duff/taskiem/connectors/internal/fixture"
@@ -53,5 +54,47 @@ func TestBalance(t *testing.T) {
 	r, err := call(t, "check_balance", nil, "balance")
 	if err != nil || r.Output.(map[string]any)["wallet_balance"] != "4970.00" {
 		t.Errorf("%v %v", r.Output, err)
+	}
+}
+
+// Dojah's entity carries more than the manifest lists (a second phone, an
+// email, addresses). Only the listed fields, each declared personal, are
+// passed on: the rest would be stored in run history unsealed.
+func TestOnlyDeclaredFieldsLeaveTheConnector(t *testing.T) {
+	c := New(Options{})
+	for action, fx := range map[string]string{"lookup_bvn": "bvn_full", "lookup_nin": "nin"} {
+		in := map[string]any{"bvn": "22222222222", "include_image": true}
+		if action == "lookup_nin" {
+			in = map[string]any{"nin": "70123456789"}
+		}
+		r, err := call(t, action, in, fx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := r.Output.(map[string]any)
+		if out["first_name"] != "JOHN" {
+			t.Errorf("%s: %v", action, out)
+		}
+		spec := c.Manifest.Actions[action]
+		var schema struct {
+			Properties map[string]any `json:"properties"`
+		}
+		if err := json.Unmarshal(spec.Output, &schema); err != nil {
+			t.Fatal(err)
+		}
+		declared := map[string]bool{}
+		for _, f := range spec.PII {
+			if segs, ok := connector.OutputPIIPath(f.Field); ok && len(segs) == 1 {
+				declared[segs[0]] = true
+			}
+		}
+		for k := range out {
+			if _, ok := schema.Properties[k]; !ok {
+				t.Errorf("%s passes on %q, which its output schema does not list", action, k)
+			}
+			if !declared[k] {
+				t.Errorf("%s passes on %q without declaring it personal", action, k)
+			}
+		}
 	}
 }

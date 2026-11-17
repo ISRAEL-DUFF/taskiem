@@ -58,6 +58,9 @@ var (
 	ErrInvalid = errors.New("invoicing: invalid")
 	// ErrState refuses what the invoice's status does not allow.
 	ErrState = errors.New("invoicing: not allowed in the invoice's status")
+	// ErrNothingDue is the ErrState of a payment for an invoice with
+	// nothing left to pay: an invoice never counts more than its total.
+	ErrNothingDue = fmt.Errorf("%w: nothing is due", ErrState)
 )
 
 // Customer is who an invoice is for. Sealed at rest.
@@ -1160,6 +1163,8 @@ func (s *Invoices) NotifyCustomer(ctx context.Context, tenant uuid.UUID, idOrNum
 
 // PaymentIn is a payment to count towards an invoice.
 type PaymentIn struct {
+	// AmountKobo is what there is to count: the invoice takes at most
+	// what is due on it (Counted.AmountKobo).
 	AmountKobo int64
 	PaymentID  string // the rail's payment id, or the money log's entry
 	// EntryID is the money log entry the payment counts (T5): a part of
@@ -1182,6 +1187,11 @@ type Counted struct {
 	// PaymentID is the customer_invoice_payments row written (uuid.Nil
 	// when the payment already counted towards the invoice).
 	PaymentID uuid.UUID
+	// AmountKobo is what the row counts: the payment's amount, or what
+	// was due when that was less. The rest of the money stays with its
+	// entry, for its caller to leave as the customer's credit or for a
+	// person.
+	AmountKobo int64
 	// Became is true when this payment made the invoice paid.
 	Became bool
 }
@@ -1196,7 +1206,11 @@ func (s *Invoices) RecordPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUI
 // CountPayment counts a payment towards an invoice, once: the same
 // payment again is a no-op, unless a further part of its entry is meant
 // (Add). Matching (T5) and one-time accounts (T4) call
-// it; nothing else marks an invoice paid. A payment with a money log
+// it; nothing else marks an invoice paid. An invoice counts no more than
+// its total: a payment of more than is due counts for what is due
+// (Counted.AmountKobo), and one for an invoice with nothing due is
+// refused (ErrNothingDue), under the invoice's row lock, so two payments
+// arriving at once cannot both count in full. A payment with a money log
 // entry is a part of it, counted along the path orders take too
 // (moneylog.Parts.Count). When the invoice becomes paid, the runs of the
 // workflows that start on it are queued in tx (once per invoice and
@@ -1219,6 +1233,23 @@ func (s *Invoices) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 	if cur.Status == "draft" {
 		return Counted{}, fmt.Errorf("%w: invoice %s has not been sent", ErrState, cur.Number)
 	}
+	// What is due is read under the invoice's row lock, taken after the
+	// entry's (the order every writer of a part takes them in), and held
+	// until the part is written.
+	if p.EntryID != nil {
+		if err := moneylog.LockEntry(ctx, tx, *p.EntryID); err != nil {
+			return Counted{}, err
+		}
+	}
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM customer_invoices WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenant, cur.ID); err != nil {
+		return Counted{}, err
+	}
+	if cur, err = s.Get(ctx, tx, tenant, cur.ID.String()); err != nil {
+		return Counted{}, err
+	}
+	if cur.DueKobo > 0 && p.AmountKobo > cur.DueKobo {
+		p.AmountKobo = cur.DueKobo
+	}
 	// One entry may count towards several invoices and orders (a split),
 	// each part once, the parts never more than the entry counts for:
 	// checked under the entry's lock, and by the database whoever writes
@@ -1233,10 +1264,14 @@ func (s *Invoices) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 			if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('taskiem invoice payment ' || $1::text || ' ' || $2, 0))`, cur.ID, p.PaymentID); err != nil {
 				return nil, false, err
 			}
+			// A payment is known by its entry where it has one (two
+			// transfers into one account number share its reference, and
+			// each counts); else by its id.
 			var counted bool
 			if !add {
 				if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM customer_invoice_payments p WHERE p.invoice_id = $1 AND p.payment_id = $2 AND p.undoes IS NULL
-				AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id))`, cur.ID, p.PaymentID).Scan(&counted); err != nil || counted {
+				AND (p.entry_id IS NULL OR $3::uuid IS NULL OR p.entry_id = $3)
+				AND NOT EXISTS (SELECT 1 FROM customer_invoice_payments u WHERE u.undoes = p.id))`, cur.ID, p.PaymentID, p.EntryID).Scan(&counted); err != nil || counted {
 					return nil, false, err
 				}
 			}
@@ -1246,6 +1281,12 @@ func (s *Invoices) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 			// 00350).
 			if cur.Status == "void" {
 				return nil, false, fmt.Errorf("%w: invoice %s is void; it takes no new payment", ErrState, cur.Number)
+			}
+			// Nor does one with nothing due: the money is not swallowed
+			// by an invoice already paid (the database refuses it too,
+			// 00434).
+			if cur.DueKobo <= 0 {
+				return nil, false, fmt.Errorf("%w on invoice %s; it takes no more", ErrNothingDue, cur.Number)
 			}
 			return moneylog.Cols{"payment_id": p.PaymentID, "connection": nullable(p.Connection)}, true, nil
 		}})
@@ -1263,7 +1304,7 @@ func (s *Invoices) CountPayment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 		return Counted{}, err
 	}
 	became := x.Status == "paid" && cur.Status != "paid"
-	out := Counted{Invoice: x, PaymentID: k.ID, Became: became}
+	out := Counted{Invoice: x, PaymentID: k.ID, AmountKobo: p.AmountKobo, Became: became}
 	if s.Counted != nil {
 		if err := s.Counted(ctx, tx, tenant, out, p); err != nil {
 			return Counted{}, err

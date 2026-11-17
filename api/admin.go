@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -257,6 +258,12 @@ func (s *Server) saveKeyConnection(ctx context.Context, p *Principal, env string
 	subscribes := false
 	err = inTx(func(tx pgx.Tx) error {
 		var err error
+		// Counted again where it is made: the lock the count takes holds
+		// until this commits, so connections made at once cannot pass the
+		// limit together.
+		if err := s.checkCount(ctx, tx, p.TenantID, "max_connections"); err != nil {
+			return err
+		}
 		if name == "" {
 			if name, err = freeConnectionName(ctx, tx, env, c.Manifest.ID); err != nil {
 				return err
@@ -346,17 +353,21 @@ func (s *Server) putSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := principalFrom(r.Context())
+	// A new secret is counted and written in one transaction, under the
+	// count's lock, so secrets made at once cannot pass the limit together.
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var exists bool
-		if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM secrets WHERE environment = $1 AND name = $2)`, env, name).Scan(&exists); err != nil || exists {
+		if err := tx.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM secrets WHERE environment = $1 AND name = $2)`, env, name).Scan(&exists); err != nil {
 			return err
 		}
-		return s.checkCount(r.Context(), tx, p.TenantID, "max_secrets")
+		if !exists {
+			if err := s.checkCount(r.Context(), tx, p.TenantID, "max_secrets"); err != nil {
+				return err
+			}
+		}
+		_, err := s.Vault.PutTx(r.Context(), tx, p.TenantID, env, name, []byte(req.Value), p.Actor())
+		return err
 	}); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	if _, err := s.Vault.Put(r.Context(), p.TenantID, env, name, []byte(req.Value), p.Actor()); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -722,6 +733,15 @@ func (s *Server) listAnchors(w http.ResponseWriter, r *http.Request) {
 		resp["public_key"] = base64.StdEncoding.EncodeToString(s.AnchorKey)
 		resp["key_id"] = audit.KeyID(s.AnchorKey)
 	}
+	// Every key an anchor may be signed with: the current one first, then
+	// the retired ones.
+	if keys := s.anchorKeys(); len(keys) > 0 {
+		all := make([]string, len(keys))
+		for i, k := range keys {
+			all[i] = base64.StdEncoding.EncodeToString(k)
+		}
+		resp["public_keys"] = all
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -1004,4 +1024,14 @@ func (s *Server) listConnectionNames(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"connections": nonNil(out)})
+}
+
+// anchorKeys are the keys an anchor may be signed with: the current one,
+// then the retired ones.
+func (s *Server) anchorKeys() []ed25519.PublicKey {
+	var keys []ed25519.PublicKey
+	if s.AnchorKey != nil {
+		keys = append(keys, s.AnchorKey)
+	}
+	return append(keys, s.RetiredAnchorKeys...)
 }

@@ -304,3 +304,25 @@ func TestEmptySecretVerifiesNothing(t *testing.T) {
 		})
 	}
 }
+
+// A push names the people behind it: the host's signed-in pusher and each
+// commit's author and committer; GitHub's own merge committer is left out.
+func TestPushNamesThePeopleBehindIt(t *testing.T) {
+	p, err := gitprovider.New(gitprovider.Config{Provider: "github", Repo: "acme/flows", Branch: "main", Auth: gitprovider.Auth{Type: "token", Token: "x"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, body := gitfake.GitHubPushBy("main", "aaa", "bbb", "s3cret", "carol@acme.test", "Bob@Acme.test")
+	push, err := p.VerifyPush(h, body, "s3cret")
+	if err != nil || push.Before != "aaa" || !push.Complete || len(push.People) != 2 {
+		t.Fatalf("push: %+v %v", push, err)
+	}
+	if push.People[0].Role != "pusher" || push.People[0].Email != "carol@acme.test" || push.People[1].Role != "author" || push.People[1].Email != "bob@acme.test" {
+		t.Errorf("people: %+v", push.People)
+	}
+	// The plain delivery names no commits: nobody is accounted for.
+	h, body = gitfake.GitHubPush("main", "bbb", "s3cret")
+	if push, err := p.VerifyPush(h, body, "s3cret"); err != nil || push.Complete || len(push.People) != 0 {
+		t.Errorf("a push without commits: %+v %v", push, err)
+	}
+}

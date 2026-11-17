@@ -310,7 +310,11 @@ func (s *Server) waDirectFile(ctx context.Context, c *chat, caption string) erro
 func (s *Server) endDirectWait(ctx context.Context, c *chat) error {
 	d := c.data
 	d.Direct = nil
-	if c.state == stateCollecting && reflect.DeepEqual(d, chatData{}) {
+	// Nothing else was waiting: the session's name for its Yes button
+	// (Ask, stamped on every save) is not something waiting.
+	rest := d
+	rest.Ask = ""
+	if c.state == stateCollecting && reflect.DeepEqual(rest, chatData{}) {
 		return s.saveSession(ctx, c, stateIdle, chatData{}, 0)
 	}
 	return s.saveSession(ctx, c, c.state, d, chatStateTTL(c.state))

@@ -74,10 +74,31 @@ func same(want NewEvent, got history.Event) error {
 	if err != nil {
 		return err
 	}
+	if !bytes.Equal(a, b) && beforeSecretPaths(want, b) {
+		return nil
+	}
 	if !bytes.Equal(a, b) {
 		return fmt.Errorf("%s(%s) payload differs:\n  replay:   %s\n  recorded: %s", got.Type, got.StepID, a, b)
 	}
 	return nil
+}
+
+// beforeSecretPaths reports whether a recorded StepScheduled differs from
+// the replayed one only in having no secret_paths: it was written before
+// decide recorded them. Such a history still verifies. The worker finds
+// that payload's places in the definition (AuthoredSecretPaths).
+func beforeSecretPaths(want NewEvent, recorded []byte) bool {
+	p, ok := want.Payload.(history.ScheduledPayload)
+	if !ok || len(p.SecretPaths) == 0 {
+		return false
+	}
+	p.SecretPaths = nil
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return false
+	}
+	a, err := canonical(raw)
+	return err == nil && bytes.Equal(a, recorded)
 }
 
 // canonical re-encodes JSON with sorted keys and normalised numbers, so

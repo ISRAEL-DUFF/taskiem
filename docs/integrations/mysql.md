@@ -93,7 +93,7 @@ Rows come back as objects keyed by column name. If two columns share a name, the
 | MySQL type | JSON value |
 | --- | --- |
 | `TINYINT` … `BIGINT`, `YEAR` | integer. An unsigned `BIGINT` above 2^63−1 becomes a decimal string. |
-| `DECIMAL` / `NUMERIC` | **string**, exactly as stored (`"12.50"`). It is never rounded through a float. This differs from the PostgreSQL connector, which turns numerics into numbers. |
+| `DECIMAL` / `NUMERIC` | **string**, exactly as stored (`"12.50"`). It is never rounded through a float. The PostgreSQL connector does the same for a numeric with a fraction. |
 | `FLOAT`, `DOUBLE` | number |
 | `DATE` | `"2026-10-05"` |
 | `DATETIME`, `TIMESTAMP` | RFC 3339 in UTC, for example `"2026-10-05T10:00:00.5Z"`. The session runs with `time_zone = '+00:00'`, so `TIMESTAMP` values come back in UTC. `DATETIME` has no time zone and is shown as stored, labelled `Z`. A zero date comes back as `"0000-00-00 00:00:00"`. |

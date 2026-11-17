@@ -75,8 +75,7 @@ String cardLine(LinkDocCard card, bool mine, String other) {
     final verb = deliveryVerbs[card.event] ?? card.event.replaceAll('_', ' ');
     return '$who $verb ${card.reference}';
   }
-  final verb = cardVerbs[card.event] ??
-      '${card.event.replaceAll('_', ' ')} ${card.doc == 'invoice' || card.doc == 'bill' ? 'invoice' : 'order'}';
+  final verb = cardVerbs[card.event] ?? '${card.event.replaceAll('_', ' ')} ${card.doc == 'invoice' || card.doc == 'bill' ? 'invoice' : 'order'}';
   return '$who $verb ${card.reference}';
 }
 
@@ -155,24 +154,24 @@ const roleChoices = [('supplier', 'They supply us'), ('customer', 'They buy from
 
 /// links.ts roleLine.
 String roleLine(String role) => switch (role) {
-      'supplier' => 'They supply you',
-      'customer' => 'They buy from you',
-      _ => 'They supply you and buy from you',
-    };
+  'supplier' => 'They supply you',
+  'customer' => 'They buy from you',
+  _ => 'They supply you and buy from you',
+};
 
-enum Tone { ok, warn, info, muted }
+enum Tone { ok, warn, info, muted, danger }
 
 /// links.ts stateWords: a link's state in a word or two, with its tone.
 ({String label, Tone tone})? stateWords(String state) => switch (state) {
-      'active' => (label: 'Linked', tone: Tone.ok),
-      'asked_us' => (label: 'Asks to link', tone: Tone.warn),
-      'requested' => (label: 'Asked', tone: Tone.info),
-      'sent' => (label: 'Request sent', tone: Tone.info),
-      'not_accepted' => (label: 'Not accepted', tone: Tone.muted),
-      'blocked' => (label: 'Blocked', tone: Tone.muted),
-      'ended' => (label: 'Link ended', tone: Tone.muted),
-      _ => null,
-    };
+  'active' => (label: 'Linked', tone: Tone.ok),
+  'asked_us' => (label: 'Asks to link', tone: Tone.warn),
+  'requested' => (label: 'Asked', tone: Tone.info),
+  'sent' => (label: 'Request sent', tone: Tone.info),
+  'not_accepted' => (label: 'Not accepted', tone: Tone.muted),
+  'blocked' => (label: 'Blocked', tone: Tone.muted),
+  'ended' => (label: 'Link ended', tone: Tone.muted),
+  _ => null,
+};
 
 // --- avatars (web/src/pages/ChatAvatar.tsx, web/src/lib/tone.ts) ---
 
@@ -292,10 +291,10 @@ bool isDiary(LinkDocCard c, bool mine) => mine && !const ['ordered', 'offered', 
 
 /// linkchat.ts cardSub: the amount, and a word.
 String cardSub(LinkDocCard c) => [
-      if (c.amountKobo != null) naira(c.amountKobo!),
-      if (c.wasKobo != null && c.wasKobo! > (c.amountKobo ?? 0)) 'was ${naira(c.wasKobo!)}',
-      if ((c.note ?? '').isNotEmpty) '“${c.note}”',
-    ].join(' · ');
+  if (c.amountKobo != null) naira(c.amountKobo!),
+  if (c.wasKobo != null && c.wasKobo! > (c.amountKobo ?? 0)) 'was ${naira(c.wasKobo!)}',
+  if ((c.note ?? '').isNotEmpty) '“${c.note}”',
+].join(' · ');
 
 /// Chrome breaks a line after a hyphen even before a digit ("P-" then
 /// "9XTV54"); Flutter's breaker does not (UAX 14's LB25). A zero-width

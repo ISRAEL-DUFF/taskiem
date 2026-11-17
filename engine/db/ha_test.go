@@ -40,6 +40,7 @@ func TestTransient(t *testing.T) {
 		{&pgconn.PgError{Code: "57P01"}, true},
 		{&pgconn.PgError{Code: "08006"}, true},
 		{&pgconn.PgError{Code: "40001"}, true},
+		{&pgconn.PgError{Code: "40P01"}, true},  // a deadlock's victim rolled back
 		{&pgconn.PgError{Code: "23505"}, false}, // unique violation: the statement, not the server
 		{&pgconn.PgError{Code: "42501"}, false},
 		{io.ErrUnexpectedEOF, true},

@@ -376,26 +376,50 @@ export function CustomerPane({
         items={
           c
             ? (close) => (
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    close();
-                    void act.run(
-                      async () => {
-                        await put(`/v1/customer-chats/${id}`, {
-                          archived: !c.archived,
-                        });
-                        changed.current();
-                        if (!c.archived) onBack();
-                        else chat.reload();
-                      },
-                      c.archived ? "Brought back to the chats" : "Archived",
-                    );
-                  }}
-                >
-                  {c.archived ? "Unarchive" : "Archive"}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      close();
+                      void act.run(
+                        async () => {
+                          await put(`/v1/customer-chats/${id}`, {
+                            archived: !c.archived,
+                          });
+                          changed.current();
+                          if (!c.archived) onBack();
+                          else chat.reload();
+                        },
+                        c.archived ? "Brought back to the chats" : "Archived",
+                      );
+                    }}
+                  >
+                    {c.archived ? "Unarchive" : "Archive"}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      close();
+                      // Muted: its messages tell nobody (no bell, no notification).
+                      void act.run(
+                        async () => {
+                          await put(`/v1/customer-chats/${id}`, {
+                            muted: !c.muted,
+                          });
+                          chat.reload();
+                        },
+                        c.muted
+                          ? "Notifications on for this customer"
+                          : "Muted",
+                      );
+                    }}
+                    data-testid="customer-mute"
+                  >
+                    {c.muted ? "Unmute notifications" : "Mute notifications"}
+                  </button>
+                </>
               )
             : undefined
         }

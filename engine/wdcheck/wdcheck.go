@@ -119,6 +119,12 @@ func check(doc []byte, reg connector.Lookup, find expansion.Templates) []Problem
 				if st.HTTP != nil && st.HTTP.Class == "reconcilable_write" {
 					out = append(out, pr(path+"/config/class", "an http step has no reconcile action, so it cannot be reconcilable_write; use idempotent_write with an idempotency_header the partner honours, or unsafe_write"))
 				}
+			case "respond":
+				// Told here, when a workflow is saved, and enforced when
+				// the answer is sent (engine/ingest).
+				for _, msg := range wd.RespondProblems(st) {
+					out = append(out, pr(path+"/config/headers", msg))
+				}
 			case "capability":
 				if !wd.IsWait(st.Uses) && !anyRail(reg, st.Uses) {
 					out = append(out, pr(path, fmt.Sprintf("no rail Taskiem connects to can %s yet", st.Uses)))

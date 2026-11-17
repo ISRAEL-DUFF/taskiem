@@ -703,6 +703,7 @@
         "required": ["payment_id", "amount_kobo"],
         "properties": {
           "payment_id": { "type": "string" },
+          "credit_id": { "type": "string", "description": "The rail's own id for this one transfer, where the account number paid into takes more than one (a one-time number the rail lets be paid twice): each transfer is then recorded on its own, and the same one heard twice once. The id list_credits reads back" },
           "amount_kobo": { "type": "integer", "description": "What the payer sent" },
           "fee_kobo": { "type": "integer", "description": "The rail's fee taken from it, when the rail settles net and says so (a one-time number's transfer)" },
           "currency": { "type": "string" },
@@ -719,6 +720,7 @@
         "required": ["payment_id"],
         "properties": {
           "payment_id": { "type": "string" },
+          "credit_id": { "type": "string", "description": "The rail's own id for the one transfer that went back, where payment.received carried one" },
           "amount_kobo": { "type": "integer" },
           "reason": { "enum": ["late", "wrong_amount", "other"], "description": "late: after the account expired; wrong_amount: not the amount asked" }
         }
@@ -888,7 +890,7 @@
         "payer_bank": { "type": "string" },
         "narration": { "type": "string", "description": "What the payer wrote, as the rail passed it on; often carries names", "x-pii": "other" },
         "occurred_at": { "type": "string", "description": "RFC 3339" },
-        "event": { "type": "string", "enum": ["payment.received"], "description": "payment.received for a payment into a one-time number (collect_transfer) the rail lists among its credits: recorded as that payment, under the same key as its payment.received event, not as an account credit" }
+        "event": { "type": "string", "enum": ["payment.received"], "description": "payment.received for a payment into a one-time number (collect_transfer) the rail lists among its credits: recorded as that payment, under the same key as its payment.received event (the number's reference and credit_id), not as an account credit" }
       }
     }
   }

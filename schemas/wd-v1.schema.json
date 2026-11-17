@@ -2521,7 +2521,7 @@
             },
             "headers": {
               "$ref": "#/$defs/values",
-              "description": "Response headers; only Content-Type, Location, Cache-Control and X- headers are sent."
+              "description": "Response headers; only Content-Type, Location, Cache-Control and X- headers are sent. Content-Type must be a data type (JSON, plain text, CSV, XML, form, PDF, PNG, JPEG, GIF, WebP or octet-stream): anything else, such as text/html, is sent as plain text. Location is sent only with a 3xx status and a full http(s) address. The server's own security headers and X-Taskiem- headers cannot be set."
             },
             "body": {
               "description": "The response body: an object or list is sent as JSON, a string as text; values may be expressions."

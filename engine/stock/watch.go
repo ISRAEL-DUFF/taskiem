@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/israel-duff/taskiem/engine/alerts"
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -90,6 +91,15 @@ func (w *Watch) Tick(ctx context.Context) error {
 // Tenant keeps one business's low items and raises its alerts; how many
 // alerts it raised.
 func (w *Watch) Tenant(ctx context.Context, tenant uuid.UUID) (int, error) {
+	// A business that turned Stock off is not watched, and is told nothing
+	// (docs/spec/business-areas.md §5: background jobs).
+	on := true
+	if err := db.InTenantTx(ctx, w.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) (err error) {
+		on, err = areas.Enabled(ctx, tx, tenant, areas.Stock)
+		return err
+	}); err != nil || !on {
+		return 0, err
+	}
 	items, err := w.Stock.Items(ctx, tenant)
 	if err != nil {
 		return 0, err

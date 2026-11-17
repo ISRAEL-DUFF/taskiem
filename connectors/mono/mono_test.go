@@ -239,7 +239,7 @@ func TestDirectPay(t *testing.T) {
 		t.Errorf("duplicate %v %v", r.Output, err)
 	}
 	_, err = call(t, "initiate_payment", payIn, "payment_duplicate", "verify_not_found")
-	kind(t, err, effects.KindFatal, "refused and absent")
+	kind(t, err, effects.KindIndeterminate, "refused and absent")
 	small := map[string]any{"amount": 19999, "description": "x", "reference": ref}
 	_, err = call(t, "initiate_payment", small)
 	kind(t, err, effects.KindFatal, "below NGN 200")
@@ -369,6 +369,9 @@ func TestDebits(t *testing.T) {
 	}
 	_, err = call(t, "debit_mandate", debitIn, "debit_duplicate", "verify_failed")
 	kind(t, err, effects.KindFatal, "original failed")
+	// Refused as sent before and not shown by verify: not a failed debit.
+	_, err = call(t, "debit_mandate", debitIn, "debit_duplicate", "verify_not_found")
+	kind(t, err, effects.KindIndeterminate, "refused and absent")
 	_, err = call(t, "debit_mandate", map[string]any{"mandate_id": mmc, "amount": 100, "narration": "x", "reference": ref})
 	kind(t, err, effects.KindFatal, "below minimum")
 	_, err = call(t, "debit_mandate", map[string]any{"mandate_id": mmc, "amount": 20000, "narration": "x", "reference": "short"})
@@ -444,5 +447,28 @@ func TestTriggerExpressions(t *testing.T) {
 		if !found {
 			t.Errorf("%s is not in the trigger's events", c.event)
 		}
+	}
+}
+
+// Reconcile must not answer "not found" from lookups Mono has not
+// confirmed: the engine would debit the customer again, or make a second
+// mandate. The step parks instead.
+func TestReconcileNeverAnswersNotFound(t *testing.T) {
+	for action, fx := range map[string]string{"verify_payment": "verify_not_found", "get_mandate": "mandate_not_found"} {
+		srv := fixture.Serve(t, fixture.Load(t, fx))
+		_, err := New(Options{BaseURL: srv.URL}).Actions[action].Execute(context.Background(), connector.Request{
+			Input: map[string]any{"reference": ref}, HTTP: srv.Client(), IdempotencyKey: ref, Reconciling: true, Attempt: 1,
+			Credentials: map[string]string{"secret_key": "test_sk_abc"}})
+		if errors.Is(err, connector.ErrNotFound) || effects.Classify(err) != effects.KindIndeterminate {
+			t.Errorf("%s: reconcile with nothing shown must park, not read as not found: %v", action, err)
+		}
+	}
+	// Found is still found.
+	srv := fixture.Serve(t, fixture.Load(t, "verify_successful"))
+	r, err := New(Options{BaseURL: srv.URL}).Actions["verify_payment"].Execute(context.Background(), connector.Request{
+		Input: map[string]any{"reference": ref}, HTTP: srv.Client(), IdempotencyKey: ref, Reconciling: true, Attempt: 1,
+		Credentials: map[string]string{"secret_key": "test_sk_abc"}})
+	if err != nil || out(r)["channel"] != "mandate" {
+		t.Errorf("found %v %v", r.Output, err)
 	}
 }

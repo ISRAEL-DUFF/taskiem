@@ -58,6 +58,8 @@ type Profile struct {
 	Delivers      bool     `json:"delivers"`
 	Vehicle       string   `json:"vehicle"`
 	DeliveryAreas []string `json:"delivery_areas"`
+	// Categories are the one or two it is found by in Explore.
+	Categories []string `json:"categories"`
 }
 
 // GalleryPhoto is one photo of the gallery, in order.
@@ -76,6 +78,9 @@ type ProfileIn struct {
 	Delivers      bool     `json:"delivers"`
 	Vehicle       string   `json:"vehicle"`
 	DeliveryAreas []string `json:"delivery_areas"`
+	// Categories, when sent, replace the business's (at most two keys of
+	// Categories); left out, they stay as they are.
+	Categories *[]string `json:"categories,omitempty"`
 }
 
 func clean(field, s string, max int) (string, error) {
@@ -117,6 +122,13 @@ func (p ProfileIn) Validate() (ProfileIn, error) {
 		return p, fmt.Errorf("%w: at most %d delivery areas", ErrInvalid, MaxDeliveryAreas)
 	}
 	p.DeliveryAreas = areas
+	if p.Categories != nil {
+		cats, err := cleanCategories(*p.Categories)
+		if err != nil {
+			return p, err
+		}
+		p.Categories = &cats
+	}
 	return p, nil
 }
 
@@ -138,16 +150,19 @@ func photoByID(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, id uuid.UUID) (
 
 // ProfileTx is the business's profile (empty text where it has said nothing).
 func ProfileTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Profile, error) {
-	out := Profile{DeliveryAreas: []string{}}
+	out := Profile{DeliveryAreas: []string{}, Categories: []string{}}
 	var logo *uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT COALESCE(name, ''), COALESCE(tagline, ''), COALESCE(area, ''), COALESCE(about, ''), logo_media, delivers, COALESCE(vehicle, ''), delivery_areas
-		FROM business_profile WHERE tenant_id = $1`, tenant).
-		Scan(&out.Name, &out.Tagline, &out.Area, &out.About, &logo, &out.Delivers, &out.Vehicle, &out.DeliveryAreas)
+	err := tx.QueryRow(ctx, `SELECT COALESCE(name, ''), COALESCE(tagline, ''), COALESCE(area, ''), COALESCE(about, ''), logo_media, delivers, COALESCE(vehicle, ''), delivery_areas,
+		categories FROM business_profile WHERE tenant_id = $1`, tenant).
+		Scan(&out.Name, &out.Tagline, &out.Area, &out.About, &logo, &out.Delivers, &out.Vehicle, &out.DeliveryAreas, &out.Categories)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return out, nil
 	}
 	if out.DeliveryAreas == nil {
 		out.DeliveryAreas = []string{}
+	}
+	if out.Categories == nil {
+		out.Categories = []string{}
 	}
 	if err != nil {
 		return out, err
@@ -166,11 +181,16 @@ func SaveProfileTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in ProfileI
 	if err != nil {
 		return Profile{}, err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO business_profile (tenant_id, name, tagline, area, about, delivers, vehicle, delivery_areas, updated_by)
-		VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), NULLIF($4, ''), NULLIF($5, ''), $6, NULLIF($7, ''), $8, $9)
+	var cats []string
+	if in.Categories != nil {
+		cats = *in.Categories
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO business_profile (tenant_id, name, tagline, area, about, delivers, vehicle, delivery_areas, updated_by, categories)
+		VALUES ($1, NULLIF($2, ''), NULLIF($3, ''), NULLIF($4, ''), NULLIF($5, ''), $6, NULLIF($7, ''), $8, $9, COALESCE($10::text[], '{}'))
 		ON CONFLICT (tenant_id) DO UPDATE SET name = NULLIF($2, ''), tagline = NULLIF($3, ''), area = NULLIF($4, ''), about = NULLIF($5, ''),
-		  delivers = $6, vehicle = NULLIF($7, ''), delivery_areas = $8, updated_by = $9, updated_at = now()`,
-		tenant, in.Name, in.Tagline, in.Area, in.About, in.Delivers, in.Vehicle, in.DeliveryAreas, by); err != nil {
+		  delivers = $6, vehicle = NULLIF($7, ''), delivery_areas = $8, updated_by = $9, updated_at = now(),
+		  categories = COALESCE($10::text[], business_profile.categories)`,
+		tenant, in.Name, in.Tagline, in.Area, in.About, in.Delivers, in.Vehicle, in.DeliveryAreas, by, cats); err != nil {
 		return Profile{}, err
 	}
 	return ProfileTx(ctx, tx, tenant)

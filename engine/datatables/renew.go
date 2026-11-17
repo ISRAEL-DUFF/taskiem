@@ -100,6 +100,9 @@ func (s *Service) Renew(ctx context.Context, tenant uuid.UUID) error {
 	if until := s.now().Add(time.Duration(days) * 24 * time.Hour); p.TokenExpiresAt != nil && !until.After(p.TokenExpiresAt.Add(24*time.Hour)) {
 		return fmt.Errorf("%w: the platform's Xenibase token (TASKIEM_XENIBASE_TOKEN) expires before %s: replace it, and this one is renewed", ErrProjectFailed, until.Format("2 January 2006"))
 	}
+	// The old token cannot be revoked (RenewedDays): the new one is kept
+	// short, so tokens turn over and none outlives its use by long.
+	days = min(days, RenewedDays)
 	tok, err := c.createToken(ctx, s.Platform.Org, TokenName, p.ProjectID, []string{"read", "write", "admin"}, days)
 	if err != nil {
 		return err
@@ -110,7 +113,7 @@ func (s *Service) Renew(ctx context.Context, tenant uuid.UUID) error {
 	}
 	next["token"] = tok.Secret
 	expires := tok.Token.ExpiresAt
-	return db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+	err = db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		if err := s.Vault.ReplaceCredentialsTx(ctx, tx, tenant, p.ConnectionID, next, "system"); err != nil {
 			return err
 		}
@@ -119,6 +122,14 @@ func (s *Service) Renew(ctx context.Context, tenant uuid.UUID) error {
 		}
 		return audit(ctx, tx, tenant, "table.project.token_renewed", p.ProjectID, map[string]any{"expires_at": expires})
 	})
+	if err != nil {
+		// The token was minted and is not stored: nothing holds its secret,
+		// and it cannot be revoked. It is named for the operator, and
+		// expires by itself.
+		s.log().Error("data tables: a renewed token was minted but could not be stored; it is unused and expires by itself",
+			"tenant", tenant, "project", p.ProjectID, "expires_at", expires, "err", pii.Redact(err.Error()))
+	}
+	return err
 }
 
 // alertTenant raises the renewal failure to the tenant, once a day.

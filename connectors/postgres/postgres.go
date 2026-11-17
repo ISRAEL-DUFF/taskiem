@@ -5,8 +5,10 @@ import (
 	"context"
 	_ "embed"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"net"
 	"net/url"
@@ -88,10 +90,7 @@ func params(in map[string]any) []any {
 
 func query(ctx context.Context, req connector.Request) (connector.Response, error) {
 	sql, _ := req.Input["sql"].(string)
-	max := 1000
-	if m, ok := req.Input["max_rows"].(int64); ok && m > 0 {
-		max = int(m)
-	}
+	max := maxRows(req.Input)
 	conn, err := connect(ctx, req)
 	if err != nil {
 		return connector.Response{}, err
@@ -172,6 +171,33 @@ func classify(err error, readOnly bool) error {
 	return fmt.Errorf("%w: %w", err, effects.ErrUnknownOutcome)
 }
 
+// maxRows reads the step's max_rows (default 1000, at most 10,000). The
+// worker decodes a step's input with encoding/json, so a number arrives
+// as float64 (it was read as int64 only, and the cap was always the
+// default); the other forms are what tests and other callers pass.
+func maxRows(in map[string]any) int {
+	n := int64(1000)
+	switch m := in["max_rows"].(type) {
+	case float64:
+		if m >= 1 && m == math.Trunc(m) {
+			n = int64(math.Min(m, 10000))
+		}
+	case int64:
+		if m > 0 {
+			n = m
+		}
+	case int:
+		if m > 0 {
+			n = int64(m)
+		}
+	case json.Number:
+		if v, err := m.Int64(); err == nil && v > 0 {
+			n = v
+		}
+	}
+	return int(min(n, 10000))
+}
+
 // jsonValue converts database values into JSON-compatible Go values.
 func jsonValue(v any) any {
 	switch t := v.(type) {
@@ -202,8 +228,15 @@ func jsonValue(v any) any {
 			}
 			return n.String()
 		}
-		f, _ := t.Float64Value()
-		return f.Float64
+		// A fraction (money, a rate): the exact decimal as text, as the
+		// MySQL connector gives it. Through a float64 it lost exactness
+		// (0.1 + 0.2, or any value past 15 digits).
+		if s, err := t.Value(); err == nil {
+			if text, ok := s.(string); ok {
+				return text
+			}
+		}
+		return fmt.Sprint(t)
 	case map[string]any:
 		for k, x := range t {
 			t[k] = jsonValue(x)

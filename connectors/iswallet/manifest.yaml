@@ -542,8 +542,9 @@ capabilities:
     notes: >-
       Opened on the connection's wallet, so its wallet_ids must list exactly one. iswallet's
       expiry is advisory: it refuses neither a late transfer nor a second one, so the window
-      is Taskiem's and a late transfer is credited. Every call opens another account: an
-      unknown outcome parks for a person.
+      is Taskiem's, a late transfer is credited, and each transfer into the number is
+      recorded on its own. Every call opens another account: an unknown outcome parks for a
+      person.
   list_credits:
     # Credits into customers' numbers, from the wallet's transactions:
     # those that name a virtual account. amount (on this route the ledger
@@ -595,15 +596,19 @@ events:
       narration: =body.data.?narration
       occurred_at: =body.data.?occurred_at.orValue(body.?occurred_at.orValue(''))
   payment.received:
-    # The payment into a one-time number (create_dynamic_account), by the
+    # A payment into a one-time number (create_dynamic_account), by the
     # reference that opened it: amount what the payer sent, the fee what
     # iswallet kept of it (amount less amount_credited), as for a credit.
+    # iswallet refuses no second transfer into the number, so each carries
+    # its own credit_id (the provider_reference list_credits reads back):
+    # two transfers are two entries, and one heard twice is one.
     trigger: credit_event
     when: >-
       =body.event_type == 'wallet.credit.posted' && has(body.data.virtual_account) && has(body.data.virtual_account.reference)
       && string(body.data.virtual_account.reference).startsWith('tot_') && has(body.data.amount)
     fields:
       payment_id: =body.data.virtual_account.reference
+      credit_id: "=has(body.data.provider_reference) && body.data.provider_reference != '' ? optional.of(string(body.data.provider_reference)) : optional.none()"
       amount_kobo: =int(body.data.amount)
       fee_kobo: "=has(body.data.amount_credited) ? optional.of(int(body.data.amount) - int(body.data.amount_credited)) : optional.none()"
       currency: =body.data.?currency
@@ -611,13 +616,15 @@ events:
   payment.returned:
     # A credit iswallet clawed back: the money log undoes what it counted
     # towards (engine/matching), finding the credit by its credit_id, or a
-    # one-time number's payment by its reference.
+    # one-time number's payment by its reference and, when the event
+    # carries one, the transfer's own credit_id.
     trigger: credit_event
     when: >-
       =body.event_type == 'wallet.credit.reversed' && has(body.data.virtual_account) && has(body.data.virtual_account.reference)
       && (string(body.data.virtual_account.reference).startsWith('tot_') || has(body.data.provider_reference) && body.data.provider_reference != '')
     fields:
       payment_id: "=string(body.data.virtual_account.reference).startsWith('tot_') ? body.data.virtual_account.reference : body.data.provider_reference"
+      credit_id: "=string(body.data.virtual_account.reference).startsWith('tot_') && has(body.data.provider_reference) && body.data.provider_reference != '' ? optional.of(string(body.data.provider_reference)) : optional.none()"
       amount_kobo: "=has(body.data.amount) ? optional.of(int(body.data.amount)) : optional.none()"
       reason: other
   payout.settled:

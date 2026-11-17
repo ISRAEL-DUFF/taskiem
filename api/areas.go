@@ -282,24 +282,26 @@ func schoolsNeedMoney(r *http.Request, tx pgx.Tx, p *Principal) error {
 }
 
 // chatAreas says which parts of Taskiem the business behind a chat uses,
-// read once for a message. A read that fails shows everything: the
-// handlers behind it still refuse what is off.
+// read once for a message. A read that fails shows nothing: the chat's
+// handlers act on the business's stock, shop and money themselves, with
+// no gate behind them, so what cannot be known to be on is treated as
+// off for this message, and the failure is logged. The next message reads
+// again. A chat with no business yet has nothing turned off.
 func (s *Server) chatAreas(ctx context.Context, c *chat) areas.State {
 	if c.areaState != nil {
 		return c.areaState
 	}
 	st := areas.State{}
-	for _, a := range areas.All {
-		st[a] = true
-	}
-	if c.tenant.ID != uuid.Nil {
-		var loaded areas.State
-		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) (err error) {
-			loaded, err = areas.Load(ctx, tx, c.tenant.ID)
-			return err
-		}); err == nil {
-			st = loaded
+	if c.tenant.ID == uuid.Nil {
+		for _, a := range areas.All {
+			st[a] = true
 		}
+	} else if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{c.tenant.ID}, func(tx pgx.Tx) (err error) {
+		st, err = areas.Load(ctx, tx, c.tenant.ID)
+		return err
+	}); err != nil {
+		s.Logger.Warn("chat: reading what the business uses; its parts are taken as off for this message", "tenant", c.tenant.ID, "err", err)
+		st = areas.State{}
 	}
 	c.areaState = st
 	return st

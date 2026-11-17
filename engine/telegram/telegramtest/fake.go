@@ -356,6 +356,16 @@ func Message(updateID, userID int64, username, text string) []byte {
 	return body
 }
 
+// LocationMessage is an update sharing a location in the private chat of
+// user id.
+func LocationMessage(updateID, userID int64, lat, lng float64) []byte {
+	body, _ := json.Marshal(map[string]any{"update_id": updateID, "message": map[string]any{
+		"message_id": updateID, "from": from(userID, ""), "chat": private(userID), "date": 1759800000,
+		"location": map[string]any{"latitude": lat, "longitude": lng},
+	}})
+	return body
+}
+
 // ContactMessage is an update sharing a contact in the private chat of
 // user id: its own (as the "share my number" button sends) when owner is
 // userID.

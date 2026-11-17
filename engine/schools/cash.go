@@ -41,7 +41,8 @@ import (
 // Both thresholds are weighed per student, not per request, so that
 // splitting does not pass under them: cash with the money a person
 // entered (desk, entered, uploaded) that already counts towards the
-// student's invoices without a second person (matching.EnteredUnapproved),
+// student's invoices, or is their credit, without a second person
+// (matching.EnteredUnapproved, under matching.LockStudentCash),
 // a discount or a reduction with the reductions of the student's
 // invoices and the standing discounts given them without one
 // (ReducedUnapproved), each within the window: since the current term
@@ -275,10 +276,15 @@ func (s *Schools) PostPayment(ctx context.Context, tenant uuid.UUID, in PostingI
 		}
 		pending = threshold != nil && in.AmountKobo >= *threshold
 		if threshold != nil && !pending {
-			// With what desk and entered money already counts towards the
-			// student's invoices without a second person (their open ones,
-			// and any of theirs within the window): postings split under
-			// the threshold add up (docs/schools.md#the-second-person).
+			// With the money a person entered that is the student's without
+			// a second person, within the window: what counts towards
+			// their invoices and what is their credit, so postings split
+			// under the threshold add up whether or not an invoice is
+			// open (docs/schools.md#the-second-person). One at a time per
+			// student, so two postings at once are weighed together.
+			if err := matching.LockStudentCash(ctx, tx, tenant, st.ID); err != nil {
+				return err
+			}
 			open, err := s.Invoices.OpenInvoicesOf(ctx, tx, tenant, "key:"+StudentKey(st.ID))
 			if err != nil {
 				return err

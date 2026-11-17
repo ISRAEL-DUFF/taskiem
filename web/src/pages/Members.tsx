@@ -2,7 +2,7 @@ import { useState } from "react";
 import { del, get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { AgentVisits } from "./AgentVisits";
-import { EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad, Row } from "../ui";
+import { EmptyState, ErrorBox, Field, Modal, PageHeader, Skeleton, fmtTime, useAction, useLoad, Row, PasswordInput } from "../ui";
 import { Icon } from "../icons";
 import { roleLabel, roleName, type ApproverRole } from "../forms/RolePicker";
 
@@ -336,7 +336,7 @@ function AddMember({ roles: available, onClose, onDone }: { roles: Role[]; onClo
           label="Initial password"
           hint="For someone new (12+ characters; leave empty if they sign in with single sign-on). Someone who already has a Taskiem account is invited instead, and appears here once they accept (unless their email is on a domain you verified for single sign-on)."
         >
-          <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <PasswordInput autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
         <Field label="Roles">
           <div>

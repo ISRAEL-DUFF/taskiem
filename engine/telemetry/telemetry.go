@@ -65,8 +65,13 @@ var (
 		Name: "taskiem_chat_stream_events_total", Help: "Events sent on chat streams, by event (message, gone, conversation, taskiem, typing, ping).",
 	}, []string{"event"})
 	PushSent = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "taskiem_push_total", Help: "Chat pushes by result (sent, gone: the browser is off for good, failed).",
+		Name: "taskiem_push_total", Help: "Pushes by result (sent; gone: the device is off for good; failed: it refused; later: the service was not able; off: not set up; dropped: given up after its tries).",
 	}, []string{"result"})
+	// PushByKind is the same by the kind of push (business, customers,
+	// orders, approvals, alerts), to see which a failure is in.
+	PushByKind = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_push_by_kind_total", Help: "Pushes by kind (business, customers, orders, approvals, alerts) and result (sent, gone, failed, later, off, dropped).",
+	}, []string{"kind", "result"})
 	PushSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
 		Name: "taskiem_push_seconds", Help: "How long a push service took to answer a push.",
 		Buckets: []float64{.05, .1, .25, .5, 1, 2.5, 5, 10},
@@ -195,6 +200,26 @@ var (
 	// the stack and carries on, and the task's lease expires.
 	TaskPanics = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "taskiem_task_panics_total", Help: "Tasks whose execution panicked; the worker logged the stack and kept serving, and the task's lease expires.",
+	})
+	// Task wake-ups sent after the commit (docs/spec/task-wake-ups.md).
+	WakeupsSent = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_wakeups_sent_total", Help: "Task wake-ups this process's notifier sent, by queue.",
+	}, []string{"queue"})
+	WakeupsMerged = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_wakeups_merged_total", Help: "Tasks whose wake-up rode on one already owed to their queue.",
+	}, []string{"queue"})
+	WakeupsLocal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_wakeups_local_total", Help: "Task wake-ups delivered in memory to workers of the scheduling process, by queue.",
+	}, []string{"queue"})
+	WakeupsInTx = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "taskiem_wakeups_in_tx_total", Help: "Tasks whose wake-up was left to the trigger inside the transaction (a savepoint, an unusual caller, TASKIEM_WAKE_IN_TX).",
+	}, []string{"queue"})
+	WakeupSendFailures = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "taskiem_wakeup_send_failures_total", Help: "Wake-up sends that failed or found no connection; workers poll meanwhile.",
+	})
+	WakeupSendSeconds = promauto.NewHistogram(prometheus.HistogramOpts{
+		Name: "taskiem_wakeup_send_duration_seconds", Help: "How long one wake-up send took, the wait for a connection included.",
+		Buckets: []float64{.0005, .001, .0025, .005, .01, .025, .05, .1, .25, 1},
 	})
 	// Canary probes: the synthetic end-to-end check (engine/canary).
 	CanaryProbes = promauto.NewCounterVec(prometheus.CounterOpts{

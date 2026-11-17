@@ -237,6 +237,15 @@ func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
 		if used == nil || *used != *user {
 			return errResetLink
 		}
+		// Only a link that reached the mailbox proves the mailbox: one
+		// sent in chat ("password") confirms no email and clears nothing.
+		var origin *string
+		if err := tx.QueryRow(ctx, `SELECT taskiem_auth_password_reset_origin($1)`, selector).Scan(&origin); err != nil {
+			return err
+		}
+		if origin == nil || *origin != "email" {
+			return nil
+		}
 		return clearUnclaimedFactors(ctx, tx, *user, tenants, clientIP(r))
 	}, "auth.password.reset", clientIP(r))
 	switch {
@@ -290,8 +299,8 @@ func (s *Server) setPassword(ctx context.Context, user uuid.UUID, hash string, k
 	return email, err
 }
 
-// clearUnclaimedFactors runs when a reset link, which proves the mailbox,
-// is used on an account whose email was never confirmed. Such an account
+// clearUnclaimedFactors runs when a reset link that was delivered to the
+// mailbox, which proves it (not one sent in chat: resetPassword), is used on an account whose email was never confirmed. Such an account
 // was made for the person by someone else (POST /v1/members, with a
 // password that someone chose), so the passkeys, authenticators and API
 // keys on it until now are not known to be theirs: they go, and the email

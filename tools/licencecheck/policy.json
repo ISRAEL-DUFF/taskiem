@@ -121,7 +121,7 @@
     },
     "mobile/assets/fonts": {
       "licences": [],
-      "reason": "The phone app's Inter, from the web's @fontsource-variable/inter (mobile/tool/fonts.py), with its licence (LICENSE-OFL.txt)."
+      "reason": "The phone app's Inter, from the web's @fontsource-variable/inter (mobile/tool/fonts.py), with its licence (LICENSE-OFL.txt); and Inter Tight from Google Fonts for the pages away from the chat, with its licence (LICENSE-OFL-InterTight.txt), both SIL OFL 1.1."
     }
   }
 }

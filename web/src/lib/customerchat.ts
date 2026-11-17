@@ -19,6 +19,8 @@ export interface CustomerChat {
   /** They sent STOP: nothing is sent until they send START. */
   stopped: boolean;
   archived: boolean;
+  /** Its messages tell nobody (no bell item, no notification). */
+  muted?: boolean;
   /** One thread only: what they owe on open invoices. */
   owes_kobo?: number;
   open_invoices?: number;

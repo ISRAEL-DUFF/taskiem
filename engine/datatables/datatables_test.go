@@ -17,6 +17,8 @@ import (
 	"github.com/israel-duff/taskiem/engine/connector"
 	"github.com/israel-duff/taskiem/engine/datatables"
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/history"
+	"github.com/israel-duff/taskiem/engine/runtime"
 	rt "github.com/israel-duff/taskiem/engine/runtime/runtimetest"
 	"github.com/israel-duff/taskiem/engine/secrets"
 )
@@ -302,9 +304,16 @@ func TestTokenRenewal(t *testing.T) {
 	if creds["token"] == old || creds["secret_key"] == "" || creds["project_id"] != p.ProjectID {
 		t.Fatalf("after renewal %v", creds)
 	}
+	// The old token cannot be revoked at Xenibase, so the new one is kept
+	// short: no token is good for long after it is replaced or leaked.
 	st := w.project(t)
-	if st.TokenExpiresAt == nil || st.TokenExpiresAt.Sub(w.now) < 364*24*time.Hour {
-		t.Fatalf("expiry not moved: %+v", st)
+	if st.TokenExpiresAt == nil || st.TokenExpiresAt.Sub(w.now) < 44*24*time.Hour || st.TokenExpiresAt.Sub(w.now) > datatables.RenewedDays*24*time.Hour+time.Hour {
+		t.Fatalf("a renewed token lasts %s, want %d days: %+v", st.TokenExpiresAt.Sub(w.now), datatables.RenewedDays, st)
+	}
+	for _, x := range w.pg.Tokens() {
+		if x.Secret == old && x.ExpiresAt.Sub(w.now) > datatables.RenewBefore {
+			t.Fatalf("the replaced token is good for %s more", x.ExpiresAt.Sub(w.now))
+		}
 	}
 	// Two tokens now carry the name; the connection holds the new one.
 	var tok xenibasetest.Token
@@ -320,8 +329,13 @@ func TestTokenRenewal(t *testing.T) {
 	if err := w.svc.Apply(ctx, w.Tenant, "test", datatables.CreateTableChange("stock", []datatables.Column{{Name: "item", Type: "text"}})); err != nil {
 		t.Fatal(err)
 	}
+	// It is renewed again two weeks before it expires, a month on.
+	w.now = w.now.Add(30 * 24 * time.Hour)
+	if err := w.svc.RenewTick(ctx); err != nil || w.creds(t)["token"] != creds["token"] {
+		t.Fatalf("renewed 15 days before expiry: %v", err)
+	}
 	// A renewal that fails is logged and raised to the tenant once a day.
-	w.now = w.now.Add(352 * 24 * time.Hour)
+	w.now = w.now.Add(2 * 24 * time.Hour)
 	w.pg.Fail(xenibasetest.Failure{Method: http.MethodPost, PathPrefix: "/api/v1/tokens", Status: 503})
 	if err := w.svc.RenewTick(ctx); err == nil {
 		t.Fatal("a refused token call did not fail the tick")
@@ -439,10 +453,7 @@ func TestWorkflowReadsTableRows(t *testing.T) {
 	if st := w.Status(t, ref); st != "completed" {
 		t.Fatalf("run %s", st)
 	}
-	var out string
-	_ = db.InTenantTx(ctx, w.DB.App, []uuid.UUID{w.Tenant}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT payload::text FROM run_events WHERE run_id = $1 AND type = 'StepCompleted' ORDER BY seq DESC LIMIT 1`, ref.ID).Scan(&out)
-	})
+	out := w.lastStepEvent(t, ref)
 	if !strings.Contains(out, "Ada") || strings.Contains(out, "Bisi") {
 		t.Fatalf("the step read %s", out)
 	}
@@ -512,4 +523,22 @@ func TestProjectTokenNeverOutlivesThePlatforms(t *testing.T) {
 	if err := w.svc.Renew(ctx, w.Tenant); err == nil || !strings.Contains(err.Error(), "TASKIEM_XENIBASE_TOKEN") {
 		t.Fatalf("renewing: %v", err)
 	}
+}
+
+// lastStepEvent is the payload of a run's last step outcome as someone who
+// may read it sees it. Rows a table step read are sealed where they are
+// stored (the connector declares them personal), so the stored payload
+// shows none of them.
+func (w *world) lastStepEvent(t *testing.T, ref runtime.RunRef) string {
+	t.Helper()
+	h, err := w.Store.OpenedHistory(ctx, ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := len(h) - 1; i >= 0; i-- {
+		if h[i].Type == history.StepCompleted || h[i].Type == history.StepFailed {
+			return string(h[i].Payload)
+		}
+	}
+	return ""
 }

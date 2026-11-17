@@ -231,6 +231,7 @@ class _Tab extends StatelessWidget {
       button: true,
       selected: on,
       label: label,
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         onTap: onTap,
@@ -261,6 +262,7 @@ class _Tone extends StatelessWidget {
       button: true,
       selected: on,
       label: label,
+      onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
         onTap: onTap,
@@ -295,6 +297,10 @@ class _Emoji extends StatelessWidget {
     return Semantics(
       button: true,
       label: name,
+      onTap: onTap,
+      // A key of a keyboard, as the web's 38 px cells: the grid is the
+      // emoji keyboard, not padded to 48 each (they would overlap).
+      identifier: 'emoji-key',
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,

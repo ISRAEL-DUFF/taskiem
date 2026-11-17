@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/netip"
 	"net/url"
@@ -63,7 +64,7 @@ func TestExecuteThenQuery(t *testing.T) {
 	}
 	out := r.Output.(map[string]any)
 	row := out["rows"].([]any)[0].(map[string]any)
-	if row["id"] != int64(1) || row["amount_kobo"] != int64(5000000) || row["fee"] != 12.5 || row["at"] != "2026-10-05T10:00:00Z" || out["truncated"] != true {
+	if row["id"] != int64(1) || row["amount_kobo"] != int64(5000000) || row["fee"] != "12.50" || row["at"] != "2026-10-05T10:00:00Z" || out["truncated"] != true {
 		t.Errorf("query output %v", out)
 	}
 }
@@ -111,5 +112,52 @@ func TestDefaultSSLModeVerifiesTheServer(t *testing.T) {
 	creds["sslmode"], creds["password"] = "sometimes", "pw-not-to-be-seen"
 	if _, err := config(creds); err == nil || strings.Contains(err.Error(), "pw-not-to-be-seen") {
 		t.Errorf("bad sslmode: %v", err)
+	}
+}
+
+// max_rows as the worker delivers it: a step's input is decoded with
+// encoding/json, so a number is a float64. It was read as int64 only, so
+// the cap was always the default 1000.
+func TestMaxRowsAsTheWorkerDeliversIt(t *testing.T) {
+	req, admin := setup(t)
+	ctx := context.Background()
+	if _, err := admin.Exec(ctx, `INSERT INTO pgconn_topups (id, ref, amount_kobo, fee) SELECT g, 'r', g, 0 FROM generate_series(1, 5) g`); err != nil {
+		t.Fatal(err)
+	}
+	var input map[string]any
+	if err := json.Unmarshal([]byte(`{"sql": "SELECT id FROM pgconn_topups ORDER BY id", "max_rows": 2}`), &input); err != nil {
+		t.Fatal(err)
+	}
+	req.Input = input
+	r, err := New().Actions["query"].Execute(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out := r.Output.(map[string]any); out["row_count"] != 2 || out["truncated"] != true {
+		t.Errorf("max_rows 2 returned %v rows, truncated %v", out["row_count"], out["truncated"])
+	}
+	for in, want := range map[any]int{float64(7): 7, int64(7): 7, 7: 7, json.Number("7"): 7, float64(0): 1000, float64(2.5): 1000, float64(1e9): 10000, nil: 1000, "7": 1000} {
+		if got := maxRows(map[string]any{"max_rows": in}); got != want {
+			t.Errorf("maxRows(%T %v) = %d, want %d", in, in, got, want)
+		}
+	}
+}
+
+// A NUMERIC with a fraction is returned as its exact decimal text, never
+// through a float64: money columns keep every digit.
+func TestNumericIsExact(t *testing.T) {
+	req, _ := setup(t)
+	req.Input = map[string]any{"sql": `SELECT 0.1::numeric + 0.2::numeric AS sum, 12345678901234567890.123456789::numeric AS big, 12.50::numeric(12,2) AS fee,
+		42::numeric AS whole, 1e20::numeric AS huge, 'NaN'::numeric AS nan, NULL::numeric AS none, -0.05::numeric AS neg`}
+	r, err := New().Actions["query"].Execute(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := r.Output.(map[string]any)["rows"].([]any)[0].(map[string]any)
+	want := map[string]any{"sum": "0.3", "big": "12345678901234567890.123456789", "fee": "12.50", "whole": int64(42), "huge": "100000000000000000000", "nan": "NaN", "none": nil, "neg": "-0.05"}
+	for k, w := range want {
+		if row[k] != w {
+			t.Errorf("%s = %#v, want %#v", k, row[k], w)
+		}
 	}
 }

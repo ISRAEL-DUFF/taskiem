@@ -173,6 +173,11 @@ func (p *Purchases) scanSuppliers(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 	out := make([]Supplier, 0, len(list))
 	for _, v := range list {
 		x := v.x
+		if len(v.phone) == 0 || string(v.phone) == "null" {
+			// A linked business, reached through the link: no number.
+			out = append(out, x)
+			continue
+		}
 		x.Phone = pii.Erased
 		var env map[string]any
 		if err := json.Unmarshal(v.phone, &env); err != nil {
@@ -382,10 +387,58 @@ func (p *Purchases) LinkSupplierTx(ctx context.Context, tx pgx.Tx, tenant, id uu
 			return Supplier{}, err
 		}
 	}
+	if link == nil && x.Phone == "" {
+		return Supplier{}, fmt.Errorf("%w: %s was added from your link with them and has no phone number; add one before unlinking", ErrPurchase, x.Name)
+	}
 	if _, err := tx.Exec(ctx, `UPDATE suppliers SET link_id = $3, updated_at = now() WHERE tenant_id = $1 AND id = $2`, tenant, id, link); err != nil {
 		return Supplier{}, err
 	}
 	if err := stockAudit(ctx, tx, tenant, "supplier.linked", x.Name, map[string]any{"supplier_id": id, "link": link, "by": actor}); err != nil {
+		return Supplier{}, err
+	}
+	return p.SupplierTx(ctx, tx, tenant, id)
+}
+
+// AddLinkedSupplierTx makes a linked business one of the business's
+// suppliers, with no phone number: its orders and bills go through the
+// link. An unlinked supplier of the same name becomes that business; one
+// already linked to it is answered as it is.
+func (p *Purchases) AddLinkedSupplierTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, name string, link uuid.UUID, actor string) (Supplier, error) {
+	var ok bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM taskiem_links_of() WHERE id = $1 AND state = 'active')`, link).Scan(&ok); err != nil {
+		return Supplier{}, err
+	}
+	if !ok {
+		return Supplier{}, fmt.Errorf("%w: that is not one of your linked businesses", ErrPurchase)
+	}
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT id FROM suppliers WHERE tenant_id = $1 AND link_id = $2 AND retired_at IS NULL`, tenant, link).Scan(&id)
+	if err == nil {
+		return p.SupplierTx(ctx, tx, tenant, id)
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		return Supplier{}, err
+	}
+	clean := cleanSupplierName(name)
+	if clean == "" {
+		return Supplier{}, fmt.Errorf("%w: a supplier's name is 1 to %d characters", ErrPurchase, MaxSupplierName)
+	}
+	var linked *uuid.UUID
+	err = tx.QueryRow(ctx, `SELECT id, link_id FROM suppliers WHERE tenant_id = $1 AND retired_at IS NULL AND lower(name) = lower($2)`, tenant, clean).Scan(&id, &linked)
+	switch {
+	case err == nil && linked == nil:
+		return p.LinkSupplierTx(ctx, tx, tenant, id, &link, actor)
+	case err == nil:
+		return Supplier{}, fmt.Errorf("%w: %s is another linked business already", ErrSupplierExists, clean)
+	case !errors.Is(err, pgx.ErrNoRows):
+		return Supplier{}, err
+	}
+	id = uuid.Must(uuid.NewV7())
+	if _, err := tx.Exec(ctx, `INSERT INTO suppliers (id, tenant_id, name, link_id, created_by) VALUES ($1, $2, $3, $4, $5)`,
+		id, tenant, clean, link, actor); err != nil {
+		return Supplier{}, err
+	}
+	if err := stockAudit(ctx, tx, tenant, "supplier.added", clean, map[string]any{"supplier_id": id, "link": link, "by": actor}); err != nil {
 		return Supplier{}, err
 	}
 	return p.SupplierTx(ctx, tx, tenant, id)
@@ -448,7 +501,7 @@ func businessName(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (string, err
 // inviteTx queues the tap-in link by SMS; false when it cannot be sent
 // here.
 func (p *Purchases) inviteTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, x Supplier) (bool, error) {
-	if p.Messages == nil || x.Phone == pii.Erased {
+	if p.Messages == nil || x.Phone == pii.Erased || x.Phone == "" {
 		return false, nil
 	}
 	link, err := p.tapIn(ctx, tx, tenant)
@@ -869,6 +922,15 @@ func (p *Purchases) SendTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID,
 	if err != nil {
 		return x, err
 	}
+	if link == nil {
+		var reachable bool
+		if err := tx.QueryRow(ctx, `SELECT phone IS NOT NULL FROM suppliers WHERE tenant_id = $1 AND id = $2`, tenant, x.SupplierID).Scan(&reachable); err != nil {
+			return x, err
+		}
+		if !reachable {
+			return x, fmt.Errorf("%w: your link with %s has ended and Taskiem has no number for them; add one to send %s", ErrPurchase, x.Supplier, x.Reference)
+		}
+	}
 	if _, err := tx.Exec(ctx, `UPDATE purchase_orders SET status = 'sent', approved_by = $3, sent_at = now(), link_id = $4, updated_at = now()
 		WHERE tenant_id = $1 AND id = $2`, tenant, id, approver, link); err != nil {
 		return x, err
@@ -1066,8 +1128,11 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 		return x, nil, nil, ErrLinked
 	}
 	known := map[string]bool{}
+	left, names := map[string]int64{}, map[string]string{}
 	for _, l := range x.Lines {
 		known[l.ItemID] = true
+		left[l.ItemID] += max(0, l.Quantity-l.Received)
+		names[l.ItemID] = l.Item
 	}
 	for item, n := range got {
 		if !known[item] {
@@ -1075,6 +1140,18 @@ func ReceiveTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, got map[str
 		}
 		if n < 0 || n > MaxDelta {
 			return x, nil, nil, fmt.Errorf("%w: how many came is a whole number", ErrPurchase)
+		}
+		// An order takes what it ordered and no more: what came beyond it
+		// would be owed to the supplier at the order's price with nobody
+		// having agreed to buy it. It is recorded as goods received on
+		// their own (or on a new order). A linked supplier's count is
+		// taken as it is: that order is received by the link's own steps.
+		if n > left[item] && !strings.HasPrefix(key, LinkReceiptKey) {
+			if left[item] == 0 {
+				return x, nil, nil, fmt.Errorf("%w: all the %s on %s has come already; record more as goods received on their own", ErrPurchase, names[item], x.Reference)
+			}
+			return x, nil, nil, fmt.Errorf("%w: only %d of %s are still to come on %s; record %d here, and the rest as goods received on their own",
+				ErrPurchase, left[item], names[item], x.Reference, left[item])
 		}
 	}
 	var moves []Movement
@@ -1246,6 +1323,25 @@ func PayTx(ctx context.Context, tx pgx.Tx, tenant, id uuid.UUID, amount int64, h
 		return x, fmt.Errorf("%w: an idempotency key", ErrPurchase)
 	}
 	key = FitKey(key)
+	// A payment already recorded under this key answers as it did, even
+	// when the order is paid up now.
+	var made bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM purchase_payments p JOIN money_entries e ON e.id = p.entry_id
+		WHERE p.tenant_id = $1 AND p.purchase_id = $2 AND e.reference = $3)`, tenant, id, "purchase:"+key).Scan(&made); err != nil {
+		return x, err
+	}
+	if made {
+		return x, nil
+	}
+	// An order is paid up to its total and no more: an amount beyond what
+	// is left would be an expense nothing explains. (Paying before the
+	// goods come is allowed, as it was: up to the order's total.)
+	if rest := max(0, x.TotalKobo-x.PaidKobo); amount > rest {
+		if rest == 0 {
+			return x, fmt.Errorf("%w: %s is paid in full already", ErrPurchase, x.Reference)
+		}
+		return x, fmt.Errorf("%w: only %s is left to pay on %s", ErrPurchase, storefront.FormatNaira(rest), x.Reference)
+	}
 	channel := "cash"
 	if how == Transfer {
 		channel = "bank"

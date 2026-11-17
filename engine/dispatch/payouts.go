@@ -216,6 +216,34 @@ func (d *Dispatch) PrepareBatch(ctx context.Context, tenant, batch, run uuid.UUI
 				return err
 			}
 			for _, l := range lines {
+				// The rider's deliveries to pay are taken here, locked, and
+				// the payout pays and binds exactly these: one confirmed
+				// delivered after this (the line above was added up in an
+				// earlier statement) waits for the next payout, and is
+				// never marked paid by a payout that did not count its fee.
+				drows, err := tx.Query(ctx, `SELECT id, fee_kobo FROM deliveries WHERE tenant_id = $1 AND rider_id = $2 AND status = 'delivered' AND payout_id IS NULL
+					ORDER BY id FOR UPDATE`, tenant, l.RiderID)
+				if err != nil {
+					return err
+				}
+				var ids []uuid.UUID
+				l.Deliveries, l.FeesKobo = 0, 0
+				for drows.Next() {
+					var id uuid.UUID
+					var fee int64
+					if err := drows.Scan(&id, &fee); err != nil {
+						drows.Close()
+						return err
+					}
+					ids = append(ids, id)
+					l.Deliveries++
+					l.FeesKobo += fee
+				}
+				drows.Close()
+				if err := drows.Err(); err != nil {
+					return err
+				}
+				l.NetKobo = max(0, l.FeesKobo-l.OwedKobo)
 				if l.Deliveries == 0 {
 					continue
 				}
@@ -236,9 +264,12 @@ func (d *Dispatch) PrepareBatch(ctx context.Context, tenant, batch, run uuid.UUI
 					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`, id, tenant, batch, l.RiderID, l.Deliveries, l.FeesKobo, min(l.OwedKobo, l.FeesKobo), l.NetKobo, status, runID); err != nil {
 					return err
 				}
-				if _, err := tx.Exec(ctx, `UPDATE deliveries SET payout_id = $3 WHERE tenant_id = $1 AND rider_id = $2 AND status = 'delivered' AND payout_id IS NULL`,
-					tenant, l.RiderID, id); err != nil {
+				tag, err := tx.Exec(ctx, `UPDATE deliveries SET payout_id = $3 WHERE tenant_id = $1 AND id = ANY ($2) AND payout_id IS NULL`, tenant, ids, id)
+				if err != nil {
 					return err
+				}
+				if int(tag.RowsAffected()) != len(ids) {
+					return fmt.Errorf("dispatch: a payout counted %d deliveries and bound %d", len(ids), tag.RowsAffected())
 				}
 				if status == "paid" {
 					if err := d.settlePayoutTx(ctx, tx, tenant, id, l.RiderID, min(l.OwedKobo, l.FeesKobo)); err != nil {

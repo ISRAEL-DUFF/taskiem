@@ -129,10 +129,15 @@ func (d *Dispatch) RiderDeliveries(ctx context.Context, phone, channel, addr str
 }
 
 // SetProof keeps a delivery's photo (its place in the business's storage)
-// or the location the rider sent.
+// or the location the rider sent. A photo is kept beside the delivery's
+// earlier ones (delivery_proofs); the delivery names the latest.
 func (d *Dispatch) SetProof(ctx context.Context, tenant, delivery uuid.UUID, proof, location string) error {
 	return d.tx(ctx, tenant, func(tx pgx.Tx) error {
 		if proof != "" {
+			if _, err := tx.Exec(ctx, `INSERT INTO delivery_proofs (id, tenant_id, delivery_id, path) VALUES ($1, $2, $3, $4)`,
+				uuid.Must(uuid.NewV7()), tenant, delivery, proof); err != nil {
+				return err
+			}
 			if _, err := tx.Exec(ctx, `UPDATE deliveries SET proof = $2 WHERE id = $1`, delivery, proof); err != nil {
 				return err
 			}
@@ -144,6 +149,68 @@ func (d *Dispatch) SetProof(ctx context.Context, tenant, delivery uuid.UUID, pro
 		}
 		return audit(ctx, tx, tenant, "dispatch.proof", delivery.String(), map[string]any{"photo": proof != "", "location": location != ""})
 	})
+}
+
+// ProofMoveWindow is how long after a photo was kept the rider may say it
+// was for another of their orders.
+const ProofMoveWindow = 30 * time.Minute
+
+// MoveProof moves the photo the delivery's rider sent last, kept for
+// another of their deliveries of the business within ProofMoveWindow, to
+// this delivery; each delivery then names the latest photo it still has.
+// ErrNoDelivery when there is no such photo (it was moved already).
+func (d *Dispatch) MoveProof(ctx context.Context, tenant, delivery uuid.UUID) (Delivery, error) {
+	var x Delivery
+	err := d.tx(ctx, tenant, func(tx pgx.Tx) error {
+		var err error
+		if x, err = d.GetTx(ctx, tx, tenant, delivery); err != nil {
+			return err
+		}
+		var id, from uuid.UUID
+		err = tx.QueryRow(ctx, `SELECT p.id, p.delivery_id FROM delivery_proofs p JOIN deliveries o ON o.id = p.delivery_id
+			WHERE p.tenant_id = $1 AND o.rider_id = $2 AND p.created_at > now() - make_interval(secs => $3)
+			ORDER BY p.created_at DESC, p.id DESC LIMIT 1 FOR UPDATE OF p`, tenant, x.RiderID, ProofMoveWindow.Seconds()).Scan(&id, &from)
+		if errors.Is(err, pgx.ErrNoRows) || err == nil && from == delivery {
+			return ErrNoDelivery
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE delivery_proofs SET delivery_id = $2 WHERE id = $1`, id, delivery); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE deliveries d SET proof = (SELECT p.path FROM delivery_proofs p WHERE p.delivery_id = d.id ORDER BY p.created_at DESC, p.id DESC LIMIT 1)
+			WHERE d.tenant_id = $1 AND d.id IN ($2, $3)`, tenant, from, delivery); err != nil {
+			return err
+		}
+		return audit(ctx, tx, tenant, "dispatch.proof_moved", delivery.String(), map[string]any{"from": from})
+	})
+	return x, err
+}
+
+// ProofCounts is how many photos each of the deliveries has.
+func (d *Dispatch) ProofCounts(ctx context.Context, tenant uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]int, error) {
+	out := map[uuid.UUID]int{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	err := d.tx(ctx, tenant, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT delivery_id, count(*) FROM delivery_proofs WHERE tenant_id = $1 AND delivery_id = ANY ($2) GROUP BY 1`, tenant, ids)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var id uuid.UUID
+			var n int
+			if err := rows.Scan(&id, &n); err != nil {
+				return err
+			}
+			out[id] = n
+		}
+		return rows.Err()
+	})
+	return out, err
 }
 
 // RiderPhoneHashTx is the keyed hash of the rider of a delivery, which a

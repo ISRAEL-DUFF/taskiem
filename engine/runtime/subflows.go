@@ -179,20 +179,22 @@ func (s *Store) notifyParent(ctx context.Context, tx pgx.Tx, r runRow, status st
 	return err
 }
 
-// childrenToReverse returns, when a run cancelled with reversing
-// withdraws one of its steps, the child runs that step waits for, which
-// are cancelled with reversing too (reverseChildren). Each child tells the
-// step when it has ended, as it would have anyway.
-func (s *Store) childrenToReverse(ctx context.Context, tx pgx.Tx, r runRow, step string) ([]uuid.UUID, error) {
-	if asked, err := cancelRequested(ctx, tx, r.ref.ID); err != nil || !asked {
-		return nil, err
-	}
+// childrenToReverse returns the child runs a withdrawn step waits for,
+// which are cancelled with reversing too (reverseChildren), and whether
+// the run was itself cancelled with reversing: then decide waits for each
+// child, which tells the step when it has ended, as it would have anyway.
+func (s *Store) childrenToReverse(ctx context.Context, tx pgx.Tx, r runRow, step string) ([]uuid.UUID, bool, error) {
 	rows, err := tx.Query(ctx, `SELECT id FROM runs WHERE parent_run_id = $1 AND parent_step = $2 AND parent_waits
 		AND status NOT IN ('completed', 'failed', 'cancelled') ORDER BY started_at`, r.ref.ID, step)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	children, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil || len(children) == 0 {
+		return nil, false, err
+	}
+	asked, err := cancelRequested(ctx, tx, r.ref.ID)
+	return children, asked, err
 }
 
 // reverseChildren cancels children with reversing.
@@ -224,6 +226,13 @@ func (s *Store) cancelChildren(ctx context.Context, tx pgx.Tx, r runRow) error {
 		}
 		switch child.status {
 		case "completed", "failed", "cancelled":
+			continue
+		}
+		// A child already cancelled with reversing (its step was withdrawn)
+		// is left to finish reversing what it did.
+		if asked, err := cancelRequested(ctx, tx, id); err != nil {
+			return err
+		} else if asked {
 			continue
 		}
 		if _, err := appendEvent(ctx, tx, id, history.RunCancelled, "", 0, map[string]any{"by": "the workflow that started it ended"}, history.OriginScheduler); err != nil {

@@ -3,7 +3,8 @@
 # (decision 0032, docs/vm.md). Installed to /usr/local/bin by install.sh.
 #
 #   taskiem-vps setup               first install, or re-run to change settings (idempotent)
-#   taskiem-vps update [--now]      move to the newest signed release on this server's channel
+#   taskiem-vps update [--now] [--allow-downgrade]
+#                                   move to the newest signed release on this server's channel
 #   taskiem-vps rollback            go back to the release before the current one
 #   taskiem-vps status              what runs, which release, health, last update and backup
 #   taskiem-vps check               health checks; alerts on change (run every 5 minutes)
@@ -20,7 +21,12 @@ BIN=${TASKIEM_VPS_BIN:-/usr/local/bin} # where this tool is installed (tests cha
 REPO_SLUG=ISRAEL-DUFF/taskiem
 IMAGE_REPO=ghcr.io/israel-duff/taskiem
 SIGNER='^https://github\.com/ISRAEL-DUFF/taskiem/\.github/workflows/ci\.yml@refs/(heads/main|tags/v.+)$'
+# A production server takes only what a version tag's run released.
+SIGNER_PRODUCTION='^https://github\.com/ISRAEL-DUFF/taskiem/\.github/workflows/ci\.yml@refs/tags/v.+$'
 ISSUER=https://token.actions.githubusercontent.com
+# CI's signed statement that an image was released to a channel, with a
+# release number that only grows (.github/workflows/ci.yml).
+RELEASE_STATEMENT=https://github.com/ISRAEL-DUFF/taskiem/attestations/release/v1
 # Third-party images, pinned by digest (the tag is kept for people), as the
 # Dockerfile pins its bases; docker-compose.yml pins the same OpenBao.
 PSQL_IMAGE=postgres:16.15-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
@@ -111,11 +117,13 @@ verify_image() { # REF
     return 0
   fi
   local src out
+  COSIGN_TRUST=()
   for src in $TUF_SOURCES pinned; do
     if [ "$src" = pinned ]; then
       [ -s "$STATE/trusted_root.json" ] || continue
       log "checking the signature against the trust metadata saved on $(date -u -r "$STATE/trusted_root.json" +%F)"
-      cosign verify "$1" --trusted-root "$STATE/trusted_root.json" --certificate-identity-regexp "$SIGNER" --certificate-oidc-issuer "$ISSUER" >/dev/null 2>&1 && return 0
+      COSIGN_TRUST=(--trusted-root "$STATE/trusted_root.json")
+      cosign verify "$1" "${COSIGN_TRUST[@]}" --certificate-identity-regexp "$SIGNER" --certificate-oidc-issuer "$ISSUER" >/dev/null 2>&1 && return 0
       break
     fi
     if ! out=$(cosign initialize --mirror "$src" 2>&1 >/dev/null); then
@@ -133,6 +141,61 @@ verify_image() { # REF
     esac
   done
   die "$1 is not signed by Taskiem's CI: refusing it"
+}
+
+# The trust metadata verify_image ended up using (the saved root, when the
+# sources could not be reached): the release statement is checked the same way.
+COSIGN_TRUST=()
+
+# The release number CI stated for REF on this server's channel: the
+# highest, if it was released more than once. Prints nothing when CI made
+# no such statement. The statement is an attestation signed as the image
+# is (keyless, this repository's CI workflow), so moving a tag in the
+# registry cannot make one.
+release_of() { # REF
+  local channel signer out
+  channel=$(conf CHANNEL)
+  signer=$SIGNER
+  [ "$channel" = production ] && signer=$SIGNER_PRODUCTION
+  out=$(cosign verify-attestation "$1" "${COSIGN_TRUST[@]}" --type "$RELEASE_STATEMENT" \
+    --certificate-identity-regexp "$signer" --certificate-oidc-issuer "$ISSUER" 2>/dev/null) || return 0
+  printf '%s\n' "$out" |
+    jq -r --arg c "$channel" '(.payload // .dsseEnvelope.payload // empty) | @base64d | fromjson | .predicate | select(.channel == $c) | .release' 2>/dev/null |
+    grep -E '^[0-9]+$' | sort -n | tail -1
+}
+
+# Refuse a release that CI did not release to this server's channel, or
+# that is not newer than the one running. Sets NEW_RELEASE.
+NEW_RELEASE=""
+check_release() { # REF ALLOW_DOWNGRADE
+  NEW_RELEASE=""
+  if test_mode && [ -z "${TASKIEM_VPS_TEST_RELEASES:-}" ]; then return 0; fi
+  [ "${TASKIEM_VPS_VERIFY:-1}" = 0 ] && return 0 # verify_image has warned
+  local have channel
+  channel=$(conf CHANNEL)
+  NEW_RELEASE=$(release_of "$1" || true)
+  if [ -z "$NEW_RELEASE" ]; then
+    refuse_release "$1" "$1 carries no signed statement from Taskiem's CI that it was released to the $channel channel: refusing it"
+  fi
+  have=$(cat "$STATE/current-release" 2>/dev/null || true)
+  case $have in '' | *[!0-9]*) have=0 ;; esac
+  [ "$NEW_RELEASE" -gt "$have" ] && return 0
+  if [ -n "$2" ]; then
+    log "WARNING: --allow-downgrade: installing release $NEW_RELEASE of the $channel channel over release $have, as ${SUDO_USER:-root} asked"
+    logger -t taskiem-vps -p auth.warning "update --allow-downgrade by ${SUDO_USER:-root}: release $NEW_RELEASE ($1) over release $have" 2>/dev/null || true
+    return 0
+  fi
+  refuse_release "$1" "$1 is release $NEW_RELEASE of the $channel channel, not newer than release $have running here: refusing it (to go back on purpose, a person runs taskiem-vps update --now --allow-downgrade)"
+}
+
+# A refused release is remembered, so the timer does not check and alert
+# about it on every tick; the alert goes out once.
+refuse_release() { # REF MESSAGE
+  if [ "$1" != "$(cat "$STATE/update-failed" 2>/dev/null || true)" ]; then
+    printf '%s\n' "$1" >"$STATE/update-failed"
+    notify "release refused" "$2. The $(conf CHANNEL) tag in the registry names an image this server will not install. If nobody meant that, someone may have moved the tag: check the registry."
+  fi
+  die "$2"
 }
 
 # Keep the newest trusted root cosign fetched, for a day the metadata
@@ -240,8 +303,13 @@ in_window() {
 
 # --- alerts ------------------------------------------------------------------
 
+# NOTIFY_SENT says whether the last alert reached anyone: yes when a
+# channel took it, or when no channel is configured (the log is then the
+# only alert there is). notify itself never fails, so callers need not
+# guard it.
+NOTIFY_SENT=yes
 notify() { # SUBJECT BODY
-  local subject body=$2 smtp from to webhook msg
+  local subject body=$2 smtp from to webhook msg tried=0 sent=0
   subject="[Taskiem $(conf DOMAIN)] $1"
   log "ALERT: $1"
   to=$(conf ALERT_EMAIL)
@@ -252,15 +320,51 @@ notify() { # SUBJECT BODY
     printf 'From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\n\r\n%s\r\n' "$from" "$to" "$subject" "$(date -R)" "$body" >"$msg"
     local tls=()
     [ "${smtp%%://*}" != smtp ] || tls=(--ssl-reqd) # smtp:// must upgrade with STARTTLS
-    curl -fsS --max-time 30 "${tls[@]}" --url "$smtp" --mail-from "$from" --mail-rcpt "$to" --upload-file "$msg" >/dev/null ||
+    tried=$((tried + 1))
+    if curl -fsS --max-time 30 "${tls[@]}" --url "$smtp" --mail-from "$from" --mail-rcpt "$to" --upload-file "$msg" >/dev/null; then
+      sent=$((sent + 1))
+    else
       log "alert email failed"
+    fi
     rm -f "$msg"
   fi
   webhook=$(conf ALERT_WEBHOOK)
   if [ -n "$webhook" ]; then
-    jq -n --arg text "$subject"$'\n'"$body" '{text: $text}' |
-      curl -fsS --max-time 15 -H 'Content-Type: application/json' -d @- "$webhook" >/dev/null || log "alert webhook failed"
+    tried=$((tried + 1))
+    if jq -n --arg text "$subject"$'\n'"$body" '{text: $text}' |
+      curl -fsS --max-time 15 -H 'Content-Type: application/json' -d @- "$webhook" >/dev/null; then
+      sent=$((sent + 1))
+    else
+      log "alert webhook failed"
+    fi
   fi
+  NOTIFY_SENT=yes
+  if [ "$tried" -gt 0 ] && [ "$sent" -eq 0 ]; then
+    NOTIFY_SENT=no
+    # Nobody was told: say so where a person watching the server looks.
+    log "ERROR: the alert \"$1\" could not be sent by any channel"
+    logger -t taskiem-vps -p daemon.err "alert could not be sent by any channel: $subject: $body" 2>/dev/null || true
+  fi
+  return 0
+}
+
+# The owner's first password, when no email could carry a set-your-password
+# link: shown on the terminal when a person is at one; otherwise written to
+# a file only root can read, and its path logged. Never to standard output:
+# an unattended install's output is kept by cloud-init and CI logs.
+hand_over_password() { # EMAIL PASSWORD
+  local f
+  if { true >/dev/tty; } 2>/dev/null; then
+    printf '\nOwner %s, first password (shown once, change it at first sign-in): %s\n\n' "$1" "$2" >/dev/tty
+    return 0
+  fi
+  f="${TASKIEM_VPS_ROOT_HOME:-/root}/taskiem-owner-password-$(date +%F).txt"
+  (
+    umask 077
+    printf 'Taskiem owner: %s\nFirst password: %s\n\nSign in, change it, then delete this file (shred -u).\n' "$1" "$2" >"$f"
+  )
+  chmod 600 "$f"
+  log "the owner's first password is in $f (readable by root only): give it to $1, then delete the file (shred -u)"
 }
 
 # --- commands ----------------------------------------------------------------
@@ -556,16 +660,14 @@ SQL
     log "creating the organisation and its owner"
     local pw
     pw=$(hex 16)
-    compose run --rm --no-deps -e TASKIEM_BOOTSTRAP_PASSWORD="$pw" taskiem bootstrap --tenant "$ORG" --email "$OWNER_EMAIL" >/dev/null
+    # By name only: the value travels in the environment, not on a command
+    # line that every process on the server can read.
+    TASKIEM_BOOTSTRAP_PASSWORD="$pw" compose run --rm --no-deps -e TASKIEM_BOOTSTRAP_PASSWORD taskiem bootstrap --tenant "$ORG" --email "$OWNER_EMAIL" >/dev/null
     touch "$STATE/bootstrapped"
     if [ -n "$SMTP_URL" ] && owner_reset_email; then
       log "$OWNER_EMAIL has been sent a link to set their password"
     else
-      if { true >/dev/tty; } 2>/dev/null; then
-        printf '\nOwner %s, first password (shown once, change it at first sign-in): %s\n\n' "$OWNER_EMAIL" "$pw" >/dev/tty
-      else
-        printf 'Owner first password: %s\n' "$pw"
-      fi
+      hand_over_password "$OWNER_EMAIL" "$pw"
     fi
   fi
 
@@ -621,10 +723,14 @@ cmd_owner_reset() { need_root owner-reset; owner_reset_email && log "sent to $(c
 
 cmd_update() {
   need_root update
-  local auto="" now=""
-  for a in "$@"; do case $a in --auto) auto=1 ;; --now) now=1 ;; *) die "unknown option $a" ;; esac; done
+  local auto="" now="" downgrade=""
+  for a in "$@"; do case $a in --auto) auto=1 ;; --now) now=1 ;; --allow-downgrade) downgrade=1 ;; *) die "unknown option $a" ;; esac; done
+  [ -z "$downgrade" ] || [ -z "$auto" ] || die "--allow-downgrade is for a person, not the timer"
+  # One lock for everything that stops or restarts the stack: updates,
+  # rollbacks and the backup (which copies OpenBao's storage while it is
+  # stopped).
   exec 9>"$STATE/update.lock"
-  flock -n 9 || { log "another update is running"; return 0; }
+  flock -n 9 || { log "another update, or the backup, is running"; return 0; }
 
   local current target
   current=$(cat "$STATE/current" 2>/dev/null || true)
@@ -643,12 +749,18 @@ cmd_update() {
 
   log "upgrading to $target"
   test_mode || verify_image "$target"
+  check_release "$target" "$downgrade"
   test_mode || docker pull --quiet "$target" >/dev/null
   sync_kit "$(image_revision "$target")"
   printf '%s\n' "$current" >"$STATE/previous"
   set_image "$target"
   if compose up -d --remove-orphans 2>"$STATE/last-update.log" && wait_healthy 240; then
     rm -f "$STATE/update-failed"
+    # The release numbers travel with current and previous.
+    if [ -n "$NEW_RELEASE" ]; then
+      cp "$STATE/current-release" "$STATE/previous-release" 2>/dev/null || rm -f "$STATE/previous-release"
+      printf '%s\n' "$NEW_RELEASE" >"$STATE/current-release"
+    fi
     date -u +%FT%TZ >"$STATE/last-update"
     log "upgraded to $target"
     notify "upgraded" "Now running $target (was $current)."
@@ -674,10 +786,17 @@ cmd_rollback() {
   local previous
   previous=$(cat "$STATE/previous" 2>/dev/null || true)
   [ -n "$previous" ] || die "no previous release recorded"
+  exec 9>"$STATE/update.lock"
+  flock -n 9 || die "an update or the backup is running: try again when it has finished"
   log "rolling back to $previous"
   sync_kit "$(image_revision "$previous")" # its own kit, before anything changes
   printf '%s\n' "$(cat "$STATE/current")" >"$STATE/previous"
   set_image "$previous"
+  # The release numbers swap with the releases.
+  local was
+  was=$(cat "$STATE/current-release" 2>/dev/null || true)
+  if [ -s "$STATE/previous-release" ]; then cp "$STATE/previous-release" "$STATE/current-release"; else rm -f "$STATE/current-release"; fi
+  if [ -n "$was" ]; then printf '%s\n' "$was" >"$STATE/previous-release"; else rm -f "$STATE/previous-release"; fi
   compose up -d --remove-orphans
   wait_healthy 240 || die "not healthy after rollback: taskiem-vps logs"
   log "rolled back"
@@ -717,14 +836,34 @@ cmd_backup() {
   # OpenBao's Raft database must not be copied while it is open: stop it for
   # the seconds a local copy takes, start it again, and back up the copy.
   # The unseal key is left out on purpose: it is on the recovery sheet.
-  local copy="$STATE/openbao-copy"
+  # An update's "compose up" would start OpenBao again in the middle of the
+  # copy, and the torn copy would be stored as a good backup. So the backup
+  # holds the lock updates take (the upgrade window covers the backup's
+  # hour), waiting for a running update to finish.
+  exec 9>"$STATE/update.lock"
+  flock -w "${TASKIEM_VPS_LOCK_WAIT:-1800}" 9 || {
+    notify "backup failed" "The backup did not run: an update held the server for more than $(( ${TASKIEM_VPS_LOCK_WAIT:-1800} / 60 )) minutes. Run taskiem-vps status, then taskiem-vps backup."
+    die "an update is still running: the backup did not start"
+  }
+  local copy="$STATE/openbao-copy" copied=yes
   mkdir -p "$copy" && chmod 700 "$copy"
   trap 'compose start openbao >/dev/null 2>&1 || true' EXIT
   compose stop openbao >/dev/null
+  # Copy, then check the copy against the source file by file while
+  # OpenBao is still stopped: a copy that differs is not a backup.
   docker run --rm --user 0 --entrypoint sh -v taskiem_openbao_data:/src:ro -v "$copy:/dst" "$OPENBAO_IMAGE" \
-    -c 'find /dst -mindepth 1 -delete && cp -a /src/. /dst/'
+    -c 'find /dst -mindepth 1 -delete && cp -a /src/. /dst/ &&
+        (cd /src && find . -type f -exec sha256sum {} + | sort -k2) >/tmp/src.sums &&
+        (cd /dst && find . -type f -exec sha256sum {} + | sort -k2) >/tmp/dst.sums &&
+        [ -s /tmp/src.sums ] && cmp -s /tmp/src.sums /tmp/dst.sums' || copied=no
+  # Something started OpenBao during the copy: its files may have moved on.
+  if ! test_mode && [ -n "$(compose ps -q --status running openbao 2>/dev/null || true)" ]; then copied=no; fi
   compose start openbao >/dev/null
   trap - EXIT
+  if [ "$copied" = no ]; then
+    notify "backup failed" "The copy of OpenBao's storage did not match the original, so nothing was stored. Run taskiem-vps backup to try again."
+    return 1
+  fi
   if OPENBAO_SOURCE=$copy restic_run backup /backup --tag taskiem --exclude /backup/kit/openbao-unseal.env --exclude /backup/etc/backup.env &&
     restic_run forget --tag taskiem --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --prune >/dev/null; then
     date -u +%FT%TZ >"$STATE/last-backup"
@@ -806,6 +945,7 @@ run_checks() {
   [ ! -s "$STATE/update-failed" ] || echo "release $(cat "$STATE/update-failed") failed to upgrade and was rolled back"
   staging_behind
   ! ls /root/taskiem-recovery-*.txt >/dev/null 2>&1 || echo "the recovery sheet is still on the server (/root/taskiem-recovery-*.txt)"
+  ! ls /root/taskiem-owner-password-*.txt >/dev/null 2>&1 || echo "the owner's first password is still on the server (/root/taskiem-owner-password-*.txt)"
 }
 
 # A staging server runs every merge to main, so main ahead of the running
@@ -835,7 +975,10 @@ cmd_check() {
   before=$(cat "$STATE/alerts" 2>/dev/null || true)
   if [ "$now" != "$before" ]; then
     if [ -n "$now" ]; then notify "problems" "$now"; else notify "all checks pass again" "Previously: $before"; fi
-    printf '%s' "$now" >"$STATE/alerts"
+    # Remembered only once someone was told: an alert that could not be
+    # sent (the mail server or webhook down with everything else) is tried
+    # again on the next check.
+    if [ "$NOTIFY_SENT" = yes ]; then printf '%s' "$now" >"$STATE/alerts"; fi
   fi
   if [ -n "$now" ]; then printf '%s\n' "$now"; return 1; fi
   echo "all checks pass"

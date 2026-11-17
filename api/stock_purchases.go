@@ -101,6 +101,9 @@ func (s *Server) addSupplier(w http.ResponseWriter, r *http.Request) {
 		Name  string   `json:"name"`
 		Phone string   `json:"phone"`
 		Items []string `json:"items"`
+		// LinkID: a linked business, added from the link with it; no phone
+		// is asked (its orders go through the link).
+		LinkID *uuid.UUID `json:"link_id"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		s.fail(w, r, err)
@@ -110,7 +113,12 @@ func (s *Server) addSupplier(w http.ResponseWriter, r *http.Request) {
 	var x stock.Supplier
 	if err := s.tx(r, func(tx pgx.Tx) error {
 		var err error
-		if x, err = s.Purchases.AddSupplierTx(r.Context(), tx, p.TenantID, in.Name, in.Phone, p.Actor()); err != nil {
+		if in.LinkID != nil && strings.TrimSpace(in.Phone) == "" {
+			x, err = s.Purchases.AddLinkedSupplierTx(r.Context(), tx, p.TenantID, in.Name, *in.LinkID, p.Actor())
+		} else if x, err = s.Purchases.AddSupplierTx(r.Context(), tx, p.TenantID, in.Name, in.Phone, p.Actor()); err == nil && in.LinkID != nil {
+			x, err = s.Purchases.LinkSupplierTx(r.Context(), tx, p.TenantID, x.ID, in.LinkID, p.Actor())
+		}
+		if err != nil {
 			return err
 		}
 		return auditTx(r, tx, "supplier.add", x.Name, map[string]any{"supplier_id": x.ID})

@@ -21,6 +21,7 @@
   "event": "payment.received",
   "expect": {
     "payment_id": "tot_ab12cd34ef56gh78ij90kl12mn34op56",
+    "credit_id": "100004261005092000999999",
     "amount_kobo": 2500000,
     "fee_kobo": 35000,
     "currency": "NGN",

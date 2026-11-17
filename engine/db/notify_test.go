@@ -16,6 +16,13 @@ import (
 // trigger ran and the notifications a listener received.
 func taskWakeups(t *testing.T, d *dbtest.DB, queues []string, due string) (int, []string) {
 	t.Helper()
+	return taskWakeupsWith(t, d, queues, due, "")
+}
+
+// taskWakeupsWith is taskWakeups in a transaction that has set
+// app.task_wake to wake (empty: not set).
+func taskWakeupsWith(t *testing.T, d *dbtest.DB, queues []string, due, wake string) (int, []string) {
+	t.Helper()
 	tn := d.SeedTenant(t, nil)
 	run := d.StartRun(t, tn)
 	l, err := pgx.Connect(ctx, d.DSN)
@@ -30,6 +37,11 @@ func taskWakeups(t *testing.T, d *dbtest.DB, queues []string, due string) (int, 
 	err = pgx.BeginFunc(ctx, d.Admin, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(ctx, `SET LOCAL track_functions = 'all'`); err != nil {
 			return err
+		}
+		if wake != "" {
+			if _, err := tx.Exec(ctx, `SELECT set_config('app.task_wake', $1, true)`, wake); err != nil {
+				return err
+			}
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO tasks (id, tenant_id, run_id, step_id, attempt, queue, available_at)
 			SELECT gen_random_uuid(), $1, $2, 's' || i, 1, q, now() + $4::interval
@@ -83,5 +95,22 @@ func TestFutureTasksDoNotNotify(t *testing.T) {
 	d := dbtest.New(t)
 	if _, got := taskWakeups(t, d, []string{"connector"}, "1 minute"); len(got) != 0 {
 		t.Errorf("a task due in a minute sent %q, want no wake-up", got)
+	}
+}
+
+// A transaction whose wake-up the engine sends itself is not notified by
+// the trigger, so its commit does not take the notify lock; any other
+// value, and a later transaction on the same connection, notify as before
+// (docs/spec/task-wake-ups.md).
+func TestEngineTransactionsDoNotNotify(t *testing.T) {
+	d := dbtest.New(t)
+	if _, got := taskWakeupsWith(t, d, []string{"connector", "sandbox"}, "0 seconds", "engine"); len(got) != 0 {
+		t.Errorf("a transaction that set app.task_wake = engine sent %q from the trigger, want none", got)
+	}
+	if _, got := taskWakeupsWith(t, d, []string{"connector"}, "0 seconds", "other"); len(got) != 1 {
+		t.Errorf("a transaction with another value sent %q, want one wake-up", got)
+	}
+	if _, got := taskWakeups(t, d, []string{"connector"}, "0 seconds"); len(got) != 1 {
+		t.Errorf("a transaction that set nothing sent %q, want one wake-up", got)
 	}
 }

@@ -113,8 +113,10 @@ The migration Job reads the pods' URL as `TASKIEM_APP_DATABASE_URL`. After migra
 - **Writable storage** is limited to two `emptyDir` volumes, `/tmp` and `/cache`. `/cache` holds compiled WebAssembly for the Python interpreter and connectors, and is rebuilt on start.
 - **`TASKIEM_TRUST_PROXY` defaults to true** because traffic arrives through the ingress controller. Turn it off if pods are reachable any other way, since otherwise clients could forge `X-Forwarded-For`.
 - **`networkPolicy.enabled`:**
-  - Inbound traffic is limited to the API and edge ports, plus metrics from `networkPolicy.monitoringNamespace`.
-  - Outbound traffic is not restricted, because connectors call many providers. The worker's egress guard already blocks private and metadata addresses; add your own egress policy if you need an allow-list.
+  - It is off by default and needs a CNI that enforces NetworkPolicy. Turn it on in production.
+  - Inbound traffic is limited to the API and edge ports, plus metrics from `networkPolicy.monitoringNamespace`. Set `networkPolicy.ingressNamespace` to your ingress controller's namespace and those two ports take traffic only from it; left empty, anything in the cluster may call them.
+  - Outbound traffic from the **public host and the mail role**, which face the internet, is limited to DNS and the database (`networkPolicy.databaseCIDRs` and `databasePort`; with no CIDRs, that port anywhere but the link-local range). A public or mail pod that is broken into cannot reach the API pods, OpenBao or the cloud's metadata address. If you point either at something else (your own clamd through `extraEnv`, say), add a policy for it.
+  - Outbound traffic from the other roles is not restricted, because connectors call many providers. The worker's egress guard already blocks private and metadata addresses; add your own egress policy if you need an allow-list.
 
 ## Container steps
 
@@ -188,7 +190,7 @@ An enterprise customer can have a deployment of its own: the same chart, install
 - **The customer's KMS as the platform key.** Point `TASKIEM_KMS=openbao` and `TASKIEM_OPENBAO_ADDR` at the customer's OpenBao or Vault. Put a token scoped to the transit key `TASKIEM_KMS_KEY` in the Secret as `TASKIEM_OPENBAO_TOKEN`. Every tenant key in the deployment is then wrapped by the customer's key, and revoking that token or disabling the key stops the whole deployment from reading secrets. Rotating it, and what happens when it is unavailable, work as described in [BYOK](byok.md). Per-tenant BYOK still works on top.
 - **A KMS on the customer's private network.** For per-tenant BYOK with a key service that has only a private address, set `config.TASKIEM_BYOK_ALLOW_PRIVATE: "on"`. The platform KMS (`TASKIEM_OPENBAO_ADDR`) is called directly, not through the egress guard, so it does not need this. Never set it on a multi-tenant deployment: it lets tenants' key addresses reach private ranges.
 - **Revocation bound.** `config.TASKIEM_BYOK_CACHE_TTL` (default `5m`) bounds how long a revoked key keeps working in running pods. Set it on every role, which `config` does.
-- **Network.** The chart's NetworkPolicies do not restrict egress. If you add an egress allow-list, include the customer's KMS address.
+- **Network.** The chart's NetworkPolicies do not restrict the egress of the api, edge, orchestrator, scheduler or worker roles. If you add an egress allow-list, include the customer's KMS address.
 
 Infrastructure for dedicated deployments (where they run, who operates them, backups) is outside this chart. See [needs people](needs-people.md#phase-4).
 

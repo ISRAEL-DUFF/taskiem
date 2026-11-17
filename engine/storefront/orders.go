@@ -986,11 +986,16 @@ func (o *Orders) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 				if _, err := tx.Exec(ctx, `DELETE FROM storefront_claims WHERE reference = $1`, d.reference); err != nil {
 					return err
 				}
+				// Accepted and never paid for: the stock it took goes back.
+				if err := o.returnStockTx(ctx, tx, tenant, Order{ID: d.id, Reference: d.reference, Kind: d.kind}); err != nil {
+					return err
+				}
 				return audit(ctx, tx, tenant, "storefront.order_expired", d.reference, nil)
 			}); err != nil {
 				errs = append(errs, err)
 				continue
 			}
+			o.sendReturns(ctx, tenant, d.id)
 			// A booking's run is ended and the customer told: its slot is
 			// free again.
 			if d.kind == "booking" {
@@ -1080,8 +1085,15 @@ func (o *Orders) Decide(ctx context.Context, tenant uuid.UUID, reference, decisi
 		out, accepted, err = o.DecideTx(ctx, tx, tenant, reference, decision, note, actor)
 		return err
 	})
-	if err != nil || accepted == nil {
+	if err != nil {
 		return out, err
+	}
+	switch out["status"] {
+	case "declined", "cancelled", "refund_due":
+		o.sendReturnsOf(ctx, tenant, reference)
+	}
+	if accepted == nil {
+		return out, nil
 	}
 	return o.afterAccept(ctx, tenant, *accepted, out)
 }
@@ -1199,6 +1211,16 @@ func (o *Orders) DecideTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, refe
 					return err
 				}
 			}
+		}
+		// The stock it took goes back to the shelf, unless its rider had
+		// delivered it. Asked on a retry too: it is recorded once.
+		switch next {
+		case "declined", "cancelled", "refund_due":
+			if err := o.returnStockTx(ctx, tx, tenant, ord); err != nil {
+				return err
+			}
+		}
+		if next != ord.Status {
 			// A booking declined or cancelled frees its slot.
 			if (ord.Kind == "booking" || ord.Kind == "hire" || ord.Kind == "space" || ord.Kind == "tickets" || ord.Kind == "class") && (next == "declined" || next == "cancelled" || next == "refund_due") {
 				if _, err := tx.Exec(ctx, `DELETE FROM storefront_claims WHERE reference = $1`, reference); err != nil {

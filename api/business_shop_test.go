@@ -150,3 +150,52 @@ func TestStorefrontBothWays(t *testing.T) {
 		t.Fatalf("written again with nothing changed: %v, then %v", was, again["updated_at"])
 	}
 }
+
+// A linked business becomes a supplier from the link with no phone number:
+// its orders go through the link. Unlinking it is refused, as it could not
+// then be reached; the same request again answers with the same supplier.
+func TestLinkedSupplierNeedsNoPhone(t *testing.T) {
+	w := shopWorld(t)
+	withStock(w.world)
+	withPurchases(w.world)
+	withLinkedOrders(w.world)
+	seller, buyer, _, _ := linkedPair(t, w.waWorld)
+	seller.must(200, "POST", "/v1/stock/setup", nil)
+	sRice := seller.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice 50kg", "quantity": 40, "unit": "bag", "price_kobo": 8000000},
+		"Idempotency-Key", "sr")["item"].(map[string]any)["id"].(string)
+	seller.must(200, "POST", "/v1/storefront/catalogue/refresh", nil)
+	w.srv.WaitBackground()
+	drainLinked(t, w.world)
+
+	link := buyer.must(200, "GET", "/v1/links", nil)["links"].([]any)[0].(map[string]any)["id"].(string)
+	buyer.must(200, "POST", "/v1/stock/setup", nil)
+	sup := buyer.must(201, "POST", "/v1/stock/suppliers", map[string]any{"name": "Dangote Stores", "link_id": link})["supplier"].(map[string]any)
+	if sup["phone"] != "" || sup["link_id"] != link || sup["reached"] != "link" {
+		t.Fatalf("a linked supplier, no phone: %v", sup)
+	}
+	again := buyer.must(201, "POST", "/v1/stock/suppliers", map[string]any{"name": "Dangote Stores", "link_id": link})["supplier"].(map[string]any)
+	if again["id"] != sup["id"] {
+		t.Fatalf("the same supplier again: %v, then %v", sup["id"], again["id"])
+	}
+	// Not one of ours: refused.
+	buyer.must(400, "POST", "/v1/stock/suppliers", map[string]any{"name": "Somebody", "link_id": "01900000-0000-7000-8000-000000000000"})
+	// Unlinked, it could not be reached.
+	buyer.must(400, "PUT", "/v1/stock/suppliers/"+sup["id"].(string)+"/link", map[string]any{"link_id": nil})
+
+	// An order through it reaches the seller.
+	mine := buyer.must(201, "POST", "/v1/stock/items", map[string]any{"name": "Rice 50kg", "quantity": 1, "unit": "bag"},
+		"Idempotency-Key", "r")["item"].(map[string]any)["id"].(string)
+	po := buyer.must(201, "POST", "/v1/supplier-prices/"+link+"/order",
+		map[string]any{"lines": []any{map[string]any{"seller_item_id": sRice, "quantity": 2, "item_id": mine}}}, "Idempotency-Key", "o1")["purchase"].(map[string]any)
+	ref := buyer.must(200, "POST", "/v1/stock/purchases/"+po["id"].(string)+"/send", nil)["purchase"].(map[string]any)["reference"].(string)
+	drainLinked(t, w.world)
+	found := false
+	for _, x := range seller.must(200, "GET", "/v1/trade-orders", nil)["orders"].([]any) {
+		if x.(map[string]any)["order_reference"] == ref {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the seller has no order %s", ref)
+	}
+}

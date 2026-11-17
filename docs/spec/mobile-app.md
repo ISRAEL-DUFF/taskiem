@@ -299,9 +299,16 @@ means signing in again every morning, which no one will do twice.
   the same things that end a session today (a role ending, a password
   changed, signing out everywhere). Audited like a sign-in.
 - **The token** is kept in the phone's secure storage, never in plain files
-  or logs. The app locks itself after 5 minutes away and opens with the
-  phone's own fingerprint, face or PIN; that lock is on the phone and is not
-  the server's step-up. The lock covers every screen, whatever is open on
+  or logs. **The app lock** is as WhatsApp's: off until the person turns
+  it on in Settings (with the phone's own unlock), then **Immediately**,
+  **After 1 minute** or **After 30 minutes** away it asks for the phone's
+  own fingerprint, face or PIN, and on opening the app with a kept session.
+  Changing it or turning it off asks for the phone's unlock too. A dialog,
+  the notification shade, the fingerprint prompt, or the phone's own camera,
+  photo or file picker or share sheet opened from the app is not being away
+  (decided 14 November 2026, after the always-on lock and cover were found
+  annoying on a real phone). That lock is on the phone and is not the
+  server's step-up. The lock covers every screen, whatever is open on
   top of the chats, and keeps them as they were underneath. Signing out, or
   the session ending, closes every screen; switching business closes them
   and starts the chats afresh for the other business.
@@ -406,8 +413,19 @@ WebAuthn origins gain the Android app's signing-key origin.
 - No analytics or crash reporting library that sends data to a third party
   in the first release. Crashes are reported to Taskiem's own server
   (`POST /v1/app/crash`, no message content), with the person's consent.
-- Screenshots are blocked on Android (`FLAG_SECURE`) while a payout approval
-  card is open with its step-up; elsewhere the phone's own rules apply.
+- **The app switcher.** With the app lock off nothing is covered, as on
+  WhatsApp. With it on, the switcher shows no picture of the screens: on
+  Android the phone leaves it out (`setRecentsScreenshotEnabled`, Android 13
+  and later; older phones show it), and nothing in the app is covered while
+  it is in front; on an iPhone the screens are covered with the mark on pine
+  as the app stops being in front, and shown again when the person comes
+  back.
+- **Still to do: screenshots.** Nothing stops a screenshot or a screen
+  recording while the app is in use: there is no `FLAG_SECURE` under
+  `mobile/android` yet. The plan is to set it on Android while a payout
+  approval card is open with its step-up (which also makes the switcher's
+  picture blank there); elsewhere the phone's own rules apply. iOS has no
+  equivalent.
 - The stores' privacy forms (Google's Data safety, Apple's privacy labels)
   are filled from this section and kept in `mobile/STORE.md`; the NDPA
   review covers the app as part of the product.
@@ -459,7 +477,7 @@ for one engineer who knows Flutter.
 | M1 | **Foundation**: `mobile/`, the generated client and theme, the app's kit of parts matching the web's, the parity test in CI, the licence gate for Dart, S1 | M | A build from `main` installs on a phone, and its sign-in screen passes the parity test against the web's |
 | M2 | **Signing up and signing in**: sign-up as on WhatsApp; chat code, password, passkey; S2; the app lock; the business switcher; the app's settings (§3.6) | M | A stranger signs up from the app and is still signed in a week later, on a real phone |
 | M3 | **The chat** (§3.1, §3.2): chats, a conversation, sending, files, voice notes, the stream; customers' conversations; `@Taskiem` with every command, reply buttons, voice notes, approvals with the chat PIN, and connecting (§3.5) | L | Two businesses chat from two phones; an owner sets up their shop, adds products and publishes a workflow by talking to `@Taskiem` in the app; every web chat e2e scenario on the shared list passes; every screen and moment of the chat film's acts passes the parity test |
-| M4 | **Notifications and links** (S3, S6): the switch, **Your phones**, the icon's count, links that open the app; passkeys; **signing up as on WhatsApp** (a phone proved by a WhatsApp or Telegram code, then the sign-up conversation with Taskiem, the server's `app` way in, §3.6; settled 12 November 2026) | M | A message to a closed app shows on a real Android phone's lock screen in under 5 seconds and opens that conversation |
+| M4 | **Notifications and links** (moved after M8, 12 November 2026: it needs the Firebase project, A4, set up later; the milestones that need nothing outside the code come first) (S3, S6): the switch, **Your phones**, the icon's count, links that open the app; passkeys; **signing up as on WhatsApp** (a phone proved by a WhatsApp or Telegram code, then the sign-up conversation with Taskiem, the server's `app` way in, §3.6; settled 12 November 2026) | M | A message to a closed app shows on a real Android phone's lock screen in under 5 seconds and opens that conversation |
 | M5 | **Linked businesses** (§3.3): Explore, cards, linking, your profile, the tools' picker and sheets | M | Two businesses find each other and link from the app alone |
 | M6 | **Selling** (§3.3): products and stock, Sell, Handover, services and bookings, price lists and deals | L | A shop keeps its products, stock and prices from the app alone for a week |
 | M7 | **Orders and deliveries** (§3.3): orders from linked businesses and from customers' messages, deliveries and availability, their cards | L | An order goes from a buyer's message to delivered and received with both sides in the app |

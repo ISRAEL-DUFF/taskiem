@@ -621,6 +621,7 @@ export function ToolSheet({
   scope,
   onReorder,
   onNewOrder,
+  onTools,
 }: {
   tool: ToolKey;
   from?: DOMRect | null;
@@ -636,6 +637,8 @@ export function ToolSheet({
   start?: { rowId?: string; add?: boolean; prefill?: Prefill; chip?: string };
   /** Tells a change (its diary line). */
   onSaved?: (line: string) => Promise<void> | void;
+  /** Back from the list: the tools panel again. */
+  onTools?: () => void;
 }) {
   const { can, me } = useAuth();
   const tool = toolsFor(can, "", me?.roles, me?.delivers).find(
@@ -713,8 +716,11 @@ export function ToolSheet({
           ? () => setOpen(undefined)
           : grouping
             ? () => setGrouping(false)
-            : undefined
+            : picking
+              ? stopPicking
+              : undefined
       }
+      onOut={onTools}
       shut={shut}
       testid="tool-sheet"
       footer={

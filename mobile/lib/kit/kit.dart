@@ -5,13 +5,26 @@ import 'package:flutter/material.dart' show TextField, InputDecoration, Material
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'icon.dart';
+import 'motion.dart';
 import '../theme/theme.dart';
 import 'tap_area.dart';
 
 /// A press, as the web's `button:active { transform: scale(0.98) }` with its
 /// 80 ms transition: the thing gives a little while held.
+/// Inside a page away from the chat: the kit draws itself in the app's
+/// own look (mobile.dart). Without it, the web's, as the chat keeps.
+class TkAppLook extends InheritedWidget {
+  const TkAppLook({super.key, required super.child});
+
+  static bool on(BuildContext context) => context.dependOnInheritedWidgetOfExactType<TkAppLook>() != null;
+
+  @override
+  bool updateShouldNotify(TkAppLook old) => false;
+}
+
 class TkPress extends StatefulWidget {
-  const TkPress({super.key, required this.child, this.onTap, this.scale = 0.98});
+  const TkPress({super.key, required this.child, this.onTap, this.scale = Tk.pressScale});
 
   final Widget child;
   final VoidCallback? onTap;
@@ -39,9 +52,11 @@ class _TkPressState extends State<TkPress> {
       onTapCancel: () => _set(false),
       onTap: widget.onTap,
       child: AnimatedScale(
+        // motion.css: `transform: scale(var(--press-scale))` over
+        // var(--t-press), var(--ease-out).
         scale: _down && !still ? widget.scale : 1,
-        duration: still ? Duration.zero : const Duration(milliseconds: 80),
-        curve: Curves.ease,
+        duration: still ? Duration.zero : Tk.tPress,
+        curve: Tk.easeOut,
         child: widget.child,
       ),
     );
@@ -164,13 +179,16 @@ class _TkFieldState extends State<TkField> {
     final t = TkTheme.tokens(context);
     final focused = _focus.hasFocus;
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    // In the app's own look (the sign-in card), as drawn: the words small
+    // and muted over the box, its corners rounder.
+    final own = TkAppLook.on(context);
     // The words and the field are one to a screen reader and a finger.
     return TapField(child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: 6),
-          child: Text(widget.label, style: tkText(size: 13, weight: 500, color: t.text)),
+          child: Text(widget.label, style: own ? tkText(size: 12.5, weight: 600, color: t.muted) : tkText(size: 13, weight: 500, color: t.text)),
         ),
         // `transition: background-color 0.18s ease, box-shadow 0.18s ease`
         AnimatedContainer(
@@ -180,8 +198,8 @@ class _TkFieldState extends State<TkField> {
           padding: const EdgeInsets.symmetric(horizontal: 12),
           alignment: Alignment.centerLeft,
           decoration: BoxDecoration(
-            color: focused ? t.fieldFocus : t.field,
-            borderRadius: BorderRadius.circular(Tk.radiusSm),
+            color: focused && !own ? t.fieldFocus : t.field,
+            borderRadius: BorderRadius.circular(own ? 12 : Tk.radiusSm),
             boxShadow: focused ? t.ring : const [],
           ),
           child: Material(
@@ -197,7 +215,7 @@ class _TkFieldState extends State<TkField> {
               onChanged: widget.onChanged,
               cursorColor: t.text,
               showCursor: !TkField.debugHideCaret,
-              style: tkText(size: 14, color: t.text),
+              style: tkText(size: own ? 15 : 14, color: t.text),
               decoration: const InputDecoration.collapsed(hintText: null),
               inputFormatters: widget.digits == null
                   ? const <TextInputFormatter>[]
@@ -216,10 +234,13 @@ TextStyle tkHint(TkTokens t) => tkText(size: 13, color: t.muted);
 /// A link in words (`a`, underlined on the sign-in card), with the web's
 /// 4 px above and below so it is easy to press.
 class TkLink extends StatelessWidget {
-  const TkLink({super.key, required this.label, this.onTap});
+  const TkLink({super.key, required this.label, this.onTap, this.bold = false});
 
   final String label;
   final VoidCallback? onTap;
+
+  /// As drawn in the app's own sheets: bold pine words, no line under them.
+  final bool bold;
 
   @override
   Widget build(BuildContext context) {
@@ -227,12 +248,19 @@ class TkLink extends StatelessWidget {
     return TapArea(
       child: Semantics(
         link: true,
+        enabled: onTap != null,
+        onTap: onTap,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(label, style: tkText(size: 13, color: t.accent, decoration: TextDecoration.underline)),
+            child: Text(
+              label,
+              style: bold
+                  ? tkText(size: 14, weight: 700, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand)
+                  : tkText(size: 13, color: t.accent, decoration: TextDecoration.underline),
+            ),
           ),
         ),
       ),
@@ -250,7 +278,9 @@ class TkErrorBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    return Padding(
+    // styles.css `.error { animation: rise-in 0.24s }`.
+    return TkIn.notice(
+      child: Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Semantics(
         liveRegion: true,
@@ -263,6 +293,7 @@ class TkErrorBox extends StatelessWidget {
           ),
           child: Text(message, style: tkText(size: 14, color: cssMix(t.danger, t.text, 0.82))),
         ),
+      ),
       ),
     );
   }
@@ -279,6 +310,27 @@ class TkLinkButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!TkAppLook.on(context)) return _web(context);
+    final t = TkTheme.tokens(context);
+    return TapArea(child: Semantics(
+      button: true,
+      child: TkPress(
+        onTap: onPressed ?? () {},
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Align(
+            widthFactor: 1,
+            heightFactor: 1,
+            child: Text(label, style: tkText(size: 14, weight: 600, lineHeight: 1.2, color: TkTheme.of(context).mode == TkMode.dark ? t.brandDark : t.brand)),
+          ),
+        ),
+      ),
+    ));
+  }
+
+  /// The web's look, kept in the chat (its sheets match the web's).
+  Widget _web(BuildContext context) {
     final t = TkTheme.tokens(context);
     return TapArea(child: Semantics(
       button: true,
@@ -344,6 +396,22 @@ class TkCheckbox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = TkTheme.of(context).mode == TkMode.dark;
+    // In the app's own look, as drawn: a rounded square, lime with a white
+    // tick when on, a ring when off.
+    if (TkAppLook.on(context)) {
+      final t = TkTheme.tokens(context);
+      return Container(
+        width: 26,
+        height: 26,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: checked ? const Color(0xFF7ED321) : const Color(0x00000000),
+          borderRadius: BorderRadius.circular(7),
+          border: checked ? null : Border.all(color: t.muted, width: 1.8),
+        ),
+        child: checked ? const TkIcon('b-check', size: 16, stroke: 2.6, color: Color(0xFFFFFFFF)) : null,
+      );
+    }
     return SizedBox(width: 16, height: 16, child: CustomPaint(painter: _CheckPainter(checked: checked, dark: dark)));
   }
 }
@@ -386,19 +454,29 @@ class _CheckPainter extends CustomPainter {
 /// Chrome's margins: 3 px above and right, 5 px left), 8 px, the words;
 /// 16 px below. The whole row is pressed.
 class TkChoiceRow extends StatelessWidget {
-  const TkChoiceRow({super.key, required this.control, required this.label, required this.onTap, this.radio = true});
+  const TkChoiceRow({super.key, required this.control, required this.label, required this.onTap, this.radio = true, this.checked});
   final Widget control;
   final Widget label;
-  final VoidCallback onTap;
+
+  /// Null: shown, not to be changed (`disabled`), and said so.
+  final VoidCallback? onTap;
   final bool radio;
+
+  /// Whether it is the one chosen, said to a screen reader; by default
+  /// what [control] (a [TkRadio] or [TkCheckbox]) shows.
+  final bool? checked;
 
   @override
   Widget build(BuildContext context) {
+    final c = control;
+    final on = checked ?? (c is TkRadio ? c.checked : (c is TkCheckbox ? c.checked : null));
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TapArea(
         child: Semantics(
           inMutuallyExclusiveGroup: radio,
+          checked: on,
+          enabled: onTap != null,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: onTap,
@@ -445,8 +523,11 @@ class TkBadge extends StatelessWidget {
 /// The web's `button.small` in a list's row: a pill 36 px tall, 11.9 px words;
 /// pine (lime on dark) when [primary], the danger colour's words when [danger].
 class TkSmallButton extends StatelessWidget {
-  const TkSmallButton({super.key, required this.label, this.onPressed, this.primary = false, this.danger = false, this.semantics});
+  const TkSmallButton({super.key, required this.label, this.onPressed, this.primary = false, this.danger = false, this.semantics, this.icon});
   final String label;
+
+  /// An icon before the words (the app's own look only).
+  final String? icon;
 
   /// What a screen reader hears, when more than the words (the web's
   /// `sr-only` name after them).
@@ -457,10 +538,55 @@ class TkSmallButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!TkAppLook.on(context)) return _web(context);
     final t = TkTheme.tokens(context);
     return TapArea(child: Semantics(
       button: true,
       label: semantics,
+      enabled: onPressed != null,
+      onTap: onPressed,
+      excludeSemantics: semantics != null,
+      child: TkPress(
+        onTap: onPressed ?? () {},
+        child: Container(
+          // 40 tall, and room above and below words on two lines (as drawn).
+          constraints: const BoxConstraints(minHeight: 40),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: primary ? t.primary : (danger ? t.tkDangerBg : t.tkSoft),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          // As wide as its words, not the row it is in.
+          child: Align(
+            widthFactor: 1,
+            heightFactor: 1,
+            child: () {
+              final ink = primary ? t.primaryText : (danger ? t.tkDangerInk : t.text);
+              final words = Text(label, textAlign: TextAlign.center, style: tkText(size: 13.5, weight: 600, lineHeight: 1.2, color: ink));
+              if (icon == null) return words;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ExcludeSemantics(child: TkIcon(icon!, size: 16, stroke: 2.2, color: ink)),
+                  const SizedBox(width: 6),
+                  Flexible(child: words),
+                ],
+              );
+            }(),
+          ),
+        ),
+      ),
+    ));
+  }
+
+  /// The web's look, kept in the chat (its sheets match the web's).
+  Widget _web(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return TapArea(child: Semantics(
+      button: true,
+      label: semantics,
+      enabled: onPressed != null,
+      onTap: onPressed,
       excludeSemantics: semantics != null,
       child: TkPress(
         onTap: onPressed ?? () {},

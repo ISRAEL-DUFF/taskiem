@@ -1914,12 +1914,39 @@ func newReference() string {
 	return "P-" + string(b)
 }
 
+// placedSource is the id of the buyer's purchase order for an order the
+// seller placed with a request key: the same for the same key on a link.
+func placedSource(seller, link uuid.UUID, key string) uuid.UUID {
+	return uuid.NewSHA1(link, []byte("placed by "+seller.String()+" with "+key))
+}
+
+// PlacedOrderTx is the order the seller in scope placed on a link with
+// this request key, when it did.
+func PlacedOrderTx(ctx context.Context, tx pgx.Tx, seller, link uuid.UUID, key string) (Order, bool, error) {
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT order_id FROM link_orders WHERE tenant_id = $1 AND link_id = $2 AND source_id = $3 AND placed_by_seller`,
+		seller, link, placedSource(seller, link, key)).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Order{}, false, nil
+	}
+	if err != nil {
+		return Order{}, false, err
+	}
+	o, err := GetOrderTx(ctx, tx, id.String(), false)
+	return o, err == nil, err
+}
+
 // PlaceOrderTx drafts an order for a linked business that buys from us
 // (a sales rep's phone order, §7), in the seller's scope: it is proposed
 // here, and mirrors to the buyer as a purchase order to us awaiting its
 // Confirm, going no further until then. The buyer must have marked us as
 // its supplier (its supplier record names the link).
-func PlaceOrderTx(ctx context.Context, tx pgx.Tx, v Vault, seller, link uuid.UUID, lines []OrderLine, note string, by Actor) (Order, *Told, error) {
+//
+// key, when not "", is the request's (its Idempotency-Key): the order is
+// known by it (placedSource), so the same request again finds the order
+// with PlacedOrderTx instead of making another, and two at the same
+// moment make one (the second is refused by the order's uniqueness).
+func PlaceOrderTx(ctx context.Context, tx pgx.Tx, v Vault, seller, link uuid.UUID, lines []OrderLine, note string, by Actor, key string) (Order, *Told, error) {
 	l, err := GetTx(ctx, tx, link)
 	if err != nil {
 		return Order{}, nil, err
@@ -1958,6 +1985,9 @@ func PlaceOrderTx(ctx context.Context, tx pgx.Tx, v Vault, seller, link uuid.UUI
 		return Order{}, nil, err
 	}
 	po, ref := uuid.Must(uuid.NewV7()), newReference()
+	if key != "" {
+		po = placedSource(seller, link, key)
+	}
 	id, err := insertOrder(ctx, tx, v, orderIn{seller: seller, link: link, buyer: l.Business, source: po, buyerName: l.Name, reference: ref,
 		note: note, status: OrderProposed, placed: true, lines: lines})
 	if err != nil {

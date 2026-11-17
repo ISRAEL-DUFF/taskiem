@@ -588,9 +588,10 @@ actions:
         ran_at:     { type: string }
         reconciles: { type: boolean, description: Nothing fails to reconcile }
         problems:   { type: integer, description: How many things do not reconcile }
-        money_in:       { type: object, properties: { count: { type: integer }, kobo: { type: integer } }, description: Students' money that landed that day }
+        money_in:       { type: object, properties: { count: { type: integer }, kobo: { type: integer } }, description: 'Students'' money that landed that day, with what was recorded that day for earlier days' }
         into_accounts:  { type: object, properties: { count: { type: integer }, kobo: { type: integer } }, description: Of it, paid into students' account numbers }
         at_the_desk:    { type: object, properties: { count: { type: integer }, kobo: { type: integer } }, description: Of it, posted at the desk }
+        recorded_late:  { type: object, properties: { count: { type: integer }, kobo: { type: integer } }, description: 'Of it, recorded that day for earlier days (in no other close)' }
         matched_auto:   { type: object, properties: { count: { type: integer }, kobo: { type: integer } }, description: Payments counted that day by the automatic path }
         matched_person: { type: object, properties: { count: { type: integer }, kobo: { type: integer } }, description: Payments counted that day by a person }
         unmatched:      { type: object, properties: { count: { type: integer }, kobo: { type: integer } }, description: Students' money no invoice counts yet }

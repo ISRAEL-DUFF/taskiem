@@ -371,3 +371,34 @@ test("in dark, every product tile keeps its own initials' colour (the lime tile 
   for (const s of seen) expect(s.ink, `${s.tone} tile's initials`).not.toBe(s.ground);
   await axeBoth(owner, "product tiles in every colour");
 });
+
+test("Back goes up one level at a time: a product to the list, the list to the tools; pulled up, the sheet fills the screen", async ({ browser }) => {
+  const { owner } = await linked(browser, { width: 390, height: 844 });
+  await owner.route("**/v1/stock", (r) =>
+    r.fulfill(json({ keeps_stock: true, catalogue: "products", items: [{ id: "a1", name: "Asun", available: true, stock: 9, unit: "plate", price_kobo: 300_000 }] })),
+  );
+  await owner.goto("/chat?with=taskiem");
+  const pane = owner.getByTestId("taskiem-pane");
+  await pane.getByRole("button", { name: "Open tools" }).click();
+  await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Products/ }).click();
+  const sheet = owner.getByTestId("tool-sheet");
+  await sheet.getByRole("button", { name: /Asun/ }).click();
+  await expect(sheet.getByLabel("Price in naira")).toBeVisible();
+  // The way back named by the list: "Products / Asun".
+  await sheet.getByRole("button", { name: /back to the list/ }).click();
+  await expect(sheet.getByRole("button", { name: /Asun/ })).toBeVisible();
+  // Back from the list: the tools panel again.
+  await sheet.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(owner.getByRole("region", { name: "Tools" })).toBeVisible();
+  // Pulled up by its grab bar: the whole screen.
+  await owner.getByRole("region", { name: "Tools" }).getByRole("button", { name: /^Products/ }).first().click();
+  const grab = sheet.locator(".tk-sheet-grab");
+  const box = await grab.boundingBox();
+  if (!box) throw new Error("the sheet's grab bar is not drawn");
+  await owner.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await owner.mouse.down();
+  await owner.mouse.move(box.x + box.width / 2, box.y - 120, { steps: 6 });
+  await owner.mouse.up();
+  await expect(sheet).toHaveClass(/\bfull\b/);
+});

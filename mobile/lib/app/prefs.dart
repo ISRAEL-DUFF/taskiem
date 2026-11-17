@@ -26,11 +26,21 @@ class Prefs extends ChangeNotifier {
   /// here (on until turned off).
   bool sound = true;
 
-  /// The app lock (docs/spec/mobile-app.md §5.2): on unless turned off.
-  bool lock = true;
+  /// The app lock (docs/spec/mobile-app.md §5.2), as WhatsApp's: off
+  /// until turned on, then how long the app may be away before it locks
+  /// (zero: at once). Null: off.
+  Duration? lockAfter;
+
+  bool get lock => lockAfter != null;
+
+  /// ChatTools.tsx recentTools: the last two tools opened, newest first.
+  List<String> recentTools = const [];
 
   /// Done once what is kept has been read.
   Future<void> get ready => _ready.future;
+
+  /// Whether what is kept has been read.
+  bool get loaded => _ready.isCompleted;
   final _ready = Completer<void>();
 
   Future<void> load() async {
@@ -39,7 +49,11 @@ class Prefs extends ChangeNotifier {
       theme = ThemeChoice.values.firstWhere((c) => c.name == t, orElse: () => ThemeChoice.light);
       taskiemSeen = DateTime.tryParse(await keys.read('taskiem-seen') ?? '');
       sound = await keys.read('chat-sound') != 'off';
-      lock = await keys.read('app-lock') != 'off';
+      // 'app-lock' was on unless turned off; the lock is now off unless
+      // turned on, and that old key is not read.
+      final secs = int.tryParse(await keys.read('app-lock-after') ?? '');
+      lockAfter = secs == null || secs < 0 ? null : Duration(seconds: secs);
+      recentTools = (await keys.read('tools-recent') ?? '').split(',').where((k) => k.isNotEmpty).toList();
     } on Object {
       // The phone's storage not read: the defaults.
     }
@@ -47,11 +61,39 @@ class Prefs extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setLock(bool on) async {
-    lock = on;
+  /// Signing out: what is the person's own (when they last saw Taskiem's
+  /// conversation, whether they turned the app lock on) does not pass to
+  /// whoever signs in on this phone next. Appearance and sound are the
+  /// phone's and stay.
+  Future<void> forgetPerson() async {
+    taskiemSeen = null;
+    lockAfter = null;
+    notifyListeners();
+    for (final k in const ['taskiem-seen', 'app-lock', 'app-lock-after']) {
+      try {
+        await keys.write(k, null);
+      } on Object {
+        // Not removed from storage: already forgotten while the app runs.
+      }
+    }
+  }
+
+  /// The lock on, waiting [after] away (zero: at once), or off (null).
+  Future<void> setLockAfter(Duration? after) async {
+    lockAfter = after;
     notifyListeners();
     try {
-      await keys.write('app-lock', on ? null : 'off');
+      await keys.write('app-lock-after', after?.inSeconds.toString());
+    } on Object {
+      // Kept only while the app runs.
+    }
+  }
+
+  /// ChatTools.tsx remember: a tool opened, first of the two kept.
+  Future<void> rememberTool(String key) async {
+    recentTools = [key, ...recentTools.where((k) => k != key)].take(2).toList();
+    try {
+      await keys.write('tools-recent', recentTools.join(','));
     } on Object {
       // Kept only while the app runs.
     }

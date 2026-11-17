@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ApiError, get, post, put } from "../api";
+import { ApiError, get, post, postOnce, put } from "../api";
 import {
   EmptyState,
   ErrorBox,
@@ -646,6 +646,16 @@ export function RidersPayPage() {
     owed.reload();
     pay.reload();
   };
+  // One key for a payout from the moment it is confirmed until the server
+  // answers: pressed again after a request that never came back, it is
+  // the same payout, not a second one.
+  const payKey = useRef("");
+  const payNow = async () => {
+    payKey.current ||= `pay-${crypto.randomUUID()}`;
+    await postOnce("/v1/riders/pay", payKey.current);
+    payKey.current = "";
+    reload();
+  };
   const off = dispatchOff(owed.error);
   const p = pay.data;
   const due = p ? p.lines.reduce((t, l) => t + l.net_kobo, 0) : 0;
@@ -688,7 +698,7 @@ export function RidersPayPage() {
                   `Pay your riders ${formatPrice(due)} now? You approve it first in Approvals or in chat.`,
                 ) &&
                 void act.run(
-                  async () => (await post("/v1/riders/pay"), reload()),
+                  payNow,
                   "Started: approve it in Approvals or in chat",
                 )
               }

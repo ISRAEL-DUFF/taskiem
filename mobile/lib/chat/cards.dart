@@ -4,6 +4,7 @@
 // state as a pill, what happened, the amount, an order's progress, and its
 // buttons. A change we made ourselves is a diary line instead.
 
+import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
@@ -11,13 +12,16 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
+import '../kit/motion.dart';
+import '../kit/tap_area.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'deal.dart';
 import 'words.dart';
 
 /// `.tk-chatcard`: the frame, inside its bubble.
 class CardFrame extends StatelessWidget {
-  const CardFrame({super.key, required this.card, required this.title, required this.mine, required this.now, this.current, required this.actions, this.deal});
+  const CardFrame({super.key, required this.card, required this.title, required this.mine, required this.now, this.current, this.view, required this.actions, this.deal});
 
   final LinkDocCard card;
 
@@ -28,102 +32,210 @@ class CardFrame extends StatelessWidget {
   final DateTime now;
   final List<Widget> actions;
 
+  /// The card's own button to its document (View order, View invoice): on a
+  /// row of its own under [actions], the whole width (`.tk-chatcard-actions .view`).
+  final Widget? view;
+
   /// A deal's answers (ChatDeal.tsx DealActions), under the buttons.
   final Widget? deal;
 
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    final dark = TkTheme.of(context).mode == TkMode.dark;
     final st = cardStatus(current ?? card, now);
     final steps = stepsFor(card);
-    final sub = cardSub(card);
     final step = st.step;
+    final amount = card.amountKobo;
+    // The words under the amount: what happened, then what was and the note.
+    final line = [
+      if (amount != null) breakAfterHyphens(title),
+      if (card.wasKobo != null && card.wasKobo! > (amount ?? 0)) 'was ${naira(card.wasKobo!)}',
+      if ((card.note ?? '').isNotEmpty) '“${card.note}”',
+    ].join(' · ');
     final children = <Widget>[
-      // `.tk-chatcard-top`: the kicker, the pill at the end.
+      // The kind and reference small, the state as a capsule at the end.
       Row(
         children: [
           Expanded(
             child: Text(
               cardKicker(card).toUpperCase(),
+              semanticsLabel: cardKicker(card),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: tkText(size: 11, weight: 700, letterSpacing: 0.88, color: t.muted),
+              style: tkText(size: 11, weight: 700, letterSpacing: 0.66, color: t.muted),
             ),
           ),
           const SizedBox(width: 8),
           CardPill(st.word, st.tone),
         ],
       ),
-      Text(breakAfterHyphens(title), style: tkText(size: 15, weight: 600, color: t.text)),
-      if (sub.isNotEmpty) Text(sub, style: tkText(size: 14, color: mine ? t.chatOutMeta : t.muted)),
+      // The amount large (Inter Tight), else what happened.
+      if (amount != null)
+        Text(naira(amount), style: tkDisplay(size: 26, lineHeight: 1.15, letterSpacing: -0.9, color: t.text))
+      else
+        Text(breakAfterHyphens(title), style: tkText(size: 15.5, weight: 600, color: t.text)),
+      if (line.isNotEmpty) Text(line, style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
       if (card.deal != null) DealHistory(card: card, now: now),
-      if (step != null)
-        Semantics(
-          label: '${steps[step]}: step ${step + 1} of ${steps.length}',
-          excludeSemantics: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // `.tk-progress-bar`: four columns, 4 px apart, 5 px tall.
-              Row(
-                children: [
-                  for (var i = 0; i < steps.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 4),
-                    Expanded(
-                      child: Container(
-                        height: 5,
-                        decoration: BoxDecoration(color: i <= step ? (dark ? t.brandDark : t.brand) : t.borderStrong, borderRadius: BorderRadius.circular(3)),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 6),
-              // `.tk-progress-words`: the same columns with no gap.
-              Row(
-                children: [
-                  for (var i = 0; i < steps.length; i++)
-                    Expanded(
-                      child: Text(
-                        steps[i],
-                        style: tkText(size: 11.5, weight: i == step ? 600 : 400, color: i == step ? t.text : t.muted),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      if (actions.isNotEmpty) Row(children: _spaced(actions)),
+      if (step != null) Padding(padding: const EdgeInsets.only(top: 4), child: CardProgress(steps: steps, step: step)),
+      if (actions.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 4), child: CardActionRows(children: actions)),
       // `.tk-deal-form { margin-top: 6px }`, on a line of its own.
       if (deal != null) Padding(padding: const EdgeInsets.only(top: 6), child: deal),
+      // Last: its document, as a quiet row.
+      ?view,
     ];
     return Semantics(
       container: true,
       label: cardKicker(card),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          // `.tk-chatcard` on --tk-tile; in our own bubble the panel at 70%.
-          color: mine ? cssMix(t.panel, const Color(0x00000000), 0.7) : t.tkTile,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 8), children[i]],
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < children.length; i++) ...[if (i > 0) SizedBox(height: i == 1 ? 6 : 4), children[i]],
+        ],
       ),
     );
   }
 }
 
-/// `.tk-chatcard-actions`: the buttons share the row, 8 px apart.
-List<Widget> _spaced(List<Widget> buttons) => [
-  for (var i = 0; i < buttons.length; i++) ...[if (i > 0) const SizedBox(width: 8), Expanded(child: buttons[i])],
-];
+/// The card's frame on the conversation: its own message, not a bubble's
+/// box (docs/spec/mobile-app-look.md, "Cards in a conversation"): the card
+/// colour, rounder than a bubble, the sender's corner tight, a soft lift.
+BoxDecoration cardDecoration(BuildContext context, {required bool mine, required bool first}) {
+  final look = TkLook.of(context);
+  final dark = TkTheme.of(context).mode == TkMode.dark;
+  return BoxDecoration(
+    color: look.card,
+    borderRadius: BorderRadius.only(
+      topLeft: Radius.circular(first && !mine ? 6 : 20),
+      topRight: Radius.circular(first && mine ? 6 : 20),
+      bottomLeft: const Radius.circular(20),
+      bottomRight: const Radius.circular(20),
+    ),
+    border: dark ? Border.all(color: look.line) : null,
+    boxShadow: dark
+        ? null
+        : const [
+            BoxShadow(color: Color(0x14000000), offset: Offset(0, 1), blurRadius: 2),
+            BoxShadow(color: Color(0x1F000000), offset: Offset(0, 8), blurRadius: 24, spreadRadius: -16),
+          ],
+  );
+}
+
+/// `.tk-chatcard-actions` (flex-wrap, each button `flex: 1` and its word on
+/// one line): the buttons share a row, 8 px apart, as wide as each other
+/// where they can be; one that does not fit beside the others goes to the
+/// next row, rather than its word being cut or broken.
+class CardActionRows extends MultiChildRenderObjectWidget {
+  const CardActionRows({super.key, required super.children});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderActionRows();
+}
+
+class _ActionRowsData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderActionRows extends RenderBox
+    with ContainerRenderObjectMixin<RenderBox, _ActionRowsData>, RenderBoxContainerDefaultsMixin<RenderBox, _ActionRowsData> {
+  static const gap = 8.0;
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _ActionRowsData) child.parentData = _ActionRowsData();
+  }
+
+  List<RenderBox> get _kids {
+    final out = <RenderBox>[];
+    var c = firstChild;
+    while (c != null) {
+      out.add(c);
+      c = childAfter(c);
+    }
+    return out;
+  }
+
+  /// The children in rows, each with the width it needs.
+  List<List<(RenderBox, double)>> _rows(double width) {
+    final rows = <List<(RenderBox, double)>>[];
+    var row = <(RenderBox, double)>[];
+    var used = 0.0;
+    for (final c in _kids) {
+      final need = c.getMaxIntrinsicWidth(double.infinity).clamp(0.0, width);
+      if (row.isNotEmpty && used + gap + need > width) {
+        rows.add(row);
+        row = [];
+        used = 0;
+      }
+      used += (row.isEmpty ? 0 : gap) + need;
+      row.add((c, need));
+    }
+    if (row.isNotEmpty) rows.add(row);
+    return rows;
+  }
+
+  /// `flex: 1` from nothing: as wide as each other, and none narrower than
+  /// its word.
+  static List<double> _widths(List<(RenderBox, double)> row, double width) {
+    final room = width - gap * (row.length - 1);
+    final even = room / row.length;
+    if (row.every((r) => r.$2 <= even)) return [for (final _ in row) even];
+    final extra = (room - row.fold(0.0, (a, r) => a + r.$2)) / row.length;
+    return [for (final r in row) r.$2 + extra];
+  }
+
+  @override
+  void performLayout() {
+    final width = constraints.maxWidth;
+    var y = 0.0;
+    for (final row in _rows(width)) {
+      final ws = _widths(row, width);
+      var h = 0.0;
+      for (var i = 0; i < row.length; i++) {
+        row[i].$1.layout(BoxConstraints.tightFor(width: ws[i]), parentUsesSize: true);
+        h = h > row[i].$1.size.height ? h : row[i].$1.size.height;
+      }
+      var x = 0.0;
+      for (var i = 0; i < row.length; i++) {
+        final c = row[i].$1;
+        (c.parentData! as _ActionRowsData).offset = Offset(x, y + (h - c.size.height) / 2);
+        x += ws[i] + gap;
+      }
+      y += h + gap;
+    }
+    size = constraints.constrain(Size(width, y > 0 ? y - gap : 0));
+  }
+
+  @override
+  double computeMinIntrinsicWidth(double height) => _kids.fold(0.0, (a, c) => a > c.getMinIntrinsicWidth(height) ? a : c.getMinIntrinsicWidth(height));
+
+  @override
+  double computeMaxIntrinsicWidth(double height) {
+    final k = _kids;
+    return k.fold(0.0, (a, c) => a + c.getMaxIntrinsicWidth(height)) + gap * (k.isEmpty ? 0 : k.length - 1);
+  }
+
+  @override
+  double computeMinIntrinsicHeight(double width) => computeMaxIntrinsicHeight(width);
+
+  @override
+  double computeMaxIntrinsicHeight(double width) {
+    var y = 0.0;
+    for (final row in _rows(width)) {
+      final ws = _widths(row, width);
+      var h = 0.0;
+      for (var i = 0; i < row.length; i++) {
+        final ch = row[i].$1.getMaxIntrinsicHeight(ws[i]);
+        h = h > ch ? h : ch;
+      }
+      y += h + gap;
+    }
+    return y > 0 ? y - gap : 0;
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) => defaultHitTestChildren(result, position: position);
+
+  @override
+  void paint(PaintingContext context, Offset offset) => defaultPaint(context, offset);
+}
 
 /// kit.css `.tk-pill`: a state in a word.
 class CardPill extends StatelessWidget {
@@ -134,14 +246,15 @@ class CardPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final (bg, ink) = switch (tone) {
-      CardTone.lime => (t.brandDark, t.brandDarkText),
-      CardTone.warn => (t.tkWarnBg, t.tkWarnInk),
-      CardTone.danger => (t.tkDangerBg, t.tkDangerInk),
-      CardTone.plain => (t.tkSoft, t.text),
+      CardTone.lime => (look.lime.withValues(alpha: 0.18), look.limeInk),
+      CardTone.warn => (look.orange.withValues(alpha: 0.16), look.orangeInk),
+      CardTone.danger => (look.red.withValues(alpha: 0.16), look.redInk),
+      CardTone.plain => (t.tkSoft, t.muted),
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
       child: Text(word, maxLines: 1, style: tkText(size: 12, weight: 700, color: ink)),
     );
@@ -165,13 +278,15 @@ class CardButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
-    final bg = primary ? t.primary : t.panel;
-    final line = primary ? t.primary : t.borderStrong;
-    final ink = primary ? t.primaryText : (dark ? t.text : t.brand);
-    return Semantics(
+    final look = TkLook.of(context);
+    // The main step pine (lime in the dark); the others on the ground.
+    final bg = primary ? look.on : look.ground;
+    final ink = primary ? (dark ? t.brandDarkText : const Color(0xFFFFFFFF)) : t.text;
+    return TapArea(child: Semantics(
       button: true,
       enabled: !busy && onTap != null,
       label: semantics ?? label,
+      onTap: busy ? null : onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: busy ? null : onTap,
@@ -179,11 +294,7 @@ class CardButton extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 40),
           padding: const EdgeInsets.symmetric(horizontal: 16),
           alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: bg,
-            border: Border.all(color: line),
-            borderRadius: BorderRadius.circular(999),
-          ),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
           child: Text(
             label,
             maxLines: 1,
@@ -192,7 +303,7 @@ class CardButton extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ));
   }
 }
 
@@ -293,6 +404,11 @@ List<Widget> cardActions(LinkDocCard card, CardActs acts, VoidCallback changed) 
       if (card.wasKobo == null && can('storefront.manage')) return [step('Accept the change', '/v1/stock/purchases/$id/accept-change', 'Change accepted')];
     case 'purchase:delivered':
       if (can('table.edit')) return [step('All came', '/v1/stock/purchases/$id/all-came', 'Received, and your stock is up')];
+    case 'invoice:queried':
+      // The buyer queried our invoice: settled on its screen.
+      if (can('invoice.manage')) {
+        return [CardButton(label: 'Settle the query', primary: true, semantics: 'Settle the query $ref', onTap: acts.onOpen == null ? null : () => acts.onOpen!(card))];
+      }
     case 'bill:bill':
       if (can('invoice.manage')) {
         return [
@@ -315,7 +431,45 @@ Widget viewButton(LinkDocCard card, CardActs acts) {
       : card.doc == 'order' || card.doc == 'purchase'
       ? 'View order'
       : 'View invoice';
-  return CardButton(label: label, semantics: '$label ${card.reference}', onTap: acts.onOpen == null ? null : () => acts.onOpen!(card));
+  return _ViewRow(label: label, semantics: '$label ${card.reference}', onTap: acts.onOpen == null ? null : () => acts.onOpen!(card));
+}
+
+/// A card's way to its document, at its foot: a hairline, the words, a
+/// chevron at the end.
+class _ViewRow extends StatelessWidget {
+  const _ViewRow({required this.label, required this.semantics, this.onTap});
+  final String label;
+  final String semantics;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return TapArea(
+      child: Semantics(
+        button: true,
+        enabled: onTap != null,
+        label: semantics,
+        onTap: onTap,
+        excludeSemantics: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Container(
+            margin: const EdgeInsets.only(top: 6),
+            padding: const EdgeInsets.only(top: 10, bottom: 2),
+            decoration: BoxDecoration(border: Border(top: BorderSide(color: TkLook.of(context).line))),
+            child: Row(
+              children: [
+                Expanded(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14, weight: 600, color: t.text))),
+                TkIcon('chevron', size: 16, color: t.muted),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// kit.tsx DiaryLine: a change we made ourselves, told as a line in a
@@ -334,13 +488,29 @@ class DiaryLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final fresh = TkFresh.of(context);
     final arrow = words.lastIndexOf(' → ');
     final spans = <InlineSpan>[
       if (arrow >= 0) ...[
         TextSpan(text: words.substring(0, arrow + 3)),
-        TextSpan(
-          text: words.substring(arrow + 3),
-          style: const TextStyle(fontWeight: FontWeight.w700, fontVariations: [FontVariation('wght', 700)]),
+        // kit.tsx: a fresh line's new value `.tk-roll`s into place.
+        if (!fresh)
+          TextSpan(
+            text: words.substring(arrow + 3),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontVariations: [FontVariation('wght', 700)]),
+          )
+        else
+        WidgetSpan(
+          alignment: PlaceholderAlignment.baseline,
+          baseline: TextBaseline.alphabetic,
+          child: TkRoll(
+            value: words,
+            child: Text(
+              words.substring(arrow + 3),
+              semanticsLabel: words.substring(arrow + 3),
+              style: tkText(size: 13, weight: 700, color: t.text),
+            ),
+          ),
         ),
       ] else
         TextSpan(text: words),
@@ -363,13 +533,16 @@ class DiaryLine extends StatelessWidget {
                   label: when,
                   child: TkPress(
                     onTap: onTap,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    // kit.tsx: a fresh line `.tk-land`s, lit in lime.
+                    child: TkLand(
+                      fresh: fresh,
                       decoration: BoxDecoration(
                         color: t.panel,
                         borderRadius: BorderRadius.circular(999),
                         boxShadow: [BoxShadow(color: t.chatShadow, offset: const Offset(0, 2), blurRadius: 8)],
                       ),
+                      child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                       // `display: inline-flex; flex-wrap: wrap; justify-content:
                       // center; gap: 4px 8px`: words too long to sit beside the
                       // tick put it on a line of its own, above them.
@@ -384,6 +557,7 @@ class DiaryLine extends StatelessWidget {
                         ],
                       ),
                     ),
+                    ),
                   ),
                 ),
                 if (more != null) Padding(padding: const EdgeInsets.only(top: 4), child: more),
@@ -391,6 +565,63 @@ class DiaryLine extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// chat.css `.tk-progress`: the steps as a bar of [steps] columns, the one
+/// it is at in words under it.
+class CardProgress extends StatelessWidget {
+  const CardProgress({super.key, required this.steps, required this.step});
+  final List<String> steps;
+  final int step;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    // The steps as dots on a line: those done (and the one it is at) filled
+    // lime, the rest rings; the word under each, the one it is at bold.
+    return Semantics(
+      label: '${steps[step]}: step ${step + 1} of ${steps.length}',
+      excludeSemantics: true,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 5,
+            child: FractionallySizedBox(widthFactor: 1 - 1 / steps.length, child: Container(height: 2, color: look.line)),
+          ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < steps.length; i++)
+                Expanded(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: i <= step ? look.lime : look.card,
+                          border: i <= step ? null : Border.all(color: t.muted, width: 2),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        steps[i],
+                        textAlign: TextAlign.center,
+                        style: tkText(size: 10.5, weight: i == step ? 700 : 500, lineHeight: 1.2, color: i <= step ? t.text : t.muted),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

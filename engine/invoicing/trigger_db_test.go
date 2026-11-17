@@ -136,12 +136,13 @@ func TestPaidInvoiceStartsWorkflowsOnce(t *testing.T) {
 		}
 	}
 	// The same payment reported again, the drain run again, another
-	// payment on the paid invoice: no second run.
+	// payment on the paid invoice (refused: nothing is due, and this
+	// world keeps no money log to hold it as credit): no second run.
 	if err := w.inv.Received(ctx, w.env.Tenant, x.ID, invoicing.Received{PaymentID: "p2", AmountKobo: 1500000, Connection: "paystack/main"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := w.inv.Received(ctx, w.env.Tenant, x.ID, invoicing.Received{PaymentID: "p3", AmountKobo: 5000, Connection: "paystack/main"}); err != nil {
-		t.Fatal(err)
+	if err := w.inv.Received(ctx, w.env.Tenant, x.ID, invoicing.Received{PaymentID: "p3", AmountKobo: 5000, Connection: "paystack/main"}); !errors.Is(err, invoicing.ErrNothingDue) {
+		t.Fatalf("a payment on a paid invoice: %v", err)
 	}
 	w.startPaid()
 	w.startPaid()

@@ -26,8 +26,12 @@ To check an export against them:
 ```sh
 curl -H "Authorization: Bearer $KEY" https://taskiem.example/v1/audit/export > audit.jsonl
 curl -H "Authorization: Bearer $KEY" https://taskiem.example/v1/audit/anchors > anchors.json   # or the write-once copy
-taskiem audit verify --anchors anchors.json --key "$(jq -r .public_key anchors.json)" audit.jsonl
+taskiem audit verify --anchors anchors.json $(jq -r '.public_keys[] | "--key " + .' anchors.json) audit.jsonl
 ```
+
+Without `--key` the command checks no signature, so it refuses to run and exits non-zero unless you pass `--unsigned-ok`; it then says plainly that signatures were not checked. An anchors file with no anchors in it fails too, unless the export is empty. Give `--key` once for each key: after the platform's anchor key is changed, the retired public keys (`TASKIEM_ANCHOR_PUBLIC_KEYS`, served as `public_keys`) verify the anchors made before the change.
+
+**Anchoring is off unless both `TASKIEM_ANCHOR_KEY` and `TASKIEM_ANCHOR_DIR` are set.** The scheduler role then only warns at start; its `/readyz` answers `ok` and a line `audit anchoring: off …`, and `taskiem status show` prints the same line.
 
 A chain rewritten after an anchor fails with "the chain was rewritten after it", even when every hash in the rewritten chain is consistent. Compare against the copy held outside the platform; the copy the API serves is only as trustworthy as the database it comes from.
 
@@ -57,6 +61,5 @@ Each secret is decrypted at most once per step attempt, so a step that retries t
 
 ## Not yet
 
-- Emailing anchors to a tenant's compliance contact waits for email delivery (Phase 2, milestone 5).
 - Streaming the audit log to a SIEM (syslog, webhook, S3) is not built; exports are pulled.
 - The audit log is kept indefinitely; there is no deletion after its minimum retention.

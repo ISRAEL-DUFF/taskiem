@@ -9,14 +9,52 @@ export interface PushDevice {
   id: string;
   label: string;
   preview: boolean;
+  /** A browser (webpush) or the phone app (fcm). */
+  kind?: "webpush" | "fcm";
+  platform?: "android" | "ios" | null;
+  /** The kinds of notification it takes. */
+  kinds?: PushKind[];
   created_at: string;
   last_sent_at: string | null;
   last_ok_at: string | null;
 }
 
+/** The kinds of notification a device may take (docs/spec/mobile-app-m4.md N3). */
+export type PushKind =
+  | "business"
+  | "customers"
+  | "orders"
+  | "approvals"
+  | "alerts";
+
+export const KIND_WORDS: Record<PushKind, { title: string; sub: string }> = {
+  business: {
+    title: "Businesses you work with",
+    sub: "Messages from linked businesses",
+  },
+  customers: {
+    title: "Customers",
+    sub: "When a customer writes",
+  },
+  orders: {
+    title: "Orders and money",
+    sub: "New orders, bills, payments and reminders",
+  },
+  approvals: {
+    title: "Approvals",
+    sub: "When something waits for your yes or no",
+  },
+  alerts: {
+    title: "Alerts",
+    sub: "Everything else the bell tells you",
+  },
+};
+
 export interface PushView {
   devices: PushDevice[];
   max: number;
+  /** The kinds a device may take, in order. */
+  kinds?: PushKind[];
   /** The device a PUT just added or updated (this browser). */
   added?: string;
 }
@@ -92,10 +130,28 @@ export function keyBytes(b64: string): Uint8Array {
 
 const KEY = "taskiem-push-device";
 
-/** The id the server gave this browser, kept here so the list can say "This device". */
+/** The business the page is in: a browser is a different device in each. */
+let scope = "";
+export function setPushScope(tenant: string | null) {
+  scope = tenant ?? "";
+  // The id kept before it was per business: this business's, once.
+  try {
+    const old = localStorage.getItem(KEY);
+    if (old && scope) {
+      if (!localStorage.getItem(`${KEY}:${scope}`))
+        localStorage.setItem(`${KEY}:${scope}`, old);
+      localStorage.removeItem(KEY);
+    }
+  } catch {
+    // Storage blocked: found again by the server (findMyDevice).
+  }
+}
+const key = () => (scope ? `${KEY}:${scope}` : KEY);
+
+/** The id the server gave this browser in this business, kept here so the list can say "This device". */
 export function myDevice(): string | null {
   try {
-    return localStorage.getItem(KEY);
+    return localStorage.getItem(key());
   } catch {
     return null;
   }
@@ -103,8 +159,8 @@ export function myDevice(): string | null {
 
 function keepDevice(id: string | null) {
   try {
-    if (id) localStorage.setItem(KEY, id);
-    else localStorage.removeItem(KEY);
+    if (id) localStorage.setItem(key(), id);
+    else localStorage.removeItem(key());
   } catch {
     // Not kept: the list does not say which is this one.
   }
@@ -193,8 +249,37 @@ export async function enablePush(
   }
 }
 
-/** Turns notifications off for this browser: tells the server, then lets the browser forget it. */
-export async function disablePush(): Promise<PushView | undefined> {
+/**
+ * Which device of the list is this browser, when the page lost it (the
+ * worker renewed the subscription, or storage was cleared): the server finds
+ * it by its address and never adds one it does not have.
+ */
+export async function findMyDevice(): Promise<PushView | undefined> {
+  const sub = await thisSubscription();
+  if (!sub) return undefined;
+  const json = sub.toJSON();
+  try {
+    const view = await put<PushView>("/v1/me/push", {
+      endpoint: json.endpoint,
+      keys: json.keys,
+      known: true,
+    });
+    keepDevice(view.added ?? null);
+    return view;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Turns notifications off for this browser in this business: tells the
+ * server. The browser's own subscription is kept (the person's other
+ * businesses may use it) unless [signingOut]: then the browser forgets it,
+ * and every business's record of it goes when the push service says so.
+ */
+export async function disablePush(
+  signingOut = false,
+): Promise<PushView | undefined> {
   const sub = await thisSubscription();
   keepDevice(null);
   if (!sub) return undefined;
@@ -204,6 +289,21 @@ export async function disablePush(): Promise<PushView | undefined> {
   } catch {
     // Signed out already, or offline: the server drops it when the push service says it is gone.
   }
-  await sub.unsubscribe().catch(() => false);
+  if (signingOut) await sub.unsubscribe().catch(() => false);
   return view;
+}
+
+/**
+ * The kinds a person can get at all, in order: business chats for those who
+ * write in them (chat.trade), customers for those who answer them (orders).
+ */
+export function offeredKinds(
+  kinds: PushKind[],
+  can: (perm: string) => boolean,
+): PushKind[] {
+  return kinds.filter(
+    (k) =>
+      (k !== "business" || can("chat.trade")) &&
+      (k !== "customers" || can("storefront.manage") || can("order.handle")),
+  );
 }

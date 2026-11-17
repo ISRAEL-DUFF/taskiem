@@ -203,6 +203,14 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 	}
 	ref := runtime.RunRef{ID: run, TenantID: p.TenantID}
 	vote := runtime.Vote{UserID: p.UserID, Roles: s.orderVoteRoles(r.Context(), p, run, step), Decision: req.Decision, Channel: "web", IP: clientIP(r)}
+	// Eligibility first: a vote that would be refused anyway does not use
+	// up the approver's authenticator code or passkey challenge.
+	if req.TOTP != "" || req.Passkey != nil {
+		if err := s.Store.CheckVote(r.Context(), ref, step, vote); err != nil {
+			s.voteRefused(w, r, err)
+			return
+		}
+	}
 	// A passkey must have been asked for this decision on this approval.
 	method, ok := s.checkStepUp(w, r, stepUpProof{TOTP: req.TOTP, Passkey: req.Passkey}, approvalScope(run, step, req.Decision))
 	if !ok {
@@ -221,24 +229,28 @@ func (s *Server) decide(w http.ResponseWriter, r *http.Request) {
 		return auditTx(r, tx, "approval.decide", run.String()+"/"+step, detail)
 	}
 	result, err := s.Store.VoteApproval(r.Context(), ref, step, vote)
-	var stepUp *runtime.StepUpError
-	switch {
-	case errors.As(err, &stepUp):
-		writeJSON(w, http.StatusForbidden, map[string]any{"error": stepUp.Error(), "step_up": stepUp.Method})
-		return
-	case errors.Is(err, runtime.ErrNotAllowed):
-		s.fail(w, r, fmt.Errorf("%w: %w", errForbidden, err))
-		return
-	case errors.Is(err, runtime.ErrAlreadyDecided), errors.Is(err, runtime.ErrApprovalClosed):
-		s.fail(w, r, fmt.Errorf("%w: %w", errConflict, err))
-		return
-	case err != nil:
-		s.fail(w, r, err)
+	if err != nil {
+		s.voteRefused(w, r, err)
 		return
 	}
 	status := result.Status
 	s.diaryChange(r.Context(), p, s.decisionWords(r, run, step, req.Decision))
 	writeJSON(w, http.StatusOK, map[string]any{"run_id": run, "step_id": step, "status": status, "level": result.Level + 1, "levels": result.Levels, "self_approved": result.SelfApproved})
+}
+
+// voteRefused answers a vote the engine did not take.
+func (s *Server) voteRefused(w http.ResponseWriter, r *http.Request, err error) {
+	var stepUp *runtime.StepUpError
+	switch {
+	case errors.As(err, &stepUp):
+		writeJSON(w, http.StatusForbidden, map[string]any{"error": stepUp.Error(), "step_up": stepUp.Method})
+	case errors.Is(err, runtime.ErrNotAllowed):
+		s.fail(w, r, fmt.Errorf("%w: %w", errForbidden, err))
+	case errors.Is(err, runtime.ErrAlreadyDecided), errors.Is(err, runtime.ErrApprovalClosed):
+		s.fail(w, r, fmt.Errorf("%w: %w", errConflict, err))
+	default:
+		s.fail(w, r, err)
+	}
 }
 
 // decisionWords is a decision's diary line: "Approved Pay Bayo Rice Mills
