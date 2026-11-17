@@ -716,6 +716,47 @@ class TaskiemApi {
     final j = await _t.send('POST', '/v1/me/storefront-orders/confirm');
     return ConfirmStorefrontOrdersResponse.fromJson(j as Map<String, dynamic>);
   }
+
+  /// Your orders (`GET /v1/me/orders`)
+  Future<MyOrdersResponse> myOrders({String? before, String? limit}) async {
+    final j = await _t.send('GET', '/v1/me/orders', query: {'before': ?before, 'limit': ?limit});
+    return MyOrdersResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One of your orders (`GET /v1/me/orders/{business}/{reference}`)
+  Future<PersonOrderDetail> myOrder({required String business, required String reference}) async {
+    final j = await _t.send('GET', '/v1/me/orders/${Uri.encodeComponent(business)}/${Uri.encodeComponent(reference)}');
+    return PersonOrderDetail.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Pay for one of your orders (`GET /v1/me/orders/{business}/{reference}/pay`)
+  Future<PayMyOrderResponse> payMyOrder({required String business, required String reference}) async {
+    final j = await _t.send('GET', '/v1/me/orders/${Uri.encodeComponent(business)}/${Uri.encodeComponent(reference)}/pay');
+    return PayMyOrderResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your saved addresses (`GET /v1/me/addresses`)
+  Future<MyAddressesResponse> myAddresses() async {
+    final j = await _t.send('GET', '/v1/me/addresses');
+    return MyAddressesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Save an address (`POST /v1/me/addresses`)
+  Future<SavedAddress> addMyAddress({required SavedAddressIn body}) async {
+    final j = await _t.send('POST', '/v1/me/addresses', body: body.toJson());
+    return SavedAddress.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change a saved address (`PUT /v1/me/addresses/{id}`)
+  Future<SavedAddress> editMyAddress({required SavedAddressIn body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/addresses/${Uri.encodeComponent(id)}', body: body.toJson());
+    return SavedAddress.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Delete a saved address (`DELETE /v1/me/addresses/{id}`)
+  Future<void> deleteMyAddress({required String id}) async {
+    await _t.send('DELETE', '/v1/me/addresses/${Uri.encodeComponent(id)}');
+  }
 }
 
 class AppConfig {
@@ -4174,17 +4215,26 @@ class DoorOrder {
 }
 
 class PlaceMyChatOrderRequest {
-  const PlaceMyChatOrderRequest({this.address, this.fulfilment, required this.lines, this.note, this.zone});
+  const PlaceMyChatOrderRequest({this.address, this.addressId, this.fulfilment, this.landmark, required this.lines, this.note, this.zone});
 
   final String? address;
+  /// One of the person's saved addresses (GET /v1/me/addresses): copied into
+  /// the order in place of `address` and `landmark` (its area after the street;
+  /// its landmark, and its phone for the rider, as the landmark). The business
+  /// sees only that copy, never the saved list. 404 when it is not one of
+  /// theirs.
+  final String? addressId;
   final String? fulfilment;
+  final String? landmark;
   final List<PlaceMyChatOrderRequestLinesItem> lines;
   final String? note;
   final String? zone;
 
   factory PlaceMyChatOrderRequest.fromJson(Map<String, dynamic> j) => PlaceMyChatOrderRequest(
         address: j['address'] == null ? null : j['address'] as String,
+        addressId: j['address_id'] == null ? null : j['address_id'] as String,
         fulfilment: j['fulfilment'] == null ? null : j['fulfilment'] as String,
+        landmark: j['landmark'] == null ? null : j['landmark'] as String,
         lines: (j['lines'] as List).map((e) => PlaceMyChatOrderRequestLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
         note: j['note'] == null ? null : j['note'] as String,
         zone: j['zone'] == null ? null : j['zone'] as String,
@@ -4192,7 +4242,9 @@ class PlaceMyChatOrderRequest {
 
   Map<String, dynamic> toJson() => {
         'address': ?address,
+        'address_id': ?addressId,
         'fulfilment': ?fulfilment,
+        'landmark': ?landmark,
         'lines': lines.map((e) => e.toJson()).toList(),
         'note': ?note,
         'zone': ?zone,
@@ -6535,5 +6587,324 @@ class ConfirmStorefrontOrdersResponse {
 
   Map<String, dynamic> toJson() => {
         'confirmed': confirmed,
+      };
+}
+
+class MyOrdersResponse {
+  const MyOrdersResponse({this.next, required this.orders, required this.waitingCount});
+
+  /// The cursor of the next page; null on the last
+  final Object? next;
+  final List<PersonOrder> orders;
+  /// How many orders made with the person's phone before it was on their
+  /// account wait for "These are mine"; nothing else of them is shown
+  final int waitingCount;
+
+  factory MyOrdersResponse.fromJson(Map<String, dynamic> j) => MyOrdersResponse(
+        next: j['next'],
+        orders: (j['orders'] as List).map((e) => PersonOrder.fromJson(e as Map<String, dynamic>)).toList(),
+        waitingCount: (j['waiting_count'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'next': ?next,
+        'orders': orders.map((e) => e.toJson()).toList(),
+        'waiting_count': waitingCount,
+      };
+}
+
+/// One row of Orders on You.
+class PersonOrder {
+  const PersonOrder({required this.business, required this.businessId, this.chatId, required this.dueKobo, required this.kind, required this.madeAt, required this.pay, this.photo, required this.reference, required this.state, required this.summary, required this.totalKobo});
+
+  final String business;
+  final String businessId;
+  /// The person's chat with the business, for "Chat about this"; null when
+  /// there is none (POST /v1/me/chats {business_id, from: "order"} starts it).
+  final Object? chatId;
+  final int dueKobo;
+  final String kind;
+  final DateTime madeAt;
+  /// Something is due now and can be paid in the app; GET
+  /// /v1/me/orders/{business_id}/{reference}/pay is its link. Never while the
+  /// business blocked the person or turned Orders off.
+  final bool pay;
+  final OrderPhoto? photo;
+  final String reference;
+  /// The order's status, as the business's order has it.
+  final String state;
+  /// "2 × Jollof rice, 1 × Chapman", or a booking's service; up to 200
+  /// characters.
+  final String summary;
+  final int totalKobo;
+
+  factory PersonOrder.fromJson(Map<String, dynamic> j) => PersonOrder(
+        business: j['business'] as String,
+        businessId: j['business_id'] as String,
+        chatId: j['chat_id'],
+        dueKobo: (j['due_kobo'] as num).toInt(),
+        kind: j['kind'] as String,
+        madeAt: DateTime.parse(j['made_at'] as String),
+        pay: j['pay'] as bool,
+        photo: j['photo'] == null ? null : OrderPhoto.fromJson(j['photo'] as Map<String, dynamic>),
+        reference: j['reference'] as String,
+        state: j['state'] as String,
+        summary: j['summary'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business': business,
+        'business_id': businessId,
+        'chat_id': ?chatId,
+        'due_kobo': dueKobo,
+        'kind': kind,
+        'made_at': madeAt.toUtc().toIso8601String(),
+        'pay': pay,
+        'photo': ?photo?.toJson(),
+        'reference': reference,
+        'state': state,
+        'summary': summary,
+        'total_kobo': totalKobo,
+      };
+}
+
+/// A business's photo, its sizes' addresses (as the chat's header has it).
+class OrderPhoto {
+  const OrderPhoto({required this.urls});
+
+  final Map<String, dynamic> urls;
+
+  factory OrderPhoto.fromJson(Map<String, dynamic> j) => OrderPhoto(
+        urls: j['urls'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'urls': urls,
+      };
+}
+
+/// One of the person's orders, with what it holds.
+class PersonOrderDetail {
+  const PersonOrderDetail({this.address, required this.business, required this.businessId, this.chatId, this.delivery, this.deliveryKobo, required this.dueKobo, this.endsAt, this.fulfilment, required this.kind, required this.lines, required this.madeAt, required this.paidKobo, required this.pay, this.photo, required this.reference, this.serviceName, this.startsAt, required this.state, required this.summary, required this.totalKobo, this.zone});
+
+  /// The address on the order, as it was copied there when it was placed.
+  final PersonOrderDetailAddress? address;
+  final String business;
+  final String businessId;
+  final Object? chatId;
+  final DeliveryProgress? delivery;
+  final int? deliveryKobo;
+  final int dueKobo;
+  final DateTime? endsAt;
+  final String? fulfilment;
+  final String kind;
+  final List<PersonOrderDetailLinesItem> lines;
+  final DateTime madeAt;
+  final int paidKobo;
+  final bool pay;
+  final OrderPhoto? photo;
+  final String reference;
+  final String? serviceName;
+  final DateTime? startsAt;
+  final String state;
+  final String summary;
+  final int totalKobo;
+  final String? zone;
+
+  factory PersonOrderDetail.fromJson(Map<String, dynamic> j) => PersonOrderDetail(
+        address: j['address'] == null ? null : PersonOrderDetailAddress.fromJson(j['address'] as Map<String, dynamic>),
+        business: j['business'] as String,
+        businessId: j['business_id'] as String,
+        chatId: j['chat_id'],
+        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
+        deliveryKobo: j['delivery_kobo'] == null ? null : (j['delivery_kobo'] as num).toInt(),
+        dueKobo: (j['due_kobo'] as num).toInt(),
+        endsAt: j['ends_at'] == null ? null : DateTime.parse(j['ends_at'] as String),
+        fulfilment: j['fulfilment'] == null ? null : j['fulfilment'] as String,
+        kind: j['kind'] as String,
+        lines: (j['lines'] as List).map((e) => PersonOrderDetailLinesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        madeAt: DateTime.parse(j['made_at'] as String),
+        paidKobo: (j['paid_kobo'] as num).toInt(),
+        pay: j['pay'] as bool,
+        photo: j['photo'] == null ? null : OrderPhoto.fromJson(j['photo'] as Map<String, dynamic>),
+        reference: j['reference'] as String,
+        serviceName: j['service_name'] == null ? null : j['service_name'] as String,
+        startsAt: j['starts_at'] == null ? null : DateTime.parse(j['starts_at'] as String),
+        state: j['state'] as String,
+        summary: j['summary'] as String,
+        totalKobo: (j['total_kobo'] as num).toInt(),
+        zone: j['zone'] == null ? null : j['zone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'address': ?address?.toJson(),
+        'business': business,
+        'business_id': businessId,
+        'chat_id': ?chatId,
+        'delivery': ?delivery?.toJson(),
+        'delivery_kobo': ?deliveryKobo,
+        'due_kobo': dueKobo,
+        'ends_at': ?endsAt?.toUtc().toIso8601String(),
+        'fulfilment': ?fulfilment,
+        'kind': kind,
+        'lines': lines.map((e) => e.toJson()).toList(),
+        'made_at': madeAt.toUtc().toIso8601String(),
+        'paid_kobo': paidKobo,
+        'pay': pay,
+        'photo': ?photo?.toJson(),
+        'reference': reference,
+        'service_name': ?serviceName,
+        'starts_at': ?startsAt?.toUtc().toIso8601String(),
+        'state': state,
+        'summary': summary,
+        'total_kobo': totalKobo,
+        'zone': ?zone,
+      };
+}
+
+/// The address on the order, as it was copied there when it was placed.
+class PersonOrderDetailAddress {
+  const PersonOrderDetailAddress({required this.address, this.landmark});
+
+  final String address;
+  final String? landmark;
+
+  factory PersonOrderDetailAddress.fromJson(Map<String, dynamic> j) => PersonOrderDetailAddress(
+        address: j['address'] as String,
+        landmark: j['landmark'] == null ? null : j['landmark'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'address': address,
+        'landmark': ?landmark,
+      };
+}
+
+class PersonOrderDetailLinesItem {
+  const PersonOrderDetailLinesItem({required this.lineKobo, required this.name, required this.priceKobo, required this.quantity});
+
+  final int lineKobo;
+  final String name;
+  final int priceKobo;
+  final int quantity;
+
+  factory PersonOrderDetailLinesItem.fromJson(Map<String, dynamic> j) => PersonOrderDetailLinesItem(
+        lineKobo: (j['line_kobo'] as num).toInt(),
+        name: j['name'] as String,
+        priceKobo: (j['price_kobo'] as num).toInt(),
+        quantity: (j['quantity'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'line_kobo': lineKobo,
+        'name': name,
+        'price_kobo': priceKobo,
+        'quantity': quantity,
+      };
+}
+
+class PayMyOrderResponse {
+  const PayMyOrderResponse({required this.dueKobo, required this.reference, required this.url});
+
+  final int dueKobo;
+  final String reference;
+  final String url;
+
+  factory PayMyOrderResponse.fromJson(Map<String, dynamic> j) => PayMyOrderResponse(
+        dueKobo: (j['due_kobo'] as num).toInt(),
+        reference: j['reference'] as String,
+        url: j['url'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'due_kobo': dueKobo,
+        'reference': reference,
+        'url': url,
+      };
+}
+
+class MyAddressesResponse {
+  const MyAddressesResponse({required this.addresses});
+
+  final List<SavedAddress> addresses;
+
+  factory MyAddressesResponse.fromJson(Map<String, dynamic> j) => MyAddressesResponse(
+        addresses: (j['addresses'] as List).map((e) => SavedAddress.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'addresses': addresses.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// One of the person's saved addresses.
+class SavedAddress {
+  const SavedAddress({required this.area, required this.createdAt, required this.default_, required this.id, required this.label, required this.landmark, required this.line, this.phone, required this.updatedAt});
+
+  final String area;
+  final DateTime createdAt;
+  final bool default_;
+  final String id;
+  /// Home, Work
+  final String label;
+  final String landmark;
+  /// The street and number
+  final String line;
+  /// A phone for the rider (E.164), when it is not the person's own
+  final Object? phone;
+  final DateTime updatedAt;
+
+  factory SavedAddress.fromJson(Map<String, dynamic> j) => SavedAddress(
+        area: j['area'] as String,
+        createdAt: DateTime.parse(j['created_at'] as String),
+        default_: j['default'] as bool,
+        id: j['id'] as String,
+        label: j['label'] as String,
+        landmark: j['landmark'] as String,
+        line: j['line'] as String,
+        phone: j['phone'],
+        updatedAt: DateTime.parse(j['updated_at'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': area,
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'default': default_,
+        'id': id,
+        'label': label,
+        'landmark': landmark,
+        'line': line,
+        'phone': ?phone,
+        'updated_at': updatedAt.toUtc().toIso8601String(),
+      };
+}
+
+class SavedAddressIn {
+  const SavedAddressIn({this.area, this.default_, this.label, this.landmark, this.line, this.phone});
+
+  final String? area;
+  final bool? default_;
+  final String? label;
+  final String? landmark;
+  final String? line;
+  final String? phone;
+
+  factory SavedAddressIn.fromJson(Map<String, dynamic> j) => SavedAddressIn(
+        area: j['area'] == null ? null : j['area'] as String,
+        default_: j['default'] == null ? null : j['default'] as bool,
+        label: j['label'] == null ? null : j['label'] as String,
+        landmark: j['landmark'] == null ? null : j['landmark'] as String,
+        line: j['line'] == null ? null : j['line'] as String,
+        phone: j['phone'] == null ? null : j['phone'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': ?area,
+        'default': ?default_,
+        'label': ?label,
+        'landmark': ?landmark,
+        'line': ?line,
+        'phone': ?phone,
       };
 }

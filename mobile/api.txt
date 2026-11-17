@@ -163,3 +163,12 @@ newChatLink
 putChatSettings
 myStorefrontOrders
 confirmStorefrontOrders
+
+# Orders on You and saved addresses (taskiem-for-everyone §13, stage 3)
+myOrders
+myOrder
+payMyOrder
+myAddresses
+addMyAddress
+editMyAddress
+deleteMyAddress
