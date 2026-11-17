@@ -37,6 +37,18 @@ func TestAPIClientIsCurrent(t *testing.T) {
 	}
 }
 
+// A parameter named with one of Dart's own words (DELETE …/messages/{id}
+// ?for=me) takes a trailing _: `String? for` would not compile.
+func TestAPIClientReservedParameter(t *testing.T) {
+	got, err := GenerateAPI(filepath.Join("..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got, "String? for}") || !strings.Contains(got, "String? for_}") || !strings.Contains(got, "'for': ?for_") {
+		t.Fatal("the query parameter `for` is not renamed for_")
+	}
+}
+
 // The app's chat words are the web's.
 func TestWordsAreCurrent(t *testing.T) {
 	root := filepath.Join("..", "..")

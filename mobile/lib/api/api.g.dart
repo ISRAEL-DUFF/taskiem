@@ -1029,8 +1029,8 @@ class TaskiemApi {
   }
 
   /// Delete a message (`DELETE /v1/me/people/{id}/messages/{message}`)
-  Future<void> deletePeopleMessage({required String id, required String message, String? for}) async {
-    await _t.send('DELETE', '/v1/me/people/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}', query: {'for': ?for});
+  Future<void> deletePeopleMessage({required String id, required String message, String? for_}) async {
+    await _t.send('DELETE', '/v1/me/people/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}', query: {'for': ?for_});
   }
 
   /// Mark a share paid (`POST /v1/me/people/{id}/messages/{message}/paid`)

@@ -179,6 +179,14 @@ class _YouNotificationsPageState extends State<YouNotificationsPage> {
     }
   }
 
+  static YouNotifications _with(YouNotifications n, {bool? messages, bool? updates, bool? offers, bool? people, bool? requests}) => YouNotifications(
+    messages: messages ?? n.messages,
+    updates: updates ?? n.updates,
+    offers: offers ?? n.offers,
+    people: people ?? n.people,
+    requests: requests ?? n.requests,
+  );
+
   /// One kind on or off: shown at once, put back if refused.
   Future<void> _set(PutMyNotificationsRequest body, YouNotifications shown) async {
     final was = _n;
@@ -243,19 +251,39 @@ class _YouNotificationsPageState extends State<YouNotificationsPage> {
                 label: 'Messages',
                 hint: 'When someone at a business writes to you',
                 on: n.messages,
-                onChanged: _busy ? null : (v) => _set(PutMyNotificationsRequest(messages: v), YouNotifications(messages: v, updates: n.updates, offers: n.offers)),
+                onChanged: _busy ? null : (v) => _set(PutMyNotificationsRequest(messages: v), _with(n, messages: v)),
               ),
               TkSwitchRow(
                 label: 'Updates',
                 hint: 'News of your orders and bookings',
                 on: n.updates,
-                onChanged: _busy ? null : (v) => _set(PutMyNotificationsRequest(updates: v), YouNotifications(messages: n.messages, updates: v, offers: n.offers)),
+                onChanged: _busy ? null : (v) => _set(PutMyNotificationsRequest(updates: v), _with(n, updates: v)),
               ),
               TkSwitchRow(
                 label: 'Offers',
                 hint: 'From businesses you said yes to',
                 on: n.offers,
-                onChanged: _busy ? null : (v) => _set(PutMyNotificationsRequest(offers: v), YouNotifications(messages: n.messages, updates: n.updates, offers: v)),
+                onChanged: _busy ? null : (v) => _set(PutMyNotificationsRequest(offers: v), _with(n, offers: v)),
+              ),
+            ],
+          ),
+        // People chats (people-chatting §13): a person's message, and a
+        // stranger's first message waiting in Requests.
+        if (n != null)
+          SettingsCard(
+            title: 'Chats with people',
+            children: [
+              TkSwitchRow(
+                label: 'Messages from people',
+                hint: 'When someone you chat with writes to you',
+                on: n.people,
+                onChanged: _busy ? null : (v) => _set(PutMyNotificationsRequest(people: v), _with(n, people: v)),
+              ),
+              TkSwitchRow(
+                label: 'Message requests',
+                hint: 'When someone new writes to you first',
+                on: n.requests,
+                onChanged: _busy ? null : (v) => _set(PutMyNotificationsRequest(requests: v), _with(n, requests: v)),
               ),
             ],
           ),

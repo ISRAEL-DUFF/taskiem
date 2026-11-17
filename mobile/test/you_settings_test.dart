@@ -81,10 +81,10 @@ void main() {
     phone(t);
     final api = you();
     var refuse = false;
-    api.routes['GET /v1/me/notifications'] = (_) => {'messages': true, 'updates': true, 'offers': true};
+    api.routes['GET /v1/me/notifications'] = (_) => {'messages': true, 'updates': true, 'offers': true, 'people': true, 'requests': true};
     api.routes['PUT /v1/me/notifications'] = (r) {
       if (refuse) return answer({'error': 'Something went wrong. Try again.'}, 500);
-      return {'messages': true, 'updates': true, 'offers': api.body(r)['offers'] ?? true};
+      return {'messages': true, 'updates': true, 'offers': api.body(r)['offers'] ?? true, 'people': api.body(r)['people'] ?? true, 'requests': true};
     };
     await settings(t, api);
     await press(t, find.text('Notifications'));
@@ -96,6 +96,11 @@ void main() {
     expect(api.body(api.sent('PUT', '/v1/me/notifications').last), {'updates': false});
     expect(find.text('Something went wrong. Try again.'), findsOneWidget);
     expect(find.textContaining('every phone you use Taskiem on'), findsOneWidget);
+    // People chats' two kinds (people-chatting §13).
+    refuse = false;
+    expect(find.text('Message requests'), findsOneWidget);
+    await press(t, find.bySemanticsLabel('Messages from people').last);
+    expect(api.body(api.sent('PUT', '/v1/me/notifications').last), {'people': false});
     await drain(t);
   });
 

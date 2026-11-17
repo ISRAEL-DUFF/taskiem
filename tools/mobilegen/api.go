@@ -138,7 +138,7 @@ func (g *apiGen) method(o operation) (string, error) {
 	call := fmt.Sprintf("'%s'", o.path)
 	if pathParam.MatchString(o.path) {
 		call = "'" + pathParam.ReplaceAllStringFunc(o.path, func(m string) string {
-			return "${Uri.encodeComponent(" + camelJSON(m[1:len(m)-1]) + ")}"
+			return "${Uri.encodeComponent(" + dartName(camelJSON(m[1:len(m)-1])) + ")}"
 		}) + "'"
 	}
 	var query, headers []string
@@ -153,10 +153,11 @@ func (g *apiGen) method(o operation) (string, error) {
 		in, _ := pm["in"].(string)
 		switch in {
 		case "path":
-			args = append(args, "required String "+camelJSON(n))
+			args = append(args, "required String "+dartName(camelJSON(n)))
 		case "query":
-			args = append(args, "String? "+camelJSON(n))
-			query = append(query, fmt.Sprintf("'%s': ?%s", n, camelJSON(n)))
+			// A word Dart keeps for itself (`for`) takes a trailing _.
+			args = append(args, "String? "+dartName(camelJSON(n)))
+			query = append(query, fmt.Sprintf("'%s': ?%s", n, dartName(camelJSON(n))))
 		case "header":
 			// A header the operation takes (Idempotency-Key): an argument
 			// named after it, required as the document says.

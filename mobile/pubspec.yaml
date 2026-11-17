@@ -48,6 +48,11 @@ dependencies:
   passkeys: 2.24.1
   # A customer picked from the phone's contacts, in its own picker, so the app reads no other contact (lib/chat/invoices_page.dart). BSD-3-Clause.
   flutter_native_contact_picker: 0.0.13
+  # Finding friends from the phone's contacts, only after the person agrees (lib/chat/people_contacts.dart;
+  # docs/spec/people-chatting.md §5.3): the numbers are read, hashed and sent, never kept. MIT.
+  flutter_contacts: 2.6.0
+  # SHA-256 of a contact's number with the week's key (lib/chat/people_contacts.dart). BSD-3-Clause.
+  crypto: 3.0.8
 dev_dependencies:
   flutter_test:
     sdk: flutter
