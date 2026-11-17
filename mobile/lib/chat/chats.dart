@@ -1015,7 +1015,12 @@ class ChatRow extends StatelessWidget {
     this.need = 0,
     this.onTap,
     this.avatar,
+    this.marks = const [],
   });
+
+  /// Small marks after the name: a customer's lines, WhatsApp and App
+  /// (taskiem-for-everyone §11), [off] when that line takes no messages.
+  final List<({String label, bool off})> marks;
 
   /// Its face in place of the letters or logo (a business's photo by its
   /// address, on You).
@@ -1068,6 +1073,18 @@ class ChatRow extends StatelessWidget {
                           style: tkText(size: 16, weight: 600, color: t.text),
                         ),
                       ),
+                      for (final m in marks) ...[
+                        const SizedBox(width: 6),
+                        Semantics(
+                          label: m.off ? '${m.label}, stopped' : m.label,
+                          excludeSemantics: true,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(color: m.off ? t.tkDangerBg : t.tkSoft, borderRadius: BorderRadius.circular(999)),
+                            child: Text(m.label, style: tkText(size: 11, weight: 600, color: m.off ? t.tkDangerInk : t.muted)),
+                          ),
+                        ),
+                      ],
                       if (time != null) ...[
                         const SizedBox(width: 8),
                         Text(
@@ -2035,10 +2052,15 @@ class _Customers extends StatelessWidget {
               key: ValueKey('row customer ${c.id}'),
               title: customerTitle(c),
               letter: customerLetter(c),
+              // One row for a customer on both lines (§11), with each line's mark.
+              marks: [
+                if (bothLines(c))
+                  for (final l in [?lineOf(c, 'whatsapp'), ?lineOf(c, 'app')]) (label: l.line == 'whatsapp' ? 'WhatsApp' : 'App', off: lineShut(l) != null),
+              ],
               time: listTime(c.lastAt, now),
               preview: _ChatsScreenState._previewText(
                 context,
-                c.stopped ? (c.line == 'app' ? 'Stopped messages' : 'Sent STOP') : '${c.lastMine ? 'You: ' : ''}${c.last}',
+                c.stopped ? ((c.replyLine ?? c.line) == 'app' ? 'Stopped messages' : 'Sent STOP') : '${c.lastMine ? 'You: ' : ''}${c.last}',
                 draft: drafts['customer:${c.id}'],
               ),
               unread: c.unread,

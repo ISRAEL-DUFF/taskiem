@@ -3,7 +3,8 @@
 // window and no templates, and replies can be rich. The + by the box sends
 // an order's card, a pay link, a booking offer, a product from the
 // catalogue, an invoice sent to them, the rider's progress on their order,
-// a photo or a file, or (to a customer who said yes) an offer.
+// a photo or a file, or (to a customer who said yes) an offer. To a
+// customer on WhatsApp too (§11) they go in the app, and the + says so.
 
 import 'package:flutter/widgets.dart';
 
@@ -34,7 +35,7 @@ enum RichKind { order, pay, invoice, delivery, booking, product, photo, file, of
 Future<void> showRichReply(BuildContext context, CustomerData d, {Pickers pickers = const Pickers(), required TextEditingController box}) async {
   final c = d.chat;
   if (c == null) return;
-  final kind = await showTkSheet<RichKind>(context, (_) => _RichMenu(offers: c.offers == 'yes', invoices: d.chats.auth.can('invoice.manage')));
+  final kind = await showTkSheet<RichKind>(context, (_) => _RichMenu(offers: c.offers == 'yes', invoices: d.chats.auth.can('invoice.manage'), both: d.both));
   if (kind == null || !context.mounted) return;
   switch (kind) {
     case RichKind.photo:
@@ -67,9 +68,12 @@ Future<void> _file(BuildContext context, CustomerData d, PickedFile f) async {
 }
 
 class _RichMenu extends StatelessWidget {
-  const _RichMenu({required this.offers, required this.invoices});
+  const _RichMenu({required this.offers, required this.invoices, this.both = false});
   final bool offers;
   final bool invoices;
+
+  /// The customer is on WhatsApp too (§11): what is sent here goes in the app.
+  final bool both;
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +90,7 @@ class _RichMenu extends StatelessWidget {
     return TkAppLook(
       child: TkSheet(
         title: 'Send',
-        crumb: 'To this customer, made from your own records',
+        crumb: both ? 'In the app, not on WhatsApp: cards, offers and files go there' : 'To this customer, made from your own records',
         body: ListView(
           padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
           children: [

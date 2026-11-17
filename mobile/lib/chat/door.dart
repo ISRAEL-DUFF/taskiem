@@ -419,3 +419,31 @@ String verifiedWords(PersonChatVerified? v) {
     },
   ].join(' · ');
 }
+
+/// Where a message went (taskiem-for-everyone §11): on the business's own
+/// WhatsApp number, or in the app.
+String lineWords(String? line) => line == 'whatsapp' ? 'on WhatsApp' : 'in the app';
+
+/// A bubble's mark of its line, before its time: "on WhatsApp ·" or "in the
+/// app ·" (§11).
+class LineMark extends StatelessWidget {
+  const LineMark({super.key, required this.line, required this.color});
+  final String? line;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: line == 'whatsapp' ? 'On WhatsApp' : 'In the app',
+    excludeSemantics: true,
+    child: Padding(
+      padding: const EdgeInsets.only(right: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (line == 'whatsapp') ...[TkIcon('b-whatsapp', size: 12, stroke: 2, color: color), const SizedBox(width: 3)],
+          Text('${lineWords(line)} ·', style: tkText(size: 11, lineHeight: 16 / 11, color: color)),
+        ],
+      ),
+    ),
+  );
+}
