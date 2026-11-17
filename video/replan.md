@@ -24,9 +24,9 @@ The merge was clean, and `video/` itself did not change on main.
 
 | Video | Verdict | Why |
 | --- | --- | --- |
-| Chat explainer, hybrid cut (2:50) | **Keep, small update** | Concept and numbers still hold. Re-render scene 12 (Explore) from the new Explore. Re-render any scene whose screen changed ("Accept and Decline side by side", sheets that go back one level), checked against the app's parity pictures in `mobile/test/parity/web/` |
-| Chat shorts (Morning, Tools, Trade, Staff, Explore, Deals) | **Keep**, rebuild after scene 12 | Explore short changes |
-| How-tos 02, 03, 04, 07, 09, 10, 12, 13, 14, 16, 17 (chat-based) | **Keep for now** | They record chat screens, which match the app |
+| Chat explainer, hybrid cut (2:50) | **Redo the app scenes** | I first said "keep, small update". That was wrong: I judged from the docs, not from the pictures. Side by side with the app's current screens (`mobile/test/parity/web/`), our hand-built scenes differ: the conversation header, the Explore page (now a full "Find a business" page with search, categories and Featured cards, not a bottom sheet), the tools panel (now a grid of tiles with counts), the order and offer cards, the composer, and the phone frame around everything. The story, script, narration, characters and Flow clips still hold |
+| Chat shorts (Morning, Tools, Trade, Staff, Explore, Deals) | **Rebuild** after the scenes are redone | Same reason |
+| How-tos 02, 03, 04, 07, 09, 10, 12, 13, 14, 16, 17 (chat-based) | **Keep; spot-check** | They are recordings of the real web chat, so they follow the app's current look when re-run. Check each against the parity pictures before use |
 | How-tos 01 and 15 (find a business, connect) | **Re-record** | Explore changed |
 | How-tos 02 (order page), 03 (invoice page), 05 (Staff page), 06 (Tasks page), 08 (Deliveries page), 11 (Money, To match) | **Decide web or phone** | They show a page away from the chat. The web layout differs from the phone app's. See section 3 |
 | Narrator scripts (`howto/narration.md`) | Keep; edit lines for any re-recorded video | |
@@ -62,8 +62,9 @@ cheapest way). Until then, avoid showing those pages in new videos.
 
 ## 5. Suggested order
 
-1. Merge is done. Update scene 12 and rebuild the chat film (mostly
-   rendering time).
+1. Merge is done. Redo the chat film's app scenes so they match the app's
+   current look (see section 7), then rebuild the film with the same cutaways
+   and narration.
 2. Re-record how-tos 01 and 15 and re-check their narration.
 3. Explore short (new).
 4. The trust film, if that audience matters now. Otherwise the new how-tos.
@@ -78,3 +79,21 @@ cheapest way). Until then, avoid showing those pages in new videos.
 3. **Do you want the phone-app film at all before the app is in the stores?**
 4. **The repository moved** to `ISRAEL-DUFF/taskiem` (GitHub says so on every
    push). Shall I switch this clone's remote to the new address?
+
+## 7. How to make the scenes match the app, and keep them matching
+
+Our 16 scenes are hand-drawn web pages (`films/chat/scenes/*.html`) built from
+the design boards. Every time the app's look changes, they go out of date, as
+now. Two ways to fix it:
+
+| | A. Redraw the scenes in the kit | B. Record the real app (recommended) |
+| --- | --- | --- |
+| How | Update `kit.css` and the 16 HTML scenes to the new look | Use the real web chat on the demo world (`recording/` and `howto/` already do this) and add our captions, music and end card around the recordings |
+| Matches the app | Only as well as I redraw it | Exactly, by construction (the app's own parity test keeps web and phone the same in the chat) |
+| Next time the app changes | Out of date again | Re-run the recording |
+| Motion and polish | Full control (taps, glows, bursts) | Real timings; less choreographed |
+| Cost | 16 scenes of hand work and checking | A new set of recording scripts for the film's moments, then rendering |
+
+Go, Postgres 16 and psql are installed in this environment, so the demo world
+(`bash web/e2e/demo/serve-demo.sh`, `seed.ts`) should run here and I can record.
+I have not started it yet.
