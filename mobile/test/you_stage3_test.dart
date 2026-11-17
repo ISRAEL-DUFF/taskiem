@@ -310,7 +310,7 @@ void main() {
     await press(t, find.text('Report Mama’s Kitchen'));
     await press(t, find.text('Send report'));
     expect(find.text('Choose why you are reporting them.'), findsOneWidget);
-    await press(t, find.text('Pretends to be someone else'));
+    await press(t, find.text('They are pretending to be someone else'));
     await typeIn(t, find.ancestor(of: find.text('What happened'), matching: find.byType(TkKitField)), 'Uses another shop’s name');
     await press(t, find.text('Send report'));
     expect(api.body(api.sent('POST', '/v1/discover/b1/report').single), {'reason': 'impersonation', 'note': 'Uses another shop’s name'});

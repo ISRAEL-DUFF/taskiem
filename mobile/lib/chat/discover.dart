@@ -35,12 +35,12 @@ import 'my_chat.dart';
 import 'words.dart' show CardTone;
 
 /// The reasons a business is reported for in Discover, in the web's words
-/// (web/src/lib/trust.ts REPORT_REASON).
+/// (web/src/lib/discover.ts DISCOVER_REPORT_REASONS).
 const discoverReportReasons = [
-  ('scam', 'Looks like a scam'),
-  ('impersonation', 'Pretends to be someone else'),
-  ('prohibited', 'Sells something not allowed'),
-  ('offensive', 'Offensive'),
+  ('scam', 'They are trying to cheat people'),
+  ('impersonation', 'They are pretending to be someone else'),
+  ('prohibited', 'They sell something not allowed'),
+  ('offensive', 'Rude or offensive'),
   ('other', 'Something else'),
 ];
 
