@@ -8,6 +8,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -44,15 +45,20 @@ const lineApp = "app"
 // its state; Pay when due), a pay link, a booking offer (a service), a
 // product, or the business's closed reply.
 type customerCard struct {
-	Type      string `json:"type"` // order | pay | booking | product
+	Type      string `json:"type"` // order | pay | booking | product | invoice | delivery
 	Reference string `json:"reference,omitempty"`
-	Title     string `json:"title"`
-	Line      string `json:"line,omitempty"`
-	Status    string `json:"status,omitempty"`
-	TotalKobo *int64 `json:"total_kobo,omitempty"`
-	ItemID    string `json:"item_id,omitempty"`
-	ServiceID string `json:"service_id,omitempty"`
-	Minutes   int    `json:"minutes,omitempty"`
+	// InvoiceID is an invoice card's invoice (Reference is its number).
+	InvoiceID string `json:"invoice_id,omitempty"`
+	// Delivery is a delivery card's rider progress as it was when sent;
+	// the person's orders (GET /v1/me/chats/{id}/orders) have it as it is.
+	Delivery  *deliveryProgress `json:"delivery,omitempty"`
+	Title     string            `json:"title"`
+	Line      string            `json:"line,omitempty"`
+	Status    string            `json:"status,omitempty"`
+	TotalKobo *int64            `json:"total_kobo,omitempty"`
+	ItemID    string            `json:"item_id,omitempty"`
+	ServiceID string            `json:"service_id,omitempty"`
+	Minutes   int               `json:"minutes,omitempty"`
 	// URL is a pay link's page (the order's status page, where it is paid).
 	URL string `json:"url,omitempty"`
 }
@@ -183,6 +189,12 @@ type appMessage struct {
 // and the person's conversation.
 func (s *Server) writeAppMessageTx(ctx context.Context, tx pgx.Tx, m appMessage) (at time.Time, conv uuid.UUID, err error) {
 	body, err := pii.SealText(ctx, s.Store.PII, tx, m.tenant, m.subject, "other", m.text)
+	if errors.Is(err, pii.ErrErased) {
+		if m.fromPerson {
+			return at, conv, errPersonErased
+		}
+		return at, conv, errCustomerErased
+	}
 	if err != nil {
 		return at, conv, err
 	}
@@ -196,7 +208,18 @@ func (s *Server) writeAppMessageTx(ctx context.Context, tx pgx.Tx, m appMessage)
 	}
 	var bizAtt, personAtt []byte
 	if m.bizFile != nil {
-		bizAtt, _ = json.Marshal(m.bizFile)
+		// The business's copy: the file's name is the customer's words,
+		// sealed under their subject as the message is.
+		f := map[string]any{}
+		for k, v := range m.bizFile {
+			f[k] = v
+		}
+		if name, _ := f["name"].(string); name != "" {
+			if f["name"], err = pii.SealText(ctx, s.Store.PII, tx, m.tenant, m.subject, "other", name); err != nil {
+				return at, conv, err
+			}
+		}
+		bizAtt, _ = json.Marshal(f)
 	}
 	fileID := uuid.Must(uuid.NewV7())
 	if m.personFile != nil {
@@ -212,8 +235,10 @@ func (s *Server) writeAppMessageTx(ctx context.Context, tx pgx.Tx, m appMessage)
 		m.id, m.tenant, m.thread, !m.fromPerson, m.kind, body, senderID, m.senderName, client, delivery, card, bizAtt, m.offer).Scan(&at); err != nil {
 		return at, conv, err
 	}
-	err = tx.QueryRow(ctx, `INSERT INTO person_conversations (id, person_id, tenant_id) VALUES ($1, $2, $3)
-		ON CONFLICT (person_id, tenant_id) DO UPDATE SET last_message_at = now() RETURNING id`, uuid.Must(uuid.NewV7()), m.person, m.tenant).Scan(&conv)
+	// Made here only when the business writes first: not one of the
+	// person's new chats (§15).
+	err = tx.QueryRow(ctx, `INSERT INTO person_conversations (id, person_id, tenant_id, by_business) VALUES ($1, $2, $3, $4)
+		ON CONFLICT (person_id, tenant_id) DO UPDATE SET last_message_at = now() RETURNING id`, uuid.Must(uuid.NewV7()), m.person, m.tenant, !m.fromPerson).Scan(&conv)
 	if err != nil {
 		return at, conv, err
 	}
@@ -233,13 +258,19 @@ func (s *Server) writeAppMessageTx(ctx context.Context, tx pgx.Tx, m appMessage)
 			return at, conv, err
 		}
 	}
+	// Waiting (§8.6) begins with the first message no one has answered and
+	// ends with the business's own answer: not Taskiem's words for it (the
+	// closed reply, an order's news), nor an offer.
 	switch {
 	case m.fromPerson:
-		_, err = tx.Exec(ctx, `UPDATE customer_conversations SET last_inbound_at = now(), last_message_at = now(), archived = false WHERE id = $1`, m.thread)
+		_, err = tx.Exec(ctx, `UPDATE customer_conversations SET last_inbound_at = now(), last_message_at = now(), archived = false,
+			wait_check_at = CASE WHEN waiting_since IS NULL THEN NULL ELSE wait_check_at END, waiting_since = COALESCE(waiting_since, now()) WHERE id = $1`, m.thread)
 	case m.system:
 		_, err = tx.Exec(ctx, `UPDATE customer_conversations SET last_message_at = now() WHERE id = $1`, m.thread)
-	default:
+	case m.offer:
 		_, err = tx.Exec(ctx, `UPDATE customer_conversations SET last_message_at = now(), last_reply_at = now() WHERE id = $1`, m.thread)
+	default:
+		_, err = tx.Exec(ctx, `UPDATE customer_conversations SET last_message_at = now(), last_reply_at = now(), waiting_since = NULL, wait_check_at = NULL WHERE id = $1`, m.thread)
 	}
 	if err != nil {
 		return at, conv, err
@@ -272,6 +303,9 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 		return customerMessageView{}, false, customerSendErr{http.StatusConflict, "You blocked this customer. Unblock them to write to them."}
 	case chat.Stopped:
 		return customerMessageView{}, false, customerSendErr{http.StatusConflict, "This customer has stopped messages."}
+	case chat.Phone == "":
+		// Erased: nothing more is sealed under them.
+		return customerMessageView{}, false, errCustomerErased
 	}
 	person := *chat.person
 	out := customerMessageView{ID: uuid.Must(uuid.NewV7()), Mine: true, Kind: "text", Body: in.Text, SenderName: in.SenderName, Delivery: "delivered",
@@ -298,6 +332,12 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 	var conv uuid.UUID
 	err := db.InTenantTx(context.WithoutCancel(ctx), s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 		var err error
+		if in.Offer {
+			// Held first, so a repeat sent at the same time finds the first.
+			if _, err := tx.Exec(ctx, `SELECT 1 FROM customer_conversations WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenant, chat.ID); err != nil {
+				return err
+			}
+		}
 		if again, err = s.customerRepeat(ctx, tx, tenant, chat.ID, in.ClientID); err != nil || again != nil {
 			return err
 		}
@@ -359,6 +399,11 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 // offerAllowedTx refuses an offer to a customer who has not said yes to
 // offers, or who has had offersPerWeek in the last seven days (§15).
 func offerAllowedTx(ctx context.Context, tx pgx.Tx, tenant, person, thread uuid.UUID) error {
+	// The thread held until this transaction ends: two offers sent at once
+	// are counted one after the other, never both under the limit.
+	if _, err := tx.Exec(ctx, `SELECT 1 FROM customer_conversations WHERE tenant_id = $1 AND id = $2 FOR UPDATE`, tenant, thread); err != nil {
+		return err
+	}
 	var yes bool
 	err := tx.QueryRow(ctx, `SELECT answer FROM customer_offer_consents WHERE tenant_id = $1 AND person_id = $2`, tenant, person).Scan(&yes)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
@@ -457,6 +502,7 @@ type cardAsk struct {
 	Reference string `json:"reference"`
 	ItemID    string `json:"item_id"`
 	ServiceID string `json:"service_id"`
+	InvoiceID string `json:"invoice_id"`
 }
 
 // cardFor makes a card from the business's own data: an order of this
@@ -473,6 +519,60 @@ func (s *Server) cardFor(ctx context.Context, tenant uuid.UUID, thread string, a
 			return customerSendErr{http.StatusConflict, "cards go to customers who chat in the Taskiem app; this customer writes on WhatsApp"}
 		}
 		switch ask.Type {
+		case "invoice":
+			if s.Invoices == nil {
+				return customerSendErr{http.StatusConflict, "invoices are not set up on this server"}
+			}
+			if _, err := uuid.Parse(ask.InvoiceID); err != nil {
+				return customerSendErr{http.StatusNotFound, "No invoice has that id."}
+			}
+			x, err := s.Invoices.Get(ctx, tx, tenant, ask.InvoiceID)
+			if err != nil {
+				return customerSendErr{http.StatusNotFound, "No invoice has that id."}
+			}
+			if x.CustomerID() != subject {
+				return customerSendErr{http.StatusConflict, "That invoice is another customer's."}
+			}
+			if x.Status == "draft" || x.Status == "void" {
+				return customerSendErr{http.StatusConflict, "Send the invoice first: a draft or a voided invoice is not sent to customers."}
+			}
+			due := x.DueKobo
+			card = &customerCard{Type: "invoice", InvoiceID: x.ID.String(), Reference: x.Number, Title: "Invoice " + x.Number, Status: x.Status, TotalKobo: &due}
+			if len(x.Lines) > 0 {
+				card.Line = x.Lines[0].Description
+				if len(x.Lines) > 1 {
+					card.Line += fmt.Sprintf(" and %d more", len(x.Lines)-1)
+				}
+			}
+			if due > 0 {
+				link, err := s.Invoices.PageLink(ctx, tx, tenant, x)
+				if err != nil {
+					return err
+				}
+				card.URL = link
+			}
+		case "delivery":
+			if s.Orders == nil {
+				return customerSendErr{http.StatusConflict, "orders are not set up on this server"}
+			}
+			ord, err := s.Orders.GetOrder(ctx, tx, tenant, ask.Reference)
+			if errors.Is(err, storefront.ErrNoOrder) {
+				return customerSendErr{http.StatusNotFound, "No order has that reference."}
+			}
+			if err != nil {
+				return err
+			}
+			if ord.CustomerID() != subject && (ord.PersonID == nil || chat.person == nil || *ord.PersonID != *chat.person) {
+				return customerSendErr{http.StatusConflict, "That order is another customer's."}
+			}
+			d, err := deliveryProgressTx(ctx, tx, tenant, ord.ID)
+			if err != nil {
+				return err
+			}
+			if d == nil {
+				return customerSendErr{http.StatusConflict, "No rider has this order yet."}
+			}
+			card = &customerCard{Type: "delivery", Reference: ord.Reference, Title: "Delivery of " + ord.Reference, Line: d.Line, Status: d.Status, Delivery: d}
 		case "order", "pay":
 			if s.Orders == nil {
 				return customerSendErr{http.StatusConflict, "orders are not set up on this server"}
@@ -638,6 +738,10 @@ func (s *Server) customerTyping(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		_, err = tx.Exec(r.Context(), `SELECT taskiem_customer_typing($1, $2, 'business')`, p.TenantID, *chat.person)
+		err = typingErr(err, customerSendErr{http.StatusConflict, "This customer has stopped messages."})
+		if errors.Is(err, errDoorBlocked) {
+			return customerSendErr{http.StatusConflict, "You blocked this customer. Unblock them to write to them."}
+		}
 		return err
 	})
 	if err != nil {
@@ -700,8 +804,17 @@ func (s *Server) customerFile(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return pgx.ErrNoRows
 		}
-		return tx.QueryRow(r.Context(), `SELECT attachment->>'path', attachment->>'type', COALESCE(attachment->>'name', ''), attachment->>'kind' FROM customer_messages
-			WHERE tenant_id = $1 AND conversation_id = $2 AND id = $3 AND attachment ? 'path'`, p.TenantID, chat.ID, msg).Scan(&path, &ctype, &name, &kind)
+		var raw []byte
+		if err := tx.QueryRow(r.Context(), `SELECT attachment->>'path', attachment FROM customer_messages
+			WHERE tenant_id = $1 AND conversation_id = $2 AND id = $3 AND attachment ? 'path'`, p.TenantID, chat.ID, msg).Scan(&path, &raw); err != nil {
+			return err
+		}
+		a, err := s.openAttachment(r.Context(), tx, p.TenantID, raw)
+		if err != nil {
+			return err
+		}
+		ctype, name, kind = a.Type, a.Name, a.Kind
+		return nil
 	})
 	if err != nil {
 		s.customerChatFail(w, r, err)
@@ -795,15 +908,24 @@ func (s *Server) openAppCustomerChat(w http.ResponseWriter, r *http.Request) {
 
 // appThreadTx is the business's app thread with a person, made when they
 // have none: sealed under the subject of their phone in this business,
-// with their name. The business is in scope.
+// with their name. The business is in scope. An app thread is the
+// person's own, keyed by the business and the person: a phone that
+// changes hands gives its new holder a thread of their own, and never
+// moves the old holder's to them.
 func (s *Server) appThreadTx(ctx context.Context, tx pgx.Tx, tenant, person uuid.UUID, phone, name string) (uuid.UUID, string, error) {
 	var id uuid.UUID
 	var subject string
-	err := tx.QueryRow(ctx, `SELECT id, subject_id FROM customer_conversations WHERE tenant_id = $1 AND person_id = $2 AND line = 'app'`, tenant, person).Scan(&id, &subject)
+	find := func() error {
+		return tx.QueryRow(ctx, `SELECT id, subject_id FROM customer_conversations WHERE tenant_id = $1 AND person_id = $2 AND line = 'app'`, tenant, person).Scan(&id, &subject)
+	}
+	err := find()
 	if err == nil || !errors.Is(err, pgx.ErrNoRows) {
 		return id, subject, err
 	}
 	env, err := s.Store.PII.SealTx(ctx, tx, tenant, "phone", phone)
+	if errors.Is(err, pii.ErrErased) {
+		return id, "", errCustomerErased
+	}
 	if err != nil {
 		return id, "", err
 	}
@@ -825,11 +947,55 @@ func (s *Server) appThreadTx(ctx context.Context, tx pgx.Tx, tenant, person uuid
 		return id, "", err
 	}
 	id = uuid.Must(uuid.NewV7())
-	err = tx.QueryRow(ctx, `INSERT INTO customer_conversations (id, tenant_id, phone_number_id, subject_id, who, line, person_id)
+	if _, err := tx.Exec(ctx, `INSERT INTO customer_conversations (id, tenant_id, phone_number_id, subject_id, who, line, person_id)
 		VALUES ($1, $2, 'app', $3, $4, 'app', $5)
-		ON CONFLICT (tenant_id, line, phone_number_id, subject_id) DO UPDATE SET person_id = EXCLUDED.person_id
-		RETURNING id`, id, tenant, subject, raw, person).Scan(&id)
-	return id, subject, err
+		ON CONFLICT (tenant_id, person_id) WHERE line = 'app' DO NOTHING`, id, tenant, subject, raw, person); err != nil {
+		return id, "", err
+	}
+	return id, subject, find()
+}
+
+// errCustomerErased refuses writing in an app thread whose customer the
+// business erased: their details are gone, and nothing more is kept
+// under them.
+var errCustomerErased = customerSendErr{http.StatusConflict, "This customer's details were erased, so this conversation is closed."}
+
+// appPersonOf is the person of an app thread, nil for a WhatsApp one: an
+// order confirmed in their conversation is theirs.
+func appPersonOf(chat customerChatView) *uuid.UUID {
+	if chat.Line != lineApp {
+		return nil
+	}
+	return chat.person
+}
+
+// errPersonErased is the same refusal, as the person sees it.
+var errPersonErased = customerSendErr{http.StatusConflict, "This business erased your details from its records, so this conversation is closed."}
+
+// openAttachment is the business's copy of a file as it is shown: its name
+// opened (sealed under the customer's subject; a name kept before it was
+// sealed is read as it is), never where it is kept.
+func (s *Server) openAttachment(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, raw []byte) (*chatAttachment, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var a struct {
+		Kind string          `json:"kind"`
+		Type string          `json:"type"`
+		Size int64           `json:"size"`
+		Name json.RawMessage `json:"name"`
+	}
+	if err := json.Unmarshal(raw, &a); err != nil {
+		return nil, err
+	}
+	out := &chatAttachment{Kind: a.Kind, Type: a.Type, Size: a.Size}
+	if len(a.Name) > 0 && string(a.Name) != "null" {
+		var err error
+		if out.Name, err = s.openCustomerText(ctx, tx, tenant, a.Name); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // broadcastOffer is POST /v1/customer-chats/offers {text, client_id}: an
@@ -992,7 +1158,8 @@ func (s *Server) putCustomerChatSettings(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, st)
 }
 
-// businessHoursTx is the business's opening hours, from its shop page;
+// businessHoursTx is the business's opening hours, from its published
+// shop page (what its customers see, never a draft not yet published);
 // known is false when it has none.
 func businessHoursTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (storefront.Hours, bool, error) {
 	sf, err := storefront.Get(ctx, tx, tenant)
@@ -1002,8 +1169,96 @@ func businessHoursTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (storefro
 	if err != nil {
 		return storefront.Hours{}, false, err
 	}
-	_, known := sf.Draft.Hours.OpenNow(time.Now())
-	return sf.Draft.Hours, known, nil
+	if sf.PublishedVersion == 0 || (sf.Status != "published" && sf.Status != "closed") {
+		return storefront.Hours{}, false, nil
+	}
+	m, err := storefront.PublishedModel(ctx, tx, tenant)
+	if errors.Is(err, storefront.ErrNotFound) {
+		return storefront.Hours{}, false, nil
+	}
+	if err != nil {
+		return storefront.Hours{}, false, err
+	}
+	_, known := m.Card.Hours.OpenNow(time.Now())
+	return m.Card.Hours, known, nil
+}
+
+// openBetween is how long the business was open, by its hours, between
+// from and to: the whole time when it keeps no hours. A customer waits
+// only while the business is open (§8.6).
+func openBetween(h storefront.Hours, known bool, from, to time.Time) time.Duration {
+	if !to.After(from) {
+		return 0
+	}
+	if !known {
+		return to.Sub(from)
+	}
+	at := func(s string) int {
+		if len(s) != 5 {
+			return -1
+		}
+		hh, err1 := strconv.Atoi(s[:2])
+		mm, err2 := strconv.Atoi(s[3:])
+		if err1 != nil || err2 != nil {
+			return -1
+		}
+		return hh*60 + mm
+	}
+	// Every opening that may touch [from, to), as times, then merged.
+	type span struct{ a, b time.Time }
+	var spans []span
+	f := from.In(storefront.Lagos)
+	day := time.Date(f.Year(), f.Month(), f.Day(), 0, 0, 0, 0, storefront.Lagos).AddDate(0, 0, -1)
+	for ; day.Before(to); day = day.AddDate(0, 0, 1) {
+		for _, sp := range h.Days[(int(day.Weekday())+6)%7] {
+			o, c := at(sp.Open), at(sp.Close)
+			if o < 0 || c < 0 {
+				continue
+			}
+			a := day.Add(time.Duration(o) * time.Minute)
+			b := day.Add(time.Duration(c) * time.Minute)
+			if c <= o {
+				b = b.AddDate(0, 0, 1) // runs past midnight
+			}
+			if b.After(from) && a.Before(to) {
+				spans = append(spans, span{maxTime(a, from), minTime(b, to)})
+			}
+		}
+	}
+	sort.Slice(spans, func(i, j int) bool { return spans[i].a.Before(spans[j].a) })
+	var total time.Duration
+	var cur *span
+	for i := range spans {
+		s := spans[i]
+		if cur != nil && !s.a.After(cur.b) {
+			if s.b.After(cur.b) {
+				cur.b = s.b
+			}
+			continue
+		}
+		if cur != nil {
+			total += cur.b.Sub(cur.a)
+		}
+		cur = &s
+	}
+	if cur != nil {
+		total += cur.b.Sub(cur.a)
+	}
+	return total
+}
+
+func maxTime(a, b time.Time) time.Time {
+	if a.After(b) {
+		return a
+	}
+	return b
+}
+
+func minTime(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+	return b
 }
 
 // nextOpening is when the hours open next after t, within a week.
@@ -1071,6 +1326,11 @@ func (s *Server) closedReplyTx(ctx context.Context, tx pgx.Tx, tenant, thread, p
 	if err != nil || tag.RowsAffected() == 0 {
 		return err
 	}
+	if s.closedReplyFault != nil {
+		if err := s.closedReplyFault(); err != nil {
+			return err
+		}
+	}
 	words := st.ClosedWords
 	if words == "" {
 		words = closedWords(h, now)
@@ -1080,9 +1340,18 @@ func (s *Server) closedReplyTx(ctx context.Context, tx pgx.Tx, tenant, thread, p
 	return err
 }
 
+// How long a customer waits in open hours before Needs you shows them,
+// and before the owners are told (§8.6).
+const (
+	waitNeedsYou  = 30 * time.Minute
+	waitTellOwner = 2 * time.Hour
+)
+
 // customerWaitingAlerts are app customers waiting for an answer for 30
-// minutes or more while the business is open (Needs you, §8.6), for
-// those who answer customers, unless the business turned it off.
+// minutes or more of the business's open hours (Needs you, §8.6), counted
+// from the first message no one answered, for those who answer customers,
+// unless the business turned it off. A thread either side blocked is not
+// waiting.
 func (s *Server) customerWaitingAlerts(ctx context.Context, p *Principal) ([]chatAlert, error) {
 	if !p.Can(PermOrders) {
 		return nil, nil
@@ -1097,13 +1366,10 @@ func (s *Server) customerWaitingAlerts(ctx context.Context, p *Principal) ([]cha
 		if err != nil {
 			return err
 		}
-		if open, _ := h.OpenNow(time.Now()); known && !open {
-			return nil
-		}
-		rows, err := tx.Query(ctx, `SELECT id, last_inbound_at FROM customer_conversations WHERE tenant_id = $1 AND line = 'app'
-			AND last_inbound_at < now() - interval '30 minutes' AND last_inbound_at > now() - interval '3 days'
-			AND (last_reply_at IS NULL OR last_reply_at < last_inbound_at) AND blocked_at IS NULL AND NOT archived
-			ORDER BY last_inbound_at DESC LIMIT $2`, p.TenantID, perKind)
+		rows, err := tx.Query(ctx, `SELECT id, waiting_since FROM customer_conversations WHERE tenant_id = $1 AND line = 'app'
+			AND waiting_since < now() - interval '30 minutes' AND waiting_since > now() - interval '7 days'
+			AND blocked_at IS NULL AND person_blocked_at IS NULL AND NOT archived
+			ORDER BY waiting_since LIMIT 500`, p.TenantID)
 		if err != nil {
 			return err
 		}
@@ -1118,12 +1384,19 @@ func (s *Server) customerWaitingAlerts(ctx context.Context, p *Principal) ([]cha
 		if err != nil {
 			return err
 		}
+		now := time.Now()
 		for _, x := range list {
+			if openBetween(h, known, x.at, now) < waitNeedsYou {
+				continue
+			}
+			if len(out) >= perKind {
+				break
+			}
 			chat, _, err := s.customerChatIn(ctx, tx, p.TenantID, x.id.String())
 			if err != nil {
 				return err
 			}
-			mins := int(time.Since(x.at).Minutes())
+			mins := int(now.Sub(x.at).Minutes())
 			line := fmt.Sprintf("Wrote %d minutes ago", mins)
 			if mins >= 120 {
 				line = fmt.Sprintf("Wrote %d hours ago", mins/60)
@@ -1150,58 +1423,112 @@ func (s *Server) RunCustomerChats(ctx context.Context) error {
 	}
 }
 
+// customerOwnerNotice is what the owners are told: no name, since a
+// notification may show on a locked phone.
+const customerOwnerNotice = "A customer has waited 2 hours for an answer"
+
 // CustomerChatsTick tells each business's owners of an app customer who
-// has waited 2 hours with no answer, once per wait, while the business is
-// open (or keeps no hours), unless it turned this off (§8.6).
+// has waited 2 hours of its open hours (or of the clock, where it keeps no
+// hours) with no answer, once per wait, unless it turned this off (§8.6).
+// The oldest waits come first; a thread that cannot be due yet (its
+// business closed, or not open long enough) is left until it may be, so
+// the businesses still waiting are never crowded out. Each thread is
+// claimed by a conditional update, so replicas running the sweep at once
+// tell once.
 func (s *Server) CustomerChatsTick(ctx context.Context) error {
-	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id, conversation_id FROM taskiem_customer_waiting('2 hours')`)
+	rows, err := s.Store.Pool.Query(ctx, `SELECT tenant_id, conversation_id, waiting_since FROM taskiem_customer_waiting('2 hours')`)
 	if err != nil {
 		return err
 	}
-	type due struct{ tenant, thread uuid.UUID }
-	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (due, error) {
-		var d due
-		return d, r.Scan(&d.tenant, &d.thread)
+	type due struct {
+		thread uuid.UUID
+		since  time.Time
+	}
+	type tenantDue struct {
+		tenant uuid.UUID
+		due    []due
+	}
+	type waitRow struct {
+		tenant uuid.UUID
+		d      due
+	}
+	list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (waitRow, error) {
+		var x waitRow
+		return x, r.Scan(&x.tenant, &x.d.thread, &x.d.since)
 	})
 	if err != nil {
 		return err
 	}
-	byTenant := map[uuid.UUID][]uuid.UUID{}
-	for _, d := range list {
-		byTenant[d.tenant] = append(byTenant[d.tenant], d.thread)
+	var byTenant []*tenantDue
+	seen := map[uuid.UUID]*tenantDue{}
+	for _, x := range list {
+		t := seen[x.tenant]
+		if t == nil {
+			t = &tenantDue{tenant: x.tenant}
+			seen[x.tenant] = t
+			byTenant = append(byTenant, t)
+		}
+		t.due = append(t.due, x.d)
 	}
 	var errs []error
-	for tenant, threads := range byTenant {
+	for _, td := range byTenant {
+		tenant := td.tenant
 		err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 			st, err := customerChatSettingsTx(ctx, tx, tenant)
 			if err != nil {
 				return err
 			}
-			if st.TellOwner {
-				h, known, err := businessHoursTx(ctx, tx, tenant)
-				if err != nil {
-					return err
-				}
-				if open, _ := h.OpenNow(time.Now()); known && !open {
-					return nil // told once it opens, if still waiting
-				}
-				owners, err := ownersTx(ctx, tx)
-				if err != nil {
-					return err
-				}
-				for _, t := range threads {
-					chat, _, err := s.customerChatIn(ctx, tx, tenant, t.String())
-					if err != nil {
-						return err
-					}
-					if err := notices.AddTx(ctx, tx, tenant, owners, notices.Notice{Kind: notices.Setup, Level: notices.Warning,
-						Title: chat.Name + " has waited 2 hours for an answer", Link: "/chat?with=c-" + t.String(), Group: "customer_waiting:" + t.String()}); err != nil {
-						return err
-					}
+			h, known, err := businessHoursTx(ctx, tx, tenant)
+			if err != nil {
+				return err
+			}
+			now := time.Now()
+			var ready []uuid.UUID
+			var later []uuid.UUID
+			var laterAt []time.Time
+			for _, d := range td.due {
+				open := openBetween(h, known, d.since, now)
+				switch {
+				case !st.TellOwner:
+					// Off: looked at again in an hour, in case it is turned on.
+					later, laterAt = append(later, d.thread), append(laterAt, now.Add(time.Hour))
+				case open >= waitTellOwner:
+					ready = append(ready, d.thread)
+				default:
+					// Open time grows at most as fast as the clock.
+					later, laterAt = append(later, d.thread), append(laterAt, now.Add(waitTellOwner-open))
 				}
 			}
-			_, err = tx.Exec(ctx, `UPDATE customer_conversations SET owner_told_at = now() WHERE tenant_id = $1 AND id = ANY ($2)`, tenant, threads)
-			return err
+			if len(later) > 0 {
+				if _, err := tx.Exec(ctx, `UPDATE customer_conversations c SET wait_check_at = x.at FROM unnest($2::uuid[], $3::timestamptz[]) AS x(id, at)
+					WHERE c.tenant_id = $1 AND c.id = x.id`, tenant, later, laterAt); err != nil {
+					return err
+				}
+			}
+			if len(ready) == 0 {
+				return nil
+			}
+			rows, err := tx.Query(ctx, `UPDATE customer_conversations SET owner_told_at = now() WHERE tenant_id = $1 AND id = ANY ($2)
+				AND waiting_since IS NOT NULL AND (owner_told_at IS NULL OR owner_told_at < waiting_since)
+				AND blocked_at IS NULL AND person_blocked_at IS NULL RETURNING id`, tenant, ready)
+			if err != nil {
+				return err
+			}
+			claimed, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+			if err != nil || len(claimed) == 0 {
+				return err
+			}
+			owners, err := ownersTx(ctx, tx)
+			if err != nil {
+				return err
+			}
+			for _, t := range claimed {
+				if err := notices.AddTx(ctx, tx, tenant, owners, notices.Notice{Kind: notices.Setup, Level: notices.Warning,
+					Title: customerOwnerNotice, Link: "/chat?with=c-" + t.String(), Group: "customer_waiting:" + t.String()}); err != nil {
+					return err
+				}
+			}
+			return nil
 		})
 		if err != nil {
 			errs = append(errs, fmt.Errorf("tenant %s: %w", tenant, err))
