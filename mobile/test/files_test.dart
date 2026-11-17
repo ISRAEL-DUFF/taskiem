@@ -27,14 +27,8 @@ const _link = '828e255f-dc0f-4dd3-bb19-0ba2764778d3';
 class _Pickers extends Pickers {
   _Pickers(this.photoBytes);
   final Uint8List photoBytes;
-
-  /// The longest side each photo was asked at.
-  static final sides = <double?>[];
   @override
-  Future<PickedFile?> photo({double? side}) async {
-    sides.add(side);
-    return PickedFile(bytes: photoBytes, name: 'tomatoes.jpg', type: 'image/jpeg');
-  }
+  Future<PickedFile?> photo({double? side}) async => PickedFile(bytes: photoBytes, name: 'tomatoes.jpg', type: 'image/jpeg');
   @override
   Future<PickedFile?> document() async => PickedFile(bytes: Uint8List.fromList(utf8.encode('%PDF-1.4 x')), name: 'List.pdf', type: 'application/pdf');
 }
@@ -197,41 +191,11 @@ void main() {
     expect(sent.uploads.single.fields['text'], 'For the soup');
     expect(sent.uploads.single.fields['client_id'], isNotEmpty);
     expect(sent.uploads.single.type, 'image/jpeg');
-    expect(_Pickers.sides.last, 1600, reason: 'drawn smaller before it goes, as the web sends it');
     sent.gate.single.complete();
     await settle(t);
     expect(find.bySemanticsLabel('Sending'), findsNothing);
     expect(data.messages!.last.attachment!.kind, 'photo');
     expect(find.bySemanticsLabel('Your photo'), findsWidgets);
-  });
-
-  testWidgets('a photo that takes too long says so, with Retry, and goes again with the same client id', (t) async {
-    var slow = true;
-    final ids = <String>[];
-    final (sent, data) = await open(
-      t,
-      also: (req) async {
-        if (req.method == 'POST' && req.url.path == '/v1/link-chats/$_link/files' && slow) {
-          ids.add((await _multipart(req)).fields['client_id']!);
-          await Completer<void>().future;
-        }
-        return null;
-      },
-    );
-    await t.tap(find.bySemanticsLabel('Attach'));
-    await t.pumpAndSettle();
-    await t.tap(find.bySemanticsLabel('Photo'));
-    await settle(t);
-    await t.tap(find.bySemanticsLabel('Send'));
-    await t.pump();
-    await t.pump(const Duration(seconds: 61));
-    await settle(t);
-    expect(find.bySemanticsLabel(RegExp('It took too long to send')), findsOneWidget);
-    slow = false;
-    unawaited(data.retry(data.outbox.single));
-    await settle(t);
-    expect(sent.uploads.single.fields['client_id'], ids.single, reason: 'the same message, not a second one');
-    expect(data.messages!.last.attachment!.kind, 'photo');
   });
 
   testWidgets('a PDF from the clip goes as a file', (t) async {

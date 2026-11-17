@@ -415,8 +415,8 @@ class TaskiemData extends ChangeNotifier {
     } on ApiError catch (e) {
       error = e.message;
       _unsent(mine, reply);
-    } on Offline catch (e) {
-      error = e.slow ? 'It took too long to send. Send it again.' : 'You’re offline. Send it again when you’re back online.';
+    } on Offline {
+      error = 'You’re offline. Send it again when you’re back online.';
       _unsent(mine, reply);
     } finally {
       busy = false;
