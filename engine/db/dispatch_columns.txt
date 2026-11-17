@@ -1586,8 +1586,9 @@ page_reports.seasoned
 storefront_snapshots.created_at
 storefront_catalogue.tenant_id
 users.created_at
-users.name
 users.deleted_at
+person_names.person_id
+person_names.name
 person_privacy.person_id
 person_privacy.find_by_number
 person_privacy.find_from_contacts

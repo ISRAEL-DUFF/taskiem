@@ -22396,19 +22396,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PersonContact'
-        '403':
-          description: No good add token
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: false
-                required: [error, add_token]
-                properties:
-                  error:
-                    type: string
-                  add_token:
-                    type: boolean
         default:
           $ref: '#/components/responses/Error'
   /v1/me/contacts/{person}:

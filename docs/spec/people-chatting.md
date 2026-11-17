@@ -273,7 +273,7 @@ Built on branch `stage5a-finding`, on 093b2f44 (stages 1 to 4, decision 0069 acc
   - `taskiem_person_link_find(hash)`, for anyone: the person, when replaced, their name, whether their photo is everyone's;
   - `taskiem_people_forget(person)`.
   
-  `taskiem_people_allows(rule, owner, viewer)` is their shared rule, not callable by the app. taskiem_dispatch may now read `users.name`, `users.deleted_at` and the new tables' columns (`dispatch_columns.txt`).
+  `taskiem_people_allows(rule, owner, viewer)` is their shared rule, not callable by the app. taskiem_dispatch may now read `users.deleted_at` and the new tables' columns (`dispatch_columns.txt`), but still not `users.name` (`TestDispatchRoleCannotReadPayloads`): the name people are shown is `person_names`, a copy of `users.name` written only by a trigger on `users` (filled once from it), which the application cannot read.
 
 **Rules (decisions of this stream):**
 - **"My contacts" is the owner's own list**: the people the owner added, whether or not they added the owner back. Mutual contacts are not needed: a person decides who is theirs.

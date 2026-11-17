@@ -22,6 +22,8 @@
 --   count as online (the app's heartbeat).
 -- * people_find_counts: how many lookups and contact hashes a person sent
 --   each day (the limits against enumeration); never what was looked up.
+-- * person_names: the name a person is shown to others by, a copy of
+--   users.name kept by a trigger, so taskiem_dispatch never reads users.name.
 -- * people_screen_verdicts: the verdict of the checks on a stranger's
 --   message (warn or hold) and its reasons; never the words.
 --
@@ -33,8 +35,42 @@
 -- anyone), taskiem_people_forget (on deleting an account).
 -- +goose Up
 
--- What the definers read of an account.
-GRANT SELECT (name, deleted_at) ON users TO taskiem_dispatch;
+-- What the definers read of an account: whether it was deleted. Its name
+-- is not readable by taskiem_dispatch (users.name stays a payload); the
+-- name people are shown is kept apart, in person_names, which a trigger
+-- keeps in step with users.name.
+GRANT SELECT (deleted_at) ON users TO taskiem_dispatch;
+
+-- The name a person is shown to other people by (people-chatting §5):
+-- a copy of users.name, written only by the trigger below, read only by
+-- the definers here. The application reads and writes users.name as
+-- before.
+CREATE TABLE person_names (
+  person_id  uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  name       text NOT NULL
+);
+ALTER TABLE person_names ENABLE ROW LEVEL SECURITY;
+ALTER TABLE person_names FORCE ROW LEVEL SECURITY;
+CREATE POLICY no_direct_access ON person_names TO taskiem_app USING (false) WITH CHECK (false);
+CREATE POLICY dispatch ON person_names TO taskiem_dispatch USING (true) WITH CHECK (true);
+REVOKE ALL ON person_names FROM PUBLIC;
+GRANT SELECT (person_id, name), INSERT, UPDATE (name) ON person_names TO taskiem_dispatch;
+INSERT INTO person_names (person_id, name) SELECT id, name FROM users;
+
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_person_name_sync() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
+BEGIN
+  INSERT INTO person_names (person_id, name) VALUES (NEW.id, NEW.name)
+  ON CONFLICT (person_id) DO UPDATE SET name = EXCLUDED.name;
+  RETURN NEW;
+END
+$$;
+-- +goose StatementEnd
+ALTER FUNCTION taskiem_person_name_sync() OWNER TO taskiem_dispatch;
+REVOKE EXECUTE ON FUNCTION taskiem_person_name_sync() FROM PUBLIC;
+CREATE TRIGGER person_name_sync AFTER INSERT OR UPDATE OF name ON users
+  FOR EACH ROW EXECUTE FUNCTION taskiem_person_name_sync();
 
 CREATE TABLE person_privacy (
   person_id           uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -183,9 +219,10 @@ BEGIN
   WITH o AS (SELECT DISTINCT x AS id FROM unnest(p_owners) x WHERE x IS NOT NULL),
   v AS (SELECT COALESCE(vp.last_seen, 'contacts') AS last_seen, COALESCE(vp.read_ticks, true) AS read_ticks
           FROM (SELECT 1) one LEFT JOIN person_privacy vp ON vp.person_id = p_viewer),
-  c AS (SELECT u.id, (u.status = 'active' AND u.deleted_at IS NULL) AS live, u.name,
+  c AS (SELECT u.id, (u.status = 'active' AND u.deleted_at IS NULL) AS live, COALESCE(pn.name, '') AS name,
                s.find_by_number, s.message, s.last_seen, s.read_ticks, s.photo, s.show_number
-          FROM o JOIN users u ON u.id = o.id LEFT JOIN person_privacy s ON s.person_id = u.id)
+          FROM o JOIN users u ON u.id = o.id LEFT JOIN person_names pn ON pn.person_id = u.id
+          LEFT JOIN person_privacy s ON s.person_id = u.id)
   SELECT c.id, c.live,
          CASE WHEN c.live THEN c.name ELSE '' END,
          EXISTS (SELECT 1 FROM person_contacts k WHERE k.person_id = c.id AND k.contact_id = p_viewer),
@@ -288,10 +325,11 @@ $$;
 CREATE FUNCTION taskiem_person_link_find(p_hash bytea)
 RETURNS TABLE (person_id uuid, replaced_at timestamptz, name text, photo_public boolean)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  SELECT l.person_id, l.replaced_at, u.name,
+  SELECT l.person_id, l.replaced_at, COALESCE(pn.name, ''),
          COALESCE(s.photo, 'contacts') = 'everyone' AND EXISTS (SELECT 1 FROM person_photos ph WHERE ph.person_id = l.person_id)
     FROM person_links l
     JOIN users u ON u.id = l.person_id AND u.status = 'active' AND u.deleted_at IS NULL
+    LEFT JOIN person_names pn ON pn.person_id = l.person_id
     LEFT JOIN person_privacy s ON s.person_id = l.person_id
    WHERE l.code_hash = p_hash
 $$;
@@ -354,4 +392,7 @@ DROP TABLE person_presence;
 DROP TABLE person_links;
 DROP TABLE person_contacts;
 DROP TABLE person_privacy;
-REVOKE SELECT (name, deleted_at) ON users FROM taskiem_dispatch;
+DROP TRIGGER person_name_sync ON users;
+DROP FUNCTION taskiem_person_name_sync();
+DROP TABLE person_names;
+REVOKE SELECT (deleted_at) ON users FROM taskiem_dispatch;
