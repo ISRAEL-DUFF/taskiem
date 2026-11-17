@@ -462,7 +462,21 @@ type personPusher struct{ s *Server }
 
 func (pp personPusher) PushPerson(ctx context.Context, person uuid.UUID, m chatlinks.PersonPush) (bool, error) {
 	s := pp.s
-	if s == nil || !s.Push.Enabled() || person == uuid.Nil {
+	if s == nil || person == uuid.Nil {
+		return false, nil
+	}
+	// The person turned this kind off on You (GET/PUT
+	// /v1/me/notifications): told nothing, so neither a push nor the SMS.
+	if m.Kind != "" {
+		on, err := s.personNotifyOn(ctx, person, m.Kind)
+		if err != nil {
+			return false, err
+		}
+		if !on {
+			return true, nil
+		}
+	}
+	if !s.Push.Enabled() {
 		return false, nil
 	}
 	var live bool

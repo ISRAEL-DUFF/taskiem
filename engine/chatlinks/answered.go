@@ -70,10 +70,34 @@ type PersonPush struct {
 	// Link is the chat on You (/you/chats/{id}); Tag the notification it
 	// replaces on a device (one per chat).
 	Link, Tag string
+	// Kind is what it tells, for the person's choice of pushes on You:
+	// KindMessages (someone at the business wrote), KindUpdates (its
+	// automatic words: an order's or a booking's news) or KindOffers.
+	Kind string
+}
+
+// The kinds of push a person may turn off on You (§7's notifications).
+const (
+	KindMessages = "messages"
+	KindUpdates  = "updates"
+	KindOffers   = "offers"
+)
+
+// KindOf is the kind of push an answer is.
+func KindOf(a Answer) string {
+	switch {
+	case a.Offer:
+		return KindOffers
+	case !a.FromPerson:
+		return KindUpdates
+	}
+	return KindMessages
 }
 
 // Pusher queues a push to a person's own devices; sent is false when they
-// have none a push can reach now, so the SMS may go instead.
+// have none a push can reach now, so the SMS may go instead. A person who
+// turned the push's kind off is told nothing, by push or by SMS: the
+// Pusher answers sent for them.
 type Pusher interface {
 	PushPerson(ctx context.Context, person uuid.UUID, p PersonPush) (sent bool, err error)
 }
@@ -131,7 +155,7 @@ func (t *Tell) TellAnswered(ctx context.Context, a Answer) error {
 			words = "New message"
 		}
 		sent, err := t.Push.PushPerson(ctx, a.Person, PersonPush{Title: sender.CleanName(name), Body: words,
-			Link: ChatLink(a.Conversation), Tag: "you:" + a.Conversation.String()})
+			Link: ChatLink(a.Conversation), Tag: "you:" + a.Conversation.String(), Kind: KindOf(a)})
 		if err != nil {
 			return err
 		}

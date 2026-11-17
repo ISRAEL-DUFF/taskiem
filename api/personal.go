@@ -36,6 +36,8 @@ var personalRoutes = regexp.MustCompile(`^(GET /v1/me|POST /v1/me/terms|GET /v1/
 	`GET /v1/me/push(/key)?|(PUT|DELETE) /v1/me/push|(PATCH|DELETE) /v1/me/push/[^/]+|` +
 	// Orders on You and saved addresses (person_orders.go, person_addresses.go, stage 3).
 	`GET /v1/me/orders(/[^/]+/[^/]+(/pay)?)?|(GET|POST) /v1/me/addresses|(PUT|DELETE) /v1/me/addresses/[^/]+|` +
+	// The person's account: deleting it, their photo, pushes, privacy (person_account.go).
+	`POST /v1/me/delete(/start|/passkey/options)?|(GET|PUT|DELETE) /v1/me/photo|(GET|PUT) /v1/me/notifications|GET /v1/me/privacy|` +
 
 	`GET /v1/me/storefront-orders|POST /v1/me/storefront-orders/confirm)$`)
 
@@ -315,7 +317,7 @@ func (s *Server) personalMe(w http.ResponseWriter, r *http.Request, p *Principal
 		return
 	}
 	user := map[string]any{"id": p.UserID, "email": email, "name": name, "email_verified": verified, "email_placeholder": emailPlaceholder(email),
-		"chat_signin": chatSignin, "passkey_only": passkeyOnly, "phone": s.phoneOf(ctx, p.UserID)}
+		"chat_signin": chatSignin, "passkey_only": passkeyOnly, "phone": s.phoneOf(ctx, p.UserID), "photo": photoOut(s.photoOf(ctx, p.UserID))["photo"]}
 	proof, err := s.proofStateOf(r, p)
 	if err != nil {
 		s.fail(w, r, err)

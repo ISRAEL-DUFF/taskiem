@@ -502,6 +502,11 @@ func (s *Server) openCustomerChat(ctx context.Context, tx pgx.Tx, tenant uuid.UU
 		if x.personBlocked {
 			v.Notice = "This customer has stopped messages"
 		}
+		if v.person == nil {
+			// The customer deleted their account (§14): the thread stays
+			// the business's, and takes no more messages.
+			v.Stopped, v.WindowOpen, v.Notice = true, false, customerLeftWords
+		}
 		return v, nil
 	}
 	if x.inbound != nil {

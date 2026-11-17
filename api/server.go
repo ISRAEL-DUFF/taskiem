@@ -472,6 +472,7 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/me/storefront-orders/confirm", s.confirmStorefrontOrders)
 			s.personOrderRoutes(r)              // Orders on You (person_orders.go)
 			s.personAddressRoutes(r)            // saved addresses (person_addresses.go)
+			s.personAccountRoutes(r)            // deleting the account, photo, pushes, privacy (person_account.go)
 			r.Get("/me/devices", s.listDevices) // Your phones (devices.go)
 			r.Delete("/me/devices/{id}", s.removeDevice)
 			r.Get("/me/passkeys", s.listPasskeys)
