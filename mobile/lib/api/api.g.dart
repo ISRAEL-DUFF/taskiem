@@ -2520,6 +2520,10 @@ class CustomerChat {
   final bool archived;
   /// The business blocked this customer (app).
   final bool? blocked;
+  /// The thread's id. For a customer with both lines (§11) it is always the
+  /// app thread's, the pair's canonical id, whichever line's id opened it (the
+  /// list, search, one thread, `POST /v1/customer-chats/app`): key anything
+  /// kept per thread on the client (a draft, a scroll position) by this id.
   final String id;
   final String last;
   final DateTime lastAt;
@@ -2551,7 +2555,10 @@ class CustomerChat {
   final String phone;
   /// Where a reply goes unless another line is chosen (`line` on the reply):
   /// the line the customer last wrote on, or the other when that one cannot
-  /// take messages (STOP, a block, left) and the other can.
+  /// take messages (STOP, a block, left) and the other can. WhatsApp past its
+  /// 24 hours while the reply template is not approved is not chosen when the
+  /// app line is open (the app is); with WhatsApp the only line open it stays
+  /// WhatsApp, and a reply is refused (409) until the template is approved.
   final String? replyLine;
   /// The customer sent STOP; nothing is sent until START.
   final bool stopped;
@@ -4035,7 +4042,9 @@ class PersonMessage {
   final String kind;
   /// In the app, or on WhatsApp: a message between you and the business on its
   /// own WhatsApp number, shown here since it was yours (§11). Show it marked
-  /// "on WhatsApp"; it cannot be answered there from here.
+  /// "on WhatsApp"; it cannot be answered there from here. A business's reply
+  /// that went as WhatsApp's template shows the template's words, as WhatsApp
+  /// delivered them; replies WhatsApp never took are not shown.
   final String? line;
   /// You sent it.
   final bool mine;

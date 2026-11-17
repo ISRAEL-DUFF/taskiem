@@ -9775,7 +9775,7 @@ paths:
       tags:
       - Customers
       summary: Reply to a customer
-      description: 'Sent from the business''s own WhatsApp number, as words within 24 hours of the customer''s last message and as the approved template after (then up to 900 characters, on one line; longer is refused, 400, never cut). The reply is kept before it goes, so a repeat of a client_id answers the message it sent (200) and never goes twice. When the business''s number changed since the customer wrote, the thread moves to the new number. Refused (409) when the customer sent STOP, the template is not approved yet, or the customer already has a thread on the new number. To a customer in the app (line app) a reply is always a message, kept in both copies: it may carry a card (`card`: an order or its pay link by reference, a booking offer by service_id, a product by item_id, made from the business''s own data; the words may then be left out) or be an offer (`offer`: only to a customer who agreed to offers, at most 2 a week, 429 after). Refused (409) when either side blocked the other ("This customer has stopped messages"). A customer with both lines (taskiem-for-everyone §11: the thread''s `lines`) is answered on `reply_line`, the line they last wrote on, unless `line` chooses the other; on WhatsApp the 24 hours and the template hold as above, and the answer also shows in the person''s copy, marked on WhatsApp. The answer carries its `line`.'
+      description: 'Sent from the business''s own WhatsApp number, as words within 24 hours of the customer''s last message and as the approved template after (then up to 900 characters, on one line; longer is refused, 400, never cut). The reply is kept before it goes, so a repeat of a client_id answers the message it sent (200) and never goes twice. When the business''s number changed since the customer wrote, the thread moves to the new number. Refused (409) when the customer sent STOP, the template is not approved yet, or the customer already has a thread on the new number. To a customer in the app (line app) a reply is always a message, kept in both copies: it may carry a card (`card`: an order or its pay link by reference, a booking offer by service_id, a product by item_id, made from the business''s own data; the words may then be left out) or be an offer (`offer`: only to a customer who agreed to offers, at most 2 a week, 429 after). Refused (409) when either side blocked the other ("This customer has stopped messages"). A customer with both lines (taskiem-for-everyone §11: the thread''s `lines`) is answered on `reply_line`, the line they last wrote on, unless `line` chooses the other; on WhatsApp the 24 hours and the template hold as above, and the answer also shows in the person''s copy, marked on WhatsApp. The answer carries its `line`. A `client_id` is one per customer, across both lines: a repeat answers the first message (200) on the line it went on, even when `reply_line` has moved since or another `line` is named.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -39345,7 +39345,7 @@ components:
         line:
           type: string
           enum: [app, whatsapp]
-          description: 'In the app, or on WhatsApp: a message between you and the business on its own WhatsApp number, shown here since it was yours (§11). Show it marked "on WhatsApp"; it cannot be answered there from here.'
+          description: 'In the app, or on WhatsApp: a message between you and the business on its own WhatsApp number, shown here since it was yours (§11). Show it marked "on WhatsApp"; it cannot be answered there from here. A business''s reply that went as WhatsApp''s template shows the template''s words, as WhatsApp delivered them; replies WhatsApp never took are not shown.'
 
         read_at:
           type: [string, 'null']
@@ -39733,6 +39733,7 @@ components:
         id:
           type: string
           format: uuid
+          description: 'The thread''s id. For a customer with both lines (§11) it is always the app thread''s, the pair''s canonical id, whichever line''s id opened it (the list, search, one thread, `POST /v1/customer-chats/app`): key anything kept per thread on the client (a draft, a scroll position) by this id.'
         name:
           type: string
           description: The customer's name in the business's book, or their number.
@@ -39792,7 +39793,7 @@ components:
         reply_line:
           type: string
           enum: [whatsapp, app]
-          description: 'Where a reply goes unless another line is chosen (`line` on the reply): the line the customer last wrote on, or the other when that one cannot take messages (STOP, a block, left) and the other can.'
+          description: 'Where a reply goes unless another line is chosen (`line` on the reply): the line the customer last wrote on, or the other when that one cannot take messages (STOP, a block, left) and the other can. WhatsApp past its 24 hours while the reply template is not approved is not chosen when the app line is open (the app is); with WhatsApp the only line open it stays WhatsApp, and a reply is refused (409) until the template is approved.'
     CustomerThreadLine:
       type: object
       additionalProperties: false
