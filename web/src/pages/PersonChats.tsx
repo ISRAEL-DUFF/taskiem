@@ -26,6 +26,7 @@ import {
   TRANSFER_WARNING,
   trustWords,
   withLatest,
+  withoutTool,
   type DoorOrder,
   type KeptSend,
   type PersonChat,
@@ -253,6 +254,13 @@ export function PersonChatPage() {
     const t = (loc.state as { tool?: string } | null)?.tool;
     return t === "shop" || t === "book" ? { key: t } : undefined;
   });
+  // Once opened, the tool leaves the history's state: a reload, or Back
+  // to this chat later, does not open it again.
+  useEffect(() => {
+    const left = withoutTool(loc.state);
+    if (left === undefined) return;
+    nav(`${loc.pathname}${loc.search}`, { replace: true, state: left });
+  }, []);
   const [reporting, setReporting] = useState(false);
   const [orders, setOrders] = useState<DoorOrder[]>();
   const act = useAction();

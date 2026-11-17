@@ -393,6 +393,7 @@ for (const scheme of ["light", "dark"] as const)
       await page.route(/\/v1\/me\/chats(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0 })));
       await page.route("**/v1/me/storefront-orders?*", (r) => r.fulfill(json({ orders: [], waiting: false, waiting_count: 0 })));
       // No saved addresses yet (Settings).
+      await page.route("**/v1/me/notifications", (r) => r.fulfill(json({ messages: true, updates: true, offers: true })));
       await page.route("**/v1/me/addresses", (r) => r.fulfill(json({ addresses: [] })));
       await page.route("**/v1/me/invitations", (r) =>
         r.fulfill(json({ invitations: [{ tenant_id: "0192e2e0-0000-7000-8000-00000000b003", tenant: "Bola Stores", roles: ["staff"], invited_at: new Date().toISOString() }] })),
@@ -497,10 +498,14 @@ for (const scheme of ["light", "dark"] as const)
       const order = { business_id: b1, business: "Mama's Kitchen", reference: "MK-1", kind: "order", state: "awaiting_payment", summary: "2 × Jollof rice", total_kobo: 900_000, due_kobo: 900_000, pay: true, made_at: now, chat_id: "c1" };
       await page.route("**/v1/me", (r) => r.fulfill(json({ ...PERSON, businesses: [], second_proof: undefined })));
       await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
-      await page.route(/\/v1\/me\/orders(\?|$)/, (r) => r.fulfill(json({ orders: [order, { ...order, reference: "MK-0", state: "completed", due_kobo: 0, pay: false }], next: "x", waiting_count: 1 })));
+      const earlier = { ...order, reference: "MK-E", state: "completed", summary: "", due_kobo: 0, pay: false, earlier: true };
+      await page.route(/\/v1\/me\/orders(\?|$)/, (r) => r.fulfill(json({ orders: [order, { ...order, reference: "MK-0", state: "completed", due_kobo: 0, pay: false }, earlier], next: "x", waiting_count: 1 })));
+      await page.route(`**/v1/me/orders/${b1}/MK-E`, (r) => r.fulfill(json({ ...earlier, lines: [], paid_kobo: 0 })));
       await page.route(`**/v1/me/orders/${b1}/MK-1`, (r) =>
         r.fulfill(json({ ...order, lines: [{ name: "Jollof rice", quantity: 2, price_kobo: 450_000, line_kobo: 900_000 }], fulfilment: "delivery", zone: "Yaba", paid_kobo: 0, address: { address: "12 Allen Avenue, Ikeja", landmark: "By the blue gate" }, delivery: { status: "accepted", line: "A rider is going to collect it" } })),
       );
+      // You's settings read which pushes the person gets.
+      await page.route("**/v1/me/notifications", (r) => r.fulfill(json({ messages: true, updates: true, offers: true })));
       await page.route("**/v1/me/addresses", (r) =>
         r.fulfill(json({ addresses: [{ id: "a1", label: "Home", line: "12 Allen Avenue", area: "Ikeja", landmark: "By the blue gate", phone: "+2348031234567", default: true, created_at: now, updated_at: now }] })),
       );
@@ -514,11 +519,14 @@ for (const scheme of ["light", "dark"] as const)
         ),
       );
       await page.goto("/you/orders");
-      await expect(page.getByTestId("you-order")).toHaveCount(2);
+      await expect(page.getByTestId("you-order")).toHaveCount(3);
       await check("/you/orders");
       await page.goto(`/you/orders/${b1}/MK-1`);
       await expect(page.getByTestId("you-order-address")).toBeVisible();
       await check("/you/orders/{business}/{reference}");
+      await page.goto(`/you/orders/${b1}/MK-E`);
+      await expect(page.getByTestId("you-order-earlier")).toBeVisible();
+      await check("an earlier order");
       await page.goto("/you/discover");
       await expect(page.getByTestId("discover-result")).toHaveCount(1);
       await check("/you/discover");
@@ -535,6 +543,72 @@ for (const scheme of ["light", "dark"] as const)
       await page.getByRole("button", { name: "Change Home" }).click();
       await expect(page.getByTestId("address-form")).toBeVisible();
       await check("changing an address");
+      expect(found, found.join("\n\n")).toEqual([]);
+    });
+
+// You's settings (§7, §14): the photo, notifications, privacy and
+// deleting the account (discover-orders.spec.ts goes through them for real).
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`You's photo, notifications, privacy and deleting pass axe and fit ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const found: string[] = [];
+      const check = async (where: string) => {
+        const vs = await axe(page);
+        if (vs.length > 0) found.push(describe(where, vs));
+        expect(await page.evaluate(() => document.documentElement.scrollWidth), where).toBeLessThanOrEqual(width);
+      };
+      const json = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+      const b1 = "0192e2e0-0000-7000-8000-00000000b301";
+      await page.route("**/v1/me", (r) =>
+        r.fulfill(
+          json({
+            ...PERSON,
+            businesses: [],
+            second_proof: undefined,
+            factors: { passkey: false, totp: false, password: true },
+            user: { ...PERSON.user, photo: { url: "/brand/seal/mark-512.png", updated_at: new Date().toISOString() } },
+          }),
+        ),
+      );
+      await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
+      await page.route("**/v1/me/addresses", (r) => r.fulfill(json({ addresses: [] })));
+      await page.route(/\/v1\/me\/chats(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0 })));
+      await page.route("**/v1/me/notifications", (r) => r.fulfill(json({ messages: true, updates: true, offers: false })));
+      await page.route("**/v1/me/privacy", (r) =>
+        r.fulfill(
+          json({
+            shown_to_businesses: { name: "Ada Obi", phone: "+2348031234567", photo: false },
+            businesses: [
+              { business_id: b1, business: "Mama's Kitchen", chat_id: "0192e2e0-0000-7000-8000-00000000c301", orders: 3, last_order_at: "2026-11-02T10:00:00Z" },
+              { business_id: "0192e2e0-0000-7000-8000-00000000b302", business: "Bola Salon", chat_id: null, orders: 1, last_order_at: "2026-10-12T10:00:00Z" },
+            ],
+            erase: { words: "Each business keeps its own records under Nigeria's Data Protection Act. To ask one to erase what it holds about you, ask it in its chat.", how: "ask_in_chat" },
+          }),
+        ),
+      );
+      await page.route("**/v1/me/delete", (r) => r.fulfill(json({ error: "You own a business on Taskiem.", owns_business: true, businesses: ["Ada Kitchen", "Ada Prints"] }, 409)));
+
+      await page.goto("/you/settings");
+      await expect(page.getByTestId("you-photo").getByText("Only you see it.")).toBeVisible();
+      await expect(page.getByTestId("you-notify-offers")).not.toBeChecked();
+      await check("/you/settings with a photo and notifications");
+      await page.goto("/you/settings/privacy");
+      await expect(page.getByTestId("privacy-business")).toHaveCount(2);
+      await check("/you/settings/privacy");
+      await page.goto("/you/settings/delete");
+      await expect(page.getByTestId("delete-proof")).toBeVisible();
+      await check("/you/settings/delete");
+      await page.getByRole("radio", { name: "Your password" }).check();
+      await page.getByTestId("delete-proof").locator("input[type=password]").fill("pw");
+      await page.getByTestId("delete-sure").check();
+      await page.getByTestId("delete-account").click();
+      await expect(page.getByTestId("delete-blocked")).toBeVisible();
+      await check("deleting refused, businesses named");
+      await page.goto("/account-deleted?told=1");
+      await expect(page.getByTestId("account-deleted")).toBeVisible();
+      await check("/account-deleted");
       expect(found, found.join("\n\n")).toEqual([]);
     });
 

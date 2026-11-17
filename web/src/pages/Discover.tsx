@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { get, post } from "../api";
 import { Icon } from "../icons";
 import { KitField, Sheet } from "../kit";
+import { PageCache } from "../lib/pagecache";
 import {
+  addResults,
+  canShowMore,
   chatPath,
   discoverProblem,
   DISCOVER_REPORT_REASONS,
@@ -14,6 +17,9 @@ import {
   placeProblem,
   resultLine,
   searchBody,
+  searchFromParams,
+  searchKey,
+  searchToParams,
   type DiscoverCategory,
   type DiscoverLocation,
   type DiscoverProfile,
@@ -36,55 +42,172 @@ import { ChatAvatar } from "./ChatAvatar";
 /** How long the typing rests before the search runs. */
 const QUIET_MS = 350;
 
-/** Discover's start, /you/discover. */
+/** A search's results as received: the rows, whether more wait, and how
+ * many rows the pages held (the next page's offset). */
+interface Found {
+  results: DiscoverResult[];
+  more: boolean;
+  received: number;
+}
+
+/** Searches already made in this tab, so Back returns to them (not those
+ * made with the person's place: that is kept nowhere). */
+const kept = new PageCache<Found>();
+
+/** The last search's address, for a profile's way back to it. */
+let lastSearch = "";
+const discoverHome = () => `/you/discover${lastSearch ? `?${lastSearch}` : ""}`;
+
+/** One business found, as a row: its photo, its name (a link to its
+ * profile), open now or closed now, its category, area and distance, the
+ * hours line, Chat and See more. The listing's preview in Settings >
+ * Discover draws the same row (`preview`: its buttons do nothing). */
+export function DiscoverRow({ r, onChat, preview = false }: { r: DiscoverResult; onChat?: () => void; preview?: boolean }) {
+  const to = `/you/discover/${encodeURIComponent(r.business)}`;
+  return (
+    <Row
+      icon="store"
+      image={photoAt(r.photo, 160)}
+      title={
+        preview ? (
+          <span className="discover-name">{r.name}</span>
+        ) : (
+          <Link to={to} className="discover-name">
+            {r.name}
+          </Link>
+        )
+      }
+      side={<span className={`badge sf-status ${r.open_now ? "ok" : "muted"}`}>{openNow(r.open_now)}</span>}
+      sub={
+        <span className="sub">
+          {resultLine(r) || (preview ? "No category or area yet" : "")}
+          {r.line && <span className="block">{r.line}</span>}
+        </span>
+      }
+      testid={preview ? "discover-preview-row" : "discover-result"}
+    >
+      {r.can_chat && (
+        <button type="button" className="small primary" disabled={preview} onClick={onChat} data-testid={preview ? "discover-preview-chat" : undefined}>
+          Chat<span className="sr-only"> with {r.name}</span>
+        </button>
+      )}
+      {preview ? (
+        <button type="button" className="small" disabled>
+          See more<span className="sr-only"> about {r.name}</span>
+        </button>
+      ) : (
+        <Link className="button small" to={to}>
+          See more<span className="sr-only"> about {r.name}</span>
+        </Link>
+      )}
+    </Row>
+  );
+}
+
+/** Discover's start, /you/discover. The search lives in the address
+ * (?q=&area=&category=), so Back from a profile returns to it, with the
+ * pages that were open. */
 export function Discover() {
   const nav = useNavigate();
+  const [params, setParams] = useSearchParams();
   const cats = useLoad(() => get<{ categories: DiscoverCategory[] }>("/v1/discover/categories"), []);
-  const [q, setQ] = useState<DiscoverQuery>({ q: "", area: "", category: "" });
-  // The search the results are for: the typing settles into it.
-  const [asked, setAsked] = useState<DiscoverQuery>(q);
+  // The search the results are for: the address's.
+  const asked = searchFromParams(params);
+  lastSearch = new URLSearchParams(searchToParams(asked)).toString();
+  // What is typed: it settles into the address after a rest.
+  const [q, setQ] = useState<DiscoverQuery>(asked);
+  const typed = useRef(q);
+  typed.current = q;
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   // The person's place, for this page only: asked for when Near me is
-  // tapped, gone when it is tapped again or the page is left.
+  // tapped, gone when it is tapped again or the page is left. Never in
+  // the address, never kept.
   const [near, setNear] = useState<DiscoverLocation | null>(null);
   const [locating, setLocating] = useState(false);
   const [placeError, setPlaceError] = useState<string>();
-  const [found, setFound] = useState<{ key: string; results: DiscoverResult[]; more: boolean }>();
+  const key = searchKey(asked);
+  const [found, setFound] = useState<{ key: string; near: DiscoverLocation | null } & Found>(() => {
+    const k = kept.get(key);
+    return k ? { key, near: null, ...k.value } : { key: "", near: null, results: [], more: false, received: 0 };
+  });
   const [error, setError] = useState<unknown>();
+  const [moreError, setMoreError] = useState<unknown>();
   const [moreBusy, setMoreBusy] = useState(false);
+  // Try again: a new count asks the same search again.
+  const [tries, setTries] = useState(0);
   const seq = useRef(0);
 
+  const settle = (s: DiscoverQuery) => setParams(searchToParams(s), { replace: true });
+  const type = (s: DiscoverQuery) => {
+    setQ(s);
+    clearTimeout(timer.current);
+    // The latest typing when the rest ends, whatever was typed since.
+    timer.current = setTimeout(() => {
+      timer.current = undefined;
+      settle(typed.current);
+    }, QUIET_MS);
+  };
+  useEffect(() => () => clearTimeout(timer.current), []);
+  // The address changed by itself (Back, Discover's tab): the boxes follow.
   useEffect(() => {
-    const t = setTimeout(() => setAsked(q), QUIET_MS);
-    return () => clearTimeout(t);
-  }, [q.q, q.area]);
-  const pickCategory = (key: string) => {
-    const next = { ...q, category: q.category === key ? "" : key };
+    if (timer.current === undefined && searchKey(typed.current) !== key) setQ(asked);
+  }, [key]);
+  const pickCategory = (cat: string) => {
+    // At once, with what is typed now: a search still waiting to settle
+    // would otherwise put the old category back.
+    clearTimeout(timer.current);
+    const next = { ...typed.current, category: typed.current.category === cat ? "" : cat };
     setQ(next);
-    setAsked(next);
+    settle(next);
   };
 
-  const key = JSON.stringify([asked, near]);
+  // Back to where the person was: the kept results' place on the page.
+  const restored = useRef(found.key === key && !!kept.get(key));
   useEffect(() => {
+    if (!restored.current) return;
+    const at = kept.get(key)?.scroll ?? 0;
+    requestAnimationFrame(() => window.scrollTo(0, at));
+  }, []);
+  // Leaving: where the list was scrolled to is kept with it.
+  const keyNow = useRef(key);
+  keyNow.current = near ? "" : key;
+  useEffect(() => () => void (keyNow.current && kept.scrolled(keyNow.current, window.scrollY)), []);
+
+  const nearKey = near ? `${near.lat},${near.lng}` : "";
+  useEffect(() => {
+    if (restored.current) {
+      restored.current = false;
+      return;
+    }
     const n = ++seq.current;
     setError(undefined);
+    setMoreError(undefined);
     post<{ results: DiscoverResult[]; more: boolean }>("/v1/discover/search", searchBody(asked, near, 0)).then(
-      (r) => n === seq.current && setFound({ key, results: r.results, more: r.more }),
+      (r) => {
+        if (n !== seq.current) return;
+        const f = { results: r.results, more: r.more, received: r.results.length };
+        setFound({ key, near, ...f });
+        if (!near) kept.set(key, f);
+      },
       (e: unknown) => n === seq.current && setError(e),
     );
-  }, [key]);
-  const results = found?.key === key ? found : undefined;
+  }, [key, nearKey, tries]);
+  const results = found.key === key && found.near === near ? found : undefined;
   const loadMore = () => {
     if (!results || moreBusy) return;
     setMoreBusy(true);
+    setMoreError(undefined);
     const n = seq.current;
-    post<{ results: DiscoverResult[]; more: boolean }>("/v1/discover/search", searchBody(asked, near, results.results.length))
+    // The next page starts after every row the pages held.
+    post<{ results: DiscoverResult[]; more: boolean }>("/v1/discover/search", searchBody(asked, near, results.received))
       .then(
         (r) => {
           if (n !== seq.current) return;
-          const have = new Set(results.results.map((x) => x.business));
-          setFound({ key, results: [...results.results, ...r.results.filter((x) => !have.has(x.business))], more: r.more });
+          const f = { results: addResults(results.results, r.results), more: r.more, received: results.received + r.results.length };
+          setFound({ key, near, ...f });
+          if (!near) kept.set(key, f, window.scrollY);
         },
-        (e: unknown) => n === seq.current && setError(e),
+        (e: unknown) => n === seq.current && setMoreError(e),
       )
       .finally(() => setMoreBusy(false));
   };
@@ -110,6 +233,7 @@ export function Discover() {
   const categories = cats.data?.categories ?? [];
   const catName = categories.find((c) => c.key === asked.category)?.name;
   const said = discoverProblem(error, "search");
+  const moreSaid = discoverProblem(moreError, "search");
   return (
     <div className="tk-x discover" data-testid="discover">
       <PageHeader title="Discover" description="Find businesses near you, chat with them, order and book. Only businesses that chose to be found are here." />
@@ -122,14 +246,14 @@ export function Discover() {
             value={q.q}
             maxLength={100}
             placeholder="A name, or what you want"
-            onChange={(e) => setQ({ ...q, q: e.target.value })}
+            onChange={(e) => type({ ...q, q: e.target.value })}
             data-testid="discover-search"
           />
         </label>
       </div>
       <div className="discover-where">
         <KitField label="Area">
-          <input type="text" value={q.area} maxLength={80} placeholder="Yaba, Ikeja, Wuse" onChange={(e) => setQ({ ...q, area: e.target.value })} data-testid="discover-area" />
+          <input type="text" value={q.area} maxLength={80} placeholder="Yaba, Ikeja, Wuse" onChange={(e) => type({ ...q, area: e.target.value })} data-testid="discover-area" />
         </KitField>
         <button type="button" className="tk-x-chip discover-near" aria-pressed={!!near} disabled={locating} onClick={nearMe} data-testid="discover-near">
           <Icon name="pin" />
@@ -155,54 +279,36 @@ export function Discover() {
           ))}
         </div>
       )}
-      {said ? (
-        <p className="warning" role="alert" data-testid="discover-problem">
-          {said}
-        </p>
+      {error ? (
+        <div className="warning discover-problem" role="alert">
+          <span data-testid="discover-problem">{said ?? (error instanceof Error ? error.message : "The search did not work.")}</span>{" "}
+          <button type="button" className="small" onClick={() => setTries((t) => t + 1)} data-testid="discover-again">
+            Try again
+          </button>
+        </div>
       ) : (
-        <ErrorBox error={error ?? cats.error} />
+        <ErrorBox error={cats.error} />
       )}
       {!results && !error && <Skeleton rows={3} label="Finding businesses…" />}
       {results && results.results.length === 0 && <EmptyState icon="search">{nothingFound(asked, catName, !!near)}</EmptyState>}
       {results && results.results.length > 0 && (
         <section aria-labelledby="discover-found">
           <h2 id="discover-found" className="discover-count">
-            {foundWords(results.results.length, results.more)}
+            {foundWords(results.results.length, canShowMore(results.more, results.received))}
           </h2>
           <Items label="Businesses found">
             {results.results.map((r) => (
-              <Row
-                key={r.business}
-                icon="store"
-                image={photoAt(r.photo, 160)}
-                title={
-                  <Link to={`/you/discover/${encodeURIComponent(r.business)}`} className="discover-name">
-                    {r.name}
-                  </Link>
-                }
-                side={<span className={`badge sf-status ${r.open_now ? "ok" : "muted"}`}>{openNow(r.open_now)}</span>}
-                sub={
-                  <span className="sub">
-                    {resultLine(r)}
-                    {r.line && <span className="block">{r.line}</span>}
-                  </span>
-                }
-                testid="discover-result"
-              >
-                {r.can_chat && (
-                  <button type="button" className="small primary" onClick={() => nav(chatPath({ business: r.business }).to)}>
-                    Chat<span className="sr-only"> with {r.name}</span>
-                  </button>
-                )}
-                <Link className="button small" to={`/you/discover/${encodeURIComponent(r.business)}`}>
-                  See more<span className="sr-only"> about {r.name}</span>
-                </Link>
-              </Row>
+              <DiscoverRow key={r.business} r={r} onChat={() => nav(chatPath({ business: r.business }).to)} />
             ))}
           </Items>
-          {results.more && (
+          {moreError ? (
+            <p className="warning" role="alert" data-testid="discover-more-problem">
+              {moreSaid ?? (moreError instanceof Error ? moreError.message : "More could not be loaded.")}
+            </p>
+          ) : null}
+          {canShowMore(results.more, results.received) && (
             <button type="button" className="discover-more" disabled={moreBusy} onClick={loadMore} data-testid="discover-more">
-              {moreBusy ? "Loading…" : "Show more businesses"}
+              {moreBusy ? "Loading…" : moreError ? "Try again" : "Show more businesses"}
             </button>
           )}
         </section>
@@ -227,7 +333,7 @@ export function DiscoverBusiness() {
   return (
     <>
       <p className="crumbs">
-        <Link to="/you/discover" aria-label="Back to Discover">
+        <Link to={discoverHome()} aria-label="Back to Discover">
           Discover
         </Link>
       </p>
@@ -236,7 +342,7 @@ export function DiscoverBusiness() {
         <section className="card" data-testid="discover-gone">
           <h1>Not in Discover</h1>
           <p>{gone}</p>
-          <Link to="/you/discover">Back to Discover</Link>
+          <Link to={discoverHome()}>Back to Discover</Link>
         </section>
       ) : (
         <ErrorBox error={view.error} />

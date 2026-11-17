@@ -12,6 +12,7 @@ import {
   roundPlace,
   standing,
   placeProblem,
+  previewResult,
   type DiscoverCategory,
   type DiscoverLocation,
   type DiscoverSettings as Settings,
@@ -19,8 +20,9 @@ import {
 import { CATEGORY_NAMES } from "../lib/explore";
 import { hoursLines, type ChatLinkCard } from "../lib/personchat";
 import { hoursErrors, hoursFromForm, hoursToForm, type HoursForm } from "../lib/storefront";
-import { ErrorBox, Field, Items, PageHeader, Row, Skeleton, useAction, useLoad } from "../ui";
+import { ErrorBox, Field, Items, PageHeader, Skeleton, useAction, useLoad } from "../ui";
 import { ChatAvatar } from "./ChatAvatar";
+import { DiscoverRow } from "./Discover";
 import { HoursEditor } from "./Storefront";
 
 // Settings > Discover (docs/spec/taskiem-for-everyone.md §10): whether the
@@ -321,28 +323,15 @@ function Preview({ s }: { s: Settings }) {
   return (
     <section className="card" aria-labelledby="discover-preview" data-testid="discover-preview">
       <h2 id="discover-preview">How customers see you</h2>
-      <Items label="Your listing">
-        <Row
-          icon="store"
-          image={photoAt(l.photo?.urls, 160)}
-          title={l.name}
-          sub={
-            <span className="sub">
-              {[cat, l.area].filter(Boolean).join(" · ") || "No category or area yet"}
-              {l.tagline && <span className="block">{l.tagline}</span>}
-            </span>
-          }
-          testid="discover-preview-row"
-        >
-          {l.can_chat && (
-            <span className="badge sf-status ok" data-testid="discover-preview-chat">
-              Chat
-            </span>
-          )}
-          {l.has_shop && <span className="badge sf-status muted">Their shop</span>}
-          {l.has_book && <span className="badge sf-status muted">Book</span>}
-        </Row>
+      <p className="hint">In a search, as a row:</p>
+      <Items label="Your listing in a search">
+        <DiscoverRow r={previewResult(l, cat ?? "")} preview />
       </Items>
+      {(l.tagline || l.has_shop || l.has_book) && (
+        <p className="hint" data-testid="discover-preview-profile">
+          On your profile: {[l.tagline && `“${l.tagline}”`, l.has_shop && "Their shop", l.has_book && "Book"].filter(Boolean).join(" · ")}
+        </p>
+      )}
       {!s.shown && <p className="hint">Customers don't see this yet.</p>}
       <p className="discover-preview-who hint">
         <ChatAvatar name={l.name} logo={photoAt(l.photo?.urls, 160)} /> Your name and photo come from <Link to="/settings/links/profile">Your business in Explore</Link> and your shop's page.
