@@ -21,6 +21,9 @@ interface Auth {
   login: (email: string, password: string) => Promise<void>;
   loginWithPasskey: () => Promise<void>;
   logout: () => Promise<void>;
+  /** The account was deleted: the server ended every session already, so
+   * this tab forgets the person at once, asking the server nothing. */
+  gone: () => void;
   refresh: () => Promise<void>;
 }
 
@@ -94,6 +97,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (ended) signedOut();
       else setLeaving("stuck");
     },
+    gone: () => {
+      setAppBadge(0);
+      forgetTab();
+      forgetViewed();
+      signedOut();
+    },
   };
   if (leaving === "stuck")
     return (
@@ -138,6 +147,7 @@ export function EmbeddedAuth({
     login: none,
     loginWithPasskey: none,
     logout: none,
+    gone: () => undefined,
     refresh: none,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -32,6 +32,17 @@ describe("a 401", () => {
     }
   });
 
+  it("a wrong password or passkey while deleting the account does not; an ended session does", async () => {
+    for (const body of [{ password_wrong: true }, { code_wrong: true }, {}, { second_proof_required: true }]) {
+      const told = serve({ error: Object.keys(body).length ? "no" : "that passkey response is not valid here; try again", ...body });
+      await expect(api("POST", "/v1/me/delete", { confirm: true })).rejects.toBeInstanceOf(ApiError);
+      expect(told).not.toContain("taskiem:unauthorised");
+    }
+    const told = serve({ error: "the session has ended" });
+    await expect(api("POST", "/v1/me/delete", { confirm: true, password: "x" })).rejects.toBeInstanceOf(ApiError);
+    expect(told).toContain("taskiem:unauthorised");
+  });
+
   it("an ended session while changing the number does", async () => {
     const told = serve({ error: "the session has ended" });
     await expect(api("POST", "/v1/me/phone/verify", { code: "123456" })).rejects.toBeInstanceOf(ApiError);

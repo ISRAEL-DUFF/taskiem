@@ -14,6 +14,7 @@ import { PersonChatList, PersonChatPage, StartChat } from "./PersonChats";
 import { TermsBanner } from "./Signup";
 import { StartSomething } from "./StartSomething";
 import { ProofStep, SwitchList, Switcher, SwitchStep as SwitchStepHere, useSwitch } from "./Switch";
+import { DeleteAccountPage, YouNotificationsCard, YouPhoto, YouPrivacyLinks, YouPrivacyPage } from "./YouAccount";
 import { SavedAddresses, YouOrder, YouOrders } from "./YouOrders";
 
 // You (docs/spec/taskiem-for-everyone.md §7): a person's own side, where a
@@ -59,6 +60,8 @@ export function YouApp() {
           <Route path="/you/discover" element={<Discover />} />
           <Route path="/you/discover/:business" element={<DiscoverBusiness />} />
           <Route path="/you/settings" element={<YouSettings />} />
+          <Route path="/you/settings/privacy" element={<YouPrivacyPage />} />
+          <Route path="/you/settings/delete" element={<DeleteAccountPage />} />
           <Route path="/you/start" element={<StartSomething />} />
           <Route path="/you/chats/new" element={<StartChat />} />
           <Route path="/you/chats/:id" element={<PersonChatRoute />} />
@@ -181,6 +184,7 @@ function YouSettings() {
       <PageHeader title="Settings" />
       <section className="card" aria-labelledby="you-account">
         <h2 id="you-account">Your account</h2>
+        <YouPhoto />
         <div className="setting-line">
           <div className="grow">
             <strong>Name</strong>
@@ -198,6 +202,7 @@ function YouSettings() {
         </div>
       </section>
       <SavedAddresses />
+      <YouNotificationsCard />
       <Appearance />
       <section className="card">
         <h2>Signing out</h2>
@@ -206,6 +211,7 @@ function YouSettings() {
           Sign out
         </button>
       </section>
+      <YouPrivacyLinks />
     </>
   );
 }

@@ -122,6 +122,11 @@ export function postForm<T = unknown>(path: string, form: FormData): Promise<T> 
   return request<T>("POST", path, form, {});
 }
 
+/** PUTs a multipart form (the person's photo); the browser sets the boundary. */
+export function putForm<T = unknown>(path: string, form: FormData): Promise<T> {
+  return request<T>("PUT", path, form, {});
+}
+
 /** GETs a binary response (an image) with the session, as a Blob. */
 export async function getBlob(path: string): Promise<Blob> {
   const res = await fetch(path, {
@@ -179,7 +184,7 @@ async function request<T>(
     // business's own sign-in first (single sign-on, a passkey, a second
     // proof), or a code or PIN that was wrong or ran out. Any other 401
     // outside signing in is (changing the phone number included).
-    if (res.status === 401 && !path.startsWith("/v1/auth/") && !keepsSession(data))
+    if (res.status === 401 && !path.startsWith("/v1/auth/") && !keepsSession(data, path))
       window.dispatchEvent(new Event("taskiem:unauthorised"));
     noteEnded(res.status, data);
     throw new ApiError(
@@ -199,8 +204,10 @@ async function request<T>(
 }
 
 /** A 401 that asks for a step while the session goes on (§5.4, §5.5). */
-export function keepsSession(body: Record<string, unknown>): boolean {
-  return !!switchStep(body) || !!body.code_wrong || !!body.ticket_expired || body.tries_left !== undefined;
+export function keepsSession(body: Record<string, unknown>, path = ""): boolean {
+  if (switchStep(body) || body.code_wrong || body.ticket_expired || body.tries_left !== undefined || body.password_wrong) return true;
+  // A passkey refused while deleting the account (its proof, not the session).
+  return path === "/v1/me/delete" && /passkey/i.test(String(body.error ?? ""));
 }
 
 /** What a business asks for before a switch into it (POST /v1/me/switch). */
@@ -340,6 +347,8 @@ export interface Me {
     passkey_only?: boolean;
     /** The account's phone, as +234…; null when it has none. */
     phone?: string | null;
+    /** The person's own photo (GET /v1/me/photo), shown on their own side only. */
+    photo?: { url: string; updated_at: string } | null;
   };
   /** Whether the member has an authenticator app enrolled for step-up. */
   totp?: boolean;
