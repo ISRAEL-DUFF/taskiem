@@ -1152,7 +1152,7 @@ Built on branch `stage2-fix-app`, on 1308508b (stage 1, main's redesigned app, s
 
 ## As built: stage 3, Orders and addresses
 
-Built on branch `stage3-orders`, on 4aff5ccc (stages 1 and 2 merged): the server of §13's Orders on You and saved addresses, with §14's deletion. Discover (§10) is a parallel stream (migrations 00461 to 00464); this one is migration `00465_person_orders_and_addresses.sql` alone. The web and app screens are later streams; the API is written for them.
+Built on branch `stage3-orders`, on 4aff5ccc (stages 1 and 2 merged): the server of §13's Orders on You and saved addresses, with §14's deletion. Discover (§10) is a parallel stream (migrations 00461 and 00462, and 00466 after review); this one is migration `00465_person_orders_and_addresses.sql` alone. The web and app screens are later streams; the API is written for them.
 
 **Data (00465).**
 - `person_addresses`: the person's own rows (`label` 1 to 40 letters, `line` 1 to 200, `area`, `landmark`, an optional `phone` in E.164, `is_default`, one default per person by a partial unique index). Policy `person_own`: `person_id = taskiem_person_scope()` **and no door open** (`taskiem_person_business()` is null), so once any door names a business in a transaction the saved list cannot be read there. `ON DELETE CASCADE` from `users`.
@@ -1196,7 +1196,7 @@ Built on branch `stage3-orders`, on 4aff5ccc (stages 1 and 2 merged): the server
 
 ## As built: stage 3, Discover
 
-Built on branch `stage3-discover`, on stages 1 and 2 as merged (4aff5ccc): the server of §10, with §14's "searches are not kept" and §15's reporting in Discover. A business's Orders across businesses and saved addresses (§13) are a parallel stream's (`stage3-orders`, migrations 00465 and after); this one's are 00461 and 00462. The web and app screens are later streams; the API is written for them.
+Built on branch `stage3-discover`, on stages 1 and 2 as merged (4aff5ccc): the server of §10, with §14's "searches are not kept" and §15's reporting in Discover. A business's Orders across businesses and saved addresses (§13) are a parallel stream's (`stage3-orders`, migration 00465, and 00467 and after); this one's are 00461 and 00462, and 00466 after review ("As built: stage 3, Discover review fixes"). The web and app screens are later streams; the API is written for them.
 
 **Data (`00461_discover.sql`).**
 - `discover_settings`: the switch **Found by the public in the Taskiem app**, apart from Explore's (`link_settings.findable`). `listed` NULL is the default: on with a published storefront, off otherwise; a workflows workspace is never listed, whatever it says. The listing's own `category` (a key of Explore's categories), `area`, `hours` and place (`lat`, `lng`, kept to three decimals, about 100 m), each winning over the profile's and the page's. `told_at` (the one-off notice) and `removed_at`, `removed_by`, `removed_note` (Taskiem's moderators).
@@ -1326,3 +1326,37 @@ Built on branch `stage3-web`, on a4ef60a0 (stages 1 and 2, and both stage 3 serv
 - A signed-out Discover, a business's verification on its profile (§15's badges) and showing open reports' count to the business are the server's left overs too and have no screens.
 - Deleting an account (§14) is not on You's settings: the server has no route yet.
 - The phone app's screens for all of this are a later stream.
+
+## As built: stage 3, Discover review fixes
+
+Built on branch `stage3-fix-discover`, on stage 3 as merged (4058c0a6): the review's findings on Discover's server, in migration `00466_discover_review.sql` (00467 and after are the Orders and accounts stream's). It supersedes "As built: stage 3, Discover" where they differ.
+
+**One writer at a time.** Every writer of a business's listing (`RefreshTx`, `SaveTx`, `RemoveTx`, the sweep, the one-off notice) takes the advisory lock `discover:`||tenant before it reads the settings and holds it until it commits, so the sweep can no longer write back, from an older read, a listing its owner just turned off or a moderator took out. A change to `discover_settings` marks the sweep too (`discover_touch`). The sweep claims each mark with `FOR UPDATE SKIP LOCKED` and takes the business's lock without waiting, so two replicas never write the same listing and a business being changed waits for the next minute; a business whose listing fails to write goes to the back of the queue (its mark's time moves on).
+
+**What may be shown is in the index.** `discover_index.hidden` (`off`, `removed`, `suspended`, `reported`, NULL when shown) and `reporters` are set by the database on every write of the row and at once when its settings, its reports, its page or its business change (triggers on `discover_settings`, `page_reports`, `storefronts`, `tenants`); a counting report leaving the 30 days is worked out again by the sweep (`taskiem_discover_recount`). The search filters on that one column and uses the index's own indexes (by name, by category, the area's words, a GiST index on the place for near-first), so a search over thousands of listings takes about a millisecond. `taskiem_discover_open` (the profile, the door, the notice) also asks the settings directly: listed (not off) and not removed.
+
+**Reports (the founder's rule).** A report counts only when the reporter's account was at least 7 days old when they made it (`page_reports.seasoned`), and not when two or more of that person's earlier Discover reports were dismissed and none was acted on. Three counting reports from different people in 30 days put the listing first in the moderators' queue (`GET /v1/ops/reports`); they hide it (`hidden: reported`) only when one of them is `scam`. Reports are still taken on a listing hidden for them. Each person may send twelve Discover reports in two hours and three a day per listing, counted in the database (`taskiem_discover_report` answers `taken`, `listing` or `many`); the server's own limit, shared with chat reports, stays in front. Discover reports no longer take a business out of Explore's sections or Featured (00429 and 00431's rules leave out the kind `discover`); a report on a page still does.
+
+**The moderators.** The reports' own buttons (`POST /v1/ops/reports/{id}/{dismiss,action}`) answer 409 for a Discover report and name `POST /v1/ops/discover/{tenant}/remove` (acts on its reports) and `/restore` (dismisses them), so a listing hidden for reports is never shown again by a report's button. Restoring a listing that was not taken out only dismisses its reports and tells the owners nothing.
+
+**The business's role.** `taskiem_app` may write only the business's own fields of `discover_settings` (`listed`, `category`, `area`, `hours`, `lat`, `lng`) and only the listing's columns of `discover_index`; `removed_*` goes through `taskiem_discover_moderate` (an operators' transaction, the platform's chain in scope, widened to the business) and `told_at` through `taskiem_discover_claim_notice`.
+
+**The one-off notice (§10).** Only to a listing that is shown, and only to a business whose storefront was published when Discover shipped: `discover_launch.shipped_at` records that moment (when 00466 ran). A business that publishes later is listed by default and not told. The businesses due are taken those not tried first, then the longest since they were tried (`discover_index.notice_tried_at`, set when telling one fails).
+
+**Sources.** `storefront_catalogue` marks the sweep once per statement (its refresh, a stock change, its rows emptied).
+
+**Photos.** `taskiem_business_photo(business)` is a business's public photo: its profile's logo, else its published page's logo resolved through `storefront_media` (the snapshot's card names the media), never one the moderators rejected; NULL for none. It runs as its caller (the business's own scope, or a definer), for Discover and for a person's Orders.
+
+**Search words.** A word ending in "es" after s, x, z, ch or sh is also tried without it ("dresses" finds "dress", "buses" finds "bus"), one ending in s without the s ("cakes" finds "cake"), and the word as typed always. "shop" and "buy" are searched like any word; words typed that are all left out ("the", "near me") find nothing. The area matches the start of a word of the listing's area ("ikeja" finds "Ikeja GRA"; part of a word no longer does).
+
+**Hours.** The line follows yesterday's opening that runs past midnight (Friday 20:00 to 02:00 seen on Saturday at 01:00: "Open now, closes at 02:00"), and looks a full week ahead: a business open only on Saturdays, seen on Saturday evening, "Opens next Saturday at 10:00".
+
+**For the clients.**
+- `POST /v1/discover/search`: `offset` from 0 to 200, else 400; `more` is true only while the next page is within 200. Results keep `line`.
+- `GET /v1/discover/{business}` and its report: 404 with "This business is not in Discover any more.", to show as it comes.
+- `POST /v1/discover/{business}/report`: 429 "You have sent many reports. Try again later." past twelve in two hours (now from the database too).
+- The operators' console: a Discover report is decided with remove or restore, not with the report's dismiss or action (409).
+
+**Tests.** `engine/discover`: `TestRefreshWaitsForTheOwner` (two connections: the sweep has read "on", the owner's "off" waits for it, then takes the listing out, and the next sweep leaves it out), `TestOpenAsksTheSettings`, `TestTheBusinessCannotRemoveOrRestore` (42501 for `removed_*`, `told_at`, the index's state and the moderators' definer from a business's scope), `TestSweepOnTwoReplicas` (twelve marks, two sweeps at once, each listing written once), `TestSweepBacksOffAFailure`, `TestBusinessPhotoLeavesOutRejected`, `TestSearchAtScale` (2,000 listings, a tenth turned off: every kind of search under 150 ms, none hidden found, the filter a plain column, nearest first, paging), `TestHoursLine` (overnight, a week ahead). `api`: `TestDiscover` (plurals, stop-words, paging, the 404 words), `TestDiscoverReportsAndNotice` (the founder's rule end to end, the queue's order, the refused buttons, Explore untouched, the database's per-person limit; the notice only when shown, not to one that chose, not to one published after Discover shipped), `TestDiscoverSweepSources` (the catalogue marks the sweep; the notice's order).
+
+**Left over.** The review's other items are unchanged: a signed-out Discover, verification on a profile, coordinates for areas, showing reports to the business and an appeal for a removed listing. Near-first finds its candidates by straight-line distance on the map's degrees and orders them by km; at Nigeria's latitudes the two agree but at a page's edge.
