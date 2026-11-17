@@ -1208,6 +1208,7 @@ storefront_orders.pay_to_kobo
 storefront_orders.payment
 storefront_orders.payment_url
 storefront_orders.person_id
+storefront_orders.person_left
 storefront_orders.price_change
 storefront_orders.reference
 storefront_orders.service_id

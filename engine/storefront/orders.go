@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -758,6 +759,29 @@ func (x Order) DueKobo() int64 { return x.TotalKobo + x.ExtraKobo }
 
 // BalanceKobo is what is left to pay on it.
 func (x Order) BalanceKobo() int64 { return max(x.DueKobo()-x.PaidKobo, 0) }
+
+// PayableStatuses are the states in which an order may still be paid
+// (part paid included); every other state is closed (declined, expired,
+// cancelled, completed, refund_due, refunded, no_show) or waits for the
+// customer first (price_changed).
+var PayableStatuses = []string{"awaiting_payment", "accepted", "received", "paid", "dispatched", "on_the_way", "arrived"}
+
+// PayableNow is whether an order can be paid now, through a pay link, by
+// its status, how it is paid and what is left to pay
+// (docs/spec/taskiem-for-everyone.md §13): something is left, it is paid
+// in the app (not "none"), its state is one of PayableStatuses, and it is
+// not waiting to be accepted before it is paid. Orders on You's Pay and
+// every pay link a person is given follow it; taskiem_order_payable_now
+// (migration 00467) is the same rule in SQL (TestPayableNowMatchesSQL).
+func PayableNow(status, payment string, leftKobo int64) bool {
+	if leftKobo <= 0 || payment == "" || payment == "none" || !slices.Contains(PayableStatuses, status) {
+		return false
+	}
+	return status != "received" || payment != "after_accept"
+}
+
+// PayableNow is the order's PayableNow.
+func (x Order) PayableNow() bool { return PayableNow(x.Status, x.Payment, x.BalanceKobo()) }
 
 // AskedKobo is what the order asks for now: the rest of an open later
 // step, or, while it waits for its first payment, the rest of its deposit

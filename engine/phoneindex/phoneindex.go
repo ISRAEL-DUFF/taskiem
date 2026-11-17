@@ -212,10 +212,11 @@ func (x *Index) backfillOne(ctx context.Context, tenant uuid.UUID) error {
 			// The orders, held until this commits, and only those whose
 			// customer's key is there and held too: an erasure (shredding
 			// the key) or retention (forgotten_at) waits for this, and its
-			// trigger then removes what this wrote.
+			// trigger then removes what this wrote. An order of an account that
+			// was deleted (person_left) is never indexed again (00467).
 			rows, err := tx.Query(ctx, `SELECT o.id, o.customer FROM storefront_orders o
 				JOIN subject_keys k ON k.tenant_id = o.tenant_id AND k.subject_id = o.subject_id AND k.shredded_at IS NULL
-				WHERE o.tenant_id = $1 AND o.id > $2 AND o.kind <> 'trade' AND o.forgotten_at IS NULL
+				WHERE o.tenant_id = $1 AND o.id > $2 AND o.kind <> 'trade' AND o.forgotten_at IS NULL AND NOT o.person_left
 				  AND NOT EXISTS (SELECT 1 FROM customer_phone_index i WHERE i.order_id = o.id)
 				ORDER BY o.id LIMIT $3 FOR SHARE OF o, k`, tenant, last, backfillBatch)
 			if err != nil {
