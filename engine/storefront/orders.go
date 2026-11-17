@@ -133,14 +133,19 @@ func (o *Orders) log() *slog.Logger {
 
 // Order is an order as the owner sees it, the customer's details opened.
 type Order struct {
-	ID         uuid.UUID `json:"id"`
-	Reference  string    `json:"reference"`
-	Kind       string    `json:"kind"`
-	Status     string    `json:"status"`
-	Customer   Customer  `json:"customer"`
-	Basket     []Line    `json:"basket"`
-	TotalKobo  int64     `json:"total_kobo"`
-	Fulfilment string    `json:"fulfilment,omitempty"`
+	ID        uuid.UUID `json:"id"`
+	Reference string    `json:"reference"`
+	Kind      string    `json:"kind"`
+	Status    string    `json:"status"`
+	// PersonID is the person who made it in the Taskiem app (an order of
+	// the kind app, a booking made there, or an order confirmed in their
+	// app conversation); InApp says so to the business, never who.
+	PersonID   *uuid.UUID `json:"-"`
+	InApp      bool       `json:"in_app,omitempty"`
+	Customer   Customer   `json:"customer"`
+	Basket     []Line     `json:"basket"`
+	TotalKobo  int64      `json:"total_kobo"`
+	Fulfilment string     `json:"fulfilment,omitempty"`
 	// Zone is the delivery area the customer chose and DeliveryKobo its
 	// fee, part of TotalKobo (dispatch D1).
 	Zone         string     `json:"zone,omitempty"`
@@ -212,7 +217,7 @@ const orderCols = `id, reference, kind, status, customer, subject_id, basket, to
 	  WHEN EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = storefront_orders.id AND p.undoes IS NULL
 	    AND p.by NOT LIKE 'system:paystack/%' AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id)) THEN 'other'
 	  WHEN payment_ref IS NOT NULL THEN 'card'
-	  ELSE 'other' END`
+	  ELSE 'other' END, storefront_orders.person_id`
 
 func scanOrder(r pgx.Row) (Order, error) {
 	var x Order
@@ -220,7 +225,7 @@ func scanOrder(r pgx.Row) (Order, error) {
 	err := r.Scan(&x.ID, &x.Reference, &x.Kind, &x.Status, &x.customerEnv, &x.subject, &basket, &x.TotalKobo, &x.Fulfilment, &x.Payment, &x.PaymentURL,
 		&x.paymentRef, &x.PaidAt, &x.RunID, &x.Note, &x.DecidedBy, &x.DecidedAt, &x.ExpiresAt, &x.CreatedAt, &x.storefront,
 		&x.ServiceID, &x.ServiceName, &x.StartsAt, &x.EndsAt, &x.Version, &x.DepositKobo, &change, &x.Zone, &x.DeliveryKobo, &x.action, &x.FrontID,
-		&x.ExtraKobo, &x.PaidKobo, &x.PayToKobo, &x.PayStepKobo, &x.PaySeq, &x.ReturnedAt, &x.Instalments, &x.Waitlist, &x.PaidBy)
+		&x.ExtraKobo, &x.PaidKobo, &x.PayToKobo, &x.PayStepKobo, &x.PaySeq, &x.ReturnedAt, &x.Instalments, &x.Waitlist, &x.PaidBy, &x.PersonID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, ErrNoOrder
 	}
@@ -228,6 +233,7 @@ func scanOrder(r pgx.Row) (Order, error) {
 		return Order{}, err
 	}
 	_ = json.Unmarshal(basket, &x.Basket)
+	x.InApp = x.PersonID != nil
 	if change != nil {
 		x.PriceChange = &PriceChange{}
 		_ = json.Unmarshal(change, x.PriceChange)
@@ -1407,7 +1413,10 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 			trade = &ord
 			return nil
 		}
-		if ord.Kind == "chat" || ord.Kind == "app" {
+		// A customer's thread: an order confirmed from their messages, or
+		// anything made in the app (an app order, a booking made there),
+		// told in their conversation, never by SMS.
+		if ord.Kind == "chat" || ord.Kind == "app" || ord.PersonID != nil {
 			if strings.Contains(text, "{link}") {
 				link, err := o.ChatStatusLink(ctx, tx, tenant, ord)
 				if err != nil {
@@ -1477,7 +1486,7 @@ func (o *Orders) NotifyCustomer(ctx context.Context, tenant uuid.UUID, reference
 			return nil, err
 		}
 		channels = []string{"whatsapp"}
-		if chat.Kind == "app" {
+		if chat.PersonID != nil || chat.Kind == "app" {
 			// One who ordered in the app is told in their conversation there.
 			channels = []string{"app"}
 		}

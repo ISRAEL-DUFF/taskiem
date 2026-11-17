@@ -2,6 +2,7 @@ package media
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"image"
 	"image/color"
@@ -40,5 +41,45 @@ func TestCheckChatFile(t *testing.T) {
 		if _, _, err := CheckChatFile(data); !errors.Is(err, ErrFile) && !errors.Is(err, ErrImage) {
 			t.Errorf("%s: %v", name, err)
 		}
+	}
+}
+
+// An Ogg voice note whose length cannot be read from it (no page carries
+// a granule) is held to the size of five minutes of speech, as other
+// voice notes are; a short one passes.
+func TestCheckChatFileOggLengthUnknown(t *testing.T) {
+	unknown := func(pages int) []byte {
+		ogg := oggOpus(nil, false)
+		audio := bytes.Repeat([]byte{0x7c}, 250)
+		packets := make([][]byte, 200)
+		for i := range packets {
+			packets[i] = audio
+		}
+		for i := range pages {
+			ogg = append(ogg, oggPageOf(7, uint32(3+i), 0, packets...)...)
+		}
+		// Every page's granule "none ends here", checksummed again.
+		for i := 0; i+27 <= len(ogg); {
+			n := int(ogg[i+26])
+			size := 27 + n
+			for _, l := range ogg[i+27 : i+27+n] {
+				size += int(l)
+			}
+			page := ogg[i : i+size]
+			for j := 6; j < 14; j++ {
+				page[j] = 0xFF
+			}
+			binary.LittleEndian.PutUint32(page[22:], 0)
+			binary.LittleEndian.PutUint32(page[22:], oggCRC(page))
+			i += size
+		}
+		return ogg
+	}
+	if ctype, _, err := CheckChatFile(unknown(2)); err != nil || ctype != "audio/ogg" {
+		t.Fatalf("a short Ogg of unknown length: %s %v", ctype, err)
+	}
+	big := unknown(MaxChatVoiceBytes/(200*250) + 2)
+	if _, _, err := CheckChatFile(big); !errors.Is(err, ErrFile) {
+		t.Fatalf("a long Ogg of unknown length passed: %d bytes, %v", len(big), err)
 	}
 }
