@@ -44,3 +44,13 @@ func (s *Server) ResetLimiters() {
 	s.limiters.m, s.limiters.shared = nil, nil
 	s.limiters.mu.Unlock()
 }
+
+// SetClosedReplyFault fails every closed reply after it is claimed (nil:
+// none fails).
+func (s *Server) SetClosedReplyFault(fn func() error) { s.closedReplyFault = fn }
+
+// OpenBetween is how long hours were open between two times.
+var OpenBetween = openBetween
+
+// WarnTransfer says whether words ask for a transfer to a personal account.
+var WarnTransfer = warnTransfer

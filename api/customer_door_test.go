@@ -114,6 +114,8 @@ func hoursOpen(now bool) map[string]any {
 func (w *doorShopWorld) hours(t *testing.T, open bool) {
 	t.Helper()
 	w.owner.must(200, "PUT", "/v1/storefront", map[string]any{"slug": "mamas-kitchen", "draft": map[string]any{"name": "Mama's Kitchen", "hours": hoursOpen(open)}})
+	// The hours customers see are the published page's.
+	w.owner.must(200, "POST", "/v1/storefront/publish", nil)
 }
 
 // personIn makes a person with a phone (the code by SMS) and signs them in
@@ -428,7 +430,7 @@ func TestCustomerDoor(t *testing.T) {
 	// Unanswered for 30 minutes while open: Needs you; after 2 hours, the owner is told.
 	w.hours(t, true)
 	owner.must(200, "PUT", "/v1/settings/chat-tools", map[string]any{"chat_tools": true})
-	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE customer_conversations SET last_inbound_at = now() - interval '40 minutes', last_reply_at = now() - interval '1 day' WHERE id = $1`, thread); err != nil {
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE customer_conversations SET waiting_since = now() - interval '40 minutes', last_reply_at = now() - interval '1 day' WHERE id = $1`, thread); err != nil {
 		t.Fatal(err)
 	}
 	found := false
@@ -440,7 +442,7 @@ func TestCustomerDoor(t *testing.T) {
 	if !found {
 		t.Fatalf("not on Needs you")
 	}
-	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE customer_conversations SET last_inbound_at = now() - interval '3 hours' WHERE id = $1`, thread); err != nil {
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE customer_conversations SET waiting_since = now() - interval '3 hours' WHERE id = $1`, thread); err != nil {
 		t.Fatal(err)
 	}
 	for range 2 {
