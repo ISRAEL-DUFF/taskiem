@@ -162,14 +162,35 @@ scripts, narration, and `NOTES.md` (what was verified against the app).
   words by the narrator.
 - Every episode works muted: captions carry it.
 
-## 7. Open questions
+## 7. Decisions (17 November 2026)
 
-1. **Order of series.** I propose Fashion, Food, Phones and gadgets. Right?
-2. **Where will viewers watch?** (Instagram, TikTok, YouTube, WhatsApp
-   status, LinkedIn.) It sets the length and the opening hook of each episode.
-3. **Language.** English only, or also Nigerian Pidgin and Yoruba narration for
-   some series?
-4. **New businesses to invent**: should I name the gadget shop and its people,
-   or do you have real businesses in mind?
-5. **Who is the viewer's first step**: "start free", "book a demo", or
-   "download the app" (not possible until the stores)?
+1. **Order of series:** Fashion, then Food, then Phones and gadgets.
+2. **Where viewers watch:** Instagram and TikTok, YouTube, and WhatsApp status
+   and groups. So every episode is made in **two shapes**: vertical 9:16
+   (Instagram, TikTok, WhatsApp; 30 to 60 s, a hook in the first 2 seconds,
+   captions burned in, light file size) and horizontal 16:9 (YouTube; up to
+   about 2 minutes, a title and thumbnail, chapters). Episode 0 may run longer
+   on YouTube than in the vertical cut. LinkedIn is not a target for these
+   series.
+3. **Language:** English **and Nigerian Pidgin.** Every episode gets two
+   narration tracks. The Pidgin script is written for the ear, not translated
+   word for word, and **a native Pidgin speaker must check each script before
+   it is recorded** (the English scripts are the source). Names and amounts
+   stay as in the pronunciation file. On-screen captions stay in English
+   unless we decide otherwise.
+4. **New businesses and people:** invented by me and approved by you before
+   anything is made. They are fictional.
+5. **Call to action:** "Start free on Taskiem" (sign up on the web or app).
+   **To confirm before it goes on any card:** Taskiem gives each new business
+   a *trial* (`docs/billing.md`); there is no free plan that I can see, so the
+   wording should say "Start your free trial" and state the length once the
+   trial period is set. Signup must also be open (`TASKIEM_ALLOW_SIGNUP`). When
+   the app is in the stores, add the download link.
+
+## 8. Next
+
+1. Draft the Fashion series outline, episode by episode, with each episode's
+   recap line, bridge line and Episode 0 beat (English first, then Pidgin).
+2. Draft the gadget shop and its people for your approval.
+3. Write the Fashion demo world (`seed-fashion.ts`) so recordings show a
+   fashion business with sizes, colours and fittings.
