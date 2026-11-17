@@ -21,6 +21,7 @@ import '../app/store.dart' show LocalStore, keepMediaBytes, keptMedia;
 import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/tap_area.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'chats.dart';
 import 'words.dart';
@@ -703,6 +704,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   Widget _page(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
     final pad = MediaQuery.paddingOf(context);
     final typed = _typed;
     final results = _found != null && _found!.q == typed ? _found!.r : null;
@@ -799,32 +801,42 @@ class _ExploreScreenState extends State<ExploreScreen> {
             children: [
               // `.tk-x-head`: back, the title, and the search under them.
               Padding(
-                padding: EdgeInsets.fromLTRB(16, 14 > pad.top ? 14 : pad.top, 16, 12),
+                padding: EdgeInsets.fromLTRB(12, 6 + pad.top, 16, 12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      children: [
-                        TapArea(child: Semantics(
-                          button: true,
-                          label: 'Back to the chats',
+                    // As drawn: ‹ Chats, then the title, large, under it.
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TapArea(child: Semantics(
+                        button: true,
+                        label: 'Back to the chats',
+                        onTap: () => Navigator.of(context).pop(),
+                        excludeSemantics: true,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
                           onTap: () => Navigator.of(context).pop(),
-                          excludeSemantics: true,
-                          child: TkPress(
-                            onTap: () => Navigator.of(context).pop(),
-                            child: SizedBox(width: 40, height: 44, child: Center(child: TkIcon('back', size: 22, color: t.text))),
-                          ),
-                        )),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Semantics(
-                            header: true,
-                            child: Text('Find a business', style: tkText(size: 26, weight: 800, lineHeight: 1.35, letterSpacing: -0.52, color: t.text)),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(0, 8, 8, 8),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                TkIcon('back', size: 24, stroke: 2, color: dark ? t.text : t.brand),
+                                Text('Chats', style: tkText(size: 15.5, weight: 500, color: dark ? t.text : t.brand)),
+                              ],
+                            ),
                           ),
                         ),
-                      ],
+                      )),
                     ),
-                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(2, 2, 0, 0),
+                      child: Semantics(
+                        header: true,
+                        child: Text('Find a business', style: tkDisplay(size: 30, lineHeight: 1.2, letterSpacing: -1.1, color: t.text)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     _SearchBox(controller: _q),
                   ],
                 ),
@@ -884,19 +896,19 @@ class _Chips extends StatelessWidget {
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 180),
                         // Grows with large text.
-                        constraints: const BoxConstraints(minHeight: 38),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        // As drawn: filled, no line, rounded.
+                        constraints: const BoxConstraints(minHeight: 32),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
                         decoration: BoxDecoration(
-                          color: on ? (dark ? t.brandDark : t.text) : t.panel,
+                          color: on ? (dark ? t.brandDark : t.text) : (dark ? const Color(0xFF1A1B1A) : t.panel),
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: on ? const Color(0x00000000) : t.border),
                         ),
                         alignment: Alignment.center,
                         // `.tk-x-chip { gap: 8px }`: the name, then the count.
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text(c.name, maxLines: 1, style: tkText(size: 13.5, weight: 600, color: on ? (dark ? t.brandDarkText : t.bg) : t.text)),
+                            Text(c.name, maxLines: 1, style: tkText(size: 13, weight: 600, color: on ? (dark ? t.brandDarkText : t.bg) : t.text)),
                             if (c.n > 0) ...[
                               const SizedBox(width: 8),
                               Text('${c.n}', style: tkText(size: 12.5, weight: 700, color: on ? (dark ? t.brandDarkText : t.bg) : t.muted)),
@@ -927,11 +939,11 @@ class _SearchBox extends StatelessWidget {
       label: 'Search businesses',
       textField: true,
       child: Container(
-        height: 50,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        height: 46,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: t.panel,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           boxShadow: const [BoxShadow(color: Color(0x140E1A14), offset: Offset(0, 1), blurRadius: 2)],
         ),
         child: Row(
@@ -963,9 +975,12 @@ class _SearchBox extends StatelessWidget {
 
 /// `.tk-x-card`: the panel, 24 px corners, lifted (a line round it in dark).
 class _Frame extends StatelessWidget {
-  const _Frame({required this.child, this.label});
+  const _Frame({required this.child, this.label, this.bare = false});
   final Widget child;
   final String? label;
+
+  /// No padding: what is in it (the Featured cover) goes to its edges.
+  final bool bare;
 
   @override
   Widget build(BuildContext context) {
@@ -976,7 +991,8 @@ class _Frame extends StatelessWidget {
       label: label,
       explicitChildNodes: true,
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: bare ? EdgeInsets.zero : const EdgeInsets.all(12),
+        clipBehavior: bare ? Clip.antiAlias : Clip.none,
         decoration: BoxDecoration(
           color: t.panel,
           borderRadius: BorderRadius.circular(24),
@@ -993,15 +1009,13 @@ class _Frame extends StatelessWidget {
   }
 }
 
-/// `.tk-x-connect`: the pine pill (soft for Message), 40 px.
+/// `.tk-x-connect`: the pine pill (soft for Message), 30 px as drawn.
 class _Pill extends StatelessWidget {
-  const _Pill({required this.label, this.onTap, this.soft = false, this.semantics, this.height = 40, this.side = 16});
+  const _Pill({required this.label, this.onTap, this.soft = false, this.semantics});
   final String label;
   final VoidCallback? onTap;
   final bool soft;
   final String? semantics;
-  final double height;
-  final double side;
 
   @override
   Widget build(BuildContext context) {
@@ -1017,11 +1031,11 @@ class _Pill extends StatelessWidget {
         onTap: onTap,
         scale: 0.96,
         child: Container(
-          height: height,
-          padding: EdgeInsets.symmetric(horizontal: side),
+          height: 30,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           alignment: Alignment.center,
           decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-          child: Text(label, style: tkText(size: 14, weight: 700, lineHeight: 1.2, color: ink)),
+          child: Text(label, style: tkText(size: 13, weight: 700, lineHeight: 1.2, color: ink)),
         ),
       ),
     ));
@@ -1117,7 +1131,7 @@ class _Card extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _Pill(label: 'Accept', semantics: "Accept ${c.name}'s request to link", height: 36, side: 14, onTap: busy ? null : () => onAnswer!('accept')),
+                  _Pill(label: 'Accept', semantics: "Accept ${c.name}'s request to link", onTap: busy ? null : () => onAnswer!('accept')),
                   const SizedBox(height: 2),
                   Semantics(
                     container: true,
@@ -1144,31 +1158,74 @@ class _Card extends StatelessWidget {
     }
     return _Frame(
       label: c.name,
+      bare: featured,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (featured) _Cover(card: c, pictures: pictures),
-          // `.explore-head { padding: 4px 4px 12px; gap: 12px }`
+          // `.explore-head { padding: 4px 4px 12px; gap: 12px }`; the
+          // Featured card's, under its cover, as drawn.
           Padding(
-            padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+            padding: featured ? const EdgeInsets.fromLTRB(12, 10, 12, 12) : const EdgeInsets.fromLTRB(4, 4, 4, 12),
             child: Row(
               children: [
-                ListenableBuilder(
-                  listenable: pictures,
-                  builder: (context, _) => ChatAvatar(name: c.name, logo: c.logo ? pictures.of(_logo(c)) : null, size: 48, letterSize: 16),
+                // As drawn: how many it is linked with, a badge on its logo.
+                Semantics(
+                  label: popular,
+                  child: SizedBox(
+                    width: featured ? 40 : 52,
+                    height: featured ? 40 : 52,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        ListenableBuilder(
+                          listenable: pictures,
+                          builder: (context, _) => ChatAvatar(name: c.name, logo: c.logo ? pictures.of(_logo(c)) : null, size: featured ? 38 : 48, letterSize: featured ? 13 : 16),
+                        ),
+                        if ((c.links ?? 0) >= 3 && !featured)
+                          Positioned(
+                            right: -2,
+                            bottom: 0,
+                            child: ExcludeSemantics(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: t.brand,
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(color: TkLook.of(context).card, width: 2),
+                                ),
+                                child: Text('${c.links}+', style: tkText(size: 10, weight: 800, color: TkLook.of(context).lime)),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: featured ? 10 : 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(c.name, style: tkText(size: 16, weight: 700, color: t.text)),
+                      Text(c.name, maxLines: featured ? 1 : 2, overflow: TextOverflow.ellipsis, style: tkText(size: 15.5, weight: 700, lineHeight: 1.25, color: t.text)),
                       if (line.isNotEmpty)
-                        Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false, style: tkText(size: 13, color: t.muted)),
-                      if (categories.isNotEmpty)
-                        Text(categories.join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false, style: tkText(size: 12.5, weight: 600, color: t.muted)),
-                      if (popular != null)
-                        Text(popular, maxLines: 1, overflow: TextOverflow.ellipsis, softWrap: false, style: tkText(size: 12.5, weight: 600, color: t.text)),
+                        Text(line, maxLines: featured ? 1 : 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.3, color: t.muted)),
+                      if (categories.isNotEmpty && !featured)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: [
+                              for (final k in categories)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(color: t.tkSoft, borderRadius: BorderRadius.circular(999)),
+                                  child: Text(k, style: tkText(size: 11, weight: 600, color: t.muted)),
+                                ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1213,12 +1270,10 @@ class _Cover extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
     final c = card;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
+    return SizedBox(
+      child: ClipRect(
         child: SizedBox(
-          height: 140,
+          height: 110,
           child: c.photos > 0
               ? ListenableBuilder(
                   listenable: pictures,

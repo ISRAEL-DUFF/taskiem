@@ -74,13 +74,18 @@ void main() {
 
   testWidgets('Block asks first; Cancel sends nothing', (t) async {
     final asked = await list(t);
-    await t.tap(find.bySemanticsLabel("Block Kola's Bakery"));
+    // Block is under ⋯.
+    await t.tap(find.bySemanticsLabel("More for Kola's Bakery"));
+    await t.pumpAndSettle();
+    await t.tap(find.text("Block Kola's Bakery"));
     await t.pumpAndSettle();
     expect(find.text("Block Kola's Bakery?"), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Cancel'));
     await t.pumpAndSettle();
     expect(asked, isEmpty);
-    await t.tap(find.bySemanticsLabel("Block Kola's Bakery"));
+    await t.tap(find.bySemanticsLabel("More for Kola's Bakery"));
+    await t.pumpAndSettle();
+    await t.tap(find.text("Block Kola's Bakery"));
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Block').last);
     await t.pumpAndSettle();

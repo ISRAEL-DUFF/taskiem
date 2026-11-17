@@ -14,11 +14,22 @@ enum TkMode { light, dark }
 
 /// The theme a screen is drawn with.
 class TkTheme extends InheritedWidget {
-  const TkTheme({super.key, required this.mode, required super.child});
+  const TkTheme({super.key, required this.mode, required super.child, this.own});
 
   final TkMode mode;
 
-  TkTokens get t => mode == TkMode.dark ? tkDark : tkLight;
+  /// Tokens of its own, for a part of a screen (the words on your own
+  /// bubble); else the app's.
+  final TkTokens? own;
+
+  TkTokens get t => own ?? (mode == TkMode.dark ? tkAppDark : tkAppLight);
+
+  /// [child] with [change] made to the tokens in force (a part of a screen
+  /// with a few colours of its own).
+  static Widget recolour(BuildContext context, TkTokens Function(TkTokens t) change, Widget child) {
+    final theme = of(context);
+    return TkTheme(mode: theme.mode, own: change(theme.t), child: child);
+  }
 
   static TkTheme of(BuildContext context) {
     final theme = context.dependOnInheritedWidgetOfExactType<TkTheme>();
@@ -30,8 +41,32 @@ class TkTheme extends InheritedWidget {
   static TkTokens tokens(BuildContext context) => of(context).t;
 
   @override
-  bool updateShouldNotify(TkTheme old) => old.mode != mode;
+  bool updateShouldNotify(TkTheme old) => old.mode != mode || old.own != own;
 }
+
+/// The chat in the app's own look (docs/spec/mobile-app-look.md, "The
+/// chat"): no wallpaper, the page's ground under it; their bubbles white
+/// (#1A1B1A in the dark), yours pine (a deep green in the dark); read ticks
+/// lime. The rest of the tokens are the web's.
+final tkAppLight = tkLight.copyWith(
+  chatWallpaper: const Color(0xFFF2F3F0),
+  chatIn: const Color(0xFFFFFFFF),
+  chatOut: const Color(0xFF0D3B2E),
+  chatOutMeta: const Color(0xB3FFFFFF),
+  chatTickRead: const Color(0xFFC8F169),
+  chatShadow: const Color(0x0D000000),
+  chatDoodle: const Color(0x00000000),
+);
+
+final tkAppDark = tkDark.copyWith(
+  chatWallpaper: const Color(0xFF000000),
+  chatIn: const Color(0xFF1A1B1A),
+  chatOut: const Color(0xFF1D3A2D),
+  chatOutMeta: const Color(0xA6F2F3F0),
+  chatTickRead: const Color(0xFFC8F169),
+  chatShadow: const Color(0x00000000),
+  chatDoodle: const Color(0x00000000),
+);
 
 /// The families after Inter's latin file, one per alphabet: the browser picks
 /// among the web's files by unicode-range; Flutter falls back letter by letter.

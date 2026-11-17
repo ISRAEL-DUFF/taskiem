@@ -15,6 +15,7 @@ import '../kit/forms.dart' show errorWords;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkPill;
+import '../kit/mobile.dart' show TkChips;
 import '../kit/modal.dart';
 import '../kit/polling.dart';
 import '../kit/tap_area.dart';
@@ -504,18 +505,18 @@ class _OrderCardState extends State<_OrderCard> {
                     ),
                   const SizedBox(height: 10),
                   _legend(t, 'How they get it'),
-                  for (final (f, words) in const [('delivery', 'Delivered'), ('pickup', 'They pick it up')])
-                    TkChoiceRow(
-                      radio: true,
-                      control: TkRadio(checked: getBy == f),
-                      label: Text(words, style: tkText(size: 14, color: t.text)),
-                      onTap: busy
-                          ? null
-                          : () {
-                              setState(() => _getBy = f);
-                              _change({'op': 'details', 'fulfilment': f});
-                            },
-                    ),
+                  // As drawn: a switch of the two.
+                  TkChips<String>(
+                    label: 'How they get it',
+                    padding: EdgeInsets.zero,
+                    chips: const [('delivery', 'Delivered'), ('pickup', 'They pick it up')],
+                    on: getBy,
+                    onPick: (f) {
+                      if (busy || f == getBy) return;
+                      setState(() => _getBy = f);
+                      _change({'op': 'details', 'fulfilment': f});
+                    },
+                  ),
                   if (getBy == 'delivery') ...[
                     const SizedBox(height: 6),
                     TkKitField(label: 'Deliver to', child: TkTextBox(controller: _address, height: 44, size: 15, max: 300)),
@@ -592,18 +593,40 @@ class _OrderCardState extends State<_OrderCard> {
             ),
       children: [
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        // As drawn: Ask them while questions wait, else Confirm; Drop as a
+        // bin beside them.
+        Row(
           children: [
-            if (_int(d['questions']) > 0 && widget.canSend) TkSmallButton(label: 'Ask them', onPressed: busy ? null : () => _step('ask', 'Asked them')),
-            TkSmallButton(
-              label: 'Confirm',
-              primary: true,
-              semantics: waits.isEmpty ? null : 'Confirm. $waits',
-              onPressed: busy || d['ready'] != true || !widget.canSend ? null : () => _step('confirm', 'Order confirmed'),
+            if (_int(d['questions']) > 0 && widget.canSend)
+              Expanded(child: TkSmallButton(label: 'Ask them', onPressed: busy ? null : () => _step('ask', 'Asked them')))
+            else
+              Expanded(
+                child: TkSmallButton(
+                  label: 'Confirm',
+                  primary: true,
+                  semantics: waits.isEmpty ? null : 'Confirm. $waits',
+                  onPressed: busy || d['ready'] != true || !widget.canSend ? null : () => _step('confirm', 'Order confirmed'),
+                ),
+              ),
+            const SizedBox(width: 8),
+            TapArea(
+              child: Semantics(
+                button: true,
+                label: 'Drop',
+                onTap: busy ? null : () => _step('drop', 'Order dropped'),
+                excludeSemantics: true,
+                child: TkPress(
+                  onTap: busy ? null : () => _step('drop', 'Order dropped'),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: t.tkSoft, shape: BoxShape.circle),
+                    child: TkIcon('trash', size: 18, color: t.text),
+                  ),
+                ),
+              ),
             ),
-            TkSmallButton(label: 'Drop', onPressed: busy ? null : () => _step('drop', 'Order dropped')),
           ],
         ),
         if (waits.isNotEmpty)
@@ -768,16 +791,22 @@ class _LineRowState extends State<_LineRow> {
                         ],
                       )
                     else
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final c in _maps(ask['choices']))
-                            TkSmallButton(
-                              label: '${_str(c['name'])}${c['price_kobo'] != null ? ' · ${naira(_int(c['price_kobo']))}' : ''}',
-                              onPressed: busy ? null : () => widget.change({'op': 'choose', 'line': i, 'item_id': c['item_id']}),
-                            ),
-                        ],
+                      // As drawn: the choices two to a row.
+                      LayoutBuilder(
+                        builder: (context, box) => Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final c in _maps(ask['choices']))
+                              SizedBox(
+                                width: (box.maxWidth - 8) / 2,
+                                child: TkSmallButton(
+                                  label: '${_str(c['name'])}${c['price_kobo'] != null ? ' · ${naira(_int(c['price_kobo']))}' : ''}',
+                                  onPressed: busy ? null : () => widget.change({'op': 'choose', 'line': i, 'item_id': c['item_id']}),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                   ],
                 ),

@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart';
 
 import '../chat/words.dart' show CardTone, toneOf;
 import 'motion.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'icon.dart';
 import 'kit.dart';
@@ -17,8 +18,11 @@ import 'tap_area.dart';
 /// kit.css `.tk-search`: a pill of the soft ground, 46 px, the magnifier and
 /// the words; the ring while typing in it.
 class TkSearchBox extends StatefulWidget {
-  const TkSearchBox({super.key, required this.controller, required this.hint, this.margin = const EdgeInsets.fromLTRB(20, 0, 20, 12)});
+  const TkSearchBox({super.key, required this.controller, required this.hint, this.margin = const EdgeInsets.fromLTRB(20, 0, 20, 12), this.fill});
   final TextEditingController controller;
+
+  /// The box's colour (a page's card colour on the ground); else soft.
+  final Color? fill;
   final String hint;
   final EdgeInsets margin;
 
@@ -53,7 +57,7 @@ class _TkSearchBoxState extends State<TkSearchBox> {
             constraints: const BoxConstraints(minHeight: 46),
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              color: t.tkSoft,
+              color: widget.fill ?? TkLook.of(context).card,
               borderRadius: BorderRadius.circular(14),
               boxShadow: _focus.hasFocus ? t.ring : const [],
             ),
@@ -121,6 +125,53 @@ class TkChipRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = <(String, String?)>[if (all) ('All', null), for (final c in chips) (c.label, c.tag)];
+    // A filter is the app's segmented switch: a soft track, the one chosen
+    // on a card (docs/spec/mobile-app-look.md); chips that put a word in
+    // stay pills.
+    if (all) {
+      final t = TkTheme.tokens(context);
+      final look = TkLook.of(context);
+      return Semantics(
+        container: true,
+        label: label,
+        explicitChildNodes: true,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: padding,
+          child: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(color: t.tkSoft, borderRadius: BorderRadius.circular(11)),
+            child: Row(
+              children: [
+                for (final (words, tag) in items)
+                  TapArea(
+                    child: Semantics(
+                      button: true,
+                      selected: on == tag,
+                      child: TkPress(
+                        onTap: () => onPick(tag == on ? null : tag),
+                        child: Container(
+                          constraints: const BoxConstraints(minHeight: 32),
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          alignment: Alignment.center,
+                          decoration: on == tag
+                              ? BoxDecoration(
+                                  color: look.card,
+                                  borderRadius: BorderRadius.circular(9),
+                                  boxShadow: const [BoxShadow(color: Color(0x1F000000), offset: Offset(0, 1), blurRadius: 3)],
+                                )
+                              : null,
+                          child: Text(words, style: tkText(size: 13, weight: 600, lineHeight: 1.2, color: t.text)),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return Semantics(
       container: true,
       label: label,
@@ -576,4 +627,35 @@ String _short(String letters) {
   if (words.isEmpty) return '';
   if (words.length == 1) return words.first.substring(0, words.first.length < 2 ? words.first.length : 2).toUpperCase();
   return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+/// One row of a list drawn as one card: the card's colour, its corners
+/// rounded at the first and last, a hairline after the leading [inset]
+/// between rows (a long list built row by row).
+class TkCardSlice extends StatelessWidget {
+  const TkCardSlice({super.key, required this.first, required this.last, required this.child, this.inset = 64});
+  final bool first;
+  final bool last;
+  final double inset;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final look = TkLook.of(context);
+    const r = Radius.circular(20);
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: look.card,
+        borderRadius: BorderRadius.only(topLeft: first ? r : Radius.zero, topRight: first ? r : Radius.zero, bottomLeft: last ? r : Radius.zero, bottomRight: last ? r : Radius.zero),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!first) Container(height: 1, margin: EdgeInsets.only(left: inset), color: look.line),
+          child,
+        ],
+      ),
+    );
+  }
 }

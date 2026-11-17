@@ -19,8 +19,11 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'icon.dart';
 import 'kit.dart';
+import 'look.dart' show tkTabular;
 import 'list.dart' show TkLoading;
+import 'sheet.dart' show TkCta, TkGhostButton, TkSheet;
 import 'tap_area.dart';
+import 'forms.dart' show TkSwitch;
 
 bool _still(BuildContext context) => MediaQuery.maybeDisableAnimationsOf(context) ?? false;
 
@@ -272,7 +275,10 @@ class TkHeadButton extends StatelessWidget {
 
 /// Chips across, scrolling sideways: one on (a period, a filter).
 class TkChips<T> extends StatelessWidget {
-  const TkChips({super.key, required this.chips, required this.on, required this.onPick, this.label = 'Show'});
+  const TkChips({super.key, required this.chips, required this.on, required this.onPick, this.label = 'Show', this.padding = const EdgeInsets.fromLTRB(16, 4, 16, 10)});
+
+  /// Round the switch: the page's edge; none inside a card.
+  final EdgeInsets padding;
   final List<(T, String)> chips;
   final T on;
   final ValueChanged<T> onPick;
@@ -284,13 +290,14 @@ class TkChips<T> extends StatelessWidget {
     final look = TkLook.of(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
     // As a phone's segmented switch: a soft track, the one chosen on a card
-    // of its own; wider than the screen, it scrolls sideways.
+    // of its own, each as wide as its words from the left (`.seg.sc`, as
+    // drawn); wider than the screen, it scrolls sideways.
     return Semantics(
       container: true,
       label: label,
       explicitChildNodes: true,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+        padding: padding,
         child: LayoutBuilder(
           builder: (context, box) => Container(
             padding: const EdgeInsets.all(2),
@@ -304,7 +311,6 @@ class TkChips<T> extends StatelessWidget {
               child: ConstrainedBox(
                 constraints: BoxConstraints(minWidth: box.maxWidth - 4),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     for (final (v, words) in chips)
                       TapArea(
@@ -321,14 +327,14 @@ class TkChips<T> extends StatelessWidget {
                               duration: _still(context) ? Duration.zero : const Duration(milliseconds: 200),
                               curve: Curves.easeOut,
                               constraints: const BoxConstraints(minHeight: 34),
-                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
                                 color: v == on ? (dark ? const Color(0xFF3A3B3A) : look.card) : const Color(0x00000000),
                                 borderRadius: BorderRadius.circular(10),
                                 boxShadow: v == on && !dark ? const [BoxShadow(color: Color(0x1F000000), blurRadius: 3, offset: Offset(0, 1))] : null,
                               ),
-                              child: Text(words, style: tkText(size: 13.5, weight: 600, color: t.text)),
+                              child: Text(words, style: tkText(size: 13, weight: 600, color: t.text)),
                             ),
                           ),
                         ),
@@ -603,7 +609,12 @@ class TkListRow extends StatelessWidget {
     this.statusAccent,
     this.level,
     this.levelColor,
+    this.trailing,
   });
+
+  /// At the row's end in place of an amount: a switch, or quiet words
+  /// ("Linked") before the chevron.
+  final Widget? trailing;
 
   /// How full it is (an item's stock against its level), as a thin bar
   /// under the line; null for none.
@@ -730,14 +741,16 @@ class TkListRow extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        maxLines: 1,
+                        // A setting's words wrap beside its switch, as drawn.
+                        maxLines: trailing is TkSwitch ? 2 : 1,
                         overflow: TextOverflow.ellipsis,
                         style: tkText(size: 15.5, weight: 500, lineHeight: 1.3, color: t.text),
                       ),
                       if (sub.isNotEmpty)
+                        // Up to two lines, as drawn.
                         Text(
                           sub,
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted),
                         ),
@@ -779,7 +792,7 @@ class TkListRow extends StatelessWidget {
                             amount!,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: tkText(size: 15, weight: 650, color: t.text),
+                            style: tkText(size: 15, weight: 650, color: t.text).copyWith(fontFeatures: tkTabular),
                           ),
                         if (status != null) ...[
                           if (amount != null) const SizedBox(height: 4),
@@ -798,7 +811,9 @@ class TkListRow extends StatelessWidget {
                     ),
                   ),
                 ],
-                if (onTap != null && amount == null && status == null) ...[
+                if (trailing != null) ...[const SizedBox(width: 10), trailing!],
+                // A row that opens has its chevron, after its amount too (as drawn).
+                if (onTap != null && status == null && trailing is! TkSwitch) ...[
                   const SizedBox(width: 6),
                   ExcludeSemantics(child: TkIcon('chevron', size: 16, color: t.muted.withValues(alpha: 0.6))),
                 ],
@@ -925,4 +940,88 @@ class TkSkeleton extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 6),
     children: [TkLoading(rows: rows, label: label)],
   );
+}
+
+/// A form over a page (docs/spec/mobile-app-look.md, "The remaining
+/// screens"): the sheet's title large, what it is about over it, the form
+/// on the ground, and its buttons at the foot: the main one last, wide.
+class TkFormSheet extends StatelessWidget {
+  const TkFormSheet({super.key, required this.title, this.crumb, required this.children, required this.action, this.onAction, this.second, this.onSecond, this.secondDanger = false, this.overlay});
+  final String title;
+  final String? crumb;
+  final List<Widget> children;
+
+  /// The main button.
+  final String action;
+  final VoidCallback? onAction;
+
+  /// A quieter one beside it (Cancel booking).
+  final String? second;
+  final VoidCallback? onSecond;
+  final bool secondDanger;
+
+  /// The saved tick, over everything.
+  final Widget? overlay;
+
+  @override
+  Widget build(BuildContext context) => TkAppLook(
+    child: TkSheet(
+      title: title,
+      crumb: crumb,
+      overlay: overlay,
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+        children: [
+          for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 12), children[i]],
+        ],
+      ),
+      // TkSheet sets it in its foot: not a second foot inside it.
+      bareFooter: true,
+      footer: Row(
+        children: [
+          if (second != null) ...[Expanded(child: TkGhostButton(label: second!, danger: secondDanger, onTap: onSecond)), const SizedBox(width: 10)],
+          Expanded(child: TkCta(label: action, onTap: onAction)),
+        ],
+      ),
+    ),
+  );
+}
+
+/// A group of a form's fields (docs/spec/mobile-app-look.md, "The remaining
+/// screens"): its heading on the ground, the fields on a card, their boxes
+/// a shade of the ground so they show on it.
+class TkFormGroup extends StatelessWidget {
+  const TkFormGroup({super.key, this.title, required this.children});
+  final String? title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (title != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
+            child: Semantics(header: true, child: Text(title!, style: tkDisplay(size: 20, letterSpacing: -0.4, color: t.text))),
+          ),
+        Container(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+          child: TkTheme.recolour(
+            context,
+            (x) => x.copyWith(field: look.ground, tkSoft: look.ground),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 12), children[i]],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

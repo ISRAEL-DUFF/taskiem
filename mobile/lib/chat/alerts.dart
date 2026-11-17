@@ -15,6 +15,7 @@ import '../kit/kit.dart';
 import '../kit/sheet.dart';
 import 'approve.dart';
 import '../kit/tap_area.dart';
+import '../theme/look.dart' show TkLook;
 import '../theme/theme.dart';
 import 'cards.dart' show CardPill;
 import 'give_task.dart';
@@ -207,17 +208,19 @@ class _BriefingCardState extends State<BriefingCard> {
       Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // As drawn: the greeting, then the day and time on its line.
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$hello, ${firstName(me?.user?.name, me?.user?.email)}'.toUpperCase(),
-                  style: tkText(size: 11, weight: 700, letterSpacing: 0.88, color: t.brandDark),
-                ),
-                const SizedBox(height: 2),
-                Text('${weekdays[day.weekday - 1]}${b.now.isNotEmpty ? ' · ${b.now}' : ''}', style: tkText(size: 14, color: mix(0.72))),
-              ],
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '$hello, ${firstName(me?.user?.name, me?.user?.email)}'.toUpperCase(),
+                    style: tkText(size: 11, weight: 700, letterSpacing: 0.88, color: t.brandDark),
+                  ),
+                  const TextSpan(text: '   '),
+                  TextSpan(text: '${weekdays[day.weekday - 1]}${b.now.isNotEmpty ? ' · ${b.now}' : ''}', style: tkText(size: 12.5, color: mix(0.72))),
+                ],
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -247,64 +250,66 @@ class _BriefingCardState extends State<BriefingCard> {
           excludeSemantics: true,
           child: TkPress(
             onTap: () => widget.onAsk?.call('how did we do yesterday'),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            // As drawn: the figure, then the week's bars across the card.
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Sales yesterday', style: tkText(size: 14, color: mix(0.8))),
-                      const SizedBox(height: 2),
-                      Text(naira(sales.yesterdayKobo ?? 0), style: tkText(size: 34, weight: 800, letterSpacing: -0.68, color: on)),
-                      if (change != null) ...[const SizedBox(height: 2), Text(change, style: tkText(size: 14, weight: 700, color: t.brandDark))],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  height: 58,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      for (var i = 0; i < week.length; i++) ...[
-                        if (i > 0) const SizedBox(width: 5),
-                        // `.tk-brief-bars > span`: each grows 50 ms after the last.
-                        TkGrow.bar(
-                          index: i,
-                          child: Container(
-                          width: 9,
-                          height: (heights[i] * 100).round() / 100 * 58,
-                          decoration: BoxDecoration(
-                            color: i == week.length - 1 ? t.brandDark : cssMix(t.brandDark, const Color(0x00000000), 0.45),
-                            borderRadius: BorderRadius.circular(3),
+                Text('Sales yesterday', style: tkText(size: 13.5, color: mix(0.8))),
+                const SizedBox(height: 2),
+                Text(naira(sales.yesterdayKobo ?? 0), style: tkText(size: 32, weight: 800, letterSpacing: -0.64, color: on)),
+                if (change != null) ...[const SizedBox(height: 2), Text(change, style: tkText(size: 13.5, weight: 600, color: t.brandDark))],
+                if (week.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    height: 30,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        for (var i = 0; i < week.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 6),
+                          // `.tk-brief-bars > span`: each grows 50 ms after the last.
+                          Expanded(
+                            child: TkGrow.bar(
+                              index: i,
+                              child: Container(
+                                height: 8 + (heights[i] * 100).round() / 100 * 22,
+                                decoration: BoxDecoration(
+                                  color: i == week.length - 1 ? t.brandDark : cssMix(t.brandDark, const Color(0x00000000), 0.45),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
         ),
       if (tiles.isNotEmpty) _AutoFitGrid(min: 96, gap: 8, children: tiles),
-      Semantics(
-        button: true,
-        label: 'Got it: put the briefing away for today',
-        onTap: _gotIt,
-        excludeSemantics: true,
-        // chat.css `.tk-brief .tk-brief-ok`: plain words, 40 px tall, 10 px
-        // below the tiles (over kit.css's pill).
-        child: TkPress(
-          onTap: _gotIt,
-          child: Container(
-            margin: const EdgeInsets.only(top: 10),
-            constraints: const BoxConstraints(minHeight: 40),
-            alignment: Alignment.center,
-            child: Text('Got it', style: tkText(size: 13, weight: 600, lineHeight: 1.2, color: mix(0.78))),
-          ),
+      // As drawn: a lime pill at the left, 12 px below the tiles.
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: TapArea(child: Semantics(
+            button: true,
+            label: 'Got it: put the briefing away for today',
+            onTap: _gotIt,
+            excludeSemantics: true,
+            child: TkPress(
+              onTap: _gotIt,
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 36),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+                decoration: BoxDecoration(color: const Color(0xFFC8F169), borderRadius: BorderRadius.circular(999)),
+                child: Text('Got it', style: tkText(size: 13.5, weight: 700, lineHeight: 1.2, color: const Color(0xFF0D3B2E))),
+              ),
+            ),
+          )),
         ),
       ),
       if (_failed)
@@ -422,6 +427,11 @@ class _AlertCardsState extends State<AlertCards> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: _gaps([
+              // As drawn: NEEDS YOU over the cards.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
+                child: ExcludeSemantics(child: Text('NEEDS YOU', style: tkText(size: 11.5, weight: 700, letterSpacing: 0.6, color: TkTheme.tokens(context).muted))),
+              ),
               // chat.css `.tk-alerts > li`: each rises 300 ms after the last.
               for (final (i, a) in shown.indexed)
                 TkIn.cardRise(
@@ -455,8 +465,12 @@ BoxDecoration _cardLook(TkTokens t, bool dark) => BoxDecoration(
 
 /// `.tk-alert-go`, `.tk-alert-soft`, `.tk-approve-go`: the cards' 52 px pills.
 class _Pill extends StatelessWidget {
-  const _Pill({required this.label, required this.named, required this.onTap, this.kind = 'go', this.icon});
+  const _Pill({required this.label, required this.named, required this.onTap, this.kind = 'go', this.icon, this.height = 52, this.said});
   final String label;
+  final double height;
+
+  /// The words in full for a screen reader, when [label] is short.
+  final String? said;
 
   /// The card it is for, said after the label ("Later: Rice is running low").
   final String named;
@@ -469,21 +483,22 @@ class _Pill extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
     final (bg, ink) = switch (kind) {
-      'soft' => (t.tkSoft, t.text),
+      'soft' => (dark ? const Color(0xFF000000) : t.tkSoft, t.text),
       'approve' => (t.brandDark, t.brand),
       _ => dark ? (t.brandDark, t.brandDarkText) : (t.brand, t.tkOnPine),
     };
     return Semantics(
+      container: true,
       button: true,
       enabled: onTap != null,
-      label: '$label: $named',
+      label: '${said ?? label}: $named',
       onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         scale: 0.97,
         onTap: onTap,
         child: Container(
-          constraints: const BoxConstraints(minHeight: 52),
+          constraints: BoxConstraints(minHeight: height),
           padding: EdgeInsets.symmetric(horizontal: kind == 'go' ? 16 : (kind == 'soft' ? 22 : 18)),
           alignment: Alignment.center,
           decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
@@ -512,61 +527,6 @@ String staffTile(int inNow, int late) => ['$inNow in', if (late > 0) '$late late
 String tasksTile(int today, int late) {
   final w = [if (today > 0) '$today due today', if (late > 0) '$late late'].join(' · ');
   return w.isEmpty ? 'None due' : w;
-}
-
-/// `.tk-alert-acts { display: flex; flex-wrap: wrap; gap: 10px }`: the
-/// next step (`.tk-alert-go { flex: 1; min-width: min(100%, 180px) }`)
-/// then the soft pills, each as wide as its words; a line that is full
-/// wraps, and the step grows into the room left on its line.
-class _Acts extends StatelessWidget {
-  const _Acts({required this.pills});
-  final List<({Widget pill, String words, bool grow})> pills;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, box) {
-        final room = box.maxWidth;
-        double base(({Widget pill, String words, bool grow}) p) {
-          final w = (TextPainter(
-                text: TextSpan(text: p.words, style: tkText(size: 15, weight: 700, lineHeight: 1.2)),
-                textDirection: TextDirection.ltr,
-              )..layout()).width +
-              (p.grow ? 32 : 44);
-          return (p.grow ? (w < 180 ? 180.0 : w) : w).clamp(0.0, room);
-        }
-
-        final lines = <List<(int, double)>>[[]];
-        var used = 0.0;
-        for (var i = 0; i < pills.length; i++) {
-          final w = base(pills[i]);
-          final gap = lines.last.isEmpty ? 0.0 : 10.0;
-          if (lines.last.isNotEmpty && used + gap + w > room) {
-            lines.add([]);
-            used = 0;
-          }
-          used += (lines.last.isEmpty ? 0.0 : 10.0) + w;
-          lines.last.add((i, w));
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (final (n, line) in lines.indexed) ...[
-              if (n > 0) const SizedBox(height: 10),
-              Row(
-                children: [
-                  for (final (k, (i, w)) in line.indexed) ...[
-                    if (k > 0) const SizedBox(width: 10),
-                    if (pills[i].grow) Expanded(child: pills[i].pill) else SizedBox(width: w, child: pills[i].pill),
-                  ],
-                ],
-              ),
-            ],
-          ],
-        );
-      },
-    );
-  }
 }
 
 /// ChatAlerts.tsx AlertCard: what it is, and its next step with Later.
@@ -605,7 +565,7 @@ class _AlertCardState extends State<_AlertCard> {
   Future<void> _post(String path, [Object? body]) => widget.auth.transport.send('POST', path, body: body ?? const {});
 
   /// The card's next step, by its kind and what the person may do.
-  ({String words, VoidCallback go})? _step() {
+  ({String words, String? short, VoidCallback go})? _step() {
     final a = widget.a;
     final can = widget.auth.can;
     final id = Uri.encodeComponent(a.id ?? '');
@@ -613,32 +573,35 @@ class _AlertCardState extends State<_AlertCard> {
     switch (a.kind) {
       case 'low_stock':
         final r = a.reorder;
-        if (r != null) return (words: 'Reorder ${r.quantity} from ${r.supplier}', go: () => open?.call('reorder', a));
-        return (words: can('table.edit') ? 'Record stock in' : 'Open stock', go: () => open?.call('stock', a));
+        // As drawn: "Reorder 10" on the button; who from, in its line and
+        // said to a screen reader.
+        if (r != null) return (words: 'Reorder ${r.quantity} from ${r.supplier}', short: 'Reorder ${r.quantity}', go: () => open?.call('reorder', a));
+        return (words: can('table.edit') ? 'Record stock in' : 'Open stock', short: null, go: () => open?.call('stock', a));
       case 'overdue':
         if (!can('invoice.manage')) return null;
         // Sent: the card is put off for a day, not shown again at once.
         return (
           words: 'Send reminder',
+          short: null,
           go: () => _run(() async {
             await _post('/v1/invoices/$id/send');
             await _post('/v1/chat-alerts/later', {'key': a.key, 'hours': 24});
           }),
         );
       case 'new_order':
-        return (words: 'Review order', go: () => open?.call('orders', a));
+        return (words: 'Review order', short: null, go: () => open?.call('orders', a));
       case 'deal':
         if (!can('storefront.manage')) return null;
-        return (words: 'Agree${a.amountKobo != null ? ' ${naira(a.amountKobo!)}' : ''}', go: () => _run(() => _post('/v1/trade-orders/$id/accept')));
+        return (words: 'Agree${a.amountKobo != null ? ' ${naira(a.amountKobo!)}' : ''}', short: null, go: () => _run(() => _post('/v1/trade-orders/$id/accept')));
       case 'rider':
-        return (words: 'Assign rider', go: () => open?.call('rider', a));
+        return (words: 'Assign rider', short: null, go: () => open?.call('rider', a));
       case 'confirm':
         if (!can('storefront.manage')) return null;
-        return (words: 'Confirm, pay the fee', go: () => _run(() => _post('/v1/storefront/orders/${Uri.encodeComponent(a.reference ?? '')}/confirm')));
+        return (words: 'Confirm, pay the fee', short: null, go: () => _run(() => _post('/v1/storefront/orders/${Uri.encodeComponent(a.reference ?? '')}/confirm')));
       case 'order_draft':
-        return (words: 'Open the order', go: () => open?.call('customer', a));
+        return (words: 'Open the order', short: null, go: () => open?.call('customer', a));
       case 'unmatched':
-        return can('invoice.manage') ? (words: 'Match it', go: () => open?.call('match', a)) : null;
+        return can('invoice.manage') ? (words: 'Match it', short: null, go: () => open?.call('match', a)) : null;
     }
     return null;
   }
@@ -649,10 +612,12 @@ class _AlertCardState extends State<_AlertCard> {
     final dark = TkTheme.of(context).mode == TkMode.dark;
     final a = widget.a;
     final look = alertLook[a.kind] ?? (icon: 'info', tone: CardTone.plain);
+    final colours = TkLook.of(context);
     final (tileBg, tileInk) = switch (look.tone) {
-      CardTone.warn => (t.tkWarnBg, t.tkWarnInk),
-      CardTone.lime => (t.tkLimeSoft, dark ? t.brandDark : t.brand),
-      _ => (t.tkSoft, t.text),
+      CardTone.warn => (colours.orange, const Color(0xFFFFFFFF)),
+      CardTone.danger => (colours.red, const Color(0xFFFFFFFF)),
+      CardTone.lime => (const Color(0xFFC8F169), const Color(0xFF0D3B2E)),
+      _ => (colours.teal, const Color(0xFFFFFFFF)),
     };
     final step = _step();
     // ChatAlerts.tsx: "Give this to…" a low stock item, for those who give tasks.
@@ -660,54 +625,91 @@ class _AlertCardState extends State<_AlertCard> {
     final give = a.kind == 'low_stock' && (a.id ?? '').isNotEmpty && can('member.manage|invoice.manage')
         ? () => giveThis(context, widget.auth, (kind: 'stock', id: a.id!, name: a.title.replaceFirst(RegExp(r' is running low$'), '')))
         : null;
+    final later = _busy ? null : () => _run(() => _post('/v1/chat-alerts/later', {'key': a.key}));
+    // As drawn: compact; the next step short, Give this to… as a person's
+    // icon, Later as the ✕ in the corner.
     return Semantics(
       container: true,
       label: a.title,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(14, 12, 10, 14),
         decoration: _cardLook(t, dark),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // As drawn: a solid square in the card's colour.
                 Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(color: tileBg, borderRadius: BorderRadius.circular(12)),
+                  width: 34,
+                  height: 34,
+                  margin: const EdgeInsets.only(top: 2),
+                  decoration: BoxDecoration(color: tileBg, borderRadius: BorderRadius.circular(10)),
                   alignment: Alignment.center,
-                  child: TkIcon(look.icon, size: 22, color: tileInk),
+                  child: TkIcon(look.icon, size: 18, stroke: 2, color: tileInk),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(a.title, style: tkText(size: 16, weight: 700, color: t.text)),
+                      Text(a.title, style: tkText(size: 15.5, weight: 700, lineHeight: 1.3, color: t.text)),
                       const SizedBox(height: 2),
-                      Text(a.line, style: tkText(size: 14, color: t.muted)),
+                      Text(a.line, style: tkText(size: 13, lineHeight: 1.35, color: t.muted)),
                     ],
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            _Acts(
-              pills: [
-                if (step != null) (pill: _Pill(label: step.words, named: a.title, onTap: _busy ? null : step.go), words: step.words, grow: true),
-                if (give != null) (pill: _Pill(label: 'Give this to…', named: a.title, kind: 'soft', onTap: _busy ? null : give), words: 'Give this to…', grow: false),
-                (
-                  pill: _Pill(
-                    label: 'Later',
-                    named: a.title,
-                    kind: 'soft',
-                    onTap: _busy ? null : () => _run(() => _post('/v1/chat-alerts/later', {'key': a.key})),
+                TapArea(
+                  child: Semantics(
+                    button: true,
+                    enabled: later != null,
+                    label: 'Later: ${a.title}',
+                    onTap: later,
+                    excludeSemantics: true,
+                    child: TkPress(
+                      onTap: later,
+                      child: SizedBox(width: 30, height: 30, child: Center(child: TkIcon('close', size: 16, color: t.muted))),
+                    ),
                   ),
-                  words: 'Later',
-                  grow: false,
                 ),
               ],
             ),
+            if (step != null || give != null) ...[
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.only(left: 48, right: 4),
+                child: Row(
+                  children: [
+                    if (step != null)
+                      Expanded(
+                        child: TapArea(child: _Pill(label: step.short ?? step.words, said: step.words, named: a.title, height: 34, onTap: _busy ? null : step.go)),
+                      ),
+                    if (give != null) ...[
+                      const SizedBox(width: 8),
+                      TapArea(
+                        child: Semantics(
+                          button: true,
+                          label: 'Give this to…: ${a.title}',
+                          onTap: _busy ? null : give,
+                          excludeSemantics: true,
+                          child: TkPress(
+                            onTap: _busy ? null : give,
+                            child: Container(
+                              width: 34,
+                              height: 34,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(color: t.tkSoft, shape: BoxShape.circle),
+                              child: TkIcon('b-people', size: 17, color: t.text),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
             if (_error != null) TkErrorBox(_error!),
           ],
         ),
@@ -731,10 +733,8 @@ class _ApprovalCard extends StatelessWidget {
     final ap = a.approval;
     if (ap == null) return const SizedBox.shrink();
     final w = subjectWords(ap.subject);
-    final stepUp = ap.stepUp as String?;
     final notes = <Widget>[
       if (ap.firstPayment == true) const CardPill('First payment to this account', CardTone.warn),
-      if (stepUp != null) CardPill(stepUp == 'passkey' ? 'Needs your passkey' : 'Needs your passkey or a code', CardTone.plain),
       if (ap.levels > 1) CardPill('Level ${ap.level} of ${ap.levels}', CardTone.plain),
       if (ap.required > 1) CardPill('${ap.approvals} of ${ap.required} approvals', CardTone.plain),
     ];
@@ -742,11 +742,12 @@ class _ApprovalCard extends StatelessWidget {
       Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Expanded(child: Text('NEEDS YOUR OK', style: tkText(size: 11, weight: 700, letterSpacing: 0.88, color: t.muted))),
+          // As drawn: the kicker in the warning's colour.
+          Expanded(child: Text('NEEDS YOUR OK', style: tkText(size: 11, weight: 700, letterSpacing: 0.88, color: t.tkWarnInk))),
           Text(ago(a.at, now), style: tkText(size: 13, color: t.muted)),
         ],
       ),
-      Text(a.who != null ? '${a.who} asks: ${a.title}' : a.title, style: tkText(size: 16, color: t.text)),
+      Text(a.who != null ? '${a.who} asks: ${a.title}' : a.title, style: tkText(size: 15, weight: 600, lineHeight: 1.3, color: t.text)),
       if (w.amount != null || w.to != null || w.account != null)
         Wrap(
           alignment: WrapAlignment.spaceBetween,
@@ -754,12 +755,12 @@ class _ApprovalCard extends StatelessWidget {
           spacing: 12,
           runSpacing: 4,
           children: [
-            if (w.amount != null) Text(w.amount!, style: tkText(size: 30, weight: 800, letterSpacing: -0.6, color: t.text)),
+            if (w.amount != null) Text(w.amount!, style: tkText(size: 28, weight: 800, letterSpacing: -0.6, color: t.text)),
             if (w.to != null || w.account != null)
               Text(
                 [if (w.to != null) 'to ${w.to}', ?w.account].join('\n'),
                 textAlign: TextAlign.right,
-                style: tkText(size: 14, color: t.muted),
+                style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted),
               ),
           ],
         ),
@@ -776,9 +777,10 @@ class _ApprovalCard extends StatelessWidget {
           final room = (box.maxWidth - 10 - no - yes).clamp(0.0, double.infinity);
           return Row(
             children: [
-              SizedBox(width: no + room / 2.4, child: _Pill(label: 'Decline', named: a.title, kind: 'soft', onTap: () => onDecide('rejected'))),
+              // As drawn: 40 px; Approve in pine (lime in the dark).
+              SizedBox(width: no + room / 2.4, child: TapArea(child: _Pill(label: 'Decline', named: a.title, kind: 'soft', height: 40, onTap: () => onDecide('rejected')))),
               const SizedBox(width: 10),
-              SizedBox(width: yes + room * 1.4 / 2.4, child: _Pill(label: 'Approve', named: a.title, kind: 'approve', icon: 'fingerprint', onTap: () => onDecide('approved'))),
+              SizedBox(width: yes + room * 1.4 / 2.4, child: TapArea(child: _Pill(label: 'Approve', named: a.title, icon: 'fingerprint', height: 40, onTap: () => onDecide('approved')))),
             ],
           );
         },
@@ -787,10 +789,19 @@ class _ApprovalCard extends StatelessWidget {
     return Semantics(
       container: true,
       label: 'Needs your OK: ${a.title}',
+      // As drawn: an orange edge down its left side.
       child: Container(
-        padding: const EdgeInsets.all(16),
         decoration: _cardLook(t, dark),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _gaps(parts, 14)),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 14, 14),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: _gaps(parts, 10)),
+            ),
+            Positioned(left: 0, top: 0, bottom: 0, child: Container(width: 4, color: const Color(0xFFF2994A))),
+          ],
+        ),
       ),
     );
   }

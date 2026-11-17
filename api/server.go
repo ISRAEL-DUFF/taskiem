@@ -656,6 +656,7 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/bookings", s.listStorefrontBookings)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/bookings/{reference}/cancel", s.cancelStorefrontBooking)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/bookings/{reference}/move", s.moveStorefrontBooking)
+			r.With(s.need(PermStorefrontManage)).Get("/storefront/bookings/{reference}/times", s.storefrontBookingTimes)
 			r.With(s.need(PermStorefrontManage)).Get("/storefront/domains", s.listStorefrontDomains)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/domains", s.addStorefrontDomain)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/storefront/domains/{id}/verify", s.verifyStorefrontDomain)

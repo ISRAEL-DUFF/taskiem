@@ -21,7 +21,10 @@ import 'invoices_page.dart' show fmtTime, openInvoice;
 import 'money_sheets.dart' show dateLabel, invoiceStatus;
 import 'storefront_orders_page.dart' show openStorefrontOrder;
 import 'words.dart' show CardTone, naira;
-import '../kit/mobile.dart' show TkRoute;
+import '../kit/icon.dart';
+import '../kit/look.dart';
+import '../kit/mobile.dart';
+import '../theme/look.dart';
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -364,9 +367,12 @@ Widget _problem(TkTokens t, String text) => Semantics(
 
 /// A part that opens and shuts (`details`).
 class _Fold extends StatefulWidget {
-  const _Fold({required this.title, required this.children});
+  const _Fold({required this.title, required this.children, this.bare = false});
   final String title;
   final List<Widget> children;
+
+  /// In its own sheet: open, with no toggle.
+  final bool bare;
 
   @override
   State<_Fold> createState() => _FoldState();
@@ -376,7 +382,9 @@ class _FoldState extends State<_Fold> {
   bool _open = false;
 
   @override
-  Widget build(BuildContext context) => Column(
+  Widget build(BuildContext context) => widget.bare
+      ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: widget.children)
+      : Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       Align(
@@ -473,6 +481,7 @@ class _InvoiceMatchPageState extends State<InvoiceMatchPage> with Polling {
     Widget card(Waiting p) => _WaitingCard(key: ValueKey(p.entry), auth: widget.auth, payment: p, manage: _manage, open: open, orders: _orders, onDone: _done);
     return TkPageScreen(
       title: 'To match',
+      titleSize: 30,
       description:
           'Money that came in without the reference Taskiem gave, and the invoices or storefront orders it may be for. Match it, or say it is not that one.',
       backLabel: 'Back to Invoices',
@@ -491,7 +500,7 @@ class _InvoiceMatchPageState extends State<InvoiceMatchPage> with Polling {
           for (final p in waiting) card(p),
         if (_leftError != null) TkErrorBox(_leftError!),
         if (_unmatched.isNotEmpty) ...[
-          Text('No invoice suggested', style: tkText(size: 18, weight: 700, color: t.text)),
+          TkSection(title: 'No invoice suggested', count: _unmatched.length, children: const []),
           Text(
             'Money that came in with nothing to suggest, or whose suggestions were all turned down. Match it by hand if you know the invoice or order.',
             style: tkHint(t),
@@ -530,8 +539,6 @@ class _WaitingCard extends StatefulWidget {
 class _WaitingCardState extends State<_WaitingCard> {
   bool _busy = false;
   String? _error;
-  String _other = '';
-  bool _otherTried = false;
 
   Waiting get _p => widget.payment;
 
@@ -557,162 +564,223 @@ class _WaitingCardState extends State<_WaitingCard> {
   void _openTarget(Map<String, dynamic> c) =>
       isOrder(c) ? openStorefrontOrder(context, widget.auth, _str(c['number'])) : openInvoice(context, widget.auth, _str(c['number']));
 
+  /// A form of the card's in its own sheet; done there, the sheet closes.
+  void _sheet(String title, Widget Function(void Function(String) done) body) => showTkSheet<void>(
+    context,
+    (sheet) => TkAppLook(
+      child: TkSheet(
+        title: title,
+        crumb: amountWords(_p.amount),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          children: [
+            body((line) {
+              Navigator.of(sheet).pop();
+              widget.onDone(line);
+            }),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final words = pickerWords(widget.orders.isNotEmpty);
+    final left = leftWords(_p.amount, _p.left);
+    final split = _p.candidates.where((c) => c['split'] is Map && _maps((c['split'] as Map)['parts']).isNotEmpty).firstOrNull;
+    // As drawn (docs/spec/mobile-app-look.md, "The remaining screens"): the
+    // payment large; what it may be for, each with how sure and why as
+    // ticks, Match or ✕; splitting it and matching it elsewhere as rows that
+    // open their sheets.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TkTopCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TkEyebrow(kindWords(_p.kind), color: look.tealInk, trailing: fmtTime(_p.received)),
+              const SizedBox(height: 6),
+              Semantics(
+                header: true,
+                child: FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(amountWords(_p.amount), style: tkFigure(context))),
+              ),
+              Text('${channelWords(_p.channel)} · ${_p.reference.isEmpty ? 'no reference' : _p.reference}', style: tkText(size: 13, color: t.muted)),
+              if (_p.held.isNotEmpty) ...[const SizedBox(height: 8), _notice(t, 'Held for you: ${_p.held}. Nothing was counted towards an invoice.')],
+              if (left.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(left, style: tkHint(t))),
+              if (_p.candidates.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Text('MAY BE FOR', semanticsLabel: 'May be for', style: tkText(size: 11.5, weight: 700, letterSpacing: 0.4, color: t.muted)),
+              ],
+              for (final c in _p.candidates)
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  decoration: BoxDecoration(color: t.tkSoft, borderRadius: BorderRadius.circular(16)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: Align(alignment: Alignment.centerLeft, child: TkLink(label: targetLabel(c), onTap: () => _openTarget(c)))),
+                          const SizedBox(width: 8),
+                          Semantics(
+                            label: 'Score ${c['score']} of 100',
+                            child: TkPill(scoreWords(_int(c['score'])).label, tone: scoreWords(_int(c['score'])).tone),
+                          ),
+                        ],
+                      ),
+                      if (isOrder(c))
+                        Text('${naira(_int(c['due_kobo']))} to pay${_str(c['customer']).isNotEmpty ? ' · ${c['customer']}' : ''}', style: tkText(size: 12.5, color: t.muted)),
+                      if (((c['reasons'] as List?) ?? const []).isNotEmpty)
+                        Semantics(
+                          container: true,
+                          label: 'Why ${targetLabel(c)}',
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
+                              children: [
+                                for (final r in (c['reasons'] as List).whereType<String>())
+                                  Container(
+                                    padding: const EdgeInsets.fromLTRB(6, 3, 9, 3),
+                                    decoration: BoxDecoration(color: look.lime.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(999)),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        TkIcon('b-check', size: 13, stroke: 2.4, color: look.limeInk),
+                                        const SizedBox(width: 4),
+                                        Flexible(child: Text(r, style: tkText(size: 12, weight: 600, color: look.limeInk))),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      if (widget.manage) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TkSmallButton(
+                                label: 'Match',
+                                semantics: 'Match to ${targetLabel(c)}',
+                                primary: true,
+                                onPressed: _busy ? null : () => _decide(c, 'confirm'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            TkHeadButton(icon: 'b-x', label: 'Not this one: ${targetLabel(c)}', onCard: true, onTap: _busy ? () {} : () => _decide(c, 'reject')),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_error!)),
+            ],
+          ),
+        ),
+        if (widget.manage) ...[
+          const SizedBox(height: 12),
+          TkSection(
+            inset: 56,
+            children: [
+              if (split != null)
+                TkListRow(
+                  title: 'Split across the customer’s invoices',
+                  icon: 'b-flow',
+                  square: look.violet,
+                  onTap: () => _sheet(
+                    'Split across the customer’s invoices',
+                    (done) => _SplitForm(auth: widget.auth, suggestion: split, left: _intOrNull(split['left_kobo']) ?? _p.amount ?? 0, onDone: done, bare: true),
+                  ),
+                ),
+              TkListRow(
+                title: words.summary.replaceAll('…', ''),
+                icon: 'b-receipt',
+                square: look.blue,
+                onTap: () => _sheet(words.summary.replaceAll('…', ''), (done) => _OtherMatch(auth: widget.auth, payment: _p, open: widget.open, orders: widget.orders, onDone: done)),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Match to another invoice or order: one picked; or split by hand.
+class _OtherMatch extends StatefulWidget {
+  const _OtherMatch({required this.auth, required this.payment, required this.open, required this.orders, required this.onDone});
+  final Auth auth;
+  final Waiting payment;
+  final List<Map<String, dynamic>> open;
+  final List<Map<String, dynamic>> orders;
+  final void Function(String line) onDone;
+
+  @override
+  State<_OtherMatch> createState() => _OtherMatchState();
+}
+
+class _OtherMatchState extends State<_OtherMatch> {
+  String _other = '';
+  bool _tried = false;
+  bool _busy = false;
+  String? _error;
+
+  Waiting get _p => widget.payment;
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final choices = matchChoices(widget.open, widget.orders, _p.candidates);
     final words = pickerWords(widget.orders.isNotEmpty);
     final chosen = choices.where((x) => x.value == _other).firstOrNull;
-    final left = leftWords(_p.amount, _p.left);
-    return TkPageCard(
+    if (choices.isEmpty) return Text(words.none, style: tkHint(t));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Semantics(
-          header: true,
-          child: Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(
-                  text: amountWords(_p.amount),
-                  style: tkText(size: 20, weight: 700, color: t.text),
-                ),
-                TextSpan(text: '  ${kindWords(_p.kind)}', style: tkHint(t)),
-              ],
-            ),
+        TkKitField(
+          field: false,
+          label: words.label,
+          hint: words.hint,
+          child: TkSmallButton(
+            label: chosen?.label ?? words.empty,
+            semantics: '${words.label}: ${chosen?.label ?? 'none chosen'}',
+            onPressed: () async {
+              final pick = await showTkModalChoices(context, title: words.label, value: _other, choices: [for (final x in choices) (x.value, x.label)]);
+              if (pick != null) setState(() => _other = pick);
+            },
           ),
         ),
-        const SizedBox(height: 8),
-        for (final (k, v) in [
-          ('Received', fmtTime(_p.received)),
-          ('Where', channelWords(_p.channel)),
-          ('Reference', _p.reference.isEmpty ? 'None' : _p.reference),
-        ])
-          MergeSemantics(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: '$k  ',
-                      style: tkText(size: 13, weight: 600, color: t.muted),
-                    ),
-                    TextSpan(
-                      text: v,
-                      style: tkText(size: 15, color: t.text),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        if (_p.held.isNotEmpty) _notice(t, 'Held for you: ${_p.held}. Nothing was counted towards an invoice.'),
-        if (left.isNotEmpty) Text(left, style: tkHint(t)),
-        if (_p.candidates.isNotEmpty) ...[const SizedBox(height: 8), Text('May be for', style: tkText(size: 16, weight: 700, color: t.text))],
-        for (final c in _p.candidates)
-          Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    TkLink(label: targetLabel(c), onTap: () => _openTarget(c)),
-                    Semantics(
-                      label: 'Score ${c['score']} of 100',
-                      child: TkPill(scoreWords(_int(c['score'])).label, tone: scoreWords(_int(c['score'])).tone),
-                    ),
-                    if (isOrder(c))
-                      Text('${naira(_int(c['due_kobo']))} to pay${_str(c['customer']).isNotEmpty ? ' · ${c['customer']}' : ''}', style: tkHint(t)),
-                  ],
-                ),
-                if (((c['reasons'] as List?) ?? const []).isNotEmpty)
-                  Semantics(
-                    container: true,
-                    label: 'Why ${targetLabel(c)}',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [for (final r in (c['reasons'] as List).whereType<String>()) Text('· $r', style: tkHint(t))],
-                    ),
-                  ),
-                if (widget.manage) ...[
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      TkSmallButton(
-                        label: 'Match',
-                        semantics: 'Match to ${targetLabel(c)}',
-                        primary: true,
-                        onPressed: _busy ? null : () => _decide(c, 'confirm'),
-                      ),
-                      TkSmallButton(label: 'Not this one', semantics: 'Not this one: ${targetLabel(c)}', onPressed: _busy ? null : () => _decide(c, 'reject')),
-                    ],
-                  ),
-                ],
-                if (widget.manage && c['split'] is Map && _maps((c['split'] as Map)['parts']).isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: _SplitForm(auth: widget.auth, suggestion: c, left: _intOrNull(c['left_kobo']) ?? _p.amount ?? 0, onDone: widget.onDone),
-                  ),
-              ],
-            ),
-          ),
-        if (widget.manage) ...[
-          const SizedBox(height: 12),
-          _Fold(
-            title: words.summary,
-            children: choices.isEmpty
-                ? [Text(words.none, style: tkHint(t))]
-                : [
-                    TkKitField(
-                      field: false,
-                      label: words.label,
-                      hint: words.hint,
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: TkSmallButton(
-                          label: chosen?.label ?? words.empty,
-                          semantics: '${words.label}: ${chosen?.label ?? 'none chosen'}',
-                          onPressed: () async {
-                            final pick = await showTkModalChoices(
-                              context,
-                              title: words.label,
-                              value: _other,
-                              choices: [for (final x in choices) (x.value, x.label)],
-                            );
-                            if (pick != null) setState(() => _other = pick);
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TkSmallButton(
-                        label: words.submit,
-                        onPressed: _busy
-                            ? null
-                            : () {
-                                setState(() => _otherTried = true);
-                                if (_other.isEmpty) return;
-                                _run(() async {
-                                  final r = await widget.auth.transport.send('POST', entryMatchPath(_p.entry), body: matchRequest(_other));
-                                  return heldMatchLine(r) ?? matchedLine(_p.amount, chosen?.number ?? _other, chosen?.kind ?? 'invoice');
-                                });
-                              },
-                      ),
-                    ),
-                    if (_otherTried && _other.isEmpty) _problem(t, words.missing),
-                    const SizedBox(height: 12),
-                    _HandSplit(auth: widget.auth, payment: _p, choices: matchChoices(widget.open, widget.orders, const []), onDone: widget.onDone),
-                  ],
-          ),
-        ],
+        const SizedBox(height: 10),
+        TkSmallButton(
+          label: words.submit,
+          primary: true,
+          onPressed: _busy
+              ? null
+              : () async {
+                  setState(() => _tried = true);
+                  if (_other.isEmpty) return;
+                  setState(() => (_busy = true, _error = null));
+                  try {
+                    final r = await widget.auth.transport.send('POST', entryMatchPath(_p.entry), body: matchRequest(_other));
+                    widget.onDone(heldMatchLine(r) ?? matchedLine(_p.amount, chosen?.number ?? _other, chosen?.kind ?? 'invoice'));
+                  } on Object catch (e) {
+                    if (mounted) setState(() => (_error = errorWords(e), _busy = false));
+                  }
+                },
+        ),
+        if (_tried && _other.isEmpty) _problem(t, words.missing),
         if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: TkErrorBox(_error!)),
+        const SizedBox(height: 16),
+        _HandSplit(auth: widget.auth, payment: _p, choices: matchChoices(widget.open, widget.orders, const []), onDone: widget.onDone),
       ],
     );
   }
@@ -823,7 +891,8 @@ class _HandSplitState extends State<_HandSplit> {
 
 /// Split a payment across the customer's open invoices, as offered.
 class _SplitForm extends StatefulWidget {
-  const _SplitForm({required this.auth, required this.suggestion, required this.left, required this.onDone});
+  const _SplitForm({required this.auth, required this.suggestion, required this.left, required this.onDone, this.bare = false});
+  final bool bare;
   final Auth auth;
   final Map<String, dynamic> suggestion;
   final int left;
@@ -869,6 +938,7 @@ class _SplitFormState extends State<_SplitForm> {
     final rest = total == null ? 0 : (widget.left - total).clamp(0, widget.left < 0 ? 0 : widget.left);
     final number = _str(widget.suggestion['number']);
     return _Fold(
+      bare: widget.bare,
       title: 'Split across the customer’s invoices…',
       children: [
         Text('${splitHint(_split, number)} Each part is a match of its own, and can be undone on its own.', style: tkHint(t)),

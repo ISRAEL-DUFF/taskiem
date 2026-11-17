@@ -4,7 +4,6 @@
 
 import 'dart:convert';
 
-import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -172,12 +171,8 @@ void main() {
       final thread = t.state<ThreadViewState<ThreadMessage>>(find.byType(ThreadView<ThreadMessage>));
       thread.scroll.jumpTo(thread.scroll.position.maxScrollExtent);
       await t.pump();
-      final words = find.textContaining("@Mama Tunde's Market", findRichText: true);
-      // Where the tag's words are laid out.
-      final para = t.renderObject<RenderParagraph>(words);
-      final at = para.text.toPlainText().indexOf("@Mama Tunde's Market") + 3;
-      final caret = para.getOffsetForCaret(TextPosition(offset: at), Rect.zero);
-      await t.tapAt(para.localToGlobal(caret + const Offset(2, 10)));
+      // The tag is a chip in the text, pressed as a link.
+      await t.tap(find.byWidgetPredicate((w) => w is TagChip && w.words.contains("Mama Tunde's Market")));
       await t.pump();
       expect(opened, [_tunde]);
     });

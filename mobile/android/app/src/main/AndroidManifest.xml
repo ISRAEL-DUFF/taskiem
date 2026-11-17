@@ -50,6 +50,8 @@
                 <data android:pathPrefix="/storefront/orders/"/>
                 <data android:pathPrefix="/bills/"/>
                 <data android:pathPrefix="/purchases/"/>
+                <!-- A password reset's link (lib/screens/forgot_password.dart). -->
+                <data android:path="/reset-password"/>
             </intent-filter>
             <!-- The links go to app_links, not Flutter's own router. -->
             <meta-data android:name="flutter_deeplinking_enabled" android:value="false"/>

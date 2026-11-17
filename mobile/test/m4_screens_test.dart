@@ -117,7 +117,7 @@ void main() {
     final auth = _auth(server, {'passkey': true});
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ApproveSheet(a: _approval(stepUp: 'passkey_or_totp'), decision: 'approved', auth: auth)));
     await settle(t);
-    expect(find.textContaining('Your phone asks for your passkey'), findsOneWidget);
+    // As drawn: the passkey asked for is the fingerprint on Approve.
     await t.tap(find.text('Approve').last);
     await settle(t);
     final decided = server.calls.firstWhere((c) => c.path == '/v1/approvals/r1/pay');
@@ -131,9 +131,13 @@ void main() {
     server.calls.clear();
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ApproveSheet(key: const ValueKey('again'), a: _approval(stepUp: 'passkey_or_totp'), decision: 'approved', auth: auth)));
     await settle(t);
+    // As drawn: the authenticator's code behind a link, until asked for.
+    expect(find.text('Or a code from your authenticator app'), findsNothing);
+    expect(find.bySemanticsLabel('Use a code from your authenticator instead'), findsOneWidget);
     await t.tap(find.text('Approve').last);
     await settle(t);
     expect(find.textContaining('Type a code from your authenticator app'), findsOneWidget);
+    expect(find.text('Or a code from your authenticator app'), findsOneWidget, reason: 'no passkey here: the code is shown');
     expect(server.calls.where((c) => c.path == '/v1/approvals/r1/pay'), isEmpty);
   });
 

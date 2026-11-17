@@ -260,20 +260,19 @@ void main() {
   testWidgets('a leak assigned, then closed as recovered', (t) async {
     final sent = await open(t, (c) => MoneyLeaksPage(auth: c.auth));
     expect(find.text('A fee of ₦500 above the agreed rate.'), findsOneWidget);
+    // Who has it, as a face: picked, then sent.
     await t.tap(find.bySemanticsLabel('Assign to: No one'));
     await t.pumpAndSettle();
     await t.tap(find.textContaining('Me ('));
-    await t.pumpAndSettle();
-    await t.tap(find.bySemanticsLabel('Assign: Fee above the agreed rate'));
     await settle(t);
     expect(sent.where((s) => !s.startsWith('GET')).last, startsWith('POST /v1/money/leaks/K1/assign {"member":"'));
     expect(find.text('Fee above the agreed rate assigned to you.'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Close: Fee above the agreed rate'));
-    await t.pump();
+    await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Close leak'));
     await t.pump();
     expect(find.text('Choose how it was closed.'), findsOneWidget);
-    await t.tap(find.textContaining('Recovered. The money came back'));
+    await t.tap(find.bySemanticsLabel(RegExp('^Recovered. The money came back')));
     await t.pump();
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Amount recovered')), matching: find.byType(EditableText)), '500');
     await t.pump();
@@ -368,9 +367,9 @@ void main() {
 
   testWidgets('fees: one changed', (t) async {
     final sent = await open(t, (c) => MoneyFeesPage(auth: c.auth));
-    expect(find.textContaining('Percent 1.5% · Flat fee ₦100 · Cap ₦2,000'), findsOneWidget);
-    await t.tap(find.bySemanticsLabel('Change the fee for paystack/main'));
-    await t.pump();
+    expect(find.textContaining('1.5% + ₦100, at most ₦2,000'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel(RegExp('^Change the fee for paystack/main')));
+    await t.pumpAndSettle();
     expect(find.text('Change the fee for paystack/main'), findsOneWidget);
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Percent')), matching: find.byType(EditableText)), '1.25');
     await t.pump();

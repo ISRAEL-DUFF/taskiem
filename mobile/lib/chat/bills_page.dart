@@ -386,7 +386,7 @@ class _BillPageState extends State<BillPage> with Polling {
                   if (_str(b['pay_account_number']).isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Text(
-                      'Put ${b['reference']} in the transfer’s note: it is counted towards this bill by itself. Without it, it counts towards your oldest invoice from $supplier first.',
+                      'Put ${b['reference']} in the transfer’s note, so it counts towards this bill.',
                       style: tkHint(t),
                     ),
                   ],
@@ -405,45 +405,26 @@ class _BillPageState extends State<BillPage> with Polling {
             ),
           ],
         ),
-      TkPageCard(
+      // As drawn: "Ofada rice, 50 kg × 3 … ₦126,000" on a card, the total large.
+      TkSection(
         title: 'What it is for',
         children: [
-          for (final l in lines)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: MergeSemantics(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_str(l['description']), style: tkText(size: 15, color: t.text)),
-                          Text('${l['quantity'] ?? 1} × ${naira(_int(l['unit_kobo']))}', style: tkHint(t)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(naira(((l['quantity'] as num? ?? 1) * _int(l['unit_kobo'])).round()), style: tkText(size: 15, weight: 600, color: t.text)),
-                  ],
+          TkBill(
+            lines: [
+              for (final l in lines)
+                (
+                  name: '${_str(l['description'])}${(l['quantity'] as num? ?? 1) != 1 ? ' × ${(l['quantity'] as num).toInt() == l['quantity'] ? (l['quantity'] as num).toInt() : l['quantity']}' : ''}',
+                  sub: '',
+                  under: null,
+                  amount: naira(((l['quantity'] as num? ?? 1) * _int(l['unit_kobo'])).round()),
                 ),
-              ),
-            ),
-          Container(height: 1, color: t.border),
-          const SizedBox(height: 10),
-          MergeSemantics(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text('Total', style: tkText(size: 15, weight: 700, color: t.text)),
-                ),
-                Text(naira(_int(b['amount_kobo'])), style: tkDisplay(size: 19, letterSpacing: -0.4, color: t.text)),
-              ],
-            ),
+            ],
+            total: naira(_int(b['amount_kobo'])),
           ),
-          const SizedBox(height: 8),
-          Text('Brought up to date ${fmtTime(_str(b['mirrored_at']))}. The supplier’s invoice is the record: a change to it shows here.', style: tkHint(t)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+            child: Text('Brought up to date ${fmtTime(_str(b['mirrored_at']))}. The supplier’s invoice is the record: a change to it shows here.', style: tkHint(t)),
+          ),
         ],
       ),
       if (manage && b['status'] != 'void' && b['status'] != 'paid')
@@ -525,7 +506,7 @@ class _BillPageState extends State<BillPage> with Polling {
             const SizedBox(height: 8),
             Text(
               ready
-                  ? 'It is paid from your Taskiem wallet once someone with the ${s['approver_role']} role approves it, and ${b['supplier_name']}’s Taskiem counts it towards ${b['reference']} by itself.'
+                  ? 'From your Taskiem wallet, once the ${s['approver_role']} approves it in their Taskiem chat.'
                   : 'Pay bills from linked suppliers from your Taskiem wallet, each after one approval.',
               style: tkText(size: 12.5, lineHeight: 1.4, color: t.muted),
             ),

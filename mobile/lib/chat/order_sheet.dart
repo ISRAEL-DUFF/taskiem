@@ -18,9 +18,11 @@ import '../kit/api_image.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart';
+import '../kit/mobile.dart' show tkInitials;
 import '../kit/modal.dart';
 import '../kit/sheet.dart';
 import '../kit/tap_area.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'buyer.dart';
@@ -498,7 +500,20 @@ class _OrderSheetState extends State<OrderSheet> {
                 ),
               ),
             // ChatBuyer.tsx `.tk-order-list.tk-stagger`: rows follow the sheet up.
-            for (final (i, it) in sec.items.indexed) side(ValueKey('item:${it.id}'), TkIn.sheetRow(index: i, child: _row(t, dark, it))),
+            // The rows on one card (docs/spec/mobile-app-look.md, "The chat").
+            for (final (i, it) in sec.items.indexed)
+              side(
+                ValueKey('item:${it.id}'),
+                TkIn.sheetRow(
+                  index: i,
+                  child: TkCardSlice(
+                    first: i == 0,
+                    last: i == sec.items.length - 1,
+                    inset: 66,
+                    child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: _row(t, dark, it)),
+                  ),
+                ),
+              ),
           ],
         ],
       );
@@ -609,24 +624,19 @@ class _OrderSheetState extends State<OrderSheet> {
     final n = _qty[it.id] ?? 0;
     final sizes = soldInSizes(it);
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: t.border))),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               ExcludeSemantics(
-                child: Container(
-                  width: 52,
-                  height: 52,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(color: t.toneSandBg, borderRadius: BorderRadius.circular(14)),
-                  alignment: Alignment.center,
-                  child: it.photo
-                      ? ApiImage(transport: _t, path: '/v1/link-chats/$_enc/photo?item=${Uri.encodeQueryComponent(it.id)}&w=320', width: 52, height: 52)
-                      : TkIcon('package', size: 22, color: t.toneSandInk),
-                ),
+                child: it.photo
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: ApiImage(transport: _t, path: '/v1/link-chats/$_enc/photo?item=${Uri.encodeQueryComponent(it.id)}&w=320', width: 40, height: 40),
+                      )
+                    : NameTile(it.name),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -785,8 +795,12 @@ class QtyStepper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    final dark = TkTheme.of(context).mode == TkMode.dark;
-    final (bg, ink) = !on ? (t.tkSoft, t.text) : (dark ? (t.brandDark, t.brandDarkText) : (t.brand, t.tkOnPine));
+    final look = TkLook.of(context);
+    // A soft track, − and + on round card buttons, the number lime-inked
+    // and the track lime-tinted once something is picked
+    // (docs/spec/mobile-app-look.md, "The chat").
+    final bg = on ? look.lime.withValues(alpha: 0.22) : look.ground;
+    final ink = on ? look.limeInk : t.text;
     Widget step(String sign, String label, VoidCallback? onTap) => TapArea(child: Semantics(
       button: true,
       enabled: onTap != null,
@@ -797,12 +811,16 @@ class QtyStepper extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
         child: SizedBox(
-          width: 44,
-          height: 44,
+          width: 40,
+          height: 40,
           child: Center(
-            // On a row in the bag, − and + stay bright though one cannot go
-            // further (chat.css `.tk-order-row .tk-qty button:disabled`).
-            child: Text(sign, style: tkText(size: 20, weight: 600, color: ink)),
+            child: Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(color: look.card, shape: BoxShape.circle),
+              child: Text(sign, style: tkText(size: 18, weight: 600, lineHeight: 1, color: t.text)),
+            ),
           ),
         ),
       ),
@@ -812,6 +830,7 @@ class QtyStepper extends StatelessWidget {
       label: 'How many $name',
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1012,6 +1031,29 @@ class _Select extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A thing for sale with no photo: its letters on a soft square of its
+/// name's own colour (docs/spec/mobile-app-look.md, "The chat").
+class NameTile extends StatelessWidget {
+  const NameTile(this.name, {super.key});
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final g = tkFaceFor(name);
+    final ink = Color.lerp(g.last, dark ? const Color(0xFFFFFFFF) : const Color(0xFF000000), dark ? 0.25 : 0.2)!;
+    return ExcludeSemantics(
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(color: g.first.withValues(alpha: dark ? 0.2 : 0.18), borderRadius: BorderRadius.circular(12)),
+        alignment: Alignment.center,
+        child: Text(tkInitials(name), maxLines: 1, textScaler: TextScaler.noScaling, style: tkText(size: 14, weight: 700, color: ink)),
       ),
     );
   }

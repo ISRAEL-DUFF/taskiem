@@ -63,7 +63,8 @@ void main() {
       ),
     ));
     await settle(t);
-    expect(find.text('Customers · 2 waiting'), findsOneWidget);
+    expect(find.text('Customers'), findsOneWidget);
+    expect(find.text('2 waiting'), findsOneWidget);
     expect(find.text('Link with the businesses you trade with'), findsOneWidget);
     expect(find.bySemanticsLabel('Find a business'), findsWidgets);
     expect(find.text('Let other businesses on Taskiem find you?'), findsOneWidget);

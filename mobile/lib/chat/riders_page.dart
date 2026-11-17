@@ -15,7 +15,7 @@ import '../app/auth.dart';
 import '../app/links.dart';
 import '../kit/forms.dart' show errorWords;
 import '../kit/kit.dart';
-import '../kit/list.dart' show TkEmpty, TkLoading, TkPill, TkRow;
+import '../kit/list.dart' show TkEmpty, TkLoading;
 import '../kit/modal.dart';
 import '../kit/page.dart';
 import '../kit/sheet.dart' show TkKitField;
@@ -24,7 +24,9 @@ import 'approve.dart' show TkTextBox;
 import 'book_sheet.dart' show lagosTime, whenLabel;
 import 'stock_page.dart' show feeInput, feeKobo;
 import 'words.dart' show CardTone, naira;
-import '../kit/mobile.dart' show TkRoute;
+import '../kit/look.dart';
+import '../kit/mobile.dart';
+import '../theme/look.dart';
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
 int _int(Object? v) => (v as num?)?.toInt() ?? 0;
@@ -70,6 +72,23 @@ String riderSub(Map<String, dynamic> r) {
     },
     if (r['rating'] is num && _int(r['ratings']) > 0) 'rated ${(r['rating'] as num).toStringAsFixed(1)} of 5 (${_int(r['ratings'])})',
     if (r['not_answering'] == true) 'not answering offers today',
+  ].join(' · ');
+}
+
+/// A rider on one line: their areas, fee, how Taskiem reaches them and
+/// their rating ("Lekki · ₦1,000 a trip · WhatsApp · ★ 4.5").
+String riderLine(Map<String, dynamic> r) {
+  final zones = ((r['zones'] as List?) ?? const []).whereType<String>().toList();
+  return [
+    zones.isNotEmpty ? zones.join(', ') : 'All areas',
+    if (_int(r['fee_kobo']) > 0) '${naira(_int(r['fee_kobo']))} a trip',
+    switch (r['reached']) {
+      'whatsapp' => 'WhatsApp',
+      'telegram' => 'Telegram',
+      _ => 'text',
+    },
+    if (r['rating'] is num && _int(r['ratings']) > 0) '★ ${(r['rating'] as num).toStringAsFixed(1)}',
+    if (r['not_answering'] == true) 'not answering today',
   ].join(' · ');
 }
 
@@ -241,6 +260,8 @@ class RidersPage extends StatefulWidget {
 class _RidersPageState extends State<RidersPage> with Polling {
   bool _retired = false;
   Map<String, dynamic>? _view;
+  int? _due;
+  int? _owedTotal;
   Object? _error;
   bool _busy = false;
   String? _actError;
@@ -260,6 +281,20 @@ class _RidersPageState extends State<RidersPage> with Polling {
       if (mounted) setState(() => (_view = v, _error = null));
     } on Object catch (e) {
       if (mounted) setState(() => _error = e);
+      return;
+    }
+    // What Pay riders says, on its row: due, and the cash owed.
+    try {
+      final r = (await _auth.transport.send('GET', '/v1/riders/pay') as Map).cast<String, dynamic>();
+      if (mounted) setState(() => _due = _maps(r['lines']).fold<int>(0, (n, l) => n + _int(l['net_kobo'])));
+    } on Object {
+      // The row says what it is for.
+    }
+    try {
+      final r = (await _auth.transport.send('GET', '/v1/riders/owed') as Map).cast<String, dynamic>();
+      if (mounted) setState(() => _owedTotal = _maps(r['owed']).fold<int>(0, (n, o) => n + _int(o['owed_kobo'])));
+    } on Object {
+      // As above.
     }
   }
 
@@ -278,14 +313,38 @@ class _RidersPageState extends State<RidersPage> with Polling {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final v = _view;
     final riders = v == null ? const <Map<String, dynamic>>[] : _maps(v['riders']);
+    final zones = v == null ? const <Map<String, dynamic>>[] : _maps(v['zones']);
     final url = _str(v?['tap_in_url']);
+    String state(Map<String, dynamic> r) => r['active'] != true ? 'leave' : (_str((r['presence'] as Map?)?['state']).ifEmpty('free'));
+    final free = riders.where((r) => state(r) == 'free').length;
+    final busy = riders.where((r) => state(r) == 'busy').length;
+    ({Color fill, Color ink}) accent(Map<String, dynamic> r) => switch (state(r)) {
+      'free' => (fill: look.lime, ink: look.limeInk),
+      'busy' => (fill: look.blue, ink: look.blueInk),
+      _ => (fill: t.muted, ink: t.muted),
+    };
+    final order = {'free': 0, 'busy': 1, 'off': 2, 'leave': 3};
+    final sorted = [...riders]..sort((a, b) => (order[state(a)] ?? 2) - (order[state(b)] ?? 2));
+    final due = _due;
+    final owed = _owedTotal;
     return TkPageScreen(
       title: 'Riders',
-      description: 'The people who deliver your orders. They get your deliveries on WhatsApp, and tell Taskiem when they are working.',
+      titleSize: 30,
       onRefresh: _load,
-      action: v == null ? null : TkSmallButton(label: 'Add', semantics: 'Add a rider', primary: true, onPressed: () => _edit(null)),
+      action: v == null ? null : TkHeadButton(icon: 'b-plus', label: 'Add a rider', primary: true, onTap: () => _edit(null)),
+      under: TkChips<bool>(
+        label: 'Show',
+        chips: const [(false, 'Current'), (true, 'Retired')],
+        on: _retired,
+        onPick: (x) {
+          if (x == _retired) return;
+          setState(() => (_retired = x, _view = null));
+          _load();
+        },
+      ),
       children: [
         if (_off(_error))
           const TkEmpty(icon: 'members', title: 'Riders need text messages', line: 'Text messages are not set up on this Taskiem yet.')
@@ -293,128 +352,147 @@ class _RidersPageState extends State<RidersPage> with Polling {
           TkErrorBox(errorWords(_error!)),
         if (_actError != null) TkErrorBox(_actError!),
         if (v == null && _error == null) const TkLoading(rows: 4, label: 'Loading your riders…'),
-        if (v != null) ...[
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TkSmallButton(label: 'Pay riders', onPressed: () => openRidersPay(context, _auth)),
-          ),
-          if (url.isNotEmpty)
-            TkPageCard(
-              title: 'The link for riders',
+        if (v != null && !_retired && riders.isNotEmpty)
+          TkTopCard(
+            semanticsLabel: 'Riders now',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'A rider you add gets this link by SMS. One tap opens WhatsApp with a message ready to send; after that, your deliveries reach them there. You can also share it yourself.',
-                  style: tkHint(t),
+                TkEyebrow('Free now', color: look.limeInk, trailing: '${riders.length} ${riders.length == 1 ? 'rider' : 'riders'}'),
+                const SizedBox(height: 6),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(text: '$free', style: tkFigure(context, size: 40)),
+                      TextSpan(text: ' free${busy > 0 ? ' · $busy out' : ''}', style: tkDisplay(size: 22, color: t.muted)),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 8),
-                Text(url, style: tkText(size: 14, color: t.text)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    TkSmallButton(
-                      label: 'Copy',
-                      semantics: 'Copy the link for riders',
-                      onPressed: () async {
-                        await Clipboard.setData(ClipboardData(text: url));
-                        if (context.mounted) showTkToast(context, 'Copied');
-                      },
-                    ),
-                    TkSmallButton(
-                      label: 'Share on WhatsApp',
-                      onPressed: () => openOrSay(
-                        context,
-                        () => openOutside(Uri.parse('https://wa.me/?text=${Uri.encodeComponent('Tap to get our deliveries on WhatsApp: $url')}')),
-                        'WhatsApp could not be opened.',
+                const SizedBox(height: 14),
+                TkFaceRow(
+                  faces: [
+                    for (final r in sorted)
+                      (
+                        name: _str(r['name']),
+                        dot: state(r) == 'leave' || state(r) == 'off' ? t.muted.withValues(alpha: 0.5) : accent(r).fill,
+                        under: switch (state(r)) {
+                          'free' => 'free',
+                          'busy' => _str((r['presence'] as Map?)?['until']).isNotEmpty ? 'till ${lagosTime(_str((r['presence'] as Map)['until']))}' : 'busy',
+                          'leave' => 'on leave',
+                          _ => 'off',
+                        },
                       ),
-                    ),
                   ],
                 ),
+                if (url.isNotEmpty) ...[
+                  const SizedBox(height: 14),
+                  TkCallout(
+                    leading: TkSquare('b-share', color: look.teal),
+                    title: 'The link for riders',
+                    sub: 'One tap gets them your deliveries on WhatsApp',
+                    color: look.teal,
+                    button: 'Share',
+                    semantics: 'Share the link for riders',
+                    onPressed: () => _share(url),
+                  ),
+                ],
               ],
             ),
-          TkPageCard(
-            title: _retired ? 'Retired riders' : 'Your riders',
-            trailing: TkSmallButton(
-              label: _retired ? 'Show current' : 'Show retired',
-              semantics: _retired ? 'Show current riders' : 'Show retired riders',
-              onPressed: () {
-                setState(() => (_retired = !_retired, _view = null));
-                _load();
-              },
-            ),
+          ),
+        if (v != null && !_retired)
+          TkSection(
+            inset: 56,
             children: [
-              if (!_retired)
-                Text(
-                  'Riders say off, on or busy till 3pm to Taskiem on WhatsApp; it counts for every business they ride for, and you never see which.',
-                  style: tkHint(t),
-                ),
-              if (riders.isEmpty) Text(_retired ? 'No retired riders.' : 'No riders yet. Add the people who deliver your orders.', style: tkHint(t)),
-              for (final r in riders) _rider(r),
+              TkListRow(
+                title: 'Pay riders',
+                sub: owed != null && owed > 0 ? '${naira(owed)} cash owed to you' : (due != null ? 'Due to riders' : 'What they are due, and the cash they owe'),
+                icon: 'b-cash',
+                square: look.lime,
+                amount: due == null ? null : naira(due),
+                onTap: () => openRidersPay(context, _auth),
+                semanticsLabel: 'Pay riders',
+              ),
             ],
           ),
-        ],
+        if (v != null)
+          TkSection(
+            title: _retired ? 'Retired riders' : 'Your riders',
+            empty: _retired ? 'No retired riders.' : 'No riders yet. Add the people who deliver your orders.',
+            children: [
+              for (final r in sorted)
+                TkListRow(
+                  title: _str(r['name']),
+                  sub: riderLine(r),
+                  status: _retired ? null : stateLine(r),
+                  statusAccent: _retired ? null : accent(r),
+                  onTap: _retired ? null : () => _more(r),
+                ),
+            ],
+          ),
+        if (v != null && !_retired && zones.isNotEmpty)
+          TkSection(
+            title: 'Areas and fees',
+            inset: 56,
+            children: [
+              for (final z in zones)
+                TkListRow(
+                  title: _str(z['name']),
+                  icon: 'b-pin',
+                  square: look.teal,
+                  amount: _int(z['fee_kobo']) > 0 ? naira(_int(z['fee_kobo'])) : 'No fee',
+                  semanticsLabel: zoneLine(z),
+                ),
+            ],
+          ),
       ],
     );
   }
 
-  Widget _rider(Map<String, dynamic> r) {
+  /// Share pressed: copy the link, or send it on WhatsApp.
+  Future<void> _share(String url) async {
+    final pick = await showTkModalChoices(context, title: 'The link for riders', choices: [('copy', 'Copy the link'), ('wa', 'Share on WhatsApp')]);
+    if (!mounted) return;
+    if (pick == 'copy') {
+      await Clipboard.setData(ClipboardData(text: url));
+      if (mounted) showTkToast(context, 'Copied');
+      return;
+    }
+    if (pick == 'wa') {
+      await openOrSay(
+        context,
+        () => openOutside(Uri.parse('https://wa.me/?text=${Uri.encodeComponent('Tap to get our deliveries on WhatsApp: $url')}')),
+        'WhatsApp could not be opened.',
+      );
+    }
+  }
+
+  /// A rider pressed: change them, send the link again, retire them.
+  Future<void> _more(Map<String, dynamic> r) async {
+    if (_busy) return;
     final name = _str(r['name']);
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TkRow(
-            name: name,
-            letters: name,
-            sub: '${r['phone']} · ${riderSub(r)}',
-            pill: _retired ? null : TkPill(stateLine(r), tone: stateTone(r)),
-          ),
-          if (!_retired)
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                TkSmallButton(label: 'Change', semantics: 'Change $name', onPressed: () => _edit(r)),
-                if (r['reached'] == 'sms')
-                  TkSmallButton(
-                    label: 'Send the link again',
-                    semantics: 'Send the link again to $name',
-                    onPressed: _busy
-                        ? null
-                        : () => _run(
-                            () => _auth.transport.send('POST', '/v1/riders/${Uri.encodeComponent(_str(r['id']))}/invite', body: const {}),
-                            'Link sent to $name',
-                          ),
-                  ),
-                TkSmallButton(
-                  label: 'Retire',
-                  semantics: 'Retire $name',
-                  danger: true,
-                  onPressed: _busy
-                      ? null
-                      : () async {
-                          final yes = await showTkConfirm(
-                            context,
-                            title: 'Retire $name?',
-                            body: 'They are offered no more deliveries, and keep the ones they made.',
-                            ok: 'Retire',
-                            cancel: 'Keep them',
-                            danger: true,
-                          );
-                          if (!yes) return;
-                          await _run(
-                            () => _auth.transport.send('POST', '/v1/riders/${Uri.encodeComponent(_str(r['id']))}/retire', body: const {}),
-                            '$name retired',
-                          );
-                        },
-                ),
-              ],
-            ),
-        ],
-      ),
+    final pick = await showTkModalChoices(
+      context,
+      title: name,
+      choices: [('change', 'Change'), if (r['reached'] == 'sms') ('link', 'Send the link again'), ('retire', 'Retire')],
     );
+    if (!mounted) return;
+    switch (pick) {
+      case 'change':
+        await _edit(r);
+      case 'link':
+        await _run(() => _auth.transport.send('POST', '/v1/riders/${Uri.encodeComponent(_str(r['id']))}/invite', body: const {}), 'Link sent to $name');
+      case 'retire':
+        final yes = await showTkConfirm(
+          context,
+          title: 'Retire $name?',
+          body: 'They are offered no more deliveries, and keep the ones they made.',
+          ok: 'Retire',
+          cancel: 'Keep them',
+          danger: true,
+        );
+        if (!yes) return;
+        await _run(() => _auth.transport.send('POST', '/v1/riders/${Uri.encodeComponent(_str(r['id']))}/retire', body: const {}), '$name retired');
+    }
   }
 
   Future<void> _edit(Map<String, dynamic>? r) async {
@@ -625,15 +703,23 @@ class _RidersPayPageState extends State<RidersPayPage> {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final p = _pay;
     final owed = _owed;
     final lines = p == null ? const <Map<String, dynamic>>[] : _maps(p['lines']);
     final payouts = p == null ? const <Map<String, dynamic>>[] : _maps(p['payouts']);
     final due = lines.fold(0, (n, l) => n + _int(l['net_kobo']));
+    final deliveries = lines.fold(0, (n, l) => n + _int(l['deliveries']));
     final ready = _str(p?['workflow_id']).isNotEmpty;
+    ({Color fill, Color ink}) tone(CardTone c) => switch (c) {
+      CardTone.lime => (fill: look.lime, ink: look.limeInk),
+      CardTone.warn => (fill: look.blue, ink: look.blueInk),
+      CardTone.danger => (fill: look.red, ink: look.redInk),
+      _ => (fill: t.muted, ink: t.muted),
+    };
     return TkPageScreen(
       title: 'Pay riders',
-      description: 'The cash riders owe you from the door, what you owe them in fees, and their weekly pay.',
+      titleSize: 22,
       backLabel: 'Back to Riders',
       onRefresh: _load,
       children: [
@@ -643,148 +729,119 @@ class _RidersPayPageState extends State<RidersPayPage> {
           TkErrorBox(errorWords(_error!)),
         if (_actError != null) TkErrorBox(_actError!),
         if (owed == null && p == null && _error == null) const TkLoading(rows: 4, label: 'Loading riders’ pay…'),
-        if (p != null)
-          TkHero(
-            label: 'Due to riders now',
-            amount: naira(due),
-            sub: ready ? 'Paid weekly, after you approve' : 'Weekly pay is not set up yet',
+        if (p != null || (owed != null && owed.isNotEmpty))
+          TkTopCard(
             semanticsLabel: 'Riders’ pay',
-            action: Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TkSmallButton(
-                  label: 'Pay riders now',
-                  primary: true,
-                  onPressed: _busy || !ready || due == 0
+                if (p != null) ...[
+                  TkEyebrow('Due to riders now', color: look.limeInk, trailing: '${lines.length} ${lines.length == 1 ? 'rider' : 'riders'}'),
+                  const SizedBox(height: 6),
+                  FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: TkCountUp(due, style: tkFigure(context, size: 40))),
+                  Text(
+                    [
+                      '$deliveries ${deliveries == 1 ? 'delivery' : 'deliveries'}',
+                      'their fees, less cash they owe',
+                      if (!ready) 'weekly pay not set up',
+                    ].join(' · '),
+                    style: tkText(size: 13, lineHeight: 1.4, color: t.muted),
+                  ),
+                  const SizedBox(height: 14),
+                  TkButtonRow([
+                    TkSmallButton(
+                      label: 'Pay riders now',
+                      primary: true,
+                      onPressed: _busy || !ready || due == 0
+                          ? null
+                          : () async {
+                              final yes = await showTkConfirm(
+                                context,
+                                title: 'Pay your riders ${naira(due)} now?',
+                                body: 'You approve it first, in Taskiem’s conversation.',
+                                ok: 'Pay them',
+                                cancel: 'Not now',
+                              );
+                              if (!yes) return;
+                              await _run(() => _auth.transport.send('POST', '/v1/riders/pay', body: const {}), 'Started: approve it in Taskiem’s conversation');
+                            },
+                    ),
+                    TkSmallButton(label: 'Weekly pay', semantics: ready ? 'Change the weekly pay' : 'Set up weekly pay', onPressed: _setup),
+                  ]),
+                ],
+                // Cash customers paid at the door, owed by the rider.
+                for (final o in owed ?? const <Map<String, dynamic>>[]) ...[
+                  const SizedBox(height: 12),
+                  TkCallout(
+                    leading: TkSquare('b-cash', color: look.orange),
+                    title: '${o['rider']} owes ${naira(_int(o['owed_kobo']))} cash',
+                    sub:
+                        'From ${_int(o['deliveries'])} ${_int(o['deliveries']) == 1 ? 'delivery' : 'deliveries'} paid at the door${_str(o['since']).isNotEmpty ? ' since ${whenLabel(_str(o['since']))}' : ''}',
+                    color: look.orange,
+                    button: 'Handed in',
+                    semantics: 'Record cash handed in by ${o['rider']}',
+                    onPressed: () => _remit(o),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        if (owed != null && owed.isEmpty && p != null) Text('No rider owes you cash. A transfer from a rider naming the order counts by itself.', style: tkHint(t)),
+        if (p != null)
+          TkSection(
+            title: 'Due to each rider',
+            empty: 'Nothing is due: riders’ fees show here once they deliver.',
+            children: [
+              for (final l in lines)
+                () {
+                  final bank = _str(l['bank']).isNotEmpty;
+                  final n = _int(l['deliveries']);
+                  return TkListRow(
+                    title: _str(l['rider']),
+                    sub: [
+                      '$n ${n == 1 ? 'delivery' : 'deliveries'}',
+                      if (_int(l['owed_kobo']) > 0) 'less ${naira(_int(l['owed_kobo']))} cash',
+                      bank ? _str(l['bank']) : 'no bank account',
+                    ].join(' · '),
+                    amount: naira(_int(l['net_kobo'])),
+                    status: bank ? null : 'Add bank',
+                    statusAccent: (fill: look.orange, ink: look.orangeInk),
+                    onTap: () => _bank(l),
+                    semanticsLabel: '${bank ? 'Change bank account' : 'Add bank account'} for ${l['rider']}',
+                  );
+                }(),
+            ],
+          ),
+        if (payouts.isNotEmpty)
+          TkSection(
+            title: 'Recent payouts',
+            children: [
+              for (final x in payouts)
+                TkListRow(
+                  title: _str(x['rider']),
+                  sub: payoutSub(x),
+                  amount: naira(_int(x['amount_kobo'])),
+                  status: payoutStatus(_str(x['status'])).label,
+                  statusAccent: tone(payoutStatus(_str(x['status'])).tone),
+                  semanticsLabel: x['status'] == 'pending' ? 'Mark not paid for ${x['rider']}' : null,
+                  onTap: x['status'] != 'pending' || _busy
                       ? null
                       : () async {
                           final yes = await showTkConfirm(
                             context,
-                            title: 'Pay your riders ${naira(due)} now?',
-                            body: 'You approve it first, in Taskiem’s conversation.',
-                            ok: 'Pay them',
-                            cancel: 'Not now',
+                            title: 'Mark ${x['rider']}’s payout of ${naira(_int(x['amount_kobo']))} as not paid?',
+                            body: 'Only once your bank shows it did not go: their deliveries are then paid in the next payout, so marking a payment that went through pays them twice.',
+                            ok: 'Mark not paid',
+                            cancel: 'Keep it',
+                            danger: true,
                           );
                           if (!yes) return;
-                          await _run(() => _auth.transport.send('POST', '/v1/riders/pay', body: const {}), 'Started: approve it in Taskiem’s conversation');
+                          await _run(
+                            () => _auth.transport.send('POST', '/v1/riders/payouts/${Uri.encodeComponent(_str(x['payout_id']))}/not-paid', body: const {}),
+                            'Marked not paid: paid in the next payout',
+                          );
                         },
                 ),
-                TkSmallButton(label: ready ? 'Change the weekly pay' : 'Set up weekly pay', onPressed: _setup),
-              ],
-            ),
-          ),
-        if (owed != null)
-          TkPageCard(
-            title: 'Cash riders owe',
-            children: [
-              Text(
-                'Cash customers paid at the door. A transfer from the rider naming the order counts by itself; record cash handed to you here.',
-                style: tkHint(t),
-              ),
-              if (owed.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text('No rider owes you cash.', style: tkHint(t)),
-                ),
-              for (final o in owed)
-                Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TkRow(
-                        name: _str(o['rider']),
-                        letters: _str(o['rider']),
-                        sub:
-                            '${_int(o['deliveries'])} ${_int(o['deliveries']) == 1 ? 'delivery' : 'deliveries'}${_str(o['since']).isNotEmpty ? ' since ${whenLabel(_str(o['since']))}' : ''}',
-                        pill: TkPill(naira(_int(o['owed_kobo'])), tone: CardTone.warn),
-                      ),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TkSmallButton(label: 'Record cash handed in', semantics: 'Record cash handed in by ${o['rider']}', onPressed: () => _remit(o)),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        if (p != null)
-          TkPageCard(
-            title: 'Due to each rider',
-            children: [
-              if (lines.isEmpty) Text('Nothing is due: riders’ fees show here once they deliver.', style: tkHint(t)),
-              for (final l in lines)
-                Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      TkRow(
-                        name: _str(l['rider']),
-                        letters: _str(l['rider']),
-                        sub: payLineSub(l),
-                        pill: TkPill(naira(_int(l['net_kobo'])), tone: CardTone.plain),
-                      ),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TkSmallButton(
-                          label: _str(l['bank']).isNotEmpty ? 'Change bank account' : 'Add bank account',
-                          semantics: '${_str(l['bank']).isNotEmpty ? 'Change bank account' : 'Add bank account'} for ${l['rider']}',
-                          onPressed: () => _bank(l),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              if (payouts.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                Text('Recent payouts', style: tkText(size: 16, weight: 700, color: t.text)),
-                for (final x in payouts)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        TkRow(
-                          name: '${x['rider']} · ${naira(_int(x['amount_kobo']))}',
-                          letters: _str(x['rider']),
-                          sub: payoutSub(x),
-                          pill: TkPill(payoutStatus(_str(x['status'])).label, tone: payoutStatus(_str(x['status'])).tone),
-                        ),
-                        if (x['status'] == 'pending')
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TkSmallButton(
-                              label: 'Mark not paid',
-                              semantics: 'Mark not paid for ${x['rider']}',
-                              onPressed: _busy
-                                  ? null
-                                  : () async {
-                                      final yes = await showTkConfirm(
-                                        context,
-                                        title: 'Mark ${x['rider']}’s payout of ${naira(_int(x['amount_kobo']))} as not paid?',
-                                        body: 'Only once your bank shows it did not go: their deliveries are then paid in the next payout, so marking a payment that went through pays them twice.',
-                                        ok: 'Mark not paid',
-                                        cancel: 'Keep it',
-                                        danger: true,
-                                      );
-                                      if (!yes) return;
-                                      await _run(
-                                        () => _auth.transport.send(
-                                          'POST',
-                                          '/v1/riders/payouts/${Uri.encodeComponent(_str(x['payout_id']))}/not-paid',
-                                          body: const {},
-                                        ),
-                                        'Marked not paid: paid in the next payout',
-                                      );
-                                    },
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-              ],
             ],
           ),
       ],
@@ -1129,4 +1186,8 @@ class _PaySetupState extends State<_PaySetup> {
       ],
     );
   }
+}
+
+extension on String {
+  String ifEmpty(String other) => isEmpty ? other : this;
 }

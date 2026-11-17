@@ -42,6 +42,7 @@ import 'chat/live.dart';
 import 'chat/taskiem.dart';
 import 'screens/home_tabs.dart';
 import 'screens/signed_in.dart';
+import 'screens/forgot_password.dart';
 import 'screens/sign_in.dart';
 import 'screens/switcher.dart' show showSwitcher;
 import 'screens/welcome.dart';
@@ -229,7 +230,7 @@ class _RootState extends State<_Root> {
     if (auth.state == AuthState.checking || !(widget.prefs?.loaded ?? true)) return const _Opening();
     return switch (auth.state) {
       AuthState.checking => const _Opening(),
-      AuthState.signedOut => _SignedOut(auth: auth),
+      AuthState.signedOut => _SignedOut(auth: auth, links: widget.links),
       AuthState.outdated => const _Outdated(),
       // A personal session: the person's own side (taskiem-for-everyone §7).
       AuthState.signedIn when auth.personal => YouHome(key: ValueKey(auth.session), auth: auth, links: widget.links),
@@ -243,39 +244,76 @@ class _RootState extends State<_Root> {
 /// sign-in. Nobody starts a business here any more: a person makes their
 /// own account, and starts one from **You** (§17, §18).
 class _SignedOut extends StatefulWidget {
-  const _SignedOut({required this.auth});
+  const _SignedOut({required this.auth, this.links});
   final Auth auth;
+
+  /// A password reset's link, opened while signed out: Choose a new password.
+  final LinkInbox? links;
 
   @override
   State<_SignedOut> createState() => _SignedOutState();
 }
 
 class _SignedOutState extends State<_SignedOut> {
-  // What is open: the phone way in, or signing in with email.
-  bool _email = false;
+  // What is open: the phone way in ('phone'), signing in with email ('in'),
+  // Forgot password? ('forgot') or a reset link's new password ('reset').
+  String _at = 'phone';
   bool _passkeys = true;
+  // Forgot password?: what was typed in Email; a reset link's token.
+  String _forgotEmail = '';
+  String? _reset;
+
+  void _linked() {
+    final token = widget.links?.takeReset();
+    if (token != null && mounted) {
+      setState(() {
+        _reset = token;
+        _at = 'reset';
+      });
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    widget.links?.addListener(_linked);
+    // The link that opened the app.
+    _linked();
     widget.auth.api.appConfig().then((c) {
       if (mounted) setState(() => _passkeys = c.passkeys);
     }, onError: (_) {});
   }
 
   @override
+  void dispose() {
+    widget.links?.removeListener(_linked);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    void go(bool email) => setState(() => _email = email);
-    // Android's back from signing in with email returns to the phone, not
-    // out of the app.
+    void go(String at) => setState(() => _at = at);
+    // Android's back returns to the phone way in, not out of the app.
     return PopScope(
-      canPop: !_email,
+      canPop: _at == 'phone',
       onPopInvokedWithResult: (popped, _) {
-        if (!popped && _email) go(false);
+        if (!popped && _at != 'phone') go(_at == 'in' ? 'phone' : 'in');
       },
-      child: _email
-          ? SignInScreen(auth: widget.auth, signup: false, passkeys: _passkeys, onPhone: () => go(false))
-          : WelcomeScreen(auth: widget.auth, onEmail: () => go(true)),
+      child: switch (_at) {
+        'in' => SignInScreen(
+          auth: widget.auth,
+          signup: false,
+          passkeys: _passkeys,
+          onPhone: () => go('phone'),
+          onForgot: (email) {
+            _forgotEmail = email;
+            go('forgot');
+          },
+        ),
+        'forgot' => ForgotPasswordScreen(auth: widget.auth, email: _forgotEmail, onBack: () => go('in')),
+        'reset' when _reset != null => ResetPasswordScreen(key: ValueKey(_reset), auth: widget.auth, token: _reset!, onDone: () => go('in')),
+        _ => WelcomeScreen(auth: widget.auth, onEmail: () => go('in')),
+      },
     );
   }
 }
@@ -425,6 +463,13 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
 
   void _linked() {
     if (!mounted) return;
+    // A password reset's link, signed in: Choose a new password over the
+    // app (saving it signs every session out, this one too).
+    final reset = widget.links?.takeReset();
+    if (reset != null) {
+      final nav = Navigator.of(context);
+      nav.push(TkRoute<void>(pageBuilder: (_, _, _) => ResetPasswordScreen(auth: widget.auth, token: reset, onDone: nav.pop)));
+    }
     final page = widget.links?.take();
     if (page != null) _openPath(page);
   }

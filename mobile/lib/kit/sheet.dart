@@ -10,6 +10,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/widgets.dart';
 
 import 'motion.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'icon.dart';
 import 'kit.dart';
@@ -248,7 +249,8 @@ class _TkSheetState extends State<TkSheet> with SingleTickerProviderStateMixin {
     void close() => Navigator.of(context).pop();
     final big = MediaQuery.textScalerOf(context).scale(10) > 15;
     final Widget headRow = Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
+                            // As drawn: 14 px from the sheet's edges.
+                            padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
                             child: Row(
                               children: [
                                 if (onBack != null && crumb == null) ...[
@@ -256,37 +258,16 @@ class _TkSheetState extends State<TkSheet> with SingleTickerProviderStateMixin {
                                   // `.tk-back { margin-right: 4px }` with the head's 12 px gap.
                                   const SizedBox(width: 16),
                                 ],
-                                // `.tk-sheet-head.crumbed`: "Products / Jollof rice", the
-                                // first word the way back.
+                                // As drawn (docs/spec/mobile-app-look.md): a round
+                                // Back, then what it is in ("Products") small over
+                                // the title.
                                 if (onBack != null && crumb != null) ...[
-                                  TapArea(
-                                    child: Semantics(
-                                      button: true,
-                                      label: '$crumb: back to the list',
-                                      onTap: onBack,
-                                      excludeSemantics: true,
-                                      child: GestureDetector(
-                                        behavior: HitTestBehavior.opaque,
-                                        onTap: onBack,
-                                        child: ConstrainedBox(
-                                          constraints: const BoxConstraints(minHeight: 32),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(crumb, style: tkText(size: 14, weight: 500, color: t.muted)),
-                                              const SizedBox(width: 8),
-                                              Text('/', style: tkText(size: 14, weight: 500, color: t.muted)),
-                                              const SizedBox(width: 2),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
+                                  _Round(icon: 'back', label: '$crumb: back to the list', onTap: onBack),
+                                  const SizedBox(width: 12),
                                 ],
                                 if (lead != null) ...[
-                                  SizedBox(width: 48, height: 48, child: ExcludeSemantics(child: lead)),
+                                  // Smaller with a line over the title (as drawn).
+                                  SizedBox(width: crumb != null ? 40 : 48, height: crumb != null ? 40 : 48, child: ExcludeSemantics(child: Center(child: lead))),
                                   const SizedBox(width: 12),
                                 ],
                                 Expanded(
@@ -295,7 +276,7 @@ class _TkSheetState extends State<TkSheet> with SingleTickerProviderStateMixin {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        if (crumb != null && onBack == null) Text(crumb, style: tkText(size: 13, weight: 600, color: t.muted)),
+                                        if (crumb != null) Text(crumb, style: tkText(size: 13, weight: 500, color: t.muted)),
                                         Text.rich(
                                           TextSpan(
                                             text: title,
@@ -307,12 +288,10 @@ class _TkSheetState extends State<TkSheet> with SingleTickerProviderStateMixin {
                                               ],
                                             ],
                                           ),
-                                          style: onBack != null && crumb != null
-                                              // `.tk-sheet-head.crumbed h2 { font-size: 14px; font-weight: 700; letter-spacing: 0 }`
-                                              ? tkText(size: 14, weight: 700, lineHeight: 1.35, color: t.text)
-                                              : lead != null
-                                              ? tkText(size: 22, weight: 800, lineHeight: 1.2, letterSpacing: -0.44, color: t.text)
-                                              : tkText(size: 26, weight: 800, lineHeight: 1.35, letterSpacing: -0.52, color: t.text),
+                                          // The app's titles: Inter Tight (docs/spec/mobile-app-look.md).
+                                          style: lead != null || crumb != null
+                                              ? tkDisplay(size: 22, lineHeight: 1.15, letterSpacing: -0.6, color: t.text)
+                                              : tkDisplay(size: 24, lineHeight: 1.2, letterSpacing: -0.8, color: t.text),
                                         ),
                                         if (sub != null) ...[
                                           const SizedBox(height: 2),
@@ -427,12 +406,24 @@ class _TkSheetState extends State<TkSheet> with SingleTickerProviderStateMixin {
                 label: semanticsLabel ?? title,
                 child: Container(
                   clipBehavior: Clip.antiAlias,
+                  // On the page's ground, its cards white on it.
                   decoration: BoxDecoration(
-                    color: t.panel,
+                    color: TkLook.of(context).ground,
                     borderRadius: BorderRadius.vertical(top: Radius.circular(_full ? 0 : 28)),
                     boxShadow: const [BoxShadow(color: Color(0x660E0F0C), offset: Offset(0, -20), blurRadius: 50, spreadRadius: -20)],
                   ),
-                  child: Stack(
+                  // On the ground, boxes are white and soft buttons a shade
+                  // under it (docs/spec/mobile-app-look.md, "The chat").
+                  child: TkTheme.recolour(
+                    context,
+                    (t) => t.copyWith(
+                      field: TkLook.of(context).card,
+                      tkSoft: Color.alphaBlend(
+                        TkTheme.of(context).mode == TkMode.dark ? const Color(0x1FFFFFFF) : const Color(0x12000000),
+                        TkLook.of(context).ground,
+                      ),
+                    ),
+                    Stack(
                     children: [
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -456,6 +447,7 @@ class _TkSheetState extends State<TkSheet> with SingleTickerProviderStateMixin {
                       ),
                       ?overlay,
                     ],
+                  ),
                   ),
                 ),
               ),
@@ -487,7 +479,7 @@ class _Round extends StatelessWidget {
         child: Container(
           width: 40,
           height: 40,
-          decoration: BoxDecoration(color: t.tkSoft, shape: BoxShape.circle),
+          decoration: BoxDecoration(color: TkLook.of(context).card, shape: BoxShape.circle),
           alignment: Alignment.center,
           child: TkIcon(icon, size: 18, color: t.text),
         ),
@@ -496,7 +488,8 @@ class _Round extends StatelessWidget {
   }
 }
 
-/// `.tk-form-body`: a form in a sheet, scrolling: 18 px between its parts.
+/// `.tk-form-body`: a form in a sheet, scrolling: 12 px between its parts,
+/// 14 from the edges (as drawn).
 class TkFormBody extends StatelessWidget {
   const TkFormBody({super.key, required this.children});
   final List<Widget> children;
@@ -504,11 +497,11 @@ class TkFormBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+      padding: const EdgeInsets.fromLTRB(14, 4, 14, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 18), children[i]],
+          for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 12), children[i]],
         ],
       ),
     );
@@ -518,7 +511,8 @@ class TkFormBody extends StatelessWidget {
 /// `.tk-form-now`: a line of what is so, muted.
 TextStyle tkFormNow(TkTokens t) => tkText(size: 14, color: t.muted);
 
-/// `.tk-lines`: label and value rows, 10 px apart.
+/// Label and value rows, as drawn: small, the label muted, the value
+/// firm, 6 px apart.
 class TkLines extends StatelessWidget {
   const TkLines(this.rows, {super.key});
   final List<(String, String)> rows;
@@ -530,13 +524,13 @@ class TkLines extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < rows.length; i++) ...[
-          if (i > 0) const SizedBox(height: 10),
+          if (i > 0) const SizedBox(height: 6),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(rows[i].$1, style: tkText(size: 15, color: t.text)),
+              Text(rows[i].$1, style: tkText(size: 13.5, color: t.muted)),
               const SizedBox(width: 12),
-              Expanded(child: Text(rows[i].$2, textAlign: TextAlign.right, style: tkText(size: 15, weight: 700, color: t.text))),
+              Expanded(child: Text(rows[i].$2, textAlign: TextAlign.right, style: tkText(size: 13.5, weight: 600, color: t.text))),
             ],
           ),
         ],
@@ -758,7 +752,10 @@ class TkGhostButton extends StatelessWidget {
           constraints: const BoxConstraints(minHeight: 56),
           padding: const EdgeInsets.symmetric(horizontal: 18),
           alignment: Alignment.center,
-          decoration: BoxDecoration(color: t.panel, border: Border.all(color: t.borderStrong), borderRadius: BorderRadius.circular(999)),
+          // In the app's own look, as drawn: filled with the card, no line.
+          decoration: TkAppLook.on(context)
+              ? BoxDecoration(color: dark ? const Color(0xFF1A1B1A) : const Color(0xFFFFFFFF), borderRadius: BorderRadius.circular(999))
+              : BoxDecoration(color: t.panel, border: Border.all(color: t.borderStrong), borderRadius: BorderRadius.circular(999)),
           child: Text(label, style: tkText(size: 15, weight: 700, lineHeight: 1.2, color: danger ? t.danger : (dark ? t.text : t.brand))),
         ),
       ),
@@ -798,14 +795,14 @@ class TkCta extends StatelessWidget {
           opacity: onTap == null ? 0.5 : 1,
           child: Container(
             constraints: const BoxConstraints(minHeight: 56),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
             alignment: Alignment.center,
             decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (icon != null && !iconAfter) ...[TkIcon(icon!, size: 20, color: mark), const SizedBox(width: 8)],
-                Flexible(child: Text(label, textAlign: TextAlign.center, style: tkText(size: 16, weight: 700, lineHeight: 1.2, color: ink))),
+                Flexible(child: Text(label, textAlign: TextAlign.center, style: tkText(size: 15, weight: 700, lineHeight: 1.2, color: ink))),
                 if (icon != null && iconAfter) ...[const SizedBox(width: 8), TkIcon(icon!, size: 20, color: mark)],
               ],
             ),
@@ -826,11 +823,10 @@ class TkSheetFoot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
     final pad = MediaQuery.paddingOf(context);
     return Container(
-      decoration: bare ? null : BoxDecoration(border: Border(top: BorderSide(color: t.border))),
-      padding: EdgeInsets.fromLTRB(20, bare ? 0 : 12, 20, 18 + pad.bottom),
+      // On the ground, no line over it.
+      padding: EdgeInsets.fromLTRB(14, bare ? 0 : 12, 14, 18 + pad.bottom),
       child: child,
     );
   }

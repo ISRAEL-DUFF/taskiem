@@ -13,11 +13,17 @@ import '../kit/forms.dart' show TkSwitchRow, errorWords;
 import '../kit/kit.dart';
 import '../kit/modal.dart';
 import '../kit/page.dart';
-import '../kit/sheet.dart' show TkKitField;
+import '../app/links.dart' show callPhone, textPhone;
+import '../kit/list.dart' show TkLoading;
+import '../kit/look.dart';
+import '../kit/mobile.dart';
+import '../kit/sheet.dart' show TkKitField, showTkSheet;
+import '../kit/tap_area.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
+import 'storefront_orders_page.dart' show groupedPhone;
 import 'book_sheet.dart' show dayLabel, formatDuration, lagosDay, lagosTime, servicePrice, whenLabel;
-import 'chats.dart' show LinkSection;
 import 'words.dart' show Tone;
 
 List<Map<String, dynamic>> _maps(Object? v) => (v as List? ?? const []).whereType<Map<String, dynamic>>().toList();
@@ -131,7 +137,10 @@ Future<String> cancelBooking(Auth auth, Map<String, dynamic> b) async {
 
 /// StorefrontBookings.tsx MoveDialog: a new day and time; answers what to
 /// say, or null when it was not moved.
-Future<String?> moveBooking(BuildContext context, Auth auth, Map<String, dynamic> b) async {
+Future<String?> moveBooking(BuildContext context, Auth auth, Map<String, dynamic> b) => showTkSheet<String>(context, (_) => BookingSheet(auth: auth, booking: b));
+
+/// The move by a typed day and time, where the free times cannot be read.
+Future<String?> typeMove(BuildContext context, Auth auth, Map<String, dynamic> b) async {
   final moved = await showTkModal<Map<String, dynamic>>(context, title: 'Move booking ${b['reference']}', builder: (_) => _MoveForm(auth: auth, booking: b));
   if (moved == null) return null;
   return '${moved['reference']} is moved to ${moved['starts_at'] != null ? whenLabel(moved['starts_at'] as String) : 'its new time'}; the customer is told.';
@@ -167,7 +176,6 @@ class _BookingsPageState extends State<BookingsPage> {
   bool _noBookings = false;
   List<Map<String, dynamic>>? _services;
   String? _servicesError;
-  bool _cancelling = false;
   String _notice = '';
   String _settingsNotice = '';
   bool _busy = false;
@@ -384,22 +392,8 @@ class _BookingsPageState extends State<BookingsPage> {
     if (mounted) setState(() => _busy = false);
   }
 
-  Future<void> _cancel(Map<String, dynamic> b) async {
-    if (_cancelling) return;
-    if (!await askCancelBooking(context, b) || !mounted) return;
-    setState(() => _cancelling = true);
-    try {
-      final said = await cancelBooking(widget.auth, b);
-      if (!mounted) return;
-      setState(() => _notice = said);
-      await _loadBookings();
-    } on Object catch (e) {
-      if (mounted) setState(() => _error = _why(e));
-    }
-    if (mounted) setState(() => _cancelling = false);
-  }
-
-  Future<void> _move(Map<String, dynamic> b) async {
+  /// One booking's sheet: moved or cancelled there, said here.
+  Future<void> _open(Map<String, dynamic> b) async {
     final said = await moveBooking(context, widget.auth, b);
     if (said == null || !mounted) return;
     setState(() => _notice = said);
@@ -410,93 +404,147 @@ class _BookingsPageState extends State<BookingsPage> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final sf = _sf;
+    // As drawn (docs/spec/mobile-app-look.md, "The remaining screens"):
+    // what is to come large, the range as a switch, each booking by day
+    // with a call icon; a booking opens its sheet; then the services,
+    // hours and rules.
     return TkPageScreen(
       title: 'Bookings',
+      titleSize: 30,
+      backLabel: 'Back to Services',
       onRefresh: () => Future.wait([_loadServices(), _loadBookings()]),
-      description: 'Appointments customers book on your storefront, and the services and hours they book from. Times are in Lagos time.',
+      description: 'Appointments customers book on your storefront, and the services and hours they book from. Times are in Lagos time. You confirm each booking in the approval request Taskiem sends you in WhatsApp or Telegram.',
       children: [
         if (_error != null) TkErrorBox(_error!),
         if (_noStorefront) Text('You have no storefront yet. Create your storefront first, then set up bookings here.', style: tkHint(t)),
         if (sf == null && !_noStorefront && _error == null) Text('Loading your storefront…', style: tkHint(t)),
-        if (sf != null) ...[_list(t), _servicesCard(t, sf), _hoursCard(t), _rulesCard(t)],
+        if (sf != null) ...[..._list(t), _servicesCard(t, sf), _hoursCard(t), _rulesCard(t)],
       ],
     );
   }
 
-  Widget _list(TkTokens t) {
+  List<Widget> _list(TkTokens t) {
+    final look = TkLook.of(context);
     final groups = _bookings == null ? null : groupByDay(_bookings!);
-    return TkPageCard(
-      title: 'Upcoming bookings',
-      children: [
-        Text('You confirm each booking in the approval request Taskiem sends you in WhatsApp or Telegram.', style: tkHint(t)),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final (v, words) in const [('week', 'This week'), ('month', 'Next 30 days')])
-              Semantics(
-                selected: _range == v,
-                child: TkSmallButton(
-                  label: words,
-                  primary: _range == v,
-                  onPressed: () {
-                    if (v == _range) return;
-                    setState(() => _range = v);
-                    _loadBookings();
-                  },
-                ),
-              ),
-          ],
-        ),
-        if (_notice.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Semantics(
-            liveRegion: true,
-            child: Text(_notice, style: tkText(size: 14, color: t.text)),
+    final all = _bookings ?? const <Map<String, dynamic>>[];
+    final toCome = all.where(canChange).length;
+    final waiting = all.where((b) => b['status'] == 'received').length;
+    ({Color fill, Color ink}) accent(Tone tone) => switch (tone) {
+      Tone.warn => (fill: look.orange, ink: look.orangeInk),
+      Tone.info => (fill: look.blue, ink: look.blueInk),
+      Tone.ok => (fill: look.lime, ink: look.limeInk),
+      Tone.danger => (fill: look.red, ink: look.redInk),
+      _ => (fill: look.line, ink: t.muted),
+    };
+    return [
+      if (_bookings != null && !_noBookings)
+        TkTopCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TkEyebrow(_range == 'week' ? 'This week' : 'Next 30 days', color: look.blueInk, trailing: all.length == 1 ? '1 booking' : '${all.length} bookings'),
+              const SizedBox(height: 6),
+              Text('$toCome to come', style: tkFigure(context)),
+              if (waiting > 0)
+                Text('$waiting waiting for you to accept, in WhatsApp or Telegram', style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
+            ],
           ),
-        ],
-        const SizedBox(height: 10),
-        if (_noBookings)
-          Text('This Taskiem does not take storefront bookings yet.', style: tkHint(t))
-        else if (groups == null)
-          Text('Loading bookings…', style: tkHint(t))
-        else if (groups.isEmpty)
-          Text('No bookings ${_range == 'week' ? 'this week' : 'in the next 30 days'}.', style: tkHint(t))
-        else
-          for (final g in groups)
-            LinkSection(
-              title: g.label,
-              top: 8,
-              rows: [
-                for (final b in g.bookings)
-                  (
-                    letter: null,
-                    icon: 'clock',
-                    tone: b['status'] == 'cancelled' ? Tone.muted : null,
-                    title: '${timeSpan(b)} · ${(b['service_name'] as String? ?? '').isEmpty ? 'Booking' : b['service_name']}',
-                    badge: orderStatus(b['status'] as String? ?? '').label,
-                    badgeTone: orderStatus(b['status'] as String? ?? '').tone,
-                    sub:
-                        '${[((b['customer'] as Map?)?['name'] as String?), ((b['customer'] as Map?)?['phone'] as String?)].whereType<String>().where((x) => x.isNotEmpty).join(' · ').ifEmpty('—')} · ${b['reference']}',
-                    actions: canChange(b)
-                        ? Wrap(
-                            spacing: 8,
-                            children: [
-                              TkSmallButton(label: 'Move', semantics: 'Move ${b['service_name'] ?? 'booking'} ${b['reference']}', onPressed: () => _move(b)),
-                              TkSmallButton(
-                                label: 'Cancel',
-                                danger: true,
-                                semantics: 'Cancel ${b['service_name'] ?? 'booking'} ${b['reference']}',
-                                onPressed: _cancelling ? null : () => _cancel(b),
-                              ),
-                            ],
-                          )
-                        : null,
-                  ),
-              ],
-            ),
+        ),
+      TkChips<String>(
+        label: 'Bookings in',
+        padding: EdgeInsets.zero,
+        chips: const [('week', 'This week'), ('month', 'Next 30 days')],
+        on: _range,
+        onPick: (v) {
+          if (v == _range) return;
+          setState(() => _range = v);
+          _loadBookings();
+        },
+      ),
+      if (_notice.isNotEmpty) Semantics(liveRegion: true, child: Text(_notice, style: tkText(size: 14, color: t.text))),
+      if (_noBookings)
+        Text('This Taskiem does not take storefront bookings yet.', style: tkHint(t))
+      else if (groups == null)
+        Text('Loading bookings…', style: tkHint(t))
+      else if (groups.isEmpty)
+        Text('No bookings ${_range == 'week' ? 'this week' : 'in the next 30 days'}.', style: tkHint(t))
+      else ...[
+        for (final g in groups)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+                child: Semantics(header: true, child: Text(g.label, style: tkText(size: 13, weight: 700, color: t.muted))),
+              ),
+              TkSection(
+                inset: 14,
+                children: [
+                  for (final b in g.bookings) _row(t, b, accent),
+                ],
+              ),
+            ],
+          ),
+        if (all.any(canChange)) Text('Tap a booking to move or cancel it.', style: tkText(size: 13, color: t.muted)),
       ],
+    ];
+  }
+
+  Widget _row(TkTokens t, Map<String, dynamic> b, ({Color fill, Color ink}) Function(Tone) accent) {
+    final c = (b['customer'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final phone = c['phone'] as String? ?? '';
+    final service = (b['service_name'] as String? ?? '').isEmpty ? 'Booking' : b['service_name'] as String;
+    final st = orderStatus(b['status'] as String? ?? '');
+    final a = accent(st.tone);
+    final open = canChange(b);
+    final who = [c['name'] as String? ?? '', b['reference'] as String? ?? ''].where((x) => x.isNotEmpty).join(' · ');
+    return MergeSemantics(
+      child: Semantics(
+        button: open,
+        label: open ? 'Move or cancel $service ${b['reference']}' : null,
+        child: TkPress(
+          onTap: open ? () => _open(b) : null,
+          scale: 0.985,
+          child: Opacity(
+            opacity: b['status'] == 'cancelled' ? 0.6 : 1,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 11, 10, 11),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Wrap(
+                          spacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(timeSpan(b), style: tkText(size: 15, weight: 600, color: t.text).copyWith(fontFeatures: tkTabular)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(color: a.fill.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(999)),
+                              child: Text(st.label, style: tkText(size: 11.5, weight: 700, color: a.ink)),
+                            ),
+                          ],
+                        ),
+                        Text(service, style: tkText(size: 14, color: t.text)),
+                        if (who.isNotEmpty) Text(who, style: tkText(size: 12.5, color: t.muted)),
+                      ],
+                    ),
+                  ),
+                  if (phone.isNotEmpty && !phone.contains('•'))
+                    TkHeadButton(
+                      icon: 'b-phone',
+                      label: 'Call ${c['name'] ?? phone}',
+                      onCard: true,
+                      onTap: () => openOrSay(context, () => callPhone(phone), 'That number could not be called.'),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -519,22 +567,13 @@ class _BookingsPageState extends State<BookingsPage> {
         else if (_services!.isEmpty)
           Text('No services yet. Add them from Services in the chat.', style: tkHint(t))
         else
-          LinkSection(
-            top: 0,
-            rows: [
-              for (final s in _services!)
-                (
-                  letter: s['name'] as String? ?? '',
-                  icon: null,
-                  tone: null,
-                  title: s['name'] as String? ?? '',
-                  badge: null,
-                  badgeTone: null,
-                  sub: [formatDuration(_int(s['duration_minutes'])), servicePrice(s)].where((x) => x.isNotEmpty).join(' · '),
-                  actions: null,
-                ),
-            ],
-          ),
+          for (final s in _services!)
+            TkListRow(
+              title: s['name'] as String? ?? '',
+              sub: [formatDuration(_int(s['duration_minutes'])), servicePrice(s)].where((x) => x.isNotEmpty).join(' · '),
+              icon: 'b-clock',
+              square: TkLook.of(context).violet,
+            ),
       ],
     );
   }
@@ -807,10 +846,6 @@ class _BookingsPageState extends State<BookingsPage> {
   }
 }
 
-extension on String {
-  String ifEmpty(String other) => isEmpty ? other : this;
-}
-
 /// StorefrontBookings.tsx MoveDialog: a new day and time, in Lagos time.
 class _MoveForm extends StatefulWidget {
   const _MoveForm({required this.auth, required this.booking});
@@ -913,6 +948,164 @@ class _MoveFormState extends State<_MoveForm> {
             TkButton(label: 'Cancel', onPressed: () => Navigator.of(context).pop()),
           ],
         ),
+      ],
+    );
+  }
+}
+
+
+/// One booking (docs/spec/mobile-app-look.md, "The remaining screens"):
+/// the customer with Call and Text; Move to a free time, picked by day and
+/// time; or Cancel booking. It closes with what to say.
+class BookingSheet extends StatefulWidget {
+  const BookingSheet({super.key, required this.auth, required this.booking});
+  final Auth auth;
+  final Map<String, dynamic> booking;
+
+  @override
+  State<BookingSheet> createState() => _BookingSheetState();
+}
+
+class _BookingSheetState extends State<BookingSheet> {
+  List<String>? _days;
+  String _day = '';
+  List<String>? _times;
+  String _time = '';
+  String? _error;
+  bool _busy = false;
+  bool _cantRead = false;
+
+  Map<String, dynamic> get _b => widget.booking;
+  String get _ref => _b['reference'] as String? ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load([String day = '']) async {
+    setState(() => (_times = null, _time = ''));
+    try {
+      final r = (await widget.auth.transport.send(
+        'GET',
+        '/v1/storefront/bookings/${Uri.encodeComponent(_ref)}/times',
+        query: {if (day.isNotEmpty) 'day': day},
+      ) as Map).cast<String, dynamic>();
+      if (!mounted) return;
+      setState(() {
+        _days = [for (final d in (r['days'] as List? ?? const [])) '$d'];
+        _day = r['day'] as String? ?? '';
+        _times = [for (final t in (r['times'] as List? ?? const [])) '$t'];
+      });
+    } on Object catch (e) {
+      if (mounted) setState(() => (_error = errorWords(e), _cantRead = true, _days = const [], _times = const []));
+    }
+  }
+
+  Future<void> _move() async {
+    if (_time.isEmpty) return;
+    setState(() => (_busy = true, _error = null));
+    try {
+      final r = (await widget.auth.transport.send('POST', '/v1/storefront/bookings/${Uri.encodeComponent(_ref)}/move', body: {'starts_at': _time}) as Map)['booking'] as Map;
+      if (!mounted) return;
+      Navigator.of(context).pop('${r['reference']} is moved to ${r['starts_at'] != null ? whenLabel(r['starts_at'] as String) : 'its new time'}; the customer is told.');
+    } on Object catch (e) {
+      if (mounted) setState(() => (_error = errorWords(e), _busy = false));
+    }
+  }
+
+  Future<void> _cancel() async {
+    if (!await askCancelBooking(context, _b) || !mounted) return;
+    setState(() => (_busy = true, _error = null));
+    try {
+      final said = await cancelBooking(widget.auth, _b);
+      if (mounted) Navigator.of(context).pop(said);
+    } on Object catch (e) {
+      if (mounted) setState(() => (_error = errorWords(e), _busy = false));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final c = (_b['customer'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final name = c['name'] as String? ?? '';
+    final phone = c['phone'] as String? ?? '';
+    final shown = phone.isNotEmpty && !phone.contains('•');
+    final service = (_b['service_name'] as String? ?? '').isEmpty ? 'Booking' : _b['service_name'] as String;
+    Widget chip(String words, bool on, VoidCallback tap, {String? label}) => TapArea(
+      child: Semantics(
+        button: true,
+        selected: on,
+        label: label ?? words,
+        excludeSemantics: true,
+        onTap: tap,
+        child: GestureDetector(
+          onTap: tap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(color: on ? (TkTheme.of(context).mode == TkMode.dark ? look.lime : t.brand) : look.card, borderRadius: BorderRadius.circular(999)),
+            child: Text(words, style: tkText(size: 14, weight: 600, color: on ? (TkTheme.of(context).mode == TkMode.dark ? t.brand : const Color(0xFFFFFFFF)) : t.text)),
+          ),
+        ),
+      ),
+    );
+    return TkFormSheet(
+      title: 'Booking $_ref',
+      crumb: '$service${_b['starts_at'] != null ? ' · ${whenLabel(_b['starts_at'] as String)}' : ''}',
+      action: _busy ? 'Moving…' : 'Move',
+      onAction: _busy || _time.isEmpty ? null : _move,
+      second: 'Cancel booking',
+      secondDanger: true,
+      onSecond: _busy ? null : _cancel,
+      children: [
+        // The customer, with Call and Text as round icons beside them.
+        TkPersonCard(
+          name: name.isEmpty ? 'The customer' : name,
+          sub: shown ? groupedPhone(phone) : phone,
+          actions: const [],
+          trailing: !shown
+              ? null
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TkHeadButton(icon: 'b-phone', label: 'Call $phone', onCard: true, onTap: () => openOrSay(context, () => callPhone(phone), 'That number could not be called.')),
+                    const SizedBox(width: 8),
+                    TkHeadButton(icon: 'b-chat', label: 'Text $phone', onCard: true, onTap: () => openOrSay(context, () => textPhone(phone), 'That number could not be texted.')),
+                  ],
+                ),
+        ),
+        Text('MOVE TO', semanticsLabel: 'Move to', style: tkText(size: 11.5, weight: 700, letterSpacing: 0.4, color: t.muted)),
+        if (_days == null)
+          const TkLoading(rows: 1, label: 'Loading free times…')
+        else if (_days!.isEmpty && !_cantRead)
+          Text('No free time to move it to in the days you take bookings.', style: tkHint(t))
+        else ...[
+          Wrap(spacing: 8, runSpacing: 8, children: [for (final d in _days!) chip(dayLabel(d), d == _day, () => d == _day ? null : _load(d))]),
+          if (_times == null)
+            const TkLoading(rows: 1, label: 'Loading free times…')
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [for (final x in _times!) chip(lagosTime(x), x == _time, () => setState(() => _time = x), label: '${dayLabel(_day)}, ${lagosTime(x)}')],
+            ),
+          if (!_cantRead) Text('Free times only · the customer is texted the new time', style: tkText(size: 12.5, color: t.muted)),
+        ],
+        if (_error != null) TkErrorBox(_error!),
+        if (_cantRead)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TkLink(
+              label: 'Type a day and time instead',
+              onTap: () async {
+                final said = await typeMove(context, widget.auth, _b);
+                if (said != null && context.mounted) Navigator.of(context).pop(said);
+              },
+            ),
+          ),
       ],
     );
   }

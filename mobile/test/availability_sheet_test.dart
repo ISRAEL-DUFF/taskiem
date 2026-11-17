@@ -47,7 +47,14 @@ void main() {
     await settle(t);
     expect(find.text('Free'), findsWidgets);
     expect(find.text('The 2 businesses you deliver for see this when they offer a delivery.'), findsOneWidget);
-    expect(find.text('You hold 1 delivery now, so you are busy until they are delivered, whatever you choose.'), findsOneWidget);
+    expect(find.text('You hold 1 delivery now'), findsOneWidget);
+    // As drawn: Busy till as chips; a time of one's own behind Another time.
+    await t.tap(find.bySemanticsLabel('Busy the rest of today'));
+    await settle(t);
+    expect(sent.last, '{"state":"busy"}');
+    await t.pump(const Duration(seconds: 2));
+    await t.tap(find.bySemanticsLabel('Another time'));
+    await t.pump();
     await t.enterText(find.byType(EditableText), '3pm');
     await t.tap(find.bySemanticsLabel('Busy'));
     await settle(t);
@@ -58,7 +65,7 @@ void main() {
     await settle(t);
     expect(sent.last, '{"state":"off"}');
     expect(find.text('Off today'), findsWidgets);
-    expect(changed, 2);
+    expect(changed, 3);
     await t.pump(const Duration(seconds: 2));
     await expectLargeText(t, TaskiemApp(mode: TkMode.dark, home: AvailabilitySheet(auth: chats.auth)), drive: settle);
   });
@@ -84,6 +91,8 @@ void main() {
     );
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: AvailabilitySheet(auth: chats.auth)));
     await settle(t);
+    await t.tap(find.bySemanticsLabel('Another time'));
+    await t.pump();
     await t.enterText(find.byType(EditableText), '6am');
     await t.tap(find.bySemanticsLabel('Busy'));
     await settle(t);

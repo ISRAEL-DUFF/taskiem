@@ -17,7 +17,7 @@ import '../kit/page.dart';
 import '../kit/polling.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
-import 'cards.dart' show CardFrame;
+import 'cards.dart' show CardFrame, cardDecoration;
 import 'words.dart' show cardLine, clock;
 
 /// The thread of one document: an order (ours), a purchase, an invoice or
@@ -167,12 +167,14 @@ class _Line extends StatelessWidget {
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: card != null ? double.infinity : 300),
         child: Container(
-          padding: card != null ? const EdgeInsets.all(6) : const EdgeInsets.fromLTRB(10, 7, 10, 6),
-          decoration: BoxDecoration(
-            color: mine ? t.chatOut : t.chatIn,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: t.border),
-          ),
+          padding: card != null ? const EdgeInsets.fromLTRB(14, 12, 14, 8) : const EdgeInsets.fromLTRB(10, 7, 10, 6),
+          decoration: card != null
+              ? cardDecoration(context, mine: mine, first: true)
+              : BoxDecoration(
+                  color: mine ? t.chatOut : t.chatIn,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: t.border),
+                ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,

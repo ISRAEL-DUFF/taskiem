@@ -17,6 +17,8 @@ import 'package:taskiem/theme/theme.dart';
 
 import 'support.dart';
 
+var noTimes = false;
+
 void main() {
   setUpAll(loadFonts);
 
@@ -83,6 +85,16 @@ void main() {
               ],
             });
           }
+          if (p == '/v1/storefront/bookings/BK-1/times') {
+            if (noTimes) return http.Response(jsonEncode({'error': 'not found'}), 404, headers: {'content-type': 'application/json'});
+            final day = req.url.queryParameters['day'] ?? '2099-11-13';
+            return ok({
+              'service': {'id': 'S1', 'name': 'Braids', 'minutes': 90},
+              'days': ['2099-11-13', '2099-11-14'],
+              'day': day,
+              'times': day == '2099-11-14' ? ['2099-11-14T10:00:00Z', '2099-11-14T12:00:00Z'] : ['2099-11-13T13:00:00Z'],
+            });
+          }
           if (p == '/v1/storefront/bookings') {
             return ok({
               'bookings': [
@@ -135,10 +147,41 @@ void main() {
 
   testWidgets('a booking moved and cancelled; the services listed', (t) async {
     final sent = await open(t);
-    expect(find.text('10:00–11:30 · Braids'), findsOneWidget);
-    expect(find.text('Ngozi · 0803 · BK-1'), findsOneWidget);
+    expect(find.text('10:00–11:30'), findsOneWidget);
+    expect(find.text('Ngozi · BK-1'), findsOneWidget);
     expect(find.text('1 hour 30 min · ₦15,000'), findsOneWidget);
-    await t.tap(find.bySemanticsLabel('Move Braids BK-1'));
+    // The booking opens its sheet: a free time picked by day and time.
+    await t.tap(find.bySemanticsLabel(RegExp('^Move or cancel Braids BK-1')));
+    await settle(t);
+    expect(find.text('Booking BK-1'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^Call 0803')), findsWidgets);
+    await t.tap(find.bySemanticsLabel('Sat 14 Nov'));
+    await settle(t);
+    await t.tap(find.bySemanticsLabel('Sat 14 Nov, 11:00'));
+    await t.pump();
+    await t.tap(find.bySemanticsLabel('Move'));
+    await settle(t);
+    expect(sent.single, 'POST /v1/storefront/bookings/BK-1/move {"starts_at":"2099-11-14T10:00:00Z"}');
+    expect(find.text('BK-1 is moved to Sat 14 Nov, 11:00; the customer is told.'), findsOneWidget);
+    sent.clear();
+    await t.tap(find.bySemanticsLabel(RegExp('^Move or cancel Braids BK-1')));
+    await settle(t);
+    await t.tap(find.bySemanticsLabel('Cancel booking'));
+    await t.pumpAndSettle();
+    // Not two Cancels: the one that keeps it says so.
+    expect(find.bySemanticsLabel('Keep it'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel('Cancel the booking'));
+    await settle(t);
+    expect(sent.single, 'POST /v1/storefront/bookings/BK-1/cancel {}');
+  });
+
+  testWidgets('free times not read: the day and time typed instead', (t) async {
+    noTimes = true;
+    addTearDown(() => noTimes = false);
+    final sent = await open(t);
+    await t.tap(find.bySemanticsLabel(RegExp('^Move or cancel Braids BK-1')));
+    await settle(t);
+    await t.tap(find.text('Type a day and time instead'));
     await t.pumpAndSettle();
     final inModal = find.descendant(of: find.byType(TkModal), matching: find.byType(EditableText));
     await t.enterText(inModal.at(1), '11:00');
@@ -151,18 +194,10 @@ void main() {
     await t.enterText(inModal.at(0), '2099-11-14');
     await t.enterText(inModal.at(1), '11:00');
     await t.pump();
-    await t.tap(find.bySemanticsLabel('Move'));
+    await t.tap(find.descendant(of: find.byType(TkModal), matching: find.bySemanticsLabel('Move')).first);
     await settle(t);
     expect(sent.single, 'POST /v1/storefront/bookings/BK-1/move {"starts_at":"2099-11-14T11:00:00+01:00"}');
     expect(find.text('BK-1 is moved to Sat 14 Nov, 11:00; the customer is told.'), findsOneWidget);
-    sent.clear();
-    await t.tap(find.bySemanticsLabel('Cancel Braids BK-1'));
-    await t.pumpAndSettle();
-    // Not two Cancels: the one that keeps it says so.
-    expect(find.bySemanticsLabel('Keep it'), findsOneWidget);
-    await t.tap(find.bySemanticsLabel('Cancel the booking'));
-    await settle(t);
-    expect(sent.single, 'POST /v1/storefront/bookings/BK-1/cancel {}');
   });
 
   testWidgets('the hours: Monday 09:00 to 17:00 kept, Tuesday opened, auto-confirm; past days off removed; saved as the API takes them', (t) async {

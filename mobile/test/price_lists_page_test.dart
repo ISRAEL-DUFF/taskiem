@@ -9,7 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:taskiem/chat/chats.dart';
 import 'package:taskiem/chat/price_lists_page.dart';
-import 'package:taskiem/kit/modal.dart' show TkModal;
+import 'package:taskiem/kit/sheet.dart' show TkSheet;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/theme/theme.dart';
 
@@ -78,18 +78,20 @@ void main() {
   testWidgets('a list’s items: one added, a lower price for more', (t) async {
     final sent = await open(t);
     expect(find.text('1 item · shared with Rivers Foods'), findsOneWidget);
-    await t.tap(find.bySemanticsLabel('Items of Trade'));
+    await t.tap(find.bySemanticsLabel(RegExp('^Items of Trade')));
     await settle(t);
     await t.tap(find.text('Beans (bag)'));
     await t.pump();
     await t.tap(find.bySemanticsLabel('+ Lower price for more of Rice'));
     await t.pump();
-    final inModal = find.descendant(of: find.byType(TkModal), matching: find.byType(EditableText));
+    // As drawn: a sheet, Cancel and Save at its foot.
+    expect(find.text('Items of Trade'), findsOneWidget);
+    final inModal = find.descendant(of: find.byType(TkSheet), matching: find.byType(EditableText));
     // Rice: price, at least, from, its price; then Beans: price, at least.
     await t.enterText(inModal.at(2), '10');
     await t.enterText(inModal.at(3), '38,000');
     await t.pump();
-    await t.tap(find.descendant(of: find.byType(TkModal), matching: find.bySemanticsLabel('Save')));
+    await t.tap(find.descendant(of: find.byType(TkSheet), matching: find.bySemanticsLabel('Save')));
     await settle(t);
     expect(
       sent.single,
@@ -105,7 +107,7 @@ void main() {
     await settle(t);
     await t.tap(find.text('Eko Events'));
     await t.pump();
-    await t.tap(find.descendant(of: find.byType(TkModal), matching: find.bySemanticsLabel('Save')));
+    await t.tap(find.descendant(of: find.byType(TkSheet), matching: find.bySemanticsLabel('Save')));
     await settle(t);
     expect(sent.single, 'PUT /v1/price-lists/PL1/links {"links":["K1","K2"]}');
     sent.clear();

@@ -13,6 +13,7 @@ import 'package:taskiem/app/auth.dart';
 import 'package:taskiem/app/links.dart';
 import 'package:taskiem/app/prefs.dart';
 import 'package:taskiem/app/session.dart';
+import 'package:taskiem/kit/forms.dart' show TkSwitch;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/screens/signed_in.dart';
 import 'package:taskiem/theme/theme.dart';
@@ -21,6 +22,19 @@ import 'lock_test.dart' show FakeUnlocker;
 import 'support.dart';
 
 http.Response _json(Object body, [int status = 200]) => http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
+
+/// Settings is one list: a row opens its own page.
+Future<void> openRow(WidgetTester t, String title) async {
+  final row = find.text(title).first;
+  await t.ensureVisible(row);
+  await t.pumpAndSettle();
+  await t.tap(row);
+  await t.pumpAndSettle();
+  for (var i = 0; i < 6; i++) {
+    await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));
+    await t.pump();
+  }
+}
 
 void main() {
   setUpAll(loadFonts);
@@ -32,6 +46,7 @@ void main() {
     Map<String, bool> factors = const {'totp': true, 'password': true},
     Map<String, dynamic>? user,
     Map<String, http.Response Function(Object? body)> answers = const {},
+    String? page,
   }) async {
     t.view.physicalSize = const Size(390, 2400);
     t.view.devicePixelRatio = 1;
@@ -64,6 +79,8 @@ void main() {
       await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));
       await t.pump();
     }
+    // Settings is one list; [page] is the row to open (its own page).
+    if (page != null) await openRow(t, page);
     return (asked: asked, prefs: prefs, u: u, auth: auth);
   }
 
@@ -108,7 +125,7 @@ void main() {
   });
 
   testWidgets('S1: the app lock is off until turned on, and every change is made with the phone\'s own unlock', (t) async {
-    final o = await open(t);
+    final o = await open(t, page: 'App lock');
     expect(o.prefs.lock, isFalse, reason: 'off, as WhatsApp\'s');
     expect(find.text('Taskiem opens without asking.'), findsOneWidget);
     o.u.answer = false;
@@ -138,13 +155,35 @@ void main() {
   });
 
   testWidgets('S1: a phone with no lock of its own cannot turn the app lock on', (t) async {
-    final o = await open(t);
+    final o = await open(t, page: 'App lock');
     o.u.has = false;
     await t.tap(find.text('Immediately'));
     await settle(t);
     expect(o.prefs.lock, isFalse);
     expect(find.textContaining('Set a screen lock on this phone first'), findsOneWidget);
     expect(o.u.asked, 0);
+  });
+
+  testWidgets('S1: the list\'s App lock switch: on locks at once, off turns it off, each with the phone\'s own unlock', (t) async {
+    final o = await open(t);
+    final sw = find.bySemanticsLabel('App lock').first;
+    await t.ensureVisible(sw);
+    await t.pumpAndSettle();
+    await t.tap(find.byWidgetPredicate((w) => w is TkSwitch && w.label == 'App lock'));
+    await settle(t);
+    expect(o.prefs.lock, isTrue);
+    expect(o.prefs.lockAfter, Duration.zero);
+    expect(o.u.asked, 1);
+    await t.tap(find.byWidgetPredicate((w) => w is TkSwitch && w.label == 'App lock'));
+    await settle(t);
+    expect(o.prefs.lock, isFalse);
+    expect(o.u.asked, 2);
+    o.u.has = false;
+    await t.tap(find.byWidgetPredicate((w) => w is TkSwitch && w.label == 'App lock'));
+    await settle(t);
+    expect(o.prefs.lock, isFalse, reason: 'no lock of its own on this phone');
+    await t.pump(const Duration(seconds: 5));
+    await t.pumpAndSettle();
   });
 
   test('S1: the lock\'s choice is kept, and the old always-on setting is not read', () async {
@@ -207,7 +246,7 @@ void main() {
           pinSet = true;
           return _json({'set': true});
         },
-      },
+      },      page: 'WhatsApp',
     );
     await field(t, 'Your WhatsApp number', '+2348031239001');
     await field(t, 'Authenticator code, to link a number', '123456');
@@ -217,8 +256,10 @@ void main() {
     await field(t, 'Code sent to your number', '654321');
     await press(t, 'Link');
     expect(o.asked.where((a) => a.$2 == '/v1/me/whatsapp/verify').single.$3, {'code': '654321'});
-    expect(find.textContaining('Linked: +2348031239001'), findsOneWidget);
+    expect(find.text('+2348031239001'), findsOneWidget, reason: 'the number linked, large on the top card');
     expect(find.text('Approval PIN'), findsOneWidget);
+    await t.tap(find.text('Set a PIN'));
+    await settle(t);
     await field(t, 'PIN', '480211');
     await field(t, 'Authenticator code, to set the PIN', '111222');
     await press(t, 'Set PIN');
@@ -248,7 +289,7 @@ void main() {
           slackPending = true;
           return _json({'enabled': true, 'linked': false, 'pending': true});
         },
-      },
+      },      page: 'Telegram',
     );
     await field(t, 'Authenticator code, to link Telegram', '123456');
     await press(t, 'Link Telegram');
@@ -256,6 +297,9 @@ void main() {
     expect(o.asked.lastWhere((a) => a.$1 != 'GET').$3, {'totp': '123456'});
     await press(t, 'Open Telegram');
     expect(opened, [Uri.parse('https://t.me/TaskiemBot?start=abc')]);
+    await t.tap(find.bySemanticsLabel('Back to Settings'));
+    await t.pumpAndSettle();
+    await openRow(t, 'Slack');
     await field(t, 'Authenticator code, to link Slack', '654321');
     await press(t, 'Link Slack');
     expect((o.asked.lastWhere((a) => a.$1 != 'GET').$1, o.asked.lastWhere((a) => a.$1 != 'GET').$2), ('POST', '/v1/me/slack'));
@@ -265,7 +309,7 @@ void main() {
   });
 
   testWidgets('a passkey alone: linking says to do it where the passkey is', (t) async {
-    await open(t, factors: const {'passkey': true}, answers: {'GET /v1/me/telegram': (_) => _json({'enabled': true, 'linked': false})});
+    await open(t, factors: const {'passkey': true}, answers: {'GET /v1/me/telegram': (_) => _json({'enabled': true, 'linked': false})}, page: 'Telegram');
     expect(find.textContaining('This needs your passkey. Do it on the web, where Taskiem asks for it.'), findsOneWidget);
     final link = t.getSemantics(find.bySemanticsLabel('Link Telegram'));
     expect(link.flagsCollection.isEnabled, isNot(true), reason: 'nothing to press with');

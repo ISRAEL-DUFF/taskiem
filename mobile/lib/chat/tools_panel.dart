@@ -13,8 +13,9 @@ import '../api/transport.dart' show ApiError, Offline;
 import '../kit/motion.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
-import '../kit/list.dart';
 import '../kit/tap_area.dart';
+import '../theme/look.dart';
+import 'words.dart' show CardTone;
 import '../theme/theme.dart';
 import 'chats.dart';
 import 'tools.dart';
@@ -266,12 +267,15 @@ class _ToolsPanelState extends State<ToolsPanel> {
         // On a phone the tools sit on the message bar, flush, as one surface
         // (`.composer > .tk-tools { margin: 0; border-radius: 22px 22px 0 0;
         // padding: 12px 12px 10px }`).
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+        // A card floating over the chat, on the page's ground, its tiles
+        // white on it (docs/spec/mobile-app-look.md, "The chat").
+        margin: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+        padding: const EdgeInsets.fromLTRB(12, 14, 12, 12),
         constraints: BoxConstraints(maxHeight: widget.maxHeight ?? double.infinity),
         decoration: BoxDecoration(
-          color: t.panel,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-          boxShadow: const [BoxShadow(color: Color(0x590D3B2E), offset: Offset(0, -10), blurRadius: 30, spreadRadius: -18)],
+          color: TkLook.of(context).ground,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: const [BoxShadow(color: Color(0x40000000), offset: Offset(0, 10), blurRadius: 40, spreadRadius: -10)],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -284,7 +288,7 @@ class _ToolsPanelState extends State<ToolsPanel> {
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
                 children: [
-                  Semantics(header: true, child: Text('Tools', style: tkText(size: 18, weight: 800, letterSpacing: -0.18, color: t.text))),
+                  Semantics(header: true, child: Text('Tools', style: tkDisplay(size: 22, letterSpacing: -0.6, color: t.text))),
                   const Spacer(),
                   Flexible(
                     child: Text(
@@ -308,9 +312,9 @@ class _ToolsPanelState extends State<ToolsPanel> {
                 child: SingleChildScrollView(
                   child: _Grid(
                     children: [
-                      for (final x in lead) _Tile(title: x.title, icon: x.icon, line: x.line, onTap: x.onPick),
+                      for (final x in lead) _Tile(keyName: x.key, title: x.title, icon: x.icon, line: x.line, onTap: x.onPick),
                       for (final tool in listed) _toolTile(tool),
-                      for (final x in more) _Tile(title: x.title, icon: x.icon, line: x.line, onTap: x.onPick),
+                      for (final x in more) _Tile(keyName: x.key, title: x.title, icon: x.icon, line: x.line, onTap: x.onPick),
                     ],
                   ),
                 ),
@@ -359,7 +363,7 @@ class _ToolsPanelState extends State<ToolsPanel> {
     final rows = c.rowsOf(tool);
     final line = c.failed(tool) ? 'Could not load' : (rows == null ? ' ' : tool.line(rows));
     final badge = rows == null ? null : tool.badge?.call(rows);
-    return _Tile(title: tool.titleOf(rows), icon: tool.icon, line: line, badge: badge, onTap: () => widget.onOpen(tool));
+    return _Tile(keyName: tool.key, title: tool.titleOf(rows), icon: tool.icon, line: line, badge: badge, onTap: () => widget.onOpen(tool));
   }
 }
 
@@ -385,10 +389,23 @@ class _Grid extends StatelessWidget {
   }
 }
 
-/// `.tk-tile` at phone width: a row, the icon on pine beside the name and
-/// its line; the badge in the corner.
+/// A tool's accent: the same colour for the same tool everywhere (selling
+/// lime, stock and bills orange, money and invoices blue…).
+Color toolAccent(TkLook look, String key) => switch (key) {
+  'sell' || 'money' || 'handover' => look.lime,
+  'products' || 'orders' || 'order' || 'statement' => look.teal,
+  'services' || 'tables' || 'briefing' || 'book' || 'availability' || 'tasks' => look.violet,
+  'stock' || 'bills' || 'offer' => look.orange,
+  'prices' || 'purchases' || 'invoices' || 'invoice-them' || 'clock-in' || 'clock-out' => look.blue,
+  _ => [look.teal, look.violet, look.blue, look.orange, look.lime][key.hashCode.abs() % 5],
+};
+
+/// A tool's tile: its icon white on its accent's square, the name, and its
+/// line, or its count as a capsule in the accents' meaning (low and to pay
+/// orange, overdue red, new lime).
 class _Tile extends StatelessWidget {
-  const _Tile({required this.title, required this.icon, required this.line, this.badge, required this.onTap});
+  const _Tile({required this.keyName, required this.title, required this.icon, required this.line, this.badge, required this.onTap});
+  final String keyName;
   final String title;
   final String icon;
   final String line;
@@ -398,49 +415,59 @@ class _Tile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final b = badge;
+    final (fill, ink) = switch (b?.tone) {
+      CardTone.warn => (look.orange, look.orangeInk),
+      CardTone.danger => (look.red, look.redInk),
+      CardTone.lime => (look.lime, look.limeInk),
+      _ => (look.teal, look.tealInk),
+    };
     return Semantics(
       button: true,
-      label: [title, if (line.trim().isNotEmpty) line, if (badge != null) badge!.text].join(', '),
+      label: [title, if (line.trim().isNotEmpty) line, if (b != null) b.text].join(', '),
       onTap: onTap,
       excludeSemantics: true,
       child: TkPress(
         onTap: onTap,
         child: Container(
-          constraints: const BoxConstraints(minHeight: 60),
+          constraints: const BoxConstraints(minHeight: 58),
           padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: t.tkTile, borderRadius: BorderRadius.circular(16)),
-          child: Stack(
-            clipBehavior: Clip.none,
+          decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(18)),
+          child: Row(
             children: [
-              Row(
-                children: [
-                  // `.tk-tile-icon { width: 36px; height: 36px; border-radius: 11px; background: var(--brand); color: var(--brand-dark) }`
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(color: t.brand, borderRadius: BorderRadius.circular(11)),
-                    alignment: Alignment.center,
-                    child: TkIcon(icon, size: 20, color: t.brandDark),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // A button's own line height (about 1.2), not the page's.
-                        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14, weight: 700, lineHeight: 1.2, color: t.text)),
-                        // ChatTools.tsx `.tk-tile-line.tk-roll`: a new line rolls up.
-                        TkRoll(
-                          value: line,
-                          onShow: false,
-                          child: Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 12, lineHeight: 1.2, color: t.muted)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(color: toolAccent(look, keyName), borderRadius: BorderRadius.circular(11)),
+                alignment: Alignment.center,
+                child: TkIcon(icon, size: 18, stroke: 2.1, color: const Color(0xFFFFFFFF)),
               ),
-              if (badge != null) Positioned(top: -4, right: -4, child: TkPill(badge!.text, tone: badge!.tone, small: true)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14, weight: 600, lineHeight: 1.25, color: t.text)),
+                    if (b != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                          decoration: BoxDecoration(color: fill.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(999)),
+                          child: Text(b.text, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 10.5, weight: 700, lineHeight: 1.3, color: ink)),
+                        ),
+                      )
+                    else
+                      // ChatTools.tsx `.tk-tile-line.tk-roll`: a new line rolls up.
+                      TkRoll(
+                        value: line,
+                        onShow: false,
+                        child: Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 11.5, lineHeight: 1.3, color: t.muted)),
+                      ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
