@@ -379,12 +379,15 @@ delivery, where it goes and its pin once it is theirs, and the word to send
 next. Delivered ones are left out.
 
 **The morning briefing** (the Alerts design): from 8am Lagos, for those who run
-the business (`storefront.manage` or `invoice.manage`), a pine card leads the
+the business (`storefront.manage`, `invoice.manage` or `school.manage`), a pine card leads the
 end of the Taskiem conversation (`GET /v1/chat-briefing`): "Good morning, Ada",
 yesterday's sales against the same day a week before ("Up 12% on last
 Wednesday") with the week's bars, and tiles for what is owed (the invoices
 page), low stock (the Stock tool), today's deliveries and bookings, each only
-for those who may see it. Tapping the sales asks "how did we do yesterday";
+for those who may see it. A school's people (`school.read`, schools on, a term
+current) see the term's fees instead: the fees collected yesterday, how much of
+the term's is in, still owed, cleared, waiting for them as the second person,
+and not matched (`docs/spec/mobile-app-look.md`, "The school in the chats"). Tapping the sales asks "how did we do yesterday";
 **Got it** puts the card away for the day (if that fails the card stays and
 says so). The card is read again when the page comes back and every ten
 minutes, so it appears at 8am and a new day's replaces yesterday's. On the

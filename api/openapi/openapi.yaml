@@ -25073,7 +25073,7 @@ paths:
       tags:
       - Account
       summary: The morning briefing card
-      description: "For those who run the business (storefront.manage or invoice.manage), with chat tools on, from 8am Lagos time (ready); yesterday's sales against the same day a week before with the week's bars, what customers owe, how many items are low, and today's deliveries and bookings, each only for those who may see it. Sales are counter sales, shop, chat and trade orders, and invoices sent (each only for those who may see it). put_off once the person has said Got it (Later with key). With show=1 (the tools menu's Briefing, or briefing typed), today's is ready at any hour and Got it is undone."
+      description: "For those who run the business (storefront.manage, invoice.manage or school.manage), with chat tools on, from 8am Lagos time (ready); yesterday's sales against the same day a week before with the week's bars, what customers owe, how many items are low, and today's deliveries and bookings, and the school's current term (school.read, schools on, a term current), each only for those who may see it. Sales are counter sales, shop, chat and trade orders, and invoices sent (each only for those who may see it). put_off once the person has said Got it (Later with key). With show=1 (the tools menu's Briefing, or briefing typed), today's is ready at any hour and Got it is undone."
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -25156,6 +25156,53 @@ paths:
                     type: integer
                   bookings:
                     type: integer
+                  school:
+                    type: object
+                    description: "The current term's fees as they stand (school.read; schools on and a term current): collected of expected, this week's, overdue, who owes, who is not cleared (partly paid or not paid), the cash and discounts waiting for this person as the second person (school.approve; never their own), and the last daily close."
+                    required: [term, expected_kobo, collected_kobo, collected_percent, this_week_kobo, overdue_kobo, debtors, debtors_kobo, not_cleared, cleared, students]
+                    properties:
+                      term:
+                        type: string
+                      expected_kobo:
+                        type: integer
+                      collected_kobo:
+                        type: integer
+                      collected_percent:
+                        type: integer
+                      this_week_kobo:
+                        type: integer
+                      overdue_kobo:
+                        type: integer
+                      debtors:
+                        type: integer
+                      debtors_kobo:
+                        type: integer
+                      not_cleared:
+                        type: integer
+                      cleared:
+                        type: integer
+                      students:
+                        type: integer
+                      yesterday:
+                        type: object
+                        description: The money that landed yesterday and what of it no invoice counts, from yesterday's close, when it was taken.
+                        required: [day, collected_kobo, payments, unmatched, reconciles]
+                        properties:
+                          day:
+                            type: string
+                            format: date
+                          collected_kobo:
+                            type: integer
+                          payments:
+                            type: integer
+                          unmatched:
+                            type: integer
+                          reconciles:
+                            type: boolean
+                      waiting:
+                        type: integer
+                      last_close:
+                        $ref: '#/components/schemas/SchoolCloseBrief'
         default:
           $ref: '#/components/responses/Error'
   /v1/chat-handover:
@@ -29527,7 +29574,7 @@ components:
           description: The alert's key, for Later (its kind and what it is about)
         kind:
           type: string
-          enum: [low_stock, overdue, new_order, rider, confirm, unmatched, approval, deal, order_draft]
+          enum: [low_stock, overdue, new_order, rider, confirm, unmatched, approval, school_approval, deal, order_draft]
         at:
           type: string
           format: date-time
@@ -29567,6 +29614,9 @@ components:
         who:
           type: string
           description: Who asked for the approval ("Tunde (cashier)")
+        school:
+          $ref: '#/components/schemas/SchoolPosting'
+          description: "school_approval: a school's request waiting for a second person (cash at the desk, a discount), the student's name masked; for those with school.approve, never their own. Decided with POST /v1/schools/approvals/{id}."
     Agent:
       type: object
       required: [id, code, name, status, region, workspace_id]

@@ -105,3 +105,27 @@ func TestWhatsAppSchoolApprovals(t *testing.T) {
 		t.Errorf("%d decisions audited", n)
 	}
 }
+
+// A school's tools in the chat apps' "tools": its pages on the web, with
+// schools on; one by its start; none with schools off.
+func TestWhatsAppSchoolTools(t *testing.T) {
+	w := newWAWorld(t)
+	owner := w.tenant(t, "Greenfield", "owner@greenfield.test")
+	owner.must(200, "PUT", "/v1/settings/chat-tools", map[string]any{"chat_tools": true})
+	owner.must(200, "PUT", "/v1/settings/schools", map[string]any{"enabled": true})
+	const on = "+2348010000021"
+	w.bind(t, owner, on)
+	got := w.say(t, on, "tools")
+	for _, want := range []string{"• Students: ", "/schools\n", "• Record a payment: ", "/schools/payments", "• Debtors: ", "/schools/debtors", "• Clearance: ", "/schools/clearance", "• Invoices: "} {
+		if !strings.Contains(got+"\n", want) {
+			t.Fatalf("tools without %q: %q", want, got)
+		}
+	}
+	if got := w.say(t, on, "/debt"); !strings.Contains(got, "/schools/debtors") || strings.Contains(got, "Students") {
+		t.Fatalf("/debt: %q", got)
+	}
+	owner.must(200, "PUT", "/v1/settings/schools", map[string]any{"enabled": false})
+	if got := w.say(t, on, "tools"); strings.Contains(got, "/schools") {
+		t.Fatalf("schools off, still the school's tools: %q", got)
+	}
+}
