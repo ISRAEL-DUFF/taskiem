@@ -670,12 +670,21 @@ func (s *Server) opsReportAction(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if !s.checkOpsStepUp(w, r, req.StepUp, "ops.report."+action, id.String()) {
+	var tenant uuid.UUID
+	var kind string
+	if err := s.Store.Pool.QueryRow(r.Context(), `SELECT tenant_id, kind FROM taskiem_ops_page_reports('all') WHERE id = $1`, id).Scan(&tenant, &kind); err != nil {
+		s.opsDBFail(w, r, err)
 		return
 	}
-	var tenant uuid.UUID
-	if err := s.Store.Pool.QueryRow(r.Context(), `SELECT tenant_id FROM taskiem_ops_page_reports('all') WHERE id = $1`, id).Scan(&tenant); err != nil {
-		s.opsDBFail(w, r, err)
+	// A report on a listing in Discover is decided on the listing: taking
+	// it out acts on its reports, putting it back (or leaving it) dismisses
+	// them, so a listing hidden for reports is never shown again by a
+	// report's own button.
+	if kind == "discover" && action != "contact" {
+		writeErr(w, http.StatusConflict, fmt.Sprintf("This report is on a listing in Discover. POST /v1/ops/discover/%[1]s/remove takes the listing out and acts on its reports; POST /v1/ops/discover/%[1]s/restore dismisses them.", tenant))
+		return
+	}
+	if !s.checkOpsStepUp(w, r, req.StepUp, "ops.report."+action, id.String()) {
 		return
 	}
 	o := operatorFrom(r.Context())

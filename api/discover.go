@@ -84,8 +84,9 @@ func (s *Server) discoverSearch(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "near is a latitude (-90 to 90) and a longitude (-180 to 180).")
 		return
 	}
-	if in.Offset < 0 || in.Offset > 200 {
-		in.Offset = 0
+	if in.Offset < 0 || in.Offset > discover.MaxOffset {
+		writeErr(w, http.StatusBadRequest, fmt.Sprintf("offset is from 0 to %d.", discover.MaxOffset))
+		return
 	}
 	if !s.limiter("discover-search:"+person.String(), 2*time.Second, 30).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "You are searching too fast. Wait a moment and try again.")
@@ -117,6 +118,11 @@ func (s *Server) discoverCategories(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"categories": out})
 }
 
+// notInDiscover is what a person is told of a business whose listing is
+// gone (never listed, turned off, taken out or hidden): the app and the
+// web show it as it comes.
+const notInDiscover = "This business is not in Discover any more."
+
 // discoverProfile is GET /v1/discover/{business}: a business's profile in
 // Discover, with the person's own chat with it when they have one (Their
 // shop and Book open in that chat, as its tools). 404 for a business that
@@ -128,7 +134,7 @@ func (s *Server) discoverProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	business, err := uuid.Parse(chi.URLParam(r, "business"))
 	if err != nil {
-		writeErr(w, http.StatusNotFound, "This business is not in Discover.")
+		writeErr(w, http.StatusNotFound, notInDiscover)
 		return
 	}
 	if !s.limiter("discover-profile:"+person.String(), time.Second, 60).Allow() {
@@ -158,7 +164,7 @@ func (s *Server) discoverProfile(w http.ResponseWriter, r *http.Request) {
 		return err
 	})
 	if errors.Is(err, discover.ErrNotFound) {
-		writeErr(w, http.StatusNotFound, "This business is not in Discover.")
+		writeErr(w, http.StatusNotFound, notInDiscover)
 		return
 	}
 	if err != nil {
@@ -171,8 +177,11 @@ func (s *Server) discoverProfile(w http.ResponseWriter, r *http.Request) {
 
 // discoverReport is POST /v1/discover/{business}/report {reason, note}: a
 // report on a listing to Taskiem's moderators, beside the reports on
-// pages. Three different people with open reports hide the listing until
-// a moderator looks.
+// pages. Three counting reports from different people (an account at
+// least 7 days old, not one whose earlier reports were dismissed) put the
+// listing first in the moderators' queue, and hide it when one says scam
+// (engine/discover FlagAtReporters). Twelve Discover reports in two hours
+// per person, three a day per listing, are kept in the database.
 func (s *Server) discoverReport(w http.ResponseWriter, r *http.Request) {
 	person, ok := discoverPerson(w, r)
 	if !ok {
@@ -180,7 +189,7 @@ func (s *Server) discoverReport(w http.ResponseWriter, r *http.Request) {
 	}
 	business, err := uuid.Parse(chi.URLParam(r, "business"))
 	if err != nil {
-		writeErr(w, http.StatusNotFound, "This business is not in Discover.")
+		writeErr(w, http.StatusNotFound, notInDiscover)
 		return
 	}
 	var in struct {
@@ -206,21 +215,26 @@ func (s *Server) discoverReport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusTooManyRequests, "You have sent many reports. Try again later.")
 		return
 	}
-	var taken bool
+	var taken string
 	err = db.InPersonTx(r.Context(), s.Store.Pool, person, func(tx pgx.Tx) error {
 		return tx.QueryRow(r.Context(), `SELECT taskiem_discover_report($1, $2, $3, $4, $5)`, person, business, in.Reason, in.Note, s.reporterDigest(person)).Scan(&taken)
 	})
 	var pe *pgconn.PgError
 	if errors.As(err, &pe) && pe.Code == "P0002" {
-		writeErr(w, http.StatusNotFound, "This business is not in Discover.")
+		writeErr(w, http.StatusNotFound, notInDiscover)
 		return
 	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if !taken {
+	switch taken {
+	case "taken":
+	case "listing":
 		writeErr(w, http.StatusTooManyRequests, "You have reported this business several times today. Taskiem's moderators have your reports.")
+		return
+	default:
+		writeErr(w, http.StatusTooManyRequests, "You have sent many reports. Try again later.")
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"reported": true, "words": "Thank you. Taskiem's moderators will look at this business."})
@@ -299,7 +313,9 @@ func (s *Server) putDiscoverSettings(w http.ResponseWriter, r *http.Request) {
 // opsDiscoverAction is POST /v1/ops/discover/{tenant}/{remove,restore}: a
 // moderator takes a listing out of Discover (a reason is required; the
 // owners are told it) or puts it back. Open reports on it are acted on, or
-// dismissed. A passkey step-up; audited in both chains.
+// dismissed: restore on a listing that was not taken out is how its
+// reports are dismissed (the reports' own buttons refuse a Discover
+// report). A passkey step-up; audited in both chains.
 func (s *Server) opsDiscoverAction(w http.ResponseWriter, r *http.Request) {
 	tenant, err := uuid.Parse(chi.URLParam(r, "tenant"))
 	action := chi.URLParam(r, "action")
@@ -345,7 +361,9 @@ func (s *Server) opsDiscoverAction(w http.ResponseWriter, r *http.Request) {
 	}
 	if action == "remove" {
 		s.tellOwnersAt(r.Context(), tenant, "Your listing was taken out of Discover", req.Reason+" Customers can still reach you through your chat link.", discover.SettingsPath)
-	} else {
+	} else if out.WasRemoved {
+		// Restoring a listing that was not taken out only dismisses its
+		// reports: the owners have nothing to hear.
 		s.tellOwnersAt(r.Context(), tenant, "Your listing is back in Discover", "Taskiem put your listing back in Discover.", discover.SettingsPath)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tenant_id": tenant, "shown": out.Shown, "hidden": out.Hidden})
