@@ -7,6 +7,12 @@
 // Offer with **Stop offers from {business}** under them; the tools (their
 // shop, Book, your orders with them, Pay); and the menu: Mute, Archive,
 // offers, Block and Report.
+//
+// A business with its own WhatsApp number (§11): once the person's chat
+// there, from the phone on their account, is joined to this one, its
+// messages show here too, marked "on WhatsApp", and the head says "Your
+// WhatsApp chat with them is here too". What the person writes goes in the
+// app.
 
 import 'dart:async';
 
@@ -633,6 +639,7 @@ class _MyChatScreenState extends State<MyChatScreen> {
                       ),
                     ),
                   ),
+                  if (c?.lines?.contains('whatsapp') == true) const _OnWhatsApp(),
                   if (proved.isNotEmpty) _Proved(words: proved),
                   if (d.notice != null)
                     _Note(
@@ -681,6 +688,7 @@ class _MyChatScreenState extends State<MyChatScreen> {
                             stamp: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                if (m.line == 'whatsapp') LineMark(line: m.line, color: meta),
                                 Text(clock(m.createdAt), style: tkText(size: 11, lineHeight: 16 / 11, color: meta)),
                                 if (m.mine) ...[const SizedBox(width: 4), DoorTicks(sending: x.local, read: m.readAt != null, meta: meta)],
                               ],
@@ -714,6 +722,28 @@ class _MyChatScreenState extends State<MyChatScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// Under the business's name, once their WhatsApp chat is joined to this
+/// one (§11).
+class _OnWhatsApp extends StatelessWidget {
+  const _OnWhatsApp();
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          TkIcon('b-whatsapp', size: 14, stroke: 2, color: t.muted),
+          const SizedBox(width: 6),
+          Flexible(child: Text('Your WhatsApp chat with them is here too', textAlign: TextAlign.center, style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted))),
+        ],
       ),
     );
   }
