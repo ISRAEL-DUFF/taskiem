@@ -446,7 +446,18 @@ for (const scheme of ["light", "dark"] as const)
       await page.goto("/m/a11ya11ya1");
       await expect(page.getByTestId("chat-here")).toBeVisible();
       await check("/m/{code}");
-      const chat = { id: "c1", business: "b1", name: "Mama's Kitchen", last: "Hello", last_mine: false, last_at: now, unread: 0, muted: false, archived: false, blocked: false, blocked_you: false, offers: "unasked", ask_offers: true, hours: { open: true, line: "Open now" }, verified: { phone: true, business: true, payments: true, months: 14 } };
+      // A business with its own WhatsApp number (§11): both ways to chat,
+      // then WhatsApp alone with chats in Taskiem off.
+      const wa = { number: "+2348000000020", link: "https://wa.me/2348000000020" };
+      for (const [code, takes, choices] of [["a11ya11yw1", true, ["whatsapp", "taskiem"]], ["a11ya11yw2", false, ["whatsapp"]]] as const) {
+        await page.route(`**/v1/chat-links/${code}`, (r) =>
+          r.fulfill(json({ name: "Mama's Kitchen", area: "Yaba", open_now: true, takes_chats: takes, code, link: `http://localhost/m/${code}`, words: "", whatsapp: wa, choices })),
+        );
+        await page.goto(`/m/${code}`);
+        await expect(page.getByTestId("chat-on-whatsapp")).toBeVisible();
+        await check(`/m/{code} offering ${choices.join(" and ")}`);
+      }
+      const chat = { id: "c1", business: "b1", name: "Mama's Kitchen", last: "Hello", last_mine: false, last_at: now, unread: 0, muted: false, archived: false, blocked: false, blocked_you: false, offers: "unasked", ask_offers: true, hours: { open: true, line: "Open now" }, verified: { phone: true, business: true, payments: true, months: 14 }, lines: ["app", "whatsapp"] };
       await page.route("**/v1/me", (r) => r.fulfill(json({ ...PERSON, businesses: [], second_proof: undefined })));
       await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
       await page.route("**/v1/me/chats/c1", (r) => r.fulfill(json(chat)));
@@ -457,6 +468,8 @@ for (const scheme of ["light", "dark"] as const)
               { id: "m1", mine: false, kind: "text", body: "Hello", read_at: null, created_at: now },
               { id: "m2", mine: false, kind: "card", body: "Order", card: { type: "order", reference: "MK-1", title: "Order MK-1", line: "1 × Jollof rice", status: "received", total_kobo: 250_000 }, read_at: null, created_at: now },
               { id: "m3", mine: true, kind: "text", body: "Thank you", read_at: now, created_at: now },
+              { id: "m3w", mine: false, kind: "text", body: "Your rice is packed", read_at: now, created_at: now, line: "whatsapp" },
+              { id: "m3x", mine: true, kind: "text", body: "I'm on my way", read_at: now, created_at: now, line: "whatsapp" },
               { id: "m4", mine: false, kind: "text", body: "Pay to 0123456789 at GTBank", warn_transfer: true, read_at: null, created_at: now },
               { id: "m5", mine: false, kind: "card", body: "Invoice", card: { type: "invoice", reference: "INV-0001", invoice_id: "f1", title: "Invoice INV-0001", status: "part_paid", total_kobo: 150_000, url: "https://pay.example.test/i" }, read_at: null, created_at: now },
               { id: "m6", mine: false, kind: "card", body: "Delivery", card: { type: "delivery", reference: "MK-1", title: "Delivery of MK-1", line: "On its way to you", status: "picked_up", delivery: { status: "picked_up", line: "On its way to you" } }, read_at: null, created_at: now },
@@ -474,6 +487,8 @@ for (const scheme of ["light", "dark"] as const)
       await expect(page.getByTestId("transfer-warning")).toBeVisible();
       await expect(page.getByTestId("tell-me-line")).toHaveText("We'll text you when they answer.");
       await expect(page.getByTestId("person-trust")).toHaveText("Phone checked · Business checked · Payments through Taskiem · Trading 1 year");
+      await expect(page.getByTestId("person-whatsapp-here")).toBeVisible();
+      await expect(page.getByTestId("person-on-whatsapp")).toHaveCount(2);
       await check("/you/chats/{id}");
       expect(found, found.join("\n\n")).toEqual([]);
     });
