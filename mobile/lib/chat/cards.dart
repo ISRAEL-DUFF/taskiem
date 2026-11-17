@@ -281,7 +281,8 @@ class CardButton extends StatelessWidget {
     final look = TkLook.of(context);
     // The main step pine (lime in the dark); the others on the ground.
     final bg = primary ? look.on : look.ground;
-    final ink = primary ? (dark ? t.brandDarkText : const Color(0xFFFFFFFF)) : t.text;
+    // On your own pine bubble the main step is lime, so its words are pine.
+    final ink = primary ? (dark ? t.brandDarkText : (look.onPine ? const Color(0xFF0D3B2E) : const Color(0xFFFFFFFF))) : t.text;
     return TapArea(child: Semantics(
       button: true,
       enabled: !busy && onTap != null,
