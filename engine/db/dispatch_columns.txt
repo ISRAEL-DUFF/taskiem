@@ -1586,3 +1586,16 @@ page_reports.seasoned
 storefront_snapshots.created_at
 storefront_catalogue.tenant_id
 users.created_at
+people_chats.id
+people_chats.person_id
+people_chats.peer_id
+people_chats.conversation_id
+people_requests.sender_id
+people_requests.recipient_id
+people_requests.sent_at
+people_requests.outcome
+people_requests.decided_at
+person_profiles.person_id
+person_profiles.name
+person_profiles.active
+person_profiles.deleted
