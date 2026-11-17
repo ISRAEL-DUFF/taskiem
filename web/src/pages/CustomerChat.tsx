@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { del, get, post, put, upload } from "../api";
+import { ApiError, del, get, post, put, upload } from "../api";
 import { Icon } from "../icons";
 import { Pill } from "../kit";
 import { naira } from "../lib/billing";
 import { appNote, appThreadLine, mayOffer, type CardAsk } from "../lib/customerlinks";
+import { clientFor, erasedWords, mayHaveArrived, type AppCard, type KeptSend } from "../lib/personchat";
 import {
   customerKey,
   customerLetter,
@@ -43,6 +44,18 @@ import { CustomerOrders } from "./CustomerOrders";
 
 /** How often an open thread and the list look for what is new. */
 const POLL_MS = 4000;
+
+/** What the clip of an app thread offers: photos, PDFs and voice notes. */
+const APP_FILES_ACCEPT = `${BUSINESS_FILES.accept},audio/*`;
+
+/** A card's own button on the business's side: the order, invoice or
+ * order of a delivery it is about. */
+function cardLink(card: AppCard): string | null {
+  if (!card.reference) return null;
+  if (card.type === "invoice") return `/invoices/${encodeURIComponent(card.reference)}`;
+  if (card.type === "order" || card.type === "pay" || card.type === "delivery" || card.type === "booking") return `/storefront/orders/${encodeURIComponent(card.reference)}`;
+  return null;
+}
 
 /** The Customers section of the chat list: one row per customer's thread
  * (the archived ones under Archived), with an unsent reply as a draft. */
@@ -252,7 +265,15 @@ export function CustomerPane({
   );
   const [messages, setMessages] = useState<CustomerMessage[]>();
   const [hasOlder, setHasOlder] = useState(false);
-  const [error, setError] = useState<unknown>();
+  // What the last look for news ran into (gone once a look works), and
+  // what a send ran into, apart.
+  const [pollError, setPollError] = useState<unknown>();
+  const [sendError, setSendError] = useState<unknown>();
+  // The customer's details were erased: the conversation is closed.
+  const [erased, setErased] = useState<string>();
+  // A reply whose answer never came, its words back in the box: sent
+  // again as they are, it keeps its client_id, so it is not sent twice.
+  const kept = useRef<KeptSend | undefined>(undefined);
   const act = useAction();
   const loadingOlder = useRef(false);
   const loadOlderRef = useRef<() => void>(() => undefined);
@@ -280,8 +301,9 @@ export function CustomerPane({
         first ? out.messages : latestPage(cur ?? [], out.messages, out.more),
       );
       if (first) setHasOlder(out.more);
+      setPollError(undefined);
       if (out.messages.some((m) => !m.mine && !m.read_at)) {
-        await post(`/v1/customer-chats/${id}/read`);
+        await post(`/v1/customer-chats/${id}/read`).catch(() => undefined);
         changed.current();
       }
     },
@@ -290,10 +312,10 @@ export function CustomerPane({
   useEffect(() => {
     setMessages(undefined);
     thread.reset();
-    pull(true).catch(setError);
+    pull(true).catch(setPollError);
     const t = setInterval(() => {
       if (document.visibilityState !== "visible") return;
-      pull(false).catch(setError);
+      pull(false).catch(setPollError);
       chat.reload();
     }, POLL_MS);
     return () => clearInterval(t);
@@ -311,7 +333,7 @@ export function CustomerPane({
         setMessages((cur) => mergeCustomer(cur ?? [], out.messages));
         setHasOlder(out.more);
       })
-      .catch(setError)
+      .catch(setPollError)
       .finally(() => (loadingOlder.current = false));
   };
 
@@ -326,8 +348,8 @@ export function CustomerPane({
   // A customer in the Taskiem app (taskiem-for-everyone §8.3): no 24-hour
   // window, cards, files, typing and blocks.
   const app = c?.line === "app";
-  const note = c ? (app ? appNote(c) : replyNote(c)) : null;
-  const canSend = !!c && !c.stopped && !c.blocked && (app || !!c.phone);
+  const note = erased ? { tone: "stop" as const, text: erased } : c ? (app ? appNote(c) : replyNote(c)) : null;
+  const canSend = !!c && !c.stopped && !c.blocked && (app || !!c.phone) && !erased;
   const tooLong = !!c && !app && lateTooLong(text, c.window_open);
   const [cards, setCards] = useState(false);
   const [asOffer, setAsOffer] = useState(false);
@@ -336,14 +358,20 @@ export function CustomerPane({
   const lastTyped = useRef(0);
   const typed = (v: string) => {
     setText(v);
-    if (!app || !v.trim() || Date.now() - lastTyped.current < 4000) return;
+    // Refused while either side blocked the other (403, 409): nothing to say.
+    if (!app || !canSend || !v.trim() || Date.now() - lastTyped.current < 4000) return;
     lastTyped.current = Date.now();
     void post(`/v1/customer-chats/${id}/typing`).catch(() => undefined);
   };
+  // Each send is its own (its own client_id): a card or a file chosen while
+  // another message is on its way goes too, never dropped.
   const send = (extra?: { card?: CardAsk; cardWords?: string; file?: File }) => {
     const words = extra?.card ? (extra.cardWords ?? "") : text.trim();
-    if ((!words && !extra?.file && !extra?.card) || !canSend || act.busy) return;
-    const client = `${Date.now()}-${++localN}`;
+    if ((!words && !extra?.file && !extra?.card) || !canSend) return;
+    const plain = !extra?.card && !extra?.file;
+    const fresh = () => `${Date.now()}-${++localN}`;
+    const client = plain ? clientFor(kept.current, words, fresh) : fresh();
+    if (plain) kept.current = undefined;
     const file = extra?.file;
     const offer = !extra?.card && !file && asOffer && mayOffer(c ?? {});
     const mine: CustomerMessage = {
@@ -358,9 +386,10 @@ export function CustomerPane({
       local: true,
     };
     setMessages((cur) => mergeCustomer(cur ?? [], [mine]));
-    if (!extra?.card) setText("");
-    void act
-      .run(async () => {
+    if (plain) setText("");
+    setSendError(undefined);
+    void (async () => {
+      try {
         let out: CustomerMessage;
         if (file) {
           const form = new FormData();
@@ -387,14 +416,20 @@ export function CustomerPane({
           ),
         );
         changed.current();
-      }, false)
-      .then((ok) => {
-        if (ok) return;
-        // Not sent: the words come back to the box.
+      } catch (e) {
+        // Not sent: the words come back to the box. When the answer never
+        // came it may have got there: the same words again keep its client_id.
         setMessages((cur) => cur?.filter((m) => m.id !== mine.id));
-        if (!extra?.card && !file) setText((cur) => (cur === "" ? words : cur));
+        if (plain) {
+          setText((cur) => (cur === "" ? words : cur));
+          if (e instanceof ApiError && mayHaveArrived(e.status)) kept.current = { text: words, client };
+        }
+        const closedNow = e instanceof ApiError ? erasedWords(e.status, e.message, "business") : null;
+        if (closedNow) setErased(closedNow);
+        else setSendError(e);
         chat.reload();
-      });
+      }
+    })();
   };
 
   const owes = owesWords(c?.owes_kobo, c?.open_invoices, naira);
@@ -502,7 +537,7 @@ export function CustomerPane({
         }
       />
       {sure.node}
-      <ErrorBox error={error ?? chat.error ?? act.error} />
+      <ErrorBox error={sendError ?? act.error ?? pollError ?? chat.error} />
       <ChatStream
         items={messages}
         thread={thread}
@@ -561,8 +596,8 @@ export function CustomerPane({
               <AppCardView
                 card={m.card}
                 actions={
-                  m.card.reference ? (
-                    <Link className="tk-btn soft" to={`/storefront/orders/${encodeURIComponent(m.card.reference)}`}>
+                  cardLink(m.card) ? (
+                    <Link className="tk-btn soft" to={cardLink(m.card) ?? "/"}>
                       Open<span className="sr-only"> {m.card.title}</span>
                     </Link>
                   ) : undefined
@@ -639,14 +674,14 @@ export function CustomerPane({
                 ref={filePick}
                 type="file"
                 hidden
-                accept={BUSINESS_FILES.accept}
+                accept={APP_FILES_ACCEPT}
                 data-testid="customer-file"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
                   e.target.value = "";
                   if (!f) return;
                   if (f.size > BUSINESS_FILES.max || !BUSINESS_FILES.types.test(f.type)) {
-                    setError(new Error(f.size > BUSINESS_FILES.max ? `${f.name} is larger than ${BUSINESS_FILES.maxWords}.` : BUSINESS_FILES.typesMessage));
+                    setSendError(new Error(f.size > BUSINESS_FILES.max ? `${f.name} is larger than ${BUSINESS_FILES.maxWords}.` : BUSINESS_FILES.typesMessage));
                     return;
                   }
                   send({ file: f });
@@ -683,7 +718,7 @@ export function CustomerPane({
           <button
             type="submit"
             className="primary icon-button send-button"
-            disabled={act.busy || !text.trim() || tooLong}
+            disabled={!text.trim() || tooLong}
           >
             <Icon name="arrow-up" />
             <span className="sr-only">Send</span>

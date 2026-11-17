@@ -22,6 +22,8 @@ export interface ChatLinkSettings {
   link_in_updates: boolean | null;
   /** As it applies now. */
   updates_link: boolean;
+  /** The Orders area is off: no chats are taken, whatever takes_chats says. */
+  orders_off?: boolean;
 }
 
 /** What the business does when nobody answers (GET /v1/settings/customer-chats). */
@@ -56,7 +58,13 @@ export function offerCount(sent: number, skipped: number): string {
 export type CardAsk =
   | { type: "order" | "pay"; reference: string }
   | { type: "booking"; service_id: string }
-  | { type: "product"; item_id: string };
+  | { type: "product"; item_id: string }
+  | { type: "invoice"; invoice_id: string }
+  | { type: "delivery"; reference: string };
+
+/** Taking chats while the Orders area is off, in words. */
+export const ORDERS_OFF_WORDS =
+  "Your Orders area is off, so chats are closed: customers cannot start a chat with you, and your link says so. Turn Orders on to take chats again.";
 
 /** The line under an app customer's name. */
 export function appThreadLine(c: { line?: string; typing?: boolean; blocked?: boolean; stopped?: boolean }): string {

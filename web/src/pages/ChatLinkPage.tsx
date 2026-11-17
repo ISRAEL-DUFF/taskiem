@@ -31,7 +31,8 @@ export function ChatLinkPage() {
   const gone = err instanceof ApiError && err.status === 410;
   const unknown = err instanceof ApiError && err.status === 404;
   const c = card.data;
-  const personal = !!me && (me.personal || me.tenant_id === null);
+  // As App.tsx tells You from a business: a gate-only session is neither.
+  const personal = !!me && (!!me.personal || (me.tenant_id === null && !me.gate_only));
   const chatHere = () => {
     if (!me) return nav(wayInPath(code));
     if (personal) return nav(startPath(code));

@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { Sheet } from "../kit";
-import { buttonWords, offerCount, type ChatLink, type ChatLinkSettings, type CustomerChatSettings as Replies } from "../lib/customerlinks";
+import { buttonWords, offerCount, ORDERS_OFF_WORDS, type ChatLink, type ChatLinkSettings, type CustomerChatSettings as Replies } from "../lib/customerlinks";
 import { toast } from "../toast";
 import { ErrorBox, Field, PageHeader, Skeleton, useAction, useLoad } from "../ui";
 import { useConfirm } from "./ConfirmSheet";
@@ -134,8 +134,13 @@ function TakingChats() {
       <ErrorBox error={view.error ?? act.error} />
       {s && (
         <>
+          {s.orders_off && (
+            <div className="warning" role="note" data-testid="orders-off">
+              {ORDERS_OFF_WORDS} <Link to="/settings/areas">Your areas</Link>
+            </div>
+          )}
           <label className="switch-line">
-            <input type="checkbox" checked={s.takes_chats} disabled={act.busy} onChange={(e) => save({ takes_chats: e.target.checked })} data-testid="takes-chats" />{" "}
+            <input type="checkbox" checked={s.takes_chats} disabled={act.busy || !!s.orders_off} onChange={(e) => save({ takes_chats: e.target.checked })} data-testid="takes-chats" />{" "}
             <span>Customers can start a chat with you</span>
           </label>
           <p className="hint">Off: your link says you are not taking chats. Chats already open go on.</p>
@@ -181,7 +186,9 @@ function WhenNobodyAnswers({ editable }: { editable: boolean }) {
     void act
       .run(async () => {
         setSt(await put<Replies>("/v1/settings/customer-chats", body));
-        setWords(undefined);
+        // Words typed and not saved yet stay in the box when a switch is
+        // turned; only saving the words themselves ends their edit.
+        if (body.closed_words !== undefined) setWords(undefined);
       }, "Saved")
       .then((ok) => ok || setSt(was));
   };
@@ -234,6 +241,10 @@ export function SendOffer({ onSent }: { onSent?: () => void }) {
   const [said, setSaid] = useState<string>();
   const act = useAction();
   const sure = useConfirm();
+  // One offer, one client_id: sent again after a failure (a dropped
+  // connection that may have got through) it is not sent twice. New words
+  // are a new offer.
+  const client = useRef<{ words: string; id: string } | undefined>(undefined);
   return (
     <section className="card" aria-labelledby="send-offer" data-testid="send-offer">
       <h2 id="send-offer">Send an offer</h2>
@@ -245,8 +256,11 @@ export function SendOffer({ onSent }: { onSent?: () => void }) {
           if (!words) return;
           const yes = await sure.confirm({ title: "Send this offer?", body: words, ok: "Send" });
           if (!yes) return;
+          if (client.current?.words !== words) client.current = { words, id: crypto.randomUUID() };
+          const id = client.current.id;
           await act.run(async () => {
-            const r = await post<{ sent: number; skipped: number }>("/v1/customer-chats/offers", { text: words, client_id: crypto.randomUUID() });
+            const r = await post<{ sent: number; skipped: number }>("/v1/customer-chats/offers", { text: words, client_id: id });
+            client.current = undefined;
             setSaid(offerCount(r.sent, r.skipped));
             setText("");
             onSent?.();

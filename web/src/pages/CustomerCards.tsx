@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { get } from "../api";
+import { ApiError, get } from "../api";
 import { Icon } from "../icons";
 import { KitEmpty, KitField, KitLoading, Sheet } from "../kit";
 import type { Services } from "../lib/bookings";
@@ -15,14 +15,58 @@ import { ErrorBox, useLoad } from "../ui";
 // chat), sent as a card the customer acts on. The server makes each card
 // from the business's own data.
 
-type Tab = "order" | "pay" | "booking" | "product";
+type Tab = "order" | "pay" | "delivery" | "invoice" | "booking" | "product";
 
 const TABS: { key: Tab; words: string }[] = [
   { key: "order", words: "Order" },
   { key: "pay", words: "Pay link" },
+  { key: "delivery", words: "Delivery" },
+  { key: "invoice", words: "Invoice" },
   { key: "booking", words: "Booking" },
   { key: "product", words: "Product" },
 ];
+
+/** What a card about an order says in the list before the server's copy. */
+const refWords: Record<"order" | "pay" | "delivery", { hint: string; words: string; icon: string }> = {
+  order: { hint: "One of their orders, with where it is.", words: "Order", icon: "orders" },
+  pay: { hint: "A link to pay what is due on one of their orders.", words: "Pay link for", icon: "money" },
+  delivery: { hint: "Where the rider is with one of their orders, once a rider has it.", words: "Delivery of", icon: "package" },
+};
+
+/** An invoice of this customer's, by its number (INV-0001): found, then
+ * sent as a card with what is due and its pay page. */
+function InvoicePick({ onPick }: { onPick: (card: CardAsk, words: string) => void }) {
+  const [number, setNumber] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>();
+  return (
+    <form
+      className="pc-check"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const n = number.trim();
+        if (!n || busy) return;
+        setBusy(true);
+        setError(undefined);
+        get<{ invoice: { id: string; number: string } }>(`/v1/invoices/${encodeURIComponent(n)}`)
+          .then(
+            ({ invoice: x }) => onPick({ type: "invoice", invoice_id: x.id }, `Invoice ${x.number}`),
+            (err: unknown) => setError(err instanceof ApiError && err.status === 404 ? new Error(`No invoice is numbered ${n}.`) : err),
+          )
+          .finally(() => setBusy(false));
+      }}
+    >
+      <p className="hint">One of their invoices, sent already: what is due, and its pay page while something is.</p>
+      <KitField label="The invoice's number">
+        <input value={number} onChange={(e) => setNumber(e.target.value)} placeholder="INV-0001" data-testid="card-invoice-number" />
+      </KitField>
+      <ErrorBox error={error} />
+      <button type="submit" className="tk-btn soft" disabled={!number.trim() || busy}>
+        {busy ? "Finding it…" : "Send"}
+      </button>
+    </form>
+  );
+}
 
 export function CardSheet({
   chat,
@@ -60,18 +104,18 @@ export function CardSheet({
           </button>
         ))}
       </div>
-      {(tab === "order" || tab === "pay") && (
+      {(tab === "order" || tab === "pay" || tab === "delivery") && (
         <>
-          <p className="hint">{tab === "pay" ? "A link to pay what is due on one of their orders." : "One of their orders, with where it is."}</p>
+          <p className="hint">{refWords[tab].hint}</p>
           {!orders.data && !orders.error && <KitLoading rows={2} label="Loading their orders…" />}
           <ErrorBox error={orders.error} />
           {refs.length > 0 && (
             <ul className="pc-tiles" aria-label="Their orders">
               {refs.map((r) => (
                 <li key={r}>
-                  <button type="button" className="tk-row pc-tile" onClick={() => pick({ type: tab, reference: r }, `${tab === "pay" ? "Pay link for" : "Order"} ${r}`)}>
+                  <button type="button" className="tk-row pc-tile" onClick={() => pick({ type: tab, reference: r }, `${refWords[tab].words} ${r}`)}>
                     <span className="tk-row-tile" aria-hidden="true">
-                      <Icon name={tab === "pay" ? "money" : "orders"} />
+                      <Icon name={refWords[tab].icon} />
                     </span>
                     <span className="tk-row-words">
                       <span className="tk-row-name">{r}</span>
@@ -86,7 +130,7 @@ export function CardSheet({
             onSubmit={(e) => {
               e.preventDefault();
               const r = typed.trim();
-              if (r) pick({ type: tab, reference: r }, `${tab === "pay" ? "Pay link for" : "Order"} ${r}`);
+              if (r) pick({ type: tab, reference: r }, `${refWords[tab].words} ${r}`);
             }}
           >
             <KitField label="Or type its reference">
@@ -98,6 +142,7 @@ export function CardSheet({
           </form>
         </>
       )}
+      {tab === "invoice" && <InvoicePick onPick={pick} />}
       {tab === "booking" && (
         <>
           <p className="hint">One of your services: they choose a free time and book it.</p>

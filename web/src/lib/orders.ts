@@ -107,6 +107,10 @@ export interface Order {
   /** The front the submission came from (fronts F3). */
   front_id?: string;
   kind: FormKind | "trade" | "app";
+  /** Made by a person in the Taskiem app (an app order, a booking made
+   * there, or an order confirmed in their app conversation): "Write to
+   * them in the app" answers for it. */
+  in_app?: boolean;
   status: OrderStatus;
   customer: Customer;
   basket: OrderLine[] | null;

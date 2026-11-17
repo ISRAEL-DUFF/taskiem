@@ -339,16 +339,18 @@ export function StorefrontOrders() {
   );
 }
 
-/** One order (GET /v1/storefront/orders/{reference}), and its customer's details for those who may see them. */
-/** An order placed in the Taskiem app: write to its customer there
- * (taskiem-for-everyone §8.1), their app conversation opened if need be. */
-function WriteInApp({ reference }: { reference: string }) {
+/** An order or booking made in the Taskiem app (`in_app`): write to its
+ * customer there (taskiem-for-everyone §8.1), their app conversation
+ * opened if need be. */
+function WriteInApp({ reference, booking }: { reference: string; booking: boolean }) {
   const act = useAction();
   const nav = useNavigate();
   return (
     <section className="card" aria-labelledby="write-in-app" data-testid="write-in-app">
       <h2 id="write-in-app">Chat with them</h2>
-      <p className="hint">They ordered in the Taskiem app: write to them there. No 24-hour wait, and they see your order card.</p>
+      <p className="hint">
+        They {booking ? "booked" : "ordered"} in the Taskiem app: write to them there. No 24-hour wait, and they see your {booking ? "booking" : "order"} card.
+      </p>
       <ErrorBox error={act.error} />
       <button
         type="button"
@@ -367,6 +369,7 @@ function WriteInApp({ reference }: { reference: string }) {
   );
 }
 
+/** One order (GET /v1/storefront/orders/{reference}), and its customer's details for those who may see them. */
 export function StorefrontOrder() {
   const { reference = "" } = useParams();
   const { can } = useAuth();
@@ -455,7 +458,7 @@ export function StorefrontOrder() {
               <ErrorBox error={refund.error} />
             </div>
           )}
-          {o.kind === "app" && can("order.handle") && <WriteInApp reference={o.reference} />}
+          {(o.in_app || o.kind === "app") && can("order.handle") && <WriteInApp reference={o.reference} booking={o.kind === "booking"} />}
           <section className="card" aria-labelledby="order-summary">
             <h2 id="order-summary">Details</h2>
             <dl className="kv">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appNote, appThreadLine, buttonWords, mayOffer, offerCount } from "./customerlinks";
+import { appNote, appThreadLine, buttonWords, mayOffer, offerCount, ORDERS_OFF_WORDS } from "./customerlinks";
 
 describe("customers chatting in the app, the business's side", () => {
   it("names the storefront's button choices", () => {
@@ -35,5 +35,10 @@ describe("customers chatting in the app, the business's side", () => {
     expect(mayOffer({ line: "app", offers: "no" })).toBe(false);
     expect(mayOffer({ line: "app", offers: "unasked" })).toBe(false);
     expect(mayOffer({ line: "whatsapp", offers: "yes" })).toBe(false);
+  });
+
+  it("says chats are closed while the Orders area is off, and how to open them", () => {
+    expect(ORDERS_OFF_WORDS).toMatch(/Orders area is off, so chats are closed/);
+    expect(ORDERS_OFF_WORDS).toMatch(/Turn Orders on/);
   });
 });
