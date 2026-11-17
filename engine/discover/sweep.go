@@ -25,46 +25,77 @@ type Sweeper struct {
 }
 
 // Sweep writes again the listings of up to limit businesses the database
-// marked (their storefront, profile, photos, chat settings, areas or
-// tenant row changed), each in its own scope; a mark made while it was
-// being written stays for the next sweep. It answers how many were
-// written; one business failing does not stop the others.
+// marked (their storefront, catalogue, profile, photos, chat settings,
+// areas, settings or tenant row changed), each in its own scope. Each
+// mark is claimed with FOR UPDATE SKIP LOCKED, and the business's Discover
+// lock taken without waiting, so two replicas never write the same one
+// and a business its owner is changing waits for the next sweep; a mark
+// made while it was being written stays for the next sweep. A business
+// whose listing fails to write goes to the back of the queue (its mark's
+// time moves on), so it does not hold up the others. It also works out
+// again the listings whose reports leave the 30 days. It answers how many
+// were written.
 func (s *Sweeper) Sweep(ctx context.Context, limit int) (int, error) {
-	rows, err := s.Pool.Query(ctx, `SELECT tenant_id, at FROM taskiem_discover_dirty($1)`, limit)
-	if err != nil {
-		return 0, err
-	}
-	type mark struct {
-		tenant uuid.UUID
-		at     time.Time
-	}
-	marks, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (mark, error) {
-		var m mark
-		return m, r.Scan(&m.tenant, &m.at)
-	})
-	if err != nil {
-		return 0, err
-	}
 	var errs []error
+	if _, err := s.Pool.Exec(ctx, `SELECT taskiem_discover_recount($1)`, limit); err != nil {
+		errs = append(errs, err)
+	}
+	rows, err := s.Pool.Query(ctx, `SELECT tenant_id FROM taskiem_discover_dirty($1)`, limit)
+	if err != nil {
+		return 0, errors.Join(append(errs, err)...)
+	}
+	marks, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID])
+	if err != nil {
+		return 0, errors.Join(append(errs, err)...)
+	}
 	n := 0
-	for _, m := range marks {
+	for _, tenant := range marks {
 		if ctx.Err() != nil {
 			break
 		}
-		err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{m.tenant}, func(tx pgx.Tx) error {
-			if _, err := RefreshTx(ctx, tx, m.tenant, s.PreviewDomain); err != nil {
+		wrote := false
+		err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			var at time.Time
+			err := tx.QueryRow(ctx, `SELECT at FROM discover_dirty WHERE tenant_id = $1 FOR UPDATE SKIP LOCKED`, tenant).Scan(&at)
+			if errors.Is(err, pgx.ErrNoRows) {
+				return nil // another replica has it, or it is done
+			}
+			if err != nil {
 				return err
 			}
-			_, err := tx.Exec(ctx, `DELETE FROM discover_dirty WHERE tenant_id = $1 AND at = $2`, m.tenant, m.at)
-			return err
+			if ok, err := tryLockTx(ctx, tx, tenant); err != nil || !ok {
+				return err // being written by its owner: the next sweep
+			}
+			if _, err := RefreshTx(ctx, tx, tenant, s.PreviewDomain); err != nil {
+				return err
+			}
+			// Held since it was read: a mark made since waits for this
+			// transaction, and comes back after it.
+			if _, err := tx.Exec(ctx, `DELETE FROM discover_dirty WHERE tenant_id = $1`, tenant); err != nil {
+				return err
+			}
+			wrote = true
+			return nil
 		})
 		if err != nil {
 			errs = append(errs, err)
+			s.later(ctx, tenant, `UPDATE discover_dirty SET at = clock_timestamp() WHERE tenant_id = $1`)
 			continue
 		}
-		n++
+		if wrote {
+			n++
+		}
 	}
 	return n, errors.Join(errs...)
+}
+
+// later moves a business that failed to the back of its queue, so the
+// next run tries the others first.
+func (s *Sweeper) later(ctx context.Context, tenant uuid.UUID, sql string) {
+	_ = db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, sql, tenant)
+		return err
+	})
 }
 
 // The one-off notice (§10): a business listed by default is told once, in
@@ -80,13 +111,15 @@ const (
 	SettingsPath = "/settings/discover"
 )
 
-// Tell tells up to limit businesses listed by default (a published
-// storefront, shown in Discover, no choice of their own) that they are,
-// once each: the business's settings record when (told_at), and the
-// owners hear of it as an owners' alert (the bell, and their chat on
-// WhatsApp or Telegram), with a link to the switch. Running it twice, or
-// on two replicas at once, tells no one twice. It answers how many were
-// told.
+// Tell tells up to limit businesses listed by default (shown in
+// Discover, no choice of their own, their storefront published when
+// Discover shipped) that they are, once each: the business's settings
+// record when (told_at, claimed through taskiem_discover_claim_notice
+// under the business's Discover lock), and the owners hear of it as an
+// owners' alert (the bell, and their chat on WhatsApp or Telegram), with a
+// link to the switch. Running it twice, or on two replicas at once, tells
+// no one twice. A business whose notice fails goes to the back of the
+// queue. It answers how many were told.
 func (s *Sweeper) Tell(ctx context.Context, limit int) (int, error) {
 	rows, err := s.Pool.Query(ctx, `SELECT * FROM taskiem_discover_notice_due($1)`, limit)
 	if err != nil {
@@ -104,20 +137,13 @@ func (s *Sweeper) Tell(ctx context.Context, limit int) (int, error) {
 		}
 		told := false
 		err := db.InTenantTx(ctx, s.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-			var shown bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM discover_index WHERE tenant_id = $1)`, tenant).Scan(&shown); err != nil || !shown {
+			if err := lockTx(ctx, tx, tenant); err != nil {
 				return err
 			}
-			// Claim it: only while nobody told them and they chose nothing.
+			// Claim it: only while it is due (shown, nobody told them,
+			// they chose nothing).
 			var claimed bool
-			err := tx.QueryRow(ctx, `INSERT INTO discover_settings (tenant_id, told_at, updated_by) VALUES ($1, now(), 'system:discover')
-				ON CONFLICT (tenant_id) DO UPDATE SET told_at = now()
-				  WHERE discover_settings.told_at IS NULL AND discover_settings.listed IS NULL
-				RETURNING true`, tenant).Scan(&claimed)
-			if errors.Is(err, pgx.ErrNoRows) {
-				return nil
-			}
-			if err != nil {
+			if err := tx.QueryRow(ctx, `SELECT taskiem_discover_claim_notice($1)`, tenant).Scan(&claimed); err != nil || !claimed {
 				return err
 			}
 			if _, err := tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'system', 'discover', 'discover.told', $2, '{}'::jsonb)`, tenant, tenant.String()); err != nil {
@@ -132,6 +158,7 @@ func (s *Sweeper) Tell(ctx context.Context, limit int) (int, error) {
 		})
 		if err != nil {
 			errs = append(errs, err)
+			s.later(ctx, tenant, `UPDATE discover_index SET notice_tried_at = now() WHERE tenant_id = $1`)
 			continue
 		}
 		if told {

@@ -1570,3 +1570,15 @@ discover_index.has_shop
 discover_index.has_book
 discover_dirty.tenant_id
 discover_dirty.at
+discover_launch.shipped_at
+discover_settings.removed_at
+discover_index.hidden
+discover_index.reporters
+discover_index.state_until
+discover_index.notice_tried_at
+discover_index.area_search
+discover_index.place
+page_reports.seasoned
+storefront_snapshots.created_at
+storefront_catalogue.tenant_id
+users.created_at

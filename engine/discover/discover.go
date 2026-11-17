@@ -1,5 +1,5 @@
 // Package discover is Discover (docs/spec/taskiem-for-everyone.md §10,
-// migrations 00461 and 00462): the public finding businesses in the
+// migrations 00461, 00462 and 00466): the public finding businesses in the
 // Taskiem app, kept apart from Explore (businesses finding businesses).
 //
 // A business is listed when its switch, "Found by the public in the
@@ -12,11 +12,17 @@
 // The listing is written to a search index (discover_index) from the
 // business's own transaction (RefreshTx), whenever its settings change and,
 // for every other source (its storefront, profile, photos, chat settings,
-// areas), by a sweep over the businesses the database marked (Sweep). The
-// public read it only through the definers taskiem_discover_search and
-// taskiem_discover_profile, which return listing columns alone and only
-// for listings that may be shown. A person's place, given for one search,
-// is an argument and nothing more: searches are not kept.
+// areas, catalogue), by a sweep over the businesses the database marked
+// (Sweep). Every writer of a business's listing holds its Discover lock
+// (lockTx) from before it reads the settings until it commits, so an
+// older read never overwrites a newer choice. Whether a listing may be
+// shown (turned off, removed, its page suspended, hidden for reports) is
+// kept in the index row itself by the database, so the search filters on
+// a plain column. The public read it only through the definers
+// taskiem_discover_search and taskiem_discover_profile, which return
+// listing columns alone and only for listings that may be shown. A
+// person's place, given for one search, is an argument and nothing more:
+// searches are not kept.
 package discover
 
 import (
@@ -150,6 +156,8 @@ type Settings struct {
 	ChatOff string `json:"chat_off,omitempty"`
 	// Listing is the listing as it would show.
 	Listing Listing `json:"listing"`
+	// WasRemoved: RemoveTx found it taken out by the moderators already.
+	WasRemoved bool `json:"-"`
 }
 
 // stored is the business's row of discover_settings.
@@ -273,12 +281,15 @@ func SettingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain 
 	}
 	l.Location = st.loc
 
-	// The photos: the profile's logo, else the page's; then the gallery.
-	// A photo the moderators rejected is never shown.
-	if p.Logo != nil && p.Logo.Moderation != "rejected" && len(p.Logo.URLs) > 0 {
-		l.Photos = append(l.Photos, Photo{URLs: p.Logo.URLs})
-	} else if len(model.Logo) > 0 {
-		l.Photos = append(l.Photos, Photo{URLs: model.Logo})
+	// The photos: the business's public photo (its profile's logo, else
+	// its page's, through taskiem_business_photo); then the gallery. A
+	// photo the moderators rejected is never shown.
+	logo, err := PhotoTx(ctx, tx, tenant)
+	if err != nil {
+		return out, err
+	}
+	if len(logo) > 0 {
+		l.Photos = append(l.Photos, Photo{URLs: logo})
 	}
 	gallery, err := links.GalleryTx(ctx, tx, tenant)
 	if err != nil {
@@ -431,13 +442,59 @@ func CategoryName(key string) string {
 	return ""
 }
 
+// PhotoTx is a business's public photo, its URLs by width (nil for
+// none): its profile's logo, else its published page's, never one the
+// moderators rejected. It is the database's taskiem_business_photo, which
+// a person's Orders use too.
+func PhotoTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (map[string]string, error) {
+	var raw []byte
+	if err := tx.QueryRow(ctx, `SELECT taskiem_business_photo($1)`, tenant).Scan(&raw); err != nil {
+		return nil, err
+	}
+	var urls map[string]string
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &urls)
+	}
+	return urls, nil
+}
+
+// lockTx takes the business's Discover lock until tx ends: every writer
+// of its listing (RefreshTx, SaveTx, RemoveTx, the sweep and the notice)
+// holds it from before it reads the settings, so one cannot write the
+// index from a read older than another's write. Taken again in the same
+// transaction, it is already held.
+func lockTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('discover:' || $1::text, 0))`, tenant)
+	return err
+}
+
+// tryLockTx is lockTx without waiting: false when another transaction
+// holds it.
+func tryLockTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (bool, error) {
+	var ok bool
+	err := tx.QueryRow(ctx, `SELECT pg_try_advisory_xact_lock(hashtextextended('discover:' || $1::text, 0))`, tenant).Scan(&ok)
+	return ok, err
+}
+
+// afterRead, set only by tests, runs in RefreshTx between reading a
+// listing's sources and writing the index.
+var afterRead func(tenant uuid.UUID) error
+
 // RefreshTx writes the business's listing to the index, or takes it out
-// when it is not listed, not complete or hidden, in its own scope (tx).
-// It answers the settings as they stand.
+// when it is not listed, not complete or hidden, in its own scope (tx),
+// holding its Discover lock. It answers the settings as they stand.
 func RefreshTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain string) (Settings, error) {
+	if err := lockTx(ctx, tx, tenant); err != nil {
+		return Settings{}, err
+	}
 	st, err := SettingsTx(ctx, tx, tenant, previewDomain)
 	if err != nil {
 		return st, err
+	}
+	if afterRead != nil {
+		if err := afterRead(tenant); err != nil {
+			return st, err
+		}
 	}
 	if !st.complete() {
 		_, err = tx.Exec(ctx, `DELETE FROM discover_index WHERE tenant_id = $1`, tenant)
@@ -463,23 +520,32 @@ func RefreshTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain s
 	if err != nil {
 		return st, err
 	}
-	// Indexed, but perhaps hidden for reports until a moderator looks.
-	var reporters int
-	if err := tx.QueryRow(ctx, `SELECT count(DISTINCT ip_hash) FROM page_reports WHERE tenant_id = $1 AND kind = 'discover' AND site_id = $1 AND status = 'open'
-		AND created_at > now() - interval '30 days'`, tenant).Scan(&reporters); err != nil {
+	// Indexed, but perhaps hidden: the database keeps why in the row
+	// (00466), as it was just written.
+	var hidden *string
+	if err := tx.QueryRow(ctx, `SELECT hidden FROM discover_index WHERE tenant_id = $1`, tenant).Scan(&hidden); err != nil {
 		return st, err
 	}
-	if reporters >= HideAtReporters {
-		st.Hidden = HiddenReported
-		return st, nil
+	switch {
+	case hidden == nil:
+		st.Shown = true
+	case *hidden == HiddenReported || *hidden == HiddenRemoved || *hidden == HiddenSuspended:
+		st.Hidden = *hidden
 	}
-	st.Shown = true
 	return st, nil
 }
 
-// HideAtReporters is how many different people with open reports hide a
-// listing until a moderator looks (taskiem_discover_open).
-const HideAtReporters = 3
+// Reports (§15, the founder's rule; taskiem_discover_reports in 00466): a
+// report counts only when the reporter's account was at least 7 days old
+// when they made it, and not when two or more of their earlier Discover
+// reports were dismissed and none was acted on. FlagAtReporters counting
+// reports from different people put the listing first in the moderators'
+// queue; they hide it only when one of them is a scam report.
+const (
+	FlagAtReporters = 3
+	// SeasonedAfter is how old a reporter's account must be.
+	SeasonedAfter = 7 * 24 * time.Hour
+)
 
 // SettingsIn is what a business may change; a field left out keeps its
 // value.
@@ -504,9 +570,12 @@ type SettingsIn struct {
 }
 
 // SaveTx changes the business's settings (only the fields given) and
-// writes its listing again, in its own scope. A workflows workspace may
-// not turn it on.
+// writes its listing again, in its own scope, holding its Discover lock.
+// A workflows workspace may not turn it on.
 func SaveTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in SettingsIn, by, previewDomain string) (Settings, error) {
+	if err := lockTx(ctx, tx, tenant); err != nil {
+		return Settings{}, err
+	}
 	var kind string
 	if err := tx.QueryRow(ctx, `SELECT kind FROM tenants WHERE id = $1`, tenant).Scan(&kind); err != nil {
 		return Settings{}, err
@@ -593,25 +662,32 @@ func validTime(s string) bool {
 
 // RemoveTx takes a business's listing out of Discover for Taskiem's
 // moderators (note says why), or puts it back (note empty, restore true),
-// in the business's scope; open reports on the listing are marked acted
-// on, or dismissed when it is put back.
+// in an operators' transaction widened to the business (the definer
+// taskiem_discover_moderate refuses any other), holding its Discover
+// lock; open reports on the listing are marked acted on, or dismissed
+// when it is put back.
 func RemoveTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, restore bool, note, by, previewDomain string) (Settings, error) {
+	if err := lockTx(ctx, tx, tenant); err != nil {
+		return Settings{}, err
+	}
+	was, err := storedTx(ctx, tx, tenant)
+	if err != nil {
+		return Settings{}, err
+	}
 	status := "actioned"
 	if restore {
 		status = "dismissed"
-		if _, err := tx.Exec(ctx, `UPDATE discover_settings SET removed_at = NULL, removed_by = NULL, removed_note = NULL, updated_at = now(), updated_by = $2
-			WHERE tenant_id = $1`, tenant, by); err != nil {
-			return Settings{}, err
-		}
-	} else if _, err := tx.Exec(ctx, `INSERT INTO discover_settings (tenant_id, removed_at, removed_by, removed_note, updated_by) VALUES ($1, now(), $2, $3, $2)
-		ON CONFLICT (tenant_id) DO UPDATE SET removed_at = now(), removed_by = $2, removed_note = $3, updated_at = now(), updated_by = $2`, tenant, by, note); err != nil {
+	}
+	if _, err := tx.Exec(ctx, `SELECT taskiem_discover_moderate($1, $2, $3, $4)`, tenant, restore, note, by); err != nil {
 		return Settings{}, err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE page_reports SET status = $3, handled_by = $2, handled_at = now()
 		WHERE tenant_id = $1 AND kind = 'discover' AND site_id = $1 AND status = 'open'`, tenant, by, status); err != nil {
 		return Settings{}, err
 	}
-	return RefreshTx(ctx, tx, tenant, previewDomain)
+	st, err := RefreshTx(ctx, tx, tenant, previewDomain)
+	st.WasRemoved = was.removedAt != nil
+	return st, err
 }
 
 // Result is one business a search found.
@@ -642,8 +718,12 @@ type Query struct {
 	Offset   int       `json:"offset"`
 }
 
-// PageSize is how many results a search answers at once.
-const PageSize = 20
+// PageSize is how many results a search answers at once, and MaxOffset
+// the furthest a search pages.
+const (
+	PageSize  = 20
+	MaxOffset = 200
+)
 
 // Querier runs the definers: a pool or a transaction.
 type Querier interface {
@@ -678,8 +758,9 @@ func Search(ctx context.Context, q Querier, in Query, now time.Time) ([]Result, 
 	if err != nil {
 		return nil, false, err
 	}
-	more := len(out) > PageSize
-	if more {
+	// More only while the next page is within MaxOffset.
+	more := len(out) > PageSize && in.Offset+PageSize <= MaxOffset
+	if len(out) > PageSize {
 		out = out[:PageSize]
 	}
 	if out == nil {
