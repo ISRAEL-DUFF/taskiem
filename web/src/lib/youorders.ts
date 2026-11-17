@@ -19,6 +19,8 @@ export interface PersonOrder {
   photo?: OrderPhoto;
   reference: string;
   kind: "order" | "booking";
+  /** What kind of booking (bookings only). */
+  booking_type?: BookingType;
   state: string;
   summary: string;
   total_kobo: number;
@@ -26,7 +28,15 @@ export interface PersonOrder {
   pay: boolean;
   made_at: string;
   chat_id: string | null;
+  /** Made with the number before it was verified on this account (it may
+   * have been someone else's): the short row only, no Pay, no detail. */
+  earlier?: boolean;
 }
+
+export type BookingType = "service" | "hire" | "space" | "class" | "tickets";
+
+/** What an earlier order's row says in place of its summary. */
+export const EARLIER_WORDS = "Made before this number was yours";
 
 export interface PersonOrders {
   orders: PersonOrder[];
@@ -86,10 +96,50 @@ export function addPage(cur: PersonOrder[], page: PersonOrder[]): PersonOrder[] 
   return [...cur, ...page.filter((o) => !seen.has(`${o.business_id}/${o.reference}`))];
 }
 
-/** A row's line: "2 × Jollof rice · MK-1A2B · Today, 18:03". */
-export function orderLine(o: Pick<PersonOrder, "summary" | "reference" | "kind">, when: string): string {
-  const what = o.summary || (o.kind === "booking" ? "A booking" : "An order");
+/** Pages kept, freshened by the newest page read again: its rows take
+ * the place of the same orders (a state or a payment changed), new ones
+ * go first, and the older pages stay as they were. */
+export function freshen(cur: PersonOrder[], newest: PersonOrder[]): PersonOrder[] {
+  const k = (o: PersonOrder) => `${o.business_id}/${o.reference}`;
+  const now = new Map(newest.map((o) => [k(o), o]));
+  const had = new Set(cur.map(k));
+  return [...newest.filter((o) => !had.has(k(o))), ...cur.map((o) => now.get(k(o)) ?? o)];
+}
+
+const BOOKING_NAME: Record<BookingType, { title: string; a: string }> = {
+  service: { title: "Booking", a: "A booking" },
+  hire: { title: "Hire", a: "A hire" },
+  space: { title: "Space booking", a: "A space booked" },
+  class: { title: "Class booking", a: "Places in a class" },
+  tickets: { title: "Tickets", a: "Tickets" },
+};
+
+/** One order's page title: "Order MK-1A2B", "Booking BS-1", "Hire HR-2". */
+export function orderTitle(o: Pick<PersonOrder, "kind" | "booking_type" | "reference">): string {
+  if (o.kind !== "booking") return `Order ${o.reference}`;
+  return `${BOOKING_NAME[o.booking_type ?? "service"]?.title ?? "Booking"} ${o.reference}`;
+}
+
+/** A row's icon: an order's box, a booking's calendar, tickets' tag. */
+export function orderIcon(o: Pick<PersonOrder, "kind" | "booking_type">): string {
+  if (o.kind !== "booking") return "orders";
+  return o.booking_type === "tickets" ? "tag" : "calendar";
+}
+
+/** A row's line: "2 × Jollof rice · MK-1A2B · Today, 18:03"; a hire's
+ * "Canopy, 3 days"; an earlier order's "Made before this number was
+ * yours". */
+export function orderLine(o: Pick<PersonOrder, "summary" | "reference" | "kind" | "booking_type" | "earlier">, when: string): string {
+  const what = o.earlier ? EARLIER_WORDS : o.summary || (o.kind === "booking" ? (BOOKING_NAME[o.booking_type ?? "service"]?.a ?? "A booking") : "An order");
   return [what, o.reference, when].filter(Boolean).join(" · ");
+}
+
+/** A booking's times in Lagos: "Sat 24 Oct, 10:30 to 12:30", or with the
+ * end's day when it ends on another ("… to Mon 26 Oct, 10:30"). */
+export function bookingWhen(starts: string, ends: string | undefined, day: (iso: string) => string, time: (iso: string) => string): string {
+  const from = `${day(starts)}, ${time(starts)}`;
+  if (!ends) return from;
+  return day(ends) === day(starts) ? `${from} to ${time(ends)}` : `${from} to ${day(ends)}, ${time(ends)}`;
 }
 
 /** What is due, under the total: "₦2,500 to pay", or nothing. */
@@ -148,6 +198,28 @@ export function addressBody(f: AddressForm, editing: boolean): Record<string, un
   return body;
 }
 
+/** The longest street a saved address keeps (an order's own address may
+ * be longer). */
+export const SAVED_LINE_MAX = 200;
+
+/** Checkout's "Save this address": why the typed address can't be saved
+ * as it is, or null. */
+export function keepProblem(address: string, saved: number): string | null {
+  if (saved >= MAX_ADDRESSES) return `You can keep up to ${MAX_ADDRESSES} addresses.`;
+  if (address.trim().length > SAVED_LINE_MAX) return `A saved address is at most ${SAVED_LINE_MAX} letters. Shorten it, or order without saving it.`;
+  return null;
+}
+
+/** The saved address chosen at checkout: the one picked ("" for another,
+ * typed); with none picked, the default, else the first. Once the person
+ * has typed an address it stays chosen, even when their saved ones load
+ * after (`typed`). */
+export function chosenAddress(picked: string | undefined, addresses: Pick<SavedAddress, "id" | "default">[], typed: boolean): string {
+  if (picked !== undefined) return picked;
+  if (typed) return "";
+  return addresses.find((a) => a.default)?.id ?? addresses[0]?.id ?? "";
+}
+
 /** A refused address, in a person's words. */
 export function addressProblem(e: unknown): string | null {
   if (!(e instanceof ApiError)) return null;
@@ -162,6 +234,22 @@ export function payProblem(e: unknown): string | null {
   if (!(e instanceof ApiError)) return null;
   if (e.status === 403) return "This business is not taking messages or payments from you.";
   if (e.status === 409 && e.body.area_off) return "This business is not taking orders right now.";
+  if (e.status === 409 && e.body.earlier) return "This order was made before this number was yours, so it can't be paid here. Chat with the business about it.";
+  // "This order is closed.", a new price to confirm, nothing due: the
+  // server's own sentence.
+  if (e.status === 409 && /^[A-Z].*\.$/.test(e.message.trim())) return e.message.trim();
+  if (e.status === 429) return "Too many tries. Wait a moment and try again.";
+  if (e.status === 404) return "This order is not one of yours, or it is no longer kept.";
+  return null;
+}
+
+/** One order's page refused, in a person's words. */
+export function orderProblem(e: unknown): string | null {
+  if (!(e instanceof ApiError)) return null;
+  if (e.status === 404) return "This order is not one of yours, or it is no longer kept.";
+  if (e.status === 403) return "This business is not taking messages from you, so its orders can't be opened here.";
+  if (e.status === 409 && e.body.area_off) return "This business is not taking orders right now, so its orders can't be opened here.";
+  if (e.status === 429) return "Too many tries. Wait a moment and try again.";
   return null;
 }
 

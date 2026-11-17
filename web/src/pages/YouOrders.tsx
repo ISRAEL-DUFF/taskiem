@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ApiError, del, get, post, put } from "../api";
+import { del, get, post, put } from "../api";
 import { Icon } from "../icons";
 import { getDraft, setDraft } from "../lib/drafts";
 import { aboutOrderDraft, deliveryStep, photoURL, stateWords, waitingWords } from "../lib/personchat";
-import { whenLabel } from "../lib/bookings";
+import { dayLabel, lagosDay, lagosTime } from "../lib/bookings";
+import { PageCache } from "../lib/pagecache";
 import { formatPrice } from "../lib/storefront";
 import {
   addPage,
@@ -14,15 +15,21 @@ import {
   addressLine,
   addressProblem,
   addressSub,
+  bookingWhen,
   confirmedWords,
   dueWords,
+  EARLIER_WORDS,
   emptyAddress,
   fulfilmentWords,
+  freshen,
   MAX_ADDRESSES,
   orderAPI,
+  orderIcon,
   orderLine,
   orderPath,
+  orderProblem,
   ordersPage,
+  orderTitle,
   payProblem,
   type AddressForm,
   type PersonOrder,
@@ -97,18 +104,50 @@ export function useChatAbout() {
   };
 }
 
+/** The pages of Orders on You as last seen, so Back from an order returns
+ * to them (this tab's memory only, for a few minutes). */
+interface OrderPages {
+  orders: PersonOrder[];
+  next: string | null;
+  waiting: number;
+}
+const keptOrders = new PageCache<OrderPages>(1);
+const ORDERS_KEY = "orders";
+
 /** /you/orders: the list, a page at a time. */
 export function YouOrders() {
-  const [pages, setPages] = useState<{ orders: PersonOrder[]; next: string | null; waiting: number }>();
+  const [pages, setPagesNow] = useState<OrderPages | undefined>(() => keptOrders.get(ORDERS_KEY)?.value);
+  const setPages = (f: (cur: OrderPages | undefined) => OrderPages | undefined) =>
+    setPagesNow((cur) => {
+      const next = f(cur);
+      if (next) keptOrders.set(ORDERS_KEY, next, window.scrollY);
+      return next;
+    });
   const [error, setError] = useState<unknown>();
+  const [moreError, setMoreError] = useState<unknown>();
   const [more, setMore] = useState(false);
   const [n, setN] = useState(0);
   const act = useAction();
   const chatAbout = useChatAbout();
+  // Back from an order: where the list was. Leaving: where it is now.
+  const back = useRef(!!pages);
+  useEffect(() => {
+    const at = keptOrders.get(ORDERS_KEY)?.scroll ?? 0;
+    if (back.current) requestAnimationFrame(() => window.scrollTo(0, at));
+    return () => keptOrders.scrolled(ORDERS_KEY, window.scrollY);
+  }, []);
   useEffect(() => {
     let live = true;
+    // Coming back, the pages already open stay; the newest is read again.
+    const keep = back.current && n === 0;
     get<PersonOrders>(ordersPage(null)).then(
-      (r) => live && (setPages({ orders: r.orders, next: r.next, waiting: r.waiting_count }), setError(undefined)),
+      (r) => {
+        if (!live) return;
+        setPages((cur) =>
+          keep && cur ? { orders: freshen(cur.orders, r.orders), next: cur.next, waiting: r.waiting_count } : { orders: r.orders, next: r.next, waiting: r.waiting_count },
+        );
+        setError(undefined);
+      },
       (e: unknown) => live && setError(e),
     );
     return () => {
@@ -118,11 +157,9 @@ export function YouOrders() {
   const loadMore = () => {
     if (!pages?.next || more) return;
     setMore(true);
+    setMoreError(undefined);
     get<PersonOrders>(ordersPage(pages.next))
-      .then(
-        (r) => setPages((cur) => (cur ? { orders: addPage(cur.orders, r.orders), next: r.next, waiting: r.waiting_count } : cur)),
-        setError,
-      )
+      .then((r) => setPages((cur) => (cur ? { orders: addPage(cur.orders, r.orders), next: r.next, waiting: r.waiting_count } : cur)), setMoreError)
       .finally(() => setMore(false));
   };
   const orders = pages?.orders ?? [];
@@ -139,6 +176,7 @@ export function YouOrders() {
             onClick={() =>
               void act.run(async () => {
                 await post("/v1/me/storefront-orders/confirm");
+                back.current = false;
                 setN((x) => x + 1);
               }, confirmedWords)
             }
@@ -165,17 +203,21 @@ export function YouOrders() {
         <Items label="Your orders">
           {orders.map((o) => {
             const st = stateWords(o.state);
-            const due = dueWords(o);
+            const due = o.earlier ? "" : dueWords(o);
             return (
               <Row
                 key={`${o.business_id}/${o.reference}`}
-                icon={o.kind === "booking" ? "calendar" : "orders"}
+                icon={orderIcon(o)}
                 image={photoURL(o.photo)}
                 tone={o.pay ? "warn" : undefined}
                 title={
-                  <Link to={orderPath(o)} className="you-order-name">
-                    {o.business}
-                  </Link>
+                  o.earlier ? (
+                    <span className="you-order-name">{o.business}</span>
+                  ) : (
+                    <Link to={orderPath(o)} className="you-order-name">
+                      {o.business}
+                    </Link>
+                  )
                 }
                 side={<span className="item-figure">{formatPrice(o.total_kobo)}</span>}
                 sub={
@@ -188,23 +230,31 @@ export function YouOrders() {
                   </span>
                 }
                 testid="you-order"
-                attrs={{ "data-status": o.state }}
+                attrs={{ "data-status": o.state, ...(o.earlier ? { "data-earlier": "true" } : {}) }}
               >
-                {o.pay && <OrderPay order={o} />}
+                {o.pay && !o.earlier && <OrderPay order={o} />}
                 <button type="button" className="small" onClick={() => chatAbout(o)} data-testid="order-chat-about">
                   Chat about this<span className="sr-only"> order, {o.reference}</span>
                 </button>
-                <Link className="button small" to={orderPath(o)}>
-                  See the order<span className="sr-only"> {o.reference}</span>
-                </Link>
+                {!o.earlier && (
+                  <Link className="button small" to={orderPath(o)}>
+                    See the order<span className="sr-only"> {o.reference}</span>
+                  </Link>
+                )}
               </Row>
             );
           })}
         </Items>
       )}
+      {orders.some((o) => o.earlier) && (
+        <p className="hint" data-testid="orders-earlier-hint">
+          An order marked “{EARLIER_WORDS}” was made with your phone number before it was on your account, so only its total and state are shown. Chat with the business to ask about it.
+        </p>
+      )}
+      {moreError ? <ErrorBox error={moreError} /> : null}
       {pages?.next && (
         <button type="button" className="discover-more" disabled={more} onClick={loadMore} data-testid="orders-more">
-          {more ? "Loading…" : "Show older orders"}
+          {more ? "Loading…" : moreError ? "Try again" : "Show older orders"}
         </button>
       )}
     </>
@@ -219,7 +269,7 @@ export function YouOrder() {
   const o = view.data;
   const st = stateWords(o?.state);
   const step = o?.delivery ? deliveryStep(o.delivery) : 0;
-  const notFound = view.error instanceof ApiError && view.error.status === 404;
+  const said = orderProblem(view.error);
   return (
     <>
       <p className="crumbs">
@@ -228,14 +278,47 @@ export function YouOrder() {
         </Link>
       </p>
       {!o && !view.error && <Skeleton rows={4} label="Loading the order…" />}
-      {notFound ? (
-        <EmptyState icon="orders">This order is not one of yours, or it is no longer kept.</EmptyState>
+      {said ? (
+        <EmptyState icon="orders">
+          <span data-testid="you-order-problem">{said}</span>
+        </EmptyState>
       ) : (
         <ErrorBox error={view.error} />
       )}
-      {o && (
+      {o?.earlier && (
         <>
-          <PageHeader title={o.kind === "booking" ? `Booking ${o.reference}` : `Order ${o.reference}`} />
+          <PageHeader title={orderTitle(o)} />
+          <section className="hero" aria-label="The total" data-testid="you-order-hero">
+            <div className="hero-top">
+              <span className="hero-label">Total</span>
+              {st.label && <span className="hero-tag">{st.label}</span>}
+            </div>
+            <div className="hero-amount">{formatPrice(o.total_kobo)}</div>
+            <p className="hero-sub">{EARLIER_WORDS}</p>
+            <dl className="hero-foot">
+              <div>
+                <dt>Business</dt>
+                <dd>{o.business}</dd>
+              </div>
+              <div>
+                <dt>Made</dt>
+                <dd>{fmtTime(o.made_at)}</dd>
+              </div>
+            </dl>
+          </section>
+          <div className="row-actions page-actions you-order-actions">
+            <button type="button" className="primary" onClick={() => chatAbout(o)} data-testid="order-chat-about">
+              <Icon name="chat" /> Chat about this
+            </button>
+          </div>
+          <p className="hint" data-testid="you-order-earlier">
+            This order was made with your phone number before it was on your account, so only its total and state are shown here. Chat with {o.business} to ask about it.
+          </p>
+        </>
+      )}
+      {o && !o.earlier && (
+        <>
+          <PageHeader title={orderTitle(o)} />
           <section className="hero" aria-label={o.due_kobo > 0 ? "What is due" : "The total"} data-testid="you-order-hero">
             <div className="hero-top">
               <span className="hero-label">{o.due_kobo > 0 ? "Still to pay" : "Total"}</span>
@@ -277,12 +360,12 @@ export function YouOrder() {
             <section className="card" aria-labelledby="you-order-when">
               <h2 id="you-order-when">When</h2>
               <p>
-                <strong>{o.service_name || o.summary}</strong>
+                {/* A service's name; a hire's, a space's, a class's or tickets' summary ("2 × Canopy, 3 days"). */}
+                <strong data-testid="you-order-booked">{(o.booking_type ?? "service") === "service" ? o.service_name || o.summary : o.summary || o.service_name}</strong>
                 {o.starts_at && (
                   <>
                     <br />
-                    {whenLabel(o.starts_at)}
-                    {o.ends_at && ` to ${new Date(o.ends_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Lagos" })}`} (Lagos time)
+                    {bookingWhen(o.starts_at, o.ends_at, (t) => dayLabel(lagosDay(t)), lagosTime)} (Lagos time)
                   </>
                 )}
               </p>

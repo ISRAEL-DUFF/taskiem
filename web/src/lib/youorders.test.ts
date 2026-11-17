@@ -7,12 +7,19 @@ import {
   addressLine,
   addressProblem,
   addressSub,
+  bookingWhen,
+  chosenAddress,
   dueWords,
   emptyAddress,
   fulfilmentWords,
+  freshen,
+  keepProblem,
   orderAPI,
+  orderIcon,
   orderLine,
   orderPath,
+  orderProblem,
+  orderTitle,
   ordersPage,
   payProblem,
   type PersonOrder,
@@ -61,7 +68,57 @@ describe("Orders on You", () => {
   it("says a refused pay link plainly", () => {
     expect(payProblem(new ApiError(403, "blocked", [], { blocked: true }))).toMatch(/not taking/);
     expect(payProblem(new ApiError(409, "off", [], { area_off: true }))).toMatch(/not taking orders/);
-    expect(payProblem(new ApiError(409, "Nothing is due on this order."))).toBeNull();
+    // The server's own sentence: closed, a new price, nothing due.
+    expect(payProblem(new ApiError(409, "This order is closed."))).toBe("This order is closed.");
+    expect(payProblem(new ApiError(409, "Nothing is due on this order."))).toBe("Nothing is due on this order.");
+    expect(payProblem(new ApiError(409, "x", [], { earlier: true }))).toMatch(/^This order was made before this number was yours, so it can't be paid here\./);
+    expect(payProblem(new ApiError(429, "Too many tries. Wait a moment and try again."))).toBe("Too many tries. Wait a moment and try again.");
+    expect(payProblem(new ApiError(409, "conflict"))).toBeNull();
+    expect(payProblem(new Error("x"))).toBeNull();
+  });
+
+  it("says a refused order page plainly", () => {
+    expect(orderProblem(new ApiError(404, "x"))).toBe("This order is not one of yours, or it is no longer kept.");
+    expect(orderProblem(new ApiError(429, "x"))).toBe("Too many tries. Wait a moment and try again.");
+    expect(orderProblem(new ApiError(403, "x", [], { blocked: true }))).toMatch(/not taking messages from you/);
+    expect(orderProblem(new ApiError(409, "x", [], { area_off: true }))).toMatch(/not taking orders/);
+    expect(orderProblem(new ApiError(500, "x"))).toBeNull();
+  });
+
+  it("shows an earlier order short: no summary, only what it was", () => {
+    const e = { ...row("OLD-1"), summary: "", earlier: true };
+    expect(orderLine(e, "12 Oct 2026")).toBe("Made before this number was yours · OLD-1 · 12 Oct 2026");
+    expect(orderLine({ ...e, summary: "2 × Jollof rice" }, "")).toBe("Made before this number was yours · OLD-1");
+  });
+
+  it("names bookings of every kind", () => {
+    expect(orderTitle(row("MK-1"))).toBe("Order MK-1");
+    expect(orderTitle({ ...row("B-1"), kind: "booking" })).toBe("Booking B-1");
+    expect(orderTitle({ ...row("H-1"), kind: "booking", booking_type: "hire" })).toBe("Hire H-1");
+    expect(orderTitle({ ...row("T-1"), kind: "booking", booking_type: "tickets" })).toBe("Tickets T-1");
+    expect(orderTitle({ ...row("C-1"), kind: "booking", booking_type: "class" })).toBe("Class booking C-1");
+    expect(orderTitle({ ...row("S-1"), kind: "booking", booking_type: "space" })).toBe("Space booking S-1");
+    expect(orderLine({ ...row("H-1"), kind: "booking", booking_type: "hire", summary: "2 × Canopy, 3 days" }, "")).toBe("2 × Canopy, 3 days · H-1");
+    expect(orderLine({ ...row("H-2"), kind: "booking", booking_type: "hire", summary: "" }, "")).toBe("A hire · H-2");
+    expect(orderIcon({ kind: "booking", booking_type: "tickets" })).toBe("tag");
+    expect(orderIcon({ kind: "booking", booking_type: "hire" })).toBe("calendar");
+    expect(orderIcon({ kind: "order" })).toBe("orders");
+  });
+
+  it("says a booking's times, with the end's day when it is another", () => {
+    const day = (t: string) => t.slice(0, 10);
+    const time = (t: string) => t.slice(11, 16);
+    expect(bookingWhen("2026-11-20T09:00", "2026-11-20T11:00", day, time)).toBe("2026-11-20, 09:00 to 11:00");
+    expect(bookingWhen("2026-11-20T09:00", "2026-11-23T09:00", day, time)).toBe("2026-11-20, 09:00 to 2026-11-23, 09:00");
+    expect(bookingWhen("2026-11-20T09:00", undefined, day, time)).toBe("2026-11-20, 09:00");
+  });
+
+  it("freshens kept pages with the newest page read again", () => {
+    const kept = [row("A"), row("B"), row("C")];
+    const newest = [row("N"), { ...row("A"), state: "paid" }, row("B")];
+    const out = freshen(kept, newest);
+    expect(out.map((o) => o.reference)).toEqual(["N", "A", "B", "C"]);
+    expect(out[1].state).toBe("paid");
   });
 });
 
@@ -82,6 +139,27 @@ describe("saved addresses", () => {
     // Changing one sends an empty phone, which takes it away.
     expect(addressBody({ ...f, default: false }, true)).toEqual({ label: "Home", line: "12 Allen Avenue", area: "", landmark: "", phone: "" });
     expect(addressBody({ ...f, phone: " 0803 123 4567 ", default: false }, false)).toMatchObject({ phone: "0803 123 4567" });
+  });
+
+  it("saves a typed address at checkout only when it can be kept", () => {
+    expect(keepProblem("12 Allen Avenue", 3)).toBeNull();
+    expect(keepProblem("x".repeat(201), 3)).toMatch(/at most 200 letters/);
+    expect(keepProblem(` ${"x".repeat(200)} `, 3)).toBeNull();
+    expect(keepProblem("12 Allen Avenue", 20)).toMatch(/up to 20 addresses/);
+  });
+
+  it("chooses the default until the person types, and then keeps what they typed", () => {
+    const list = [
+      { id: "a", default: false },
+      { id: "b", default: true },
+    ];
+    expect(chosenAddress(undefined, list, false)).toBe("b");
+    expect(chosenAddress(undefined, [{ id: "a", default: false }], false)).toBe("a");
+    expect(chosenAddress(undefined, [], false)).toBe("");
+    // Typed before the saved ones loaded: the typed one stays.
+    expect(chosenAddress(undefined, list, true)).toBe("");
+    expect(chosenAddress("a", list, true)).toBe("a");
+    expect(chosenAddress("", list, false)).toBe("");
   });
 
   it("says the limit and a bad phone plainly", () => {
