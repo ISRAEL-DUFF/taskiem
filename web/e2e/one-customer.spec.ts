@@ -193,8 +193,16 @@ test("one customer on WhatsApp and in the app: one thread with both lines, the r
   await person.getByTestId("way-in-terms").getByRole("checkbox").check();
   await person.getByRole("button", { name: "Create" }).click();
   await expect(person).toHaveURL(/\/you\/chats\/[0-9a-f-]{36}$/);
-  // Their WhatsApp chat with the business is here too.
-  await expect(person.getByTestId("person-whatsapp-here")).toHaveText("Your WhatsApp chat with them is here too");
+  // Not joined yet: the WhatsApp message came before this number was
+  // proved on the account, so the two lines join only when the number
+  // writes on WhatsApp again (§11; stage 4 review: a recycled number never
+  // takes an earlier holder's chat).
+  await expect(person.getByTestId("person-whatsapp-here")).toHaveCount(0);
+  await deliver(biz, num.digits, "It's me, Kemi, on WhatsApp too.");
+  // Their WhatsApp chat with the business is here too (the page reads the
+  // chat again on its own; a reload makes it at once).
+  await person.reload();
+  await expect(person.getByTestId("person-whatsapp-here")).toHaveText("Your WhatsApp chat with them is here too", { timeout: 15_000 });
   const offers = person.getByTestId("offers-question");
   await offers.getByRole("button", { name: "No", exact: true }).click();
   await person.getByLabel(`Message ${name}`).fill("Is it ready by noon?");
