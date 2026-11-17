@@ -425,14 +425,16 @@ export function PageAction({ tenant, business, status, onDone }: { tenant: strin
   const act = useAction();
   const suspended = status === "suspended";
   const action = suspended ? "restore" : "suspend";
-  const run = () =>
-    act.run(async () => {
-      if (!suspended && !confirm(`Suspend ${business}'s page? Customers see "This page is unavailable" until it is restored.`)) return;
+  const run = () => {
+    // Asked first: a "no" does nothing, and says nothing was done.
+    if (!suspended && !confirm(`Suspend ${business}'s page? Customers see "This page is unavailable" until it is restored.`)) return;
+    return act.run(async () => {
       await withStepUp(`ops.storefront.${action}`, tenant, `/storefronts/${tenant}/${action}`, { reason: reason.trim() });
       setReason("");
       setDone(suspended ? "Restored. The owner is told." : "Suspended. The owner is told, with your reason.");
       onDone();
     }, "Page updated");
+  };
   return (
     <div className="card">
       <h2>{suspended ? "Restore the page" : "Suspend the page"}</h2>
@@ -463,6 +465,8 @@ export function Reports() {
   const [status, setStatus] = useState<ReportFilter>("open");
   const { data, error, reload } = useLoad(() => opsGet<{ reports: OpsReport[] }>(`/reports?status=${status}`), [status]);
   const [contacts, setContacts] = useState<Record<string, string>>({});
+  // What a Discover decision did: said above the list, which is read again (its reports leave the open ones).
+  const [decided, setDecided] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const act = useAction();
   const run = (rep: OpsReport, action: "dismiss" | "action" | "contact") =>
@@ -476,7 +480,7 @@ export function Reports() {
       <h1>Reports</h1>
       <p className="hint">
         Visitors' reports from every page's and hosted form's footer. Three different people's open reports in 30 days suspend a page pending review. Reveal a
-        reporter's contact only to ask them more: it is audited, and shown once.
+        reporter's contact only to ask them more: it is audited, and shown once. A report on a Discover listing is decided with Remove or Restore.
       </p>
       <StatusTabs
         label="Show reports"
@@ -489,6 +493,11 @@ export function Reports() {
           ["all", "All"],
         ]}
       />
+      {decided && (
+        <div className="notice" role="status" data-testid="ops-reports-decided">
+          {decided}
+        </div>
+      )}
       <ErrorBox error={error ?? act.error} />
       {data && data.reports.length === 0 && <div className="empty">{status === "open" ? "No open reports." : "No reports."}</div>}
       {data && data.reports.length > 0 && (
@@ -533,7 +542,8 @@ export function Reports() {
                     {rep.handled_by && <div className="hint">by {actorLabel(rep.handled_by)}</div>}
                   </td>
                   <td style={{ whiteSpace: "nowrap" }}>
-                    {rep.status === "open" && (
+                    {/* A Discover report is decided with Remove or Restore (its own buttons answer 409). */}
+                    {rep.status === "open" && rep.kind !== "discover" && (
                       <>
                         <button disabled={act.busy} onClick={() => void run(rep, "dismiss")}>
                           Dismiss
@@ -570,7 +580,7 @@ export function Reports() {
                   <tr>
                     <td colSpan={8}>
                       {rep.kind === "discover" ? (
-                        <DiscoverAction tenant={rep.tenant_id} business={rep.business} onDone={() => undefined} />
+                        <DiscoverAction tenant={rep.tenant_id} business={rep.business} onDone={(words) => (setDecided(words), setOpen(null), reload())} />
                       ) : (
                         <SuspendRestore tenant={rep.tenant_id} business={rep.business} />
                       )}
@@ -603,18 +613,27 @@ function SuspendRestore({ tenant, business }: { tenant: string; business: string
 /** Take a business's listing out of Discover, or put it back
  * (taskiem-for-everyone §10): a passkey step-up; removing needs a reason,
  * which the owners are told. Its open reports are acted on, or dismissed. */
-export function DiscoverAction({ tenant, business, onDone }: { tenant: string; business: string; onDone: () => void }) {
+export function DiscoverAction({ tenant, business, onDone }: { tenant: string; business: string; onDone: (words: string) => void }) {
   const [reason, setReason] = useState("");
   const [done, setDone] = useState("");
   const act = useAction();
-  const run = (action: "remove" | "restore") =>
-    act.run(async () => {
-      if (action === "remove" && !confirm(`Take ${business} out of Discover? Customers no longer find it there until it is put back.`)) return;
-      await withStepUp(`ops.discover.${action}`, tenant, `/discover/${tenant}/${action}`, { reason: reason.trim() });
-      setReason("");
-      setDone(action === "remove" ? "Taken out of Discover. The owners are told, with your reason." : "Put back in Discover. The owners are told.");
-      onDone();
-    }, action === "remove" ? "Listing removed" : "Listing restored");
+  const run = (action: "remove" | "restore") => {
+    // Asked first: a "no" does nothing, and says nothing was done.
+    if (action === "remove" && !confirm(`Take ${business} out of Discover? Customers no longer find it there until it is put back.`)) return;
+    return act.run(
+      async () => {
+        await withStepUp(`ops.discover.${action}`, tenant, `/discover/${tenant}/${action}`, { reason: reason.trim() });
+        setReason("");
+        const words =
+          action === "remove"
+            ? `${business} is taken out of Discover, and its open reports are acted on. The owners are told, with your reason.`
+            : `${business}: its open reports are dismissed. If it had been taken out, it is back in Discover and the owners are told.`;
+        setDone(words);
+        onDone(words);
+      },
+      action === "remove" ? "Listing removed" : "Listing restored",
+    );
+  };
   return (
     <div className="card" data-testid="ops-discover-action">
       <h2>Discover listing</h2>
