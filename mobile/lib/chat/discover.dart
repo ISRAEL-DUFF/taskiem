@@ -92,9 +92,12 @@ String discoverProblem(Object e, String what) {
 
 /// The Discover tab on You.
 class DiscoverTab extends StatefulWidget {
-  const DiscoverTab({super.key, required this.auth, required this.onOpenChat});
+  const DiscoverTab({super.key, required this.auth, required this.onOpenChat, this.back = false});
   final Auth auth;
   final OpenMyChat onOpenChat;
+
+  /// Pushed over a business's home (a link to /you/discover), not a tab.
+  final bool back;
 
   @override
   State<DiscoverTab> createState() => _DiscoverTabState();
@@ -230,7 +233,7 @@ class _DiscoverTabState extends State<DiscoverTab> {
     final results = _results;
     return TkScreen(
       title: 'Discover',
-      back: false,
+      back: widget.back,
       onRefresh: _search,
       under: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -11,7 +11,10 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskiem/api/api.g.dart' show DiscoverSettings;
+import 'package:taskiem/app/applinks.dart' show LinkInbox;
+import 'package:taskiem/app/config.dart' show taskiemUrl;
 import 'package:taskiem/app/links.dart';
+import 'package:taskiem/screens/you.dart' show YouHome;
 import 'package:taskiem/chat/discover.dart';
 import 'package:taskiem/chat/discover_settings.dart';
 import 'package:taskiem/chat/door.dart' show yourOrderStatus;
@@ -535,6 +538,39 @@ void main() {
     test('where a listing stands, as the web says', () {
       expect(discoverStanding(DiscoverSettings.fromJson(discoverSettings())).tag, 'Listed');
     });
+  });
+
+  testWidgets('links to You open its tabs and pages: an order, Discover, a profile, a chat to start', (t) async {
+    phone(t);
+    final api = discoverApi((_) => {'results': [result('b1', 'Mama’s Kitchen')], 'more': false});
+    api.routes['GET /v1/me/orders/b1/MK-1042'] = (_) => {...order(), 'lines': <Object>[], 'paid_kobo': 0};
+    api.routes['GET /v1/discover/b1'] = (_) => answer({'error': 'This business is not in Discover any more.'}, 404);
+    api.routes['POST /v1/me/chats'] = (_) => chat(id: 'c1', offers: 'no', ask: false);
+    final links = StreamController<Uri>();
+    final inbox = LinkInbox(links: links.stream, first: () async => null);
+    addTearDown(() {
+      inbox.dispose();
+      links.close();
+    });
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), links: inbox, now: () => at)));
+    await settle(t);
+    Future<void> link(String path) async {
+      links.add(Uri.parse('$taskiemUrl$path'));
+      await settle(t);
+      await settle(t);
+    }
+
+    await link('/you/orders/b1/MK-1042');
+    expect(find.text('Order MK-1042'), findsOneWidget);
+    await link('/you/discover/b1');
+    expect(find.text('Order MK-1042'), findsNothing, reason: 'what was open is closed first');
+    expect(find.text('This business is not in Discover any more.'), findsOneWidget);
+    await link('/you/discover');
+    expect(find.text('Mama’s Kitchen'), findsOneWidget, reason: 'the Discover tab');
+    await link('/you/chats/new?business=b1&ref=MK-1042');
+    expect(api.body(api.sent('POST', '/v1/me/chats').single), {'business_id': 'b1', 'from': 'order'});
+    expect((t.widget(find.byType(EditableText)) as EditableText).controller.text, 'Hello, about my order MK-1042: ');
+    await drain(t);
   });
 
   testWidgets('an order from a link: read by its business and reference', (t) async {

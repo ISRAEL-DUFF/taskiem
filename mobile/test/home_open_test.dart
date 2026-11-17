@@ -18,7 +18,9 @@ import 'package:taskiem/app/session.dart';
 import 'package:taskiem/chat/conversation.dart';
 import 'package:taskiem/chat/customer.dart';
 import 'package:taskiem/chat/invoices_page.dart';
+import 'package:taskiem/chat/discover.dart' show DiscoverTab;
 import 'package:taskiem/chat/taskiem.dart';
+import 'package:taskiem/chat/your_orders.dart' show YourOrderPage;
 import 'package:taskiem/main.dart';
 
 import 'lock_test.dart' show FakeUnlocker;
@@ -102,6 +104,31 @@ void main() {
       links.add(Uri.parse('https://staging.ispend.name.ng/chat?with=c-8d3a448a-c24d-485e-93a0-ddfd438fa74e'));
       await settle(t);
       expect(find.byType(CustomerScreen), findsOneWidget);
+      await links.close();
+    });
+
+    testWidgets('in a business, a link to the person’s own order or Discover opens over the business', (t) async {
+      final links = StreamController<Uri>();
+      final inbox = LinkInbox(links: links.stream, first: () async => null);
+      await open(t, links: inbox, also: (r) async {
+        if (r.url.path == '/v1/me/orders/b1/MK-1042') {
+          return _json({
+            'business_id': 'b1', 'business': 'Mama’s Kitchen', 'reference': 'MK-1042', 'kind': 'order', 'state': 'accepted', 'summary': '1 × Jollof rice',
+            'total_kobo': 250000, 'due_kobo': 0, 'pay': false, 'made_at': '2026-11-15T10:00:00Z', 'chat_id': null, 'lines': <Object>[], 'paid_kobo': 0,
+          });
+        }
+        if (r.url.path == '/v1/discover/search') return _json({'results': <Object>[], 'more': false});
+        if (r.url.path == '/v1/discover/categories') return _json({'categories': <Object>[]});
+        return null;
+      });
+      links.add(Uri.parse('https://staging.ispend.name.ng/you/orders/b1/MK-1042'));
+      await settle(t);
+      expect(find.byType(YourOrderPage), findsOneWidget);
+      expect(find.text('Order MK-1042'), findsOneWidget);
+      links.add(Uri.parse('https://staging.ispend.name.ng/you/discover'));
+      await settle(t);
+      expect(find.byType(YourOrderPage), findsNothing);
+      expect(find.byType(DiscoverTab), findsOneWidget);
       await links.close();
     });
 

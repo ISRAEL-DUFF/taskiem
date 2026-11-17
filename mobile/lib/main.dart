@@ -49,6 +49,7 @@ import 'screens/sign_in.dart';
 import 'screens/switcher.dart' show showSwitcher;
 import 'screens/welcome.dart';
 import 'screens/you.dart';
+import 'screens/you_links.dart' show openYouPage;
 import 'theme/theme.dart';
 import 'kit/mobile.dart' show TkRoute, tkPush;
 import 'kit/modal.dart' show showTkConfirm, showTkToast;
@@ -570,6 +571,13 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
         openStorefrontOrder(context, auth, id);
       case RouteScreen.you:
         nav.push(TkRoute<void>(pageBuilder: (_, _, _) => MyChatScreen(data: MyChatData(auth, id), notify: widget.notify)));
+      case RouteScreen.youPage:
+        // The rest of the person's own side: pushed over the business.
+        final you = youRouteOf(id);
+        if (you == null) return;
+        Future<void> open(String chat, {String? notice, String draft = '', String? tool}) =>
+            tkPush<void>(context, MyChatScreen(data: MyChatData(auth, chat, notice: notice), draft: draft, notify: widget.notify, tool: tool));
+        unawaited(openYouPage(context, auth, you, open: open));
     }
   }
 

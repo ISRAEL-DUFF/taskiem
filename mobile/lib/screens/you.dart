@@ -38,6 +38,8 @@ import 'chat_link.dart';
 import 'home_tabs.dart';
 import 'second_proof.dart';
 import 'start_something.dart';
+import 'you_links.dart';
+import '../app/route.dart' show youRouteOf;
 import 'switcher.dart';
 
 /// The words for an error, as the sign-in screens say them.
@@ -73,6 +75,9 @@ class _YouHomeState extends State<YouHome> {
 
   /// Told each time Orders is shown again: it reads itself again.
   final _ordersShown = ValueNotifier<int>(0);
+
+  /// The tabs, for a link that opens one.
+  final _tabs = GlobalKey<HomeTabsState>();
 
   @override
   void initState() {
@@ -203,6 +208,14 @@ class _YouHomeState extends State<YouHome> {
       await _chats.load();
       return;
     }
+    // You's own pages (/you, a chat, Orders, an order, Discover, a
+    // business's profile): its tab, and the screen over it.
+    final you = youRouteOf(page);
+    if (you != null) {
+      Navigator.of(context).popUntil((r) => r.isFirst);
+      await openYouPage(context, widget.auth, you, open: _openId, showTab: (i) => _tabs.currentState?.show(i), now: widget.now);
+      return;
+    }
     final token = Uri.parse(page).queryParameters['token'];
     if (!page.startsWith('/second-proof') || token == null) return;
     try {
@@ -276,6 +289,7 @@ class _YouHomeState extends State<YouHome> {
   /// You's tabs (§7): Chats, Orders and Discover; Settings is in the head.
   @override
   Widget build(BuildContext context) => HomeTabs(
+    key: _tabs,
     count: () => _chats.unread,
     counted: _chats,
     offline: widget.auth.transport.offline,

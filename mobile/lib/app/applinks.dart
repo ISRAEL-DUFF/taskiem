@@ -12,8 +12,16 @@ import 'package:flutter/foundation.dart';
 import 'config.dart';
 
 /// The pages the app opens from a link (the server's appPaths); anything
-/// else of the server's opens in the phone's browser as before.
-final _opens = RegExp(r'^/(chat|approvals|invoices/[^/]+|trade-orders/[^/]+|storefront/orders/[^/]+|bills/[^/]+|purchases/[^/]+)/?$');
+/// else of the server's opens in the phone's browser as before. You's
+/// (taskiem-for-everyone §7): the chats and one chat, Orders and one order,
+/// Discover and a business's profile; You's settings stay on the web.
+final _opens = RegExp(
+  r'^/(chat|approvals|invoices/[^/]+|trade-orders/[^/]+|storefront/orders/[^/]+|bills/[^/]+|purchases/[^/]+'
+  r'|you|you/chats|you/chats/[^/]+|you/orders|you/orders/[^/]+/[^/]+|you/discover|you/discover/[^/]+)/?$',
+);
+
+/// A part of a /you link's question: letters, digits and dashes.
+final _plain = RegExp(r'^[A-Za-z0-9\-]{1,80}$');
 
 /// The page of the app [uri] is, as a path with its question (the web's
 /// address), or null when it is not one of this server's the app opens.
@@ -34,6 +42,19 @@ String? appPageOf(Uri uri, {String server = taskiemUrl}) {
   final with_ = uri.queryParameters['with'];
   if (uri.path == '/chat' && with_ != null) {
     return RegExp(r'^[A-Za-z0-9\-]{1,80}$').hasMatch(with_) ? '/chat?with=$with_' : '/chat';
+  }
+  // A chat to start with a business (the web's /you/chats/new, from
+  // Discover or an order): only its business, the tool and the order kept.
+  if (uri.path == '/you/chats/new' || uri.path == '/you/chats/new/') {
+    final q = uri.queryParameters;
+    final business = q['business'] ?? '';
+    if (!_plain.hasMatch(business)) return '/you';
+    final tool = q['tool'], ref = q['ref'];
+    return Uri(path: '/you/chats/new', queryParameters: {
+      'business': business,
+      if (tool == 'shop' || tool == 'book') 'tool': tool!,
+      if (ref != null && _plain.hasMatch(ref)) 'ref': ref,
+    }).toString();
   }
   return uri.path.endsWith('/') && uri.path.length > 1 ? uri.path.substring(0, uri.path.length - 1) : uri.path;
 }
