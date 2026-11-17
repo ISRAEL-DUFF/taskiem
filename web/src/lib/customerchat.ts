@@ -3,6 +3,7 @@
 // in the chat; staff who handle orders answer there, and the answer goes
 // from the business's number. Pure helpers, tested on their own.
 
+import type { CustomerThreadLine } from "./customerlines";
 import type { AppAttachment, AppCard } from "./personchat";
 
 export interface CustomerChat {
@@ -37,6 +38,12 @@ export interface CustomerChat {
   offers?: "unasked" | "yes" | "no";
   /** They are typing now (app, one thread only). */
   typing?: boolean;
+  /** Its lines (taskiem-for-everyone §11): one, or both once the person in
+   * the app and the WhatsApp thread of their verified phone are one
+   * customer. Then the window, stops and notice above are reply_line's. */
+  lines?: CustomerThreadLine[];
+  /** Where a reply goes unless another line is chosen. */
+  reply_line?: "whatsapp" | "app";
 }
 
 export interface CustomerMessage {
@@ -61,6 +68,8 @@ export interface CustomerMessage {
   created_at: string;
   /** Shown before the server answers. */
   local?: boolean;
+  /** Where it went: on WhatsApp or in the app (§11). */
+  line?: "whatsapp" | "app";
 }
 
 /** The list's and the URL's key for a thread: "c-" and its id. */

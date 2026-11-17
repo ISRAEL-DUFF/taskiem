@@ -442,6 +442,20 @@ img.tk-live-tile { object-fit: cover; }
 .customer-note { margin: 0 12px 8px; padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.4; background: var(--tk-warn-bg); color: var(--tk-warn-ink); }
 .customer-note.stop { background: var(--tk-danger-bg); color: var(--tk-danger-ink); }
 .chat-pane .bubble.media-note .text { color: var(--muted); }
+/* One customer on both lines (taskiem-for-everyone §11): each line's state
+ * in words, and where the reply goes, chosen as two pills. */
+.customer-line-states { list-style: none; margin: 0 12px 8px; padding: 8px 12px; border-radius: 12px; font-size: 13px; line-height: 1.4; background: var(--tk-soft); color: var(--text); }
+.customer-line-states li + li { margin-top: 2px; }
+.line-chooser { margin: 0 12px 8px; padding: 0; border: 0; min-width: 0; }
+.line-chooser legend { float: left; margin: 0 8px 0 0; padding: 0; font-size: 13px; line-height: 32px; color: var(--muted); }
+.line-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.line-choice { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 12px; border-radius: 999px; background: var(--tk-soft); color: var(--text); font-size: 13px; cursor: pointer; }
+.line-choice.on { background: var(--primary); color: var(--primary-text); font-weight: 600; }
+.line-choice.off { cursor: not-allowed; color: var(--muted); }
+.line-choice input { margin: 0; accent-color: var(--primary-text); }
+.line-choice:focus-within { box-shadow: var(--ring); }
+.line-why { clear: both; margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+.bubble .line-of { font-style: normal; }
 .chat-list-pane section[aria-labelledby="customers-head"] { margin-top: 12px; }
 .customer-failed { display: block; margin-top: 4px; font-size: 12px; color: var(--danger); }
 /* Orders from customers' messages (phase 2): the card above the reply box. */

@@ -24,6 +24,10 @@ export interface ChatLinkSettings {
   updates_link: boolean;
   /** The Orders area is off: no chats are taken, whatever takes_chats says. */
   orders_off?: boolean;
+  /** The chat link offers Chat on WhatsApp beside Chat on Taskiem (§11). */
+  link_whatsapp?: boolean;
+  /** The business's own WhatsApp number, when it has one. */
+  own_number?: string;
 }
 
 /** What the business does when nobody answers (GET /v1/settings/customer-chats). */
@@ -67,8 +71,9 @@ export const ORDERS_OFF_WORDS =
   "Your Orders area is off, so chats are closed: customers cannot start a chat with you, and your link says so. Turn Orders on to take chats again.";
 
 /** The line under an app customer's name. */
-export function appThreadLine(c: { line?: string; typing?: boolean; blocked?: boolean; stopped?: boolean }): string {
+export function appThreadLine(c: { line?: string; typing?: boolean; blocked?: boolean; stopped?: boolean; lines?: unknown[] }): string {
   if (c.typing) return "typing…";
+  if ((c.lines?.length ?? 0) > 1) return "On WhatsApp and in the app";
   if (c.line !== "app") return "Customer on WhatsApp";
   if (c.blocked) return "In the app · you blocked them";
   if (c.stopped) return "In the app · stopped messages";
