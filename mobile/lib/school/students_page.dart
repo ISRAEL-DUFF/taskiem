@@ -33,7 +33,7 @@ import 'school_chasing.dart' show PromiseSheet, RemindSheet, PlanSheet;
 import 'school_clearance.dart' show OverrideSheet;
 import 'school_money.dart' show CashSheet, ReceiptsPage;
 import 'school_setup.dart' show ImportStudentsPage;
-import 'school_tab.dart' show pushSchool, said;
+import 'school_tab.dart' show QuietValue, pushSchool, said;
 import 'school_words.dart';
 
 /// A row of choices as pills that scroll sideways (classes, filters).
@@ -139,7 +139,7 @@ class _StudentsPageState extends State<StudentsPage> {
                 TkHeadButton(
                   icon: 'b-upload',
                   label: 'Import students',
-                  onTap: () => pushSchool<void>(context, ImportStudentsPage(auth: _auth)).then((_) => _load()),
+                  onTap: () => showTkSheet<void>(context, (_) => ImportStudentsPage(auth: _auth)).then((_) => _load()),
                 ),
                 const SizedBox(width: 8),
                 TkHeadButton(
@@ -560,14 +560,14 @@ class _StudentPageState extends State<StudentPage> {
                 title: 'Optional items',
                 icon: 'tag',
                 square: look.blue,
-                amount: '${(_fees?['chosen'] as List? ?? const []).length} of ${optional.length}',
+                trailing: QuietValue('${(_fees?['chosen'] as List? ?? const []).length} of ${optional.length}'),
                 onTap: manage ? () => _sheet(_OptionsSheet(auth: _auth, id: id, fees: _fees!)) : null,
               ),
             TkListRow(
               title: 'Discounts',
               icon: 'b-hand',
               square: look.teal,
-              amount: _discounts.isEmpty ? 'None' : _discounts.map(_discountWords).join(', '),
+              trailing: QuietValue(_discounts.isEmpty ? 'None' : _discounts.map(_discountWords).join(', ')),
               onTap: () => _sheet(_DiscountsSheet(auth: _auth, id: id, discounts: _discounts, manage: manage)),
             ),
           ],

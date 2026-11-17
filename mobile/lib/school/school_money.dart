@@ -16,7 +16,9 @@ import '../chat/words.dart' show naira;
 import '../kit/forms.dart' show errorWords, nairaKobo;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkLoading, TkSearchBox;
+import '../kit/icon.dart';
 import '../kit/look.dart';
+import '../kit/modal.dart' show showTkModalChoices;
 import '../kit/mobile.dart';
 import '../kit/page.dart';
 import '../kit/sheet.dart' show TkKitField, TkLines, TkSheet, TkFormBody, TkFootTwo, TkGhostButton, TkCta, TkSavedTick, showTkSheet;
@@ -115,7 +117,34 @@ class _CashSheetState extends State<CashSheet> {
               Row(
                 children: [
                   Expanded(child: Text('AMOUNT', style: tkText(size: 11, weight: 700, letterSpacing: 0.6, color: t.muted))),
-                  SizedBox(width: 168, child: TkChips<int>(label: 'When', padding: EdgeInsets.zero, chips: const [(0, 'Today'), (1, 'Yesterday')], on: _daysAgo, onPick: (v) => setState(() => _daysAgo = v))),
+                  // As drawn: the day as a small pill; Yesterday for money
+                  // counted late.
+                  Semantics(
+                    button: true,
+                    label: 'Paid ${_daysAgo == 0 ? 'today' : 'yesterday'}; change',
+                    excludeSemantics: true,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () async {
+                        final v = await showTkModalChoices(context, title: 'Paid', value: '$_daysAgo', choices: const [('0', 'Today'), ('1', 'Yesterday')]);
+                        if (v != null) setState(() => _daysAgo = int.parse(v));
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
+                        decoration: BoxDecoration(color: t.tkSoft, borderRadius: BorderRadius.circular(999)),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TkIcon('b-calendar', size: 14, stroke: 2, color: t.text),
+                            const SizedBox(width: 5),
+                            Text(_daysAgo == 0 ? 'Today' : 'Yesterday', style: tkText(size: 13, weight: 650, color: t.text)),
+                            const SizedBox(width: 2),
+                            TkIcon('b-caret', size: 14, stroke: 2.2, color: t.text),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 6),
@@ -302,7 +331,7 @@ class _SchoolApproveSheetState extends State<SchoolApproveSheet> {
     final rows = <(String, String)>[
       ('Amount', naira(kobo(p['amount_kobo']))),
       ('Student', [str(p['admission_number']), str(p['class'])].where((x) => x.isNotEmpty).join(' · ')),
-      if (str(d['how']).isNotEmpty) ('How', '${deskWay(str(d['how']))}${str(d['date']).isEmpty ? '' : ', ${dayWords(str(d['date']))}'}'),
+      if (str(d['how']).isNotEmpty) ('How', '${deskWay(str(d['how']))}${str(d['date']).isEmpty ? '' : ', ${nearDayWords(str(d['date']))}'}'),
       if (str(d['kind']).isNotEmpty) ('Discount', '${str(d['kind']).replaceAll('_', ' ')}${d['percent'] != null ? ' ${kobo(d['percent'])}%' : ''}'),
       if (str(d['reason']).isNotEmpty) ('Why', str(d['reason'])),
       if (str(d['note']).isNotEmpty) ('Note', str(d['note'])),
@@ -320,7 +349,7 @@ class _SchoolApproveSheetState extends State<SchoolApproveSheet> {
               leading: TkSquare('b-person', color: look.orange),
               title: 'You are the second person',
               sub: kind.startsWith('cash')
-                  ? 'Approved, it is counted on the invoice and the receipt goes to the family.'
+                  ? 'Approved, it is counted on ${str(p['invoice_number']).isEmpty ? 'the invoice' : str(p['invoice_number'])} and the receipt goes to the family.'
                   : 'Approved, the discount is on the student’s invoice.',
               color: look.orange,
             ),

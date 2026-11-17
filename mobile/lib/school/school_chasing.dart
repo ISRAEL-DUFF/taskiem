@@ -314,8 +314,9 @@ class _RemindSheetState extends State<RemindSheet> {
     final r = rungs.firstWhere((x) => x.n == _rung);
     return TkFormSheet(
       title: 'Send a reminder',
-      crumb: n == 1 ? nameOr(widget.students.single) : '$n families',
+      crumb: '${n == 1 ? nameOr(widget.students.single) : '$n families'} · Debtors',
       action: _busy ? 'Sending…' : (n == 1 ? 'Send it' : 'Send to $n'),
+      actionIcon: 'b-send',
       onAction: _busy ? null : _send,
       second: 'Cancel',
       onSecond: () => Navigator.of(context).pop(),
@@ -448,12 +449,36 @@ class _PlanSheetState extends State<PlanSheet> {
     super.dispose();
   }
 
+  /// How many parts the bursar approves: the family's own count unless
+  /// changed (2, 3 or 4, as drawn).
+  late int _parts = maps(widget.plan['instalments']).length;
+
+  /// The parts as approved: the family's when the count is theirs; else
+  /// the same total split evenly (what is left over on the last), on the
+  /// family's days, two weeks apart past their last.
+  List<Map<String, dynamic>> get _instalments {
+    final asked = maps(widget.plan['instalments']);
+    if (_parts == asked.length || asked.isEmpty) return asked;
+    final total = asked.fold(0, (n, i) => n + kobo(i['amount_kobo']));
+    final each = total ~/ _parts;
+    final days = [for (final i in asked) DateTime.parse(str(i['due_on']))];
+    DateTime dayOf(int k) {
+      if (_parts < asked.length) return k == _parts - 1 ? days.last : days[k];
+      return k < days.length ? days[k] : DateTime(days.last.year, days.last.month, days.last.day + 14 * (k - days.length + 1));
+    }
+
+    return [
+      for (var k = 0; k < _parts; k++) {'amount_kobo': k == _parts - 1 ? total - each * (_parts - 1) : each, 'due_on': dayKey(dayOf(k))},
+    ];
+  }
+
   Future<void> _decide(String d) async {
     setState(() => (_busy = true, _error = null));
     try {
       await widget.auth.transport.send('POST', '$schoolApi/plans/${str(widget.plan['id'])}', body: {
         'decision': d,
         if (_note.text.trim().isNotEmpty) 'note': _note.text.trim(),
+        if (d == 'approved' && _parts != maps(widget.plan['instalments']).length) 'instalments': _instalments,
       });
       if (!mounted) return;
       said(context, d == 'approved' ? 'Plan approved; the family is told' : 'Plan declined; the family is told');
@@ -474,7 +499,6 @@ class _PlanSheetState extends State<PlanSheet> {
       action: _busy ? 'Saving…' : 'Approve the plan',
       onAction: _busy ? null : () => _decide('approved'),
       second: 'Decline',
-      secondDanger: true,
       onSecond: _busy || _note.text.trim().isEmpty ? null : () => _decide('declined'),
       children: [
         Container(
@@ -485,15 +509,25 @@ class _PlanSheetState extends State<PlanSheet> {
             children: [
               if (str(p['message']).isNotEmpty) Text('“${str(p['message'])}”', style: tkText(size: 14.5, lineHeight: 1.4, color: t.text)),
               const SizedBox(height: 4),
-              Text('From the family page · ${maps(p['instalments']).length} instalments · ${dayWords(str(p['created_at']))}', style: tkText(size: 12.5, color: t.muted)),
+              Text('From the family page · ${maps(p['instalments']).length} instalments · ${nearDayWords(str(p['created_at']))} ${lagosClock(str(p['created_at']))}', style: tkText(size: 12.5, color: t.muted)),
             ],
           ),
         ),
-        // What they asked: each part by its day. Approved as asked; to
-        // change the parts, the web.
-        TkFormGroup(children: [TkLines([for (final i in maps(p['instalments'])) (naira(kobo(i['amount_kobo'])), 'by ${dayWords(str(i['due_on']))}')])]),
-        Text('Approving tells the family at once; declining needs a note, which they are told.', style: tkText(size: 13, color: t.muted)),
-        TkFormGroup(children: [TkKitField(label: 'Note to the family (needed to decline)', child: TkTextBox(controller: _note, max: 300, size: 15, height: 46))]),
+        // As drawn: the parts the bursar approves, 2, 3 or 4, then each by
+        // its day, and the note.
+        TkChips<int>(
+          label: 'Parts',
+          padding: EdgeInsets.zero,
+          chips: [for (final n in {2, 3, 4, maps(p['instalments']).length}.toList()..sort()) (n, '$n')],
+          on: _parts,
+          onPick: (v) => setState(() => _parts = v),
+        ),
+        TkFormGroup(
+          children: [
+            TkLines([for (final i in _instalments) (naira(kobo(i['amount_kobo'])), 'by ${dayWords(str(i['due_on']))}')]),
+            TkKitField(label: 'Note to the family (needed to decline)', child: TkTextBox(controller: _note, max: 300, size: 15, height: 46)),
+          ],
+        ),
         if (_error != null) TkErrorBox(_error!),
       ],
     );

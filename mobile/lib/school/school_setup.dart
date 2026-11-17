@@ -20,6 +20,7 @@ import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkLoading;
 import '../kit/look.dart';
+import '../kit/tap_area.dart';
 import '../kit/mobile.dart';
 import '../kit/modal.dart' show showTkConfirm, showTkModalChoices;
 import '../kit/page.dart';
@@ -28,7 +29,7 @@ import '../theme/look.dart';
 import '../chat/words.dart' show CardTone;
 import '../kit/forms.dart' show TkSwitch;
 import '../theme/theme.dart';
-import 'school_tab.dart' show pushSchool, said;
+import 'school_tab.dart' show QuietValue, pushSchool, said;
 import 'school_words.dart';
 import 'students_page.dart' show SchoolPills, StudentsPage, StudentPage, loadClasses;
 
@@ -132,7 +133,7 @@ class _TermsPageState extends State<TermsPage> {
                   icon: 'b-fees',
                   square: look.violet,
                   trailing: Text('${_classes.length} classes', style: tkText(size: 14, color: TkTheme.tokens(context).muted)),
-                  onTap: () => pushSchool<void>(context, FeesPage(auth: _auth, term: term, termName: '${str(term['name'])} · ${str(x['label'])}')),
+                  onTap: () => openClassFees(context, _auth, term, '${str(term['name'])} · ${str(x['label'])}').then((_) => _load()),
                 ),
                 TkListRow(
                   title: 'Invoices for ${str(term['name'])}',
@@ -195,7 +196,7 @@ class _TermPage extends StatelessWidget {
         TkSection(
           inset: 56,
           children: [
-            TkListRow(title: 'Fees', sub: 'Each class’s items for the term', icon: 'b-fees', square: const Color(0xFF8E8E93), onTap: () => pushSchool<void>(context, FeesPage(auth: auth, term: term, termName: name))),
+            TkListRow(title: 'Fees', sub: 'Each class’s items for the term', icon: 'b-fees', square: const Color(0xFF8E8E93), onTap: () => openClassFees(context, auth, term, name)),
             if (current && auth.schoolManage)
               TkListRow(
                 title: 'Invoice the term',
@@ -347,126 +348,30 @@ class _AddSheetState extends State<_AddSheet> {
 
 // --- A term's fees ---
 
-class FeesPage extends StatefulWidget {
-  const FeesPage({super.key, required this.auth, required this.term, required this.termName});
-  final Auth auth;
-  final Map<String, dynamic> term;
-  final String termName;
-
-  @override
-  State<FeesPage> createState() => _FeesPageState();
-}
-
-class _FeesPageState extends State<FeesPage> {
-  Map<String, dynamic>? _r;
-  String _class = '';
-  String? _error;
-
-  Auth get _auth => widget.auth;
-  String get _base => '$schoolApi/terms/${str(widget.term['id'])}/fees';
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final r = mapOf(await _auth.transport.send('GET', _base));
-      if (!mounted) return;
-      setState(() {
-        _r = r;
-        final cs = maps(r?['classes']);
-        if (_class.isEmpty && cs.isNotEmpty) _class = str(cs.first['class_id']);
-        _error = null;
-      });
-    } on Object catch (e) {
-      if (mounted) setState(() => _error = errorWords(e));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final r = _r;
-    final classes = maps(r?['classes']);
-    final c = classes.where((x) => str(x['class_id']) == _class).firstOrNull;
-    final editable = _auth.schoolManage && str(widget.term['state']) != 'past';
-    return TkPageScreen(
-      title: 'Fees',
-      titleSize: 30,
-      backLabel: 'Back',
-      onRefresh: _load,
-      children: [
-        Text(widget.termName, style: tkText(size: 13.5, color: TkTheme.tokens(context).muted)),
-        if (_error != null) TkErrorBox(_error!),
-        if (r == null && _error == null) const TkLoading(rows: 3, label: 'Loading fees…'),
-        if (classes.isNotEmpty)
-          SchoolPills<String>(
-            label: 'Class',
-            choices: [for (final x in classes) (str(x['class_id']), '${str(x['class'])} ${kobo(x['required_kobo']) > 0 ? naira(kobo(x['required_kobo'])) : '(no fees yet)'}')],
-            on: _class,
-            onPick: (v) => setState(() => _class = v),
-          ),
-        if (c != null) ...[
-          TkSection(
-            empty: 'No fees yet for ${str(c['class'])}.',
-            children: [
-              for (final i in maps(c['items']))
-                TkListRow(
-                  title: str(i['name']),
-                  sub: [str(i['kind']) == 'optional' ? 'Optional' : 'Required', if (str(i['pass_through_for']).isNotEmpty) 'collected for ${str(i['pass_through_for'])}'].join(' · '),
-                  amount: naira(kobo(i['amount_kobo'])),
-                ),
-            ],
-          ),
-          Text(_totals(c), style: tkText(size: 13, lineHeight: 1.4, color: TkTheme.tokens(context).muted)),
-          if (editable)
-            TkCta(
-              label: 'Change ${str(c['class'])}’s fees',
-              onTap: () async {
-                final done = await showTkSheet<bool>(context, (_) => ClassFeesSheet(auth: _auth, base: _base, fees: c, previous: mapOf(r?['previous_term']), classes: classes, termName: widget.termName));
-                if (done == true) await _load();
-              },
-            ),
-        ],
-      ],
-    );
-  }
-
-  String _totals(Map<String, dynamic> c) {
-    final items = maps(c['items']);
-    final optional = items.where((i) => str(i['kind']) == 'optional').fold(0, (n, i) => n + kobo(i['amount_kobo']));
-    return [
-      'Every student pays ${naira(kobo(c['required_kobo']))}',
-      if (kobo(c['pass_through_kobo']) > 0) 'of which ${naira(kobo(c['pass_through_kobo']))} is collected for others',
-      if (optional > 0) '${naira(optional)} more is optional',
-    ].join('; ');
-  }
-}
+/// Opens a class's fees for a term, as drawn: a sheet with the classes
+/// across its top.
+Future<void> openClassFees(BuildContext context, Auth auth, Map<String, dynamic> term, String termName) =>
+    showTkSheet<bool>(context, (_) => ClassFeesSheet(auth: auth, term: term, termName: termName));
 
 class _ItemRow {
   _ItemRow(Map<String, dynamic>? i)
-    : name = TextEditingController(text: str(i?['name'])),
+    : name = str(i?['name']),
       amount = TextEditingController(text: i == null ? '' : nairaText(kobo(i['amount_kobo']))),
-      forWhom = TextEditingController(text: str(i?['pass_through_for'])),
+      forWhom = str(i?['pass_through_for']),
       optional = str(i?['kind']) == 'optional';
-  final TextEditingController name, amount, forWhom;
+  String name;
+  final TextEditingController amount;
+  String forWhom;
   bool optional;
-  void dispose() {
-    name.dispose();
-    amount.dispose();
-    forWhom.dispose();
-  }
+  int get kobo_ => nairaKobo(amount.text) ?? 0;
 }
 
+/// A class's fees for a term (as drawn): the classes across the top, each
+/// item with its amount, what every student pays, and copying.
 class ClassFeesSheet extends StatefulWidget {
-  const ClassFeesSheet({super.key, required this.auth, required this.base, required this.fees, required this.previous, required this.classes, required this.termName});
+  const ClassFeesSheet({super.key, required this.auth, required this.term, required this.termName});
   final Auth auth;
-  final String base;
-  final Map<String, dynamic> fees;
-  final Map<String, dynamic>? previous;
-  final List<Map<String, dynamic>> classes;
+  final Map<String, dynamic> term;
   final String termName;
 
   @override
@@ -474,18 +379,71 @@ class ClassFeesSheet extends StatefulWidget {
 }
 
 class _ClassFeesSheetState extends State<ClassFeesSheet> {
-  late final _rows = [for (final i in maps(widget.fees['items'])) _ItemRow(i)];
+  Map<String, dynamic>? _r;
+  String _class = '';
+  List<_ItemRow> _rows = [];
+  bool _changed = false;
   bool _busy = false;
   String? _error;
 
-  String get _class => str(widget.fees['class_id']);
+  String get _base => '$schoolApi/terms/${str(widget.term['id'])}/fees';
+  bool get _editable => widget.auth.schoolManage && str(widget.term['state']) != 'past';
+  List<Map<String, dynamic>> get _classes => maps(_r?['classes']);
+  Map<String, dynamic>? get _c => _classes.where((x) => str(x['class_id']) == _class).firstOrNull;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   @override
   void dispose() {
     for (final r in _rows) {
-      r.dispose();
+      r.amount.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final r = mapOf(await widget.auth.transport.send('GET', _base));
+      if (!mounted) return;
+      setState(() {
+        _r = r;
+        if (_class.isEmpty && _classes.isNotEmpty) _class = str(_classes.first['class_id']);
+        _show();
+        _error = null;
+      });
+    } on Object catch (e) {
+      if (mounted) setState(() => _error = errorWords(e));
+    }
+  }
+
+  void _show() {
+    for (final r in _rows) {
+      r.amount.dispose();
+    }
+    _rows = [
+      for (final i in maps(_c?['items'])) _ItemRow(i)..amount.addListener(_touched),
+    ];
+    _changed = false;
+  }
+
+  void _touched() {
+    if (mounted && !_changed) setState(() => _changed = true);
+  }
+
+  Future<void> _pick(String id) async {
+    if (id == _class) return;
+    if (_changed) {
+      final go = await showTkConfirm(context, title: 'Leave ${str(_c?['class'])}’s changes?', body: 'They are not saved.', ok: 'Leave them', cancel: 'Stay');
+      if (!go) return;
+    }
+    setState(() {
+      _class = id;
+      _show();
+    });
   }
 
   Future<void> _put(Future<Object?> Function() f, String done) async {
@@ -495,116 +453,255 @@ class _ClassFeesSheetState extends State<ClassFeesSheet> {
       if (!mounted) return;
       final drafts = kobo(r?['drafts_updated']);
       said(context, drafts > 0 ? '$done; $drafts drafts updated' : done);
-      Navigator.of(context).pop(true);
+      setState(() => _busy = false);
+      await _load();
     } on Object catch (e) {
       if (mounted) setState(() => (_error = errorWords(e), _busy = false));
     }
   }
 
   void _save() {
-    final bad = _rows.where((r) => r.name.text.trim().isNotEmpty && (nairaKobo(r.amount.text) ?? -1) < 0).firstOrNull;
+    final bad = _rows.where((r) => (nairaKobo(r.amount.text) ?? -1) < 0).firstOrNull;
     if (bad != null) {
-      setState(() => _error = '${bad.name.text.trim()} needs an amount.');
+      setState(() => _error = '${bad.name} needs an amount.');
       return;
     }
     _put(
-      () => widget.auth.transport.send('PUT', '${widget.base}/${Uri.encodeComponent(_class)}', body: {
+      () => widget.auth.transport.send('PUT', '$_base/${Uri.encodeComponent(_class)}', body: {
         'items': [
           for (final r in _rows)
-            if (r.name.text.trim().isNotEmpty)
-              {
-                'name': r.name.text.trim(),
-                'amount_kobo': nairaKobo(r.amount.text) ?? 0,
-                'kind': r.optional ? 'optional' : 'required',
-                if (r.forWhom.text.trim().isNotEmpty) 'pass_through_for': r.forWhom.text.trim(),
-              },
+            {'name': r.name, 'amount_kobo': r.kobo_, 'kind': r.optional ? 'optional' : 'required', if (r.forWhom.isNotEmpty) 'pass_through_for': r.forWhom},
         ],
       }),
-      '${str(widget.fees['class'])}’s fees saved',
+      '${str(_c?['class'])}’s fees saved',
     );
   }
 
+  Future<void> _edit(_ItemRow? r) async {
+    final got = await showTkSheet<Object>(context, (_) => _ItemSheet(item: r));
+    if (!mounted || got == null) return;
+    setState(() {
+      _changed = true;
+      if (got == 'remove' && r != null) {
+        _rows.remove(r);
+        r.amount.dispose();
+      } else if (got is _ItemRow && r == null) {
+        _rows.add(got..amount.addListener(_touched));
+      }
+    });
+  }
+
   Future<void> _copyClass() async {
-    final from = await showTkModalChoices(context, title: 'Copy from', choices: [for (final c in widget.classes.where((c) => str(c['class_id']) != _class)) (str(c['class_id']), str(c['class']))]);
+    final from = await showTkModalChoices(context, title: 'Copy from', choices: [for (final c in _classes.where((c) => str(c['class_id']) != _class)) (str(c['class_id']), str(c['class']))]);
     if (from == null) return;
-    await _put(
-      () => widget.auth.transport.send('POST', '${widget.base}/${Uri.encodeComponent(_class)}/copy', body: {'from_term': widget.base.split('/')[4], 'from_class': from}),
-      'Copied',
-    );
+    await _put(() => widget.auth.transport.send('POST', '$_base/${Uri.encodeComponent(_class)}/copy', body: {'from_term': str(widget.term['id']), 'from_class': from}), 'Copied');
+  }
+
+  String _totals() {
+    final required = _rows.where((r) => !r.optional).fold(0, (n, r) => n + r.kobo_);
+    final pass = _rows.where((r) => !r.optional && r.forWhom.isNotEmpty).fold(0, (n, r) => n + r.kobo_);
+    final optional = _rows.where((r) => r.optional).fold(0, (n, r) => n + r.kobo_);
+    final whom = {for (final r in _rows) if (r.forWhom.isNotEmpty) r.forWhom}.join(' and ');
+    final words = [
+      'Every student pays ${naira(required)}${pass > 0 ? ', of which ${naira(pass)} is for $whom' : ''}',
+      if (optional > 0) '${naira(optional)} more is optional',
+    ].join('; ');
+    return '$words.';
   }
 
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
-    final prev = widget.previous;
+    final c = _c;
+    final prev = mapOf(_r?['previous_term']);
+    final name = str(c?['class']);
     return TkFormSheet(
-      title: '${str(widget.fees['class'])} fees',
+      title: c == null ? 'Fees' : '$name fees',
       crumb: widget.termName,
-      action: _busy ? 'Saving…' : 'Save ${str(widget.fees['class'])}’s fees',
-      onAction: _busy ? null : _save,
-      second: 'Cancel',
+      action: !_editable ? 'Done' : (_busy ? 'Saving…' : 'Save $name’s fees'),
+      onAction: !_editable ? () => Navigator.of(context).pop() : (_busy || c == null ? null : _save),
+      second: _editable ? 'Cancel' : null,
       onSecond: () => Navigator.of(context).pop(),
       children: [
-        TkFormGroup(
-          children: [
-            for (final (i, r) in _rows.indexed)
+        if (_error != null) TkErrorBox(_error!),
+        if (_r == null && _error == null) const TkLoading(rows: 3, label: 'Loading fees…'),
+        if (_classes.isNotEmpty)
+          // As drawn: each class with what its students pay.
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: [
+              for (final x in _classes)
+                TapArea(
+                  child: Semantics(
+                    button: true,
+                    selected: str(x['class_id']) == _class,
+                    label: '${str(x['class'])}${kobo(x['required_kobo']) > 0 ? ', ${naira(kobo(x['required_kobo']))}' : ', no fees yet'}',
+                    excludeSemantics: true,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _pick(str(x['class_id'])),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                        decoration: BoxDecoration(color: str(x['class_id']) == _class ? look.card : null, borderRadius: BorderRadius.circular(999)),
+                        child: Text(
+                          '${str(x['class'])}${kobo(x['required_kobo']) > 0 ? ' ${naira(kobo(x['required_kobo']))}' : ''}',
+                          style: tkText(size: 13, weight: str(x['class_id']) == _class ? 700 : 600, color: str(x['class_id']) == _class ? t.text : t.muted),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        if (c != null) ...[
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+            decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+            child: TkTheme.recolour(
+              context,
+              (x) => x.copyWith(field: look.ground),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 3, child: TkKitField(label: 'Item', child: TkTextBox(controller: r.name, max: 80, size: 15, height: 46))),
-                      const SizedBox(width: 8),
-                      Expanded(flex: 2, child: TkKitField(label: 'Amount (₦)', child: TkTextBox(controller: r.amount, money: true, size: 15, height: 46))),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      TkPillChoice2(label: 'Required', on: !r.optional, onTap: () => setState(() => r.optional = false)),
-                      const SizedBox(width: 6),
-                      TkPillChoice2(label: 'Optional', on: r.optional, onTap: () => setState(() => r.optional = true)),
-                      const Spacer(),
-                      TkLink(label: 'Remove', onTap: () => setState(() => _rows.removeAt(i).dispose())),
-                    ],
-                  ),
-                  TkKitField(label: 'Collected for (optional)', hint: 'WAEC, NECO: not the school’s income.', child: TkTextBox(controller: r.forWhom, max: 60, size: 15, height: 46)),
-                  if (i < _rows.length - 1) Padding(padding: const EdgeInsets.only(top: 6), child: Container(height: 1, color: t.border)),
+                  if (_rows.isEmpty) Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text('No fees yet for $name.', style: tkText(size: 14, color: t.muted))),
+                  for (final (i, r) in _rows.indexed)
+                    Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(border: i == 0 ? null : Border(top: BorderSide(color: t.border))),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TapArea(
+                              child: Semantics(
+                                button: _editable,
+                                label: '${r.name}, ${r.optional ? 'optional' : 'required'}${r.forWhom.isEmpty ? '' : ', collected for ${r.forWhom}'}${_editable ? ': change' : ''}',
+                                excludeSemantics: true,
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: _editable ? () => _edit(r).then((_) => setState(() {})) : null,
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(r.name, style: tkText(size: 15.5, weight: 500, lineHeight: 1.3, color: t.text)),
+                                      Text(
+                                        [r.optional ? 'Optional' : 'Required', if (r.forWhom.isNotEmpty) 'collected for ${r.forWhom}'].join(' · '),
+                                        style: tkText(size: 12.5, lineHeight: 1.3, color: t.muted),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          SizedBox(
+                            width: 136,
+                            child: Semantics(
+                              label: '${r.name}, amount',
+                              child: TkTextBox(controller: r.amount, money: true, prefix: '₦', size: 15, height: 44, enabled: _editable),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (_editable)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Align(alignment: Alignment.centerLeft, child: TkLink(label: '+ Add an item', bold: true, onTap: () => _edit(null))),
+                    ),
                 ],
               ),
-            Align(alignment: Alignment.centerLeft, child: TkLink(label: '+ Add an item', bold: true, onTap: () => setState(() => _rows.add(_ItemRow(null))))),
-          ],
-        ),
-        TkSection(
-          inset: 56,
-          children: [
-            if (prev != null)
-              TkListRow(
-                title: 'Copy from ${str(prev['name'])} ${str(prev['session'])}',
-                icon: 'b-copy',
-                square: look.violet,
-                onTap: _busy ? null : () => _put(() => widget.auth.transport.send('POST', '${widget.base}/${Uri.encodeComponent(_class)}/copy', body: const {}), 'Copied'),
-              ),
-            if (widget.classes.length > 1) TkListRow(title: 'Copy from another class', icon: 'b-copy', square: look.violet, onTap: _busy ? null : _copyClass),
-          ],
-        ),
-        if (_error != null) TkErrorBox(_error!),
+            ),
+          ),
+          Text(_totals(), style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
+          if (_editable)
+            TkSection(
+              inset: 56,
+              children: [
+                if (prev != null)
+                  TkListRow(
+                    title: 'Copy from ${str(prev['name'])}',
+                    sub: str(prev['session']),
+                    icon: 'b-copy',
+                    square: look.violet,
+                    onTap: _busy ? null : () => _put(() => widget.auth.transport.send('POST', '$_base/${Uri.encodeComponent(_class)}/copy', body: const {}), 'Copied'),
+                  ),
+                if (_classes.length > 1) TkListRow(title: 'Copy from another class', icon: 'b-copy', square: look.violet, onTap: _busy ? null : _copyClass),
+              ],
+            ),
+        ],
       ],
     );
   }
 }
 
-/// A small pill choice (re-exported for setup's rows).
-class TkPillChoice2 extends StatelessWidget {
-  const TkPillChoice2({super.key, required this.label, required this.on, required this.onTap});
-  final String label;
-  final bool on;
-  final VoidCallback onTap;
+/// One fee item: its name, whether every student pays it, and who it is
+/// collected for; answers the item (new), 'remove', or null.
+class _ItemSheet extends StatefulWidget {
+  const _ItemSheet({required this.item});
+  final _ItemRow? item;
 
   @override
-  Widget build(BuildContext context) => SchoolPills<bool>(label: label, choices: [(true, label)], on: on, onPick: (_) => onTap());
+  State<_ItemSheet> createState() => _ItemSheetState();
+}
+
+class _ItemSheetState extends State<_ItemSheet> {
+  late final _name = TextEditingController(text: widget.item?.name ?? '');
+  late final _amount = TextEditingController(text: widget.item?.amount.text ?? '');
+  late final _for = TextEditingController(text: widget.item?.forWhom ?? '');
+  late bool _optional = widget.item?.optional ?? false;
+
+  @override
+  void initState() {
+    super.initState();
+    _name.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _amount.dispose();
+    _for.dispose();
+    super.dispose();
+  }
+
+  void _done() {
+    final it = widget.item;
+    if (it != null) {
+      it
+        ..name = _name.text.trim()
+        ..forWhom = _for.text.trim()
+        ..optional = _optional;
+      Navigator.of(context).pop(it);
+      return;
+    }
+    Navigator.of(context).pop(
+      _ItemRow({'name': _name.text.trim(), 'amount_kobo': nairaKobo(_amount.text) ?? 0, 'kind': _optional ? 'optional' : 'required', 'pass_through_for': _for.text.trim()}),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => TkFormSheet(
+    title: widget.item == null ? 'An item' : widget.item!.name,
+    crumb: 'Fees',
+    action: widget.item == null ? 'Add it' : 'Done',
+    onAction: _name.text.trim().isEmpty ? null : _done,
+    second: widget.item == null ? 'Cancel' : 'Remove',
+    secondDanger: widget.item != null,
+    onSecond: () => Navigator.of(context).pop(widget.item == null ? null : 'remove'),
+    children: [
+      TkFormGroup(
+        children: [
+          TkKitField(label: 'Item', child: TkTextBox(controller: _name, max: 80, size: 15, height: 46)),
+          if (widget.item == null) TkKitField(label: 'Amount', child: TkTextBox(controller: _amount, money: true, prefix: '₦', size: 15, height: 46)),
+          TkChips<bool>(label: 'Who pays', padding: EdgeInsets.zero, chips: const [(false, 'Every student'), (true, 'Optional')], on: _optional, onPick: (v) => setState(() => _optional = v)),
+          TkKitField(label: 'Collected for (optional)', hint: 'WAEC, NECO: not the school’s income.', child: TkTextBox(controller: _for, max: 60, size: 15, height: 46)),
+        ],
+      ),
+    ],
+  );
 }
 
 // --- Invoicing the term ---
@@ -704,10 +801,15 @@ class _InvoiceTermSheetState extends State<InvoiceTermSheet> {
                   if (maps(p[k]).isNotEmpty)
                     TkListRow(
                       title: w,
-                      sub: maps(p[k]).take(4).map(nameOr).join(', ') + (maps(p[k]).length > 4 ? '…' : ''),
                       icon: i,
                       square: look.orange,
-                      amount: '${maps(p[k]).length}',
+                      trailing: QuietValue('${maps(p[k]).length}'),
+                      titleLines: 2,
+                      // As drawn: the count; who they are, a tap away.
+                      onTap: () async {
+                        final id = await showTkModalChoices(context, title: w, choices: [for (final x in maps(p[k])) (str(x['student_id']), nameOr(x))]);
+                        if (id != null && context.mounted) await pushSchool<void>(context, StudentPage(auth: widget.auth, id: id));
+                      },
                     ),
               ],
             ),
@@ -756,7 +858,7 @@ class _TermInvoicesPageState extends State<TermInvoicesPage> {
     return TkPageScreen(
       title: 'Invoices',
       titleSize: 30,
-      backLabel: 'Back',
+      backLabel: 'Back to Classes and terms',
       onRefresh: _load,
       children: [
         SchoolPills<String>(
@@ -842,10 +944,14 @@ class _ImportStudentsPageState extends State<ImportStudentsPage> {
     final p = _plan;
     final problems = maps(_refused?['problems']);
     final n = kobo(p?['added']) + kobo(p?['updated']);
-    return TkPageScreen(
+    // As drawn: a sheet over Students, the file first, Not now and Save.
+    return TkFormSheet(
       title: 'Import students',
-      titleSize: 30,
-      backLabel: 'Back to Students',
+      crumb: 'Students',
+      action: _busy && p != null ? 'Saving…' : (p == null ? 'Save students' : 'Save $n students'),
+      onAction: _busy || p == null || n == 0 ? null : _save,
+      second: 'Not now',
+      onSecond: () => Navigator.of(context).pop(),
       children: [
         Semantics(
           button: true,
@@ -856,7 +962,7 @@ class _ImportStudentsPageState extends State<ImportStudentsPage> {
             onTap: _busy ? null : _pick,
             child: Container(
               padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(18), border: Border.all(color: t.borderStrong)),
+              decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(18), border: Border.all(color: t.borderStrong, width: 1.2)),
               child: Column(
                 children: [
                   TkIcon('b-upload', size: 26, stroke: 2, color: look.limeInk),
@@ -891,11 +997,11 @@ class _ImportStudentsPageState extends State<ImportStudentsPage> {
                   TkListRow(
                     title: maps(f['guardians']).map((g) => str(g['name'])).join(', '),
                     sub: '${f['existing'] == true ? 'A family already here' : 'A new family'} · ${(f['students'] as List? ?? const []).join(', ')}',
+                    letters: maps(f['guardians']).map((g) => str(g['name'])).firstOrNull,
                   ),
               ],
             ),
           TkFormGroup(children: [TkLines([('To add', '${kobo(p['added'])}'), ('To update', '${kobo(p['updated'])}')])]),
-          TkCta(label: _busy ? 'Saving…' : 'Save $n students', onTap: _busy || n == 0 ? null : _save),
         ],
       ],
     );
@@ -986,7 +1092,7 @@ class _AccountNumbersPageState extends State<AccountNumbersPage> {
     return TkPageScreen(
       title: 'Account numbers',
       titleSize: 30,
-      backLabel: 'Back',
+      backLabel: 'Back to School',
       onRefresh: _check,
       children: [
         if (_error != null) TkErrorBox(_error!),
@@ -1092,25 +1198,36 @@ class _PromotionPageState extends State<PromotionPage> {
       title: 'Promotion',
       titleSize: 30,
       backLabel: 'Back to Classes and terms',
-      description: 'At the end of a school year every class moves up once. Choose who repeats, leaves or graduates first; it happens once.',
       children: [
+        // As drawn: what promotion does, under the title.
+        Text(
+          'At the end of ${str(widget.session['label']).isEmpty ? 'a school year' : str(widget.session['label'])} every class moves up once. Choose who repeats, leaves or graduates first; it happens once.',
+          style: tkText(size: 13.5, lineHeight: 1.4, color: t.muted),
+        ),
         if (_error != null) TkErrorBox(_error!),
         if (p == null && _error == null) const TkLoading(rows: 4, label: 'Loading classes…'),
         if (p != null) ...[
           if (done) Text('Promoted ${dayWords(str(p['promoted_at']))}.', style: tkText(size: 14, color: t.muted)),
-          TkFormGroup(children: [TkLines([for (final c in maps(p['classes'])) ('${str(c['class'])} → ${str(c['next']).isEmpty ? 'Graduate' : str(c['next'])}', '${kobo(c['students'])}')])]),
+          // As drawn: each class and where it goes, an arrow between.
+          TkSection(
+            inset: 16,
+            children: [
+              for (final c in maps(p['classes']))
+                _MoveRow(from: str(c['class']), to: str(c['next']).isEmpty ? 'Graduate' : str(c['next']), count: kobo(c['students'])),
+            ],
+          ),
           if (!done)
             TkSection(
-              title: 'Each student',
+              title: 'Exceptions',
               children: [
                 for (final s in maps(p['students']))
                   TkListRow(
                     title: nameOr(s),
                     sub: studentLine(s),
-                    trailing: TkSmallButton(
-                      label: '${words(action(s), s)} ▾',
+                    trailing: _ChoicePill(
+                      label: words(action(s), s).startsWith('Move up') ? 'Move up' : words(action(s), s),
                       semantics: '${nameOr(s)}: ${words(action(s), s)}; change',
-                      onPressed: () async {
+                      onTap: () async {
                         final v = await showTkModalChoices(context, title: nameOr(s), value: action(s), choices: [('promote', words('promote', s)), ('repeat', 'Repeat'), ('leave', 'Leave'), ('graduate', 'Graduate')]);
                         if (v != null) setState(() => _exceptions[str(s['id'])] = v);
                       },
@@ -1219,14 +1336,14 @@ class _SchoolSettingsPageState extends State<SchoolSettingsPage> {
                 title: 'Cash at or above',
                 icon: 'b-cash',
                 square: look.orange,
-                trailing: _Quiet(cash == null ? 'Never needed' : naira(kobo(cash) * 100)),
+                trailing: QuietValue(cash == null ? 'Never needed' : naira(kobo(cash) * 100)),
                 onTap: owner ? () => _number('Cash at or above', 'Cash posted at or above this amount waits for a second person. Empty: never.', 'cash_threshold_naira', clearable: true) : null,
               ),
               TkListRow(
                 title: 'Discounts at or above',
                 icon: 'b-hand',
                 square: look.orange,
-                trailing: _Quiet(naira(kobo(s['discount_threshold_naira']) * 100)),
+                trailing: QuietValue(naira(kobo(s['discount_threshold_naira']) * 100)),
                 onTap: owner ? () => _number('Discounts at or above', 'A discount at or above this amount waits for a second person.', 'discount_threshold_naira') : null,
               ),
             ],
@@ -1239,7 +1356,7 @@ class _SchoolSettingsPageState extends State<SchoolSettingsPage> {
                 title: 'The family page link lasts',
                 icon: 'b-family',
                 square: look.blue,
-                trailing: _Quiet('${kobo(s['family_link_days'])} days'),
+                trailing: QuietValue('${kobo(s['family_link_days'])} days'),
                 onTap: owner ? () => _number('The family page link lasts', 'Days, 1 to 30.', 'family_link_days', naira_: false, max: 30) : null,
               ),
               TkListRow(
@@ -1257,7 +1374,7 @@ class _SchoolSettingsPageState extends State<SchoolSettingsPage> {
                 title: 'Grace on a plan’s instalment',
                 icon: 'b-plan',
                 square: look.red,
-                trailing: _Quiet('${kobo(s['plan_grace_days'])} days'),
+                trailing: QuietValue('${kobo(s['plan_grace_days'])} days'),
                 onTap: owner ? () => _number('Grace on a plan’s instalment', 'Days, 0 to 60, before an instalment is behind.', 'plan_grace_days', naira_: false, max: 60) : null,
               ),
             ],
@@ -1271,7 +1388,7 @@ class _SchoolSettingsPageState extends State<SchoolSettingsPage> {
                   title: '${r.n} ${r.name}',
                   icon: 'b-bell',
                   square: look.red,
-                  trailing: _Quiet(str(wording['${r.n}']).isEmpty ? 'Default' : 'Yours'),
+                  trailing: QuietValue(str(wording['${r.n}']).isEmpty ? 'Default' : 'Yours'),
                   onTap: owner
                       ? () async {
                           final v = await showTkSheet<String>(
@@ -1292,7 +1409,7 @@ class _SchoolSettingsPageState extends State<SchoolSettingsPage> {
                 title: 'Issued by',
                 icon: 'b-bank',
                 square: look.teal,
-                trailing: _Quiet(str(issuing?['connection']).isEmpty ? 'Not set' : str(issuing?['connection'])),
+                trailing: QuietValue(str(issuing?['connection']).isEmpty ? 'Not set' : str(issuing?['connection'])),
                 onTap: () => pushSchool<void>(context, AccountNumbersPage(auth: _auth)),
               ),
             ],
@@ -1371,14 +1488,62 @@ class _WordingSheetState extends State<_WordingSheet> {
   );
 }
 
-/// A setting's value, quiet before the chevron (as drawn).
-class _Quiet extends StatelessWidget {
-  const _Quiet(this.words);
-  final String words;
+/// A class and where it goes at promotion: "JSS 1A → JSS 2A   32".
+class _MoveRow extends StatelessWidget {
+  const _MoveRow({required this.from, required this.to, required this.count});
+  final String from, to;
+  final int count;
 
   @override
-  Widget build(BuildContext context) => ConstrainedBox(
-    constraints: const BoxConstraints(maxWidth: 120),
-    child: Text(words, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14.5, color: TkTheme.tokens(context).muted)),
-  );
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Semantics(
+      label: '$from to $to, $count students',
+      excludeSemantics: true,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
+        child: Row(
+          children: [
+            Text(from, style: tkText(size: 14.5, color: t.muted)),
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 6), child: TkIcon('b-arrow', size: 15, stroke: 2, color: t.muted)),
+            Expanded(child: Text(to, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14.5, color: t.muted))),
+            Text('$count', style: tkText(size: 14.5, weight: 700, color: t.text)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A small choice that opens its list: its words and a caret (as drawn).
+class _ChoicePill extends StatelessWidget {
+  const _ChoicePill({required this.label, required this.semantics, required this.onTap});
+  final String label, semantics;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Semantics(
+      button: true,
+      label: semantics,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 7, 9, 7),
+          decoration: BoxDecoration(color: t.tkSoft, borderRadius: BorderRadius.circular(999)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(label, style: tkText(size: 13, weight: 650, color: t.text)),
+              const SizedBox(width: 3),
+              TkIcon('b-caret', size: 14, stroke: 2.2, color: t.text),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -340,3 +340,15 @@ void said(BuildContext context, String words, {bool error = false}) => showTkToa
 
 /// Nothing yet, with an icon (the kit's empty panel).
 Widget nothing(String title, {String? line, String icon = 'info'}) => TkEmpty(icon: icon, title: title, line: line);
+
+/// A setting's value, quiet before the chevron (as drawn).
+class QuietValue extends StatelessWidget {
+  const QuietValue(this.words, {super.key});
+  final String words;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 120),
+    child: Text(words, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14.5, color: TkTheme.tokens(context).muted)),
+  );
+}

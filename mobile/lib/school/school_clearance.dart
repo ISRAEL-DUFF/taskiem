@@ -224,7 +224,7 @@ class _OverrideSheetState extends State<OverrideSheet> {
         Text('They are cleared until the day you choose, whatever they owe. Your name and the reason are kept, and it can be withdrawn.', style: tkText(size: 13.5, lineHeight: 1.4, color: t.muted)),
         TkFormGroup(
           children: [
-            TkKitField(label: 'Reason', child: TkTextBox(controller: _reason, max: 300, size: 15, height: 46)),
+            TkKitField(label: 'Reason', count: '${_reason.text.length} / 300', child: TkTextBox(controller: _reason, max: 300, size: 15, height: 46)),
             TkKitField(
               label: 'Until (optional)',
               field: false,
@@ -451,7 +451,7 @@ class _GateScreenState extends State<GateScreen> {
                   height: 68,
                   alignment: Alignment.center,
                   decoration: const BoxDecoration(color: Color(0x33FFFFFF), shape: BoxShape.circle),
-                  child: TkIcon(ok ? 'b-check' : 'b-alert', size: 36, stroke: 2.4, color: const Color(0xFFFFFFFF)),
+                  child: TkIcon(ok ? 'b-check' : 'b-warn', size: 36, stroke: 2.4, color: const Color(0xFFFFFFFF)),
                 ),
                 const SizedBox(height: 12),
                 Text(ok ? 'CLEARED' : 'SEE THE BURSAR', textAlign: TextAlign.center, style: tkDisplay(size: 30, letterSpacing: -0.5, color: const Color(0xFFFFFFFF))),

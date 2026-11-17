@@ -83,6 +83,15 @@ String lagosClock(String at) {
 }
 
 /// "YYYY-MM-DD" for a day.
+/// A day near today in words: "today", "yesterday", else as [dayWords].
+String nearDayWords(String day, {DateTime? now}) {
+  final today = dayKey(now ?? DateTime.now());
+  if (day.startsWith(today)) return 'today';
+  final n = now ?? DateTime.now();
+  if (day.startsWith(dayKey(DateTime(n.year, n.month, n.day - 1)))) return 'yesterday';
+  return dayWords(day);
+}
+
 String dayKey(DateTime d) => '${d.year}-${'${d.month}'.padLeft(2, '0')}-${'${d.day}'.padLeft(2, '0')}';
 
 /// A student's line: admission number and class.

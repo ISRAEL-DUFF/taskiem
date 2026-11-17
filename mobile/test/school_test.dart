@@ -15,6 +15,7 @@ import 'package:taskiem/main.dart';
 import 'package:taskiem/school/close_page.dart';
 import 'package:taskiem/school/school_chasing.dart';
 import 'package:taskiem/school/school_clearance.dart';
+import 'package:taskiem/school/school_setup.dart';
 import 'package:taskiem/school/school_tab.dart';
 import 'package:taskiem/school/school_words.dart';
 import 'package:taskiem/school/students_page.dart';
@@ -177,6 +178,51 @@ void main() {
     final post = sent.singleWhere((s) => s.path == '/v1/schools/approvals/P1');
     expect((post.body! as Map<String, dynamic>)['decision'], 'approved');
     await t.pump(const Duration(seconds: 2));
+  });
+
+  testWidgets('a payment plan approved in fewer parts: the same total, on the family’s days', (t) async {
+    final sent = await open(
+      t,
+      (c) => PlanSheet(auth: c.auth, plan: const {
+        'id': 'PL', 'name': 'Tolu Adeyemi', 'class': 'JSS 2A', 'created_at': '2026-11-17T07:12:00Z',
+        'instalments': [{'amount_kobo': 6150000, 'due_on': '2026-11-27'}, {'amount_kobo': 6150000, 'due_on': '2026-12-11'}, {'amount_kobo': 6150000, 'due_on': '2027-01-08'}],
+      }),
+    );
+    expect(find.text('by Fri 11 Dec'), findsOneWidget);
+    await t.tap(find.bySemanticsLabel(RegExp(r'^2$')).first);
+    await t.pump();
+    expect(find.text('₦92,250'), findsNWidgets(2));
+    expect(find.text('by Fri 11 Dec'), findsNothing, reason: 'two parts: the first day and the last');
+    await t.tap(find.text('Approve the plan'));
+    await settle(t);
+    final body = sent.singleWhere((s) => s.path == '/v1/schools/plans/PL').body! as Map<String, dynamic>;
+    expect(body['decision'], 'approved');
+    expect(body['instalments'], [{'amount_kobo': 9225000, 'due_on': '2026-11-27'}, {'amount_kobo': 9225000, 'due_on': '2027-01-08'}]);
+    await t.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('a class’s fees: the classes across the top, an amount changed and saved', (t) async {
+    final sent = await open(t, (c) => ClassFeesSheet(auth: c.auth, term: const {'id': 'T1', 'name': 'First term', 'state': 'current'}, termName: 'First term · 2026/2027'));
+    expect(find.text('JSS 1A fees'), findsOneWidget);
+    expect(find.text('Required · collected for WAEC'), findsOneWidget);
+    expect(find.text('Every student pays ₦190,000, of which ₦15,000 is for WAEC; ₦35,000 more is optional.'), findsOneWidget);
+    await t.enterText(find.byType(EditableText).first, '160,000');
+    await t.pump();
+    await t.tap(find.text('Save JSS 1A’s fees'));
+    await settle(t);
+    final put = sent.singleWhere((s) => s.path == '/v1/schools/terms/T1/fees/c0');
+    final items = (put.body! as Map<String, dynamic>)['items'] as List;
+    expect(items.first, {'name': 'Tuition', 'amount_kobo': 16000000, 'kind': 'required'});
+    expect(items.last, {'name': 'WAEC registration', 'amount_kobo': 1500000, 'kind': 'required', 'pass_through_for': 'WAEC'});
+    await t.pump(const Duration(seconds: 6));
+  });
+
+  testWidgets('promotion: each class and where it goes, and the exceptions', (t) async {
+    await open(t, (c) => PromotionPage(auth: c.auth, session: const {'id': 'SE', 'label': '2026/2027'}));
+    expect(find.bySemanticsLabel('JSS 1A to JSS 2A, 32 students'), findsOneWidget);
+    expect(find.bySemanticsLabel('SS 3A to Graduate, 24 students'), findsOneWidget);
+    expect(find.text('Exceptions'), findsOneWidget);
+    expect(find.textContaining('At the end of 2026/2027'), findsOneWidget);
   });
 }
 

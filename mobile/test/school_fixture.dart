@@ -19,7 +19,47 @@ final schoolAmaka = {'id': 'S1', 'admission_number': 'JSS1A/014', 'name': 'Amaka
 Future<http.Response?> schoolServer(http.Request req) async {
   final p = req.url.path;
   final m = req.method;
+  if (m == 'POST' && p == '/v1/schools/accounts/issue') {
+    return _j({'plan': {'issuer': {'connection': 'iswallet (main)', 'rail': 'iswallet', 'requirement': '', 'fee': '1.4%, at most ₦2,000'}, 'active': 418, 'already_issued': 402, 'to_issue': 14, 'later': 0,
+      'waiting': [{'student_id': 'W1', 'admission_number': 'JSS2A/003', 'status': 'pending'}, {'student_id': 'W2', 'admission_number': 'P4/019', 'status': 'pending'}],
+      'cannot': [{'student_id': 'C1', 'admission_number': 'JSS1B/030', 'reason': 'No guardian name'}, {'student_id': 'C2', 'admission_number': 'P4/040', 'reason': 'Name longer than the rail allows'}], 'hash': 'h'}});
+  }
+  if (m == 'POST' && p.endsWith('/invoice')) {
+    return _j({'plan': {'enrolled': 418, 'to_invoice': 6, 'total_kobo': 114000000, 'pass_through_kobo': 9000000, 'already_invoiced': 412, 'hash': 'h',
+      'classes': [{'class': 'JSS 1A', 'students': 2, 'total_kobo': 38000000}, {'class': 'Primary 4', 'students': 3, 'total_kobo': 57000000}, {'class': 'SS 1B', 'students': 1, 'total_kobo': 19000000}],
+      'no_contact': [{'student_id': 'N1', 'admission_number': 'JSS1B/030', 'name': ''}], 'needs_approval': [{'student_id': 'N2', 'admission_number': 'P4/011', 'name': 'Funke Ajayi'}], 'no_fees': [], 'nothing_to_pay': []}});
+  }
+  if (m == 'POST' && p == '/v1/schools/students/import') {
+    return _j({'hash': 'h', 'added': 12, 'updated': 406, 'saved': false, 'students': List.generate(418, (i) => {'row': i + 2}),
+      'families': [
+        {'index': 0, 'existing': true, 'guardians': [{'name': 'Ngozi Obi', 'phone': '0803'}], 'students': ['Amaka', 'Ifeanyi']},
+        {'index': 1, 'existing': false, 'guardians': [{'name': 'Shola Adewale', 'phone': '0805'}], 'students': ['Tobi']},
+      ]});
+  }
   if (m != 'GET') return _j({});
+  if (p == '/v1/schools/accounts/jobs') return _j({'jobs': []});
+  if (p.endsWith('/promotion')) {
+    return _j({'session': '2026/2027', 'done': false, 'promoted_at': null,
+      'classes': [{'class': 'JSS 1A', 'next': 'JSS 2A', 'students': 32}, {'class': 'JSS 3A', 'next': 'SS 1A', 'students': 28}, {'class': 'SS 3A', 'next': '', 'students': 24}],
+      'students': [
+        {'id': 'S2', 'admission_number': 'JSS1A/021', 'name': 'Bolu Ade', 'class': 'JSS 1A', 'action': 'promote', 'next': 'JSS 2A'},
+        {'id': 'S3', 'admission_number': 'P4/033', 'name': 'Dami Ogun', 'class': 'Primary 4', 'action': 'promote', 'next': 'Primary 5'},
+        {'id': 'S4', 'admission_number': 'JSS2A/002', 'name': 'Efe Martins', 'class': 'JSS 2A', 'action': 'promote', 'next': 'JSS 3A'},
+      ]});
+  }
+  if (p.endsWith('/fees') && p.startsWith('/v1/schools/terms/')) {
+    Map<String, dynamic> c(String id, String n, int req, List<Map<String, dynamic>> items, [int pass = 0]) => {'class_id': id, 'class': n, 'required_kobo': req, 'pass_through_kobo': pass, 'items': items};
+    final items = [
+      {'name': 'Tuition', 'amount_kobo': 15000000, 'kind': 'required'},
+      {'name': 'PTA levy', 'amount_kobo': 1000000, 'kind': 'required'},
+      {'name': 'ICT levy', 'amount_kobo': 1500000, 'kind': 'required'},
+      {'name': 'Bus, Ikeja route', 'amount_kobo': 3500000, 'kind': 'optional'},
+      {'name': 'WAEC registration', 'amount_kobo': 1500000, 'kind': 'required', 'pass_through_for': 'WAEC'},
+    ];
+    return _j({'previous_term': {'name': 'Third term', 'session': '2025/2026'}, 'classes': [
+      c('c0', 'JSS 1A', 19000000, items, 1500000), c('c1', 'JSS 1B', 17500000, items), c('c2', 'JSS 2A', 18000000, items), c('c3', 'Primary 4', 0, []),
+    ]});
+  }
   if (p == '/v1/schools/overview') {
     return _j({'overview': {
       'term': 'First term · 2026/2027', 'term_state': 'current', 'enrolled': 418, 'invoiced': 412, 'expected_kobo': 2594000000, 'expected_by_now_kobo': 2410000000, 'collected_kobo': 1842000000,
@@ -87,6 +127,7 @@ Future<http.Response?> schoolServer(http.Request req) async {
     ]});
   }
   if (p == '/v1/gate/search') return _j({'students': [{'student_id': 'S1', 'name': 'Amaka Obi', 'class': 'JSS 1A'}, {'student_id': 'S7', 'name': 'Amara Eze', 'class': 'Primary 2'}, {'student_id': 'S8', 'name': 'Kamal Musa', 'class': 'SS 2A'}]});
+  if (p == '/v1/gate/students/S8') return _j({'student_id': 'S8', 'name': 'Kamal Musa', 'class': 'SS 2A', 'status': 'not_paid'});
   if (p == '/v1/gate/students/S1') return _j({'student_id': 'S1', 'name': 'Amaka Obi', 'class': 'JSS 1A', 'status': 'cleared'});
   if (p == '/v1/schools/sessions') {
     return _j({'sessions': [{'id': 'SE', 'label': '2026/2027', 'terms': [
