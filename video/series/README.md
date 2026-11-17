@@ -24,7 +24,7 @@ Beauty and personal care, Building materials, Farm produce, Health and
 pharmacy, Home and furniture, Cars and spare parts, Delivery and logistics,
 Wholesale and distribution, Services.
 
-## 2. The spine: ten chapters
+## 2. The spine: Episode 0, then ten chapters
 
 | # | Chapter | What the viewer can do after it | Taskiem parts (existing how-tos to start from) |
 | --- | --- | --- | --- |
@@ -39,8 +39,49 @@ Wholesale and distribution, Services.
 | 9 | **Know your numbers** | The morning briefing, "how did we do" | Morning briefing (7) |
 | 10 | **Keep it safe** | Approvals for money going out, the app lock | Approvals (12), app lock |
 
-Not every series needs all ten (a tailor has little use for chapter 5 on some
+Episode 0 (the overview, section 2a below) comes before chapter 1. Not every series needs all ten (a tailor has little use for chapter 5 on some
 days; a gadget shop leans on 7 and 8). Each series says which it shortens.
+
+### 2a. Episode 0: the whole picture
+
+Every series opens with **Episode 0**, a 2 to 3 minute film that shows the
+business's whole journey from beginning to end. A viewer who watches only this
+should understand how Taskiem helps a business like theirs. The other episodes
+then teach them how to do each thing Episode 0 showed.
+
+- **One beat per chapter.** Episode 0 has a short beat (10 to 15 seconds) for
+  each of the ten chapters, in order, in the series' own story and world. The
+  chapter beats are the same moments that Episodes 1 to 10 teach in full.
+- **A visible map.** Each beat carries a small chapter tag ("Episode 3: Take
+  orders") so the viewer knows where to learn it.
+- **One continuous story.** A single day or week in the business, not ten
+  unrelated demos (the chat explainer is the model: one owner, one working day).
+- **It ends on the map.** A closing card lists the episodes, and leads into
+  Episode 1.
+- **Mix.** Character cutaways (Flow) and real app recordings, as in the chat
+  film. Narrated. Works muted.
+- Episode 0 is made **last**, once the chapters exist, so its beats can reuse
+  their footage.
+
+### 2b. Continuity between episodes
+
+Every episode, 0 to 10, is built to hand over to the next:
+
+| Part | Length | What it does |
+| --- | --- | --- |
+| **Opening recap** | 3 to 5 s | One line and one frame of where the last episode ended ("Zainab has her dresses in. Now, her first order.") |
+| **The episode** | 45 to 90 s | One chapter, one goal, taught step by step |
+| **The bridge** | 5 to 8 s | A problem or question that the next episode answers ("But how does she get paid?"), shown on a character beat, then a **Next card**: "Episode 4: Get paid" with a short preview of what it shows |
+| **End card** | 3 s | The series name, the episode number and the next episode's title |
+
+Rules:
+- The bridge always names the next episode's *problem*, not its feature. The
+  viewer should want to see the answer.
+- The last episode ends on a call to action (what to do now), not a next card.
+- The recap line and the bridge line are in the narration script, so the
+  voice carries the story across episodes.
+- Episode numbers and titles are fixed in the series outline, so every card is
+  consistent.
 
 ## 3. What differs, series by series
 
@@ -102,9 +143,9 @@ New characters get a full entry in the bible before any Flow clip is made.
 2. **Recording scripts** per chapter, based on the existing how-tos but set in
    that world (`video/series/<kind>/NN-*.mjs`).
 3. **Narration**, one script per series, in the same voice (plus new names in
-   `characters/pronunciation.md`).
+   `characters/pronunciation.md`), including each episode's recap and bridge lines.
 4. **Flow clips** of the cast: 3 to 5 cutaways per episode, one clip per moment.
-5. **Series kit**: title card, "next episode" card, end card, thumbnail style,
+5. **Series kit**: title card, **"Next episode" card** (a new part of the kit: the next title and a preview clip), chapter tags for Episode 0, end card, thumbnail style,
    a colour accent per series inside the brand palette.
 
 Folder: `video/series/<kind>/` with `README.md` (outline), `seed`, episode
