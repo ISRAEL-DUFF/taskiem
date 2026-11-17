@@ -480,7 +480,7 @@ export function PersonChatPage() {
                 </span>
               )}
               {whatsappHere(c) && (
-                <span className="pc-trust" data-testid="person-whatsapp-here">
+                <span className="pc-wa-here" data-testid="person-whatsapp-here">
                   {whatsappHere(c)}
                 </span>
               )}
@@ -559,11 +559,6 @@ export function PersonChatPage() {
               what={(card?.title ?? m.body).split("\n")[0]?.slice(0, 60) ?? "message"}
               after={
                 <span className={inline ? "stamp inline" : "stamp"}>
-                  {m.line === "whatsapp" && (
-                    <span className="channel-mark line-of" data-testid="person-on-whatsapp">
-                      on WhatsApp ·
-                    </span>
-                  )}
                   <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
                     {clock(m.created_at)}
                   </time>
@@ -579,6 +574,11 @@ export function PersonChatPage() {
               }
             >
               {!m.mine && first && m.sender_name && <span className="who">{m.sender_name}</span>}
+              {m.line === "whatsapp" && (
+                <span className="line-of" data-testid="person-on-whatsapp">
+                  on WhatsApp
+                </span>
+              )}
               {m.offer && (
                 <span className="pc-offer-mark">
                   <Pill tone="plain">Offer</Pill>

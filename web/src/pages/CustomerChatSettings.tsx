@@ -4,6 +4,7 @@ import { get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { Sheet } from "../kit";
 import { buttonWords, offerCount, ORDERS_OFF_WORDS, type ChatLink, type ChatLinkSettings, type CustomerChatSettings as Replies } from "../lib/customerlinks";
+import { phoneWords } from "../lib/customerchat";
 import { toast } from "../toast";
 import { ErrorBox, Field, PageHeader, Skeleton, useAction, useLoad } from "../ui";
 import { useConfirm } from "./ConfirmSheet";
@@ -179,7 +180,7 @@ function TakingChats() {
                 <span>Offer WhatsApp on your chat link</span>
               </label>
               <p className="hint">
-                Your link offers Chat on WhatsApp, on your own number {s.own_number}, beside Chat on Taskiem. A customer on both is one chat here.
+                Your link offers Chat on WhatsApp, on your own number {phoneWords(s.own_number)}, beside Chat on Taskiem. A customer on both is one chat here.
               </p>
             </>
           )}

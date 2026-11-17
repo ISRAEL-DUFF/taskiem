@@ -591,11 +591,6 @@ export function CustomerPane({
             what={(m.card?.title ?? m.body).split("\n")[0]?.slice(0, 60) ?? "message"}
             after={
               <span className={m.card || m.attachment ? "stamp" : "stamp inline"}>
-                {markLines && m.line && (
-                  <span className="channel-mark line-of" data-testid="message-line" data-line={m.line}>
-                    {lineWords(m.line)} ·
-                  </span>
-                )}
                 {m.mine && m.sent_as === "template" && (
                   <span
                     className="channel-mark"
@@ -613,6 +608,11 @@ export function CustomerPane({
           >
             {m.mine && first && m.sender_name && (
               <span className="who">{m.sender_name}</span>
+            )}
+            {markLines && m.line && (
+              <span className="line-of" data-testid="message-line" data-line={m.line}>
+                {lineWords(m.line)}
+              </span>
             )}
             {m.offer && (
               <span className="pc-offer-mark">
@@ -642,6 +642,8 @@ export function CustomerPane({
             {!m.card && !(m.attachment && ["Photo", "Voice note", "File", m.attachment.name].includes(m.body)) && (
               <span className="text">
                 {m.kind === "media" && !m.attachment ? <em>{m.body}</em> : m.body}
+                {/* Room for the time and ticks in the corner of the last line. */}
+                {!m.card && !m.attachment && <span className={`stamp-gap${m.mine ? " mine" : ""}`} aria-hidden="true" />}
               </span>
             )}
             {m.mine && m.delivery === "failed" && (
@@ -802,8 +804,11 @@ function LineChooser({
   const open = shut.filter((x) => !x.why);
   return (
     <fieldset className="line-chooser" data-testid="line-chooser" disabled={open.length === 0}>
-      <legend>Your reply goes</legend>
+      <legend className="sr-only">Your reply goes</legend>
       <div className="line-choices">
+        <span className="line-label" aria-hidden="true">
+          Your reply goes
+        </span>
         {shut.map(({ l, why }) => (
           <label key={l.line} className={`line-choice${value === l.line ? " on" : ""}${why ? " off" : ""}`} data-line={l.line}>
             <input

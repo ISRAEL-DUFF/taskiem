@@ -82,12 +82,11 @@ describe("one customer on both lines", () => {
     expect(lineNote(app({ phone: "" }))?.text).toBe("This customer's details were erased.");
   });
 
-  it("tells each line's state for a thread with both", () => {
+  it("tells a line's state for a thread with both, when the chooser does not", () => {
     expect(lineStates(thread([app(), wa()]))).toEqual([]);
-    expect(lineStates(thread([app({ blocked: true, notice: "You blocked this customer in the app" }), wa({ stopped: true, notice: "This customer sent STOP on WhatsApp" })]))).toEqual([
-      { line: "app", text: "You blocked this customer in the app." },
-      { line: "whatsapp", text: "This customer sent STOP on WhatsApp." },
-    ]);
+    // Lines that cannot take a reply say why in the chooser.
+    expect(lineStates(thread([app({ blocked: true, notice: "You blocked this customer in the app" }), wa({ stopped: true, notice: "This customer sent STOP on WhatsApp" })]))).toEqual([]);
+    expect(lineStates(thread([app(), wa({ notice: "This customer changed their number" })]))).toEqual([{ line: "whatsapp", text: "This customer changed their number." }]);
     // One line: the box's note says it.
     expect(lineStates(thread([app({ blocked: true, notice: "x" })]))).toEqual([]);
   });

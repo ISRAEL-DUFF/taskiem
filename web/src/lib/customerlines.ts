@@ -90,12 +90,13 @@ export function lineNote(l: CustomerThreadLine): { tone: "warn" | "stop"; text: 
   return null;
 }
 
-/** What each line says of itself, for a thread with both: STOP on
- * WhatsApp, a block in the app, a number changed. */
+/** What a line of a thread with both says of itself while it still takes
+ * a reply (a line that cannot is said by the chooser: STOP on WhatsApp, a
+ * block in the app). */
 export function lineStates(c: ThreadOf): { line: Line; text: string }[] {
   const lines = threadLines(c);
   if (lines.length < 2) return [];
-  return lines.filter((l) => l.notice).map((l) => ({ line: l.line, text: `${l.notice}.` }));
+  return lines.filter((l) => l.notice && !lineClosed(l)).map((l) => ({ line: l.line, text: `${l.notice}.` }));
 }
 
 /** The small mark after a customer's name in the list. */
