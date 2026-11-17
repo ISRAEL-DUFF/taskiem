@@ -50,6 +50,10 @@ export function RefCard({
 }) {
   const [c, setC] = useState<ChatCard | null>();
   const [busy, setBusy] = useState(false);
+  // A tagged card is one short row until it is pressed, so a message naming
+  // several stays short; pressed again, a row once more. Kept while the
+  // conversation is open.
+  const [expanded, setExpanded] = useState(false);
   const [tick, setTick] = useState(0);
   const key = useRef(`card-${Math.random().toString(36).slice(2)}`);
   const navigate = useNavigate();
@@ -97,27 +101,54 @@ export function RefCard({
   };
   const share = paidShare(c);
   const label = `${KIND_WORD[c.kind]} ${c.name}`;
+  const sub = [c.party, c.kind === "customer" ? `last wrote ${shortDate(c.when)}` : shortDate(c.when)]
+    .filter(Boolean)
+    .join(" · ");
+  const amount =
+    c.kind === "customer" ? undefined : naira(c.due_kobo && c.due_kobo > 0 ? c.due_kobo : (c.total_kobo ?? 0));
+  if (!expanded)
+    return (
+      <article className={`tk-ref tk-ref-${c.kind} tk-ref-folded`} aria-label={label} data-testid="ref-card">
+        <button type="button" className="tk-ref-row" aria-expanded={false} onClick={() => setExpanded(true)}>
+          <span className={`tk-ref-tile ${c.kind}`} aria-hidden="true">
+            <Icon name={ICON[c.kind]} />
+          </span>
+          <span className="tk-ref-words">
+            <span className="tk-ref-name">{c.name}</span>
+            <span className="tk-ref-sub">{[KIND_WORD[c.kind], sub].filter(Boolean).join(" · ")}</span>
+          </span>
+          <span className="tk-ref-end">
+            {amount && <b>{amount}</b>}
+            {pill && <Pill tone={pill.tone}>{pill.text}</Pill>}
+          </span>
+          <span className="tk-ref-chevron" aria-hidden="true">
+            <Icon name="chevron" />
+          </span>
+          <span className="sr-only">Show details</span>
+        </button>
+      </article>
+    );
   return (
     <article className={`tk-ref tk-ref-${c.kind}`} aria-label={label} data-testid="ref-card">
-      <span className="tk-ref-top">
+      <button type="button" className="tk-ref-top" aria-expanded={true} onClick={() => setExpanded(false)}>
         <span className={`tk-ref-tile ${c.kind}`} aria-hidden="true">
           <Icon name={ICON[c.kind]} />
         </span>
         <span className="tk-ref-words">
           <span className="tk-kicker">{KIND_WORD[c.kind]}</span>
           <span className="tk-ref-name">{c.name}</span>
-          <span className="tk-ref-sub">
-            {[c.party, c.kind === "customer" ? `last wrote ${shortDate(c.when)}` : shortDate(c.when)]
-              .filter(Boolean)
-              .join(" · ")}
-          </span>
+          <span className="tk-ref-sub">{sub}</span>
         </span>
         {pill && (
           <span className="tk-ref-pill">
             <Pill tone={pill.tone}>{pill.text}</Pill>
           </span>
         )}
-      </span>
+        <span className="tk-ref-chevron open" aria-hidden="true">
+          <Icon name="chevron" />
+        </span>
+        <span className="sr-only">Show less</span>
+      </button>
       {c.kind === "customer" ? (
         <span className="tk-ref-stats">
           <span>

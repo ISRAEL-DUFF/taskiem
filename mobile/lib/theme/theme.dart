@@ -4,6 +4,7 @@
 
 import 'package:flutter/widgets.dart';
 
+import 'look.dart' show TkLook;
 import 'tokens.g.dart';
 
 export 'tokens.g.dart';
@@ -14,7 +15,7 @@ enum TkMode { light, dark }
 
 /// The theme a screen is drawn with.
 class TkTheme extends InheritedWidget {
-  const TkTheme({super.key, required this.mode, required super.child, this.own});
+  const TkTheme({super.key, required this.mode, required super.child, this.own, this.look});
 
   final TkMode mode;
 
@@ -24,11 +25,15 @@ class TkTheme extends InheritedWidget {
 
   TkTokens get t => own ?? (mode == TkMode.dark ? tkAppDark : tkAppLight);
 
+  /// The app look's accents of its own, for a part of a screen on a dark
+  /// ground in the light (your own pine bubble); else the mode's.
+  final TkLook? look;
+
   /// [child] with [change] made to the tokens in force (a part of a screen
   /// with a few colours of its own).
-  static Widget recolour(BuildContext context, TkTokens Function(TkTokens t) change, Widget child) {
+  static Widget recolour(BuildContext context, TkTokens Function(TkTokens t) change, Widget child, {TkLook? look}) {
     final theme = of(context);
-    return TkTheme(mode: theme.mode, own: change(theme.t), child: child);
+    return TkTheme(mode: theme.mode, own: change(theme.t), look: look ?? theme.look, child: child);
   }
 
   static TkTheme of(BuildContext context) {
@@ -41,7 +46,7 @@ class TkTheme extends InheritedWidget {
   static TkTokens tokens(BuildContext context) => of(context).t;
 
   @override
-  bool updateShouldNotify(TkTheme old) => old.mode != mode || old.own != own;
+  bool updateShouldNotify(TkTheme old) => old.mode != mode || old.own != own || old.look != look;
 }
 
 /// The chat in the app's own look (docs/spec/mobile-app-look.md, "The

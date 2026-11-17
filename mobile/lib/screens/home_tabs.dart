@@ -209,6 +209,7 @@ class _Tab extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     final ink = on ? TkLook.of(context).on : t.muted;
+    final dark = TkTheme.of(context).mode == TkMode.dark;
     return Semantics(
       button: true,
       selected: on,
@@ -226,10 +227,18 @@ class _Tab extends StatelessWidget {
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // The open tab's icon a little larger, in the open colour.
-                  SizedBox(
-                    width: 48,
+                  // The open tab's icon on a pill of its colour, a little larger:
+                  // in the light the open colour (pine) is close to the others'
+                  // grey-green, so the colour alone did not show which is open.
+                  AnimatedContainer(
+                    duration: still ? Duration.zero : const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    width: 56,
                     height: 26,
+                    decoration: BoxDecoration(
+                      color: on ? (TkLook.of(context).on).withValues(alpha: dark ? 0.16 : 0.12) : const Color(0x00000000),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
                     child: Center(
                       child: AnimatedScale(
                         scale: on ? 1.08 : 1,
@@ -247,7 +256,7 @@ class _Tab extends StatelessWidget {
                 tab.label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: tkText(size: 10.5, weight: 600, lineHeight: 1.2, color: ink),
+                style: tkText(size: 10.5, weight: on ? 800 : 600, lineHeight: 1.2, color: ink),
               ),
             ],
           ),
