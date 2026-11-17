@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   aboutOrderDraft,
+  linkChoices,
+  whatsappHere,
   withoutTool,
   basketTotal,
   cardFigure,
@@ -265,5 +267,24 @@ describe("a tool asked for on the way into a chat", () => {
     expect(withoutTool({ tool: "book", notice: "Started" })).toEqual({ notice: "Started" });
     expect(withoutTool({ notice: "Started" })).toBeUndefined();
     expect(withoutTool(null)).toBeUndefined();
+  });
+});
+
+describe("one customer across the app and WhatsApp (§11)", () => {
+  it("says the WhatsApp chat is here too, once it is", () => {
+    expect(whatsappHere({ lines: ["app", "whatsapp"] })).toBe("Your WhatsApp chat with them is here too");
+    expect(whatsappHere({ lines: ["app"] })).toBe("");
+    expect(whatsappHere({})).toBe("");
+  });
+
+  it("offers Chat on Taskiem, Chat on WhatsApp, or both", () => {
+    const wa = { number: "+234 800 000 0001", link: "https://wa.me/2348000000001" };
+    expect(linkChoices({ takes_chats: true, choices: ["whatsapp", "taskiem"], whatsapp: wa })).toEqual({ taskiem: true, whatsapp: wa.link });
+    expect(linkChoices({ takes_chats: false, choices: ["whatsapp"], whatsapp: wa })).toEqual({ taskiem: false, whatsapp: wa.link });
+    expect(linkChoices({ takes_chats: true, choices: ["taskiem"] })).toEqual({ taskiem: true, whatsapp: null });
+    expect(linkChoices({ takes_chats: false, choices: [] })).toEqual({ taskiem: false, whatsapp: null });
+    // An answer without choices: Taskiem while it takes chats.
+    expect(linkChoices({ takes_chats: true })).toEqual({ taskiem: true, whatsapp: null });
+    expect(linkChoices({ takes_chats: true, choices: ["whatsapp", "taskiem"] })).toEqual({ taskiem: true, whatsapp: null });
   });
 });

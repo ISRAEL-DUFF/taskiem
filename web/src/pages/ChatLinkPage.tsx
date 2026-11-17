@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError, get } from "../api";
 import { useAuth } from "../auth";
-import { hoursLines, openWords, type ChatLinkCard } from "../lib/personchat";
+import { hoursLines, linkChoices, openWords, type ChatLinkCard } from "../lib/personchat";
 import { ErrorBox, Skeleton, useLoad } from "../ui";
 import { ChatAvatar } from "./ChatAvatar";
 import { rememberAppURL } from "./PersonChats";
@@ -13,6 +13,8 @@ import { useSwitch } from "./Switch";
 // the Taskiem app. Signed out, Chat here runs the phone way in with the
 // link (the business pays for the code), then opens the chat; signed in,
 // it opens the chat at once (a business's session moves to You first).
+// A business with its own WhatsApp number offers Chat on WhatsApp beside
+// Chat on Taskiem (§11), or alone when it takes no chats in Taskiem.
 
 /** Where the chat opens once the person is signed in. */
 export const startPath = (code: string) => `/you/chats/new?code=${encodeURIComponent(code)}`;
@@ -57,6 +59,7 @@ export function ChatLinkPage() {
       </div>
     );
   const open = openWords(c.open_now);
+  const ways = linkChoices(c);
   const hours = hoursLines(c.hours);
   const photo = c.photo?.urls?.["320"] ?? c.photo?.urls?.["800"] ?? Object.values(c.photo?.urls ?? {})[0];
   return (
@@ -80,18 +83,27 @@ export function ChatLinkPage() {
           {c.hours?.note && <p className="hint">{c.hours.note}</p>}
         </details>
       )}
-      {c.takes_chats ? (
+      {ways.taskiem ? (
         <>
           <button type="button" className="primary" disabled={sw.busy} onClick={chatHere} data-testid="chat-here">
-            Chat here in your browser
+            {ways.whatsapp ? "Chat on Taskiem" : "Chat here in your browser"}
           </button>
           <ErrorBox error={sw.error} />
+          {ways.whatsapp && (
+            <a className="button" href={ways.whatsapp} target="_blank" rel="noopener noreferrer" data-testid="chat-on-whatsapp">
+              Chat on WhatsApp
+            </a>
+          )}
           {c.app && (
             <a className="button" href={c.app} target="_blank" rel="noopener noreferrer" data-testid="get-app">
               Get the Taskiem app
             </a>
           )}
         </>
+      ) : ways.whatsapp ? (
+        <a className="button primary" href={ways.whatsapp} target="_blank" rel="noopener noreferrer" data-testid="chat-on-whatsapp">
+          Chat on WhatsApp
+        </a>
       ) : (
         <p className="notice" role="status" data-testid="not-taking-chats">
           {c.name} is not taking chats in Taskiem right now.{c.shop ? " You can still visit their shop." : ""}

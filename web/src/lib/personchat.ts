@@ -80,6 +80,9 @@ export interface PersonChat {
   verified?: BusinessTrust;
   /** On a PUT: the answer to offers was not taken (they blocked you). */
   offers_refused?: boolean;
+  /** Where the chat runs: the app, and WhatsApp once the person's messages
+   * with the business on its own number are shown here too (§11). */
+  lines?: ("app" | "whatsapp")[];
 }
 
 /** What a business has proved, for the conversation's header. */
@@ -112,6 +115,9 @@ export interface PersonMessage {
   failed?: string;
   /** A photo being sent: this device's own copy. */
   localPreview?: string;
+  /** In the app, or on WhatsApp with the business's own number (§11):
+   * shown marked "on WhatsApp", not answered there from here. */
+  line?: "app" | "whatsapp";
 }
 
 /** A business's card, for anyone with its chat link (GET /v1/chat-links/{code}). */
@@ -129,6 +135,10 @@ export interface ChatLinkCard {
   words: string;
   /** Where to get the Taskiem app, when it is listed. */
   app?: string;
+  /** Chat on WhatsApp, on the business's own number (§11). */
+  whatsapp?: { number: string; link: string };
+  /** The ways to chat the link offers, in order. */
+  choices?: ("whatsapp" | "taskiem")[];
 }
 
 /** An item of their shop. */
@@ -286,6 +296,20 @@ export function closedNote(c: Pick<PersonChat, "blocked" | "blocked_you" | "name
 export function headLine(c: Pick<PersonChat, "typing" | "hours">): string {
   if (c.typing) return "typing…";
   return c.hours?.line ?? "";
+}
+
+/** The quiet line under the business's name once their WhatsApp chat
+ * with the person shows here too (§11), or "". */
+export function whatsappHere(c: Pick<PersonChat, "lines">): string {
+  return c.lines?.includes("whatsapp") ? "Your WhatsApp chat with them is here too" : "";
+}
+
+/** What the chat link offers (§11): Chat on Taskiem, Chat on WhatsApp, or
+ * both; WhatsApp only with its link. Without choices (an older answer),
+ * Taskiem while it takes chats. */
+export function linkChoices(c: Pick<ChatLinkCard, "choices" | "whatsapp" | "takes_chats">): { taskiem: boolean; whatsapp: string | null } {
+  const ch = c.choices ?? (c.takes_chats ? ["taskiem"] : []);
+  return { taskiem: ch.includes("taskiem"), whatsapp: ch.includes("whatsapp") && c.whatsapp?.link ? c.whatsapp.link : null };
 }
 
 /** A row's preview: what was said last, "You: " before ours. */

@@ -30,6 +30,7 @@ import {
   type DoorOrder,
   type KeptSend,
   type PersonChat,
+  whatsappHere,
   type PersonMessage,
 } from "../lib/personchat";
 import { browserEnv, enableYouPush, pushSupport, serverKey, thisSubscription, youPushOn } from "../lib/push";
@@ -478,6 +479,11 @@ export function PersonChatPage() {
                   {trust}
                 </span>
               )}
+              {whatsappHere(c) && (
+                <span className="pc-trust" data-testid="person-whatsapp-here">
+                  {whatsappHere(c)}
+                </span>
+              )}
             </>
           ) : undefined
         }
@@ -553,6 +559,11 @@ export function PersonChatPage() {
               what={(card?.title ?? m.body).split("\n")[0]?.slice(0, 60) ?? "message"}
               after={
                 <span className={inline ? "stamp inline" : "stamp"}>
+                  {m.line === "whatsapp" && (
+                    <span className="channel-mark line-of" data-testid="person-on-whatsapp">
+                      on WhatsApp ·
+                    </span>
+                  )}
                   <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
                     {clock(m.created_at)}
                   </time>
