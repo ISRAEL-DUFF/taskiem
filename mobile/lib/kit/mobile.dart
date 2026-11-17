@@ -610,7 +610,16 @@ class TkListRow extends StatelessWidget {
     this.level,
     this.levelColor,
     this.trailing,
+    this.leading,
+    this.subLines = 2,
   });
+
+  /// In place of the tile: a tick box when rows are chosen (as drawn), no
+  /// chevron after.
+  final Widget? leading;
+
+  /// How many lines the sub may take.
+  final int subLines;
 
   /// At the row's end in place of an amount: a switch, or quiet words
   /// ("Linked") before the chevron.
@@ -708,6 +717,9 @@ class TkListRow extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: 14, vertical: small ? 11 : 10),
             child: Row(
               children: [
+                if (leading != null)
+                  leading!
+                else
                 ExcludeSemantics(
                   child: SizedBox(
                     width: size,
@@ -750,7 +762,7 @@ class TkListRow extends StatelessWidget {
                         // Up to two lines, as drawn.
                         Text(
                           sub,
-                          maxLines: 2,
+                          maxLines: subLines,
                           overflow: TextOverflow.ellipsis,
                           style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted),
                         ),
@@ -813,7 +825,7 @@ class TkListRow extends StatelessWidget {
                 ],
                 if (trailing != null) ...[const SizedBox(width: 10), trailing!],
                 // A row that opens has its chevron, after its amount too (as drawn).
-                if (onTap != null && status == null && trailing is! TkSwitch) ...[
+                if (onTap != null && status == null && leading == null && trailing is! TkSwitch) ...[
                   const SizedBox(width: 6),
                   ExcludeSemantics(child: TkIcon('chevron', size: 16, color: t.muted.withValues(alpha: 0.6))),
                 ],
