@@ -98,6 +98,16 @@ placeMyChatOrder
 bookInMyChat
 payMyChatOrder
 
+# Discover: the public finding businesses, and a business's listing
+# (taskiem-for-everyone §10, stage 3). Chat from a profile is startMyChat
+# with from: "discover".
+discoverSearch
+discoverCategories
+discoverProfile
+discoverReport
+getDiscoverSettings
+putDiscoverSettings
+
 # The message menu (M3)
 reactLinkMessage
 unreactLinkMessage

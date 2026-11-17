@@ -39,8 +39,13 @@ var personalRoutes = regexp.MustCompile(`^(GET /v1/me|POST /v1/me/terms|GET /v1/
 
 	`GET /v1/me/storefront-orders|POST /v1/me/storefront-orders/confirm)$`)
 
+// discoverPersonRoutes are Discover's routes for a person (discover.go,
+// stage 3).
+var discoverPersonRoutes = regexp.MustCompile(`^(POST /v1/discover/search|GET /v1/discover/[^/]+|POST /v1/discover/[^/]+/report)$`)
+
 func personalAllowed(method, path string) bool {
-	return personalRoutes.MatchString(method + " " + strings.TrimSuffix(path, "/"))
+	route := method + " " + strings.TrimSuffix(path, "/")
+	return personalRoutes.MatchString(route) || discoverPersonRoutes.MatchString(route)
 }
 
 // deviceCookie names a browser, so a second proof made there holds for it

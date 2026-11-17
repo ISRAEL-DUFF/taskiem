@@ -70,6 +70,14 @@ func (x *Index) indexKey() []byte {
 // their verified phone (taskiem_person_orders); nil when the index is not
 // set up, which leaves the phone's orders out.
 func (x *Index) IndexKey() []byte {
+	return x.DoorKey()
+}
+
+// DoorKey is the narrowed index key, for the customer door's own check
+// that the person has a confirmed order with a business (00462): the door
+// makes the hash of the person's verified phone itself, so a wrong key
+// matches nothing. Nil when the index is not set up.
+func (x *Index) DoorKey() []byte {
 	if !x.Ready() {
 		return nil
 	}

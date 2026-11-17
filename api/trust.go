@@ -174,6 +174,11 @@ func (s *Server) appeal(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, messag
 // WhatsApp and Telegram (inside the conversation window as text, outside
 // as the alert template), linking to the storefront page in the app.
 func (s *Server) tellOwners(ctx context.Context, tenant uuid.UUID, title, body string) {
+	s.tellOwnersAt(ctx, tenant, title, body, "/storefront")
+}
+
+// tellOwnersAt is tellOwners linking to another page of the app (path).
+func (s *Server) tellOwnersAt(ctx context.Context, tenant uuid.UUID, title, body, path string) {
 	var name string
 	var users []uuid.UUID
 	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
@@ -193,7 +198,7 @@ func (s *Server) tellOwners(ctx context.Context, tenant uuid.UUID, title, body s
 	}
 	link := ""
 	if s.PublicURL != "" {
-		link = strings.TrimRight(s.PublicURL, "/") + "/storefront"
+		link = strings.TrimRight(s.PublicURL, "/") + path
 	}
 	msg := whatsapp.AlertMessage(name, "storefront", title, body, link, nil)
 	if s.WhatsApp != nil {
