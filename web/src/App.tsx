@@ -35,6 +35,7 @@ import { Account, Passkeys } from "./pages/Account";
 import { ChatOnYou, SecondProofElsewhere, SecondProofPage, YouApp } from "./pages/You";
 import { ChatLinkPage } from "./pages/ChatLinkPage";
 import { CustomerChatSettings } from "./pages/CustomerChatSettings";
+import { DiscoverSettings } from "./pages/DiscoverSettings";
 import { signedInTo } from "./pages/WayIn";
 import { StartSomething } from "./pages/StartSomething";
 import { Switcher } from "./pages/Switch";
@@ -956,6 +957,10 @@ function SignedIn() {
                   <Route
                     path="/settings/customers"
                     element={<CustomerChatSettings />}
+                  />
+                  <Route
+                    path="/settings/discover"
+                    element={<DiscoverSettings />}
                   />
                   <Route path="/settings/areas" element={<Areas />} />
                   <Route

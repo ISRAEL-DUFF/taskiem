@@ -664,7 +664,7 @@ function TextInput({
   );
 }
 
-function HoursEditor({
+export function HoursEditor({
   value,
   onChange,
 }: {
