@@ -29,6 +29,8 @@ class TaskiemApplication : Application() {
             "orders" to "Orders and money",
             "approvals" to "Approvals",
             "alerts" to "Alerts",
+            // A business answering the person's own chat (You).
+            "you" to "Chats with businesses",
         )
 
         fun makeChannels(context: Context) {

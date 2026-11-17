@@ -69,46 +69,67 @@ http.Response _json(Object body, [int status = 200]) => http.Response(jsonEncode
 
 const _fcm = {'api_key': 'AIzaTest', 'app_id_android': '1:42:android:abc', 'project_id': 'taskiem-test', 'sender_id': '42'};
 
-/// A server that keeps devices as the real one does, enough for the app.
+/// A server that keeps devices as the real one does, enough for the app:
+/// the business's devices, and the person's own (You's: a personal session,
+/// or `?side=you`), apart.
 class PushServer extends FakeServer {
-  PushServer({this.firebase = true}) {
+  PushServer({this.firebase = true, this.personal = false}) {
     answers['GET /v1/app/config'] = () => _json({'min_version': '0.1.0', 'passkeys': false, 'signup': false, if (firebase) 'push': {'fcm': _fcm}});
-    answers['GET /v1/me'] = () => _json({'tenant_id': _tenant, 'tenant_name': 'Ada Foods', 'auth_method': 'password', 'permissions': ['chat.trade', 'order.handle'], 'roles': ['owner']});
-    answers['GET /v1/me/push'] = () => _json(view());
-    answers['PUT /v1/me/push'] = () {
-      final b = calls.last.body!;
-      final token = b['token'] as String;
-      final old = b['replaces'] as String?;
-      var d = devices.where((d) => d['token'] == token).firstOrNull;
-      if (b['known'] == true && d == null) return _json({'error': 'not found'}, 404);
-      final was = old == null ? null : devices.where((d) => d['token'] == old).firstOrNull;
-      if (was != null) devices.remove(was);
-      if (d == null) {
-        d = {
-          'id': 'd${++_n}', 'token': token, 'kind': 'fcm', 'platform': 'android',
-          'label': (b['label'] as String?) ?? (was?['label'] ?? 'A phone'),
-          'preview': was?['preview'] ?? true, 'kinds': was?['kinds'] ?? List.of(pushKinds),
-          'created_at': '2026-11-14T10:00:00Z',
-        };
-        devices.add(d);
-      }
-      return _json({...view(), 'added': d['id']});
-    };
-    answers['DELETE /v1/me/push'] = () {
-      devices.removeWhere((d) => d['token'] == calls.last.body!['token']);
-      return _json(view());
-    };
+    answers['GET /v1/me'] = () => personal
+        ? _json({'personal': true, 'auth_method': 'phone', 'permissions': <String>[], 'roles': <String>[]})
+        : _json({'tenant_id': _tenant, 'tenant_name': 'Ada Foods', 'auth_method': 'password', 'permissions': ['chat.trade', 'order.handle'], 'roles': ['owner']});
   }
 
   final bool firebase;
+  final bool personal;
   final String _tenant = 't1';
   int _n = 0;
+
+  /// The business's devices.
   final devices = <Map<String, dynamic>>[];
 
-  Map<String, dynamic> view() => {
-    'devices': [for (final d in devices) Map.of(d)..remove('token')],
-    'max': 10, 'kinds': pushKinds, 'browsers': true, 'phones': firebase,
+  /// The person's own devices (You's).
+  final youDevices = <Map<String, dynamic>>[];
+
+  /// The side each push request was for.
+  final sides = <String>[];
+
+  List<Map<String, dynamic>> listOf(String side) => side == 'you' ? youDevices : devices;
+
+  Map<String, dynamic> view(String side) => {
+    'devices': [for (final d in listOf(side)) Map.of(d)..remove('token')],
+    'max': 10, 'kinds': side == 'you' ? ['you'] : pushKinds, 'browsers': true, 'phones': firebase, 'side': side,
   };
+
+  /// /v1/me/push, by side.
+  http.Response push(String method, String side, Map<String, dynamic>? b) {
+    final list = listOf(side);
+    switch (method) {
+      case 'GET':
+        return _json(view(side));
+      case 'PUT':
+        final token = b!['token'] as String;
+        final old = b['replaces'] as String?;
+        var d = list.where((d) => d['token'] == token).firstOrNull;
+        if (b['known'] == true && d == null) return _json({'error': 'not found'}, 404);
+        final was = old == null ? null : list.where((d) => d['token'] == old).firstOrNull;
+        if (was != null) list.remove(was);
+        if (d == null) {
+          d = {
+            'id': 'd${++_n}', 'token': token, 'kind': 'fcm', 'platform': 'android',
+            'label': (b['label'] as String?) ?? (was?['label'] ?? 'A phone'),
+            'preview': was?['preview'] ?? true, 'kinds': was?['kinds'] ?? (b['kinds'] ?? (side == 'you' ? ['you'] : List.of(pushKinds))),
+            'created_at': '2026-11-14T10:00:00Z',
+          };
+          list.add(d);
+        }
+        return _json({...view(side), 'added': d['id']});
+      case 'DELETE':
+        list.removeWhere((d) => d['token'] == b!['token']);
+        return _json(view(side));
+    }
+    return _json({'error': 'no'}, 405);
+  }
 
   @override
   http.Client client() {
@@ -117,23 +138,30 @@ class PushServer extends FakeServer {
   }
 }
 
-/// PATCH and DELETE of one device, by id (the fake's answers are by exact path).
+/// The push requests, by side; PATCH and DELETE of one device, by id.
 class _Patch extends http.BaseClient {
   _Patch(this.inner, this.s);
   final http.Client inner;
   final PushServer s;
   @override
   Future<http.StreamedResponse> send(http.BaseRequest req) async {
-    final m = RegExp(r'^/v1/me/push/(d\d+)$').firstMatch(req.url.path);
-    if (m != null) {
-      final body = req is http.Request && req.body.isNotEmpty ? jsonDecode(req.body) as Map<String, dynamic> : null;
-      s.calls.add((method: req.method, path: req.url.path, body: body, auth: req.headers['Authorization']));
-      final d = s.devices.firstWhere((d) => d['id'] == m[1]);
-      if (req.method == 'DELETE') s.devices.remove(d);
+    final path = req.url.path;
+    if (path != '/v1/me/push' && !RegExp(r'^/v1/me/push/d\d+$').hasMatch(path)) return inner.send(req);
+    final body = req is http.Request && req.body.isNotEmpty ? jsonDecode(req.body) as Map<String, dynamic> : null;
+    s.calls.add((method: req.method, path: path, body: body, auth: req.headers['Authorization']));
+    final side = req.url.queryParameters['side'] ?? (s.personal ? 'you' : 'business');
+    s.sides.add(side);
+    late final http.Response r;
+    if (path == '/v1/me/push') {
+      r = s.push(req.method, side, body);
+    } else {
+      final list = s.listOf(side);
+      final d = list.firstWhere((d) => d['id'] == path.split('/').last);
+      if (req.method == 'DELETE') list.remove(d);
       if (req.method == 'PATCH') d.addAll({for (final k in ['kinds', 'preview']) if (body!.containsKey(k)) k: body[k]});
-      return http.StreamedResponse(Stream.value(utf8.encode(jsonEncode(s.view()))), 200);
+      r = _json(s.view(side));
     }
-    return inner.send(req);
+    return http.StreamedResponse(Stream.value(r.bodyBytes), r.statusCode, headers: r.headers);
   }
 }
 
@@ -391,6 +419,90 @@ void main() {
     for (final bad in ['//evil.example', 'https://evil.example', '/a/../b', null, '']) {
       expect(appPath(bad), isFalse, reason: '$bad');
     }
+  });
+
+  group('push on You (taskiem-for-everyone §9)', () {
+    test('a personal session: the phone is You\'s device, kinds ["you"], no side asked; signing out takes it off', () async {
+      final server = PushServer(personal: true);
+      server.answers['POST /v1/auth/logout'] = () => http.Response('', 204);
+      final (auth, n, fb, keys) = await signedIn(server);
+      await n.start();
+      expect(n.personal, isTrue);
+      expect(await n.shouldAsk(), isTrue);
+      await n.turnOn();
+      expect(n.error, isNull);
+      expect(n.isOn && n.youIsOn, isTrue);
+      final put = server.calls.lastWhere((c) => c.method == 'PUT');
+      expect(put.body, containsPair('kind', 'fcm'));
+      expect(put.body, containsPair('kinds', ['you']));
+      expect(server.sides.where((x) => x != 'you'), isEmpty, reason: 'a personal session is You\'s side');
+      expect(server.youDevices, hasLength(1));
+      expect(server.devices, isEmpty);
+      expect(keys.values['push-on:you'], '1');
+      expect(n.youMine?.kinds, ['you']);
+
+      await auth.signOut();
+      expect(server.youDevices, isEmpty);
+      expect(fb.forgot, isTrue);
+      expect(keys.values.keys.where((k) => k.startsWith('push-')), isEmpty);
+    });
+
+    test('a business session registers You too (?side=you), turned off apart; signing out takes both off', () async {
+      final server = PushServer();
+      server.answers['POST /v1/auth/logout'] = () => http.Response('', 204);
+      final (auth, n, _, keys) = await signedIn(server);
+      await n.start();
+      await n.turnOn();
+      expect(server.devices, hasLength(1));
+      expect(server.youDevices, hasLength(1), reason: 'customer chats reach the person while they work in a business');
+      expect(server.youDevices.single['kinds'], ['you']);
+      expect(n.youOn, isTrue);
+      expect(keys.values['push-on:you'], '1');
+
+      // Off for You here: the business's stay.
+      await n.setYou(false);
+      expect(server.youDevices, isEmpty);
+      expect(server.devices, hasLength(1));
+      expect(n.youOn, isFalse);
+      // Turned on again with the business's, You's stays off as chosen.
+      await n.turnOff();
+      await n.turnOn();
+      expect(server.youDevices, isEmpty);
+      await n.setYou(true);
+      expect(server.youDevices, hasLength(1));
+
+      // Opened again later: You's found by its token, from the business.
+      final again = PhoneNotifications(auth: auth, keys: keys, platform: FakeFirebase());
+      await again.start();
+      expect(again.youOn, isTrue);
+      final known = server.calls.lastWhere((c) => c.method == 'PUT');
+      expect(known.body!['known'], isTrue);
+      expect(server.sides.last, 'you');
+
+      await auth.signOut();
+      expect(server.devices, isEmpty);
+      expect(server.youDevices, isEmpty);
+    });
+
+    test('a push for You (no business) opens /you/chats/{id} in any session; its chat on the screen shows nothing', () async {
+      final (_, n, fb, _) = await signedIn(PushServer());
+      await n.start();
+      fb.taps.add({'link': '/you/chats/c1', 'tag': 'you:c1', 'kind': 'you'});
+      await pumpEventQueue();
+      final page = n.takePending();
+      expect(page, '/you/chats/c1');
+      expect(youChatOf(page), 'c1');
+      expect(youChatOf('/chat'), isNull);
+      expect(appPath('/you/chats/c1'), isTrue);
+
+      final said = <String>[];
+      n.onArrived = (note) => said.add(note.title);
+      n.showing = 'you:c1';
+      fb.notes.add(const PushNote(title: 'Mama’s Kitchen', body: 'Yes', data: {'tag': 'you:c1', 'link': '/you/chats/c1', 'business': ''}));
+      fb.notes.add(const PushNote(title: 'Bola Stores', body: 'Hi', data: {'tag': 'you:c2', 'link': '/you/chats/c2'}));
+      await pumpEventQueue();
+      expect(said, ['Bola Stores']);
+    });
   });
 
   group('Settings', () {

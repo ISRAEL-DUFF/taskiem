@@ -16,7 +16,14 @@ import '../app/applinks.dart';
 import '../app/auth.dart';
 import '../app/phone.dart';
 import '../chat/approve.dart' show TkTextBox;
-import '../chat/door.dart' show yourOrderStatus;
+import '../app/notify.dart' show PhoneNotifications, PushNote, youChatOf;
+import '../app/prefs.dart' show Prefs;
+import '../app/sound.dart' show chime;
+import '../kit/forms.dart' show TkSwitch;
+import '../theme/look.dart';
+import 'settings_more.dart' show SettingsPage;
+import 'signed_in.dart' show NotificationsCard;
+import '../chat/door.dart' show doorTone, yourOrderStatus;
 import '../chat/my_chat.dart';
 import '../chat/words.dart' show naira, listTime;
 import '../kit/kit.dart';
@@ -38,8 +45,12 @@ String _say(Object e) => switch (e) {
     };
 
 class YouHome extends StatefulWidget {
-  const YouHome({super.key, required this.auth, this.links, this.now = DateTime.now});
+  const YouHome({super.key, required this.auth, this.links, this.now = DateTime.now, this.notify, this.prefs});
   final Auth auth;
+
+  /// Notifications on this phone, here You's: a business answering a chat.
+  final PhoneNotifications? notify;
+  final Prefs? prefs;
 
   /// Links that open the app: a second proof's link opened on this phone,
   /// a business's chat link.
@@ -68,10 +79,69 @@ class _YouHomeState extends State<YouHome> {
     _poll = Timer.periodic(const Duration(seconds: 10), (_) {
       if (mounted && ModalRoute.of(context)?.isCurrent != false) _chats.load();
     });
+    // Notifications on this phone, on the person's own side: a tapped one
+    // opens its chat; one that comes with the app open is a toast; asked
+    // once.
+    final notify = widget.notify;
+    if (notify != null) {
+      notify.addListener(_notified);
+      notify.onArrived = _arrived;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        await notify.start();
+        if (!mounted) return;
+        _notified();
+        if (await notify.shouldAsk() && mounted) await _askOnce(notify);
+      });
+    }
+  }
+
+  /// A tapped notification: its chat, over the list.
+  void _notified() {
+    final notify = widget.notify;
+    if (notify == null || !mounted) return;
+    final problem = notify.takeProblem();
+    if (problem != null) showTkToast(context, problem, error: true);
+    final id = youChatOf(notify.takePending());
+    if (id == null) return;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    unawaited(_open(PersonChat.fromJson(_stub(id))));
+  }
+
+  /// Enough of a chat to open it by its id (the rest is read as it opens).
+  static Map<String, dynamic> _stub(String id) => {
+    'id': id, 'business': '', 'name': 'Business', 'last': '', 'last_at': DateTime.now().toUtc().toIso8601String(), 'last_mine': false,
+    'unread': 0, 'muted': false, 'archived': false, 'blocked': false, 'blocked_you': false, 'offers': 'unasked', 'ask_offers': false,
+  };
+
+  void _arrived(PushNote n) {
+    if (!mounted) return;
+    if (widget.prefs?.sound ?? true) unawaited(chime());
+    final words = n.body.isEmpty ? n.title : '${n.title}: ${n.body}';
+    showTkToast(context, words, action: 'Open', onAction: () => widget.notify?.open(n.data));
+    unawaited(_chats.load());
+  }
+
+  Future<void> _askOnce(PhoneNotifications notify) async {
+    final yes = await showTkConfirm(
+      context,
+      title: 'Get a notification when a business answers you?',
+      body: 'Taskiem tells you on this phone, even when the app is closed. You can change this in Settings.',
+      ok: 'Yes',
+      cancel: 'Not now',
+    );
+    if (yes) {
+      await notify.turnOn();
+      if (mounted && notify.error != null) showTkToast(context, notify.error!, error: true);
+    } else {
+      await notify.declined();
+    }
   }
 
   @override
   void dispose() {
+    final notify = widget.notify;
+    notify?.removeListener(_notified);
+    if (notify?.onArrived == _arrived) notify?.onArrived = null;
     _poll?.cancel();
     widget.links?.removeListener(_linked);
     _chats.dispose();
@@ -104,7 +174,7 @@ class _YouHomeState extends State<YouHome> {
 
   /// A chat opened, and the list read again when it is closed.
   Future<void> _open(PersonChat c, {String? notice, String draft = ''}) async {
-    await tkPush<void>(context, MyChatScreen(data: MyChatData(widget.auth, c.id, notice: notice, now: widget.now), draft: draft));
+    await tkPush<void>(context, MyChatScreen(data: MyChatData(widget.auth, c.id, notice: notice, now: widget.now), draft: draft, notify: widget.notify));
     await _chats.load();
   }
 
@@ -251,40 +321,43 @@ class _YouHomeState extends State<YouHome> {
     final mine = r.orders;
     return TkSection(
       title: 'Your shop orders',
-      count: r.orders.length,
+      count: waiting,
       children: [
         if (waiting > 0)
-          TkPanel(
+          Padding(
             padding: const EdgeInsets.all(16),
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
                     waiting == 1
                         ? 'We found an order made with your number before it was on your account. Is it yours?'
                         : 'We found $waiting orders made with your number before it was on your account. Are they yours?',
-                    style: tkText(size: 14, color: t.text),
+                    style: tkText(size: 14.5, lineHeight: 1.4, color: t.text),
                   ),
-                  const SizedBox(height: 10),
-                  TkButton(label: 'These are mine', primary: true, onPressed: _theseAreMine),
-                ],
-              ),
-            ],
-          ),
-        if (mine.isNotEmpty)
-          TkPanel(
-            children: [
-              for (final o in mine)
-                TkListRow(
-                  title: o.business,
-                  sub: '${o.reference} · ${yourOrderStatus(o.state)} · ${listTime(o.madeAt, widget.now())}',
-                  letters: o.business,
-                  amount: naira(o.totalKobo),
-                  semanticsLabel: 'Order ${o.reference} with ${o.business}, ${yourOrderStatus(o.state)}, ${naira(o.totalKobo)}',
-                  onTap: () => _order(o),
                 ),
-            ],
+                const SizedBox(height: 4),
+                Text('Nothing of them shows until you say so.', style: tkText(size: 12.5, color: t.muted)),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TkSmallButton(label: waiting == 1 ? 'It’s mine' : 'These are mine', primary: true, onPressed: _theseAreMine),
+                ),
+              ],
+            ),
+          ),
+        for (final o in mine)
+          TkListRow(
+            title: o.business,
+            sub: '${o.reference} · ${listTime(o.madeAt, widget.now())}',
+            letters: o.business,
+            amount: naira(o.totalKobo),
+            status: yourOrderStatus(o.state),
+            statusTone: doorTone(o.state),
+            semanticsLabel: 'Order ${o.reference} with ${o.business}, ${yourOrderStatus(o.state)}, ${naira(o.totalKobo)}',
+            onTap: () => _order(o),
           ),
       ],
     );
@@ -314,7 +387,7 @@ class _YouHomeState extends State<YouHome> {
         actions: [
           if (businesses.isNotEmpty) TkHeadButton(icon: 'loop', label: 'Switch', onTap: () => showSwitcher(context, auth)),
           const SizedBox(width: 6),
-          TkHeadButton(icon: 'settings', label: 'Settings', onTap: () => tkPush<void>(context, YouSettingsScreen(auth: auth))),
+          TkHeadButton(icon: 'settings', label: 'Settings', onTap: () => tkPush<void>(context, YouSettingsScreen(auth: auth, notify: widget.notify))),
         ],
         children: [
           if (_invitations.isNotEmpty)
@@ -370,8 +443,7 @@ class _YouHomeState extends State<YouHome> {
                     ),
                   if (chats != null && (chats.isNotEmpty || archived.isNotEmpty))
                     TkPanel(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      inset: 0,
+                      inset: 76,
                       children: [
                         if (archived.isNotEmpty)
                           TkListRow(
@@ -457,8 +529,11 @@ class _InvitationRow extends StatelessWidget {
 /// Settings on **You** (§7): who the person is, their phone with Change
 /// number, and signing out.
 class YouSettingsScreen extends StatelessWidget {
-  const YouSettingsScreen({super.key, required this.auth});
+  const YouSettingsScreen({super.key, required this.auth, this.notify});
   final Auth auth;
+
+  /// Notifications on this phone, for You.
+  final PhoneNotifications? notify;
 
   @override
   Widget build(BuildContext context) {
@@ -503,6 +578,7 @@ class YouSettingsScreen extends StatelessWidget {
                 if (email != null) line('Email', email),
               ],
             ),
+            if (notify != null) _YouNotifications(notify: notify!),
             TkButton(label: 'Sign out', minHeight: 44, onPressed: auth.signOut),
           ],
         );
@@ -714,4 +790,40 @@ class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
       ],
     );
   }
+}
+
+/// This phone's notifications on You: on or off, and a row to the rest
+/// (whether they say what came, your other devices).
+class _YouNotifications extends StatelessWidget {
+  const _YouNotifications({required this.notify});
+  final PhoneNotifications notify;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: notify,
+    builder: (context, _) {
+      final n = notify;
+      if (n.available != true && !n.noGoogle) return const SizedBox.shrink();
+      final look = TkLook.of(context);
+      final more = SettingsPage(title: 'Notifications on this phone', backLabel: 'Back to Settings', children: [NotificationsCard(notify: n)]);
+      return TkSection(
+        title: 'This phone',
+        inset: 56,
+        children: [
+          if (n.noGoogle)
+            TkListRow(title: 'Notifications', sub: 'This phone cannot get them', icon: 'b-bell', square: look.orange, onTap: () => tkPush<void>(context, more))
+          else ...[
+            TkListRow(
+              title: 'Notify me on this phone',
+              sub: 'When a business answers you',
+              icon: 'b-bell',
+              square: look.orange,
+              trailing: TkSwitch(label: 'Notify me on this phone', on: n.isOn, onChanged: n.busy ? null : (v) => v ? n.turnOn() : n.turnOff()),
+            ),
+            TkListRow(title: 'What this phone tells you', icon: 'b-bell', square: look.orange, onTap: () => tkPush<void>(context, more)),
+          ],
+        ],
+      );
+    },
+  );
 }
