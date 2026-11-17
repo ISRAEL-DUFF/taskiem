@@ -750,12 +750,21 @@ func minutesOf(s string) int {
 	return int(s[0]-'0')*600 + int(s[1]-'0')*60 + int(s[3]-'0')*10 + int(s[4]-'0')
 }
 
-// closingAt is when today's opening that holds t closes ("" for none).
+// closingAt is when the opening that holds t closes ("" for none):
+// today's, or yesterday's that ran past midnight (Friday 20:00 to 02:00
+// holds Saturday 01:00).
 func closingAt(h storefront.Hours, t time.Time) string {
 	mins := t.Hour()*60 + t.Minute()
-	for _, sp := range h.Days[(int(t.Weekday())+6)%7] {
+	today := (int(t.Weekday()) + 6) % 7
+	for _, sp := range h.Days[today] {
 		o, c := minutesOf(sp.Open), minutesOf(sp.Close)
-		if o >= 0 && mins >= o && (c <= o || mins < c) {
+		if o >= 0 && c >= 0 && mins >= o && (c <= o || mins < c) {
+			return sp.Close
+		}
+	}
+	for _, sp := range h.Days[(today+6)%7] {
+		o, c := minutesOf(sp.Open), minutesOf(sp.Close)
+		if o >= 0 && c >= 0 && c < o && mins < c {
 			return sp.Close
 		}
 	}
@@ -764,12 +773,14 @@ func closingAt(h storefront.Hours, t time.Time) string {
 
 var weekdays = [7]string{"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"}
 
-// nextOpening says when the business next opens after t, within a week:
-// "at 09:00", "tomorrow at 09:00" or "on Monday at 09:00".
+// nextOpening says when the business next opens after t, within a week
+// (today's weekday a week on included): "at 09:00", "tomorrow at 09:00",
+// "on Monday at 09:00" or, for a business open only on today's weekday,
+// "next Saturday at 09:00".
 func nextOpening(h storefront.Hours, t time.Time) string {
 	mins := t.Hour()*60 + t.Minute()
 	today := (int(t.Weekday()) + 6) % 7
-	for add := 0; add < 7; add++ {
+	for add := 0; add <= 7; add++ {
 		day := (today + add) % 7
 		spans := slices.Clone(h.Days[day])
 		slices.SortFunc(spans, func(a, b storefront.Span) int { return minutesOf(a.Open) - minutesOf(b.Open) })
@@ -783,6 +794,8 @@ func nextOpening(h storefront.Hours, t time.Time) string {
 				return "at " + sp.Open
 			case 1:
 				return "tomorrow at " + sp.Open
+			case 7:
+				return "next " + weekdays[day] + " at " + sp.Open
 			default:
 				return "on " + weekdays[day] + " at " + sp.Open
 			}
