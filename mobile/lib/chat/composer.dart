@@ -29,6 +29,9 @@ import 'attachments.dart';
 import 'tools_panel.dart';
 
 /// Where a file to send comes from: the phone's gallery, camera and files.
+/// The longest side a photo is sent at in a chat (photos.ts SEND_SIDE).
+const chatPhotoSide = 1600.0;
+
 class Pickers {
   const Pickers();
 
@@ -267,9 +270,12 @@ class ComposerState extends State<Composer> {
     setState(() => _error = null);
     try {
       choose(await switch (what) {
-        'photo' => widget.pickers.photo(),
+        // Drawn smaller before it goes, as the web sends a photo
+        // (photos.ts SEND_SIDE): a phone's full photo is several MB, too
+        // slow on a weak connection.
+        'photo' => widget.pickers.photo(side: chatPhotoSide),
         'document' => widget.pickers.document(),
-        _ => widget.pickers.camera(),
+        _ => widget.pickers.camera(side: chatPhotoSide),
       });
     } on PlatformException catch (e) {
       setState(

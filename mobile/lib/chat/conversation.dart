@@ -714,10 +714,19 @@ class ConversationData extends ChangeNotifier {
       o.failed = true;
       // lib/outbox.ts sendError.
       o.error = e.status == 429 ? 'You are sending too fast. Wait a moment and tap Retry.' : (e.message.isEmpty ? 'It could not be sent.' : e.message);
-    } on Offline {
-      // Kept with its clock: it goes by itself when the connection is back.
-      o.error = null;
-      offline = true;
+    } on Offline catch (e) {
+      if (e.slow && o.file != null) {
+        // A file that took too long, on a connection that is there: said,
+        // with Retry, not left waiting for a connection that never "comes
+        // back". Retry sends the same client id, so one the server did
+        // keep is not sent twice.
+        o.failed = true;
+        o.error = 'It took too long to send. Tap Retry.';
+      } else {
+        // Kept with its clock: it goes by itself when the connection is back.
+        o.error = null;
+        offline = true;
+      }
     } on Object {
       // Anything else (an answer that could not be read, say): the message
       // must not stay "sending" for ever. Retry sends the same client id,
