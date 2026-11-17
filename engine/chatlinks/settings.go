@@ -43,15 +43,19 @@ type Settings struct {
 	LinkInUpdates *bool `json:"link_in_updates"`
 	// UpdatesLink is LinkInUpdates as it applies now.
 	UpdatesLink bool `json:"updates_link"`
+	// LinkWhatsApp: the chat link offers Chat on WhatsApp, on the
+	// business's own number, beside Chat on Taskiem (§11; on unless the
+	// business turns it off; only when it has a number of its own).
+	LinkWhatsApp bool `json:"link_whatsapp"`
 }
 
 // SettingsTx reads the business's settings, with the defaults where it
 // has said nothing. TakesChats is as it applies now: off while the Orders
 // area is off.
 func SettingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Settings, error) {
-	st := Settings{TakesChats: true, StorefrontButton: ButtonBoth}
-	err := tx.QueryRow(ctx, `SELECT takes_chats, storefront_button, link_in_updates FROM customer_chat_link_settings WHERE tenant_id = $1`, tenant).
-		Scan(&st.TakesChats, &st.StorefrontButton, &st.LinkInUpdates)
+	st := Settings{TakesChats: true, StorefrontButton: ButtonBoth, LinkWhatsApp: true}
+	err := tx.QueryRow(ctx, `SELECT takes_chats, storefront_button, link_in_updates, link_whatsapp FROM customer_chat_link_settings WHERE tenant_id = $1`, tenant).
+		Scan(&st.TakesChats, &st.StorefrontButton, &st.LinkInUpdates, &st.LinkWhatsApp)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return st, err
 	}
@@ -82,6 +86,7 @@ type SettingsIn struct {
 	// default.
 	LinkInUpdates *bool `json:"link_in_updates"`
 	ResetUpdates  bool  `json:"link_in_updates_default"`
+	LinkWhatsApp  *bool `json:"link_whatsapp"`
 }
 
 // SaveSettingsTx changes the business's settings: only the fields given,
@@ -100,14 +105,15 @@ func SaveSettingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in Setting
 	if !in.ResetUpdates {
 		updates = in.LinkInUpdates
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO customer_chat_link_settings (tenant_id, takes_chats, storefront_button, link_in_updates, updated_by)
-		VALUES ($1, COALESCE($2::boolean, true), COALESCE($3::text, 'both'), $4::boolean, $6)
+	if _, err := tx.Exec(ctx, `INSERT INTO customer_chat_link_settings (tenant_id, takes_chats, storefront_button, link_in_updates, updated_by, link_whatsapp)
+		VALUES ($1, COALESCE($2::boolean, true), COALESCE($3::text, 'both'), $4::boolean, $6, COALESCE($7::boolean, true))
 		ON CONFLICT (tenant_id) DO UPDATE SET
 		  takes_chats = COALESCE($2::boolean, customer_chat_link_settings.takes_chats),
 		  storefront_button = COALESCE($3::text, customer_chat_link_settings.storefront_button),
 		  link_in_updates = CASE WHEN $5::boolean THEN EXCLUDED.link_in_updates ELSE customer_chat_link_settings.link_in_updates END,
+		  link_whatsapp = COALESCE($7::boolean, customer_chat_link_settings.link_whatsapp),
 		  updated_by = EXCLUDED.updated_by, updated_at = now()`,
-		tenant, in.TakesChats, in.StorefrontButton, updates, setUpdates, by); err != nil {
+		tenant, in.TakesChats, in.StorefrontButton, updates, setUpdates, by, in.LinkWhatsApp); err != nil {
 		return Settings{}, err
 	}
 	return SettingsTx(ctx, tx, tenant)
@@ -126,6 +132,31 @@ type Card struct {
 	TakesChats bool  `json:"takes_chats"`
 	// Shop is its published storefront's address, when it has one.
 	Shop string `json:"shop,omitempty"`
+	// WhatsApp is Chat on WhatsApp, for a business with its own number
+	// that offers it on its link (§11).
+	WhatsApp *WhatsAppChat `json:"whatsapp,omitempty"`
+	// Choices are the ways to chat the link offers, in order: whatsapp
+	// (its own number) and taskiem (the app or the browser); empty when
+	// it takes no chats either way.
+	Choices []string `json:"choices"`
+}
+
+// WhatsAppChat is Chat on WhatsApp: the business's own number and its
+// wa.me link.
+type WhatsAppChat struct {
+	Number string `json:"number"`
+	Link   string `json:"link"`
+}
+
+// WaMe is the wa.me link of a number ("+234 800…" → https://wa.me/234800…).
+func WaMe(number string) string {
+	digits := make([]rune, 0, len(number))
+	for _, r := range number {
+		if r >= '0' && r <= '9' {
+			digits = append(digits, r)
+		}
+	}
+	return "https://wa.me/" + string(digits)
 }
 
 // CardTx reads the business's card in its own scope (tx): its profile's
@@ -189,6 +220,22 @@ func CardTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, previewDomain stri
 		return c, err
 	}
 	c.TakesChats = st.TakesChats
+	c.Choices = []string{}
+	if st.LinkWhatsApp {
+		var number string
+		err := tx.QueryRow(ctx, `SELECT display_number FROM whatsapp_numbers WHERE tenant_id = $1 AND status = 'active' AND display_number <> ''
+			ORDER BY updated_at DESC LIMIT 1`, tenant).Scan(&number)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return c, err
+		}
+		if number != "" {
+			c.WhatsApp = &WhatsAppChat{Number: number, Link: WaMe(number)}
+			c.Choices = append(c.Choices, "whatsapp")
+		}
+	}
+	if c.TakesChats {
+		c.Choices = append(c.Choices, "taskiem")
+	}
 	return c, nil
 }
 

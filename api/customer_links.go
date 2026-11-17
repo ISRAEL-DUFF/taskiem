@@ -320,7 +320,7 @@ func (s *Server) putChatSettings(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		return auditTx(r, tx, "chat_link.settings", "chat_link", map[string]any{"takes_chats": after.TakesChats,
-			"storefront_button": after.StorefrontButton, "link_in_updates": after.LinkInUpdates})
+			"storefront_button": after.StorefrontButton, "link_in_updates": after.LinkInUpdates, "link_whatsapp": after.LinkWhatsApp})
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -418,7 +418,8 @@ img{width:96px;height:96px;border-radius:50%;object-fit:cover}h1{font-size:1.5re
 {{else}}{{with .Photo}}<img src="{{.}}" alt="">{{end}}
 <h1>{{.Card.Name}}</h1>{{with .Card.Tagline}}<p>{{.}}</p>{{end}}{{with .Card.Area}}<p>{{.}}</p>{{end}}
 {{if .Card.OpenNow}}<p>{{if deref .Card.OpenNow}}Open now{{else}}Closed now{{end}}</p>{{end}}
-{{if .Card.TakesChats}}<a class="btn main" href="{{.Chat}}">Chat here in your browser</a>{{else}}<p>{{.Card.Name}} is not taking chats here right now.</p>{{end}}
+{{if .Card.TakesChats}}<a class="btn main" href="{{.Chat}}">{{if .Card.WhatsApp}}Chat on Taskiem{{else}}Chat here in your browser{{end}}</a>{{else if not .Card.WhatsApp}}<p>{{.Card.Name}} is not taking chats here right now.</p>{{end}}
+{{with .Card.WhatsApp}}<a class="btn{{if not $.Card.TakesChats}} main{{end}}" href="{{.Link}}" rel="noopener">Chat on WhatsApp</a>{{end}}
 {{with .App}}<a class="btn" href="{{.}}">Get the Taskiem app</a>{{end}}
 {{with .Hours}}<ul>{{range .}}<li>{{.}}</li>{{end}}</ul>{{end}}{{end}}
 </div></main></body></html>`
@@ -473,7 +474,10 @@ func hoursLines(h *storefront.Hours) []string {
 // chatLinkHTML serves /m/{code} where this server serves no web app (the
 // web app's own page, with the browser chat, is used where it does): the
 // business's name, photo and hours, "Chat here in your browser" (signing
-// in by phone, then the chat) and "Get the Taskiem app".
+// in by phone, then the chat) and "Get the Taskiem app". A business with
+// its own WhatsApp number that offers it has both "Chat on Taskiem" and
+// "Chat on WhatsApp" (§11).
+
 func (s *Server) chatLinkHTML(w http.ResponseWriter, r *http.Request) {
 	if !s.limiter("chat-link:"+limitIP(r), time.Minute, 60).Allow() {
 		writeErr(w, http.StatusTooManyRequests, "Too many links opened. Wait a minute, then try again.")
