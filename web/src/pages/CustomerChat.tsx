@@ -642,8 +642,10 @@ export function CustomerPane({
             {!m.card && !(m.attachment && ["Photo", "Voice note", "File", m.attachment.name].includes(m.body)) && (
               <span className="text">
                 {m.kind === "media" && !m.attachment ? <em>{m.body}</em> : m.body}
-                {/* Room for the time and ticks in the corner of the last line. */}
-                {!m.card && !m.attachment && <span className={`stamp-gap${m.mine ? " mine" : ""}`} aria-hidden="true" />}
+                {/* Room for the time and ticks in the corner of the last line (in a
+                    thread with both lines; the others keep their look, which the
+                    app copies). */}
+                {markLines && !m.card && !m.attachment && <span className={`stamp-gap${m.mine ? " mine" : ""}`} aria-hidden="true" />}
               </span>
             )}
             {m.mine && m.delivery === "failed" && (
