@@ -348,10 +348,11 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 		s.CustomerAnswered.BusinessAnswered(context.WithoutCancel(ctx), CustomerAnswer{Person: person, Business: tenant, Conversation: conv,
 			Message: out.ID, BusinessName: name, Offer: in.Offer, Muted: muted})
 	}
-	// The person told where the app cannot reach them (§9): an answer, not
-	// an offer, and never into a muted chat.
-	if !in.Offer && !muted {
-		s.tellAnswered(context.WithoutCancel(ctx), chatlinks.Answer{Tenant: tenant, Conversation: conv, Person: person})
+	// The person told (§9): a push, else (a person's reply only) the SMS;
+	// never into a muted chat.
+	if !muted {
+		s.tellAnswered(context.WithoutCancel(ctx), chatlinks.Answer{Tenant: tenant, Conversation: conv, Person: person,
+			Words: answerWords(out), FromPerson: !strings.HasPrefix(in.SenderID, "system:"), Offer: in.Offer})
 	}
 	return out, true, nil
 }

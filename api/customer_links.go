@@ -57,6 +57,27 @@ func (s *Server) tellAnswered(ctx context.Context, a chatlinks.Answer) {
 	}
 }
 
+// answerWords is what a push says of a business's message to a person:
+// its words, or what it is (a card's title, a photo, a voice note).
+func answerWords(m customerMessageView) string {
+	if strings.TrimSpace(m.Body) != "" {
+		return m.Body
+	}
+	switch {
+	case m.Card != nil && m.Card.Title != "":
+		return m.Card.Title
+	case m.Card != nil:
+		return "Sent you a card"
+	case m.Attachment != nil && m.Attachment.Kind == "photo":
+		return "Sent you a photo"
+	case m.Attachment != nil && m.Attachment.Kind == "voice":
+		return "Sent you a voice note"
+	case m.Attachment != nil:
+		return "Sent you a file"
+	}
+	return ""
+}
+
 // storefrontChat is what a storefront being published offers for chat:
 // its chat link, and the owner's choice of button.
 func (s *Server) storefrontChat(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (storefront.Chat, error) {

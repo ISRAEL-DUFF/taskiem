@@ -1843,7 +1843,9 @@ func (e *engine) chat(srv *api.Server) {
 	if len(e.cfg.Messages.HashKey) == 32 {
 		srv.ChatLinks = &chatlinks.Links{Pool: e.pool, Key: e.cfg.Messages.HashKey, Base: e.cfg.PublicURL}
 		srv.PhoneIndex = newPhoneIndex(e.cfg, e)
-		srv.Answered = &chatlinks.Tell{Pool: e.pool, Links: srv.ChatLinks, Messages: e.messages}
+		// A business message on You: pushed to the person's own devices,
+		// else (a person's reply only) the SMS.
+		srv.Answered = &chatlinks.Tell{Pool: e.pool, Links: srv.ChatLinks, Messages: e.messages, Push: srv.PersonPusher()}
 	}
 	srv.AppGetURL, srv.UpdateChatTemplate = e.cfg.AppGetURL, e.cfg.UpdateChatTemplate
 	// A person's own sign-in code by SMS, through the same providers: no

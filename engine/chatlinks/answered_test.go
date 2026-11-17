@@ -16,17 +16,21 @@ import (
 type fakePush struct {
 	sent  bool
 	calls int
+	last  chatlinks.PersonPush
 }
 
-func (f *fakePush) PushPerson(context.Context, uuid.UUID, string, string, string) (bool, error) {
+func (f *fakePush) PushPerson(_ context.Context, _ uuid.UUID, p chatlinks.PersonPush) (bool, error) {
 	f.calls++
+	f.last = p
 	return f.sent, nil
 }
 
-// The browser chat's SMS (docs/spec/taskiem-for-everyone.md §9): a push
-// where the person's browser takes one, else "{business} answered you on
-// Taskiem: {link}" by SMS, at most once per conversation per hour, from the
-// business's own outbox (its plan's SMS).
+// Telling a person (docs/spec/taskiem-for-everyone.md §9): a push to their
+// own devices, "{business}: {first words}" opening the chat on You; else,
+// for a reply from someone at the business only, "{business} answered you
+// on Taskiem: {link}" by SMS, at most once per conversation per hour, from
+// the business's own outbox (its plan's SMS). Never for Taskiem's
+// automatic words or an offer.
 func TestTellAnswered(t *testing.T) {
 	env := rt.New(t)
 	env.NoReplay = true
@@ -55,13 +59,16 @@ func TestTellAnswered(t *testing.T) {
 	}
 	answer := func(c uuid.UUID) {
 		t.Helper()
-		if err := tell.TellAnswered(ctx, chatlinks.Answer{Tenant: env.Tenant, Conversation: c, Person: person}); err != nil {
+		if err := tell.TellAnswered(ctx, chatlinks.Answer{Tenant: env.Tenant, Conversation: c, Person: person, Words: "Your rice is ready", FromPerson: true}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	answer(conv)
 	if got := sms(); got != 1 {
 		t.Fatalf("first answer: %d SMS", got)
+	}
+	if push.last.Title != "Mama's Kitchen" || push.last.Body != "Your rice is ready" || push.last.Link != "/you/chats/"+conv.String() || push.last.Tag != "you:"+conv.String() {
+		t.Fatalf("the push: %+v", push.last)
 	}
 	answer(conv)
 	answer(conv)
@@ -103,8 +110,22 @@ func TestTellAnswered(t *testing.T) {
 	if got := sms(); got != 3 {
 		t.Fatalf("pushed, and texted: %d", got)
 	}
-	// A person with no phone: nothing, and no error.
+	// No device: Taskiem's automatic words (an order update) and offers are
+	// pushed where they can be, never texted.
 	push.sent = false
+	if _, err := env.DB.Admin.Exec(ctx, `UPDATE customer_chat_notices SET last_at = last_at - interval '61 minutes'`); err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range []chatlinks.Answer{{Words: "Your order is on its way"}, {Words: "10% off today", FromPerson: true, Offer: true}} {
+		a.Tenant, a.Conversation, a.Person = env.Tenant, conv, person
+		if err := tell.TellAnswered(ctx, a); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := sms(); got != 3 {
+		t.Fatalf("an automatic update or an offer was texted: %d", got)
+	}
+	// A person with no phone: nothing, and no error.
 	if err := tell.TellAnswered(ctx, chatlinks.Answer{Tenant: env.Tenant, Conversation: uuid.New(), Person: uuid.New()}); err != nil {
 		t.Fatal(err)
 	}

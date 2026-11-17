@@ -19645,11 +19645,18 @@ paths:
       tags:
       - Notifications
       summary: The devices (browsers and phones) this person allowed to be notified when the app is closed
-      description: In the business they are in. Never the devices' addresses, tokens or keys. Only for a person (not an API key); 404 when neither browsers nor phones can be notified on this server.
+      description: In the business they are in; in a personal session, or with side=you, the person's own devices (no business, taskiem-for-everyone §9), which take the one kind `you` (a business's message in the person's chat with it, and its order updates there, opening the chat on You) and stay whatever businesses the person is in. Never the devices' addresses, tokens or keys. Only for a person (not an API key); 404 when neither browsers nor phones can be notified on this server.
       security:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
+      parameters:
+      - name: side
+        in: query
+        description: you for the person's own devices (no business) from a business session; a personal session is always on that side.
+        schema:
+          type: string
+          enum: [you]
       responses:
         '200':
           description: This person's browsers
@@ -19664,12 +19671,19 @@ paths:
       tags:
       - Notifications
       summary: Allow this browser or phone to be notified
-      description: A browser (kind webpush, the default) gives its subscription, whose address must be a push service's (https, on Google's, Mozilla's, Apple's or Microsoft's host); the phone app (kind fcm) gives its Firebase registration token and platform. The same device again is updated, not added twice; at most 10 devices a person in a business, the oldest replaced. A browser that renewed its subscription names the old address in replaces, and keeps its name, preview and kinds.
+      description: A browser (kind webpush, the default) gives its subscription, whose address must be a push service's (https, on Google's, Mozilla's, Apple's or Microsoft's host); the phone app (kind fcm) gives its Firebase registration token and platform. The same device again is updated, not added twice; at most 10 devices a person in a business, the oldest replaced. A browser that renewed its subscription names the old address in replaces, and keeps its name, preview and kinds. In a personal session, or with side=you from a business session, the device is the person's own (no business) and takes only the kind `you`; the browser chat registers here to be told when a business answers, and while the person has such a device the "answered you" SMS does not go.
       security:
       - sessionCookie: []
         csrfHeader: []
       - sessionToken: []
       - apiKey: []
+      parameters:
+      - name: side
+        in: query
+        description: you for the person's own devices (no business) from a business session; a personal session is always on that side.
+        schema:
+          type: string
+          enum: [you]
       requestBody:
         required: true
         content:
@@ -19695,8 +19709,8 @@ paths:
                   type: [array, 'null']
                   items:
                     type: string
-                    enum: [business, customers, orders, approvals, alerts]
-                  description: The kinds of notification the device takes; left out, a new device takes the defaults (all for owners and admins, all but alerts for others)
+                    enum: [business, customers, orders, approvals, alerts, you]
+                  description: The kinds of notification the device takes; left out, a new device takes the defaults (all for owners and admins, all but alerts for others; `you` for a person's own device). A business's device never takes `you`, a person's own takes nothing else (400)
                 replaces:
                   type: string
                   maxLength: 2048
@@ -19735,12 +19749,19 @@ paths:
       tags:
       - Notifications
       summary: This browser or phone takes itself off
-      description: By its address or token, which only it knows. Nothing there is not an error.
+      description: By its address or token, which only it knows (side=you, or a personal session, for the person's own device). Nothing there is not an error.
       security:
       - sessionCookie: []
         csrfHeader: []
       - sessionToken: []
       - apiKey: []
+      parameters:
+      - name: side
+        in: query
+        description: you for the person's own devices (no business) from a business session; a personal session is always on that side.
+        schema:
+          type: string
+          enum: [you]
       requestBody:
         required: true
         content:
@@ -19774,6 +19795,12 @@ paths:
       - sessionToken: []
       - apiKey: []
       parameters:
+      - name: side
+        in: query
+        description: you for the person's own devices (no business) from a business session; a personal session is always on that side.
+        schema:
+          type: string
+          enum: [you]
       - name: id
         in: path
         required: true
@@ -19797,7 +19824,7 @@ paths:
                   type: [array, 'null']
                   items:
                     type: string
-                    enum: [business, customers, orders, approvals, alerts]
+                    enum: [business, customers, orders, approvals, alerts, you]
       responses:
         '200':
           description: This person's browsers
@@ -19818,6 +19845,12 @@ paths:
       - sessionToken: []
       - apiKey: []
       parameters:
+      - name: side
+        in: query
+        description: you for the person's own devices (no business) from a business session; a personal session is always on that side.
+        schema:
+          type: string
+          enum: [you]
       - name: id
         in: path
         required: true
@@ -40385,7 +40418,7 @@ components:
           type: array
           items:
             type: string
-            enum: [business, customers, orders, approvals, alerts]
+            enum: [business, customers, orders, approvals, alerts, you]
           description: The kinds of notification it takes
         label:
           type: string
@@ -40403,8 +40436,12 @@ components:
     PushDevices:
       type: object
       additionalProperties: false
-      required: [devices, max, kinds, browsers, phones]
+      required: [devices, max, kinds, browsers, phones, side]
       properties:
+        side:
+          type: string
+          enum: [business, you]
+          description: Whose devices these are, the session's business's or the person's own (personal session, or side=you)
         devices:
           type: array
           items:

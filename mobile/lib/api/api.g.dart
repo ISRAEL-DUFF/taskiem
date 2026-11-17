@@ -652,32 +652,32 @@ class TaskiemApi {
   }
 
   /// The devices (browsers and phones) this person allowed to be notified when the app is closed (`GET /v1/me/push`)
-  Future<PushDevices> listPush() async {
-    final j = await _t.send('GET', '/v1/me/push');
+  Future<PushDevices> listPush({String? side}) async {
+    final j = await _t.send('GET', '/v1/me/push', query: {'side': ?side});
     return PushDevices.fromJson(j as Map<String, dynamic>);
   }
 
   /// Allow this browser or phone to be notified (`PUT /v1/me/push`)
-  Future<PushDevices> putPush({required PutPushRequest body}) async {
-    final j = await _t.send('PUT', '/v1/me/push', body: body.toJson());
+  Future<PushDevices> putPush({required PutPushRequest body, String? side}) async {
+    final j = await _t.send('PUT', '/v1/me/push', body: body.toJson(), query: {'side': ?side});
     return PushDevices.fromJson(j as Map<String, dynamic>);
   }
 
   /// Rename a device, switch its preview, or set the kinds of notification it takes (`PATCH /v1/me/push/{id}`)
-  Future<PushDevices> patchPush({required PatchPushRequest body, required String id}) async {
-    final j = await _t.send('PATCH', '/v1/me/push/${Uri.encodeComponent(id)}', body: body.toJson());
+  Future<PushDevices> patchPush({required PatchPushRequest body, String? side, required String id}) async {
+    final j = await _t.send('PATCH', '/v1/me/push/${Uri.encodeComponent(id)}', body: body.toJson(), query: {'side': ?side});
     return PushDevices.fromJson(j as Map<String, dynamic>);
   }
 
   /// Take a browser off (`DELETE /v1/me/push/{id}`)
-  Future<PushDevices> deletePush({required String id}) async {
-    final j = await _t.send('DELETE', '/v1/me/push/${Uri.encodeComponent(id)}');
+  Future<PushDevices> deletePush({String? side, required String id}) async {
+    final j = await _t.send('DELETE', '/v1/me/push/${Uri.encodeComponent(id)}', query: {'side': ?side});
     return PushDevices.fromJson(j as Map<String, dynamic>);
   }
 
   /// This browser or phone takes itself off (`DELETE /v1/me/push`)
-  Future<PushDevices> deletePushEndpoint({required DeletePushEndpointRequest body}) async {
-    final j = await _t.send('DELETE', '/v1/me/push', body: body.toJson());
+  Future<PushDevices> deletePushEndpoint({required DeletePushEndpointRequest body, String? side}) async {
+    final j = await _t.send('DELETE', '/v1/me/push', body: body.toJson(), query: {'side': ?side});
     return PushDevices.fromJson(j as Map<String, dynamic>);
   }
 
@@ -6025,7 +6025,7 @@ class PutChatToolsRequest {
 }
 
 class PushDevices {
-  const PushDevices({this.added, required this.browsers, required this.devices, required this.kinds, required this.max, required this.phones});
+  const PushDevices({this.added, required this.browsers, required this.devices, required this.kinds, required this.max, required this.phones, required this.side});
 
   /// The browser a PUT just added or updated
   final String? added;
@@ -6037,6 +6037,9 @@ class PushDevices {
   final int max;
   /// Phones can be notified on this server (Firebase)
   final bool phones;
+  /// Whose devices these are, the session's business's or the person's own
+  /// (personal session, or side=you)
+  final String side;
 
   factory PushDevices.fromJson(Map<String, dynamic> j) => PushDevices(
         added: j['added'] == null ? null : j['added'] as String,
@@ -6045,6 +6048,7 @@ class PushDevices {
         kinds: (j['kinds'] as List).map((e) => e as String).toList(),
         max: (j['max'] as num).toInt(),
         phones: j['phones'] as bool,
+        side: j['side'] as String,
       );
 
   Map<String, dynamic> toJson() => {
@@ -6054,6 +6058,7 @@ class PushDevices {
         'kinds': kinds.map((e) => e).toList(),
         'max': max,
         'phones': phones,
+        'side': side,
       };
 }
 
@@ -6104,7 +6109,9 @@ class PutPushRequest {
   final PutPushRequestKeys? keys;
   final String? kind;
   /// The kinds of notification the device takes; left out, a new device takes
-  /// the defaults (all for owners and admins, all but alerts for others)
+  /// the defaults (all for owners and admins, all but alerts for others; `you`
+  /// for a person's own device). A business's device never takes `you`, a
+  /// person's own takes nothing else (400)
   final Object? kinds;
   /// Only find this device (a page that lost which one it is); one the server
   /// does not have is not added again (404)
@@ -6281,17 +6288,22 @@ class ChatLink {
 }
 
 class ChatSettings {
-  const ChatSettings({this.linkInUpdates, required this.storefrontButton, required this.takesChats, required this.updatesLink});
+  const ChatSettings({this.linkInUpdates, this.ordersOff, required this.storefrontButton, required this.takesChats, required this.updatesLink});
 
   /// The business's own choice; null for the default
   final Object? linkInUpdates;
+  /// The Orders area is off, so no chats are taken whatever takes_chats was set
+  /// to
+  final bool? ordersOff;
   final String storefrontButton;
+  /// Whether customers can start chats now (off while the Orders area is off)
   final bool takesChats;
   /// Whether updates end with the link now
   final bool updatesLink;
 
   factory ChatSettings.fromJson(Map<String, dynamic> j) => ChatSettings(
         linkInUpdates: j['link_in_updates'],
+        ordersOff: j['orders_off'] == null ? null : j['orders_off'] as bool,
         storefrontButton: j['storefront_button'] as String,
         takesChats: j['takes_chats'] as bool,
         updatesLink: j['updates_link'] as bool,
@@ -6299,6 +6311,7 @@ class ChatSettings {
 
   Map<String, dynamic> toJson() => {
         'link_in_updates': ?linkInUpdates,
+        'orders_off': ?ordersOff,
         'storefront_button': storefrontButton,
         'takes_chats': takesChats,
         'updates_link': updatesLink,
@@ -6329,24 +6342,29 @@ class PutChatSettingsRequest {
 }
 
 class MyStorefrontOrdersResponse {
-  const MyStorefrontOrdersResponse({required this.orders, required this.waiting});
+  const MyStorefrontOrdersResponse({required this.orders, required this.waiting, required this.waitingCount});
 
   final List<PhoneOrder> orders;
+  /// Some orders wait for "These are mine"
   final bool waiting;
+  /// How many orders wait for "These are mine"; nothing else of them is shown
+  final int waitingCount;
 
   factory MyStorefrontOrdersResponse.fromJson(Map<String, dynamic> j) => MyStorefrontOrdersResponse(
         orders: (j['orders'] as List).map((e) => PhoneOrder.fromJson(e as Map<String, dynamic>)).toList(),
         waiting: j['waiting'] as bool,
+        waitingCount: (j['waiting_count'] as num).toInt(),
       );
 
   Map<String, dynamic> toJson() => {
         'orders': orders.map((e) => e.toJson()).toList(),
         'waiting': waiting,
+        'waiting_count': waitingCount,
       };
 }
 
 class PhoneOrder {
-  const PhoneOrder({required this.business, required this.businessId, required this.madeAt, required this.reference, required this.state, required this.totalKobo, required this.waiting});
+  const PhoneOrder({required this.business, required this.businessId, required this.madeAt, required this.reference, required this.state, required this.totalKobo});
 
   final String business;
   final String businessId;
@@ -6354,9 +6372,6 @@ class PhoneOrder {
   final String reference;
   final String state;
   final int totalKobo;
-  /// Made with the phone before it was on the account, and not yet confirmed as
-  /// the person's
-  final bool waiting;
 
   factory PhoneOrder.fromJson(Map<String, dynamic> j) => PhoneOrder(
         business: j['business'] as String,
@@ -6365,7 +6380,6 @@ class PhoneOrder {
         reference: j['reference'] as String,
         state: j['state'] as String,
         totalKobo: (j['total_kobo'] as num).toInt(),
-        waiting: j['waiting'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
@@ -6375,7 +6389,6 @@ class PhoneOrder {
         'reference': reference,
         'state': state,
         'total_kobo': totalKobo,
-        'waiting': waiting,
       };
 }
 

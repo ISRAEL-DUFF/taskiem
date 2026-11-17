@@ -32,6 +32,8 @@ var personalRoutes = regexp.MustCompile(`^(GET /v1/me|POST /v1/me/terms|GET /v1/
 	// A person's chats with businesses (customer_door.go, stage 2).
 	`(GET|POST) /v1/me/chats|(GET|PUT) /v1/me/chats/[^/]+|GET /v1/me/chats/[^/]+/(messages|files/[^/]+|shop|services|services/[^/]+/times|orders|orders/[^/]+/pay)|` +
 	`POST /v1/me/chats/[^/]+/(messages|files|read|typing|block|report|orders|bookings)|DELETE /v1/me/chats/[^/]+/block|` +
+	// The person's own devices for pushes on You (push.go, 00460).
+	`GET /v1/me/push(/key)?|(PUT|DELETE) /v1/me/push|(PATCH|DELETE) /v1/me/push/[^/]+|` +
 
 	`GET /v1/me/storefront-orders|POST /v1/me/storefront-orders/confirm)$`)
 

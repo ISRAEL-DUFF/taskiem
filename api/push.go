@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/chatlinks"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/lang"
 	"github.com/israel-duff/taskiem/engine/links"
@@ -27,6 +28,13 @@ import (
 // allows each browser for the business they are in; a push goes to the members
 // whose role holds chat.trade when a message comes from a linked business,
 // unless the conversation is muted, as the messages to their phones do.
+//
+// A person's own side (taskiem-for-everyone §9, migration 00460): the same
+// routes, in a personal session, or in a business session with ?side=you,
+// keep the person's own devices (no business). They take one kind, you: a
+// business's message in the person's chat with it on You, pushed by
+// chatlinks.Tell through PersonPusher. They stay whatever businesses the
+// person is in.
 
 func (s *Server) pushRoutes(r chi.Router) {
 	r.Get("/me/push/key", s.pushKey)
@@ -55,11 +63,37 @@ func (s *Server) pushPerson(w http.ResponseWriter, r *http.Request) (*Principal,
 		return nil, false
 	}
 	p := principalFrom(r.Context())
-	if p.UserID == uuid.Nil {
+	if p.UserID == uuid.Nil || p.KeyID != uuid.Nil {
 		s.fail(w, r, fmt.Errorf("%w: a push belongs to a person, not an API key", errForbidden))
 		return nil, false
 	}
 	return p, true
+}
+
+// pushSide is the side a device request is for: the session's business, or
+// the person's own (uuid.Nil) in a personal session or with ?side=you.
+func pushSide(r *http.Request, p *Principal) uuid.UUID {
+	if p.Personal || p.TenantID == uuid.Nil || r.URL.Query().Get("side") == "you" {
+		return uuid.Nil
+	}
+	return p.TenantID
+}
+
+// pushTx runs fn in the side's scope: the business's, or the person's own.
+func (s *Server) pushTx(r *http.Request, p *Principal, side uuid.UUID, fn func(pgx.Tx) error) error {
+	if side == uuid.Nil {
+		return db.InPersonTx(r.Context(), s.Store.Pool, p.UserID, fn)
+	}
+	return s.tx(r, fn)
+}
+
+// pushAudit records a change to a business's device in its chain; a
+// person's own devices are theirs, with no business to tell.
+func pushAudit(r *http.Request, tx pgx.Tx, side uuid.UUID, action, target string, detail map[string]any) error {
+	if side == uuid.Nil {
+		return nil
+	}
+	return auditTx(r, tx, action, target, detail)
 }
 
 func (s *Server) pushKey(w http.ResponseWriter, r *http.Request) {
@@ -82,13 +116,20 @@ type pushOut struct {
 	// Browsers and Phones say which devices this server can notify.
 	Browsers bool `json:"browsers"`
 	Phones   bool `json:"phones"`
+	// Side is whose devices these are: "business" (the session's
+	// business) or "you" (the person's own, taking the kind you).
+	Side string `json:"side"`
 }
 
 func (s *Server) pushView(r *http.Request, p *Principal) (pushOut, error) {
-	out := pushOut{Max: push.MaxDevices, Kinds: push.Kinds, Browsers: s.Push.WebPushOn(), Phones: s.Push.FCMOn()}
-	err := s.tx(r, func(tx pgx.Tx) error {
+	side := pushSide(r, p)
+	out := pushOut{Max: push.MaxDevices, Kinds: push.KindsFor(side), Browsers: s.Push.WebPushOn(), Phones: s.Push.FCMOn(), Side: "business"}
+	if side == uuid.Nil {
+		out.Side = "you"
+	}
+	err := s.pushTx(r, p, side, func(tx pgx.Tx) error {
 		var err error
-		out.Devices, err = push.ListTx(r.Context(), tx, p.TenantID, p.UserID)
+		out.Devices, err = push.ListTx(r.Context(), tx, side, p.UserID)
 		return err
 	})
 	return out, err
@@ -152,16 +193,18 @@ func (s *Server) putPush(w http.ResponseWriter, r *http.Request) {
 		}
 		in.DeviceID = *dev
 	}
-	// Those who run the business take alerts too, unless they say otherwise.
+	// Those who run the business take alerts too, unless they say otherwise
+	// (a person's own device takes you, whatever is asked).
 	defaults := push.DefaultKinds(p.HasRole("owner") || p.HasRole("admin"))
+	side := pushSide(r, p)
 	var added uuid.UUID
-	if err := s.tx(r, func(tx pgx.Tx) error {
-		d, err := push.AddTx(r.Context(), tx, p.TenantID, p.UserID, in, defaults)
+	if err := s.pushTx(r, p, side, func(tx pgx.Tx) error {
+		d, err := push.AddTx(r.Context(), tx, side, p.UserID, in, defaults)
 		if err != nil {
 			return err
 		}
 		added = d.ID
-		return auditTx(r, tx, "push.add", d.ID.String(), map[string]any{"label": d.Label, "kind": d.Kind})
+		return pushAudit(r, tx, side, "push.add", d.ID.String(), map[string]any{"label": d.Label, "kind": d.Kind})
 	}); err != nil {
 		s.fail(w, r, pushErr(err))
 		return
@@ -194,8 +237,9 @@ func (s *Server) patchPush(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.tx(r, func(tx pgx.Tx) error {
-		_, err := push.UpdateTx(r.Context(), tx, p.TenantID, p.UserID, id, in.Label, in.Preview, in.Kinds)
+	side := pushSide(r, p)
+	if err := s.pushTx(r, p, side, func(tx pgx.Tx) error {
+		_, err := push.UpdateTx(r.Context(), tx, side, p.UserID, id, in.Label, in.Preview, in.Kinds)
 		return err
 	}); err != nil {
 		s.fail(w, r, pushErr(err))
@@ -214,11 +258,12 @@ func (s *Server) deletePush(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, pgx.ErrNoRows)
 		return
 	}
-	if err := s.tx(r, func(tx pgx.Tx) error {
-		if err := push.RemoveTx(r.Context(), tx, p.TenantID, p.UserID, id); err != nil {
+	side := pushSide(r, p)
+	if err := s.pushTx(r, p, side, func(tx pgx.Tx) error {
+		if err := push.RemoveTx(r.Context(), tx, side, p.UserID, id); err != nil {
 			return err
 		}
-		return auditTx(r, tx, "push.remove", id.String(), nil)
+		return pushAudit(r, tx, side, "push.remove", id.String(), nil)
 	}); err != nil {
 		s.fail(w, r, pushErr(err))
 		return
@@ -242,15 +287,16 @@ func (s *Server) deletePushEndpoint(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if err := s.tx(r, func(tx pgx.Tx) error {
+	side := pushSide(r, p)
+	if err := s.pushTx(r, p, side, func(tx pgx.Tx) error {
 		addr, who := in.Endpoint, "this browser"
 		if in.Token != "" {
 			addr, who = in.Token, "this phone"
 		}
-		if err := push.RemoveEndpointTx(r.Context(), tx, p.TenantID, p.UserID, addr); err != nil {
+		if err := push.RemoveEndpointTx(r.Context(), tx, side, p.UserID, addr); err != nil {
 			return err
 		}
-		return auditTx(r, tx, "push.remove", who, nil)
+		return pushAudit(r, tx, side, "push.remove", who, nil)
 	}); err != nil {
 		s.fail(w, r, err)
 		return
@@ -352,12 +398,13 @@ func (s *Server) waitForPush(ctx context.Context) bool {
 }
 
 // DrainPush sends every push that is due, business by business, in each one's
-// own scope; it answers how many were sent to at least one device.
+// own scope, then each person's own (on You), in theirs; it answers how many
+// were sent to at least one device.
 func (s *Server) DrainPush(ctx context.Context) (int, error) {
 	if !s.Push.Enabled() {
 		return 0, nil
 	}
-	var tenants []uuid.UUID
+	var tenants, people []uuid.UUID
 	rows, err := s.Store.Pool.Query(ctx, `SELECT taskiem_push_due(200)`)
 	if err != nil {
 		return 0, err
@@ -365,12 +412,18 @@ func (s *Server) DrainPush(ctx context.Context) (int, error) {
 	if tenants, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID]); err != nil {
 		return 0, err
 	}
+	if rows, err = s.Store.Pool.Query(ctx, `SELECT taskiem_push_due_people(200)`); err != nil {
+		return 0, err
+	}
+	if people, err = pgx.CollectRows(rows, pgx.RowTo[uuid.UUID]); err != nil {
+		return 0, err
+	}
 	sent := 0
 	var errs []error
-	for _, t := range tenants {
+	drain := func(tenant, person uuid.UUID) {
 		// A business with more than one batch due is drained to the end.
 		for round := 0; round < 20 && ctx.Err() == nil; round++ {
-			n, claimed, err := s.drainPushOf(ctx, t)
+			n, claimed, err := s.drainPushOf(ctx, tenant, person)
 			sent += n
 			if err != nil {
 				errs = append(errs, err)
@@ -381,7 +434,46 @@ func (s *Server) DrainPush(ctx context.Context) (int, error) {
 			}
 		}
 	}
+	for _, t := range tenants {
+		drain(t, uuid.Nil)
+	}
+	for _, p := range people {
+		drain(uuid.Nil, p)
+	}
 	return sent, errors.Join(errs...)
+}
+
+// pushScopeTx runs fn in a push's scope: the business's, or (tenant
+// uuid.Nil) the person's own.
+func (s *Server) pushScopeTx(ctx context.Context, tenant, person uuid.UUID, fn func(pgx.Tx) error) error {
+	if tenant == uuid.Nil {
+		return db.InPersonTx(ctx, s.Store.Pool, person, fn)
+	}
+	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, fn)
+}
+
+// PersonPusher pushes to a person's own devices (chatlinks.Pusher): a
+// business's message in their chat with it, opening that chat on You. It
+// answers false, queueing nothing, when the person has no device a push
+// can reach now, so the caller tells them some other way.
+func (s *Server) PersonPusher() chatlinks.Pusher { return personPusher{s} }
+
+type personPusher struct{ s *Server }
+
+func (pp personPusher) PushPerson(ctx context.Context, person uuid.UUID, m chatlinks.PersonPush) (bool, error) {
+	s := pp.s
+	if s == nil || !s.Push.Enabled() || person == uuid.Nil {
+		return false, nil
+	}
+	var live bool
+	err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		var err error
+		if live, err = push.LiveYouTx(ctx, tx, person, s.Push.WebPushOn(), s.Push.FCMOn()); err != nil || !live {
+			return err
+		}
+		return push.EnqueueTx(ctx, tx, uuid.Nil, []uuid.UUID{person}, push.Queued{Kind: push.KindYou, Title: m.Title, Body: m.Body, Link: m.Link, Tag: m.Tag})
+	})
+	return live && err == nil, err
 }
 
 // pushBatch is how many pushes of one business are claimed at once.
@@ -429,13 +521,14 @@ func pushUnreadTx(ctx context.Context, tx pgx.Tx) (pushUnread, error) {
 	return u, err
 }
 
-// drainPushOf sends one batch of a business's due pushes; it answers how
-// many reached at least one device, and how many were claimed.
-func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, error) {
+// drainPushOf sends one batch of a business's due pushes (tenant uuid.Nil:
+// a person's own, person); it answers how many reached at least one device,
+// and how many were claimed.
+func (s *Server) drainPushOf(ctx context.Context, tenant, person uuid.UUID) (int, int, error) {
 	var queued []push.Queued
 	var targets []push.Target
 	var unread pushUnread
-	if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+	if err := s.pushScopeTx(ctx, tenant, person, func(tx pgx.Tx) error {
 		var err error
 		if queued, err = push.ClaimTx(ctx, tx, pushBatch); err != nil || len(queued) == 0 {
 			return err
@@ -446,6 +539,11 @@ func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, e
 		}
 		if targets, err = push.TargetsTx(ctx, tx, tenant, users); err != nil {
 			return err
+		}
+		if tenant == uuid.Nil {
+			// The person's chats with businesses with something unread.
+			unread = pushUnread{chat: map[uuid.UUID]bool{person: true}}
+			return tx.QueryRow(ctx, `SELECT count(DISTINCT conversation_id) FROM person_messages WHERE person_id = $1 AND NOT mine AND read_at IS NULL`, person).Scan(&unread.links)
 		}
 		unread, err = pushUnreadTx(ctx, tx)
 		return err
@@ -483,6 +581,9 @@ func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, e
 		}
 		payload := push.Payload{Title: q.Title, Body: q.Body, Link: q.Link, Tag: q.Tag, Unread: unread.of(q.User), Icon: q.Icon,
 			Business: tenant.String(), Kind: q.Kind}
+		if tenant == uuid.Nil {
+			payload.Business = "" // on You, in no business
+		}
 		for _, t := range targets {
 			// A retry is not sent again to the devices that took it.
 			if t.User != q.User || !t.Takes(q.Kind) || slices.Contains(q.SentTo, t.ID) {
@@ -510,7 +611,7 @@ func (s *Server) drainPushOf(ctx context.Context, tenant uuid.UUID) (int, int, e
 	}
 	wg.Wait()
 	sent := 0
-	err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+	err := s.pushScopeTx(ctx, tenant, person, func(tx pgx.Tx) error {
 		for _, j := range jobs {
 			failed, went := false, false
 			var took []uuid.UUID

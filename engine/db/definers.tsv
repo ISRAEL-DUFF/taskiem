@@ -410,3 +410,4 @@ taskiem_customer_phone_orders_confirm(uuid)	@ISRAEL-DUFF (customer chats)	A pers
 taskiem_chat_signup_offered(bytea)	@ISRAEL-DUFF (onboarding)	Records that the sign-up offer went to a shared-number address (its digest), so a typed "no" is read as Not now only just after it (00459)
 taskiem_chat_signup_offer_taken(bytea,interval)	@ISRAEL-DUFF (onboarding)	Whether the sign-up offer went to an address (its digest) within the given time; reading it takes it (00459)
 taskiem_customer_chat_notices_purge()	@ISRAEL-DUFF (customer chats)	The sweep of customer_chat_notices past every period (2 days), sign-up offers past a day and chat-link sign-up codes no chat settled in 30 days; counts only (00459)
+taskiem_push_due_people(integer)	@ISRAEL-DUFF (customers)	The people with pushes of their own due (no business: a business message in their chat on You), ids only; the sender drains each in the person's own scope (00460)
