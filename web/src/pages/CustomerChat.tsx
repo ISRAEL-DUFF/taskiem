@@ -60,6 +60,14 @@ function cardLink(card: AppCard): string | null {
 
 /** The Customers section of the chat list: one row per customer's thread
  * (the archived ones under Archived), with an unsent reply as a draft. */
+// The row is the open one when the link names the pair by either of its
+// lines' ids (a pair opened from an order's or a search's link names the
+// WhatsApp line's id; the list names the pair's own id).
+function isOpenCustomer(openKey: string | null, c: { id: string; lines?: { id: string }[] }): boolean {
+  if (!openKey) return false;
+  return openKey === customerKey(c.id) || (c.lines ?? []).some((l) => openKey === customerKey(l.id));
+}
+
 export function CustomerRows({
   chats,
   openKey,
@@ -125,7 +133,7 @@ export function CustomerRows({
                 )
               }
               unread={c.unread}
-              selected={openKey === customerKey(c.id)}
+              selected={isOpenCustomer(openKey, c)}
               testid="customer-chat"
             />
           );
@@ -171,7 +179,7 @@ export function CustomerSearch({
                 time={listTime(c.last_at)}
                 preview={c.last}
                 unread={c.unread}
-                selected={openKey === customerKey(c.id)}
+                selected={isOpenCustomer(openKey, c)}
                 testid="customer-found"
               />
             ))}

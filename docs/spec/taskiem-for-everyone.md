@@ -1644,7 +1644,7 @@ Built on branch `stage4-fix-clients`, on 2c909828, beside a server stream fixing
 - App: `test/one_customer_test.dart` (14: the held line and the note; an offer refused, never sent; opened by the WhatsApp line's id, the draft the customer's own; Block's words; marks in a thread of one line holding both; WhatsApp alone signed out; only a wa.me link; the number in Settings), `test/home_open_test.dart` (a pair opened by its WhatsApp line's id holds back notifications tagged with the app thread's id). `flutter analyze` clean; `flutter test` 1,110 passed, 6 skipped.
 
 **Left over.**
-- The web's list highlights the open row by the id in the link: a pair opened by its WhatsApp line's id (from an order's or a search's link) is not shown selected there.
+- ~~The web's list highlights the open row by the id in the link~~: fixed; the row is selected when the link names either line's id (`isOpenCustomer`).
 - No parity pictures yet for the chooser, the line marks or the chat link's two buttons (as before).
 
 ## As built: stage 4, server review fixes
