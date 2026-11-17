@@ -416,6 +416,11 @@ func (s *Server) startPersonChat(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		detail["via"] = via
+		// A confirmed storefront order of theirs with the business opens
+		// it too: the door checks it through the phone index (00462).
+		if key := s.PhoneIndex.DoorKey(); key != nil {
+			detail["index_key"] = hex.EncodeToString(key)
+		}
 		if err := enterTx(ctx, tx, person, tenant, "customer.start", detail); err != nil {
 			return err
 		}

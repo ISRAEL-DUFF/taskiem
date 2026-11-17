@@ -66,6 +66,17 @@ func (x *Index) indexKey() []byte {
 	return m.Sum(nil)
 }
 
+// DoorKey is the narrowed index key, for the customer door's own check
+// that the person has a confirmed order with a business (00462): the door
+// makes the hash of the person's verified phone itself, so a wrong key
+// matches nothing. Nil when the index is not set up.
+func (x *Index) DoorKey() []byte {
+	if !x.Ready() {
+		return nil
+	}
+	return x.indexKey()
+}
+
 // Hash is a phone's (E.164) hash in the index. The database makes the
 // same from a person's verified phone in taskiem_customer_phone_orders.
 func (x *Index) Hash(e164 string) []byte {

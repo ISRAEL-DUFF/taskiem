@@ -10,9 +10,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/israel-duff/taskiem/engine/webauthn"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/api"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/discover"
+	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
 // discoverNames runs a search as c and answers the names found, in order.
@@ -407,5 +410,45 @@ func TestDiscoverReportsAndNotice(t *testing.T) {
 		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND action = $2`, w.biz, action).Scan(&n); err != nil || n != 1 {
 			t.Fatalf("%s audited %d times (%v)", action, n, err)
 		}
+	}
+}
+
+// "Chat with {business} about this order" (§13, asked for by the Orders
+// stream): the door opens a business with no published shop for a person
+// with a confirmed storefront order there, found through the phone index
+// by their own verified phone; an order waiting for "These are mine"
+// does not, nor does anyone else's; the index key is not audited.
+func TestCustomerDoorOpensForPhoneIndexOrders(t *testing.T) {
+	ctx := context.Background()
+	w := newDoorShopWorld(t)
+	withChatLinks(w.world)
+	bola := tenantUUID(t, w.tenant(t, "Bola Bakes", "bola@bola.test"))
+	orders := &storefront.Orders{Pool: w.env.DB.App, Vault: w.env.Vault, PhoneIndex: w.srv.PhoneIndex}
+	const number = "+2348031110051"
+	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{bola}, func(tx pgx.Tx) error {
+		_, err := orders.PlaceChatTx(ctx, tx, bola, storefront.ChatOrder{Customer: storefront.Customer{Name: "Tolu", Phone: number},
+			Lines: []storefront.Line{{ID: "1", Name: "Chocolate cake", Quantity: 1, PriceKobo: 1500000}}, Fulfilment: "pickup", Pay: storefront.ChatPayLater, By: "user:x"})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+	tolu, _ := w.personIn(t, number)
+	other, _ := w.personIn(t, "+2348031110052")
+
+	// Made before the phone was on the account: not theirs until they say so.
+	tolu.must(404, "POST", "/v1/me/chats", map[string]any{"business_id": bola, "from": "order"})
+	tolu.must(200, "POST", "/v1/me/storefront-orders/confirm", nil)
+	if chat := tolu.must(201, "POST", "/v1/me/chats", map[string]any{"business_id": bola, "from": "order"}); chat["name"] != "Bola Bakes" {
+		t.Fatalf("the chat about an order: %v", chat)
+	}
+	other.must(404, "POST", "/v1/me/chats", map[string]any{"business_id": bola, "from": "order"})
+	// A wrong key, straight to the door, finds nothing.
+	if err := doorStartWith(ctx, w, personID(t, other), bola, map[string]any{"via": "order", "index_key": strings.Repeat("ab", 32)}); err == nil {
+		t.Fatal("the door opened for a made-up key")
+	}
+	var keys int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM audit_log WHERE tenant_id = $1 AND detail::text LIKE '%index_key%'`, bola).Scan(&keys); err != nil || keys != 0 {
+		t.Fatalf("the index key in the audit: %d %v", keys, err)
 	}
 }

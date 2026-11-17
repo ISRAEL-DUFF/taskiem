@@ -3,7 +3,11 @@
 -- is allowed for a business listed in Discover with its Chat button
 -- (discover_index.can_chat), while the listing may be shown
 -- (taskiem_discover_open: not hidden for reports, the page not
--- suspended). Otherwise the body of 00457, unchanged.
+-- suspended). It also opens a business the person has a confirmed
+-- storefront order with, found through the phone index (00454, 00458), so
+-- "Chat with {business} about this order" works for a business with no
+-- published shop; the index key it is given is left out of the audit, as
+-- the chat code's hash is. Otherwise the body of 00457, unchanged.
 -- +goose Up
 -- +goose StatementBegin
 CREATE OR REPLACE FUNCTION taskiem_customer_enter(p_person uuid, p_tenant uuid, p_action text, p_detail jsonb)
@@ -45,14 +49,21 @@ BEGIN
     END IF;
     -- Opening one: from its published shop, its live chat link (the
     -- code's keyed hash, checked here, never a word from the caller), an
-    -- order the person placed with it, or its listing in Discover.
+    -- order the person placed with it (in the app, or a confirmed one
+    -- found by their phone), or its listing in Discover.
     IF NOT (EXISTS (SELECT 1 FROM storefronts WHERE tenant_id = p_tenant AND status = 'published')
         OR EXISTS (SELECT 1 FROM customer_chat_codes c WHERE c.tenant_id = p_tenant AND c.replaced_at IS NULL
                     AND p_detail ? 'code_hash' AND c.code_hash = decode(p_detail ->> 'code_hash', 'hex'))
         OR EXISTS (SELECT 1 FROM storefront_orders WHERE tenant_id = p_tenant AND person_id = p_person)
         -- Listed in Discover with its Chat button (00461): the public may
         -- start a chat from its listing, while the listing may be shown.
-        OR (EXISTS (SELECT 1 FROM discover_index d WHERE d.tenant_id = p_tenant AND d.can_chat) AND taskiem_discover_open(p_tenant))) THEN
+        OR (EXISTS (SELECT 1 FROM discover_index d WHERE d.tenant_id = p_tenant AND d.can_chat) AND taskiem_discover_open(p_tenant))
+        -- A confirmed storefront order of theirs with it, found through the
+        -- phone index by their own verified phone (stage 2's "theirs":
+        -- made after the phone was verified, or confirmed with "These are
+        -- mine"). The caller gives only the narrowed index key; the hash is
+        -- made here from the person's phone, so a wrong key finds nothing.
+        OR (p_detail ? 'index_key' AND EXISTS (SELECT 1 FROM taskiem_customer_phone_orders(p_person, decode(p_detail ->> 'index_key', 'hex'), p_tenant, 1)))) THEN
       RAISE EXCEPTION 'no such business' USING ERRCODE = 'P0002';
     END IF;
   END IF;
@@ -68,7 +79,7 @@ BEGIN
   END IF;
   PERFORM set_config('app.tenant_scope', '{' || p_tenant::text || '}', true);
   PERFORM taskiem_audit_append(p_tenant, 'person', p_person::text, p_action, p_person::text,
-    (CASE WHEN jsonb_typeof(p_detail) = 'object' THEN p_detail - 'code_hash' ELSE COALESCE(p_detail, '{}') END) || jsonb_build_object('door', 'customer'));
+    (CASE WHEN jsonb_typeof(p_detail) = 'object' THEN p_detail - 'code_hash' - 'index_key' ELSE COALESCE(p_detail, '{}') END) || jsonb_build_object('door', 'customer'));
   PERFORM set_config('app.person_business', p_tenant::text, true);
 END
 $$;
