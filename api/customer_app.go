@@ -338,7 +338,9 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 				return err
 			}
 		}
-		if again, err = s.customerRepeat(ctx, tx, tenant, chat.ID, in.ClientID); err != nil || again != nil {
+		// On either of the customer's lines (§11), under the client_id's
+		// lock, so the same send on the other line at once never goes too.
+		if again, err = s.customerRepeatLocked(ctx, tx, tenant, in); err != nil || again != nil {
 			return err
 		}
 		if in.Offer {
@@ -376,7 +378,7 @@ func (s *Server) sendCustomerApp(ctx context.Context, tenant uuid.UUID, chat cus
 			var m *customerMessageView
 			if e := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
 				var err error
-				m, err = s.customerRepeat(ctx, tx, tenant, chat.ID, in.ClientID)
+				m, err = s.customerRepeat(ctx, tx, tenant, in.pair, in.ClientID)
 				return err
 			}); e == nil && m != nil {
 				return *m, false, nil
@@ -1398,10 +1400,12 @@ func (s *Server) customerWaitingAlerts(ctx context.Context, p *Principal) ([]cha
 			if len(out) >= perKind {
 				break
 			}
-			chat, _, err := s.customerChatIn(ctx, tx, p.TenantID, x.id.String())
+			// The customer's thread, both lines (§11): named as it shows.
+			t, err := s.customerThreadIn(ctx, tx, p.TenantID, x.id.String())
 			if err != nil {
 				return err
 			}
+			chat := t.view
 			mins := int(now.Sub(x.at).Minutes())
 			line := fmt.Sprintf("Wrote %d minutes ago", mins)
 			if mins >= 120 {
@@ -1445,7 +1449,10 @@ func (s *Server) CustomerChatsTick(ctx context.Context) error {
 	// The app threads not yet looked at for their WhatsApp threads (§11):
 	// those there were before the lines were joined, then each new one.
 	joinErr := s.joinSweep(ctx)
-	return errors.Join(joinErr, s.ownersTick(ctx))
+	// Pairs whose person's phone changed without the change reaching the
+	// business (§5.5 item 4): parted.
+	staleErr := s.staleLinkSweep(ctx)
+	return errors.Join(joinErr, staleErr, s.ownersTick(ctx))
 }
 
 // ownersTick tells the owners of customers waiting 2 hours (CustomerChatsTick).

@@ -466,10 +466,13 @@ func (s *Server) startPersonChat(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		// The business's WhatsApp thread of their verified phone, if it
-		// has one, is the same customer's (§11): the lines are joined.
-		if _, err := s.joinAppTx(ctx, tx, tenant, thread, false); err != nil {
+		// has one, is the same customer's (§11): the lines are joined. In a
+		// savepoint: if joining fails, the chat starts all the same (the
+		// next message, or the sweep, joins them).
+		s.savepoint(ctx, tx, "customer door: joining the lines", func(sp pgx.Tx) error {
+			_, err := s.joinAppTx(ctx, sp, tenant, thread, false)
 			return err
-		}
+		})
 		fresh = true
 		if out, err = personChatTx(ctx, tx, person, id.String()); err != nil {
 			return err
@@ -948,10 +951,12 @@ func (s *Server) personSend(ctx context.Context, person uuid.UUID, chatID, text,
 			return err
 		}
 		// Writing in the app joins the business's WhatsApp thread of their
-		// verified phone, when it has one and they are not joined (§11).
-		if _, err := s.joinAppTx(ctx, tx, tenant, thread, false); err != nil {
+		// verified phone, when it has one and they are not joined (§11). In
+		// a savepoint: if joining fails, the message is kept all the same.
+		s.savepoint(ctx, tx, "customer door: joining the lines", func(sp pgx.Tx) error {
+			_, err := s.joinAppTx(ctx, sp, tenant, thread, false)
 			return err
-		}
+		})
 
 		if out.CreatedAt, _, err = s.writeAppMessageTx(ctx, tx, appMessage{id: out.ID, tenant: tenant, thread: thread, subject: subject, person: person,
 			fromPerson: true, kind: out.Kind, text: text, bizFile: bizFile, personFile: f, clientID: clientID}); err != nil {
