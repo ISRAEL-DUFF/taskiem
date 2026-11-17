@@ -182,3 +182,14 @@ myAddresses
 addMyAddress
 editMyAddress
 deleteMyAddress
+
+# You's settings: deleting the account, the photo (its upload and its bytes are
+# the app's own multipart and image calls, as a chat's files are), pushes,
+# privacy (taskiem-for-everyone §7, §14, stage 3 review fixes)
+deleteAccountStart
+deleteAccountPasskeyOptions
+deleteAccount
+deleteMyPhoto
+myNotifications
+putMyNotifications
+myPrivacy

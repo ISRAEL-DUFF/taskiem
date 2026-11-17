@@ -793,6 +793,47 @@ class TaskiemApi {
   Future<void> deleteMyAddress({required String id}) async {
     await _t.send('DELETE', '/v1/me/addresses/${Uri.encodeComponent(id)}');
   }
+
+  /// Ask for a code to delete your account (`POST /v1/me/delete/start`)
+  Future<DeleteAccountStartResponse> deleteAccountStart({required DeleteAccountStartRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/delete/start', body: body.toJson());
+    return DeleteAccountStartResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A passkey challenge for deleting your account (`POST /v1/me/delete/passkey/options`)
+  Future<DeleteAccountPasskeyOptionsResponse> deleteAccountPasskeyOptions() async {
+    final j = await _t.send('POST', '/v1/me/delete/passkey/options');
+    return DeleteAccountPasskeyOptionsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Delete your account (`POST /v1/me/delete`)
+  Future<DeleteAccountResponse> deleteAccount({required DeleteAccountRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/delete', body: body.toJson());
+    return DeleteAccountResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove your photo (`DELETE /v1/me/photo`)
+  Future<void> deleteMyPhoto() async {
+    await _t.send('DELETE', '/v1/me/photo');
+  }
+
+  /// Which pushes you get on You (`GET /v1/me/notifications`)
+  Future<YouNotifications> myNotifications() async {
+    final j = await _t.send('GET', '/v1/me/notifications');
+    return YouNotifications.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change which pushes you get on You (`PUT /v1/me/notifications`)
+  Future<YouNotifications> putMyNotifications({required PutMyNotificationsRequest body}) async {
+    final j = await _t.send('PUT', '/v1/me/notifications', body: body.toJson());
+    return YouNotifications.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your privacy page (`GET /v1/me/privacy`)
+  Future<MyPrivacyResponse> myPrivacy() async {
+    final j = await _t.send('GET', '/v1/me/privacy');
+    return MyPrivacyResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -1473,7 +1514,7 @@ class MeSecondProofWays {
 }
 
 class MeUser {
-  const MeUser({this.email, this.emailPlaceholder, this.emailVerified, this.id, this.name, this.phone});
+  const MeUser({this.email, this.emailPlaceholder, this.emailVerified, this.id, this.name, this.phone, this.photo});
 
   final String? email;
   /// The sign-in name receives no mail (an account made in chat); the web app
@@ -1484,6 +1525,9 @@ class MeUser {
   final String? name;
   /// The person's own phone number (E.164), or null.
   final Object? phone;
+  /// The person's own photo (GET /v1/me/photo), or null. Shown on their own
+  /// side only; businesses are not shown it.
+  final Object? photo;
 
   factory MeUser.fromJson(Map<String, dynamic> j) => MeUser(
         email: j['email'] == null ? null : j['email'] as String,
@@ -1492,6 +1536,7 @@ class MeUser {
         id: j['id'] == null ? null : j['id'] as String,
         name: j['name'] == null ? null : j['name'] as String,
         phone: j['phone'],
+        photo: j['photo'],
       );
 
   Map<String, dynamic> toJson() => {
@@ -1501,6 +1546,7 @@ class MeUser {
         'id': ?id,
         'name': ?name,
         'phone': ?phone,
+        'photo': ?photo,
       };
 }
 
@@ -7091,34 +7137,49 @@ class MyOrdersResponse {
 
 /// One row of Orders on You.
 class PersonOrder {
-  const PersonOrder({required this.business, required this.businessId, this.chatId, required this.dueKobo, required this.kind, required this.madeAt, required this.pay, this.photo, required this.reference, required this.state, required this.summary, required this.totalKobo});
+  const PersonOrder({this.bookingType, required this.business, required this.businessId, this.chatId, required this.dueKobo, this.earlier, required this.kind, required this.madeAt, required this.pay, this.photo, required this.reference, required this.state, required this.summary, required this.totalKobo});
 
+  /// What kind of booking (bookings only).
+  final String? bookingType;
   final String business;
   final String businessId;
   /// The person's chat with the business, for "Chat about this"; null when
   /// there is none (POST /v1/me/chats {business_id, from: "order"} starts it).
   final Object? chatId;
   final int dueKobo;
+  /// An order made with the person's number before it was verified on this
+  /// account (the number may have been someone else's): shown short only
+  /// (business, reference, state, total, date), with no summary, nothing due
+  /// and no Pay, even after "These are mine". Its detail is this row alone, its
+  /// pay link is refused (409 `earlier`); "Chat about this" is the way to ask
+  /// about it. Absent otherwise.
+  final bool? earlier;
   final String kind;
   final DateTime madeAt;
-  /// Something is due now and can be paid in the app; GET
+  /// Something is due now and can be paid in the app (one rule,
+  /// storefront.PayableNow and taskiem_order_payable_now; never a cancelled,
+  /// declined, expired, completed or refunded order); GET
   /// /v1/me/orders/{business_id}/{reference}/pay is its link. Never while the
-  /// business blocked the person or turned Orders off.
+  /// business blocked the person or turned Orders off, and never for an earlier
+  /// order.
   final bool pay;
   final OrderPhoto? photo;
   final String reference;
   /// The order's status, as the business's order has it.
   final String state;
-  /// "2 × Jollof rice, 1 × Chapman", or a booking's service; up to 200
-  /// characters.
+  /// "2 × Jollof rice, 1 × Chapman"; a booking's service, a hire's item and
+  /// days ("Canopy, 3 days"), tickets ("2 tickets, Afrobeats Night"), a class's
+  /// places or a space; up to 200 characters. Empty for an earlier order.
   final String summary;
   final int totalKobo;
 
   factory PersonOrder.fromJson(Map<String, dynamic> j) => PersonOrder(
+        bookingType: j['booking_type'] == null ? null : j['booking_type'] as String,
         business: j['business'] as String,
         businessId: j['business_id'] as String,
         chatId: j['chat_id'],
         dueKobo: (j['due_kobo'] as num).toInt(),
+        earlier: j['earlier'] == null ? null : j['earlier'] as bool,
         kind: j['kind'] as String,
         madeAt: DateTime.parse(j['made_at'] as String),
         pay: j['pay'] as bool,
@@ -7130,10 +7191,12 @@ class PersonOrder {
       );
 
   Map<String, dynamic> toJson() => {
+        'booking_type': ?bookingType,
         'business': business,
         'business_id': businessId,
         'chat_id': ?chatId,
         'due_kobo': dueKobo,
+        'earlier': ?earlier,
         'kind': kind,
         'made_at': madeAt.toUtc().toIso8601String(),
         'pay': pay,
@@ -7160,18 +7223,21 @@ class OrderPhoto {
       };
 }
 
-/// One of the person's orders, with what it holds.
+/// One of the person's orders, with what it holds. An earlier order (`earlier`)
+/// is its row alone, with no lines.
 class PersonOrderDetail {
-  const PersonOrderDetail({this.address, required this.business, required this.businessId, this.chatId, this.delivery, this.deliveryKobo, required this.dueKobo, this.endsAt, this.fulfilment, required this.kind, required this.lines, required this.madeAt, required this.paidKobo, required this.pay, this.photo, required this.reference, this.serviceName, this.startsAt, required this.state, required this.summary, required this.totalKobo, this.zone});
+  const PersonOrderDetail({this.address, this.bookingType, required this.business, required this.businessId, this.chatId, this.delivery, this.deliveryKobo, required this.dueKobo, this.earlier, this.endsAt, this.fulfilment, required this.kind, required this.lines, required this.madeAt, required this.paidKobo, required this.pay, this.photo, required this.reference, this.serviceName, this.startsAt, required this.state, required this.summary, required this.totalKobo, this.zone});
 
   /// The address on the order, as it was copied there when it was placed.
   final PersonOrderDetailAddress? address;
+  final String? bookingType;
   final String business;
   final String businessId;
   final Object? chatId;
   final DeliveryProgress? delivery;
   final int? deliveryKobo;
   final int dueKobo;
+  final bool? earlier;
   final DateTime? endsAt;
   final String? fulfilment;
   final String kind;
@@ -7190,12 +7256,14 @@ class PersonOrderDetail {
 
   factory PersonOrderDetail.fromJson(Map<String, dynamic> j) => PersonOrderDetail(
         address: j['address'] == null ? null : PersonOrderDetailAddress.fromJson(j['address'] as Map<String, dynamic>),
+        bookingType: j['booking_type'] == null ? null : j['booking_type'] as String,
         business: j['business'] as String,
         businessId: j['business_id'] as String,
         chatId: j['chat_id'],
         delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
         deliveryKobo: j['delivery_kobo'] == null ? null : (j['delivery_kobo'] as num).toInt(),
         dueKobo: (j['due_kobo'] as num).toInt(),
+        earlier: j['earlier'] == null ? null : j['earlier'] as bool,
         endsAt: j['ends_at'] == null ? null : DateTime.parse(j['ends_at'] as String),
         fulfilment: j['fulfilment'] == null ? null : j['fulfilment'] as String,
         kind: j['kind'] as String,
@@ -7215,12 +7283,14 @@ class PersonOrderDetail {
 
   Map<String, dynamic> toJson() => {
         'address': ?address?.toJson(),
+        'booking_type': ?bookingType,
         'business': business,
         'business_id': businessId,
         'chat_id': ?chatId,
         'delivery': ?delivery?.toJson(),
         'delivery_kobo': ?deliveryKobo,
         'due_kobo': dueKobo,
+        'earlier': ?earlier,
         'ends_at': ?endsAt?.toUtc().toIso8601String(),
         'fulfilment': ?fulfilment,
         'kind': kind,
@@ -7382,5 +7452,220 @@ class SavedAddressIn {
         'landmark': ?landmark,
         'line': ?line,
         'phone': ?phone,
+      };
+}
+
+class DeleteAccountStartRequest {
+  const DeleteAccountStartRequest({this.via});
+
+  final String? via;
+
+  factory DeleteAccountStartRequest.fromJson(Map<String, dynamic> j) => DeleteAccountStartRequest(
+        via: j['via'] == null ? null : j['via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'via': ?via,
+      };
+}
+
+class DeleteAccountStartResponse {
+  const DeleteAccountStartResponse({required this.expiresIn, required this.sentVia});
+
+  final int expiresIn;
+  final String sentVia;
+
+  factory DeleteAccountStartResponse.fromJson(Map<String, dynamic> j) => DeleteAccountStartResponse(
+        expiresIn: (j['expires_in'] as num).toInt(),
+        sentVia: j['sent_via'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'expires_in': expiresIn,
+        'sent_via': sentVia,
+      };
+}
+
+class DeleteAccountPasskeyOptionsResponse {
+  const DeleteAccountPasskeyOptionsResponse({required this.publicKey});
+
+  final Map<String, dynamic> publicKey;
+
+  factory DeleteAccountPasskeyOptionsResponse.fromJson(Map<String, dynamic> j) => DeleteAccountPasskeyOptionsResponse(
+        publicKey: j['publicKey'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'publicKey': publicKey,
+      };
+}
+
+class DeleteAccountRequest {
+  const DeleteAccountRequest({this.code, required this.confirm, this.credential, this.password});
+
+  final String? code;
+  final bool confirm;
+  final PasskeyCredential? credential;
+  final String? password;
+
+  factory DeleteAccountRequest.fromJson(Map<String, dynamic> j) => DeleteAccountRequest(
+        code: j['code'] == null ? null : j['code'] as String,
+        confirm: j['confirm'] as bool,
+        credential: j['credential'] == null ? null : PasskeyCredential.fromJson(j['credential'] as Map<String, dynamic>),
+        password: j['password'] == null ? null : j['password'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': ?code,
+        'confirm': confirm,
+        'credential': ?credential?.toJson(),
+        'password': ?password,
+      };
+}
+
+class DeleteAccountResponse {
+  const DeleteAccountResponse({required this.businessesTold, required this.deleted});
+
+  /// How many businesses were told "This customer left Taskiem".
+  final int businessesTold;
+  final bool deleted;
+
+  factory DeleteAccountResponse.fromJson(Map<String, dynamic> j) => DeleteAccountResponse(
+        businessesTold: (j['businesses_told'] as num).toInt(),
+        deleted: j['deleted'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'businesses_told': businessesTold,
+        'deleted': deleted,
+      };
+}
+
+/// Which pushes the person's own devices get from businesses.
+class YouNotifications {
+  const YouNotifications({required this.messages, required this.offers, required this.updates});
+
+  /// Someone at a business wrote to them.
+  final bool messages;
+  /// Offers from businesses they said yes to.
+  final bool offers;
+  /// A business's automatic words (an order's or a booking's news).
+  final bool updates;
+
+  factory YouNotifications.fromJson(Map<String, dynamic> j) => YouNotifications(
+        messages: j['messages'] as bool,
+        offers: j['offers'] as bool,
+        updates: j['updates'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages,
+        'offers': offers,
+        'updates': updates,
+      };
+}
+
+class PutMyNotificationsRequest {
+  const PutMyNotificationsRequest({this.messages, this.offers, this.updates});
+
+  final bool? messages;
+  final bool? offers;
+  final bool? updates;
+
+  factory PutMyNotificationsRequest.fromJson(Map<String, dynamic> j) => PutMyNotificationsRequest(
+        messages: j['messages'] == null ? null : j['messages'] as bool,
+        offers: j['offers'] == null ? null : j['offers'] as bool,
+        updates: j['updates'] == null ? null : j['updates'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': ?messages,
+        'offers': ?offers,
+        'updates': ?updates,
+      };
+}
+
+class MyPrivacyResponse {
+  const MyPrivacyResponse({required this.businesses, required this.erase, required this.shownToBusinesses});
+
+  final List<MyPrivacyResponseBusinessesItem> businesses;
+  final MyPrivacyResponseErase erase;
+  final MyPrivacyResponseShownToBusinesses shownToBusinesses;
+
+  factory MyPrivacyResponse.fromJson(Map<String, dynamic> j) => MyPrivacyResponse(
+        businesses: (j['businesses'] as List).map((e) => MyPrivacyResponseBusinessesItem.fromJson(e as Map<String, dynamic>)).toList(),
+        erase: MyPrivacyResponseErase.fromJson(j['erase'] as Map<String, dynamic>),
+        shownToBusinesses: MyPrivacyResponseShownToBusinesses.fromJson(j['shown_to_businesses'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'businesses': businesses.map((e) => e.toJson()).toList(),
+        'erase': erase.toJson(),
+        'shown_to_businesses': shownToBusinesses.toJson(),
+      };
+}
+
+class MyPrivacyResponseBusinessesItem {
+  const MyPrivacyResponseBusinessesItem({required this.business, required this.businessId, this.chatId, this.lastOrderAt, required this.orders});
+
+  final String business;
+  final String businessId;
+  /// The person's chat with it, where they can ask it to erase their details.
+  final Object? chatId;
+  final Object? lastOrderAt;
+  final int orders;
+
+  factory MyPrivacyResponseBusinessesItem.fromJson(Map<String, dynamic> j) => MyPrivacyResponseBusinessesItem(
+        business: j['business'] as String,
+        businessId: j['business_id'] as String,
+        chatId: j['chat_id'],
+        lastOrderAt: j['last_order_at'],
+        orders: (j['orders'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business': business,
+        'business_id': businessId,
+        'chat_id': ?chatId,
+        'last_order_at': ?lastOrderAt,
+        'orders': orders,
+      };
+}
+
+class MyPrivacyResponseErase {
+  const MyPrivacyResponseErase({required this.how, required this.words});
+
+  final String how;
+  final String words;
+
+  factory MyPrivacyResponseErase.fromJson(Map<String, dynamic> j) => MyPrivacyResponseErase(
+        how: j['how'] as String,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'how': how,
+        'words': words,
+      };
+}
+
+class MyPrivacyResponseShownToBusinesses {
+  const MyPrivacyResponseShownToBusinesses({required this.name, this.phone, required this.photo});
+
+  final String name;
+  final Object? phone;
+  /// Always false; the person's photo stays on their own side.
+  final bool photo;
+
+  factory MyPrivacyResponseShownToBusinesses.fromJson(Map<String, dynamic> j) => MyPrivacyResponseShownToBusinesses(
+        name: j['name'] as String,
+        phone: j['phone'],
+        photo: j['photo'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'phone': ?phone,
+        'photo': photo,
       };
 }
