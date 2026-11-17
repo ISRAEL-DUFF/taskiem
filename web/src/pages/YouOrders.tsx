@@ -44,12 +44,12 @@ const BADGE: Record<string, string> = { warn: "warn", lime: "ok", plain: "muted"
 
 /** Pay one order: its pay link asked for, then opened by the person (a
  * link opened after a request would be blocked as a pop-up). */
-export function OrderPay({ order, primary = true }: { order: Pick<PersonOrder, "business_id" | "reference" | "due_kobo">; primary?: boolean }) {
+export function OrderPay({ order, small = true }: { order: Pick<PersonOrder, "business_id" | "reference" | "due_kobo">; small?: boolean }) {
   const [url, setUrl] = useState<string>();
   const act = useAction();
   if (url)
     return (
-      <a className={`button${primary ? " primary" : ""} small`} href={url} target="_blank" rel="noopener noreferrer" data-testid="order-pay-open">
+      <a className={`button primary${small ? " small" : ""}`} href={url} target="_blank" rel="noopener noreferrer" data-testid="order-pay-open">
         Open the pay page<span className="sr-only"> for {order.reference}</span>
       </a>
     );
@@ -58,7 +58,7 @@ export function OrderPay({ order, primary = true }: { order: Pick<PersonOrder, "
     <>
       <button
         type="button"
-        className={`small${primary ? " primary" : ""}`}
+        className={`primary${small ? " small" : ""}`}
         disabled={act.busy}
         data-testid="order-pay"
         onClick={() =>
@@ -256,8 +256,8 @@ export function YouOrder() {
               </div>
             </dl>
           </section>
-          <div className="row-actions page-actions">
-            {o.pay && <OrderPay order={o} />}
+          <div className="row-actions page-actions you-order-actions">
+            {o.pay && <OrderPay order={o} small={false} />}
             <button type="button" className={o.pay ? "" : "primary"} onClick={() => chatAbout(o)} data-testid="order-chat-about">
               <Icon name="chat" /> Chat about this
             </button>

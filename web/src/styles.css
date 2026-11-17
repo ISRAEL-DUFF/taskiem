@@ -2435,3 +2435,4 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 .you-order-lines .num { text-align: right; font-variant-numeric: tabular-nums; }
 .address-form .switch-line { margin: 4px 0 12px; }
 .you-tabs { max-width: 100%; }
+.you-order-actions { margin: 12px 0; }

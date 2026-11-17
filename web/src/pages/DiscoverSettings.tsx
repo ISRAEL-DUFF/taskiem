@@ -36,10 +36,17 @@ export function DiscoverSettings() {
   const [st, setSt] = useState<Settings>();
   const act = useAction();
   const s = st ?? view.data;
-  const save = (body: Record<string, unknown>, said: string) =>
-    act.run(async () => {
+  // The switch shows what was chosen at once; the saved settings once they
+  // are back, or what was there before when it was refused.
+  const save = async (body: Record<string, unknown>, said: string) => {
+    const was = s;
+    if (s && typeof body.listed === "boolean") setSt({ ...s, listed: body.listed });
+    const ok = await act.run(async () => {
       setSt(await put<Settings>("/v1/settings/discover", body));
     }, said);
+    if (!ok) setSt(was);
+    return ok;
+  };
   return (
     <>
       <p className="crumbs">

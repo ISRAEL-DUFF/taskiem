@@ -570,7 +570,7 @@ export function Reports() {
                   <tr>
                     <td colSpan={8}>
                       {rep.kind === "discover" ? (
-                        <DiscoverAction tenant={rep.tenant_id} business={rep.business} onDone={reload} />
+                        <DiscoverAction tenant={rep.tenant_id} business={rep.business} onDone={() => undefined} />
                       ) : (
                         <SuspendRestore tenant={rep.tenant_id} business={rep.business} />
                       )}

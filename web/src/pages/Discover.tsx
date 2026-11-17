@@ -121,7 +121,7 @@ export function Discover() {
             type="search"
             value={q.q}
             maxLength={100}
-            placeholder="A name, or what you want: rice, hair, cakes"
+            placeholder="A name, or what you want"
             onChange={(e) => setQ({ ...q, q: e.target.value })}
             data-testid="discover-search"
           />
