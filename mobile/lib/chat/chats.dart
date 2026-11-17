@@ -1014,7 +1014,12 @@ class ChatRow extends StatelessWidget {
     this.alert = false,
     this.need = 0,
     this.onTap,
+    this.avatar,
   });
+
+  /// Its face in place of the letters or logo (a business's photo by its
+  /// address, on You).
+  final Widget? avatar;
 
   /// Its count in orange (Taskiem's: what needs you).
   final bool alert;
@@ -1046,7 +1051,7 @@ class ChatRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         child: Row(
           children: [
-            accent ? const _AccentAvatar() : ChatAvatar(name: letter, logo: logo, size: 48),
+            accent ? const _AccentAvatar() : (avatar ?? ChatAvatar(name: letter, logo: logo, size: 48)),
             const SizedBox(width: 14),
             Expanded(
               child: Column(

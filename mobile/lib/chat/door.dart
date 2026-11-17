@@ -1,18 +1,25 @@
 // What both sides of a customer's chat in the app show
-// (docs/spec/taskiem-for-everyone.md §8.3, §8.5, §15): a message's bubble
-// with its photo, voice note or file, an order, pay, booking or product
-// card, and an offer marked Offer. The person's side (You, my_chat.dart)
-// and the business's (customer.dart) draw messages the same way.
+// (docs/spec/taskiem-for-everyone.md §8.3, §8.5, §15), in the app's own
+// chat look (docs/spec/mobile-app-look.md, "The chat", "Cards in a
+// conversation"): a message's bubble with its photo, voice note or file;
+// an order, pay, invoice, delivery, booking or product card standing free
+// of the bubbles; an offer marked Offer; and, under a business's message
+// asking for a transfer, the warning to pay only through Taskiem. The
+// person's side (You, my_chat.dart) and the business's (customer.dart) draw
+// messages the same way.
 
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
 import '../kit/icon.dart';
-import '../kit/kit.dart';
 import '../kit/list.dart' show TkPill;
+import '../kit/look.dart' show tkTabular;
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'bookings_page.dart' show orderStatus;
+import 'cards.dart' show CardButton, CardPill, CardProgress, cardDecoration;
+import 'chats.dart' show ChatAvatar;
 import 'thread.dart';
 import 'words.dart';
 
@@ -24,11 +31,37 @@ String yourOrderStatus(String s) => switch (s) {
   _ => orderStatus(s).label,
 };
 
+/// A delivery's step, in a customer's words.
+String deliveryStatus(String s) => switch (s) {
+  'accepted' => 'Rider coming',
+  'picked_up' => 'On its way',
+  'arrived' => 'At your door',
+  'delivered' => 'Delivered',
+  _ => s.replaceAll('_', ' '),
+};
+
+/// An invoice's state, in a customer's words.
+String invoiceWords(String s) => switch (s) {
+  'sent' || 'recorded' => 'To pay',
+  'part_paid' => 'Part-paid',
+  'overdue' => 'Overdue',
+  'paid' => 'Paid',
+  'void' => 'Cancelled',
+  _ => s.replaceAll('_', ' '),
+};
+
+/// A card's state in words, by its kind.
+String cardStatus(CustomerCard c) => switch (c.type) {
+  'delivery' => deliveryStatus(c.status ?? ''),
+  'invoice' => invoiceWords(c.status ?? ''),
+  _ => yourOrderStatus(c.status ?? ''),
+};
+
 /// A state's pill tone, for either side.
 CardTone doorTone(String s) => switch (s) {
   'completed' || 'paid' || 'delivered' => CardTone.lime,
-  'declined' || 'cancelled' || 'expired' || 'refunded' || 'no_show' => CardTone.plain,
-  'refund_due' => CardTone.danger,
+  'declined' || 'cancelled' || 'expired' || 'refunded' || 'no_show' || 'void' => CardTone.plain,
+  'refund_due' || 'overdue' => CardTone.danger,
   _ => CardTone.warn,
 };
 
@@ -51,14 +84,28 @@ LinkMessage doorFileMessage({required String id, required bool mine, required Ch
 String cardKind(CustomerCard c) => switch (c.type) {
   'order' => c.title.startsWith('Booking') ? 'Booking' : 'Order',
   'pay' => 'Pay',
+  'invoice' => 'Invoice',
+  'delivery' => 'Delivery',
   'booking' => 'Book',
   'product' => 'Product',
   _ => 'Card',
 };
 
+/// A delivery's steps, and the one it is at.
+const deliverySteps = ['Rider coming', 'Picked up', 'At your door', 'Delivered'];
+
+int deliveryStep(DeliveryProgress d) => switch (d.status) {
+  'delivered' => 3,
+  'arrived' => 2,
+  'picked_up' => 1,
+  _ => 0,
+};
+
 /// A card in a customer's chat: an order (what, total, its state), a pay
-/// link, a booking offer, a product; and its button, where the side
-/// reading it can act on it.
+/// link, an invoice (what is due), a delivery (the rider's progress), a
+/// booking offer, a product; and its button, where the side reading it can
+/// act on it. As drawn: the kind small in capitals with its state as a
+/// pill, the amount large, a line of what it is, then its button.
 class DoorCard extends StatelessWidget {
   const DoorCard({super.key, required this.card, this.action, this.onAction});
   final CustomerCard card;
@@ -72,38 +119,53 @@ class DoorCard extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final c = card;
     final minutes = c.minutes == null || c.minutes == 0 ? null : (c.minutes! >= 60 ? '${c.minutes! ~/ 60} h${c.minutes! % 60 == 0 ? '' : ' ${c.minutes! % 60} min'}' : '${c.minutes} min');
-    final line = [if ((c.line ?? '').isNotEmpty) c.line!, ?minutes].join(' · ');
+    final line = [if ((c.line ?? '').isNotEmpty && c.type != 'delivery') c.line!, ?minutes].join(' · ');
+    final kicker = [cardKind(c), if ((c.reference ?? '').isNotEmpty && !c.title.contains(c.reference!)) c.reference!].join(' · ');
+    final due = c.type == 'pay' || (c.type == 'invoice' && (c.totalKobo ?? 0) > 0 && c.status != 'paid');
+    final d = c.delivery;
+    final amount = c.totalKobo;
     return Semantics(
       container: true,
       label: '${cardKind(c)}: ${c.title}',
-      child: Container(
-        margin: const EdgeInsets.only(top: 2, bottom: 4),
-        padding: const EdgeInsets.all(12),
-        constraints: const BoxConstraints(minWidth: 220),
-        decoration: BoxDecoration(color: t.panel2, borderRadius: BorderRadius.circular(12)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(child: Text(cardKind(c).toUpperCase(), style: tkText(size: 11, weight: 700, letterSpacing: 0.4, color: t.muted))),
-                if ((c.status ?? '').isNotEmpty) TkPill(yourOrderStatus(c.status!), tone: doorTone(c.status!), small: true),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(c.title, style: tkText(size: 15, weight: 700, lineHeight: 1.3, color: t.text)),
-            if (line.isNotEmpty) Text(line, style: tkText(size: 13, lineHeight: 1.35, color: t.muted)),
-            if (c.totalKobo != null) ...[
-              const SizedBox(height: 4),
-              Text(c.type == 'pay' ? '${naira(c.totalKobo!)} due' : naira(c.totalKobo!), style: tkText(size: 15, weight: 700, color: t.text)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  kicker.toUpperCase(),
+                  semanticsLabel: kicker,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: tkText(size: 11, weight: 700, letterSpacing: 0.66, color: t.muted),
+                ),
+              ),
+              if ((c.status ?? '').isNotEmpty) ...[const SizedBox(width: 8), CardPill(cardStatus(c), doorTone(c.status!))],
             ],
-            if (action != null && onAction != null) ...[
-              const SizedBox(height: 10),
-              TkButton(label: action!, primary: c.type == 'pay', onPressed: onAction),
-            ],
+          ),
+          const SizedBox(height: 6),
+          if (amount != null && c.type != 'product' && c.type != 'booking') ...[
+            Text(due ? '${naira(amount)} due' : naira(amount), style: tkDisplay(size: 24, lineHeight: 1.15, letterSpacing: -0.8, color: t.text)),
+            const SizedBox(height: 2),
+            Text(c.title, style: tkText(size: 13.5, weight: 600, lineHeight: 1.35, color: t.text)),
+          ] else ...[
+            Text(c.title, style: tkText(size: 15.5, weight: 600, lineHeight: 1.3, color: t.text)),
+            if (amount != null) Text(naira(amount), style: tkText(size: 14, weight: 600, color: t.text).copyWith(fontFeatures: tkTabular)),
           ],
-        ),
+          if (line.isNotEmpty) Text(line, style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
+          if (d != null) ...[
+            const SizedBox(height: 2),
+            Text(d.line, style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
+            const SizedBox(height: 8),
+            CardProgress(steps: deliverySteps, step: deliveryStep(d)),
+          ],
+          if (action != null && onAction != null) ...[
+            const SizedBox(height: 10),
+            CardButton(label: action!, primary: c.type == 'pay' || c.type == 'invoice' || c.type == 'booking', onTap: onAction),
+          ],
+        ],
       ),
     );
   }
@@ -120,9 +182,44 @@ class OfferMark extends StatelessWidget {
   );
 }
 
+/// The warning under a business's message that asks for a transfer to an
+/// account (§15).
+const transferWarning = 'Pay only through Taskiem’s pay links. Taskiem never asks you to send money to a personal account.';
+
+/// Under a business's message that holds an account number: pay only
+/// through Taskiem.
+class TransferWarning extends StatelessWidget {
+  const TransferWarning({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    return Semantics(
+      container: true,
+      label: 'Warning: $transferWarning',
+      excludeSemantics: true,
+      child: Container(
+        margin: const EdgeInsets.only(top: 4),
+        constraints: const BoxConstraints(maxWidth: 340),
+        padding: const EdgeInsets.fromLTRB(10, 8, 12, 8),
+        decoration: BoxDecoration(color: look.red.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(padding: const EdgeInsets.only(top: 1), child: TkIcon('warn', size: 16, stroke: 2, color: look.redInk)),
+            const SizedBox(width: 8),
+            Expanded(child: Text(transferWarning, style: tkText(size: 13, weight: 600, lineHeight: 1.35, color: TkTheme.of(context).mode == TkMode.dark ? t.text : look.redInk))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// One message of a customer's chat in the app, on either side: who wrote
 /// it (staff, on the business's side), an offer's mark, its file, its card,
-/// its words, and under an offer what the side can do about it.
+/// its words, and under it what the side can do about it.
 class DoorBubble extends StatelessWidget {
   const DoorBubble({
     super.key,
@@ -134,6 +231,7 @@ class DoorBubble extends StatelessWidget {
     required this.stamp,
     required this.files,
     required this.other,
+    this.last = true,
     this.sender,
     this.card,
     this.attachment,
@@ -142,11 +240,15 @@ class DoorBubble extends StatelessWidget {
     this.onCard,
     this.under,
     this.local,
+    this.warn = false,
   });
 
   final String id;
   final bool mine;
   final bool first;
+
+  /// The last of its run: its corner on the sender's side tucked in.
+  final bool last;
   final String body;
   final DateTime at;
   final Widget stamp;
@@ -161,41 +263,81 @@ class DoorBubble extends StatelessWidget {
   final String? cardAction;
   final VoidCallback? onCard;
 
-  /// Under the bubble's words: Stop offers from {business}.
+  /// Under the bubble: Stop offers from {business}.
   final Widget? under;
 
   /// Still being sent: this phone's own copy of the file.
   final PickedFile? local;
 
+  /// Asks for a transfer to an account: the warning under it.
+  final bool warn;
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final a = attachment;
-    final words = a != null && _fileWords.contains(body) ? '' : (card != null && body == card!.title ? '' : body);
-    return LayoutBuilder(
-      builder: (context, box) {
-        final room = (box.maxWidth * 0.78 - 24).clamp(120.0, 360.0);
-        return BubbleFrame(
-          mine: mine,
-          first: first,
-          stamp: stamp,
-          // The time under the words, never over them.
-          inline: false,
-          children: [
-            if ((sender ?? '').isNotEmpty && first) Text(sender!, style: tkText(size: 12, weight: 600, color: t.tintText)),
-            if (offer) const OfferMark(),
-            if (a != null) AttachmentView(m: doorFileMessage(id: id, mine: mine, a: a, at: at), files: files, other: other, room: room, local: local),
-            if (card != null) DoorCard(card: card!, action: cardAction, onAction: onCard),
-            if (words.isNotEmpty) Text(words, style: tkText(size: 16, lineHeight: 23 / 16, color: t.text)),
-            ?under,
-          ],
-        );
-      },
+    final c = card;
+    final words = a != null && _fileWords.contains(body) ? '' : (c != null && body == c.title ? '' : body);
+    final name = (sender ?? '').isNotEmpty && first ? Text(sender!, style: tkText(size: 12, weight: 600, color: t.tintText)) : null;
+    final Widget shown;
+    if (c != null && a == null) {
+      // A card is its own message, on the card's frame, not a bubble's.
+      shown = LayoutBuilder(
+        builder: (context, box) => Align(
+          alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: (box.maxWidth * 0.86).clamp(0.0, 360.0),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+            decoration: cardDecoration(context, mine: mine, first: first),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ?name,
+                if (offer) const OfferMark(),
+                DoorCard(card: c, action: cardAction, onAction: onCard),
+                if (words.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(words, style: tkText(size: 15, lineHeight: 1.4, color: t.text))),
+                Padding(padding: const EdgeInsets.only(top: 4), child: Align(alignment: Alignment.centerRight, child: stamp)),
+              ],
+            ),
+          ),
+        ),
+      );
+    } else {
+      shown = LayoutBuilder(
+        builder: (context, box) {
+          final room = (box.maxWidth * 0.78 - 24).clamp(120.0, 360.0);
+          return BubbleFrame(
+            mine: mine,
+            first: first,
+            last: last,
+            stamp: stamp,
+            // The time under the words, never over them.
+            inline: false,
+            children: [
+              ?name,
+              if (offer) const OfferMark(),
+              if (a != null) AttachmentView(m: doorFileMessage(id: id, mine: mine, a: a, at: at), files: files, other: other, room: room, local: local),
+              if (c != null) Padding(padding: const EdgeInsets.only(top: 4), child: DoorCard(card: c, action: cardAction, onAction: onCard)),
+              if (words.isNotEmpty) Text(words, style: tkText(size: 16, lineHeight: 23 / 16, color: t.text)),
+            ],
+          );
+        },
+      );
+    }
+    if (!warn && under == null) return shown;
+    return Column(
+      crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        shown,
+        if (warn) const TransferWarning(),
+        if (under != null) Padding(padding: const EdgeInsets.only(left: 4, right: 4), child: under),
+      ],
     );
   }
 }
 
-/// A read tick for the person's own message: one when sent, two blue once
+/// A read tick for the person's own message: one when sent, two lime once
 /// the business read it; a clock while it goes.
 class DoorTicks extends StatelessWidget {
   const DoorTicks({super.key, required this.sending, required this.read, required this.meta});
@@ -221,3 +363,59 @@ const doorFiles = FileRules(
   typesMessage: 'Send a photo (JPEG, PNG or WebP), a PDF or a voice note.',
   documents: true,
 );
+
+/// A business's photo's address for about [width] pixels: the smallest
+/// size at least that wide (else the largest), a web address only.
+String? photoUrl(Map<String, dynamic>? urls, {int width = 96}) {
+  if (urls == null) return null;
+  final sizes = <(int, String)>[
+    for (final e in urls.entries)
+      if (e.value is String && (e.value as String).startsWith(RegExp('https?://'))) (int.tryParse(e.key) ?? 0, e.value as String),
+  ]..sort((a, b) => a.$1.compareTo(b.$1));
+  if (sizes.isEmpty) return null;
+  return sizes.firstWhere((s) => s.$1 >= width, orElse: () => sizes.last).$2;
+}
+
+/// A business's face: its photo, else its letters on its name's colour.
+class BusinessFace extends StatelessWidget {
+  const BusinessFace({super.key, required this.name, this.urls, this.size = 40, this.letterSize});
+  final String name;
+  final Map<String, dynamic>? urls;
+  final double size;
+  final double? letterSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final letters = ChatAvatar(name: name, size: size, letterSize: letterSize);
+    final url = photoUrl(urls, width: (size * 2).round());
+    if (url == null) return letters;
+    return ClipOval(
+      child: Image.network(
+        url,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        excludeFromSemantics: true,
+        gaplessPlayback: true,
+        errorBuilder: (_, _, _) => letters,
+        frameBuilder: (_, child, frame, sync) => sync || frame != null ? child : letters,
+      ),
+    );
+  }
+}
+
+/// What a business has proved, in plain words for the head of its chat
+/// (§15): "Phone checked · Payments through Taskiem · Trading 8 months".
+String verifiedWords(PersonChatVerified? v) {
+  if (v == null) return '';
+  return [
+    if (v.phone) 'Phone checked',
+    if (v.business) 'Business checked',
+    if (v.payments) 'Payments through Taskiem',
+    switch (v.months) {
+      <= 0 => 'New on Taskiem',
+      1 => 'Trading 1 month',
+      final n => 'Trading $n months',
+    },
+  ].join(' · ');
+}
