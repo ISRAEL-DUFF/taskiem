@@ -32,7 +32,7 @@ import { StaffPerson } from "./pages/StaffPerson";
 import { Tasks } from "./pages/Tasks";
 import { Policies } from "./pages/Policies";
 import { Account, Passkeys } from "./pages/Account";
-import { SecondProofElsewhere, SecondProofPage, YouApp } from "./pages/You";
+import { ChatOnYou, SecondProofElsewhere, SecondProofPage, YouApp } from "./pages/You";
 import { ChatLinkPage } from "./pages/ChatLinkPage";
 import { CustomerChatSettings } from "./pages/CustomerChatSettings";
 import { signedInTo } from "./pages/WayIn";
@@ -767,6 +767,7 @@ function SignedIn() {
                     element={<StartSomething />}
                   />
                   <Route path="/second-proof" element={<SecondProofPage />} />
+                  <Route path="/you/chats/:id" element={<ChatOnYou />} />
                   <Route
                     path="/you"
                     element={

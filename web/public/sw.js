@@ -32,7 +32,9 @@ function openLink(link, business) {
   return l + (l.indexOf("?") < 0 ? "?" : "&") + "business=" + b;
 }
 
-var KINDS = ["business", "customers", "orders", "approvals", "alerts"];
+// `you`: a business's answer in the person's own chat (taskiem-for-everyone
+// §9). Its push names no business, so a tap opens /you/chats/{id} as it is.
+var KINDS = ["business", "customers", "orders", "approvals", "alerts", "you"];
 
 /** The sender's logo, a path inside the app the worker may fetch with the person's own session (nothing else is fetched). */
 var ICON_PATH = /^\/v1\/links\/[0-9a-f-]{36}\/logo(\?size=(320|800|2000))?$/;

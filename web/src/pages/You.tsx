@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { post, type Business, type InvitationAccepted, type Lock } from "../api";
 import { useAuth } from "../auth";
 import { brandFile } from "../brand";
 import { Icon } from "../icons";
+import { useWorkerGo } from "../lib/pushOpen";
 import { ErrorBox, PageHeader, Skeleton, useAction } from "../ui";
 import { Appearance, Invitations } from "./Account";
 import { PhoneSetting } from "./ChangeNumber";
@@ -23,6 +24,8 @@ export function YouApp() {
   const { me } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
+  // A notification tapped while this window is open: the worker says where.
+  useWorkerGo();
   if (!me) return null;
   const inBusiness = (me.businesses?.length ?? 0) > 0;
   // A conversation fills the window, as the chat does (§9).
@@ -49,13 +52,38 @@ export function YouApp() {
           <Route path="/you/settings" element={<YouSettings />} />
           <Route path="/you/start" element={<StartSomething />} />
           <Route path="/you/chats/new" element={<StartChat />} />
-          <Route path="/you/chats/:id" element={<PersonChatPage />} />
+          <Route path="/you/chats/:id" element={<PersonChatRoute />} />
           <Route path="/m/:code" element={<ChatLinkPage />} />
           <Route path="/second-proof" element={<SecondProofPage />} />
           <Route path="*" element={<Navigate to="/you" replace />} />
         </Routes>
       </main>
     </div>
+  );
+}
+
+/** A conversation, made afresh for each chat: nothing of one (its messages,
+ * a sheet, a send under way) is shown in the next. */
+function PersonChatRoute() {
+  const { id = "" } = useParams();
+  return <PersonChatPage key={id} />;
+}
+
+/** /you/chats/{id} opened in a business's session (a tapped notification
+ * for the person's own chat): the chat is on You, so the person moves there,
+ * by their own tap. */
+export function ChatOnYou() {
+  const { id = "" } = useParams();
+  const sw = useSwitch(`/you/chats/${encodeURIComponent(id)}`);
+  return (
+    <section className="card" data-testid="chat-on-you">
+      <h1>A chat of your own</h1>
+      <p>This chat is between you and a business, on your own side of Taskiem (You), not in this business.</p>
+      <button type="button" className="primary" disabled={sw.busy} onClick={() => sw.go("you")} data-testid="open-on-you">
+        Open it on You
+      </button>
+      <ErrorBox error={sw.error} />
+    </section>
   );
 }
 
