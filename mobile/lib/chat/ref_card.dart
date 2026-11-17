@@ -160,6 +160,11 @@ class RefCard extends StatefulWidget {
 
 class _RefCardState extends State<RefCard> {
   ChatCard? _c;
+
+  /// Shown in full: a tagged card is one short row until it is pressed, so
+  /// a message naming several stays short; pressed again, a row once more.
+  /// Kept while the conversation is open.
+  bool _open = false;
   bool _gone = false;
   bool _busy = false;
   int _tick = 0;
@@ -228,7 +233,13 @@ class _RefCardState extends State<RefCard> {
               width: double.infinity,
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(color: t.panel, borderRadius: BorderRadius.circular(14), border: Border.all(color: t.border)),
-              child: child,
+              // Opening and closing grow and shrink it, not jump.
+              child: AnimatedSize(
+                duration: (MediaQuery.maybeDisableAnimationsOf(context) ?? false) ? Duration.zero : const Duration(milliseconds: 200),
+                curve: Tk.easeOut,
+                alignment: Alignment.topCenter,
+                child: child,
+              ),
             ),
           ),
         ),
@@ -293,13 +304,78 @@ class _RefCardState extends State<RefCard> {
     ];
     final share = paidShare(c);
     final sub = [?c.party, c.kind == 'customer' ? 'last wrote ${shortDate(c.when, widget.now)}' : shortDate(c.when, widget.now)].where((s) => s.isNotEmpty).join(' · ');
+    final still = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final amount = c.kind == 'customer' ? null : naira((c.dueKobo ?? 0) > 0 ? c.dueKobo! : (c.totalKobo ?? 0));
+    // Pressed, the card opens or closes; a screen reader hears which.
+    Widget toggle(Widget child) => Semantics(
+      button: true,
+      expanded: _open,
+      label: '$label${pill != null ? ', ${pill.text}' : ''}${amount != null ? ', $amount' : ''}',
+      hint: _open ? 'Show less' : 'Show details',
+      onTap: () => setState(() => _open = !_open),
+      excludeSemantics: true,
+      child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => setState(() => _open = !_open), child: child),
+    );
+    Widget chevron() => AnimatedRotation(
+      turns: _open ? 0.75 : 0.25,
+      duration: still ? Duration.zero : const Duration(milliseconds: 180),
+      child: TkIcon('chevron', size: 16, color: t.muted),
+    );
+    if (!_open) {
+      // One short row: what it is, where it stands, how much.
+      return frame(
+        label: label,
+        toggle(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+            child: Row(
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: tileBg, borderRadius: BorderRadius.circular(9)),
+                  child: TkIcon(icon, size: 17, color: tileInk),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14.5, weight: 700, lineHeight: 1.25, color: t.text)),
+                      Text(
+                        [kind, if (sub.isNotEmpty) sub].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: tkText(size: 12.5, lineHeight: 1.3, color: t.muted),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (amount != null)
+                      Text(amount, style: tkText(size: 14, weight: 700, lineHeight: 1.25, color: t.text).copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
+                    if (pill != null) ...[const SizedBox(height: 3), CardPill(pill.text, pill.tone)],
+                  ],
+                ),
+                const SizedBox(width: 6),
+                chevron(),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return frame(
       label: label,
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // `.tk-ref-top`
-          Padding(
+          // `.tk-ref-top`; pressed, the card closes to its row.
+          toggle(Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,9 +400,11 @@ class _RefCardState extends State<RefCard> {
                   ),
                 ),
                 if (pill != null) ...[const SizedBox(width: 12), CardPill(pill.text, pill.tone)],
+                const SizedBox(width: 6),
+                Padding(padding: const EdgeInsets.only(top: 2), child: chevron()),
               ],
             ),
-          ),
+          )),
           if (c.kind == 'customer')
             _Stats(c: c, now: widget.now)
           else ...[
