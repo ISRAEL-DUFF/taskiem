@@ -4,7 +4,8 @@ import { ApiError, del, get, post, put, upload } from "../api";
 import { Icon } from "../icons";
 import { Pill } from "../kit";
 import { naira } from "../lib/billing";
-import { appNote, appThreadLine, mayOffer, type CardAsk } from "../lib/customerlinks";
+import { appThreadLine, mayOffer, type CardAsk } from "../lib/customerlinks";
+import { bothLines, chosenLine, lineClosed, lineNote, lineStates, lineWords, listMark, replyLineBody, stoppedPreview, threadLines, type Line } from "../lib/customerlines";
 import { clientFor, erasedWords, mayHaveArrived, type AppCard, type KeptSend } from "../lib/personchat";
 import {
   customerKey,
@@ -18,7 +19,6 @@ import {
   mergeCustomer,
   owesWords,
   phoneWords,
-  replyNote,
   type CustomerChat,
   type CustomerMessage,
 } from "../lib/customerchat";
@@ -40,7 +40,8 @@ import { CustomerOrders } from "./CustomerOrders";
 
 // Customers' conversations in the Chat page (docs/spec/chat-five-more-flows.md,
 // phase 1): the list's Customers section and a customer's thread. A reply
-// goes from the business's own WhatsApp number.
+// goes from the business's own WhatsApp number, or in the app; a customer
+// on both is one thread with both lines (taskiem-for-everyone §11).
 
 /** How often an open thread and the list look for what is new. */
 const POLL_MS = 4000;
@@ -89,6 +90,7 @@ export function CustomerRows({
       <ul className="chat-rows" aria-label={head} data-testid="customer-chats">
         {chats.map((c) => {
           const draft = drafts[`customer:${c.id}`];
+          const mark = listMark(c);
           return (
             <ChatRow
               key={c.id}
@@ -97,10 +99,10 @@ export function CustomerRows({
               title={
                 <>
                   {customerTitle(c)}
-                  {c.line === "app" && (
-                    <span className="line-mark" data-testid="in-the-app">
+                  {mark && (
+                    <span className="line-mark" data-testid={bothLines(c) ? "both-lines" : "in-the-app"}>
                       {" "}
-                      · in the app
+                      · {mark}
                     </span>
                   )}
                 </>
@@ -112,7 +114,7 @@ export function CustomerRows({
                     <span className="draft">Draft:</span> {draft}
                   </>
                 ) : c.stopped ? (
-                  c.line === "app" ? "Stopped messages" : "Sent STOP"
+                  stoppedPreview(c)
                 ) : (
                   `${c.last_mine ? "You: " : ""}${c.last}`
                 )
@@ -345,12 +347,25 @@ export function CustomerPane({
   useAutoGrow(box, text);
 
   const c = chat.data;
-  // A customer in the Taskiem app (taskiem-for-everyone §8.3): no 24-hour
-  // window, cards, files, typing and blocks.
-  const app = c?.line === "app";
-  const note = erased ? { tone: "stop" as const, text: erased } : c ? (app ? appNote(c) : replyNote(c)) : null;
-  const canSend = !!c && !c.stopped && !c.blocked && (app || !!c.phone) && !erased;
-  const tooLong = !!c && !app && lateTooLong(text, c.window_open);
+  // The customer's lines (taskiem-for-everyone §11): WhatsApp, the app, or
+  // both. A reply goes on the line chosen, by default where they last wrote.
+  const lines = c ? threadLines(c) : [];
+  const both = lines.length > 1;
+  const [picked, setPicked] = useState<Line>();
+  const replyLine: Line = c ? chosenLine(c, picked) : "whatsapp";
+  const cur = lines.find((l) => l.line === replyLine);
+  const appLine = lines.find((l) => l.line === "app");
+  // In the app (§8.3): no 24-hour window; cards, files, offers, typing and
+  // blocks. With both lines they always go in the app.
+  const app = replyLine === "app";
+  const appOpen = !!appLine && !lineClosed(appLine) && !erased;
+  const note = erased ? { tone: "stop" as const, text: erased } : cur ? lineNote(cur) : null;
+  const canSend = !!cur && !lineClosed(cur) && !erased;
+  const tooLong = !!cur && !app && lateTooLong(text, cur.window_open);
+  const states = c ? lineStates(c) : [];
+  // Each bubble says where it went once the thread holds both lines.
+  const markLines = both || new Set((messages ?? []).map((m) => m.line).filter(Boolean)).size > 1;
+  const inApp = both ? " in the app" : "";
   const [cards, setCards] = useState(false);
   const [asOffer, setAsOffer] = useState(false);
   const filePick = useRef<HTMLInputElement>(null);
@@ -359,7 +374,7 @@ export function CustomerPane({
   const typed = (v: string) => {
     setText(v);
     // Refused while either side blocked the other (403, 409): nothing to say.
-    if (!app || !canSend || !v.trim() || Date.now() - lastTyped.current < 4000) return;
+    if (!app || !appOpen || !v.trim() || Date.now() - lastTyped.current < 4000) return;
     lastTyped.current = Date.now();
     void post(`/v1/customer-chats/${id}/typing`).catch(() => undefined);
   };
@@ -367,13 +382,15 @@ export function CustomerPane({
   // another message is on its way goes too, never dropped.
   const send = (extra?: { card?: CardAsk; cardWords?: string; file?: File }) => {
     const words = extra?.card ? (extra.cardWords ?? "") : text.trim();
-    if ((!words && !extra?.file && !extra?.card) || !canSend) return;
     const plain = !extra?.card && !extra?.file;
+    // Cards and files go in the app whatever line is chosen.
+    if ((!words && !extra?.file && !extra?.card) || !(plain ? canSend : appOpen)) return;
     const fresh = () => `${Date.now()}-${++localN}`;
     const client = plain ? clientFor(kept.current, words, fresh) : fresh();
     if (plain) kept.current = undefined;
     const file = extra?.file;
-    const offer = !extra?.card && !file && asOffer && mayOffer(c ?? {});
+    const offer = !extra?.card && !file && asOffer && appOpen && mayOffer({ ...c, line: "app" });
+    const line: Line = plain && !offer ? replyLine : "app";
     const mine: CustomerMessage = {
       id: `local-${client}`,
       mine: true,
@@ -384,6 +401,7 @@ export function CustomerPane({
       read_at: null,
       created_at: new Date().toISOString(),
       local: true,
+      line,
     };
     setMessages((cur) => mergeCustomer(cur ?? [], [mine]));
     if (plain) setText("");
@@ -405,7 +423,7 @@ export function CustomerPane({
               : {
                   text: words,
                   client_id: client,
-                  ...(offer ? { offer: true } : {}),
+                  ...(offer ? { offer: true } : c ? replyLineBody(c, line) : {}),
                 },
           );
         if (offer) setAsOffer(false);
@@ -449,7 +467,7 @@ export function CustomerPane({
             ? [
                 c.typing ? "" : c.phone && c.phone !== c.name ? phoneWords(c.phone) : "",
                 c.typing ? "" : owes,
-                appThreadLine(c),
+                appThreadLine({ ...c, lines }),
               ]
                 .filter(Boolean)
                 .join(" · ")
@@ -501,17 +519,19 @@ export function CustomerPane({
                   >
                     {c.muted ? "Unmute notifications" : "Mute notifications"}
                   </button>
-                  {c.line === "app" && (
+                  {appLine && (
                     <button
                       type="button"
                       role="menuitem"
                       data-testid="customer-block"
                       onClick={async () => {
                         close();
-                        if (!c.blocked) {
+                        if (!appLine.blocked) {
                           const yes = await sure.confirm({
-                            title: `Block ${customerTitle(c)}?`,
-                            body: "They will not be able to write to you, and you will not be able to write to them. Nothing is deleted.",
+                            title: `Block ${customerTitle(c)}${inApp}?`,
+                            body: both
+                              ? "In the app they will not be able to write to you, and you will not be able to write to them. Their WhatsApp stays as it is. Nothing is deleted."
+                              : "They will not be able to write to you, and you will not be able to write to them. Nothing is deleted.",
                             ok: "Block",
                             danger: true,
                           });
@@ -519,16 +539,16 @@ export function CustomerPane({
                         }
                         void act.run(
                           async () => {
-                            if (c.blocked) await del(`/v1/customer-chats/${id}/block`);
+                            if (appLine.blocked) await del(`/v1/customer-chats/${id}/block`);
                             else await post(`/v1/customer-chats/${id}/block`);
                             chat.reload();
                             changed.current();
                           },
-                          c.blocked ? "Unblocked" : "Blocked",
+                          appLine.blocked ? "Unblocked" : "Blocked",
                         );
                       }}
                     >
-                      {c.blocked ? "Unblock this customer" : "Block this customer"}
+                      {appLine.blocked ? `Unblock this customer${inApp}` : `Block this customer${inApp}`}
                     </button>
                   )}
                 </>
@@ -548,9 +568,11 @@ export function CustomerPane({
           !prev || prev.mine !== m.mine || prev.sender_name !== m.sender_name
         }
         empty={
-          app ? (
+          both ? (
+            <>Nothing here yet. What this customer writes on WhatsApp or in the app shows here.</>
+          ) : app ? (
             <>Nothing here yet. Write first: they read it in the Taskiem app.</>
-          ) : c?.stopped ? (
+          ) : cur?.stopped ? (
             <>What they wrote was deleted when they sent STOP.</>
           ) : (
             <>
@@ -587,6 +609,11 @@ export function CustomerPane({
             {m.mine && first && m.sender_name && (
               <span className="who">{m.sender_name}</span>
             )}
+            {markLines && m.line && (
+              <span className="line-of" data-testid="message-line" data-line={m.line}>
+                {lineWords(m.line)}
+              </span>
+            )}
             {m.offer && (
               <span className="pc-offer-mark">
                 <Pill tone="plain">Offer</Pill>
@@ -615,6 +642,10 @@ export function CustomerPane({
             {!m.card && !(m.attachment && ["Photo", "Voice note", "File", m.attachment.name].includes(m.body)) && (
               <span className="text">
                 {m.kind === "media" && !m.attachment ? <em>{m.body}</em> : m.body}
+                {/* Room for the time and ticks in the corner of the last line (in a
+                    thread with both lines; the others keep their look, which the
+                    app copies). */}
+                {markLines && !m.card && !m.attachment && <span className={`stamp-gap${m.mine ? " mine" : ""}`} aria-hidden="true" />}
               </span>
             )}
             {m.mine && m.delivery === "failed" && (
@@ -626,6 +657,23 @@ export function CustomerPane({
         )}
       />
       {c && <CustomerOrders chatId={c.id} canSend={canSend} />}
+      {states.length > 0 && (
+        <ul className="customer-line-states" aria-label="This customer's lines" data-testid="customer-line-states">
+          {states.map((st) => (
+            <li key={st.line} data-line={st.line}>
+              {st.text}
+            </li>
+          ))}
+        </ul>
+      )}
+      {both && c && (
+        <LineChooser
+          lines={lines}
+          value={replyLine}
+          onChange={setPicked}
+          appOpen={appOpen}
+        />
+      )}
       {note && (
         <p
           className={`customer-note ${note.tone}`}
@@ -645,10 +693,10 @@ export function CustomerPane({
           {LATE_REPLY_MAX} characters. This one is {lateLength(text)}.
         </p>
       )}
-      {canSend && app && mayOffer(c ?? {}) && (
+      {canSend && appOpen && (app || both) && mayOffer({ ...c, line: "app" }) && (
         <label className="switch-line customer-offer-line">
           <input type="checkbox" checked={asOffer} onChange={(e) => setAsOffer(e.target.checked)} data-testid="customer-as-offer" />{" "}
-          <span>Send as an offer (they said yes to offers; two a week at most)</span>
+          <span>Send as an offer{inApp} (they said yes to offers; two a week at most)</span>
         </label>
       )}
       {canSend && (
@@ -659,12 +707,13 @@ export function CustomerPane({
             send();
           }}
         >
-          {app && (
+          {appOpen && (
             <>
               <button
                 type="button"
                 className="composer-tools"
-                aria-label="Send a card: an order, a pay link, a booking or a product"
+                aria-label={`Send a card${inApp}: an order, a pay link, a booking or a product`}
+                title={both ? "Cards go in the app" : undefined}
                 data-testid="customer-cards"
                 onClick={() => setCards(true)}
               >
@@ -692,6 +741,7 @@ export function CustomerPane({
           <div className="composer-pill">
             <label className="sr-only" htmlFor="customer-text">
               Reply to {c ? customerTitle(c) : "the customer"}
+              {both ? ` ${lineWords(replyLine)}` : ""}
             </label>
             <textarea
               id="customer-text"
@@ -699,7 +749,7 @@ export function CustomerPane({
               data-chat-box=""
               rows={1}
               maxLength={2000}
-              placeholder="Reply"
+              placeholder={both ? `Reply ${lineWords(replyLine)}` : "Reply"}
               value={text}
               onChange={(e) => typed(e.target.value)}
               onKeyDown={(e) => {
@@ -709,8 +759,8 @@ export function CustomerPane({
                 }
               }}
             />
-            {app && (
-              <button type="button" className="icon-button" aria-label="Send a photo, PDF or voice note" title="Send a photo or a PDF" onClick={() => filePick.current?.click()}>
+            {appOpen && (
+              <button type="button" className="icon-button" aria-label={`Send a photo, PDF or voice note${inApp}`} title={both ? "Photos and files go in the app" : "Send a photo or a PDF"} onClick={() => filePick.current?.click()}>
                 <Icon name="attach" />
               </button>
             )}
@@ -735,6 +785,56 @@ export function CustomerPane({
         />
       )}
     </section>
+  );
+}
+
+/** Where a reply goes, for a customer on both lines: on WhatsApp or in the
+ * app, the one that cannot take a message turned off with why. Cards,
+ * offers and files go in the app whatever is chosen. */
+function LineChooser({
+  lines,
+  value,
+  onChange,
+  appOpen,
+}: {
+  lines: ReturnType<typeof threadLines>;
+  value: Line;
+  onChange: (l: Line) => void;
+  appOpen: boolean;
+}) {
+  const shut = lines.map((l) => ({ l, why: lineClosed(l) }));
+  const open = shut.filter((x) => !x.why);
+  return (
+    <fieldset className="line-chooser" data-testid="line-chooser" disabled={open.length === 0}>
+      <legend className="sr-only">Your reply goes</legend>
+      <div className="line-choices">
+        <span className="line-label" aria-hidden="true">
+          Your reply goes
+        </span>
+        {shut.map(({ l, why }) => (
+          <label key={l.line} className={`line-choice${value === l.line ? " on" : ""}${why ? " off" : ""}`} data-line={l.line}>
+            <input
+              type="radio"
+              name="reply-line"
+              value={l.line}
+              checked={value === l.line}
+              disabled={!!why}
+              aria-describedby={why ? `line-why-${l.line}` : undefined}
+              onChange={() => onChange(l.line)}
+            />
+            <span>{lineWords(l.line)}</span>
+          </label>
+        ))}
+      </div>
+      {shut
+        .filter((x) => x.why)
+        .map(({ l, why }) => (
+          <p key={l.line} id={`line-why-${l.line}`} className="line-why" data-testid="line-why">
+            Not {lineWords(l.line)}: {why}.
+          </p>
+        ))}
+      {value === "whatsapp" && appOpen && <p className="line-why">Cards, offers and files go in the app.</p>}
+    </fieldset>
   );
 }
 

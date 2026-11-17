@@ -7116,7 +7116,7 @@ class ChatLink {
 }
 
 class ChatSettings {
-  const ChatSettings({this.linkInUpdates, this.linkWhatsapp, this.ordersOff, required this.storefrontButton, required this.takesChats, required this.updatesLink});
+  const ChatSettings({this.linkInUpdates, this.linkWhatsapp, this.ordersOff, this.ownNumber, required this.storefrontButton, required this.takesChats, required this.updatesLink});
 
   /// The business's own choice; null for the default
   final Object? linkInUpdates;
@@ -7127,6 +7127,10 @@ class ChatSettings {
   /// The Orders area is off, so no chats are taken whatever takes_chats was set
   /// to
   final bool? ordersOff;
+  /// The business's own WhatsApp number, when it has one: where Chat on
+  /// WhatsApp goes (taskiem-for-everyone §11). Settings offers the
+  /// link_whatsapp switch only with it.
+  final String? ownNumber;
   final String storefrontButton;
   /// Whether customers can start chats now (off while the Orders area is off)
   final bool takesChats;
@@ -7137,6 +7141,7 @@ class ChatSettings {
         linkInUpdates: j['link_in_updates'],
         linkWhatsapp: j['link_whatsapp'] == null ? null : j['link_whatsapp'] as bool,
         ordersOff: j['orders_off'] == null ? null : j['orders_off'] as bool,
+        ownNumber: j['own_number'] == null ? null : j['own_number'] as String,
         storefrontButton: j['storefront_button'] as String,
         takesChats: j['takes_chats'] as bool,
         updatesLink: j['updates_link'] as bool,
@@ -7146,6 +7151,7 @@ class ChatSettings {
         'link_in_updates': ?linkInUpdates,
         'link_whatsapp': ?linkWhatsapp,
         'orders_off': ?ordersOff,
+        'own_number': ?ownNumber,
         'storefront_button': storefrontButton,
         'takes_chats': takesChats,
         'updates_link': updatesLink,

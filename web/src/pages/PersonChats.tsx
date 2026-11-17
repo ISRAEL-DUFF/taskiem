@@ -30,6 +30,7 @@ import {
   type DoorOrder,
   type KeptSend,
   type PersonChat,
+  whatsappHere,
   type PersonMessage,
 } from "../lib/personchat";
 import { browserEnv, enableYouPush, pushSupport, serverKey, thisSubscription, youPushOn } from "../lib/push";
@@ -478,6 +479,11 @@ export function PersonChatPage() {
                   {trust}
                 </span>
               )}
+              {whatsappHere(c) && (
+                <span className="pc-wa-here" data-testid="person-whatsapp-here">
+                  {whatsappHere(c)}
+                </span>
+              )}
             </>
           ) : undefined
         }
@@ -568,6 +574,11 @@ export function PersonChatPage() {
               }
             >
               {!m.mine && first && m.sender_name && <span className="who">{m.sender_name}</span>}
+              {m.line === "whatsapp" && (
+                <span className="line-of" data-testid="person-on-whatsapp">
+                  on WhatsApp
+                </span>
+              )}
               {m.offer && (
                 <span className="pc-offer-mark">
                   <Pill tone="plain">Offer</Pill>
