@@ -145,7 +145,7 @@ void main() {
     final sent = await open(t, _order('received'));
     expect(find.text('PO-12 from Rivers Foods'), findsOneWidget);
     expect(find.text('₦15,000'), findsWidgets);
-    expect(find.text('Accept it, change it, or decline it.'), findsOneWidget);
+    expect(find.text('NEW · ANSWER THEM'), findsOneWidget);
     expect(find.text('Their note: “By Friday”'), findsOneWidget);
     expect(find.text('Messages about it'), findsOneWidget, reason: 'the order’s thread, under its steps');
     expect(find.text('2 bags at ₦5,000'), findsOneWidget);
@@ -280,7 +280,7 @@ void main() {
 
   testWidgets('past their credit limit: the notice, and their statement', (t) async {
     await open(t, _order('received', more: {'over_limit_at': '2026-11-12T09:00:00Z'}));
-    expect(find.textContaining('past the credit limit you give them'), findsOneWidget);
+    expect(find.text('Past their credit limit'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Their statement').first);
     await t.pumpAndSettle();
     expect(find.text('This is coming to the app soon.'), findsNothing);
@@ -309,13 +309,29 @@ void main() {
     await t.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('Message opens the business’s conversation; none without one', (t) async {
+    final opened = <String>[];
+    Openers.conversation = (context, link) {
+      opened.add(link);
+      return true;
+    };
+    addTearDown(() => Openers.conversation = null);
+    await open(t, _order('received'));
+    await t.tap(find.bySemanticsLabel('Message Rivers Foods'));
+    await t.pump();
+    expect(opened.single, 'L1');
+    Openers.conversation = null;
+    await open(t, _order('received'));
+    expect(find.bySemanticsLabel('Message Rivers Foods'), findsNothing);
+  });
+
   testWidgets('without storefront.manage no answers; without link.manage no terms', (t) async {
     await open(t, _order('received'), perms: ['link.manage']);
-    expect(find.text('Answer Rivers Foods'), findsNothing);
+    expect(find.bySemanticsLabel('Accept'), findsNothing);
     expect(find.text('Your items'), findsNothing);
     expect(find.text('Rivers Foods’s orders'), findsOneWidget);
     await open(t, _order('received'), perms: ['storefront.manage']);
-    expect(find.text('Answer Rivers Foods'), findsOneWidget);
+    expect(find.bySemanticsLabel('Accept'), findsOneWidget);
     expect(find.text('Rivers Foods’s orders'), findsNothing);
   });
 

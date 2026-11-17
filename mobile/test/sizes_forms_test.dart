@@ -83,13 +83,17 @@ void main() {
         onCancel: () {},
       ),
     );
-    // Off to the side in its row of chips: slid to first.
+    // The choice opened from its row; a ready-made one picked.
+    await t.tap(find.bySemanticsLabel(RegExp('^Change Size')));
+    await t.pumpAndSettle();
     await t.ensureVisible(find.bySemanticsLabel('Small, medium, large'));
     await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Small, medium, large'));
     await t.pump();
-    // The boxes in order: its name, its values, the same number for all.
-    await t.enterText(find.byType(EditableText).at(2), '3');
+    await t.tap(find.bySemanticsLabel('Done'));
+    await t.pumpAndSettle();
+    expect(find.text('Medium'), findsWidgets);
+    await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp('^Same number for all')), matching: find.byType(EditableText)), '3');
     await t.pump();
     await t.tap(find.bySemanticsLabel('Fill'));
     await t.pump();

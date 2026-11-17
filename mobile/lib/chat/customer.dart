@@ -451,7 +451,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
               child: Column(
                 children: [
                   ColoredBox(
-                    color: t.panel,
+                    color: t.chatWallpaper,
                     child: Padding(
                       padding: EdgeInsets.only(top: pad.top),
                       child: ChatHeadBar(

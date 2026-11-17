@@ -77,7 +77,7 @@ func (a AppLinks) PasskeyOrigins() []string {
 }
 
 // appPaths are the pages the app opens; everything else stays on the web.
-var appPaths = []string{"/chat", "/chat/*", "/m/*", "/second-proof", "/invoices/*", "/trade-orders/*", "/storefront/orders/*", "/bills/*", "/purchases/*", "/approvals", "/approvals/*"}
+var appPaths = []string{"/chat", "/chat/*", "/m/*", "/second-proof", "/invoices/*", "/trade-orders/*", "/storefront/orders/*", "/bills/*", "/purchases/*", "/approvals", "/approvals/*", "/reset-password"}
 
 // assetLinks is Android's Digital Asset Links: the app handles these links
 // and shares these sign-ins (passkeys).

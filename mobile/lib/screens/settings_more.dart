@@ -18,9 +18,38 @@ import '../app/lock.dart';
 import '../app/prefs.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
+import '../kit/look.dart' show TkEyebrow, TkFace, TkTopCard, tkFigure;
+import '../kit/forms.dart' show TkSwitch;
+import '../kit/mobile.dart' show TkListRow, TkSection, tkInitials;
+import '../kit/page.dart' show TkPageScreen;
+import '../theme/look.dart';
 import '../theme/theme.dart';
 
-/// The web's `.card`: the panel, its border, the radius; 20 px by 22.
+/// A settings page of its own (docs/spec/mobile-app-look.md, "Settings"):
+/// the app's head with Back to Settings, its cards on the ground. A card
+/// titled as the page shows no title of its own.
+class SettingsPage extends StatelessWidget {
+  const SettingsPage({super.key, required this.title, required this.children, this.backLabel = 'Back to Settings'});
+  final String title;
+  final String backLabel;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => _PageTitle(
+    title: title,
+    child: TkPageScreen(title: title, titleSize: 26, backLabel: backLabel, children: children),
+  );
+}
+
+class _PageTitle extends InheritedWidget {
+  const _PageTitle({required this.title, required super.child});
+  final String title;
+
+  @override
+  bool updateShouldNotify(_PageTitle old) => old.title != title;
+}
+
+/// A group of settings: its heading on the ground, then its card.
 class SettingsCard extends StatelessWidget {
   const SettingsCard({super.key, required this.title, required this.children});
   final String title;
@@ -28,37 +57,113 @@ class SettingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
-      child: Semantics(
-        container: true,
-        // Its buttons and fields each their own, not one block read out.
-        explicitChildNodes: true,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
-          decoration: BoxDecoration(
-            color: t.panel,
-            border: Border.all(color: t.border),
-            borderRadius: BorderRadius.circular(Tk.radius),
+    final own = context.dependOnInheritedWidgetOfExactType<_PageTitle>()?.title == title;
+    return Semantics(
+      container: true,
+      // Its buttons and fields each their own, not one block read out.
+      explicitChildNodes: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!own) SettingsHeading(title),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(20)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < children.length; i++) ...[if (i > 0 && children[i] is! SizedBox && children[i - 1] is! SizedBox) const SizedBox(height: 6), children[i]],
+              ],
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Semantics(
-                  header: true,
-                  child: Text(title, style: tkText(size: 16, weight: 600, lineHeight: 1.3, color: t.text)),
-                ),
-              ),
-              ...children,
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }
+}
+
+/// A group's heading, large on the ground (`.b-sec`).
+class SettingsHeading extends StatelessWidget {
+  const SettingsHeading(this.title, {super.key});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
+    child: Semantics(
+      header: true,
+      child: Text(title, style: tkDisplay(size: 20, letterSpacing: -0.4, color: TkTheme.tokens(context).text)),
+    ),
+  );
+}
+
+/// What is set, large on the top card: its eyebrow, the figure, a line,
+/// then its buttons.
+class SettingsTop extends StatelessWidget {
+  const SettingsTop({super.key, required this.eyebrow, this.trailing, required this.big, this.line, this.children = const []});
+  final String eyebrow;
+  final String? trailing;
+  final String big;
+  final String? line;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    return TkTopCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TkEyebrow(eyebrow, color: look.limeInk, trailing: trailing),
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(big, maxLines: 1, style: tkFigure(context, size: 26)),
+          ),
+          if (line != null) Padding(padding: const EdgeInsets.only(top: 4), child: Text(line!, style: tkText(size: 13, lineHeight: 1.4, color: t.muted))),
+          for (final c in children) ...[const SizedBox(height: 12), c],
+        ],
+      ),
+    );
+  }
+}
+
+/// Quiet words on the ground, under a card.
+class SettingsNote extends StatelessWidget {
+  const SettingsNote(this.words, {super.key});
+  final String words;
+
+  @override
+  Widget build(BuildContext context) =>
+      Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(words, style: tkText(size: 13, lineHeight: 1.4, color: TkTheme.tokens(context).muted)));
+}
+
+/// A page's cards, 14 apart.
+class SettingsColumn extends StatelessWidget {
+  const SettingsColumn({super.key, required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(height: 14), children[i]],
+    ],
+  );
+}
+
+/// A button in a settings card: the app's own small one.
+class _Btn extends StatelessWidget {
+  const _Btn({required this.label, this.onTap, this.primary = false, this.danger = false});
+  final String label;
+  final VoidCallback? onTap;
+  final bool primary;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) => TkSmallButton(label: label, primary: primary, danger: danger, onPressed: onTap);
 }
 
 /// Account.tsx's words for a failure.
@@ -170,41 +275,82 @@ class _YouCardState extends _Section<YouCard> {
     final t = TkTheme.tokens(context);
     final u = widget.auth.me?.user;
     final placeholder = u?.emailPlaceholder == true;
-    return SettingsCard(
-      title: 'You',
-      children: [
-        if ((u?.name ?? '').isNotEmpty) Text(u!.name!, style: tkText(size: 15, weight: 600, color: t.text)),
-        if (!placeholder && (u?.email ?? '').isNotEmpty) Text(u!.email!, style: tkHint(t)),
-        if (placeholder) ...[
-          const SizedBox(height: 8),
-          Text('Add your email', style: tkText(size: 14, weight: 600, color: t.text)),
-          const SizedBox(height: 4),
-          Text(
-            'Your account was made in a chat, so Taskiem cannot email you yet. Add an email to get receipts and invoices, and to sign in with it.',
-            style: tkHint(t),
+    final me = widget.auth.me;
+    final name = (u?.name ?? '').isNotEmpty ? u!.name! : 'You';
+    final roles = me?.roles is List ? [for (final r in me!.roles as List) '$r'] : const <String>[];
+    final who = [
+      if (roles.isNotEmpty) '${roles.first[0].toUpperCase()}${roles.first.substring(1).replaceAll('_', ' ')}',
+      if ((me?.tenantName ?? '').isNotEmpty) me!.tenantName!,
+    ].join(' · ');
+    // You at the top of Settings, as drawn: your face, name, email, and
+    // your role in the business; an account made in a chat adds its email.
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(22)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          MergeSemantics(
+            child: Row(
+              children: [
+                TkFace(tkInitials(name), size: 56, colors: tkFaceFor(name)),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkDisplay(size: 19, letterSpacing: -0.3, color: t.text)),
+                      if (!placeholder && (u?.email ?? '').isNotEmpty) Text(u!.email!, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 13, color: t.muted)),
+                      if (who.isNotEmpty) Text(who, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 13, color: t.muted)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 12),
-          TkField(label: 'Email', controller: _email, keyboard: TextInputType.emailAddress, autofill: const [AutofillHints.email]),
-          if (error != null) TkErrorBox(error!),
-          const SizedBox(height: 12),
-          TkButton(
-            label: 'Send the link',
-            primary: true,
-            minHeight: 44,
-            onPressed: busy
-                ? null
-                : () => run(() async {
-                    await widget.auth.api.addEmail(body: AddEmailRequest(email: _email.text.trim()));
-                    _email.clear();
-                  }, done: 'A link is on its way: open it to confirm'),
-          ),
+          if (placeholder) ...[
+            const SizedBox(height: 14),
+            Text('Add your email', style: tkText(size: 15, weight: 600, color: t.text)),
+            const SizedBox(height: 4),
+            Text(
+              'Your account was made in a chat, so Taskiem cannot email you yet. Add an email to get receipts and invoices, and to sign in with it.',
+              style: tkHint(t),
+            ),
+            const SizedBox(height: 12),
+            TkField(label: 'Email', controller: _email, keyboard: TextInputType.emailAddress, autofill: const [AutofillHints.email]),
+            if (error != null) TkErrorBox(error!),
+            const SizedBox(height: 12),
+            TkSmallButton(
+              label: 'Send the link',
+              primary: true,
+              onPressed: busy
+                  ? null
+                  : () => run(() async {
+                      await widget.auth.api.addEmail(body: AddEmailRequest(email: _email.text.trim()));
+                      _email.clear();
+                    }, done: 'A link is on its way: open it to confirm'),
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
 
 // --- the lock ---
+
+/// The lock set to [after] (null: off), made with the phone's own unlock;
+/// what stopped it, if anything stopped it.
+Future<String?> chooseLock(Prefs prefs, Unlocker? u, Duration? after) async {
+  if (after == prefs.lockAfter) return null;
+  if (u != null) {
+    final has = await u.available();
+    if (!has && after != null) return 'Set a screen lock on this phone first: a fingerprint, face or PIN.';
+    if (has && !await stepOut(u.unlock)) return null;
+  }
+  await prefs.setLockAfter(after);
+  return null;
+}
 
 /// The app lock, as WhatsApp's: off until turned on, then locking at once,
 /// after a minute or after half an hour away. Every change is made with the
@@ -223,19 +369,8 @@ class _LockCardState extends State<LockCard> {
   String? _error;
 
   Future<void> _choose(Duration? after) async {
-    final prefs = widget.prefs;
-    if (after == prefs.lockAfter) return;
-    final u = widget.unlocker;
-    if (u != null) {
-      final has = await u.available();
-      if (!has && after != null) {
-        if (mounted) setState(() => _error = 'Set a screen lock on this phone first: a fingerprint, face or PIN.');
-        return;
-      }
-      if (has && !await stepOut(u.unlock)) return;
-    }
-    if (mounted) setState(() => _error = null);
-    await prefs.setLockAfter(after);
+    final why = await chooseLock(widget.prefs, widget.unlocker, after);
+    if (mounted) setState(() => _error = why);
   }
 
   @override
@@ -302,42 +437,49 @@ class _ChatToolsCardState extends _Section<ChatToolsCard> {
     );
   }
 
+  void _flip() {
+    if (_on == null || busy) return;
+    final next = !(_on ?? false);
+    // What was just chosen shows at once; taken back if refused.
+    setState(() => _on = next);
+    run(() async {
+      try {
+        await widget.auth.api.putChatTools(body: PutChatToolsRequest(chatTools: next));
+        widget.onChanged?.call(next);
+      } on Object {
+        _on = !next;
+        rethrow;
+      }
+    }, done: 'Saved');
+  }
+
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
     final on = _on ?? false;
-    return SettingsCard(
-      title: 'Chat tools',
+    // For everyone here, as drawn: the switch on its row; what it does
+    // under the card.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Semantics(
-          toggled: on,
-          enabled: _on != null && !busy,
-          child: TkChoiceRow(
-            radio: false,
-            control: TkCheckbox(checked: on),
-            label: Text('Name a business to message it', style: tkText(size: 14, color: t.text)),
-            onTap: () {
-              if (_on == null || busy) return;
-              final next = !on;
-              // What was just chosen shows at once; taken back if refused.
-              setState(() => _on = next);
-              run(() async {
-                try {
-                  await widget.auth.api.putChatTools(body: PutChatToolsRequest(chatTools: next));
-                  widget.onChanged?.call(next);
-                } on Object {
-                  _on = !next;
-                  rethrow;
-                }
-              }, done: 'Saved');
-            },
-          ),
+        const SettingsHeading('For everyone here'),
+        TkSection(
+          inset: 56,
+          children: [
+            TkListRow(
+              title: 'Chat tools',
+              sub: 'Name a business to message it',
+              icon: 'b-tools',
+              square: TkLook.of(context).red,
+              trailing: TkSwitch(label: 'Name a business to message it', on: on, onChanged: _on == null || busy ? null : (_) => _flip()),
+              onTap: _on == null || busy ? null : _flip,
+            ),
+          ],
         ),
-        Text(
+        if (error != null) ...[const SizedBox(height: 10), TkErrorBox(error!)],
+        const SizedBox(height: 10),
+        const SettingsNote(
           'On WhatsApp, Telegram, Slack and in your Taskiem chat, a message naming linked businesses goes straight to them. Write @Taskiem to ask Taskiem instead. Everyone in the business gets the same.',
-          style: tkHint(t),
         ),
-        if (error != null) TkErrorBox(error!),
       ],
     );
   }
@@ -362,6 +504,9 @@ class WhatsAppCard extends StatefulWidget {
 class _WhatsAppCardState extends _Section<WhatsAppCard> {
   WhatsAppBinding? _b;
   bool _sent = false;
+  // Linking another number, and setting the PIN: each opened when asked for.
+  bool _another = false;
+  bool _pinOpen = false;
   final _number = TextEditingController();
   final _code = TextEditingController();
   final _proof = TextEditingController();
@@ -399,28 +544,24 @@ class _WhatsAppCardState extends _Section<WhatsAppCard> {
     final api = widget.auth.api;
     final number = b.number is String ? b.number as String : null;
     final pending = b.pending;
-    return SettingsCard(
-      title: 'WhatsApp',
-      children: [
-        Text(
-          'Link your WhatsApp number to approve requests, check what ran and start workflows by chat${b.platformNumber != null ? ' with Taskiem’s number ${b.platformNumber}' : ''}. Your roles and approval policies apply exactly as here; some approvals still ask for your passkey or authenticator code.',
-          style: tkHint(t),
-        ),
-        const SizedBox(height: 12),
-        if (number != null) ...[
-          Text(
-            'Linked: $number${b.verifiedAt is String ? ' · since ${_fmt(DateTime.parse(b.verifiedAt as String))}' : ''}',
-            style: tkText(size: 14, weight: 600, color: t.text),
-          ),
-          if (b.dormant == true) _dormant(t, 'number'),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            children: [
-              TkPlainButton(
+    final what =
+        'Approve requests, check what ran and start workflows by chat${b.platformNumber != null ? ' with Taskiem’s number ${b.platformNumber}' : ''}.';
+    // As drawn (docs/spec/mobile-app-look.md, "Settings"): the number
+    // linked large on the top card with Unlink; linking, and the approval
+    // PIN, each on a card of its own.
+    return SettingsColumn(children: [
+      if (number != null)
+        SettingsTop(
+          eyebrow: b.dormant == true ? 'Resting' : 'Linked',
+          trailing: b.verifiedAt is String ? 'since ${_fmt(DateTime.parse(b.verifiedAt as String))}' : null,
+          big: number,
+          line: what,
+          children: [
+            if (b.dormant == true) _dormant(t, 'number'),
+            TkSmallButton(
                 label: 'Unlink',
-                danger: true,
-                onTap: busy
+                semantics: 'Unlink $number',
+                onPressed: busy
                     ? null
                     : () async {
                         final placeholder = RegExp(r'^owner\+.*@phone\.taskiem\.invalid$').hasMatch(widget.auth.me?.user?.email ?? '');
@@ -440,10 +581,25 @@ class _WhatsAppCardState extends _Section<WhatsAppCard> {
                           }, done: 'WhatsApp unlinked');
                         }
                       },
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+            ),
+          ],
+        ),
+      if (number != null) SettingsNote('Your roles and approval policies apply exactly as here; some approvals still ask for your passkey or authenticator code.'),
+      // Linked: another number only when asked for (as drawn).
+      if (number != null && !_another && pending == null && !_sent)
+        TkSection(
+          inset: 56,
+          children: [
+            TkListRow(title: 'Link another number', icon: 'b-whatsapp', square: const Color(0xFF25D366), onTap: () => setState(() => _another = true)),
+          ],
+        )
+      else
+      SettingsCard(
+      title: number != null ? 'Link another number' : 'Link your WhatsApp',
+      children: [
+        if (number == null) ...[
+          Text('$what Your roles and approval policies apply exactly as here; some approvals still ask for your passkey or authenticator code.', style: tkHint(t)),
+          const SizedBox(height: 12),
         ],
         TkField(label: number != null ? 'Link another number instead' : 'Your WhatsApp number', controller: _number, keyboard: TextInputType.phone),
         Padding(
@@ -453,7 +609,7 @@ class _WhatsAppCardState extends _Section<WhatsAppCard> {
         ProofField(auth: widget.auth, to: 'link a number', controller: _proof),
         Align(
           alignment: Alignment.centerLeft,
-          child: TkPlainButton(
+          child: _Btn(
             label: 'Send a code',
             onTap: busy || proofAsked(widget.auth) == null
                 ? null
@@ -485,7 +641,7 @@ class _WhatsAppCardState extends _Section<WhatsAppCard> {
             listenable: _code,
             builder: (context, _) => Align(
               alignment: Alignment.centerLeft,
-              child: TkPlainButton(
+              child: _Btn(
                 label: 'Link',
                 primary: true,
                 onTap: busy || _code.text.length != 6
@@ -495,6 +651,7 @@ class _WhatsAppCardState extends _Section<WhatsAppCard> {
                         _code.clear();
                         _number.clear();
                         _sent = false;
+                        _another = false;
                         await _load();
                       }, done: 'WhatsApp linked'),
               ),
@@ -502,89 +659,96 @@ class _WhatsAppCardState extends _Section<WhatsAppCard> {
           ),
         ],
         if (error != null) TkErrorBox(error!),
-        if (number != null && b.flows) _pinPart(t, b.pin),
       ],
-    );
+      ),
+      if (number != null && b.flows) _pinPart(t, b.pin),
+    ]);
   }
 
   /// Account.tsx WhatsAppPin.
   Widget _pinPart(TkTokens t, WhatsAppPin pin) {
     final api = widget.auth.api;
+    final look = TkLook.of(context);
     final f = factorsOf(widget.auth);
     final strong = f.passkey || f.totp;
-    return Padding(
-      padding: const EdgeInsets.only(top: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Semantics(
-            header: true,
-            child: Text('Approval PIN', style: tkText(size: 15, weight: 600, color: t.text)),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Six digits you enter in WhatsApp to confirm approvals whose policy allows a WhatsApp PIN. Policies asking for a passkey or authenticator code still send you here. Five wrong PINs lock it for 15 minutes.',
-            style: tkHint(t),
-          ),
-          const SizedBox(height: 12),
-          if (pin.set) ...[
-            Text(
-              'PIN set${pin.setAt != null ? ' ${_fmt(pin.setAt!)}' : ''}${pin.lockedUntil != null ? ' · locked until ${_fmt(pin.lockedUntil!)}' : ''}',
-              style: tkText(size: 14, color: t.text),
-            ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TkPlainButton(
-                label: 'Remove',
-                danger: true,
-                onTap: busy
-                    ? null
-                    : () async {
-                        final yes = await showTkConfirm(context, title: 'Remove your WhatsApp PIN?', ok: 'Remove', danger: true);
-                        if (yes) {
-                          await run(() async {
-                            await api.removeWhatsAppPin();
-                            await _load();
-                          }, done: 'PIN removed');
-                        }
-                      },
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          if (!strong)
-            Text('Add a passkey or an authenticator first: the PIN stands in for them in WhatsApp.', style: tkHint(t))
-          else ...[
-            TkField(label: pin.set ? 'New PIN' : 'PIN', controller: _pin, digits: 6, obscure: true, keyboard: TextInputType.number),
-            Padding(
-              padding: const EdgeInsets.only(top: 6, bottom: 12),
-              child: Text('Not one digit repeated, nor a run like 123456', style: tkHint(t)),
-            ),
-            ProofField(auth: widget.auth, to: 'set the PIN', controller: _pinProof),
-            ListenableBuilder(
-              listenable: _pin,
-              builder: (context, _) => Align(
-                alignment: Alignment.centerLeft,
-                child: TkPlainButton(
-                  label: pin.set ? 'Change PIN' : 'Set PIN',
-                  onTap: busy || _pin.text.length != 6 || proofAsked(widget.auth) == null
+    // As drawn: the PIN set, with Remove; Change the PIN (or Set a PIN)
+    // opening its form; what the PIN is for under them.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SettingsHeading('Approval PIN'),
+        TkSection(
+          inset: 56,
+          children: [
+            if (pin.set)
+              TkListRow(
+                title: 'PIN set${pin.setAt != null ? ' ${_fmt(pin.setAt!)}' : ''}',
+                sub: pin.lockedUntil != null ? 'Locked until ${_fmt(pin.lockedUntil!)}' : 'Stands in for your passkey in WhatsApp',
+                icon: 'b-shield',
+                square: look.violet,
+                trailing: TkSmallButton(
+                  label: 'Remove',
+                  semantics: 'Remove the PIN',
+                  onPressed: busy
                       ? null
-                      : () => run(() async {
-                          final p = proofOf(widget.auth, _pinProof.text);
-                          await api.setWhatsAppPin(
-                            body: WhatsAppPinRequest(pin: _pin.text, totp: p.totp, password: p.password),
-                          );
-                          _pin.clear();
-                          _pinProof.clear();
-                          await _load();
-                        }, done: 'PIN saved'),
+                      : () async {
+                          final yes = await showTkConfirm(context, title: 'Remove your WhatsApp PIN?', ok: 'Remove', danger: true);
+                          if (yes) {
+                            await run(() async {
+                              await api.removeWhatsAppPin();
+                              await _load();
+                            }, done: 'PIN removed');
+                          }
+                        },
                 ),
               ),
+            TkListRow(
+              title: pin.set ? 'Change the PIN' : 'Set a PIN',
+              sub: strong ? '6 digits, not one repeated, nor a run like 123456' : 'Add a passkey or an authenticator first',
+              icon: 'b-key',
+              square: look.teal,
+              onTap: strong ? () => setState(() => _pinOpen = !_pinOpen) : null,
             ),
           ],
+        ),
+        if (_pinOpen && strong) ...[
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+            decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TkField(label: pin.set ? 'New PIN' : 'PIN', controller: _pin, digits: 6, obscure: true, keyboard: TextInputType.number),
+                const SizedBox(height: 12),
+                ProofField(auth: widget.auth, to: 'set the PIN', controller: _pinProof),
+                ListenableBuilder(
+                  listenable: _pin,
+                  builder: (context, _) => TkSmallButton(
+                    label: pin.set ? 'Change PIN' : 'Set PIN',
+                    primary: true,
+                    onPressed: busy || _pin.text.length != 6 || proofAsked(widget.auth) == null
+                        ? null
+                        : () => run(() async {
+                            final p = proofOf(widget.auth, _pinProof.text);
+                            await api.setWhatsAppPin(body: WhatsAppPinRequest(pin: _pin.text, totp: p.totp, password: p.password));
+                            _pin.clear();
+                            _pinProof.clear();
+                            _pinOpen = false;
+                            await _load();
+                          }, done: 'PIN saved'),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
-      ),
+        if (error != null) ...[const SizedBox(height: 10), TkErrorBox(error!)],
+        const SizedBox(height: 10),
+        const SettingsNote(
+          'Six digits you enter in WhatsApp to confirm approvals whose policy allows a WhatsApp PIN. Policies asking for a passkey or authenticator code still send you here. Five wrong PINs lock it for 15 minutes.',
+        ),
+      ],
     );
   }
 }
@@ -649,7 +813,7 @@ class _TelegramCardState extends _Section<TelegramCard> {
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerLeft,
-            child: TkPlainButton(
+            child: _Btn(
               label: 'Unlink',
               danger: true,
               onTap: busy
@@ -680,7 +844,7 @@ class _TelegramCardState extends _Section<TelegramCard> {
         ProofField(auth: widget.auth, to: 'link Telegram', controller: _proof),
         Align(
           alignment: Alignment.centerLeft,
-          child: TkPlainButton(
+          child: _Btn(
             label: b.dormant == true ? 'Link again' : (b.linked ? 'Link another account instead' : 'Link Telegram'),
             onTap: busy || proofAsked(widget.auth) == null
                 ? null
@@ -701,8 +865,8 @@ class _TelegramCardState extends _Section<TelegramCard> {
           Wrap(
             spacing: 8,
             children: [
-              TkPlainButton(label: 'Open Telegram', primary: true, onTap: () => openOutside(link)),
-              TkPlainButton(
+              _Btn(label: 'Open Telegram', primary: true, onTap: () => openOutside(link)),
+              _Btn(
                 label: 'Done',
                 onTap: busy
                     ? null
@@ -774,7 +938,7 @@ class _SlackCardState extends _Section<SlackCard> {
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerLeft,
-            child: TkPlainButton(
+            child: _Btn(
               label: 'Unlink',
               danger: true,
               onTap: busy
@@ -802,7 +966,7 @@ class _SlackCardState extends _Section<SlackCard> {
           ProofField(auth: widget.auth, to: 'link Slack', controller: _proof),
           Align(
             alignment: Alignment.centerLeft,
-            child: TkPlainButton(
+            child: _Btn(
               label: b.pending ? 'Send the Confirm again' : 'Link Slack',
               onTap: busy || proofAsked(widget.auth) == null
                   ? null

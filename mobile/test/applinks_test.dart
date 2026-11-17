@@ -34,6 +34,27 @@ void main() {
     }
   });
 
+  test('a password reset’s link: its token, from the fragment no server sees', () async {
+    String? token(String u) => resetTokenOf(Uri.parse(u), server: server);
+    expect(token('https://taskiem.example/reset-password#token=AbC-_1234.xyZ_-9876'), 'AbC-_1234.xyZ_-9876');
+    expect(token('https://taskiem.example/reset-password/#token=AbC-_1234.xyZ_-9876'), 'AbC-_1234.xyZ_-9876');
+    expect(token('https://taskiem.example/reset-password'), isNull);
+    expect(token('https://taskiem.example/reset-password#token=a b'), isNull);
+    expect(token('https://evil.example/reset-password#token=AbC-_1234.xyZ_-9876'), isNull);
+    expect(token('https://taskiem.example/chat#token=AbC-_1234.xyZ_-9876'), isNull);
+    expect(page('https://taskiem.example/reset-password'), isNull, reason: 'not a page opened signed in');
+    final links = StreamController<Uri>();
+    final inbox = LinkInbox(links: links.stream, first: () async => null);
+    await pumpEventQueue();
+    links.add(Uri.parse('https://staging.ispend.name.ng/reset-password#token=AbC-_1234.xyZ_-9876'));
+    await pumpEventQueue();
+    expect(inbox.waiting, isFalse);
+    expect(inbox.takeReset(), 'AbC-_1234.xyZ_-9876');
+    expect(inbox.takeReset(), isNull);
+    inbox.dispose();
+    await links.close();
+  });
+
   test('a link that came signed out waits until it is taken, once', () async {
     final links = StreamController<Uri>();
     final inbox = LinkInbox(links: links.stream, first: () async => Uri.parse('https://staging.ispend.name.ng/approvals'));

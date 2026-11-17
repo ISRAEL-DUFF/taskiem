@@ -14,13 +14,18 @@ import 'package:share_plus/share_plus.dart';
 import '../app/lock.dart' show stepOut;
 import '../api/api.g.dart';
 import '../api/transport.dart';
-import '../kit/icon.dart';
+import '../kit/api_image.dart';
+import '../kit/forms.dart' show TkSwitch;
 import '../kit/kit.dart';
+import '../kit/look.dart';
+import '../kit/mobile.dart';
+import '../kit/page.dart' show TkPageScreen;
+import '../theme/look.dart';
 import '../kit/modal.dart';
 import '../theme/theme.dart';
 import 'attachments.dart' show handOffFile;
 import 'chats.dart';
-import 'thread.dart' show ChatHeadBar;
+import 'profile_screen.dart' show photoPath;
 import 'words.dart';
 
 /// links.ts groupLinks: asked, linked, waiting, then past.
@@ -52,6 +57,8 @@ class LinksScreen extends StatefulWidget {
 
 class _LinksScreenState extends State<LinksScreen> {
   LinkSettings? _settings;
+  // Your card as others see it (the business profile), for the top card.
+  Map<String, dynamic>? _card;
   Uint8List? _qr;
   String? _error;
   bool _busy = false;
@@ -68,6 +75,14 @@ class _LinksScreenState extends State<LinksScreen> {
   }
 
   Future<void> _load() async {
+    unawaited(() async {
+      try {
+        final c = await _d.auth.transport.send('GET', '/v1/business-profile');
+        if (mounted && c is Map) setState(() => _card = c.cast<String, dynamic>());
+      } on Object {
+        // No card read: the top card goes without it.
+      }
+    }());
     await _try(() async {
       final s = await _d.api.getLinkSettings();
       if (!mounted) return;
@@ -126,199 +141,230 @@ class _LinksScreenState extends State<LinksScreen> {
     await _d.load();
   }, 'Taken off the list');
 
+  /// Link with us on Taskiem: the QR code and the address, over the page.
+  void _code() {
+    final url = _settings?.url;
+    if (url == null) return;
+    showTkModal<void>(context, title: 'Link with us on Taskiem', builder: (_) => _CodeCard(url: url, qr: _qr, bare: true));
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    final dark = TkTheme.of(context).mode == TkMode.dark;
-    final pad = MediaQuery.paddingOf(context);
+    final look = TkLook.of(context);
     final manage = _d.auth.can('link.manage');
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
-      child: ColoredBox(
-        color: t.bg,
-        child: Column(
+    final s = _settings;
+    final url = s?.url;
+    final card = _card;
+    final name = (card?['name'] as String?) ?? '';
+    final line = [(card?['tagline'] as String?) ?? '', (card?['area'] as String?) ?? ''].where((x) => x.isNotEmpty).join(' · ');
+    final logo = photoPath(card?['logo'] as Map<String, dynamic>?);
+    // As drawn (docs/spec/mobile-app-look.md, "Settings"): being found on
+    // the top card with your card as others see it; then your links.
+    return ListenableBuilder(
+      listenable: _d,
+      builder: (context, _) {
+        final links = _ordered(_d.links);
+        return TkPageScreen(
+          title: 'Linked businesses',
+          titleSize: 30,
+          backLabel: 'Back to Chats',
+          action: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (url != null) TkHeadButton(icon: 'b-qr', label: 'Link with us on Taskiem: the QR code', onTap: _code),
+              if (url != null && widget.onFind != null) const SizedBox(width: 8),
+              if (widget.onFind != null) TkHeadButton(icon: 'b-plus', label: 'Find a business to link with', primary: true, onTap: () => widget.onFind!(context)),
+            ],
+          ),
           children: [
-            ColoredBox(
-              color: t.panel,
-              child: Padding(
-                padding: EdgeInsets.only(top: pad.top),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 10, 16, 10),
-                  child: Row(
-                    children: [
-                      ChatHeadBar.iconButton('Back to the chats', TkIcon('back', size: 20, color: t.text), () => Navigator.of(context).maybePop()),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Semantics(
-                          header: true,
-                          child: Text('Linked businesses', style: tkText(size: 17, weight: 600, color: t.text)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Expanded(
-              child: ListenableBuilder(
-                listenable: _d,
-                builder: (context, _) {
-                  final links = _ordered(_d.links);
-                  return ListView(
-                    padding: EdgeInsets.fromLTRB(16, 16, 16, 24 + pad.bottom),
-                    children: [
-                      Text(
-                        'Businesses on Taskiem you have linked with, and requests either way. Each side keeps its own records.',
-                        style: tkHint(t),
-                      ),
-                      const SizedBox(height: 16),
-                      if ((_error ?? _d.error) != null) TkErrorBox((_error ?? _d.error)!),
-                      _Card(
-                        title: 'Let other businesses find us',
-                        children: [
-                          if (_settings == null)
-                            Text('Loading the setting…', style: tkHint(t))
-                          else
-                            Semantics(
-                              label: 'Let other businesses find us',
-                              child: TkChoiceRow(
-                                radio: false,
-                                control: TkCheckbox(checked: _settings!.findableNow),
-                                label: Text(findableLine(_settings!), style: tkText(size: 14, color: t.text)),
-                                onTap: manage && !_busy ? () => _findable(!_settings!.findableNow) : null,
+            if ((_error ?? _d.error) != null) TkErrorBox((_error ?? _d.error)!),
+            TkTopCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TkEyebrow('Being found', color: look.tealInk, trailing: 'in Explore'),
+                  const SizedBox(height: 10),
+                  if (s == null)
+                    Text('Loading the setting…', style: tkHint(t))
+                  else
+                    MergeSemantics(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: manage && !_busy ? () => _findable(!s.findableNow) : null,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Let other businesses find us', style: tkText(size: 15.5, weight: 600, color: t.text)),
+                                  Text(findableLine(s), style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted)),
+                                ],
                               ),
                             ),
-                          Text(
-                            'A search shows only what your storefront already shows the public. Someone with your phone number or page address can always ask.',
-                            style: tkHint(t),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      _Card(
-                        title: 'How other businesses see you',
-                        children: [
-                          Text('Your name, a line about what you do, your area, a logo and up to 12 photos.', style: tkHint(t)),
-                          const SizedBox(height: 12),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TkButton(label: 'Edit your business in Explore', onPressed: widget.onProfile ?? () => showComingSoon(context)),
-                          ),
-                        ],
-                      ),
-                      if (_settings?.url != null) ...[const SizedBox(height: 16), _CodeCard(url: _settings!.url!, qr: _qr)],
-                      const SizedBox(height: 8),
-                      if (!_d.loaded)
-                        Padding(padding: const EdgeInsets.only(top: 16), child: Text('Loading your linked businesses…', style: tkHint(t)))
-                      else if (links.isEmpty && _d.sent.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 24),
-                          child: Column(
-                            children: [
-                              Text('No links yet.', style: tkHint(t)),
-                              const SizedBox(height: 12),
-                              TkButton(
-                                label: 'Find a business',
-                                onPressed: () => widget.onFind != null ? widget.onFind!(context) : Navigator.of(context).maybePop(),
-                              ),
-                            ],
-                          ),
-                        )
-                      else
-                        LinkSection(
-                          title: 'Your links',
-                          top: 16,
-                          rows: [
-                            for (final l in links)
-                              (
-                                letter: l.name,
-                                icon: null,
-                                tone: stateWords(l.state)?.tone,
-                                title: l.name,
-                                badge: stateWords(l.state)?.label,
-                                badgeTone: stateWords(l.state)?.tone,
-                                sub:
-                                    '${roleLine(l.role)} · ${l.state == 'active' && l.answeredAt != null ? 'Linked ${whenWords(l.answeredAt!, _d.now())}' : 'Asked ${whenWords(l.requestedAt, _d.now())}'}',
-                                actions: manage ? _actions(l) : null,
-                              ),
-                            for (final b in _d.sent)
-                              (
-                                letter: null,
-                                icon: 'chat',
-                                tone: Tone.info,
-                                title: b.shown,
-                                badge: stateWords('sent')?.label,
-                                badgeTone: stateWords('sent')?.tone,
-                                sub: 'Sent ${whenWords(b.createdAt, _d.now())}',
-                                actions: manage ? _buttons([('Take off the list', 'Take off the list ${b.shown}', false, false, () => _takeOff(b))]) : null,
-                              ),
+                            const SizedBox(width: 12),
+                            TkSwitch(label: 'Let other businesses find us', on: s.findableNow, onChanged: manage && !_busy ? _findable : null),
                           ],
                         ),
-                    ],
-                  );
-                },
+                      ),
+                    ),
+                  if (name.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    // Your card as other businesses see it.
+                    Semantics(
+                      label: 'How other businesses see you: $name${line.isNotEmpty ? ', $line' : ''}',
+                      excludeSemantics: true,
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: look.ground, borderRadius: BorderRadius.circular(16)),
+                        child: Row(
+                          children: [
+                            ClipOval(
+                              child: logo != null
+                                  ? ApiImage(transport: _d.auth.transport, path: logo, width: 40, height: 40)
+                                  : TkFace(tkInitials(name), size: 40, colors: tkFaceFor(name)),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14.5, weight: 600, color: t.text)),
+                                  if (line.isNotEmpty) Text(line, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12, lineHeight: 1.3, color: t.muted)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  TkButtonRow([
+                    TkSmallButton(label: 'Edit your card', semantics: 'Edit your business in Explore', onPressed: widget.onProfile ?? () => showComingSoon(context)),
+                    if (url != null)
+                      TkSmallButton(
+                        label: 'Share your link',
+                        icon: 'b-share',
+                        onPressed: () => stepOut(() => SharePlus.instance.share(ShareParams(text: url))),
+                      ),
+                  ]),
+                ],
               ),
             ),
+            if (!_d.loaded)
+              Text('Loading your linked businesses…', style: tkHint(t))
+            else if (links.isEmpty && _d.sent.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Column(
+                  children: [
+                    Text('No links yet.', style: tkHint(t)),
+                    const SizedBox(height: 12),
+                    TkSmallButton(
+                      label: 'Find a business',
+                      primary: true,
+                      onPressed: () => widget.onFind != null ? widget.onFind!(context) : Navigator.of(context).maybePop(),
+                    ),
+                  ],
+                ),
+              )
+            else
+              // As drawn: each link a row with its face and, unless linked,
+              // its state; a request answered on its row; the rest from a
+              // tap on the row.
+              TkSection(
+                title: 'Your links',
+                inset: 66,
+                trailing: Text('${links.length + _d.sent.length}', style: tkText(size: 15, weight: 600, color: t.muted)),
+                children: [
+                  for (final l in links) _row(l, manage, look),
+                  for (final b in _d.sent)
+                    TkListRow(
+                      title: b.shown,
+                      sub: 'Sent ${whenWords(b.createdAt, _d.now())}',
+                      icon: 'b-chat',
+                      status: stateWords('sent')?.label,
+                      statusAccent: (fill: look.blue, ink: look.blueInk),
+                      onTap: manage ? () => _more(b.shown, [('off', 'Take off the list', () => _takeOff(b))]) : null,
+                    ),
+                ],
+              ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 
-  /// Links.tsx LinkActions: what can be done with a link in its state.
-  Widget? _actions(BusinessLink l) => switch (l.state) {
-    'asked_us' => _buttons([
-      ('Accept', 'Accept ${l.name}', true, false, () => _answer(l, 'accept', 'Linked with ${l.name}')),
-      ('Decline', 'Decline ${l.name}', false, false, () => _answer(l, 'decline', 'Declined. They are not told.')),
-      (
-        'Block',
-        'Block ${l.name}',
-        false,
-        true,
-        () async {
-          final yes = await showTkConfirm(context, title: 'Block ${l.name}?', body: 'Their requests will not reach you, and they are not told.', ok: 'Block', danger: true);
-          if (yes) _answer(l, 'block', 'Blocked');
-        },
-      ),
-    ]),
-    'active' => _buttons([
-      (
-        'End link',
-        'End link ${l.name}',
-        false,
-        true,
-        () async {
-          final yes = await showTkConfirm(context, title: 'End the link with ${l.name}?', body: 'What passed between you stays on both sides.', ok: 'End link', danger: true);
-          if (yes) _answer(l, 'end', 'Link ended');
-        },
-      ),
-    ]),
-    'requested' || 'not_accepted' => _buttons([
-      (
-        l.state == 'requested' ? 'Withdraw request' : 'Take off the list',
-        '${l.state == 'requested' ? 'Withdraw request' : 'Take off the list'} ${l.name}',
-        false,
-        false,
-        () => _answer(l, 'cancel', 'Request withdrawn'),
-      ),
-    ]),
-    'blocked' => _buttons([('Unblock', 'Unblock ${l.name}', false, false, () => _answer(l, 'unblock', 'Unblocked'))]),
-    _ => null,
-  };
-
-  Widget _buttons(List<(String, String, bool, bool, VoidCallback)> bs) => Padding(
-    padding: const EdgeInsets.only(top: 8),
-    child: Wrap(
-      spacing: 8,
-      runSpacing: 8,
+  /// A link's row: its face, who they are to you and since when, its
+  /// state unless linked; Accept and Decline under a request to answer.
+  Widget _row(BusinessLink l, bool manage, TkLook look) {
+    final st = stateWords(l.state);
+    final accent = switch (st?.tone) {
+      Tone.warn => (fill: look.orange, ink: look.orangeInk),
+      Tone.info => (fill: look.blue, ink: look.blueInk),
+      Tone.danger => (fill: look.red, ink: look.redInk),
+      Tone.ok => (fill: look.lime, ink: look.limeInk),
+      _ => null,
+    };
+    final more = <(String, String, VoidCallback)>[
+      if (l.state == 'asked_us')
+        (
+          'block',
+          'Block',
+          () async {
+            final yes = await showTkConfirm(context, title: 'Block ${l.name}?', body: 'Their requests will not reach you, and they are not told.', ok: 'Block', danger: true);
+            if (yes) _answer(l, 'block', 'Blocked');
+          },
+        ),
+      if (l.state == 'active')
+        (
+          'end',
+          'End link',
+          () async {
+            final yes = await showTkConfirm(context, title: 'End the link with ${l.name}?', body: 'What passed between you stays on both sides.', ok: 'End link', danger: true);
+            if (yes) _answer(l, 'end', 'Link ended');
+          },
+        ),
+      if (l.state == 'requested') ('cancel', 'Withdraw request', () => _answer(l, 'cancel', 'Request withdrawn')),
+      if (l.state == 'not_accepted') ('cancel', 'Take off the list', () => _answer(l, 'cancel', 'Request withdrawn')),
+      if (l.state == 'blocked') ('unblock', 'Unblock', () => _answer(l, 'unblock', 'Unblocked')),
+    ];
+    final row = TkListRow(
+      title: l.name,
+      letters: l.name,
+      sub: '${roleLine(l.role)} · ${l.state == 'active' && l.answeredAt != null ? 'Linked ${whenWords(l.answeredAt!, _d.now())}' : 'Asked ${whenWords(l.requestedAt, _d.now())}'}',
+      status: l.state == 'active' ? null : st?.label,
+      statusAccent: accent,
+      onTap: manage && more.isNotEmpty ? () => _more(l.name, more) : null,
+      semanticsLabel: manage && more.isNotEmpty ? 'More for ${l.name}' : null,
+    );
+    if (!manage || l.state != 'asked_us') return row;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final b in bs)
-          IntrinsicWidth(
-            child: TkSmallButton(label: b.$1, semantics: b.$2, primary: b.$3, danger: b.$4, onPressed: _busy ? null : b.$5),
+        row,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(66, 0, 14, 12),
+          child: Row(
+            children: [
+              TkSmallButton(label: 'Accept', semantics: 'Accept ${l.name}', primary: true, onPressed: _busy ? null : () => _answer(l, 'accept', 'Linked with ${l.name}')),
+              const SizedBox(width: 8),
+              TkSmallButton(label: 'Decline', semantics: 'Decline ${l.name}', onPressed: _busy ? null : () => _answer(l, 'decline', 'Declined. They are not told.')),
+            ],
           ),
+        ),
       ],
-    ),
-  );
+    );
+  }
+
+  /// What else can be done with a row, over the page.
+  Future<void> _more(String name, List<(String, String, VoidCallback)> what) async {
+    final pick = await showTkModalChoices(context, title: name, choices: [for (final (k, words, _) in what) (k, words)]);
+    if (pick == null) return;
+    what.firstWhere((w) => w.$1 == pick).$3();
+  }
 }
 
 /// The web's `.card`, as the settings' cards draw it.
@@ -354,9 +400,12 @@ class _Card extends StatelessWidget {
 /// Links.tsx CodeCard: the address that opens a request to us and its QR
 /// code; the link copied, or the code shared to print or send.
 class _CodeCard extends StatefulWidget {
-  const _CodeCard({required this.url, required this.qr});
+  const _CodeCard({required this.url, required this.qr, this.bare = false});
   final String url;
   final Uint8List? qr;
+
+  /// In its own sheet: no card round it.
+  final bool bare;
 
   @override
   State<_CodeCard> createState() => _CodeCardState();
@@ -375,9 +424,10 @@ class _CodeCardState extends State<_CodeCard> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final qr = widget.qr;
-    return _Card(
-      title: 'Link with us on Taskiem',
-      children: [
+    Widget wrap(List<Widget> children) => widget.bare
+        ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: children)
+        : _Card(title: 'Link with us on Taskiem', children: children);
+    return wrap([
         Text(
           'A business on Taskiem that opens this or scans the code can ask to link with you, whether or not others find you by search.',
           style: tkHint(t),
@@ -423,7 +473,6 @@ class _CodeCardState extends State<_CodeCard> {
             ),
           ],
         ),
-      ],
-    );
+      ]);
   }
 }

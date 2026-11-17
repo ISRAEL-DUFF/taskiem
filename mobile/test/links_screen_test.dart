@@ -50,8 +50,9 @@ void main() {
     expect(find.text('Linked businesses'), findsOneWidget);
     expect(find.text("Kola's Bakery"), findsOneWidget);
     expect(find.bySemanticsLabel("Accept Kola's Bakery"), findsOneWidget);
-    expect(find.bySemanticsLabel('Withdraw request Ifeoma Packaging'), findsOneWidget);
-    expect(find.bySemanticsLabel('End link Bayo Rice Mills'), findsOneWidget);
+    // The rest from a tap on the row (as drawn).
+    expect(find.bySemanticsLabel(RegExp('^More for Ifeoma Packaging')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('^More for Bayo Rice Mills')), findsOneWidget);
 
     await t.tap(find.bySemanticsLabel("Accept Kola's Bakery"));
     await settle(t);
@@ -60,17 +61,22 @@ void main() {
 
     // Ending a link asks first; Cancel sends nothing.
     sent.clear();
-    final end = find.bySemanticsLabel('End link Bayo Rice Mills');
-    await t.ensureVisible(end);
-    await t.pumpAndSettle();
-    await t.tap(end);
-    await t.pumpAndSettle();
+    final row = find.bySemanticsLabel(RegExp('^More for Bayo Rice Mills'));
+    Future<void> end() async {
+      await t.ensureVisible(row);
+      await t.pumpAndSettle();
+      await t.tap(row);
+      await t.pumpAndSettle();
+      await t.tap(find.text('End link'));
+      await t.pumpAndSettle();
+    }
+
+    await end();
     expect(find.text('End the link with Bayo Rice Mills?'), findsOneWidget);
     await t.tap(find.bySemanticsLabel('Cancel'));
     await t.pumpAndSettle();
     expect(sent, isEmpty);
-    await t.tap(end);
-    await t.pumpAndSettle();
+    await end();
     await t.tap(find.bySemanticsLabel('End link').last);
     await settle(t);
     expect(sent.single, contains('/end'));

@@ -76,18 +76,19 @@ class TkEyebrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    // The label takes what the trailing words leave; they keep their own
+    // width, up to two fifths of the screen ("LEAKS   2 open", as drawn).
+    // (No LayoutBuilder: tiles in a row are measured for their height.)
     return Row(
       children: [
         if (icon != null) ...[ExcludeSemantics(child: TkIcon(icon!, size: 15, stroke: 2.4, color: color)), const SizedBox(width: 6)],
-        // The label first: three parts of the room to the trailing words' two.
         Expanded(
-          flex: 3,
           child: Text(label.toUpperCase(), semanticsLabel: label, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 11.5, weight: 700, lineHeight: 1.3, letterSpacing: 0.4, color: color)),
         ),
         if (trailing != null) ...[
           const SizedBox(width: 6),
-          Flexible(
-            flex: 2,
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.4),
             child: Text(trailing!, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.end, style: tkText(size: 12, weight: 500, lineHeight: 1.3, color: t.muted)),
           ),
         ],
@@ -98,7 +99,11 @@ class TkEyebrow extends StatelessWidget {
 
 /// A figure large, as the top card and the tiles set it.
 TextStyle tkFigure(BuildContext context, {double size = 40, Color? color}) =>
-    tkDisplay(size: size, lineHeight: 1.1, letterSpacing: -size * 0.04, color: color ?? TkTheme.tokens(context).text);
+    tkDisplay(size: size, lineHeight: 1.1, letterSpacing: -size * 0.04, color: color ?? TkTheme.tokens(context).text).copyWith(fontFeatures: tkTabular);
+
+/// Figures in columns of equal width (`font-variant-numeric: tabular-nums`),
+/// with Inter's letter features kept.
+const tkTabular = <FontFeature>[FontFeature.tabularFigures(), FontFeature('cv11'), FontFeature('ss01')];
 
 /// A highlight: its label in an accent's colour, a figure, a line under it,
 /// and a small chart if it has one; pressed, it opens its page.
@@ -514,7 +519,11 @@ class TkFlow extends StatelessWidget {
                     fit: BoxFit.scaleDown,
                     child: Text('${stages[i].count}', maxLines: 1, style: tkFigure(context, size: 30, color: stages[i].count == 0 ? t.muted : stages[i].ink)),
                   ),
-                  Text(stages[i].label, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12, weight: 600, lineHeight: 1.25, color: t.muted)),
+                  // One word is never broken ("Confirme-d"): it is made a little smaller.
+                  if (!stages[i].label.contains(' '))
+                    FittedBox(fit: BoxFit.scaleDown, child: Text(stages[i].label, maxLines: 1, style: tkText(size: 12, weight: 600, lineHeight: 1.25, color: t.muted)))
+                  else
+                    Text(stages[i].label, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12, weight: 600, lineHeight: 1.25, color: t.muted)),
                   const SizedBox(height: 6),
                   SizedBox(
                     height: 7,
@@ -703,28 +712,32 @@ class TkCallout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final large = _large(context);
+    final press = button != null && onPressed != null ? TkSmallButton(label: button!, semantics: semantics, primary: true, onPressed: onPressed) : null;
+    final words = Row(
+      children: [
+        leading,
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, maxLines: large ? 4 : 2, overflow: TextOverflow.ellipsis, style: tkText(size: 14, weight: 600, lineHeight: 1.3, color: t.text)),
+              if (sub != null && sub!.isNotEmpty)
+                Text(sub!, maxLines: large ? 6 : 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.3, color: t.muted)),
+            ],
+          ),
+        ),
+        if (press != null && !large) ...[const SizedBox(width: 8), press],
+      ],
+    );
     return Container(
       padding: const EdgeInsets.fromLTRB(10, 8, 8, 8),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(16)),
-      child: Row(
-        children: [
-          leading,
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 14, weight: 600, lineHeight: 1.3, color: t.text)),
-                if (sub != null && sub!.isNotEmpty) Text(sub!, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.3, color: t.muted)),
-              ],
-            ),
-          ),
-          if (button != null && onPressed != null) ...[
-            const SizedBox(width: 8),
-            TkSmallButton(label: button!, semantics: semantics, primary: true, onPressed: onPressed),
-          ],
-        ],
-      ),
+      // With large text, the button under the words.
+      child: press != null && large
+          ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [words, const SizedBox(height: 8), press])
+          : words,
     );
   }
 }
@@ -797,9 +810,40 @@ class TkSteps extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
+    Widget dot(bool done) => Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: done ? look.lime : look.card, border: done ? null : Border.all(color: t.muted, width: 2)),
+    );
+    final label = steps.map((s) => '${s.label}${s.done ? (s.when.isEmpty ? ', done' : ', ${s.when}') : ', not yet'}').join('; ');
+    // With large text, the steps down the card: across, their words break.
+    if (_large(context)) {
+      return Semantics(
+        container: true,
+        label: label,
+        excludeSemantics: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final s in steps)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  children: [
+                    dot(s.done),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(s.label, style: tkText(size: 11.5, weight: 600, lineHeight: 1.25, color: t.text))),
+                    if (s.when.isNotEmpty) Text(s.when, style: tkText(size: 10.5, lineHeight: 1.25, color: t.muted)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      );
+    }
     return Semantics(
       container: true,
-      label: steps.map((s) => '${s.label}${s.done ? (s.when.isEmpty ? ', done' : ', ${s.when}') : ', not yet'}').join('; '),
+      label: label,
       excludeSemantics: true,
       child: Stack(
         children: [
@@ -834,6 +878,436 @@ class TkSteps extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A button of a person's card (Call, WhatsApp, Map): its icon over its
+/// word, on the ground's colour.
+typedef TkCardAction = ({String icon, String label, String? semantics, VoidCallback onTap});
+
+/// A person or a business on one card: their letters on their face, their
+/// name and a line under it, what is at its end, and the buttons to reach
+/// them across its foot.
+class TkPersonCard extends StatelessWidget {
+  const TkPersonCard({super.key, required this.name, this.sub = '', this.actions = const [], this.trailing, this.children = const []});
+  final String name;
+  final String sub;
+  final List<TkCardAction> actions;
+  final Widget? trailing;
+
+  /// More under the head (lines of detail, a button).
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final ink = look.on;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              TkFace(_letters(name), size: 40, colors: tkFaceFor(name)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: MergeSemantics(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 16, weight: 600, lineHeight: 1.3, color: t.text)),
+                      if (sub.isNotEmpty) Text(sub, maxLines: 3, overflow: TextOverflow.ellipsis, style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted)),
+                    ],
+                  ),
+                ),
+              ),
+              if (trailing != null) ...[const SizedBox(width: 8), trailing!],
+            ],
+          ),
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                for (var i = 0; i < actions.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: TapArea(
+                      child: Semantics(
+                        button: true,
+                        label: actions[i].semantics ?? actions[i].label,
+                        excludeSemantics: true,
+                        onTap: actions[i].onTap,
+                        child: TkPress(
+                          onTap: actions[i].onTap,
+                          child: Container(
+                            padding: const EdgeInsets.fromLTRB(4, 10, 4, 8),
+                            decoration: BoxDecoration(color: look.ground, borderRadius: BorderRadius.circular(14)),
+                            child: Column(
+                              children: [
+                                TkIcon(actions[i].icon, size: 20, stroke: 2, color: ink),
+                                const SizedBox(height: 4),
+                                Text(actions[i].label, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 12, weight: 600, color: ink)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+String _letters(String name) {
+  final words = name.split(RegExp(r'[\s·]+')).where((w) => w.isNotEmpty && RegExp(r'[A-Za-z0-9]').hasMatch(w[0])).toList();
+  if (words.isEmpty) return '?';
+  if (words.length == 1) return words.first.substring(0, math.min(2, words.first.length)).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}
+
+/// One line of what was ordered: the item (and a line under it), its amount.
+typedef TkBillLine = ({String name, String sub, Widget? under, String amount});
+
+/// What was ordered on a card: each line with its amount, a hairline, the
+/// total large.
+class TkBill extends StatelessWidget {
+  const TkBill({super.key, required this.lines, this.totalLabel = 'Total', required this.total});
+  final List<TkBillLine> lines;
+  final String totalLabel;
+  final String total;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+      decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final l in lines)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 7),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        MergeSemantics(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(l.name, style: tkText(size: 15, weight: 500, lineHeight: 1.35, color: t.text)),
+                              if (l.sub.isNotEmpty) Text(l.sub, style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted)),
+                            ],
+                          ),
+                        ),
+                        ?l.under,
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(l.amount, style: tkText(size: 15, weight: 600, lineHeight: 1.35, color: t.text).copyWith(fontFeatures: tkTabular)),
+                ],
+              ),
+            ),
+          Container(height: 1, margin: const EdgeInsets.symmetric(vertical: 6), color: look.line),
+          MergeSemantics(
+            child: Row(
+              children: [
+                Expanded(child: Text(totalLabel, style: tkText(size: 15, weight: 700, color: t.text))),
+                Text(total, style: tkDisplay(size: 19, letterSpacing: -0.4, color: t.text).copyWith(fontFeatures: tkTabular)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A small tile inside a top card: an icon, a figure, a line under it.
+class TkMiniTile extends StatelessWidget {
+  const TkMiniTile({super.key, required this.icon, required this.value, required this.sub});
+  final String icon;
+  final String value;
+  final String sub;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    return MergeSemantics(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(color: look.ground, borderRadius: BorderRadius.circular(14)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ExcludeSemantics(child: TkIcon(icon, size: 18, stroke: 2, color: t.muted)),
+            const SizedBox(height: 4),
+            Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 15, weight: 650, lineHeight: 1.3, color: t.text)),
+            Text(sub, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12, lineHeight: 1.3, color: t.muted)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The buttons of a top card, side by side, sharing its width.
+class TkButtonRow extends StatelessWidget {
+  const TkButtonRow(this.buttons, {super.key});
+  final List<Widget> buttons;
+
+  @override
+  Widget build(BuildContext context) => _large(context)
+      // With large text, one under another: side by side, the words break.
+      ? Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < buttons.length; i++) ...[if (i > 0) const SizedBox(height: 8), buttons[i]],
+          ],
+        )
+      : Row(
+          children: [
+            for (var i = 0; i < buttons.length; i++) ...[if (i > 0) const SizedBox(width: 8), Expanded(child: buttons[i])],
+          ],
+        );
+}
+
+/// The phone asks for text half as large again or more.
+bool _large(BuildContext context) => MediaQuery.textScalerOf(context).scale(10) > 15;
+
+/// One face in a [TkFaceRow]: who, the colour of their dot, and a word
+/// under their name (a time, "late", "off").
+typedef TkFaceItem = ({String name, Color dot, String under});
+
+/// Faces in a row (who is in, who is free): each with a dot of its state,
+/// the first name and a word; past [most], a count of the rest.
+class TkFaceRow extends StatelessWidget {
+  const TkFaceRow({super.key, required this.faces, this.most = 5});
+  final List<TkFaceItem> faces;
+  final int most;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final shown = faces.length > most ? faces.sublist(0, most - 1) : faces;
+    final rest = faces.length - shown.length;
+    Widget cell(Widget face, String name, String under) => Expanded(
+      child: Column(
+        children: [
+          face,
+          const SizedBox(height: 4),
+          Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 12, weight: 600, lineHeight: 1.25, color: t.text)),
+          Text(under, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 11, lineHeight: 1.25, color: t.muted)),
+        ],
+      ),
+    );
+    return Semantics(
+      container: true,
+      label: [for (final f in faces) '${f.name}, ${f.under}'].join('; '),
+      excludeSemantics: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final f in shown)
+            cell(
+              SizedBox(
+                width: 44,
+                height: 44,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    TkFace(_letters(f.name), size: 44, colors: tkFaceFor(f.name)),
+                    Positioned(
+                      right: -1,
+                      bottom: -1,
+                      child: Container(
+                        width: 14,
+                        height: 14,
+                        decoration: BoxDecoration(color: f.dot, shape: BoxShape.circle, border: Border.all(color: look.card, width: 2.5)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              f.name.split(' ').first,
+              f.under,
+            ),
+          if (rest > 0)
+            cell(
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: look.ground, shape: BoxShape.circle),
+                child: Text('+$rest', style: tkText(size: 13, weight: 700, color: t.text)),
+              ),
+              'more',
+              '',
+            ),
+          for (var i = shown.length + (rest > 0 ? 1 : 0); i < most; i++) const Expanded(child: SizedBox()),
+        ],
+      ),
+    );
+  }
+}
+
+/// A week's days as marks: each its letter, and a word in an accent's
+/// colour on the days that say something (late, missed).
+class TkDayMarks extends StatelessWidget {
+  const TkDayMarks({super.key, required this.days});
+  final List<({String letter, String word, Color? color})> days;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    return Semantics(
+      container: true,
+      label: days.where((d) => d.word.isNotEmpty).map((d) => '${d.letter}: ${d.word}').join('; '),
+      excludeSemantics: true,
+      child: Row(
+        children: [
+          for (var i = 0; i < days.length; i++) ...[
+            if (i > 0) const SizedBox(width: 6),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(2, 8, 2, 6),
+                decoration: BoxDecoration(
+                  color: days[i].color == null ? look.ground : days[i].color!.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text(days[i].letter, textScaler: TextScaler.noScaling, style: tkText(size: 13, weight: 600, lineHeight: 1.2, color: t.text)),
+                    Text(days[i].word, maxLines: 1, overflow: TextOverflow.clip, textScaler: TextScaler.noScaling, style: tkText(size: 10.5, weight: 600, lineHeight: 1.3, color: days[i].color == null ? t.muted : t.text)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// A small tile of a figure: its label in an accent's ink, the figure, a
+/// line; three across ([TkStatTiles]).
+typedef TkStat = ({String label, Color ink, String value, String line});
+
+/// Figures three across on tiles (two rows with large text).
+class TkStatTiles extends StatelessWidget {
+  const TkStatTiles(this.stats, {super.key});
+  final List<TkStat> stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    Widget tile(TkStat s) => MergeSemantics(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+        decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(s.label.toUpperCase(), semanticsLabel: s.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 11.5, weight: 700, letterSpacing: 0.4, color: s.ink)),
+            const SizedBox(height: 6),
+            FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: Text(s.value, style: tkDisplay(size: 17, letterSpacing: -0.4, color: t.text).copyWith(fontFeatures: tkTabular))),
+            Text(s.line, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 12, lineHeight: 1.3, color: t.muted)),
+          ],
+        ),
+      ),
+    );
+    if (_large(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [for (var i = 0; i < stats.length; i++) ...[if (i > 0) const SizedBox(height: 8), tile(stats[i])]],
+      );
+    }
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [for (var i = 0; i < stats.length; i++) ...[if (i > 0) const SizedBox(width: 8), Expanded(child: tile(stats[i]))]],
+      ),
+    );
+  }
+}
+
+/// One of a sheet's actions as a tile (as drawn): its icon over a short
+/// word; [semantics] says it in full.
+typedef TkAction = ({String icon, String label, String? semantics, VoidCallback? onTap});
+
+/// A sheet's actions as tiles side by side, sharing its width (Record a
+/// payment, Cancel it, Open it): the long buttons, as icons.
+class TkActionTiles extends StatelessWidget {
+  const TkActionTiles(this.actions, {super.key});
+  final List<TkAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final ink = TkTheme.of(context).mode == TkMode.dark ? t.text : t.brand;
+    Widget tile(TkAction a) => TapArea(
+      child: Semantics(
+        button: true,
+        enabled: a.onTap != null,
+        label: a.semantics ?? a.label,
+        onTap: a.onTap,
+        excludeSemantics: true,
+        child: TkPress(
+          onTap: a.onTap,
+          child: Opacity(
+            opacity: a.onTap == null ? 0.5 : 1,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 64),
+              padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
+              decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(16)),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // As drawn: pine words and icon (lime's ink in the dark).
+                  TkIcon(a.icon, size: 20, stroke: 2, color: ink),
+                  const SizedBox(height: 6),
+                  Text(a.label, textAlign: TextAlign.center, maxLines: 2, style: tkText(size: 12.5, weight: 600, lineHeight: 1.25, color: ink)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (_large(context)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [for (var i = 0; i < actions.length; i++) ...[if (i > 0) const SizedBox(height: 8), tile(actions[i])]],
+      );
+    }
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [for (var i = 0; i < actions.length; i++) ...[if (i > 0) const SizedBox(width: 8), Expanded(child: tile(actions[i]))]],
       ),
     );
   }

@@ -37,6 +37,22 @@ class MainActivity : FlutterFragmentActivity() {
                     if (android.os.Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(!hide)
                     result.success(null)
                 }
+                // lib/app/links.dart openMailApp: the phone's email app at its
+                // inbox (a password reset's link), not a new email.
+                "mail" -> {
+                    val open = android.content.Intent.makeMainSelectorActivity(
+                        android.content.Intent.ACTION_MAIN,
+                        android.content.Intent.CATEGORY_APP_EMAIL,
+                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    result.success(
+                        try {
+                            startActivity(open)
+                            true
+                        } catch (_: android.content.ActivityNotFoundException) {
+                            false
+                        },
+                    )
+                }
                 else -> result.notImplemented()
             }
         }

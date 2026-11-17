@@ -243,14 +243,17 @@ class _YouHomeState extends State<YouHome> {
   /// before the phone was on the account wait for "These are mine".
   Widget? _ordersSection(TkTokens t) {
     final r = _orders;
-    if (r == null || r.orders.isEmpty) return null;
-    final waiting = r.orders.where((o) => o.waiting).toList();
-    final mine = r.orders.where((o) => !o.waiting).toList();
+    if (r == null || (r.orders.isEmpty && r.waitingCount == 0)) return null;
+    // Orders made before the phone was on the account: only a count until
+    // the person says they are theirs (§13), so a reissued number never
+    // sees the earlier holder's orders.
+    final waiting = r.waitingCount;
+    final mine = r.orders;
     return TkSection(
       title: 'Your shop orders',
       count: r.orders.length,
       children: [
-        if (waiting.isNotEmpty)
+        if (waiting > 0)
           TkPanel(
             padding: const EdgeInsets.all(16),
             children: [
@@ -258,13 +261,11 @@ class _YouHomeState extends State<YouHome> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    waiting.length == 1
+                    waiting == 1
                         ? 'We found an order made with your number before it was on your account. Is it yours?'
-                        : 'We found ${waiting.length} orders made with your number before it was on your account. Are they yours?',
+                        : 'We found $waiting orders made with your number before it was on your account. Are they yours?',
                     style: tkText(size: 14, color: t.text),
                   ),
-                  const SizedBox(height: 8),
-                  for (final o in waiting) Text('${o.business} · ${o.reference} · ${naira(o.totalKobo)}', style: tkHint(t)),
                   const SizedBox(height: 10),
                   TkButton(label: 'These are mine', primary: true, onPressed: _theseAreMine),
                 ],

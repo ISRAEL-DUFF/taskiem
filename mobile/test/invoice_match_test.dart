@@ -203,8 +203,8 @@ void main() {
     await settle(t);
     expect(sent.last, 'POST /v1/money/suggestions/S1/reject {}');
     expect(find.text('INV-0001 will not be suggested for this payment again.'), findsOneWidget);
-    await t.tap(find.textContaining('Match to another invoice or order…'));
-    await t.pump();
+    await t.tap(find.text('Match to another invoice or order'));
+    await t.pumpAndSettle();
     await t.tap(find.bySemanticsLabel('Match to this one'));
     await t.pump();
     expect(find.text('Choose the invoice or order this payment is for.'), findsOneWidget);
@@ -230,8 +230,9 @@ void main() {
         'credit_kobo': 0,
       },
     );
-    await t.tap(find.textContaining('Match to another invoice or order…'));
-    await t.pump();
+    await t.tap(find.text('Match to another invoice or order'));
+    await t.pumpAndSettle();
+    await t.ensureVisible(find.textContaining('Split by hand across several…'));
     await t.tap(find.textContaining('Split by hand across several…'));
     await t.pump();
     await t.tap(find.text('INV-0003 · ₦15,000 due · Chidi').last);
@@ -265,8 +266,8 @@ void main() {
         ),
       ],
     );
-    await t.tap(find.textContaining('Split across the customer’s invoices…'));
-    await t.pump();
+    await t.tap(find.text('Split across the customer’s invoices'));
+    await t.pumpAndSettle();
     expect(find.textContaining('The payment is more than is due on INV-0001.'), findsOneWidget);
     await t.enterText(find.descendant(of: find.bySemanticsLabel(RegExp(r'^INV-0002 \(')), matching: find.byType(EditableText)), '8000');
     await t.pump();

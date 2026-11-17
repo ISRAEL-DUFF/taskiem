@@ -549,6 +549,7 @@ class _StockPageState extends State<StockPage> {
                 Expanded(
                   child: TkSmallButton(
                     label: 'Record a sale',
+                    icon: 'b-cart',
                     primary: true,
                     onPressed: canSell ? () => _open((c) => _SaleForm(auth: widget.auth, items: items), 'Record a sale') : null,
                   ),
@@ -560,8 +561,17 @@ class _StockPageState extends State<StockPage> {
               TkCallout(
                 leading: TkSquare('b-cash', color: look.orange),
                 title: unsold.length == 1 ? '1 terminal sale to explain' : '${unsold.length} terminal sales to explain',
-                sub: '${naira(unsoldKobo)} · say what was sold, and it comes off your stock',
+                sub: '${naira(unsoldKobo)} · say what was sold',
                 color: look.orange,
+                // Say: the oldest first (as drawn).
+                button: 'Say',
+                semantics: 'Say what the terminal sales were, the oldest first',
+                onPressed: canSell
+                    ? () => _open(
+                          (c) => _SaleForm(auth: widget.auth, items: items, entry: unsold.first),
+                          'What was sold for ${naira(_int(unsold.first['amount_kobo']) ?? 0)}',
+                        )
+                    : null,
               ),
             ],
           ],

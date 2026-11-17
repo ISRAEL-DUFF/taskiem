@@ -90,17 +90,23 @@ Future<void> _tap(WidgetTester t, String words) async {
   await t.pumpAndSettle();
 }
 
+/// The WhatsApp logo on the sign-in card (as drawn, not the web's button).
+Future<void> _tapLogo(WidgetTester t) async {
+  final logo = find.bySemanticsLabel('Sign in with a code on WhatsApp');
+  await t.ensureVisible(logo);
+  await t.pumpAndSettle();
+  await t.tap(logo);
+  await t.pumpAndSettle();
+}
+
 /// The app's screens by the web half's names.
 final screens = <String, Screen>{
   'sign-in': (build: () => SignInScreen(auth: fakeAuth(), signup: false, onPhone: () {}), drive: _none),
-  'sign-in-chat': (
-    build: () => SignInScreen(auth: fakeAuth(), signup: false, onPhone: () {}),
-    drive: (t) => _tap(t, 'Sign in with WhatsApp or Telegram'),
-  ),
+  'sign-in-chat': (build: () => SignInScreen(auth: fakeAuth(), signup: false, onPhone: () {}), drive: (t) => _tapLogo(t)),
   'sign-in-chat-code': (
     build: () => SignInScreen(auth: fakeAuth(), signup: false, onPhone: () {}),
     drive: (t) async {
-      await _tap(t, 'Sign in with WhatsApp or Telegram');
+      await _tapLogo(t);
       await t.enterText(find.byType(TextField).first, '08031234567');
       await _tap(t, 'Send me a code');
     },
@@ -499,6 +505,23 @@ final screens = <String, Screen>{
   ),
 };
 
+/// Screens drawn in the app's own look rather than the web's (docs/spec/
+/// mobile-app-look.md, "Cards in a conversation"): the cards and tags in a
+/// conversation. Each is still built and driven, so it still fails on an
+/// error or an overflow, but it is no longer compared with the web's picture.
+const appsOwnLook = {
+  'chat-bayo', 'chat-deal', 'chat-deal-counter', 'chat-tag', 'chat-tag-hash', 'chat-tagged',
+  // The chat in the app's own look (docs/spec/mobile-app-look.md, "The chat").
+  'chat-attach', 'chat-caption', 'chat-delete', 'chat-files', 'chat-files-end', 'chat-head-menu', 'chat-info-media', 'chat-long',
+  'chat-menu', 'chat-order', 'chat-order-review', 'chat-pick', 'chat-product', 'chat-reply', 'chat-sell', 'chat-taskiem',
+  'chat-taskiem-approval', 'chat-taskiem-approve', 'chat-taskiem-cards', 'chat-tool-sheet', 'chat-tools', 'chat-tunde',
+  'chats', 'chats-customers', 'chats-search', 'chats-starred', 'customer-chidi',
+  // Signing in, as drawn (docs/spec/mobile-app-look.md, "Signing in").
+  'sign-in', 'sign-in-chat', 'sign-in-chat-code', 'sign-in-wrong', 'sign-up',
+  // Find a business, as drawn (docs/spec/mobile-app-look.md).
+  'explore', 'explore-search', 'explore-start',
+};
+
 final kept = RegExp(r'^([a-z-]+)-(light|dark)-(\d+)x(\d+)\.png$');
 
 void main() {
@@ -506,8 +529,7 @@ void main() {
   setUp(() => TkField.debugHideCaret = true);
   tearDown(() => TkField.debugHideCaret = false);
 
-  final files = Directory('test/parity/web').listSync().whereType<File>().toList()
-    ..sort((a, b) => a.path.compareTo(b.path));
+  final files = Directory('test/parity/web').listSync().whereType<File>().toList()..sort((a, b) => a.path.compareTo(b.path));
   test('every screen the web half keeps has an app screen', () {
     for (final f in files) {
       final m = kept.firstMatch(f.uri.pathSegments.last);
@@ -530,12 +552,18 @@ void main() {
       // Shadows as the app draws them (flutter_test makes them solid shapes
       // otherwise), from the first frame; put back before the test ends.
       debugDisableShadows = false;
-      await tester.pumpWidget(RepaintBoundary(
-        key: shot,
-        child: TaskiemApp(mode: mode, home: screens[m.group(1)]!.build()),
-      ));
+      await tester.pumpWidget(
+        RepaintBoundary(
+          key: shot,
+          child: TaskiemApp(mode: mode, home: screens[m.group(1)]!.build()),
+        ),
+      );
       await tester.pumpAndSettle();
       await screens[m.group(1)]!.drive(tester);
+      if (appsOwnLook.contains(m.group(1))) {
+        debugDisableShadows = true;
+        return;
+      }
       final boundary = tester.renderObject(find.byKey(shot)) as RenderRepaintBoundary;
       final result = await tester.runAsync(() async {
         final app = await boundary.toImage();
@@ -551,8 +579,11 @@ void main() {
         return share;
       });
       debugDisableShadows = true;
-      expect(result, lessThan(allowed),
-          reason: '$name: the app looks different from the web (${(result! * 100).toStringAsFixed(2)}% of the screen); see build/parity/');
+      expect(
+        result,
+        lessThan(allowed),
+        reason: '$name: the app looks different from the web (${(result! * 100).toStringAsFixed(2)}% of the screen); see build/parity/',
+      );
     });
   }
 }
@@ -562,8 +593,7 @@ Future<ui.Image> _decode(Uint8List png) async {
   return (await codec.getNextFrame()).image;
 }
 
-Future<Uint8List> _rgba(ui.Image i) async =>
-    (await i.toByteData(format: ui.ImageByteFormat.rawRgba))!.buffer.asUint8List();
+Future<Uint8List> _rgba(ui.Image i) async => (await i.toByteData(format: ui.ImageByteFormat.rawRgba))!.buffer.asUint8List();
 
 /// The share of pixels that differ, as web/e2e/parity.spec.ts counts them.
 double differs(Uint8List a, Uint8List b, int w, int h) {

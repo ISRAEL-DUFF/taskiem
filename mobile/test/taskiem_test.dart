@@ -253,11 +253,10 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('Choose who it is for.'), findsOneWidget);
     expect(given, isEmpty);
-    await t.tap(find.text('Choose…'));
-    await t.pumpAndSettle();
-    expect(find.text('Bola Ade'), findsOneWidget);
-    expect(find.text('Any owner'), findsNothing, reason: 'not the owner\'s role');
-    await t.tap(find.text('Any cashier'));
+    // As drawn: the people as faces, anyone in a role as chips.
+    expect(find.bySemanticsLabel('Bola Ade'), findsOneWidget);
+    expect(find.bySemanticsLabel('Any owner'), findsNothing, reason: 'not the owner\'s role');
+    await t.tap(find.bySemanticsLabel('Any cashier'));
     await t.pumpAndSettle();
     await t.tap(find.text('A photo when it is done'));
     await t.pump();
@@ -413,7 +412,8 @@ void main() {
   testWidgets('M8: an unmatched payment’s Match it opens what it may pay', (t) async {
     await screen(t);
     final step = find.bySemanticsLabel('Match it: A payment of ₦37,500 is not matched yet');
-    await t.ensureVisible(step);
+    // In the middle: at the bottom edge the jump-down button is over it.
+    await Scrollable.ensureVisible(t.element(step), alignment: 0.5);
     await t.pumpAndSettle();
     await t.tap(step);
     await t.pumpAndSettle();
@@ -498,7 +498,7 @@ void main() {
     final decided = await openApproval(t, 'Approve');
     expect(find.text('Approve it?'), findsOneWidget);
     expect(find.text('Bank code'), findsOneWidget);
-    expect(find.text('First payment to this account.'), findsOneWidget);
+    expect(find.text('First payment to this account'), findsWidgets, reason: 'its pill and its warning');
     await t.enterText(find.byType(EditableText).last, 'Checked with Bayo');
     await t.tap(find.bySemanticsLabel('Approve'));
     await settle(t);

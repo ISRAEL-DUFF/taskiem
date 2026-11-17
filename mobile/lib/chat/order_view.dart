@@ -10,13 +10,15 @@ import '../app/auth.dart';
 import '../app/links.dart';
 import '../kit/forms.dart' show errorWords;
 import '../kit/kit.dart';
-import '../kit/list.dart' show TkPill;
 import '../kit/modal.dart' show openOrSay, showTkConfirm;
 import '../kit/sheet.dart';
 import '../theme/theme.dart';
-import 'cards.dart' show CardProgress;
+import '../kit/look.dart';
+import '../kit/mobile.dart' show TkHeadButton;
+import '../theme/look.dart';
 import 'composer.dart' show Pickers;
 import 'customer.dart' show phoneWords;
+import 'storefront_orders_page.dart' show groupedPhone;
 import 'attachments.dart' show PickedFile;
 import 'words.dart';
 
@@ -80,15 +82,6 @@ class OrderView extends StatelessWidget {
       ? DeliveryView(auth: auth, order: order, onSaved: onSaved, canEdit: canEdit, pickers: pickers)
       : _TradeOrderView(auth: auth, order: order, onSaved: onSaved, canEdit: canEdit);
 }
-
-/// The state line (`.tk-form-now`): who, and the state as a pill.
-Widget _now(TkTokens t, String who, String word, CardTone tone) => Row(
-  children: [
-    Flexible(child: Text('$who ·', style: tkText(size: 14, color: t.muted))),
-    const SizedBox(width: 6),
-    TkPill(word, tone: tone),
-  ],
-);
 
 /// `.tk-foot-two`: side by side; with large text one under another.
 Widget _foot(BuildContext context, List<Widget> buttons) => TkSheetFoot(
@@ -154,6 +147,7 @@ class _TradeOrderViewState extends State<_TradeOrderView> {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final status = _str(_o['status']);
     // Accept a new order only: the server accepts nothing else
     // (engine/links/orders.go DecideTx); a changed one waits for the buyer,
@@ -162,28 +156,64 @@ class _TradeOrderViewState extends State<_TradeOrderView> {
     final accept = status == 'received';
     final step = tradeStep[status];
     final note = _str(_o['note']);
+    final ink = switch (status) {
+      'received' => look.orangeInk,
+      'accepted' || 'ready' => look.tealInk,
+      'dispatched' || 'arrived' || 'changed' => look.blueInk,
+      'proposed' => look.violetInk,
+      'delivered' => look.limeInk,
+      _ => t.muted,
+    };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          child: TkFormBody(
-            children: [
-              _now(
-                t,
-                _str(_o['buyer_name']),
-                tradeStatusWords[status] ?? status,
-                status == 'received' ? CardTone.lime : (status == 'declined' || status == 'cancelled' ? CardTone.danger : CardTone.plain),
-              ),
-              if (step != null) CardProgress(steps: orderSteps, step: step),
-              TkLines([
-                for (final l in _maps(_o['lines']))
-                  ('${_int(l['quantity'])} × ${_str(l['item'])}', _int(l['price_kobo']) > 0 ? naira(_int(l['quantity']) * _int(l['price_kobo'])) : 'No price'),
-                ('Total', naira(_int(_o['total_kobo']))),
-              ]),
-              if (note.isNotEmpty) Text('Their note: “$note”', style: tkText(size: 14, color: t.muted)),
-              if (_waits != null) Semantics(liveRegion: true, child: Text(_waits!, style: tkText(size: 14, weight: 600, color: t.text))),
-              if (_error != null) TkErrorBox(_error!),
-            ],
+          // The cards on the page's ground, as a phone's grouped sheet.
+          child: ColoredBox(
+            color: look.ground,
+            child: TkFormBody(
+              children: [
+                TkTopCard(
+                  semanticsLabel: 'The order',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TkEyebrow(status == 'received' ? 'New · answer them' : (tradeStatusWords[status] ?? status), color: ink, trailing: _ref),
+                      const SizedBox(height: 6),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(naira(_int(_o['total_kobo'])), style: tkFigure(context, size: 36)),
+                      ),
+                      Text('From ${_str(_o['buyer_name'])}', style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
+                      if (step != null) ...[
+                        const SizedBox(height: 14),
+                        TkSteps(steps: [for (final (i, s) in orderSteps.indexed) (label: s, when: '', done: i <= step)]),
+                      ],
+                    ],
+                  ),
+                ),
+                TkBill(
+                  lines: [
+                    for (final l in _maps(_o['lines']))
+                      (
+                        name: '${_int(l['quantity'])} × ${_str(l['item'])}',
+                        sub: '',
+                        under: null,
+                        amount: _int(l['price_kobo']) > 0 ? naira(_int(l['quantity']) * _int(l['price_kobo'])) : 'No price',
+                      ),
+                  ],
+                  total: naira(_int(_o['total_kobo'])),
+                ),
+                if (note.isNotEmpty) Text('Their note: “$note”', style: tkText(size: 14, color: t.muted)),
+                if (_waits != null)
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(_waits!, style: tkText(size: 14, weight: 600, color: t.text)),
+                  ),
+                if (_error != null) TkErrorBox(_error!),
+              ],
+            ),
           ),
         ),
         if (open)
@@ -251,10 +281,10 @@ class _DeliveryViewState extends State<DeliveryView> {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     final status = _str(_o['status']);
     final d = _d;
     final c = (d['customer'] as Map?)?.cast<String, dynamic>() ?? const {};
-    final step = deliveryStep[status];
     final area = _str(d['drop_area']);
     final address = _str(c['address']);
     final next = switch (status) {
@@ -269,67 +299,161 @@ class _DeliveryViewState extends State<DeliveryView> {
     final pickupLink = _str(d['pickup_link']);
     final pin = _str(c['pin']);
     final phone = _str(c['phone']);
-    Widget link(String label, VoidCallback go) => TkLink(label: label, onTap: go);
+    // What to do now, in the step's colour.
+    final (words, ink) = switch (status) {
+      'received' => ('A delivery for you', look.orangeInk),
+      'accepted' => ('Go and pick it up', look.blueInk),
+      'dispatched' => ('Take it to the door', look.blueInk),
+      'arrived' => ('At the door', look.tealInk),
+      'delivered' => ('Delivered', look.limeInk),
+      _ => (deliveryWords[status] ?? status, t.muted),
+    };
+    Widget stop(Color dot, String label, String where, String? under, String? map, String mapSays) => Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: MergeSemantics(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  semanticsLabel: label,
+                  style: tkText(size: 11, weight: 700, letterSpacing: 0.6, color: t.muted),
+                ),
+                Text(where, style: tkText(size: 14.5, weight: 600, lineHeight: 1.35, color: t.text)),
+                if (under != null && under.isNotEmpty) Text(under, style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted)),
+              ],
+            ),
+          ),
+        ),
+        if (map != null && map.isNotEmpty)
+          TkHeadButton(
+            icon: 'b-pin',
+            label: mapSays,
+            onCard: true,
+            onTap: () => openOrSay(context, () => openOutside(Uri.parse(map)), 'The map could not be opened.'),
+          ),
+      ],
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          child: TkFormBody(
-            children: [
-              _now(
-                t,
-                _str(_o['buyer_name']),
-                deliveryWords[status] ?? status,
-                status == 'received'
-                    ? CardTone.warn
-                    : status == 'declined' || status == 'cancelled'
-                    ? CardTone.danger
-                    : status == 'delivered'
-                    ? CardTone.lime
-                    : CardTone.plain,
-              ),
-              if (step != null) CardProgress(steps: deliverySteps, step: step),
-              TkLines([
-                if (_str(d['pickup']).isNotEmpty) ('Pick up', _str(d['pickup'])),
-                ('Deliver to', address.isNotEmpty ? '$address${area.isNotEmpty ? ' ($area)' : ''}' : (area.isNotEmpty ? area : 'The area is on the order')),
-                if (_str(c['landmark']).isNotEmpty) ('Landmark', _str(c['landmark'])),
-                if (_str(c['name']).isNotEmpty) ('Customer', [_str(c['name']), phone].where((x) => x.isNotEmpty).join(' · ')),
-                if (d['door_payment'] == true) ('Payment', 'At the door'),
-                ('Your fee', naira(_int(_o['total_kobo']))),
-              ]),
-              if (pickupLink.isNotEmpty || pin.isNotEmpty || phone.isNotEmpty)
-                Wrap(
-                  spacing: 16,
-                  runSpacing: 4,
-                  children: [
-                    if (pickupLink.isNotEmpty)
-                      link('Map of the pick-up', () => openOrSay(context, () => openOutside(Uri.parse(pickupLink)), 'The map could not be opened.')),
-                    if (pin.isNotEmpty) link('Open the customer’s map', () => openOrSay(context, () => openOutside(Uri.parse(pin)), 'The map could not be opened.')),
-                    if (phone.isNotEmpty) link('Call ${phoneWords(phone)}', () => openOrSay(context, () => callPhone(phone), 'That number could not be called.')),
-                  ],
-                ),
-              if (proof)
-                TkKitField(
-                  field: false,
-                  label: 'Photo of the delivery',
-                  hint: 'The business asks for one.',
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: TkSmallButton(
-                      label: _photo == null ? 'Take the photo' : 'Photo taken: take another',
-                      onPressed: _busy || !widget.canEdit ? null : _takePhoto,
-                    ),
+          // The cards on the page's ground, as a phone's grouped sheet.
+          child: ColoredBox(
+            color: look.ground,
+            child: TkFormBody(
+              children: [
+                TkTopCard(
+                  semanticsLabel: 'The delivery',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TkEyebrow(words, color: ink, trailing: _str(_o['buyer_name'])),
+                      const SizedBox(height: 6),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(naira(_int(_o['total_kobo'])), style: tkFigure(context, size: 36)),
+                      ),
+                      Text(
+                        d['door_payment'] == true ? 'Your fee · they pay at the door' : 'Your fee',
+                        style: tkText(size: 13, lineHeight: 1.4, color: t.muted),
+                      ),
+                      const SizedBox(height: 14),
+                      if (_str(d['pickup']).isNotEmpty) ...[
+                        stop(look.blue, 'Pick up', _str(d['pickup']), null, pickupLink, 'Map of the pick-up'),
+                        const SizedBox(height: 10),
+                      ],
+                      stop(
+                        look.lime,
+                        'Deliver to',
+                        address.isNotEmpty ? '$address${area.isNotEmpty ? ' ($area)' : ''}' : (area.isNotEmpty ? area : 'The area is on the order'),
+                        _str(c['landmark']),
+                        pin,
+                        'Open the customer’s map',
+                      ),
+                      if (deliveryStep[status] != null) ...[
+                        const SizedBox(height: 14),
+                        TkSteps(steps: [for (final (i, s) in deliverySteps.indexed) (label: s, when: '', done: i <= deliveryStep[status]!)]),
+                      ],
+                      // The next step in the card, as drawn.
+                      if (widget.canEdit && next != null) ...[
+                        const SizedBox(height: 14),
+                        TkButtonRow([
+                          TkSmallButton(label: next.$2, primary: true, onPressed: _busy || needsPhoto ? null : () => _act(next.$1)),
+                          if (status == 'received') TkSmallButton(label: 'Can’t', onPressed: _busy ? null : () => _act('cant')),
+                        ]),
+                      ],
+                    ],
                   ),
                 ),
-              if (_error != null) TkErrorBox(_error!),
-            ],
+                if (_str(c['name']).isNotEmpty || phone.isNotEmpty)
+                  TkPersonCard(
+                    name: _str(c['name']).isEmpty ? 'The customer' : _str(c['name']),
+                    sub: phone.isEmpty ? '' : groupedPhone(phone),
+                    actions: [
+                      if (phone.isNotEmpty)
+                        (
+                          icon: 'b-phone',
+                          label: 'Call',
+                          semantics: 'Call ${phoneWords(phone)}',
+                          onTap: () => openOrSay(context, () => callPhone(phone), 'That number could not be called.'),
+                        ),
+                      if (phone.isNotEmpty)
+                        (
+                          icon: 'b-chat',
+                          label: 'Text',
+                          semantics: 'Text ${phoneWords(phone)}',
+                          onTap: () => openOrSay(context, () => textPhone(phone), 'That number could not be texted.'),
+                        ),
+                    ],
+                  ),
+                // Said from the start; taken at the door.
+                if (d['proof_required'] == true && !const {'delivered', 'declined', 'cancelled'}.contains(status))
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                    decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+                    child: Row(
+                      children: [
+                        TkSquare('b-camera', color: look.violet, size: 30),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: MergeSemantics(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(proof ? 'Photo of the delivery' : 'A photo when you deliver', style: tkText(size: 15, weight: 500, color: t.text)),
+                                Text(_photo == null ? 'The business asks for one.' : 'Taken', style: tkText(size: 12.5, color: t.muted)),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (proof)
+                          TkSmallButton(
+                          label: _photo == null ? 'Take the photo' : 'Take another',
+                          semantics: _photo == null ? 'Take the photo' : 'Photo taken: take another',
+                          primary: _photo == null,
+                          onPressed: _busy || !widget.canEdit ? null : _takePhoto,
+                        ),
+                      ],
+                    ),
+                  ),
+                if (_error != null) TkErrorBox(_error!),
+              ],
+            ),
           ),
         ),
-        if (widget.canEdit && next != null)
-          _foot(context, [
-            if (status == 'received') TkGhostButton(label: 'Can’t', onTap: _busy ? null : () => _act('cant')),
-            TkCta(label: next.$2, onTap: _busy || needsPhoto ? null : () => _act(next.$1)),
-          ]),
       ],
     );
   }

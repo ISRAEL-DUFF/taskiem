@@ -351,7 +351,7 @@ class _ToolSheetState extends State<ToolSheet> {
       itemBuilder: (context, i) {
         if (i == shown.length) {
           // The rest, for what the sheet does not do, after the list.
-          return TkSheetMore(label: tool.more, onTap: () => openToolPage(context, tool, c.chats.auth));
+          return Padding(padding: const EdgeInsets.only(top: 6), child: TkSheetMore(label: tool.more, onTap: () => openToolPage(context, tool, c.chats.auth)));
         }
         final r = shown[i];
         if (_picking) return _pickRow(context, r);
@@ -367,7 +367,9 @@ class _ToolSheetState extends State<ToolSheet> {
               ? widget.onRow!(context, r)
               : showComingSoon(context),
         );
-        return rising ? TkIn.sheetRow(key: ValueKey('rise ${r.id}'), index: i, child: row) : row;
+        // The rows on one card (docs/spec/mobile-app-look.md, "The chat").
+        final carded = TkCardSlice(first: i == 0, last: i == shown.length - 1, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: row));
+        return rising ? TkIn.sheetRow(key: ValueKey('rise ${r.id}'), index: i, child: carded) : carded;
       },
     );
   }

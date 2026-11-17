@@ -38,6 +38,17 @@ String? appPageOf(Uri uri, {String server = taskiemUrl}) {
   return uri.path.endsWith('/') && uri.path.length > 1 ? uri.path.substring(0, uri.path.length - 1) : uri.path;
 }
 
+/// A password reset's token from its link (the server's /reset-password
+/// with #token=…, from sendPasswordReset), or null when [uri] is not one.
+/// The token is in the fragment, which no server is sent.
+String? resetTokenOf(Uri uri, {String server = taskiemUrl}) {
+  final home = Uri.tryParse(server);
+  if (home == null || uri.scheme != 'https' || uri.host.toLowerCase() != home.host.toLowerCase()) return null;
+  if (uri.path != '/reset-password' && uri.path != '/reset-password/') return null;
+  final token = Uri.splitQueryString(uri.fragment)['token'] ?? '';
+  return RegExp(r'^[A-Za-z0-9_\-.~]{8,200}$').hasMatch(token) ? token : null;
+}
+
 /// The link waiting to be opened.
 class LinkInbox extends ChangeNotifier {
   LinkInbox({Stream<Uri>? links, Future<Uri?> Function()? first}) {
@@ -62,6 +73,15 @@ class LinkInbox extends ChangeNotifier {
   /// its chat starts without asking again.
   bool shownSignedOut = false;
 
+  String? _reset;
+
+  /// A password reset's token waiting (signed in or out), once.
+  String? takeReset() {
+    final r = _reset;
+    _reset = null;
+    return r;
+  }
+
   Uri? _last;
   DateTime _lastAt = DateTime(2000);
 
@@ -73,6 +93,12 @@ class LinkInbox extends ChangeNotifier {
     if (uri == _last && now.difference(_lastAt) < const Duration(seconds: 3)) return;
     _last = uri;
     _lastAt = now;
+    final reset = resetTokenOf(uri);
+    if (reset != null) {
+      _reset = reset;
+      notifyListeners();
+      return;
+    }
     final page = appPageOf(uri);
     if (page == null) return;
     _pending = page;
