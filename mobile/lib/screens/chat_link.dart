@@ -57,16 +57,31 @@ List<(String, String)> hoursLines(Map<String, dynamic>? hours) {
 
 /// The business's WhatsApp number, when its link offers Chat on WhatsApp
 /// (§11), or null.
-ChatLinkCardWhatsapp? whatsappChoice(ChatLinkCard c) => (c.choices ?? const []).contains('whatsapp') ? c.whatsapp : null;
+/// Only with a wa.me link that reads as one (as the web's linkChoices):
+/// anything else is not offered.
+ChatLinkCardWhatsapp? whatsappChoice(ChatLinkCard c) {
+  final w = c.whatsapp;
+  if (!(c.choices ?? const []).contains('whatsapp') || w == null) return null;
+  return whatsappUri(w) == null ? null : w;
+}
+
+/// The business's wa.me link, or null when it is not one.
+Uri? whatsappUri(ChatLinkCardWhatsapp w) {
+  if (!w.link.startsWith('https://wa.me/')) return null;
+  final u = Uri.tryParse(w.link);
+  return u == null || u.scheme != 'https' || u.host != 'wa.me' ? null : u;
+}
 
 /// Chat in Taskiem: the link offers it (`choices`, or, from a server before
 /// them, while it takes chats).
 bool taskiemChoice(ChatLinkCard c) => c.choices == null ? c.takesChats : c.choices!.contains('taskiem') && c.takesChats;
 
 /// Chat on WhatsApp: the business's own number, in WhatsApp (outside the
-/// app).
-Future<void> chatOnWhatsApp(BuildContext context, ChatLinkCardWhatsapp w) =>
-    openOrSay(context, () => openOutside(Uri.parse(w.link)), 'WhatsApp didn’t open. Try again.');
+/// app). A link that does not read as one is not opened: it says so.
+Future<void> chatOnWhatsApp(BuildContext context, ChatLinkCardWhatsapp w) {
+  final u = whatsappUri(w);
+  return openOrSay(context, () async => u != null && await openOutside(u), 'WhatsApp didn’t open. Try again.');
+}
 
 /// The words of a link that no longer works.
 const linkGone = 'This link no longer works';

@@ -11,6 +11,7 @@
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:taskiem/api/api.g.dart' show ChatLinkCard;
 import 'package:taskiem/app/auth.dart';
 import 'package:taskiem/app/applinks.dart';
 import 'package:taskiem/app/config.dart' show taskiemUrl;
@@ -47,7 +48,7 @@ Map<String, dynamic> pair({String reply = 'whatsapp', Map<String, dynamic>? what
   final r = reply == 'app' ? a : w;
   return {
     ...thread(),
-    'lines': [w, a],
+    'lines': [a, w], // The server's order.
     'reply_line': reply,
     'window_open': r['window_open'],
     'stopped': r['stopped'],
@@ -106,7 +107,7 @@ void main() {
     };
     api.routes['POST /v1/customer-chats/cc1/typing'] = (_) => answer({}, 204);
     final d = await openThread(t, api);
-    expect(find.textContaining('Customer in the app and on WhatsApp'), findsOneWidget);
+    expect(find.textContaining('On WhatsApp and in the app'), findsOneWidget);
     expect(find.text('Hi, is the cake ready?'), findsOneWidget);
     expect(find.text('Writing from the app now'), findsOneWidget);
     expect(find.text('on WhatsApp ·'), findsNWidgets(2));
@@ -163,15 +164,128 @@ void main() {
     c = pair(reply: 'whatsapp', whatsapp: line('whatsapp', window: false), app: line('app', blocked: true, notice: 'You blocked this customer in the app'));
     final api2 = both(c);
     final d2 = await openThread(t, api2);
-    expect(find.text('More than a day since they last wrote on WhatsApp: your reply goes as a WhatsApp message they answer to carry on.'), findsOneWidget);
+    expect(find.text('More than a day since they last wrote: your reply goes as a WhatsApp message they answer to carry on.'), findsOneWidget);
     expect(find.text('Not in the app: you blocked this customer there.'), findsOneWidget);
     expect(find.bySemanticsLabel('In the app: You blocked them'), findsOneWidget);
     expect(find.bySemanticsLabel('Send an order, a pay link, a booking, a product or a file'), findsNothing, reason: 'cards go in the app, which is blocked');
     // The menu unblocks the app line.
     await press(t, find.bySemanticsLabel('More about this conversation'));
-    expect(find.text('Unblock this customer'), findsOneWidget);
+    expect(find.text('Unblock this customer in the app'), findsOneWidget);
     await t.tapAt(const Offset(10, 10));
     await settle(t);
+    await drain(t);
+    d2.dispose();
+  });
+
+  testWidgets('while writing the line is held; a line that shuts is said, not switched quietly', (t) async {
+    phone(t);
+    var c = pair(reply: 'whatsapp');
+    final api = both(c);
+    api.routes['GET /v1/customer-chats/cc1'] = (_) => c;
+    final sent = <Map<String, dynamic>>[];
+    api.routes['POST /v1/customer-chats/cc1/messages'] = (r) {
+      final b = api.body(r);
+      sent.add(b);
+      return answer({'id': 'r${sent.length}', 'mine': true, 'kind': 'text', 'body': b['text'], 'line': b['line'], 'delivery': 'sent', 'read_at': null, 'created_at': '2026-11-16T10:29:00Z'}, 201);
+    };
+    api.routes['POST /v1/customer-chats/cc1/typing'] = (_) => answer({}, 204);
+    final d = await openThread(t, api);
+    expect(find.bySemanticsLabel('Reply to Tolu Ade on WhatsApp'), findsOneWidget, reason: 'the box says the line');
+    await t.enterText(find.byType(EditableText).first, 'Your cake is ready');
+    await t.pump();
+    // They write in the app meanwhile: the server's reply line moves, the
+    // words being written stay for WhatsApp.
+    c = pair(reply: 'app');
+    await d.reload();
+    await t.pump();
+    expect(t.getSemantics(find.bySemanticsLabel('On WhatsApp').last).flagsCollection.isSelected.toString(), 'Tristate.isTrue');
+    expect(find.byKey(const ValueKey('line-moved')), findsNothing);
+    await press(t, find.bySemanticsLabel('Send').last);
+    expect(sent.last, containsPair('line', 'whatsapp'));
+
+    // Writing for WhatsApp, which then sends STOP: said, and it goes in the app.
+    c = pair(reply: 'whatsapp');
+    await d.reload();
+    await t.pump();
+    await t.enterText(find.byType(EditableText).first, 'Come by 4pm');
+    await t.pump();
+    c = pair(reply: 'app', whatsapp: line('whatsapp', stopped: true, notice: 'This customer sent STOP on WhatsApp'));
+    await d.reload();
+    await t.pump();
+    expect(find.text('Now goes in the app: it can’t go on WhatsApp now.'), findsOneWidget);
+    expect(find.bySemanticsLabel('Reply to Tolu Ade in the app'), findsOneWidget);
+    await press(t, find.bySemanticsLabel('Send').last);
+    expect(sent.last, containsPair('line', 'app'));
+    expect(find.text('Now goes in the app: it can’t go on WhatsApp now.'), findsNothing, reason: 'said only while there are words');
+    await drain(t);
+    d.dispose();
+  });
+
+  testWidgets('an offer that can no longer go as one is refused, never sent as a message', (t) async {
+    phone(t);
+    var c = pair(reply: 'app');
+    c['offers'] = 'yes';
+    final api = both(c);
+    api.routes['GET /v1/customer-chats/cc1'] = (_) => c;
+    api.routes['POST /v1/customer-chats/cc1/typing'] = (_) => answer({}, 204);
+    final d = await openThread(t, api);
+    await t.enterText(find.byType(EditableText).first, 'Free delivery today');
+    await t.pump();
+    await press(t, find.bySemanticsLabel('Send an order, a pay link, a booking, a product or a file'));
+    // They said no to offers while the sheet was open.
+    c = {...c, 'offers': 'no'};
+    await d.reload();
+    await press(t, find.text('Send as an offer'));
+    expect(api.sent('POST', '/v1/customer-chats/cc1/messages'), isEmpty);
+    expect(find.textContaining('Not sent: this customer no longer takes offers.'), findsOneWidget);
+    expect(find.text('Free delivery today'), findsOneWidget, reason: 'the words stay in the box');
+    // The app line shut: refused too.
+    c = {...pair(reply: 'whatsapp', app: line('app', blocked: true)), 'offers': 'yes'};
+    await d.reload();
+    expect(d.offerRefused(), startsWith('Not sent: an offer goes in the app'));
+    await d.send('Free delivery today', offer: true);
+    expect(api.sent('POST', '/v1/customer-chats/cc1/messages'), isEmpty, reason: 'not sent on WhatsApp instead');
+    await settle(t);
+    await drain(t);
+    d.dispose();
+  });
+
+  testWidgets('opened by the WhatsApp line\'s id: the draft is the customer\'s own; Block names the app; both lines\' messages marked in a thread of one', (t) async {
+    phone(t);
+    final api = both(pair(reply: 'whatsapp'));
+    // The pair, opened by the WhatsApp line's id: the server answers with
+    // the customer's own (the app thread's) id.
+    api.routes['GET /v1/customer-chats/cw1'] = (_) => pair(reply: 'whatsapp');
+    api.routes['GET /v1/customer-chats/cw1/messages'] = (_) => {'messages': pairMessages, 'more': false};
+    api.routes['POST /v1/customer-chats/cw1/read'] = (_) => answer({}, 204);
+    api.routes['GET /v1/customer-chats/cw1/orders'] = (_) => {'items': <Object>[], 'orders': <Object>[], 'pay_page': false, 'zones': <Object>[]};
+    final chats = ChatsData(api.auth(permissions: const ['storefront.manage', 'order.handle'], personal: false), now: () => at);
+    chats.setDraft('customer:cc1', 'Started in the list');
+    final d = CustomerData(chats, 'cw1', follow: false);
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: CustomerScreen(data: d)));
+    await settle(t);
+    expect(d.threadId, 'cc1');
+    expect(find.text('Started in the list'), findsOneWidget, reason: 'the draft kept under the customer\'s own id');
+    await t.enterText(find.byType(EditableText).first, 'Written by the other id');
+    await t.pump();
+    expect(chats.draft('customer:cc1'), 'Written by the other id');
+    expect(chats.draft('customer:cw1'), '');
+    // Block, to a customer on both: the app line only.
+    await press(t, find.bySemanticsLabel('More about this conversation'));
+    await press(t, find.text('Block this customer in the app'));
+    expect(find.text('Block Tolu Ade in the app?'), findsOneWidget);
+    expect(find.textContaining('Their WhatsApp stays as it is.'), findsOneWidget);
+    await t.tapAt(const Offset(10, 10));
+    await settle(t);
+    await drain(t);
+    d.dispose();
+
+    // A thread of one line holding both lines' messages: each marked.
+    final one = business(c: {...thread(), 'line': 'whatsapp', 'window_open': true});
+    one.routes['GET /v1/customer-chats/cc1/messages'] = (_) => {'messages': pairMessages, 'more': false};
+    final d2 = await openThread(t, one);
+    expect(find.text('on WhatsApp ·'), findsNWidgets(2));
+    expect(find.text('in the app ·'), findsOneWidget);
     await drain(t);
     d2.dispose();
   });
@@ -288,9 +402,41 @@ void main() {
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, auth: auth, links: links));
     await settle(t);
     expect(find.text('Welcome to Taskiem'), findsOneWidget);
+    expect(find.text('Sign in to chat with Mama’s Kitchen.'), findsOneWidget);
     await press(t, find.text('Chat on WhatsApp'));
     expect(opened, [Uri.parse('https://wa.me/2348031112222')]);
     await drain(t);
+  });
+
+  testWidgets('signed out, a chat link with WhatsApp alone: Chat on WhatsApp first, and no chats in Taskiem said', (t) async {
+    phone(t);
+    final opened = <Uri>[];
+    final was = openOutside;
+    openOutside = (u) async {
+      opened.add(u);
+      return true;
+    };
+    addTearDown(() => openOutside = was);
+    final api = Api();
+    api.routes['GET /v1/chat-links/k7m2q9x4pz'] = (_) => card(takes: false);
+    final auth = api.auth()..state = AuthState.signedOut;
+    final links = LinkInbox(links: const Stream.empty(), first: () async => null);
+    links.receive(Uri.parse('$taskiemUrl/m/k7m2q9x4pz'));
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, auth: auth, links: links));
+    await settle(t);
+    expect(find.text('Mama’s Kitchen isn’t taking chats in Taskiem right now.'), findsOneWidget);
+    expect(find.text('Sign in to chat with Mama’s Kitchen.'), findsNothing, reason: 'signing in is not for chatting with them');
+    await press(t, find.text('Chat on WhatsApp'));
+    expect(opened, [Uri.parse('https://wa.me/2348031112222')]);
+    await drain(t);
+  });
+
+  test('only a wa.me link is offered or opened', () {
+    ChatLinkCard of(String link) => ChatLinkCard.fromJson({...card(), 'link': 'https://app.taskiem.com/m/k7m2q9x4pz', 'whatsapp': {'number': '+2348031112222', 'link': link}});
+    expect(whatsappChoice(of('https://wa.me/2348031112222')), isNotNull);
+    for (final bad in ['javascript:alert(1)', 'http://wa.me/2348031112222', 'https://wa.me.evil.test/1', 'https://example.com/wa.me/1', '']) {
+      expect(whatsappChoice(of(bad)), isNull, reason: bad);
+    }
   });
 
   testWidgets('Customer chats: "Offer WhatsApp on your chat link" saved', (t) async {
@@ -308,6 +454,7 @@ void main() {
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ChatLinkPage(auth: api.auth(permissions: const ['storefront.manage', 'order.handle'], personal: false))));
     await settle(t);
     expect(find.text('Offer WhatsApp on your chat link'), findsOneWidget);
+    expect(find.textContaining('on your own number +234 803 123 4567,'), findsOneWidget, reason: 'the number as people write it');
     await press(t, find.bySemanticsLabel('Offer WhatsApp on your chat link').last);
     expect(api.body(api.sent('PUT', '/v1/customers/chat-settings').single), {'link_whatsapp': false});
     await drain(t);

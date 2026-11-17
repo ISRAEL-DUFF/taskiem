@@ -201,7 +201,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            AuthSide(line: _link?.card != null ? 'Sign in to chat with ${_link!.card!.name}.' : 'Chat with the businesses you buy from, and run your own.'),
+            AuthSide(
+              line: _link?.card != null && taskiemChoice(_link!.card!)
+                  ? 'Sign in to chat with ${_link!.card!.name}.'
+                  : 'Chat with the businesses you buy from, and run your own.',
+            ),
             AuthCard(
               children: switch (_step) {
                 WelcomeStep.phone => _phoneStep(t),
@@ -220,8 +224,18 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
           ChatLinkCardView(card: _link!.card!),
           const SizedBox(height: 20),
           // Their own WhatsApp number (§11): no signing in needed for it.
+          // While they take no chats in Taskiem it is the way to them: the
+          // main button, and signing in is not for chatting with them.
           if (whatsappChoice(_link!.card!) case final wa?) ...[
-            CardButton(label: 'Chat on WhatsApp', onTap: () => chatOnWhatsApp(context, wa)),
+            CardButton(label: 'Chat on WhatsApp', primary: !taskiemChoice(_link!.card!), onTap: () => chatOnWhatsApp(context, wa)),
+            const SizedBox(height: 20),
+          ],
+          if (!taskiemChoice(_link!.card!)) ...[
+            Text(
+              '${_link!.card!.name} isn’t taking chats in Taskiem right now.',
+              textAlign: TextAlign.center,
+              style: tkText(size: 14, color: t.muted),
+            ),
             const SizedBox(height: 20),
           ],
         ],

@@ -32,6 +32,7 @@ import '../screens/settings_more.dart' show SettingsCard, SettingsPage;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
+import 'customer.dart' show phoneWords;
 import 'my_chat.dart' show sayFailure;
 
 /// Hands words to the phone's share sheet. A test stands in for it.
@@ -229,7 +230,7 @@ class _ChatLinkPageState extends State<ChatLinkPage> {
               if (s.linkWhatsapp != null && (s.ownNumber ?? '').isNotEmpty)
                 TkSwitchRow(
                   label: 'Offer WhatsApp on your chat link',
-                  hint: 'Your link offers Chat on WhatsApp, on your own number ${s.ownNumber}, beside Chat on Taskiem. A customer on both is one chat here.',
+                  hint: 'Your link offers Chat on WhatsApp, on your own number ${phoneWords(s.ownNumber!)}, beside Chat on Taskiem. A customer on both is one chat here.',
                   on: s.linkWhatsapp!,
                   onChanged: can ? (v) => _settings(PutChatSettingsRequest(linkWhatsapp: v)) : null,
                 ),
