@@ -125,6 +125,8 @@ test("a customer opens a chat link, signs in by phone in the browser, and chats 
   await expect(person).toHaveURL(/\/you\/chats\/[0-9a-f-]{36}$/);
   await expect(person.getByTestId("person-notice")).toContainText(`${name} will see your name and phone number`);
   await expect(person.getByTestId("offers-question")).toContainText(`Get offers from ${name}?`);
+  // What the business has proved, in plain words (a business made just now).
+  await expect(person.getByTestId("person-trust")).toHaveText("New on Taskiem");
   await check(person, "the browser chat", 390);
   await person.getByTestId("offers-question").getByRole("button", { name: "Yes" }).click();
   await expect(person.getByTestId("offers-question")).toHaveCount(0);
@@ -147,6 +149,10 @@ test("a customer opens a chat link, signs in by phone in the browser, and chats 
   await pane.getByLabel("Reply to Tolu Bello").fill("Yes, come at 4");
   await pane.getByLabel("Reply to Tolu Bello").press("Enter");
   await expect(pane.getByTestId("customer-message").filter({ hasText: "Yes, come at 4" })).toBeVisible();
+  // A message asking for a transfer to an account: the person is warned.
+  await pane.getByLabel("Reply to Tolu Bello").fill("Or send it to 0123456789 at GTBank");
+  await pane.getByLabel("Reply to Tolu Bello").press("Enter");
+  await expect(pane.getByTestId("customer-message").filter({ hasText: "0123456789" })).toBeVisible();
   // They said yes to offers: this one goes as an offer.
   await pane.getByLabel("Reply to Tolu Bello").fill("Free drink with every jollof today");
   await pane.getByTestId("customer-as-offer").check();
@@ -155,6 +161,11 @@ test("a customer opens a chat link, signs in by phone in the browser, and chats 
 
   // The person: the answer and the offer, with Stop offers under it.
   await expect(person.getByTestId("person-message").filter({ hasText: "Yes, come at 4" })).toBeVisible({ timeout: 15_000 });
+  await expect(person.getByTestId("person-message").filter({ hasText: "Yes, come at 4" }).getByTestId("transfer-warning")).toHaveCount(0);
+  await expect(person.getByTestId("person-message").filter({ hasText: "0123456789" }).getByTestId("transfer-warning")).toContainText(
+    "Pay only through Taskiem's pay links",
+    { timeout: 15_000 },
+  );
   const offer = person.getByTestId("person-message").filter({ hasText: "Free drink" });
   await expect(offer.getByText("Offer", { exact: true })).toBeVisible({ timeout: 15_000 });
   await offer.getByRole("button", { name: `Stop offers from ${name}` }).click();
@@ -278,6 +289,7 @@ function world() {
     ask_offers: true,
     typing: false,
     hours: { open: true, line: "Open now, closes at 18:00" },
+    verified: { phone: true, business: false, payments: true, months: 8 },
   };
   const messages = [
     { id: "m1", mine: true, kind: "text", body: "Hello", read_at: at(9), created_at: at(10) },
@@ -288,6 +300,10 @@ function world() {
     { id: "m6", mine: false, kind: "card", body: "Order MK-1", card: { type: "order", reference: "MK-1", title: "Order MK-1", line: "1 × Jollof rice", status: "awaiting_payment", total_kobo: 300_000 }, read_at: null, created_at: at(5) },
     { id: "m7", mine: false, kind: "media", body: "Menu", attachment: { kind: "file", type: "application/pdf", size: 120_000, name: "Menu.pdf" }, read_at: null, created_at: at(4) },
     { id: "m8", mine: false, kind: "text", body: "Free drink with every jollof today", offer: true, read_at: null, created_at: at(3) },
+    { id: "m9", mine: false, kind: "card", body: "Invoice INV-0007", card: { type: "invoice", reference: "INV-0007", invoice_id: "f1", title: "Invoice INV-0007", line: "Catering for 40", status: "sent", total_kobo: 2_000_000, url: "https://pay.example.test/INV-0007" }, read_at: null, created_at: at(2.5) },
+    // A delivery card as it was sent (a rider coming); the order has moved on since.
+    { id: "m10", mine: false, kind: "card", body: "Delivery of MK-1", card: { type: "delivery", reference: "MK-1", title: "Delivery of MK-1", line: "A rider is going to collect it", status: "accepted", delivery: { status: "accepted", line: "A rider is going to collect it" } }, read_at: null, created_at: at(2.2) },
+    { id: "m11", mine: false, kind: "text", body: "Or pay to 0123456789 GTBank, Ngozi", warn_transfer: true, sender_name: "Ngozi", read_at: null, created_at: at(2) },
   ];
   const calls: { method: string; path: string; body: unknown; key?: string }[] = [];
   const shop = {
@@ -310,7 +326,17 @@ function world() {
     zones: [{ name: "Ikeja", fee_kobo: 100_000 }],
     payment: "at_order",
   };
-  const order = { reference: "MK-1", kind: "order", status: "awaiting_payment", summary: "1 × Jollof rice", total_kobo: 300_000, due_kobo: 300_000, pay: true, created_at: at(5) };
+  const order = {
+    reference: "MK-1",
+    kind: "order",
+    status: "awaiting_payment",
+    summary: "1 × Jollof rice",
+    total_kobo: 300_000,
+    due_kobo: 300_000,
+    pay: true,
+    delivery: { status: "picked_up", line: "On its way to you", accepted_at: at(3), picked_up_at: at(1) },
+    created_at: at(5),
+  };
   const handle = async (route: Route) => {
     const r = route.request();
     const path = new URL(r.url()).pathname;
@@ -320,8 +346,9 @@ function world() {
     if (path === "/v1/me/chats") return route.fulfill(json({ chats: [chat], unread: 1 }));
     if (path === "/v1/me/chats/c1" && method === "GET") return route.fulfill(json(chat));
     if (path === "/v1/me/chats/c1" && method === "PUT") {
-      const b = body as { offers?: boolean };
+      const b = body as { offers?: boolean; offers_asked?: boolean };
       if (b.offers !== undefined) Object.assign(chat, { offers: b.offers ? "yes" : "no", ask_offers: false });
+      if (b.offers_asked) Object.assign(chat, { ask_offers: false });
       return route.fulfill(json(chat));
     }
     if (path === "/v1/me/chats/c1/messages" && method === "GET") return route.fulfill(json({ messages, more: false }));
@@ -353,31 +380,60 @@ for (const width of [390, 360])
     await page.route("**/v1/me/storefront-orders?*", (r) =>
       r.fulfill(
         json({
-          orders: [
-            { reference: "BS-7Q2R", state: "completed", total_kobo: 1_250_000, made_at: new Date().toISOString(), business: "Bola Stores", business_id: "b2", waiting: false },
-            { reference: "BS-1A1A", state: "received", total_kobo: 450_000, made_at: new Date().toISOString(), business: "Bola Stores", business_id: "b2", waiting: true },
-          ],
+          // Confirmed orders only: those made before the number was on the
+          // account are only counted.
+          orders: [{ reference: "BS-7Q2R", state: "completed", total_kobo: 1_250_000, made_at: new Date().toISOString(), business: "Bola Stores", business_id: "b2" }],
           waiting: true,
+          waiting_count: 2,
         }),
       ),
     );
     await page.route("**/v1/me/storefront-orders/confirm", (r) => r.fulfill(json({ confirmed: true })));
+    await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ public_key: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" })));
     await page.route(/\/v1\/me\/chats(\/|$|\?)/, w.handle);
 
     await page.goto("/you");
     await expect(page.getByTestId("person-chat")).toContainText("Mama's Kitchen");
     await expect(page.getByTestId("shop-orders")).toContainText("Chat with Bola Stores about this order");
-    await expect(page.getByTestId("these-are-mine")).toBeVisible();
+    await expect(page.getByTestId("these-are-mine")).toContainText("We found 2 orders made with your number before it was on your account. Are they yours?");
+    await expect(page.getByTestId("these-are-mine").getByRole("button", { name: "These are mine" })).toBeVisible();
+    // Nothing of the waiting orders is shown.
+    await expect(page.getByTestId("shop-order")).toHaveCount(1);
+    await expect(page.getByTestId("shop-orders")).not.toContainText("BS-1A1A");
     await check(page, "/you", width);
     await page.screenshot({ path: `test-results/person-you-${width}.png` });
 
     await page.getByTestId("person-chat").click();
     await expect(page.getByTestId("person-head-line")).toHaveText("Open now, closes at 18:00");
-    await expect(page.getByTestId("app-card")).toHaveCount(4);
+    await expect(page.getByTestId("person-trust")).toHaveText("Phone checked · Payments through Taskiem · Trading 8 months");
+    await expect(page.getByTestId("app-card")).toHaveCount(6);
+    // A transfer to an account is warned about, under the business's message only.
+    await expect(page.getByTestId("transfer-warning")).toHaveCount(1);
+    await expect(page.getByTestId("person-message").filter({ hasText: "0123456789" }).getByTestId("transfer-warning")).toHaveText(
+      "Pay only through Taskiem's pay links. Taskiem never asks you to send money to a personal account.",
+    );
+    // Cards follow the order: the delivery card shows the rider's progress now, not as sent.
+    const deliveryCard = page.getByTestId("app-card").filter({ hasText: "Delivery of MK-1" });
+    await expect(deliveryCard).toContainText("On its way to you");
+    await expect(deliveryCard).toContainText("On the way");
+    await expect(deliveryCard.getByTestId("delivery-steps")).toHaveAttribute("aria-label", "On the way: step 2 of 4");
+    await expect(page.getByTestId("app-card").filter({ hasText: "Invoice INV-0007" }).getByRole("link", { name: /^Pay/ })).toHaveAttribute("href", "https://pay.example.test/INV-0007");
+    // Tell me when they answer, where the browser can take a push.
+    await expect(page.getByTestId("tell-me")).toHaveText("Tell me when they answer");
     await check(page, "a conversation", width);
     await page.screenshot({ path: `test-results/person-chat-${width}.png` });
-    await page.getByTestId("offers-question").getByRole("button", { name: "No" }).click();
-    expect(w.calls.find((c) => c.method === "PUT")?.body).toEqual({ offers: false });
+    // Asked once: answered (390), or passed over (360), and not asked again.
+    if (width === 390) {
+      await page.getByTestId("offers-question").getByRole("button", { name: "No", exact: true }).click();
+      await expect.poll(() => w.calls.find((c) => c.method === "PUT")?.body).toEqual({ offers: false });
+    } else {
+      await page.getByTestId("offers-not-now").click();
+      await expect.poll(() => w.calls.find((c) => c.method === "PUT")?.body).toEqual({ offers_asked: true });
+    }
+    await expect(page.getByTestId("offers-question")).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByTestId("person-head-line")).toHaveText("Open now, closes at 18:00");
+    await expect(page.getByTestId("offers-question")).toHaveCount(0);
 
     // Their shop: few left, sizes and colours, delivery, and the order once.
     await page.getByTestId("person-tools-button").click();

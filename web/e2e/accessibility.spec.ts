@@ -390,7 +390,7 @@ for (const scheme of ["light", "dark"] as const)
       await page.route("**/v1/me", (r) => r.fulfill(json(PERSON)));
       // No chats yet, and no orders from shops (stage 2).
       await page.route(/\/v1\/me\/chats(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0 })));
-      await page.route("**/v1/me/storefront-orders?*", (r) => r.fulfill(json({ orders: [], waiting: false })));
+      await page.route("**/v1/me/storefront-orders?*", (r) => r.fulfill(json({ orders: [], waiting: false, waiting_count: 0 })));
       await page.route("**/v1/me/invitations", (r) =>
         r.fulfill(json({ invitations: [{ tenant_id: "0192e2e0-0000-7000-8000-00000000b003", tenant: "Bola Stores", roles: ["staff"], invited_at: new Date().toISOString() }] })),
       );
@@ -442,7 +442,7 @@ for (const scheme of ["light", "dark"] as const)
       await page.goto("/m/a11ya11ya1");
       await expect(page.getByTestId("chat-here")).toBeVisible();
       await check("/m/{code}");
-      const chat = { id: "c1", business: "b1", name: "Mama's Kitchen", last: "Hello", last_mine: false, last_at: now, unread: 0, muted: false, archived: false, blocked: false, blocked_you: false, offers: "unasked", ask_offers: true, hours: { open: true, line: "Open now" } };
+      const chat = { id: "c1", business: "b1", name: "Mama's Kitchen", last: "Hello", last_mine: false, last_at: now, unread: 0, muted: false, archived: false, blocked: false, blocked_you: false, offers: "unasked", ask_offers: true, hours: { open: true, line: "Open now" }, verified: { phone: true, business: true, payments: true, months: 14 } };
       await page.route("**/v1/me", (r) => r.fulfill(json({ ...PERSON, businesses: [], second_proof: undefined })));
       await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
       await page.route("**/v1/me/chats/c1", (r) => r.fulfill(json(chat)));
@@ -453,6 +453,9 @@ for (const scheme of ["light", "dark"] as const)
               { id: "m1", mine: false, kind: "text", body: "Hello", read_at: null, created_at: now },
               { id: "m2", mine: false, kind: "card", body: "Order", card: { type: "order", reference: "MK-1", title: "Order MK-1", line: "1 × Jollof rice", status: "received", total_kobo: 250_000 }, read_at: null, created_at: now },
               { id: "m3", mine: true, kind: "text", body: "Thank you", read_at: now, created_at: now },
+              { id: "m4", mine: false, kind: "text", body: "Pay to 0123456789 at GTBank", warn_transfer: true, read_at: null, created_at: now },
+              { id: "m5", mine: false, kind: "card", body: "Invoice", card: { type: "invoice", reference: "INV-0001", invoice_id: "f1", title: "Invoice INV-0001", status: "part_paid", total_kobo: 150_000, url: "https://pay.example.test/i" }, read_at: null, created_at: now },
+              { id: "m6", mine: false, kind: "card", body: "Delivery", card: { type: "delivery", reference: "MK-1", title: "Delivery of MK-1", line: "On its way to you", status: "picked_up", delivery: { status: "picked_up", line: "On its way to you" } }, read_at: null, created_at: now },
             ],
             more: false,
           }),
@@ -460,8 +463,13 @@ for (const scheme of ["light", "dark"] as const)
       );
       await page.route("**/v1/me/chats/c1/read", (r) => r.fulfill({ status: 204 }));
       await page.route("**/v1/me/chats/c1/orders", (r) => r.fulfill(json({ orders: [] })));
+      // A server with no push keys: "We'll text you when they answer."
+      await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ error: "not found" }, 404)));
       await page.goto("/you/chats/c1");
       await expect(page.getByTestId("offers-question")).toBeVisible();
+      await expect(page.getByTestId("transfer-warning")).toBeVisible();
+      await expect(page.getByTestId("tell-me-line")).toHaveText("We'll text you when they answer.");
+      await expect(page.getByTestId("person-trust")).toHaveText("Phone checked · Business checked · Payments through Taskiem · Trading 1 year");
       await check("/you/chats/{id}");
       expect(found, found.join("\n\n")).toEqual([]);
     });
