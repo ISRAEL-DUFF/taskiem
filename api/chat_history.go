@@ -374,7 +374,12 @@ func (s *Server) purgeChatHistory(ctx context.Context) error {
 		return err
 	}
 	// Customers' messages past their year (customer_chat.go).
-	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_customer_messages_purge()`)
+	if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_customer_messages_purge()`); err != nil {
+		return err
+	}
+	// "At most once per ..." notices past their periods, sign-up offers past
+	// a day, chat-link sign-up codes that led to no chat (migration 00459).
+	_, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_customer_chat_notices_purge()`)
 	return err
 }
 

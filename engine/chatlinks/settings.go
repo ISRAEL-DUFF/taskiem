@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/engine/areas"
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
@@ -27,8 +28,12 @@ var ErrInvalid = errors.New("chatlinks: invalid")
 // Settings are a business's choices about its chat link.
 type Settings struct {
 	// TakesChats: customers can start a chat from the link (on unless the
-	// business turns it off).
+	// business turns it off). Off too while the business's Orders area is
+	// off: customer chats are part of it (OrdersOff says why).
 	TakesChats bool `json:"takes_chats"`
+	// OrdersOff: the Orders area is off, so no chats are taken whatever
+	// the switch says.
+	OrdersOff bool `json:"orders_off,omitempty"`
 	// StorefrontButton is what the storefront offers: whatsapp, taskiem
 	// or both (the default).
 	StorefrontButton string `json:"storefront_button"`
@@ -41,13 +46,21 @@ type Settings struct {
 }
 
 // SettingsTx reads the business's settings, with the defaults where it
-// has said nothing.
+// has said nothing. TakesChats is as it applies now: off while the Orders
+// area is off.
 func SettingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) (Settings, error) {
 	st := Settings{TakesChats: true, StorefrontButton: ButtonBoth}
 	err := tx.QueryRow(ctx, `SELECT takes_chats, storefront_button, link_in_updates FROM customer_chat_link_settings WHERE tenant_id = $1`, tenant).
 		Scan(&st.TakesChats, &st.StorefrontButton, &st.LinkInUpdates)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return st, err
+	}
+	orders, err := areas.Enabled(ctx, tx, tenant, areas.Orders)
+	if err != nil {
+		return st, err
+	}
+	if !orders {
+		st.TakesChats, st.OrdersOff = false, true
 	}
 	if st.LinkInUpdates != nil {
 		st.UpdatesLink = *st.LinkInUpdates
@@ -71,35 +84,31 @@ type SettingsIn struct {
 	ResetUpdates  bool  `json:"link_in_updates_default"`
 }
 
-// SaveSettingsTx changes the business's settings.
+// SaveSettingsTx changes the business's settings: only the fields given,
+// each written in one statement (two owners changing different settings at
+// once both stand; nothing read before is written back).
 func SaveSettingsTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, in SettingsIn, by string) (Settings, error) {
-	cur, err := SettingsTx(ctx, tx, tenant)
-	if err != nil {
-		return cur, err
-	}
 	if in.StorefrontButton != nil {
 		switch *in.StorefrontButton {
 		case ButtonWhatsApp, ButtonTaskiem, ButtonBoth:
-			cur.StorefrontButton = *in.StorefrontButton
 		default:
-			return cur, fmt.Errorf("%w: the storefront's button is whatsapp, taskiem or both", ErrInvalid)
+			return Settings{}, fmt.Errorf("%w: the storefront's button is whatsapp, taskiem or both", ErrInvalid)
 		}
 	}
-	if in.TakesChats != nil {
-		cur.TakesChats = *in.TakesChats
-	}
-	switch {
-	case in.ResetUpdates:
-		cur.LinkInUpdates = nil
-	case in.LinkInUpdates != nil:
-		cur.LinkInUpdates = in.LinkInUpdates
+	setUpdates := in.ResetUpdates || in.LinkInUpdates != nil
+	var updates *bool
+	if !in.ResetUpdates {
+		updates = in.LinkInUpdates
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO customer_chat_link_settings (tenant_id, takes_chats, storefront_button, link_in_updates, updated_by)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (tenant_id) DO UPDATE SET takes_chats = EXCLUDED.takes_chats, storefront_button = EXCLUDED.storefront_button,
-		  link_in_updates = EXCLUDED.link_in_updates, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-		tenant, cur.TakesChats, cur.StorefrontButton, cur.LinkInUpdates, by); err != nil {
-		return cur, err
+		VALUES ($1, COALESCE($2::boolean, true), COALESCE($3::text, 'both'), $4::boolean, $6)
+		ON CONFLICT (tenant_id) DO UPDATE SET
+		  takes_chats = COALESCE($2::boolean, customer_chat_link_settings.takes_chats),
+		  storefront_button = COALESCE($3::text, customer_chat_link_settings.storefront_button),
+		  link_in_updates = CASE WHEN $5::boolean THEN EXCLUDED.link_in_updates ELSE customer_chat_link_settings.link_in_updates END,
+		  updated_by = EXCLUDED.updated_by, updated_at = now()`,
+		tenant, in.TakesChats, in.StorefrontButton, updates, setUpdates, by); err != nil {
+		return Settings{}, err
 	}
 	return SettingsTx(ctx, tx, tenant)
 }

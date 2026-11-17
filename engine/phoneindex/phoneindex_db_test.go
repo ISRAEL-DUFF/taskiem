@@ -135,7 +135,7 @@ func TestOrdersOfAPerson(t *testing.T) {
 	bola := f.person("+2348031234567", time.Now().Add(-time.Hour))
 	other := f.person("+2348035555555", time.Now().Add(-time.Hour))
 
-	list, err := f.idx.Orders(ctx, bola, 50)
+	list, err := f.idx.Orders(ctx, bola, uuid.Nil, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,14 +146,28 @@ func TestOrdersOfAPerson(t *testing.T) {
 		t.Fatalf("the newest: %+v", list[0])
 	}
 	// Made after the phone was verified: not waiting for "These are mine".
-	if list[0].Waiting || list[1].Waiting {
-		t.Fatalf("waiting: %+v", list)
+	if n, err := f.idx.Waiting(ctx, bola); err != nil || n != 0 {
+		t.Fatalf("waiting: %d %v", n, err)
 	}
-	if list, err := f.idx.Orders(ctx, other, 50); err != nil || len(list) != 0 {
+	// One business's, chosen before the limit.
+	if one, err := f.idx.Orders(ctx, bola, a, 1); err != nil || len(one) != 1 || one[0].Reference != oa.Reference {
+		t.Fatalf("one business's: %+v %v", one, err)
+	}
+	if list, err := f.idx.Orders(ctx, other, uuid.Nil, 50); err != nil || len(list) != 0 {
 		t.Fatalf("another person's orders: %+v %v", list, err)
 	}
-	if list, err := f.idx.Orders(ctx, uuid.New(), 50); err != nil || len(list) != 0 {
+	if list, err := f.idx.Orders(ctx, uuid.New(), uuid.Nil, 50); err != nil || len(list) != 0 {
 		t.Fatalf("no one's orders: %+v %v", list, err)
+	}
+	// Only the person in scope: not with no scope, nor as another person.
+	if _, err := f.env.DB.App.Exec(ctx, `SELECT * FROM taskiem_customer_phone_orders($1, $2, NULL, 50)`, bola, bytes.Repeat([]byte{9}, 32)); err == nil {
+		t.Fatal("the orders were read with no person in scope")
+	}
+	if err := db.InPersonTx(ctx, f.env.DB.App, other, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `SELECT taskiem_customer_phone_orders_waiting($1, $2)`, bola, bytes.Repeat([]byte{9}, 32))
+		return err
+	}); err == nil {
+		t.Fatal("another person counted the waiting orders")
 	}
 
 	// The function answers only these columns, and only by person.
@@ -162,7 +176,7 @@ func TestOrdersOfAPerson(t *testing.T) {
 		unnest(p.proargnames, p.proargmodes::text[]) WITH ORDINALITY a(name, mode, ord) WHERE p.proname = 'taskiem_customer_phone_orders' AND a.mode = 't'`).Scan(&cols); err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{"reference", "state", "total_kobo", "made_at", "business", "business_id", "waiting"}; len(cols) != len(want) {
+	if want := []string{"reference", "state", "total_kobo", "made_at", "business", "business_id"}; len(cols) != len(want) {
 		t.Fatalf("columns: %v", cols)
 	} else {
 		for i := range want {
@@ -180,7 +194,9 @@ func TestOrdersOfAPerson(t *testing.T) {
 	}
 	// A key other than the index's finds nothing.
 	var wrong int
-	if err := f.env.DB.App.QueryRow(ctx, `SELECT count(*) FROM taskiem_customer_phone_orders($1, $2, 50)`, bola, bytes.Repeat([]byte{9}, 32)).Scan(&wrong); err != nil || wrong != 0 {
+	if err := db.InPersonTx(ctx, f.env.DB.App, bola, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT count(*) FROM taskiem_customer_phone_orders($1, $2, NULL, 50)`, bola, bytes.Repeat([]byte{9}, 32)).Scan(&wrong)
+	}); err != nil || wrong != 0 {
 		t.Fatalf("another key: %d %v", wrong, err)
 	}
 
@@ -188,7 +204,7 @@ func TestOrdersOfAPerson(t *testing.T) {
 	if _, err := f.env.DB.Admin.Exec(ctx, `UPDATE users SET status = 'disabled' WHERE id = $1`, bola); err != nil {
 		t.Fatal(err)
 	}
-	if list, err := f.idx.Orders(ctx, bola, 50); err != nil || len(list) != 0 {
+	if list, err := f.idx.Orders(ctx, bola, uuid.Nil, 50); err != nil || len(list) != 0 {
 		t.Fatalf("a disabled account: %+v %v", list, err)
 	}
 }
@@ -202,15 +218,23 @@ func TestTheseAreMine(t *testing.T) {
 	a := f.business("Mama's Kitchen")
 	f.order(a, "+2348031234567", 450000)
 	bola := f.person("+2348031234567", time.Now().Add(time.Minute))
-	list, err := f.idx.Orders(ctx, bola, 50)
-	if err != nil || len(list) != 1 || !list[0].Waiting {
+	// Before "These are mine": a count, nothing of the order (a number that
+	// was someone else's shows nothing of theirs).
+	list, err := f.idx.Orders(ctx, bola, uuid.Nil, 50)
+	if err != nil || len(list) != 0 {
 		t.Fatalf("before confirming: %+v %v", list, err)
+	}
+	if n, err := f.idx.Waiting(ctx, bola); err != nil || n != 1 {
+		t.Fatalf("waiting before confirming: %d %v", n, err)
 	}
 	if ok, err := f.idx.Confirm(ctx, bola); err != nil || !ok {
 		t.Fatalf("confirm: %v %v", ok, err)
 	}
-	if list, err = f.idx.Orders(ctx, bola, 50); err != nil || len(list) != 1 || list[0].Waiting {
+	if list, err = f.idx.Orders(ctx, bola, uuid.Nil, 50); err != nil || len(list) != 1 {
 		t.Fatalf("after confirming: %+v %v", list, err)
+	}
+	if n, err := f.idx.Waiting(ctx, bola); err != nil || n != 0 {
+		t.Fatalf("waiting after confirming: %d %v", n, err)
 	}
 	if _, err := f.env.DB.Admin.Exec(ctx, `UPDATE user_phones SET number = '+2348031234568' WHERE user_id = $1`, bola); err != nil {
 		t.Fatal(err)

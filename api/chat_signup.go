@@ -261,11 +261,23 @@ func (s *Server) chatSignupMessage(ctx context.Context, sc *signupChat, text, re
 		}
 		return true, s.suSay(ctx, sc, sc.t("signup.customer", "link", s.AppGetURL))
 	case sc.user == uuid.Nil && offersCustomer(sc.ch) && notNow(text):
-		// Not now is typed: the offer's three buttons are its others.
-		return true, s.suSay(ctx, sc, sc.t("signup.later"))
+		// Not now is typed: the offer's three buttons are its others. Only
+		// just after the offer went to this address: an outsider writing
+		// "no" to a business's update is answered as an outsider (§12).
+		var offered bool
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_chat_signup_offer_taken($1, $2::interval)`, signupKey(sc.addr), signupOfferRecent.String()).Scan(&offered); err != nil {
+			return true, err
+		}
+		if offered {
+			return true, s.suSay(ctx, sc, sc.t("signup.later"))
+		}
 	}
 	return false, nil
 }
+
+// signupOfferRecent is how long after the sign-up offer a typed "no" is
+// its Not now.
+const signupOfferRecent = time.Hour
 
 // offersCustomer reports whether a channel's sign-up offer has "I'm a
 // customer" in place of "Not now": Taskiem's shared WhatsApp number and
@@ -296,7 +308,11 @@ func (s *Server) signupOffer(ctx context.Context, sc *signupChat, text string) e
 		return s.signupBegin(ctx, sc)
 	}
 	if offersCustomer(sc.ch) {
-		// WhatsApp allows three buttons: Not now is typing "no" (§12).
+		// WhatsApp allows three buttons: Not now is typing "no" (§12),
+		// read as such only just after this (taskiem_chat_signup_offer_taken).
+		if _, err := s.Store.Pool.Exec(ctx, `SELECT taskiem_chat_signup_offered($1)`, signupKey(sc.addr)); err != nil {
+			return err
+		}
 		return s.suSay(ctx, sc, sc.t("signup.offer_everyone", "languages", langNames(s.operatorLangs())),
 			whatsapp.Button{ID: "su:start", Title: sc.t("signup.button_start")},
 			whatsapp.Button{ID: "su:have", Title: sc.t("signup.button_have")},

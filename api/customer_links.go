@@ -78,20 +78,23 @@ func (s *Server) storefrontChat(ctx context.Context, tx pgx.Tx, tenant uuid.UUID
 }
 
 // republishForChat publishes a published storefront again after its chat
-// link or button changed, so the page offers the new one. Its own
-// transaction: a page that cannot be published now keeps the old button,
-// and the change itself stands.
+// link or button changed (or chats were turned on or off), so the page
+// offers the new one. Only the button changes: the page as published is
+// copied with it (storefront.RepublishChat), so the owner's unpublished
+// draft stays unpublished and nothing goes to the moderators again. Its
+// own transaction: a page that cannot be published now keeps the old
+// button, and the change itself stands.
 func (s *Server) republishForChat(r *http.Request) {
 	p := principalFrom(r.Context())
 	err := s.tx(r, func(tx pgx.Tx) error {
-		sf, err := storefront.Get(r.Context(), tx, p.TenantID)
-		if errors.Is(err, storefront.ErrNotFound) || err == nil && (sf.PublishedVersion == 0 || sf.Status != "published") {
-			return nil
-		}
+		chat, err := s.storefrontChat(r.Context(), tx, p.TenantID)
 		if err != nil {
 			return err
 		}
-		_, err = s.publishGated(r.Context(), tx, p.TenantID, p.Actor())
+		_, err = storefront.RepublishChat(r.Context(), tx, p.TenantID, p.Actor(), chat)
+		if errors.Is(err, storefront.ErrNotFound) {
+			return nil
+		}
 		return err
 	})
 	if err != nil {
@@ -314,7 +317,9 @@ func (s *Server) putChatSettings(w http.ResponseWriter, r *http.Request) {
 // business's): the storefront orders and bookings made with the person's
 // verified phone, across businesses, so "Chat with {business} about this
 // order" finds them. Orders made before the phone was on the account are
-// marked waiting until the person says they are theirs.
+// only counted (waiting_count) until the person says they are theirs:
+// nothing of them is shown, so a number that was someone else's never
+// shows that person's orders.
 func (s *Server) myStorefrontOrders(w http.ResponseWriter, r *http.Request) {
 	p := principalFrom(r.Context())
 	if p.UserID == uuid.Nil {
@@ -335,26 +340,20 @@ func (s *Server) myStorefrontOrders(w http.ResponseWriter, r *http.Request) {
 		limit = v
 	}
 	if !s.PhoneIndex.Ready() {
-		writeJSON(w, http.StatusOK, map[string]any{"orders": []phoneindex.Order{}, "waiting": false})
+		writeJSON(w, http.StatusOK, map[string]any{"orders": []phoneindex.Order{}, "waiting": false, "waiting_count": 0})
 		return
 	}
-	list, err := s.PhoneIndex.Orders(r.Context(), p.UserID, 200)
+	list, err := s.PhoneIndex.Orders(r.Context(), p.UserID, only, limit)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	out := make([]phoneindex.Order, 0, len(list))
-	waiting := false
-	for _, o := range list {
-		if only != uuid.Nil && o.BusinessID != only {
-			continue
-		}
-		waiting = waiting || o.Waiting
-		if len(out) < limit {
-			out = append(out, o)
-		}
+	waiting, err := s.PhoneIndex.Waiting(r.Context(), p.UserID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"orders": out, "waiting": waiting})
+	writeJSON(w, http.StatusOK, map[string]any{"orders": list, "waiting": waiting > 0, "waiting_count": waiting})
 }
 
 // confirmStorefrontOrders is POST /v1/me/storefront-orders/confirm: "These

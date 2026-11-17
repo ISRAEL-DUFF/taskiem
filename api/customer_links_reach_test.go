@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/chatlinks"
 	"github.com/israel-duff/taskiem/engine/telegram/telegramtest"
 )
@@ -86,6 +87,17 @@ func TestSharedNumberChatWords(t *testing.T) {
 	if sent := w.whatsapp(t, chidi, "Hello again"); len(sent) != 1 || sent[0].Text != "To chat with Ada Stores, open "+link {
 		t.Fatalf("a day later: %+v", sent)
 	}
+	// With sign-up on the shared number, Chidi's typed "no" to an update is
+	// an outsider's reply, not Not now to a sign-up offer he was never sent.
+	chatSignupOn(w.world, "whatsapp", "telegram")
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE customer_chat_notices SET last_at = now() - interval '25 hours'`); err != nil {
+		t.Fatal(err)
+	}
+	w.srv.ResetLimiters()
+	if sent := w.whatsapp(t, chidi, "No"); len(sent) != 1 || sent[0].Text != "To chat with Ada Stores, open "+link {
+		t.Fatalf("a typed no from an outsider: %+v", sent)
+	}
+	w.srv.ChatSignup = api.ChatSignupConfig{}
 
 	// On Telegram: the link ends every update (no window there).
 	const bola = int64(7101)

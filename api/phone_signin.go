@@ -26,8 +26,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/israel-duff/taskiem/engine/db"
 	phonenum "github.com/israel-duff/taskiem/engine/phone"
 	"github.com/israel-duff/taskiem/engine/sender"
@@ -58,14 +56,15 @@ func phoneCodeText(code string) string {
 }
 
 // sendPhoneCode sends a code by WhatsApp, else (or when asked) by SMS, and
-// says how it went. A code for a person who came through a business's
-// chat link (business) counts against that business's plan (§15): its
-// WhatsApp templates, or its SMS (customer_message_charges); any other is
-// Taskiem's.
-func (s *Server) sendPhoneCode(ctx context.Context, number, via, code string, business uuid.UUID) (string, error) {
+// says how it went. Every code is Taskiem's when it is sent, even one
+// asked for through a business's chat link: anyone can ask for codes
+// through any link. The business pays only when a new account made with
+// such a code starts a chat with it (taskiem-for-everyone §15, migration
+// 00457: the door's customer.start charges it once).
+func (s *Server) sendPhoneCode(ctx context.Context, number, via, code string) (string, error) {
 	if via != "sms" && s.WhatsApp != nil {
-		// From Taskiem's own number.
-		_, err := s.WhatsApp.SendTemplate(ctx, business, number, whatsapp.TplOTP, map[string]string{"code": code}, nil)
+		// From Taskiem's own number, on Taskiem's account.
+		_, err := s.WhatsApp.SendTemplate(ctx, uuid.Nil, number, whatsapp.TplOTP, map[string]string{"code": code}, nil)
 		if err == nil {
 			return "whatsapp", nil
 		}
@@ -80,23 +79,12 @@ func (s *Server) sendPhoneCode(ctx context.Context, number, via, code string, bu
 	if err := s.CodeSMS.SendCode(ctx, number, phoneCodeText(code)); err != nil {
 		return "", err
 	}
-	if business != uuid.Nil {
-		if err := chargeCodeSMS(ctx, s.Store.Pool, business, phoneCodeText(code)); err != nil {
-			s.Logger.Warn("phone code: not counted against the business", "err", err, "tenant", business)
-		}
-	}
 	return "sms", nil
 }
 
-// chargeCodeSMS counts a sign-in code sent by SMS against the business the
-// person came through, as its SMS (§15).
-func chargeCodeSMS(ctx context.Context, pool *pgxpool.Pool, business uuid.UUID, text string) error {
-	return db.InTenantTx(ctx, pool, []uuid.UUID{business}, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `INSERT INTO customer_message_charges (id, tenant_id, channel, purpose, segments) VALUES ($1, $2, 'sms', 'signin_code', $3)`,
-			uuid.Must(uuid.NewV7()), business, sender.Segments(text))
-		return err
-	})
-}
+// phoneCodeSegments is how many SMS segments a code is, as a business is
+// charged for one (§15).
+func phoneCodeSegments() int { return sender.Segments(phoneCodeText("000000")) }
 
 // issuePhoneCode issues and sends one code, answering the request itself
 // when it cannot: 429 for the hour's limit or a locked number, 503 when no
@@ -107,8 +95,10 @@ func (s *Server) issuePhoneCode(w http.ResponseWriter, r *http.Request, number, 
 }
 
 // issuePhoneCodeFor is issuePhoneCode for a person who came through a
-// business's chat link: the code is recorded as theirs (phone_codes.came_from)
-// and counts against it.
+// business's chat link: the code records the business and how it went
+// (phone_codes.came_from, sent_via), so that a new account made with it
+// charges the business when it starts a chat with it (§15). A sign-in code
+// asked for with no link records none.
 func (s *Server) issuePhoneCodeFor(w http.ResponseWriter, r *http.Request, number, purpose string, user *uuid.UUID, via string, business uuid.UUID) string {
 	ctx := r.Context()
 	if via == "sms" && s.CodeSMS == nil {
@@ -143,14 +133,7 @@ func (s *Server) issuePhoneCodeFor(w http.ResponseWriter, r *http.Request, numbe
 		writeErr(w, http.StatusTooManyRequests, "A code was sent to this number a moment ago. Try again in 10 minutes.")
 		return ""
 	}
-	if business != uuid.Nil {
-		var ok bool
-		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_phone_code_came_from($1, $2, $3)`, number, purpose, business).Scan(&ok); err != nil {
-			s.fail(w, r, err)
-			return ""
-		}
-	}
-	sent, err := s.sendPhoneCode(ctx, number, via, code, business)
+	sent, err := s.sendPhoneCode(ctx, number, via, code)
 	if errors.Is(err, errSMSUnavailable) {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": err.Error(), "sms_unavailable": true})
 		return ""
@@ -159,6 +142,16 @@ func (s *Server) issuePhoneCodeFor(w http.ResponseWriter, r *http.Request, numbe
 		s.Logger.Warn("phone code not sent", "err", err, "number", whatsapp.MaskNumber(number))
 		writeErr(w, http.StatusBadGateway, "The code could not be sent just now. Try again in a moment, or ask for it by SMS.")
 		return ""
+	}
+	if purpose == "sign_in" {
+		var came *uuid.UUID
+		if business != uuid.Nil {
+			came = &business
+		}
+		var ok bool
+		if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_phone_code_source($1, $2, $3, $4)`, number, purpose, came, sent).Scan(&ok); err != nil {
+			s.Logger.Warn("phone code: where it came from was not kept", "err", err)
+		}
 	}
 	return sent
 }
@@ -407,6 +400,13 @@ func (s *Server) phoneCreate(w http.ResponseWriter, r *http.Request) {
 		}
 		if claimed != "ok" {
 			return errNumberTaken
+		}
+		// Made with a code asked for through a business's chat link: the
+		// business is charged for it if this account starts a chat with it
+		// (§15, migration 00457).
+		var kept bool
+		if err := tx.QueryRow(ctx, `SELECT taskiem_auth_phone_signup_source($1, $2, $3)`, user, number, phoneCodeSegments()).Scan(&kept); err != nil {
+			return err
 		}
 		if s.Terms.On() {
 			if _, err := tx.Exec(ctx, `SELECT taskiem_terms_accept($1, $2, $3, $4)`, user, s.Terms.Version, s.Terms.PrivacyVersion, channel); err != nil {

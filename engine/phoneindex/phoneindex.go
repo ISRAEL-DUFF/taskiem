@@ -113,7 +113,14 @@ const backfillBatch = 500
 // phone is opened in that business's own scope and its hash written; the
 // business is then marked done. Orders of the kind trade (a business's
 // order from another business) and forgotten or erased customers are left
-// out. It answers how many businesses it finished.
+// out, and an order whose customer is erased or forgotten while the fill
+// reads it is not indexed: the order and its customer's key are held
+// (FOR SHARE) until the hash is written, so an erasure waits for it and
+// then takes it out, or comes first and is seen. An order that cannot be
+// opened is skipped and counted, not a failure; a business that fails is
+// marked and tried again later, after those not yet tried. One replica at
+// a time fills a business (an advisory lock). It answers how many
+// businesses it finished.
 func (x *Index) Backfill(ctx context.Context, limit int) (int, error) {
 	if !x.Ready() || x.Vault == nil {
 		return 0, nil
@@ -129,25 +136,70 @@ func (x *Index) Backfill(ctx context.Context, limit int) (int, error) {
 	done := 0
 	var errs []error
 	for _, t := range due {
-		if err := x.backfillOne(ctx, t); err != nil {
+		ok, err := x.backfillLocked(ctx, t)
+		if err != nil {
 			errs = append(errs, err)
+			// Marked, so it waits its turn behind the others.
+			if merr := db.InTenantTx(context.WithoutCancel(ctx), x.Pool, []uuid.UUID{t}, func(tx pgx.Tx) error {
+				_, err := tx.Exec(ctx, `INSERT INTO phone_index_backfill (tenant_id, done_at, tries, failed_at) VALUES ($1, NULL, 1, now())
+					ON CONFLICT (tenant_id) DO UPDATE SET tries = phone_index_backfill.tries + 1, failed_at = now()
+					WHERE phone_index_backfill.done_at IS NULL`, t)
+				return err
+			}); merr != nil {
+				errs = append(errs, merr)
+			}
 			continue
 		}
-		done++
+		if ok {
+			done++
+		}
 	}
 	return done, errors.Join(errs...)
 }
 
+// backfillLocked fills one business while holding its advisory lock (a
+// session lock on a connection of its own); false when another replica
+// holds it.
+func (x *Index) backfillLocked(ctx context.Context, tenant uuid.UUID) (bool, error) {
+	conn, err := x.Pool.Acquire(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Release()
+	var got bool
+	if err := conn.QueryRow(ctx, `SELECT pg_try_advisory_lock(hashtextextended('phone-index-backfill:' || $1::text, 0))`, tenant).Scan(&got); err != nil {
+		return false, err
+	}
+	if !got {
+		return false, nil
+	}
+	defer func() {
+		_, _ = conn.Exec(context.WithoutCancel(ctx), `SELECT pg_advisory_unlock(hashtextextended('phone-index-backfill:' || $1::text, 0))`, tenant)
+	}()
+	return true, x.backfillOne(ctx, tenant)
+}
+
 func (x *Index) backfillOne(ctx context.Context, tenant uuid.UUID) error {
 	last := uuid.Nil
-	indexed := 0
+	indexed, skipped := 0, 0
 	for {
-		n, next, wrote := 0, last, 0
+		n, next, wrote, missed := 0, last, 0, 0
 		err := db.InTenantTx(ctx, x.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			// Done meanwhile (another replica, before this one took the lock).
+			var finished bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM phone_index_backfill WHERE tenant_id = $1 AND done_at IS NOT NULL)`, tenant).Scan(&finished); err != nil || finished {
+				n = -1
+				return err
+			}
+			// The orders, held until this commits, and only those whose
+			// customer's key is there and held too: an erasure (shredding
+			// the key) or retention (forgotten_at) waits for this, and its
+			// trigger then removes what this wrote.
 			rows, err := tx.Query(ctx, `SELECT o.id, o.customer FROM storefront_orders o
+				JOIN subject_keys k ON k.tenant_id = o.tenant_id AND k.subject_id = o.subject_id AND k.shredded_at IS NULL
 				WHERE o.tenant_id = $1 AND o.id > $2 AND o.kind <> 'trade' AND o.forgotten_at IS NULL
 				  AND NOT EXISTS (SELECT 1 FROM customer_phone_index i WHERE i.order_id = o.id)
-				ORDER BY o.id LIMIT $3`, tenant, last, backfillBatch)
+				ORDER BY o.id LIMIT $3 FOR SHARE OF o, k`, tenant, last, backfillBatch)
 			if err != nil {
 				return err
 			}
@@ -167,14 +219,26 @@ func (x *Index) backfillOne(ctx context.Context, tenant uuid.UUID) error {
 				next = w.id
 				var env map[string]any
 				if json.Unmarshal(w.env, &env) != nil {
+					missed++
 					continue
 				}
-				v, err := x.Vault.OpenTx(ctx, tx, tenant, env)
+				// Opened in a savepoint: an order that cannot be opened is
+				// skipped, and the batch goes on.
+				var v any
+				err := pgx.BeginFunc(ctx, tx, func(sp pgx.Tx) error {
+					var err error
+					v, err = x.Vault.OpenTx(ctx, sp, tenant, env)
+					return err
+				})
 				if errors.Is(err, pii.ErrErased) {
 					continue
 				}
 				if err != nil {
-					return err
+					if ctx.Err() != nil {
+						return err
+					}
+					missed++
+					continue
 				}
 				m, _ := v.(map[string]any)
 				p, _ := m["phone"].(string)
@@ -187,15 +251,20 @@ func (x *Index) backfillOne(ctx context.Context, tenant uuid.UUID) error {
 				wrote++
 			}
 			if n < backfillBatch {
-				_, err = tx.Exec(ctx, `INSERT INTO phone_index_backfill (tenant_id, indexed) VALUES ($1, $2)
-					ON CONFLICT (tenant_id) DO UPDATE SET indexed = phone_index_backfill.indexed + EXCLUDED.indexed, done_at = now()`, tenant, indexed+wrote)
+				_, err = tx.Exec(ctx, `INSERT INTO phone_index_backfill (tenant_id, indexed, skipped, done_at) VALUES ($1, $2, $3, now())
+					ON CONFLICT (tenant_id) DO UPDATE SET indexed = phone_index_backfill.indexed + EXCLUDED.indexed,
+					  skipped = phone_index_backfill.skipped + EXCLUDED.skipped, done_at = now(), failed_at = NULL`, tenant, indexed+wrote, skipped+missed)
 			}
 			return err
 		})
 		if err != nil {
 			return err
 		}
+		if n < 0 {
+			return nil
+		}
 		indexed += wrote
+		skipped += missed
 		if n < backfillBatch {
 			return nil
 		}
@@ -212,33 +281,56 @@ type Order struct {
 	MadeAt     time.Time `json:"made_at"`
 	Business   string    `json:"business"`
 	BusinessID uuid.UUID `json:"business_id"`
-	// Waiting: made with the phone before it was verified on the account,
-	// and not yet confirmed as the person's ("These are mine").
-	Waiting bool `json:"waiting"`
 }
 
-// Orders are the person's own orders across businesses, newest first, up
-// to limit (at most 200): those made with their verified phone.
-func (x *Index) Orders(ctx context.Context, person uuid.UUID, limit int) ([]Order, error) {
+// Orders are the person's own confirmed orders across businesses (or of
+// one business, when business is not uuid.Nil), newest first, up to limit
+// (at most 200): those made with their verified phone. Orders made before
+// the phone was on their account are left out until they say "These are
+// mine" (Waiting counts them). Read in the person's own scope.
+func (x *Index) Orders(ctx context.Context, person, business uuid.UUID, limit int) ([]Order, error) {
+	out := []Order{}
 	if !x.Ready() {
-		return []Order{}, nil
+		return out, nil
 	}
-	rows, err := x.Pool.Query(ctx, `SELECT reference, state, total_kobo, made_at, business, business_id, waiting
-		FROM taskiem_customer_phone_orders($1, $2, $3)`, person, x.indexKey(), limit)
-	if err != nil {
-		return nil, err
+	var only *uuid.UUID
+	if business != uuid.Nil {
+		only = &business
 	}
-	out, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Order])
-	if out == nil {
-		out = []Order{}
-	}
+	err := db.InPersonTx(ctx, x.Pool, person, func(tx pgx.Tx) error {
+		rows, err := tx.Query(ctx, `SELECT reference, state, total_kobo, made_at, business, business_id
+			FROM taskiem_customer_phone_orders($1, $2, $3, $4)`, person, x.indexKey(), only, limit)
+		if err != nil {
+			return err
+		}
+		list, err := pgx.CollectRows(rows, pgx.RowToStructByPos[Order])
+		if list != nil {
+			out = list
+		}
+		return err
+	})
 	return out, err
+}
+
+// Waiting is how many orders made with the person's phone before it was
+// on their account wait for "These are mine": a count, nothing of them.
+func (x *Index) Waiting(ctx context.Context, person uuid.UUID) (int, error) {
+	if !x.Ready() {
+		return 0, nil
+	}
+	var n int
+	err := db.InPersonTx(ctx, x.Pool, person, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT taskiem_customer_phone_orders_waiting($1, $2)`, person, x.indexKey()).Scan(&n)
+	})
+	return n, err
 }
 
 // Confirm records that the orders made with the person's phone before it
 // was on their account are theirs; false when they have no phone.
 func (x *Index) Confirm(ctx context.Context, person uuid.UUID) (bool, error) {
 	var ok bool
-	err := x.Pool.QueryRow(ctx, `SELECT taskiem_customer_phone_orders_confirm($1)`, person).Scan(&ok)
+	err := db.InPersonTx(ctx, x.Pool, person, func(tx pgx.Tx) error {
+		return tx.QueryRow(ctx, `SELECT taskiem_customer_phone_orders_confirm($1)`, person).Scan(&ok)
+	})
 	return ok, err
 }

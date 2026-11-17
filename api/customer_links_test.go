@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -172,9 +173,12 @@ func TestChatLinks(t *testing.T) {
 	}
 }
 
-// A sign-in code asked for through a business's chat link is the
-// business's to pay for (§15): recorded with the code and counted in its
-// SMS; one asked for with no link, or an old one, is Taskiem's.
+// Who pays for a sign-in code through a chat link (§15, founder's decision
+// of 2026-11-17): nothing when it is sent, so someone asking for codes
+// through a business's link costs it nothing; the business is charged once
+// when a NEW account made with such a code starts a chat with it; an
+// existing account signing in through the link is not charged; at most 50
+// charged codes a business a day, then Taskiem pays.
 func TestPhoneCodeThroughChatLink(t *testing.T) {
 	w, sms := phoneWorld(t)
 	ctx := context.Background()
@@ -183,48 +187,114 @@ func TestPhoneCodeThroughChatLink(t *testing.T) {
 	tenant := tenantUUID(t, owner)
 	code := owner.must(200, "GET", "/v1/customers/chat-link", nil)["code"].(string)
 	anon := &client{t: t, base: w.base}
-	const bola, ade = "+2348031230901", "+2348031230902"
-	anon.must(202, "POST", "/v1/auth/phone/start", map[string]any{"phone": bola, "chat_code": code})
-	if sms.count(bola) != 1 {
-		t.Fatal("no code")
-	}
-	var came *uuid.UUID
-	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT came_from FROM phone_codes WHERE number = $1`, bola).Scan(&came); err != nil || came == nil || *came != tenant {
-		t.Fatalf("came from: %v %v", came, err)
-	}
-	charges := func() int {
-		var n int
-		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM customer_message_charges WHERE tenant_id = $1 AND channel = 'sms' AND purpose = 'signin_code'`, tenant).Scan(&n); err != nil {
+	charges := func() (n, segments int) {
+		t.Helper()
+		if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*), COALESCE(sum(segments), 0) FROM customer_message_charges WHERE tenant_id = $1 AND purpose = 'signin_code'`, tenant).Scan(&n, &segments); err != nil {
 			t.Fatal(err)
 		}
-		return n
+		return n, segments
 	}
-	if charges() != 1 {
-		t.Fatalf("charged: %d", charges())
+	// signIn asks for a code through the link (or none) and signs in, making
+	// an account for a new number.
+	signIn := func(number, link string) *client {
+		t.Helper()
+		body := map[string]any{"phone": number}
+		if link != "" {
+			body["chat_code"] = link
+		}
+		anon.must(202, "POST", "/v1/auth/phone/start", body)
+		out := anon.must(200, "POST", "/v1/auth/phone/verify", map[string]any{"phone": number, "code": sms.code(t, number), "bearer": true})
+		if out["status"] == "new" {
+			out = anon.must(201, "POST", "/v1/auth/phone/create", map[string]any{"ticket": out["ticket"], "name": "Bola Ade", "adult": true, "terms": true, "bearer": true})
+		}
+		return &client{t: t, base: w.base, token: out["token"].(string)}
 	}
-	// No link: Taskiem's.
-	anon.must(202, "POST", "/v1/auth/phone/start", map[string]any{"phone": ade})
-	if charges() != 1 {
-		t.Fatalf("charged with no link: %d", charges())
+
+	// Someone asks for codes for many numbers through the link: recorded
+	// with each code, charged to no one.
+	for i := range 5 {
+		anon.must(202, "POST", "/v1/auth/phone/start", map[string]any{"phone": fmt.Sprintf("+23480312309%02d", 50+i), "chat_code": code})
 	}
-	// A link replaced: Taskiem's.
-	owner.must(200, "POST", "/v1/customers/chat-link", nil)
-	anon.must(202, "POST", "/v1/auth/phone/start", map[string]any{"phone": ade, "chat_code": code})
-	if charges() != 1 {
-		t.Fatalf("charged for an old link: %d", charges())
+	var came *uuid.UUID
+	var via string
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT came_from, sent_via FROM phone_codes WHERE number = '+2348031230950'`).Scan(&came, &via); err != nil || came == nil || *came != tenant || via != "sms" {
+		t.Fatalf("came from: %v %q %v", came, via, err)
 	}
-	// The business's SMS this month counts it.
+	if n, _ := charges(); n != 0 {
+		t.Fatalf("codes asked for through the link were charged: %d", n)
+	}
+	// Asked for again with no link: no longer the business's.
+	anon.must(202, "POST", "/v1/auth/phone/start", map[string]any{"phone": "+2348031230950"})
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT came_from FROM phone_codes WHERE number = '+2348031230950'`).Scan(&came); err != nil || came != nil {
+		t.Fatalf("came from, asked again with no link: %v %v", came, err)
+	}
+
+	// A new account made through the link: nothing yet; its first chat with
+	// the business charges the code, once.
+	bola := signIn("+2348031230901", code)
+	if n, _ := charges(); n != 0 {
+		t.Fatalf("charged before any chat: %d", n)
+	}
+	bola.must(201, "POST", "/v1/me/chats", map[string]any{"code": code})
+	if n, seg := charges(); n != 1 || seg != 1 {
+		t.Fatalf("a new account's first chat: %d charges, %d segments", n, seg)
+	}
+	bola.must(200, "POST", "/v1/me/chats", map[string]any{"code": code})
+	if n, _ := charges(); n != 1 {
+		t.Fatalf("charged again: %d", n)
+	}
+	// It counts in the business's SMS this month.
 	var used int64
 	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT COALESCE(sum(segments), 0) FROM customer_message_charges WHERE tenant_id = $1`, tenant).Scan(&used)
+		return tx.QueryRow(ctx, `SELECT COALESCE(sum(segments), 0) FROM customer_message_charges WHERE tenant_id = $1 AND channel = 'sms'`, tenant).Scan(&used)
 	}); err != nil || used != 1 {
 		t.Fatalf("segments: %d %v", used, err)
+	}
+
+	// An existing account signing in through the link (a new device) and
+	// chatting: Taskiem's.
+	signIn("+2348031230902", "")
+	ade := signIn("+2348031230902", code)
+	ade.must(201, "POST", "/v1/me/chats", map[string]any{"code": code})
+	if n, _ := charges(); n != 1 {
+		t.Fatalf("an existing account was charged: %d", n)
+	}
+
+	// A new account made through the link that never chats with the
+	// business: nothing (and a chat with another business charges no one).
+	other := w.tenant(t, "Ada Stores", "ada@ada.test")
+	otherCode := other.must(200, "GET", "/v1/customers/chat-link", nil)["code"].(string)
+	cara := signIn("+2348031230903", code)
+	cara.must(201, "POST", "/v1/me/chats", map[string]any{"code": otherCode})
+	if n, _ := charges(); n != 1 {
+		t.Fatalf("charged for a chat with another business: %d", n)
+	}
+	var otherCharges int
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT count(*) FROM customer_message_charges WHERE tenant_id = $1`, tenantUUID(t, other)).Scan(&otherCharges); err != nil || otherCharges != 0 {
+		t.Fatalf("the other business was charged: %d %v", otherCharges, err)
+	}
+
+	// The day's cap: 50 charged codes; the 51st is Taskiem's, and does not
+	// count against the business's SMS.
+	if _, err := w.env.DB.Admin.Exec(ctx, `INSERT INTO customer_message_charges (id, tenant_id, channel, purpose, segments)
+		SELECT gen_random_uuid(), $1, 'sms', 'signin_code', 1 FROM generate_series(1, 49)`, tenant); err != nil {
+		t.Fatal(err)
+	}
+	dayo := signIn("+2348031230904", code)
+	dayo.must(201, "POST", "/v1/me/chats", map[string]any{"code": code})
+	if n, _ := charges(); n != 50 {
+		t.Fatalf("over the cap: %d charges", n)
+	}
+	var charged *bool
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT s.charged FROM customer_signup_sources s JOIN user_phones p ON p.user_id = s.user_id WHERE p.number = '+2348031230904'`).Scan(&charged); err != nil || charged == nil || *charged {
+		t.Fatalf("over the cap, settled as Taskiem's: %v %v", charged, err)
 	}
 }
 
 // A person's own storefront orders (§13): found by their verified phone
 // across businesses, only theirs; orders made before the phone was on the
-// account wait for "These are mine"; a personal session reaches it.
+// account are only counted until "These are mine" (nothing of them shown);
+// a personal session reaches it.
 func TestMyStorefrontOrders(t *testing.T) {
 	w, sms := phoneWorld(t)
 	ctx := context.Background()
@@ -254,26 +324,29 @@ func TestMyStorefrontOrders(t *testing.T) {
 
 	got := me.must(200, "GET", "/v1/me/storefront-orders", nil)
 	list := got["orders"].([]any)
-	if len(list) != 2 || got["waiting"] != true {
+	// The order made before the phone was on the account: a count only,
+	// nothing of it (not its reference, state, total or business).
+	if len(list) != 1 || got["waiting"] != true || got["waiting_count"] != float64(1) {
 		t.Fatalf("orders: %v", got)
 	}
-	first, second := list[0].(map[string]any), list[1].(map[string]any)
-	if first["reference"] != later.Reference || first["business"] != "Ada Stores" || first["waiting"] != false ||
-		second["reference"] != early.Reference || second["business"] != "Mama's Kitchen" || second["waiting"] != true {
+	first := list[0].(map[string]any)
+	if first["reference"] != later.Reference || first["business"] != "Ada Stores" || len(first) != 6 {
 		t.Fatalf("orders: %v", list)
 	}
-	for _, o := range list {
-		if len(o.(map[string]any)) != 7 {
-			t.Fatalf("more than the order's reference, state, total, date and business: %v", o)
-		}
+	if b, _ := json.Marshal(got); strings.Contains(string(b), early.Reference) || strings.Contains(string(b), "Mama") {
+		t.Fatalf("a waiting order shown: %s", b)
 	}
-	one := me.must(200, "GET", "/v1/me/storefront-orders?business="+mama.String(), nil)
-	if l := one["orders"].([]any); len(l) != 1 || l[0].(map[string]any)["reference"] != early.Reference {
-		t.Fatalf("one business's: %v", one)
+	if one := me.must(200, "GET", "/v1/me/storefront-orders?business="+mama.String(), nil); len(one["orders"].([]any)) != 0 {
+		t.Fatalf("one business's, waiting: %v", one)
 	}
 	me.must(200, "POST", "/v1/me/storefront-orders/confirm", nil)
-	if got := me.must(200, "GET", "/v1/me/storefront-orders", nil); got["waiting"] != false {
+	if got := me.must(200, "GET", "/v1/me/storefront-orders", nil); got["waiting"] != false || got["waiting_count"] != float64(0) || len(got["orders"].([]any)) != 2 {
 		t.Fatalf("after These are mine: %v", got)
+	}
+	// One business's, chosen before the limit.
+	one := me.must(200, "GET", "/v1/me/storefront-orders?limit=1&business="+mama.String(), nil)
+	if l := one["orders"].([]any); len(l) != 1 || l[0].(map[string]any)["reference"] != early.Reference {
+		t.Fatalf("one business's: %v", one)
 	}
 	// Another person sees none of them.
 	other, _ := phoneIn(t, w, sms, "+2348031230912", nil)

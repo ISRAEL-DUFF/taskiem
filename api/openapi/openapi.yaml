@@ -21159,9 +21159,10 @@ paths:
       description: 'The storefront orders and bookings made with the person''s verified phone, across businesses, newest
         first (taskiem-for-everyone §13), so "Chat with {business} about this order" finds them. Each has only its
         reference, state, total, date and business. They are found through the phone index, by the person''s own
-        verified phone only. An order made before the phone was on the account is `waiting` until the person says the
-        orders are theirs (POST /v1/me/storefront-orders/confirm); `waiting` at the top says one is. A personal session
-        reaches it.'
+        verified phone only. Orders made before the phone was on the account are only counted (`waiting_count`, and
+        `waiting` when there are any) until the person says they are theirs (POST /v1/me/storefront-orders/confirm):
+        nothing of them is listed before, so a number that was someone else''s never shows their orders. `business`
+        is chosen before `limit`. A personal session reaches it.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -21187,7 +21188,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [orders, waiting]
+                required: [orders, waiting, waiting_count]
                 properties:
                   orders:
                     type: array
@@ -21195,6 +21196,10 @@ paths:
                       $ref: '#/components/schemas/PhoneOrder'
                   waiting:
                     type: boolean
+                    description: Some orders wait for "These are mine"
+                  waiting_count:
+                    type: integer
+                    description: How many orders wait for "These are mine"; nothing else of them is shown
         default:
           $ref: '#/components/responses/Error'
   /v1/me/storefront-orders/confirm:
@@ -31648,6 +31653,10 @@ components:
       properties:
         takes_chats:
           type: boolean
+          description: Whether customers can start chats now (off while the Orders area is off)
+        orders_off:
+          type: boolean
+          description: The Orders area is off, so no chats are taken whatever takes_chats was set to
         storefront_button:
           type: string
           enum: [whatsapp, taskiem, both]
@@ -31690,7 +31699,7 @@ components:
           description: Where to get the Taskiem app (TASKIEM_APP_GET_URL), for the page's Get the Taskiem app; absent where it is not listed.
     PhoneOrder:
       type: object
-      required: [reference, state, total_kobo, made_at, business, business_id, waiting]
+      required: [reference, state, total_kobo, made_at, business, business_id]
       properties:
         reference:
           type: string
@@ -31707,9 +31716,6 @@ components:
         business_id:
           type: string
           format: uuid
-        waiting:
-          type: boolean
-          description: Made with the phone before it was on the account, and not yet confirmed as the person's
     Reach:
       type: object
       required: [telegram, whatsapp, contacts]

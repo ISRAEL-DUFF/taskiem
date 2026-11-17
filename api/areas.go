@@ -174,13 +174,14 @@ func (s *Server) putAreas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var affected []areas.UsedBy
-	var after areas.State
+	var before, after areas.State
 	err := s.tx(r, func(tx pgx.Tx) error {
 		ctx := r.Context()
 		if err := lockAreas(ctx, tx, p.TenantID); err != nil {
 			return err
 		}
-		before, err := areas.Load(ctx, tx, p.TenantID)
+		var err error
+		before, err = areas.Load(ctx, tx, p.TenantID)
 		if err != nil {
 			return err
 		}
@@ -250,6 +251,11 @@ func (s *Server) putAreas(w http.ResponseWriter, r *http.Request) {
 			"affected": affected,
 		})
 		return
+	}
+	// Customer chats are part of Orders: the shop's Chat with us follows it
+	// (taskiem-for-everyone §8.2), published again from the page as it is.
+	if before.On(areas.Orders) != after.On(areas.Orders) {
+		s.republishForChat(r)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"areas": areaRows(after)})
 }
