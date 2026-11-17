@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
@@ -54,4 +55,31 @@ test("an operator signs in with a passkey and approves a catalogue submission", 
   await page.getByRole("link", { name: "Platform audit" }).click();
   await expect(page.getByRole("cell", { name: "catalogue.approve" })).toBeVisible();
   await expect(page.getByText("Chain intact")).toBeVisible();
+
+  // A report on a business's listing in Discover (taskiem-for-everyone §10):
+  // the listing is taken out, with a reason and the passkey, and put back.
+  const tenant = sql("SELECT id FROM tenants WHERE name = 'E2E'");
+  sql(
+    `INSERT INTO page_reports (id, tenant_id, kind, site_id, reason, message, ip_hash) VALUES (gen_random_uuid(), '${tenant}', 'discover', '${tenant}', 'prohibited', 'Selling medicines', decode(repeat('ab', 32), 'hex'))`,
+  );
+  await page.goto(`${base}/ops/reports`);
+  const report = page.getByRole("row").filter({ hasText: "Selling medicines" });
+  await expect(report).toContainText("Discover listing");
+  await report.getByRole("button", { name: /Remove or restore/ }).click();
+  const panel = page.getByTestId("ops-discover-action");
+  await expect(panel.getByRole("button", { name: "Remove from Discover with passkey" })).toBeDisabled();
+  await panel.getByLabel(/Reason/).fill("Selling medicines without a licence");
+  page.once("dialog", (d) => void d.accept());
+  await panel.getByRole("button", { name: "Remove from Discover with passkey" }).click();
+  await expect(panel.getByRole("status")).toHaveText("Taken out of Discover. The owners are told, with your reason.");
+  expect(sql(`SELECT removed_note FROM discover_settings WHERE tenant_id = '${tenant}'`)).toBe("Selling medicines without a licence");
+  await panel.getByRole("button", { name: "Restore with passkey" }).click();
+  await expect(panel.getByRole("status")).toHaveText("Put back in Discover. The owners are told.");
+  expect(sql(`SELECT removed_at IS NULL FROM discover_settings WHERE tenant_id = '${tenant}'`)).toBe("t");
 });
+
+function sql(text: string): string {
+  const db = process.env.TASKIEM_TEST_DATABASE_URL;
+  if (!db) throw new Error("set TASKIEM_TEST_DATABASE_URL");
+  return execFileSync("psql", [db.replace(/\/[^/?]*(\?.*)?$/, "/taskiem_e2e$1"), "-v", "ON_ERROR_STOP=1", "-tAqc", text], { encoding: "utf8" }).trim();
+}
