@@ -136,6 +136,11 @@ void main() {
     await t.tap(find.descendant(of: cards.first, matching: find.byType(GestureDetector)).first);
     await t.pumpAndSettle();
     expect(find.text('2 × Rice, 50kg bag'), findsOneWidget, reason: 'only the one pressed opens');
+    // Your own message in the light: its buttons white on the pine, not
+    // pine on pine (they looked as if they could not be pressed).
+    for (final b in ['Open', 'Give this to…']) {
+      expect(t.widget<Text>(find.descendant(of: cards.first, matching: find.text(b))).style!.color, const Color(0xFFFFFFFF), reason: b);
+    }
     await t.tap(find.descendant(of: cards.first, matching: find.byType(GestureDetector)).first);
     await t.pumpAndSettle();
     expect(find.text('2 × Rice, 50kg bag'), findsNothing);

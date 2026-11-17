@@ -45,6 +45,9 @@ class TkLook {
   /// The top card's light, at its top left (dark only; none in light).
   final Color glow;
 
+  /// Whether this is the look on your own pine bubble in the light.
+  bool get onPine => identical(this, tkLookOnPine);
+
   /// The look in force.
   static TkLook of(BuildContext context) {
     final theme = TkTheme.of(context);
@@ -90,11 +93,12 @@ const tkLookOnPine = TkLook(
   blueInk: Color(0xFFA6C6FF),
   violetInk: Color(0xFFC9C0FF),
   glow: Color(0x00000000),
-  ground: Color(0xFFF2F3F0),
+  // A card's plain buttons: a light veil on the green; its main one lime.
+  ground: Color(0x29FFFFFF),
   card: Color(0xFFFFFFFF),
   line: Color(0x12000000),
   bar: Color(0xDBF8F9F7),
-  on: Color(0xFF0D3B2E),
+  on: Color(0xFFC8F169),
 );
 
 const tkLookDark = TkLook(

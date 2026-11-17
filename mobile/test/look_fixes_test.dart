@@ -8,7 +8,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:taskiem/chat/cards.dart' show CardPill;
+import 'package:taskiem/chat/cards.dart' show CardButton, CardPill;
 import 'package:taskiem/chat/conversation.dart' show ownWords;
 import 'package:taskiem/chat/thread.dart' show showHeadMenu;
 import 'package:taskiem/chat/words.dart' show CardTone;
@@ -85,6 +85,32 @@ void main() {
     }
     // Before: the light's lime ink, dark green on the dark green.
     expect(contrast(tkLookLight.limeInk, pine), lessThan(3));
+  });
+
+  testWidgets('in your own pine bubble in the light, a card\'s buttons look pressable: light ones with white words, the main one lime', (t) async {
+    await t.pumpWidget(TaskiemApp(
+      home: Builder(
+        builder: (context) => ownWords(
+          context,
+          true,
+          ColoredBox(
+            color: pine,
+            child: Center(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                CardButton(label: 'Open', onTap: () {}),
+                CardButton(label: 'Pay', primary: true, onTap: () {}),
+              ]),
+            ),
+          ),
+        ),
+      ),
+    ));
+    Color ground(String label) => (t.widget<Container>(find.ancestor(of: find.text(label), matching: find.byType(Container)).first).decoration as BoxDecoration).color!;
+    final open = t.widget<Text>(find.text('Open')).style!.color!;
+    final pay = t.widget<Text>(find.text('Pay')).style!.color!;
+    expect(contrast(open, Color.alphaBlend(ground('Open'), pine)), greaterThan(4.5), reason: 'a plain button\'s words');
+    expect(contrast(ground('Pay'), pine), greaterThan(3), reason: 'the main button stands off the bubble');
+    expect(contrast(pay, ground('Pay')), greaterThan(4.5), reason: 'its words');
   });
 
   testWidgets('in the dark your own bubble is left as it is', (t) async {

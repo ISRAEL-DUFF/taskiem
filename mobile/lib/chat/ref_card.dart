@@ -15,6 +15,7 @@ import '../app/auth.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/modal.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'bills_page.dart' show openBill;
 import 'cards.dart' show CardPill;
@@ -442,7 +443,7 @@ class _RefCardState extends State<RefCard> {
                           child: Stack(
                             children: [
                               Positioned.fill(child: ColoredBox(color: t.tkSoft)),
-                              FractionallySizedBox(widthFactor: share, child: Container(decoration: BoxDecoration(color: t.brand, borderRadius: BorderRadius.circular(3)))),
+                              FractionallySizedBox(widthFactor: share, child: Container(decoration: BoxDecoration(color: TkLook.of(context).onPine ? const Color(0xFFC8F169) : t.brand, borderRadius: BorderRadius.circular(3)))),
                             ],
                           ),
                         ),
@@ -556,7 +557,14 @@ class _Btn extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
-    final (bg, ink) = primary ? (dark ? (t.brandDark, t.brandDarkText) : (t.brand, const Color(0xFFFFFFFF))) : (t.tkSoft, dark ? t.text : t.brand);
+    // On your own pine bubble in the light, as the dark draws them: the
+    // plain ones a light veil with white words, the main one lime.
+    final onPine = TkLook.of(context).onPine;
+    final (bg, ink) = onPine
+        ? (primary ? (const Color(0xFFC8F169), const Color(0xFF0D3B2E)) : (const Color(0x29FFFFFF), const Color(0xFFFFFFFF)))
+        : primary
+        ? (dark ? (t.brandDark, t.brandDarkText) : (t.brand, const Color(0xFFFFFFFF)))
+        : (t.tkSoft, dark ? t.text : t.brand);
     return Semantics(
       button: true,
       enabled: onTap != null,
