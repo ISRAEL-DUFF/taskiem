@@ -22,7 +22,7 @@ import {
   type TheirShop,
 } from "../lib/personchat";
 import { formatPrice } from "../lib/storefront";
-import { addressLine, addressProblem, type SavedAddress } from "../lib/youorders";
+import { addressLine, addressProblem, chosenAddress, keepProblem, MAX_ADDRESSES, SAVED_LINE_MAX, type SavedAddress } from "../lib/youorders";
 import { ErrorBox, useLoad } from "../ui";
 
 // The tools of a person's chat with a business (docs/spec/taskiem-for-
@@ -95,6 +95,8 @@ export function ShopSheet({
   const saved = useLoad(() => get<{ addresses: SavedAddress[] }>("/v1/me/addresses").catch(() => ({ addresses: [] as SavedAddress[] })), []);
   const addresses = saved.data?.addresses ?? [];
   const [picked, setPicked] = useState<string>();
+  // An address typed: it stays chosen over a default that loads after.
+  const [typed, setTyped] = useState(false);
   const [keep, setKeep] = useState(false);
   const [keepAs, setKeepAs] = useState("Home");
   const keptID = useRef("");
@@ -119,11 +121,17 @@ export function ShopSheet({
   const total = basketTotal(lines, fee);
   const ways = s ? [...(s.pickup ? (["pickup"] as const) : []), ...(s.delivery ? (["delivery"] as const) : [])] : [];
   const how = fulfilment || (ways.length === 1 ? ways[0] : "");
-  // The saved address chosen: the one picked, else the default.
-  const chosenID = picked ?? addresses.find((a) => a.default)?.id ?? addresses[0]?.id ?? "";
+  // The saved address chosen: the one picked, else the default; once an
+  // address is typed it stays chosen, even when the saved ones load late.
+  const chosenID = chosenAddress(picked, addresses, typed);
   const chosen = addresses.find((a) => a.id === chosenID);
   const hasAddress = !!chosen || address.trim().length > 0;
-  const ready = lines.length > 0 && (ways.length === 0 || (!!how && (how !== "delivery" || ((s?.zones.length ?? 0) === 0 || !!zone) && hasAddress)));
+  // "Save this address": offered under the most a person keeps, and the
+  // typed address short enough to be kept.
+  const canKeep = !!saved.data && addresses.length < MAX_ADDRESSES;
+  const keeping = keep && canKeep;
+  const keepSaid = keeping ? keepProblem(address, addresses.length) : null;
+  const ready = lines.length > 0 && !keepSaid && (ways.length === 0 || (!!how && (how !== "delivery" || ((s?.zones.length ?? 0) === 0 || !!zone) && hasAddress)));
 
   const place = async () => {
     if (!ready || busy) return;
@@ -134,7 +142,7 @@ export function ShopSheet({
       const delivering = how === "delivery";
       let addressID = delivering && chosen ? chosen.id : "";
       // "Save this address": saved once, then the order is placed with it.
-      if (delivering && !chosen && keep) {
+      if (delivering && !chosen && keeping) {
         if (!keptID.current) {
           try {
             const made = await post<SavedAddress>("/v1/me/addresses", { label: keepAs.trim() || "Home", line: address.trim(), area: zone, landmark: landmark.trim() });
@@ -255,7 +263,8 @@ export function ShopSheet({
           {ways.length === 1 && <p className="hint">{ways[0] === "pickup" ? "You pick it up from them." : "They deliver it to you."}</p>}
           {how === "delivery" && s.zones.length > 0 && (
             <KitField label="Where to">
-              <select value={zone} onChange={(e) => (setZone(e.target.value), (key.current = ""))} required>
+              {/* The zone is the saved address's area: another zone, another address to save. */}
+              <select value={zone} onChange={(e) => (setZone(e.target.value), (key.current = ""), (keptID.current = ""))} required>
                 <option value="">Choose your area</option>
                 {s.zones.map((z) => (
                   <option key={z.name} value={z.name}>
@@ -284,18 +293,32 @@ export function ShopSheet({
           {how === "delivery" && !chosen && (
             <>
               <KitField label="Your address">
-                <textarea rows={2} maxLength={300} value={address} onChange={(e) => (setAddress(e.target.value), (key.current = ""), (keptID.current = ""))} required />
+                <textarea
+                  rows={2}
+                  maxLength={keeping ? SAVED_LINE_MAX : 300}
+                  value={address}
+                  onChange={(e) => (setAddress(e.target.value), setTyped(true), (key.current = ""), (keptID.current = ""))}
+                  required
+                />
               </KitField>
               <KitField label="Landmark" hint="Optional. Something a rider can find.">
                 <input type="text" maxLength={200} value={landmark} onChange={(e) => (setLandmark(e.target.value), (key.current = ""), (keptID.current = ""))} />
               </KitField>
-              <label className="switch-line">
-                <input type="checkbox" checked={keep} onChange={(e) => (setKeep(e.target.checked), (key.current = ""))} data-testid="shop-keep-address" /> <span>Save this address</span>
-              </label>
-              {keep && (
+              {canKeep && (
+                <label className="switch-line">
+                  <input type="checkbox" checked={keep} onChange={(e) => (setKeep(e.target.checked), (key.current = ""))} data-testid="shop-keep-address" /> <span>Save this address</span>
+                </label>
+              )}
+              {keeping && (
                 <KitField label="Name it" hint="Such as Home or Work.">
-                  <input type="text" maxLength={40} value={keepAs} onChange={(e) => (setKeepAs(e.target.value), (keptID.current = ""))} />
+                  {/* A new name after it was saved keeps the one saved: a retry does not save it twice. */}
+                  <input type="text" maxLength={40} value={keepAs} onChange={(e) => setKeepAs(e.target.value)} />
                 </KitField>
+              )}
+              {keepSaid && (
+                <p className="error" role="alert" data-testid="shop-keep-problem">
+                  {keepSaid}
+                </p>
               )}
             </>
           )}

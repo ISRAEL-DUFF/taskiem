@@ -538,3 +538,11 @@ export const chatAboutWords = (business: string) => `Chat with ${business} about
 
 /** What the person's first message about an order says, ready to send. */
 export const aboutOrderDraft = (reference: string) => `Hello, about my order ${reference}: `;
+
+/** A chat's history state once the tool it asked for is open: the rest
+ * of it (null when nothing is left), or undefined when it asked for none. */
+export function withoutTool(state: unknown): Record<string, unknown> | null | undefined {
+  if (!state || typeof state !== "object" || !("tool" in state)) return undefined;
+  const rest = Object.fromEntries(Object.entries(state).filter(([k]) => k !== "tool"));
+  return Object.keys(rest).length ? rest : null;
+}

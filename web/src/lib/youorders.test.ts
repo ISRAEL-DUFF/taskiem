@@ -118,7 +118,7 @@ describe("Orders on You", () => {
     const newest = [row("N"), { ...row("A"), state: "paid" }, row("B")];
     const out = freshen(kept, newest);
     expect(out.map((o) => o.reference)).toEqual(["N", "A", "B", "C"]);
-    expect(out[1].state).toBe("paid");
+    expect(out[1]?.state).toBe("paid");
   });
 });
 

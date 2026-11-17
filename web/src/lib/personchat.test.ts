@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   aboutOrderDraft,
+  withoutTool,
   basketTotal,
   cardFigure,
   cardKicker,
@@ -255,5 +256,14 @@ describe("stage 2's review fixes, the person's side", () => {
     expect(cardsKey([card("1", "MK-2"), card("2", "MK-1"), card("3", "MK-1", "delivery")])).toBe("MK-1,MK-2|3");
     // Invoice and product cards are not orders.
     expect(cardsKey([card("1", "INV-0001", "invoice")])).toBe("");
+  });
+});
+
+describe("a tool asked for on the way into a chat", () => {
+  it("leaves the history state once opened", () => {
+    expect(withoutTool({ tool: "shop" })).toBeNull();
+    expect(withoutTool({ tool: "book", notice: "Started" })).toEqual({ notice: "Started" });
+    expect(withoutTool({ notice: "Started" })).toBeUndefined();
+    expect(withoutTool(null)).toBeUndefined();
   });
 });
