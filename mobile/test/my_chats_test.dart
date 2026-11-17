@@ -44,7 +44,9 @@ class Api {
     calls.add(req);
     final f = routes['${req.method} ${req.url.path}'];
     if (f == null) return http.Response(jsonEncode({'error': 'not here'}), 404, headers: _json);
-    final out = f(req);
+    // A route may answer later (a Future): a test holds an answer back.
+    var out = f(req);
+    if (out is Future) out = await out;
     if (out is http.Response) return out;
     return http.Response(jsonEncode(out ?? {}), 200, headers: _json);
   });

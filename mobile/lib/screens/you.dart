@@ -71,6 +71,9 @@ class _YouHomeState extends State<YouHome> {
   late final MyChats _chats = MyChats(widget.auth);
   Timer? _poll;
 
+  /// Told each time Orders is shown again: it reads itself again.
+  final _ordersShown = ValueNotifier<int>(0);
+
   @override
   void initState() {
     super.initState();
@@ -147,6 +150,7 @@ class _YouHomeState extends State<YouHome> {
     _poll?.cancel();
     widget.links?.removeListener(_linked);
     _chats.dispose();
+    _ordersShown.dispose();
     super.dispose();
   }
 
@@ -275,9 +279,12 @@ class _YouHomeState extends State<YouHome> {
     count: () => _chats.unread,
     counted: _chats,
     offline: widget.auth.transport.offline,
+    onShow: (i) {
+      if (i == 1) _ordersShown.value++;
+    },
     tabs: [
       (label: 'Chats', icon: 'b-chat', build: _chatsTab),
-      (label: 'Orders', icon: 'b-box', build: (_) => YourOrdersTab(auth: widget.auth, onOpenChat: _openId, now: widget.now)),
+      (label: 'Orders', icon: 'b-box', build: (_) => YourOrdersTab(auth: widget.auth, onOpenChat: _openId, now: widget.now, shown: _ordersShown)),
       (label: 'Discover', icon: 'b-search', build: (_) => DiscoverTab(auth: widget.auth, onOpenChat: _openId)),
     ],
   );

@@ -5,15 +5,17 @@
 // something is due (its link from `…/pay`, opened in the app's browser
 // tab) and **Chat about this** (the chat they have, or one started with
 // `from: "order"`). Orders made with the phone before it was on the
-// account are only counted until **These are mine**. A row opens the
-// order: its lines, how it comes, the address on it, the rider's progress,
-// a booking's times.
+// account are only counted until **These are mine**; one made before the
+// number was verified on this account (`earlier`) stays a short row with
+// only Chat about this. A row opens the order: its lines, how it comes,
+// the address on it, the rider's progress, a booking's times.
 
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
+import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/links.dart';
 import '../kit/kit.dart';
@@ -35,29 +37,104 @@ String waitingWords(int n) => n == 1
     ? 'We found an order made with your number before it was on your account. Is it yours?'
     : 'We found $n orders made with your number before it was on your account. Are they yours?';
 
+/// An order made before this number was verified on the account: its row
+/// says only this, with no summary and no Pay.
+const earlierWords = 'Made before this number was yours';
+
+/// The words for a kind of booking ("Hire", "Tickets"), or "Booking".
+String bookingWord(String? type) => switch (type) {
+  'hire' => 'Hire',
+  'space' => 'Space',
+  'class' => 'Class',
+  'tickets' => 'Tickets',
+  _ => 'Booking',
+};
+
+/// "Booking" or "Order", by the order's kind.
+String orderWord(String kind, String? bookingType) => kind == 'booking' ? bookingWord(bookingType) : 'Order';
+
+/// A row's line: "2 × Jollof rice · Today, 18:03"; an earlier order's says
+/// it was made before the number was the person's.
+String yourOrderLine(PersonOrder o, String when) {
+  if (o.earlier == true) return '$earlierWords · $when';
+  final what = o.summary.isNotEmpty ? o.summary : (o.kind == 'booking' ? 'A booking' : 'An order');
+  return '${o.kind == 'booking' ? '${bookingWord(o.bookingType)} · ' : ''}$what · $when';
+}
+
+/// The pay link refused, in a person's words (the web's payProblem), else
+/// the server's ("This order is closed.", an earlier order, too many tries).
+String payProblem(Object e) {
+  if (e is ApiError) {
+    if (e.status == 403) return 'This business is not taking messages or payments from you.';
+    if (e.status == 409 && e.has('area_off')) return 'This business is not taking orders right now.';
+  }
+  return sayFailure(e);
+}
+
+/// The orders being paid now: pressed again before the pay page opens,
+/// nothing more is asked or opened.
+final _paying = <String>{};
+
 /// Opens an order's pay link (`GET /v1/me/orders/{business}/{reference}/pay`)
-/// in the app's browser tab.
-Future<void> payMyOrder(BuildContext context, Auth auth, {required String business, required String reference}) async {
+/// in the app's browser tab; true when it was opened.
+Future<bool> payMyOrder(BuildContext context, Auth auth, {required String business, required String reference}) async {
+  final key = '$business/$reference';
+  if (!_paying.add(key)) return false;
   try {
     final r = await auth.api.payMyOrder(business: business, reference: reference);
-    if (!context.mounted) return;
+    if (!context.mounted) return false;
     await openOrSay(context, () => openInBrowser(Uri.parse(r.url)), 'The pay page didn’t open. Try again.');
+    return true;
   } on Object catch (e) {
-    if (context.mounted) showTkToast(context, sayFailure(e), error: true);
+    if (context.mounted) showTkToast(context, payProblem(e), error: true);
+    return false;
+  } finally {
+    _paying.remove(key);
   }
 }
+
+/// The words a chat about an order starts with, as the web's
+/// (personchat.ts aboutOrderDraft).
+String aboutOrderDraft(String reference) => 'Hello, about my order $reference: ';
 
 /// "Chat about this": the chat with the order's business, the order named
 /// in the box.
 Future<void> chatAboutOrder(BuildContext context, Auth auth, OpenMyChat open, {required String business, Object? chat, required String reference}) =>
-    chatWithBusiness(context, auth, open, business: business, chat: chat is String ? chat : null, from: 'order', draft: 'About my order $reference: ');
+    chatWithBusiness(context, auth, open, business: business, chat: chat is String ? chat : null, from: 'order', draft: aboutOrderDraft(reference));
+
+/// An order's row again, from what its page read.
+PersonOrder rowOf(PersonOrderDetail d) => PersonOrder(
+  bookingType: d.bookingType,
+  business: d.business,
+  businessId: d.businessId,
+  chatId: d.chatId,
+  dueKobo: d.dueKobo,
+  earlier: d.earlier,
+  kind: d.kind,
+  madeAt: d.madeAt,
+  pay: d.pay,
+  photo: d.photo,
+  reference: d.reference,
+  state: d.state,
+  summary: d.summary,
+  totalKobo: d.totalKobo,
+);
+
+String _keyOf(PersonOrder o) => '${o.businessId}/${o.reference}';
 
 /// The Orders tab on You.
 class YourOrdersTab extends StatefulWidget {
-  const YourOrdersTab({super.key, required this.auth, required this.onOpenChat, this.now = DateTime.now});
+  const YourOrdersTab({super.key, required this.auth, required this.onOpenChat, this.now = DateTime.now, this.shown, this.back = false});
   final Auth auth;
   final OpenMyChat onOpenChat;
   final DateTime Function() now;
+
+  /// Told each time the tab is shown again: the list is read again, its
+  /// pages and place kept.
+  final Listenable? shown;
+
+  /// Pushed over a business's home (a link to /you/orders), not a tab.
+  final bool back;
 
   @override
   State<YourOrdersTab> createState() => _YourOrdersTabState();
@@ -73,9 +150,19 @@ class _YourOrdersTabState extends State<YourOrdersTab> {
   @override
   void initState() {
     super.initState();
+    widget.shown?.addListener(_shownAgain);
     _load();
   }
 
+  @override
+  void dispose() {
+    widget.shown?.removeListener(_shownAgain);
+    super.dispose();
+  }
+
+  void _shownAgain() => unawaited(_refresh());
+
+  /// The first page, from the start (and after "These are mine").
   Future<void> _load() async {
     try {
       final r = await widget.auth.api.myOrders();
@@ -87,7 +174,38 @@ class _YourOrdersTabState extends State<YourOrdersTab> {
         _error = null;
       });
     } on Object catch (e) {
-      if (mounted) setState(() => _error = sayFailure(e));
+      if (!mounted) return;
+      // Orders already shown stay; the failure is said.
+      if (_orders == null) {
+        setState(() => _error = sayFailure(e));
+      } else {
+        showTkToast(context, sayFailure(e), error: true);
+      }
+    }
+  }
+
+  /// Read again, keeping the pages read and the place in them: the first
+  /// page's rows take their places, new ones come on top, older pages stay.
+  Future<void> _refresh() async {
+    final had = _orders;
+    if (had == null) return _load();
+    try {
+      final r = await widget.auth.api.myOrders();
+      if (!mounted) return;
+      final first = r.orders;
+      final fresh = {for (final o in first) _keyOf(o)};
+      final last = first.isEmpty ? null : first.last.madeAt;
+      // Rows of the older pages: after the first page's last.
+      final older = [for (final o in had) if (!fresh.contains(_keyOf(o)) && last != null && !o.madeAt.isAfter(last)) o];
+      setState(() {
+        _orders = [...first, ...older];
+        // More than one page read: the next stays the one after those.
+        if (older.isEmpty) _next = r.next is String ? r.next as String : null;
+        _waiting = r.waitingCount;
+        _error = null;
+      });
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, sayFailure(e), error: true);
     }
   }
 
@@ -99,14 +217,15 @@ class _YourOrdersTabState extends State<YourOrdersTab> {
       final r = await widget.auth.api.myOrders(before: next);
       if (!mounted) return;
       setState(() {
-        final seen = {for (final o in _orders ?? const <PersonOrder>[]) '${o.businessId}/${o.reference}'};
-        _orders = [...?_orders, ...r.orders.where((o) => !seen.contains('${o.businessId}/${o.reference}'))];
+        final seen = {for (final o in _orders ?? const <PersonOrder>[]) _keyOf(o)};
+        _orders = [...?_orders, ...r.orders.where((o) => !seen.contains(_keyOf(o)))];
         _next = r.next is String ? r.next as String : null;
       });
     } on Object catch (e) {
       if (mounted) showTkToast(context, sayFailure(e), error: true);
+    } finally {
+      if (mounted) setState(() => _more = false);
     }
-    if (mounted) setState(() => _more = false);
   }
 
   /// "These are mine" (§13): the orders made with this phone before it was
@@ -121,9 +240,18 @@ class _YourOrdersTabState extends State<YourOrdersTab> {
     }
   }
 
+  /// An order's page; back from it, only its row is read again, in its
+  /// place (the pages read and the scrolling stay).
   Future<void> _open(PersonOrder o) async {
     await tkPush<void>(context, YourOrderPage(auth: widget.auth, order: o, onOpenChat: widget.onOpenChat, now: widget.now));
-    if (mounted) await _load();
+    if (!mounted || o.earlier == true) return;
+    try {
+      final d = await widget.auth.api.myOrder(business: o.businessId, reference: o.reference);
+      if (!mounted) return;
+      setState(() => _orders = [for (final x in _orders ?? const <PersonOrder>[]) _keyOf(x) == _keyOf(o) ? rowOf(d) : x]);
+    } on Object {
+      // The row stays as it was; the list is read again when shown.
+    }
   }
 
   @override
@@ -133,8 +261,8 @@ class _YourOrdersTabState extends State<YourOrdersTab> {
     final now = widget.now();
     return TkScreen(
       title: 'Orders',
-      back: false,
-      onRefresh: _load,
+      back: widget.back,
+      onRefresh: _refresh,
       children: [
         if (_waiting > 0)
           TkTopCard(
@@ -167,13 +295,14 @@ class _YourOrdersTabState extends State<YourOrdersTab> {
                 TkListRow(
                   key: ValueKey('order ${o.businessId} ${o.reference}'),
                   title: o.business,
-                  sub: '${o.kind == 'booking' ? 'Booking · ' : ''}${o.summary} · ${listTime(o.madeAt, now)}',
+                  sub: yourOrderLine(o, listTime(o.madeAt, now)),
                   face: BusinessFace(name: o.business, urls: o.photo?.urls, size: 40),
                   amount: o.pay ? '${naira(o.dueKobo)} due' : naira(o.totalKobo),
                   status: yourOrderStatus(o.state),
                   statusTone: doorTone(o.state),
                   waiting: o.pay,
-                  semanticsLabel: '${o.kind == 'booking' ? 'Booking' : 'Order'} ${o.reference} with ${o.business}: ${o.summary}, ${yourOrderStatus(o.state)}, ${naira(o.totalKobo)}${o.pay ? ', ${naira(o.dueKobo)} to pay' : ''}',
+                  semanticsLabel:
+                      '${orderWord(o.kind, o.bookingType)} ${o.reference} with ${o.business}: ${o.earlier == true ? earlierWords : o.summary}, ${yourOrderStatus(o.state)}, ${naira(o.totalKobo)}${o.pay ? ', ${naira(o.dueKobo)} to pay' : ''}',
                   onTap: () => _open(o),
                 ),
             ],
@@ -195,11 +324,20 @@ List<({String label, String when, bool done})> deliverySteps(DeliveryProgress d)
   ];
 }
 
-/// One of the person's orders (`GET /v1/me/orders/{business}/{reference}`).
+/// One of the person's orders (`GET /v1/me/orders/{business}/{reference}`):
+/// from its row, or from a link (its business and reference alone).
 class YourOrderPage extends StatefulWidget {
-  const YourOrderPage({super.key, required this.auth, required this.order, required this.onOpenChat, this.now = DateTime.now});
+  YourOrderPage({super.key, required this.auth, required PersonOrder this.order, required this.onOpenChat, this.now = DateTime.now})
+    : business = order.businessId,
+      reference = order.reference;
+
+  /// From a link (/you/orders/{business}/{reference}): the rest is read.
+  const YourOrderPage.of({super.key, required this.auth, required this.business, required this.reference, required this.onOpenChat, this.now = DateTime.now}) : order = null;
+
   final Auth auth;
-  final PersonOrder order;
+  final PersonOrder? order;
+  final String business;
+  final String reference;
   final OpenMyChat onOpenChat;
   final DateTime Function() now;
 
@@ -207,94 +345,131 @@ class YourOrderPage extends StatefulWidget {
   State<YourOrderPage> createState() => _YourOrderPageState();
 }
 
-class _YourOrderPageState extends State<YourOrderPage> {
+class _YourOrderPageState extends State<YourOrderPage> with WidgetsBindingObserver {
   PersonOrderDetail? _d;
   String? _error;
+
+  /// Pay's page was opened: read again when the person comes back to the app.
+  bool _paying = false;
+
+  PersonOrder? get _row => _d == null ? widget.order : rowOf(_d!);
 
   @override
   void initState() {
     super.initState();
-    _load();
+    WidgetsBinding.instance.addObserver(this);
+    // An earlier order is its row alone: nothing more to read.
+    if (widget.order?.earlier != true) _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _paying && mounted) {
+      _paying = false;
+      unawaited(_load());
+    }
   }
 
   Future<void> _load() async {
     try {
-      final d = await widget.auth.api.myOrder(business: widget.order.businessId, reference: widget.order.reference);
+      final d = await widget.auth.api.myOrder(business: widget.business, reference: widget.reference);
       if (mounted) setState(() => (_d = d, _error = null));
     } on Object catch (e) {
       if (mounted) setState(() => _error = sayFailure(e));
     }
   }
 
+  Future<void> _pay() async {
+    if (await payMyOrder(context, widget.auth, business: widget.business, reference: widget.reference)) _paying = true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
-    final o = widget.order;
+    final o = _row;
     final d = _d;
-    final booking = (d?.kind ?? o.kind) == 'booking';
-    final state = d?.state ?? o.state;
-    final pay = d?.pay ?? o.pay;
-    final due = d?.dueKobo ?? o.dueKobo;
-    final total = d?.totalKobo ?? o.totalKobo;
-    final paid = d?.paidKobo ?? 0;
+    final earlier = o?.earlier == true;
+    final word = o == null ? 'Order' : orderWord(o.kind, o.bookingType);
+    final booking = o?.kind == 'booking';
     String iso(DateTime x) => x.toUtc().toIso8601String();
     return TkScreen(
-      title: '${booking ? 'Booking' : 'Order'} ${o.reference}',
+      title: '$word ${widget.reference}',
       backLabel: 'Back to Orders',
-      onRefresh: _load,
+      onRefresh: earlier ? null : _load,
       children: [
-        TkTopCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(child: TkEyebrow('${booking ? 'BOOKING' : 'ORDER'} · ${o.reference}', color: look.limeInk)),
-                  CardPill(yourOrderStatus(state), doorTone(state)),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  BusinessFace(name: o.business, urls: (d?.photo ?? o.photo)?.urls, size: 36),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(o.business, style: tkDisplay(size: 18, letterSpacing: -0.3, color: t.text))),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (booking && d?.startsAt != null) ...[
-                Text(whenLabel(iso(d!.startsAt!)), style: tkFigure(context, size: 26)),
-                Text(
-                  [d.serviceName ?? o.summary, if (d.endsAt != null) '${lagosTime(iso(d.startsAt!))} to ${lagosTime(iso(d.endsAt!))}'].join(' · '),
-                  style: tkText(size: 13.5, color: t.muted),
+        if (o != null)
+          TkTopCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: TkEyebrow('${word.toUpperCase()} · ${o.reference}', color: look.limeInk)),
+                    CardPill(yourOrderStatus(o.state), doorTone(o.state)),
+                  ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    BusinessFace(name: o.business, urls: o.photo?.urls, size: 36),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(o.business, style: tkDisplay(size: 18, letterSpacing: -0.3, color: t.text))),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (booking && d?.startsAt != null) ...[
+                  Text(whenLabel(iso(d!.startsAt!)), style: tkFigure(context, size: 26)),
+                  Text(
+                    [if ((d.serviceName ?? o.summary).isNotEmpty) d.serviceName ?? o.summary, if (d.endsAt != null) '${lagosTime(iso(d.startsAt!))} to ${lagosTime(iso(d.endsAt!))}'].join(' · '),
+                    style: tkText(size: 13.5, color: t.muted),
+                  ),
+                  const SizedBox(height: 8),
+                ] else if (booking && o.summary.isNotEmpty) ...[
+                  Text(o.summary, style: tkText(size: 14, color: t.text)),
+                  const SizedBox(height: 6),
+                ],
+                Text(naira(o.totalKobo), style: tkFigure(context, size: booking ? 20 : 30)),
+                Text(
+                  [
+                    if (o.pay && o.dueKobo > 0) '${naira(o.dueKobo)} to pay',
+                    if ((d?.paidKobo ?? 0) > 0) '${naira(d!.paidKobo)} paid',
+                    'Made ${listTime(o.madeAt, widget.now())}',
+                  ].join(' · '),
+                  style: tkText(size: 13, color: t.muted),
+                ),
+                if (earlier) ...[
+                  const SizedBox(height: 10),
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      '$earlierWords. It was made with your number before the number was on your account, so only this much of it shows, and it is not paid here. Ask ${o.business} about it in the chat.',
+                      style: tkText(size: 13.5, lineHeight: 1.4, color: t.text),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                if (o.pay && !earlier) ...[
+                  CardButton(label: 'Pay ${naira(o.dueKobo)}', primary: true, onTap: _pay),
+                  const SizedBox(height: 8),
+                ],
+                CardButton(
+                  label: 'Chat about this',
+                  primary: earlier,
+                  onTap: () => chatAboutOrder(context, widget.auth, widget.onOpenChat, business: widget.business, chat: o.chatId, reference: widget.reference),
+                ),
               ],
-              Text(naira(total), style: tkFigure(context, size: booking ? 20 : 30)),
-              Text(
-                [
-                  if (pay && due > 0) '${naira(due)} to pay',
-                  if (paid > 0) '${naira(paid)} paid',
-                  'Made ${listTime(o.madeAt, widget.now())}',
-                ].join(' · '),
-                style: tkText(size: 13, color: t.muted),
-              ),
-              const SizedBox(height: 14),
-              if (pay) ...[
-                CardButton(label: 'Pay ${naira(due)}', primary: true, onTap: () => payMyOrder(context, widget.auth, business: o.businessId, reference: o.reference)),
-                const SizedBox(height: 8),
-              ],
-              CardButton(
-                label: 'Chat about this',
-                onTap: () => chatAboutOrder(context, widget.auth, widget.onOpenChat, business: o.businessId, chat: d?.chatId ?? o.chatId, reference: o.reference),
-              ),
-            ],
+            ),
           ),
-        ),
         if (_error != null) TkErrorBox(_error!),
-        if (d == null && _error == null) const TkSkeleton(rows: 3, label: 'Loading the order…'),
-        if (d?.delivery != null)
+        if (d == null && _error == null && !earlier) const TkSkeleton(rows: 3, label: 'Loading the order…'),
+        if (!earlier && d?.delivery != null)
           TkSection(
             title: 'Delivery',
             children: [
@@ -311,15 +486,15 @@ class _YourOrderPageState extends State<YourOrderPage> {
               ),
             ],
           ),
-        if (d != null && d.lines.isNotEmpty)
+        if (!earlier && d != null && d.lines.isNotEmpty)
           TkBill(
             lines: [
               for (final l in d.lines) (name: '${l.quantity} × ${l.name}', sub: l.quantity > 1 ? '${naira(l.priceKobo)} each' : '', under: null, amount: naira(l.lineKobo)),
               if ((d.deliveryKobo ?? 0) > 0) (name: 'Delivery', sub: d.zone ?? '', under: null, amount: naira(d.deliveryKobo!)),
             ],
-            total: naira(total),
+            total: naira(d.totalKobo),
           ),
-        if (d != null && (d.fulfilment != null || d.address != null))
+        if (!earlier && d != null && (d.fulfilment != null || d.address != null))
           TkSection(
             title: booking ? 'Where' : 'How you get it',
             inset: 56,

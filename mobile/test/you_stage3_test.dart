@@ -168,7 +168,7 @@ void main() {
     expect(opened, [Uri.parse('https://app.taskiem.com/o/abc')]);
     await press(t, find.text('Chat about this'));
     expect(api.sent('POST', '/v1/me/chats'), isEmpty, reason: 'the chat they have is opened');
-    expect((t.widget(find.byType(EditableText)) as EditableText).controller.text, 'About my order MK-1042: ');
+    expect((t.widget(find.byType(EditableText)) as EditableText).controller.text, 'Hello, about my order MK-1042: ');
     await drain(t);
   });
 
@@ -192,7 +192,7 @@ void main() {
     expect(find.textContaining('10:00 to 11:30'), findsOneWidget);
     await press(t, find.text('Chat about this'));
     expect(api.body(api.sent('POST', '/v1/me/chats').single), {'business_id': 'b3', 'from': 'order'});
-    expect((t.widget(find.byType(EditableText)) as EditableText).controller.text, 'About my order TK-9: ');
+    expect((t.widget(find.byType(EditableText)) as EditableText).controller.text, 'Hello, about my order TK-9: ');
     await drain(t);
   });
 
@@ -221,12 +221,12 @@ void main() {
     await press(t, find.text('Discover').first);
     expect(api.body(api.sent('POST', '/v1/discover/search').first), <String, dynamic>{});
     expect(find.text('Mama’s Kitchen'), findsOneWidget);
-    expect(find.text('Food and drinks · Yaba'), findsWidgets);
+    expect(find.text('Food and drinks · Yaba\nOpen now, closes at 18:00'), findsOneWidget, reason: 'the hours line under the category and area');
     expect(find.text('Open now'), findsOneWidget);
-    expect(find.text('Closed'), findsOneWidget);
+    expect(find.text('Closed now'), findsOneWidget);
     expect(find.bySemanticsLabel('Chat with Bola Stores'), findsNothing, reason: 'not taking chats');
 
-    await press(t, find.text('Show more'));
+    await press(t, find.text('Show more businesses'));
     expect(api.body(api.sent('POST', '/v1/discover/search').last), {'offset': 2}, reason: 'after the results given');
     expect(find.text('Zainab Cakes'), findsOneWidget);
 
@@ -243,7 +243,12 @@ void main() {
     await settle(t);
     await settle(t);
     expect(find.text('You are searching too fast. Wait a moment and try again.'), findsOneWidget);
+    expect(find.text('Mama’s Kitchen'), findsNothing, reason: 'a failed search leaves no results of the one before');
+    expect(find.text('Show more businesses'), findsNothing);
     fast = false;
+    await typeIn(t, find.bySemanticsLabel('Area (Yaba, Lekki…)'), 'Yab');
+    await settle(t);
+    await settle(t);
 
     await press(t, find.bySemanticsLabel('Chat with Mama’s Kitchen'));
     expect(api.body(api.sent('POST', '/v1/me/chats').single), {'business_id': 'b1', 'from': 'discover'});
@@ -299,10 +304,10 @@ void main() {
     expect(find.bySemanticsLabel('Our jollof'), findsOneWidget);
     expect(find.text('09:00–18:00'), findsOneWidget);
     expect(find.text('3 Montgomery Road, Yaba'), findsOneWidget);
-    await press(t, find.text('Open in maps'));
+    await press(t, find.text('Open in your map'));
     expect(opened, [Uri.parse('https://maps.example/mk')]);
 
-    await press(t, find.text('Report this business'));
+    await press(t, find.text('Report Mama’s Kitchen'));
     await press(t, find.text('Send report'));
     expect(find.text('Choose why you are reporting them.'), findsOneWidget);
     await press(t, find.text('Pretends to be someone else'));
@@ -502,7 +507,7 @@ void main() {
 
     await press(t, find.bySemanticsLabel('Found by the public in the Taskiem app').last);
     expect(api.body(api.sent('PUT', '/v1/settings/discover').last), {'listed': false});
-    expect(find.textContaining('You’re not in Discover'), findsOneWidget);
+    expect(find.text('Customers can’t find you in Discover.'), findsOneWidget);
     await drain(t);
   });
 
