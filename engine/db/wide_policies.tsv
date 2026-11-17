@@ -5,7 +5,7 @@
 # its own change, with an owner who reviewed it and a one-line reason (what
 # a tenant can see or write through it, and why that is intended).
 # Format: table.policy<TAB>owner<TAB>reason
-person_conversations.person_own	@ISRAEL-DUFF (customers)	A person's own copy of their conversations with businesses (taskiem-for-everyone §14): scoped to the person (taskiem_person_scope()), and, once a door names one business, to that business's rows only; tenant_id names the business, not an owner (00452)
-person_messages.person_own	@ISRAEL-DUFF (customers)	A person's own copy of their messages with businesses: scoped to the person, and to one business once a door names it (00452)
-person_files.person_own	@ISRAEL-DUFF (customers)	A person's own copy of photos, voice notes and files in their conversations with businesses: scoped to the person, and to one business once a door names it (00452)
+person_conversations.person_own	@ISRAEL-DUFF (customers)	A person's own copy of their conversations with businesses (taskiem-for-everyone §14): scoped to the person (taskiem_person_scope()), and, once a door names one business, to that business's rows only; or, once a business reached them (taskiem_person_reached()), that one person's rows with that business; tenant_id names the business, not an owner (00452, 00456)
+person_messages.person_own	@ISRAEL-DUFF (customers)	A person's own copy of their messages with businesses: scoped to the person, and to one business once a door names it; or one person's with the business that reached them (00452, 00456)
+person_files.person_own	@ISRAEL-DUFF (customers)	A person's own copy of photos, voice notes and files in their conversations with businesses: scoped to the person, and to one business once a door names it; or one person's with the business that reached them (00452, 00456)
 customer_reports.person_writes	@ISRAEL-DUFF (customers)	A person reports a conversation to Taskiem's moderators: insert only, as the person in scope; no tenant reads reports (00452)
