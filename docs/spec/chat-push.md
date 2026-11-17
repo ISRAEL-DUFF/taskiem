@@ -550,3 +550,7 @@ place, a logo that does not show on Chrome (the app's icon shows instead: this
 is the case to look at), a badge that stays after reading, and anything in the
 server's logs that says `push: not sent` (its status, never the address or the
 words) or in the metrics: `taskiem_push_total{result="failed"}` rising.
+
+## A person's own side (2026-11-17)
+
+A person's devices can also be registered with no business, from a personal session or with `?side=you` from a business session, on the same `/v1/me/push` routes. They take one kind, `you` (a business's message in the person's chat with it on You, and its order updates there), open `/you/chats/{id}`, carry no `business` in the payload, and stay whatever businesses the person is in. While a person has such a live device, the browser chat's "answered you" SMS does not go. See [Taskiem for everyone, §9 and its review fixes](taskiem-for-everyone.md#as-built-stage-2-review-fixes-links-billing-push) (migration 00460).
