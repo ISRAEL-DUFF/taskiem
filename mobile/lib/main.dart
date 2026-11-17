@@ -778,15 +778,28 @@ class _OpenCustomer extends StatefulWidget {
 
 class _OpenCustomerState extends State<_OpenCustomer> {
   late final CustomerData _data = CustomerData(widget.chats, widget.id);
+  String? _tag;
 
   @override
   void initState() {
     super.initState();
-    widget.notify?.show('c-${widget.id}', this);
+    _showTag();
+    _data.addListener(_showTag);
+  }
+
+  /// The customer's notifications are held back while they are open, by
+  /// their own id (a pair's is the app thread's, the tag the server gives),
+  /// whichever line's id opened them.
+  void _showTag() {
+    final tag = 'c-${_data.threadId}';
+    if (tag == _tag) return;
+    _tag = tag;
+    widget.notify?.show(tag, this);
   }
 
   @override
   void dispose() {
+    _data.removeListener(_showTag);
     widget.notify?.unshow(this);
     _data.dispose();
     super.dispose();

@@ -77,35 +77,50 @@ String? lineShut(CustomerThreadLine l) {
   return l.stopped ? 'Sent STOP' : null;
 }
 
-/// Why the chooser does not offer [l], in a sentence.
+/// Why the chooser does not offer [l], in a sentence (customerlines.ts
+/// lineClosed, after "Not on WhatsApp:").
 String lineWhy(CustomerThreadLine l) {
   final whatsapp = l.line == 'whatsapp';
   if (l.phone.isEmpty) return whatsapp ? 'Not on WhatsApp: their details there were erased.' : 'Not in the app: their details there were erased.';
   if (whatsapp) return 'Not on WhatsApp: they sent STOP. Nothing can go there until they send START.';
   if (l.blocked) return 'Not in the app: you blocked this customer there.';
-  return 'Not in the app: ${l.notice ?? 'This customer has stopped messages'}.';
+  final why = (l.notice ?? 'This customer has stopped messages').replaceFirst(RegExp(r'\.$'), '');
+  return 'Not in the app: ${why.isEmpty ? why : why[0].toLowerCase() + why.substring(1)}.';
 }
+
+/// customerlines.ts lineMoved: said when the line a reply was being written
+/// for shut while it was written, and it now goes on [now]; never moved
+/// quietly.
+String movedWords(String now, String wanted) => 'Now goes ${lineWords(now)}: it can’t go ${lineWords(wanted)} now.';
 
 /// A line's state on the head: why it is shut, or how a reply goes there.
 String lineState(CustomerThreadLine l) =>
     lineShut(l) ??
     (l.line == 'whatsapp' && !l.windowOpen ? 'More than a day since they wrote' : 'Open');
 
-/// What the box says about a reply on [l], one of both lines (§11).
+/// What the box says about a reply on [l], one of both lines (§11), in the
+/// web's words (customerlines.ts lineNote).
 ({bool stop, String text})? lineNote(CustomerThreadLine l) {
   if (l.line == 'app') {
-    if (l.phone.isEmpty) return (stop: true, text: 'This customer’s details in the app were erased, so nothing can go there.');
-    if (l.blocked) return (stop: true, text: 'You blocked this customer in the app. Unblock them to write to them there.');
-    if (l.stopped) return (stop: true, text: l.notice ?? 'This customer has stopped messages');
+    if (l.phone.isEmpty) return (stop: true, text: 'This customer’s details were erased.');
+    if (l.blocked) return (stop: true, text: 'You blocked this customer. Unblock them to write to them.');
+    if (l.stopped) return (stop: true, text: l.notice ?? 'This customer has stopped messages.');
     return null;
   }
-  if (l.stopped) return (stop: true, text: 'They asked not to get messages on WhatsApp (they sent STOP). Nothing can go there until they send START.');
-  if (l.phone.isEmpty) return (stop: true, text: 'This customer’s WhatsApp details were erased.');
+  if (l.stopped) return (stop: true, text: 'They asked not to get messages (they sent STOP). Nothing can be sent until they send START.');
+  if (l.phone.isEmpty) return (stop: true, text: 'This customer’s details were erased.');
   if (!l.windowOpen) {
-    return (stop: false, text: 'More than a day since they last wrote on WhatsApp: your reply goes as a WhatsApp message they answer to carry on.');
+    return (stop: false, text: 'More than a day since they last wrote: your reply goes as a WhatsApp message they answer to carry on.');
   }
+  // A thread parted from the app when its customer moved their number.
+  if ((l.notice ?? '').isNotEmpty) return (stop: false, text: '${l.notice!.replaceFirst(RegExp(r'\.$'), '')}.');
   return null;
 }
+
+/// Each bubble says its line once the thread has both lines or holds
+/// messages of both (CustomerChat.tsx markLines).
+bool marksLines(CustomerChat? c, List<CustomerLine>? messages) =>
+    (c != null && bothLines(c)) || {for (final m in messages ?? const <CustomerLine>[]) ?m.m.line}.length > 1;
 
 /// customerchat.ts replyNote: what the box says about how a reply goes.
 ({bool stop, String text})? replyNote(CustomerChat c) {
@@ -197,6 +212,11 @@ class CustomerData extends ChangeNotifier {
 
   String get _key => 'customer:$id';
 
+  /// The customer's own id, whichever line's id opened them: the thread's
+  /// as the server says it (a pair's is the app thread's). Their draft and
+  /// their notifications' tag (`c-{id}`) go by it.
+  String get threadId => chat?.id ?? id;
+
   /// The customer chats in the Taskiem app (not on WhatsApp only).
   bool get app => chat?.line == 'app';
 
@@ -216,6 +236,16 @@ class CustomerData extends ChangeNotifier {
 
   /// Whether the app line takes a message: where cards, offers and files go.
   bool get appOpen => app && reaches(both ? 'app' : null);
+
+  /// Why words cannot go as an offer now (an offer goes only in the app, to
+  /// a customer who said yes), or null when they can (customerlines.ts
+  /// offerRefused). It is never sent as a plain message instead.
+  String? offerRefused() {
+    const back = 'Your words are still in the box: send them again to send them as a message.';
+    if (!appOpen) return 'Not sent: an offer goes in the app, and it can’t take a message now. $back';
+    if (chat?.offers != 'yes') return 'Not sent: this customer no longer takes offers. $back';
+    return null;
+  }
 
   /// The thread's photos, voice notes and PDFs (app customers'), fetched
   /// as shown.
@@ -274,6 +304,9 @@ class CustomerData extends ChangeNotifier {
       });
     }
   }
+
+  /// The thread's state again (as the poll reads it).
+  Future<void> reload() => _chat();
 
   bool _reading = false;
   bool _pulling = false;
@@ -359,7 +392,7 @@ class CustomerData extends ChangeNotifier {
   /// `app`); left out, the thread's reply line. An offer goes in the app.
   Future<void> send(String text, {bool offer = false, String? line}) async {
     final words = text.trim();
-    if (words.isEmpty) return;
+    if (words.isEmpty || (offer && offerRefused() != null)) return;
     final on = !both ? null : (offer ? 'app' : line);
     await _reply(
       CustomerMessage(id: '', mine: true, kind: 'text', body: words, offer: offer ? true : null, line: on ?? (both ? chat?.replyLine : null), createdAt: chats.now()),
@@ -509,30 +542,63 @@ class _CustomerScreenState extends State<CustomerScreen> {
   final _text = TextEditingController();
   StreamSubscription<String>? _back;
 
-  /// The line staff chose for the reply (both lines), and the one it goes
-  /// on now: the chosen one while it takes messages, else the reply line.
+  /// The line staff chose for the reply (both lines); the one held while
+  /// the box has words (the line in effect when writing began, so it never
+  /// changes quietly under them); and the one it goes on now: the chosen or
+  /// held one while it takes messages, else the reply line.
   String? _line;
+  String? _held;
   String? _on;
+
+  /// Where the draft is kept: the customer's own id (`threadId`), once the
+  /// server has said it.
+  late String _draftKey;
 
   @override
   void initState() {
     super.initState();
-    if (widget.data.messages == null) widget.data.open();
+    final d = widget.data;
+    if (d.messages == null) d.open();
     // The words left unsent here, back in the box, and kept as they change.
-    final key = 'customer:${widget.data.id}';
-    _text.text = widget.data.chats.draft(key);
+    _draftKey = 'customer:${d.threadId}';
+    _text.text = d.chats.draft(_draftKey);
     _text.addListener(() {
-      widget.data.chats.setDraft(key, _text.text);
-      if (_text.text.trim().isNotEmpty) widget.data.typing(line: _on);
+      d.chats.setDraft(_draftKey, _text.text);
+      final writing = _text.text.trim().isNotEmpty;
+      if (writing) d.typing(line: _on);
+      // Writing began: the line in effect now is held.
+      if (!writing) {
+        _held = null;
+      } else if (d.both) {
+        _held ??= _on;
+      }
       setState(() {});
     });
-    _back = widget.data.givenBack.listen((w) {
+    d.addListener(_rekey);
+    _back = d.givenBack.listen((w) {
       if (_text.text.isEmpty) _text.text = w;
     });
   }
 
+  /// Opened by the WhatsApp line's id: once the server says the customer's
+  /// own id, the draft moves there (shared with the list and the other id).
+  void _rekey() {
+    final key = 'customer:${widget.data.threadId}';
+    if (key == _draftKey) return;
+    final old = _draftKey;
+    _draftKey = key;
+    final chats = widget.data.chats;
+    if (_text.text.trim().isEmpty) {
+      _text.text = chats.draft(key);
+    } else {
+      chats.setDraft(key, _text.text);
+    }
+    chats.setDraft(old, '');
+  }
+
   @override
   void dispose() {
+    widget.data.removeListener(_rekey);
     _back?.cancel();
     _text.dispose();
     super.dispose();
@@ -562,9 +628,14 @@ class _CustomerScreenState extends State<CustomerScreen> {
           // Both lines (§11): the reply goes on the chosen line while it
           // takes messages, else on the thread's reply line.
           String? on;
+          String? moved;
           if (c != null && both) {
-            final want = _line ?? c.replyLine ?? 'app';
+            final wanted = _line ?? _held;
+            final want = wanted ?? c.replyLine ?? 'app';
             on = d.reaches(want) ? want : (c.replyLine ?? want);
+            // The line chosen, or held while writing, shut: said, not
+            // changed quietly.
+            if (wanted != null && on != wanted && _text.text.trim().isNotEmpty) moved = movedWords(on, wanted);
           }
           _on = on;
           final onLine = c == null || on == null ? null : lineOf(c, on);
@@ -575,6 +646,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
           final owes = c == null ? '' : owesWords(c.owesKobo, c.openInvoices);
           final title = c == null ? 'Customer' : customerTitle(c);
           final list = d.messages;
+          final marked = marksLines(c, list);
           // The message after each: the last of a run has the tucked corner.
           final nextOf = <String, CustomerLine>{for (var i = 0; list != null && i + 1 < list.length; i++) list[i].id: list[i + 1]};
           return Semantics(
@@ -610,14 +682,18 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                   ),
                                   if (app)
                                     (
-                                      appBlocked ? 'Unblock this customer' : 'Block this customer',
+                                      // To a customer on both, the app line only
+                                      // (CustomerChat.tsx's words).
+                                      '${appBlocked ? 'Unblock' : 'Block'} this customer${both ? ' in the app' : ''}',
                                       () async {
                                         final on = !appBlocked;
                                         if (on &&
                                             !await showTkConfirm(
                                               context,
-                                              title: 'Block this customer?',
-                                              body: 'They can no longer write to you, and you can’t write to them. Nothing is deleted.',
+                                              title: both ? 'Block $title in the app?' : 'Block this customer?',
+                                              body: both
+                                                  ? 'In the app they will not be able to write to you, and you will not be able to write to them. Their WhatsApp stays as it is. Nothing is deleted.'
+                                                  : 'They can no longer write to you, and you can’t write to them. Nothing is deleted.',
                                               ok: 'Block',
                                               danger: true,
                                             )) {
@@ -645,7 +721,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                             ? 'Waiting for network…'
                             : c == null
                             ? null
-                            : [if (c.phone.isNotEmpty && c.phone != c.name) phoneWords(c.phone), owes, both ? 'Customer in the app and on WhatsApp' : (app ? 'Customer in the app' : 'Customer on WhatsApp')].where((s) => s.isNotEmpty).join(' · '),
+                            : [if (c.phone.isNotEmpty && c.phone != c.name) phoneWords(c.phone), owes, both ? 'On WhatsApp and in the app' : (app ? 'Customer in the app' : 'Customer on WhatsApp')].where((s) => s.isNotEmpty).join(' · '),
                       ),
                     ),
                   ),
@@ -668,7 +744,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                             tail: app && c?.typing == true ? const TypingBubble() : null,
                             empty: Text(
                               both
-                                  ? 'Nothing here yet. What this customer writes to you, in the app or on WhatsApp, shows here.'
+                                  ? 'Nothing here yet. What this customer writes on WhatsApp or in the app shows here.'
                                   : app
                                   ? 'Nothing here yet. What this customer writes to you in the Taskiem app shows here.'
                                   : c?.stopped == true
@@ -705,7 +781,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                     stamp: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        if (both) LineMark(line: line, color: meta),
+                                        if (marked) LineMark(line: line, color: meta),
                                         Text(clock(m.m.createdAt), style: tkText(size: 11, lineHeight: 16 / 11, color: meta)),
                                         if (m.m.mine) ...[const SizedBox(width: 4), _Delivery(x: m, meta: meta)],
                                       ],
@@ -713,7 +789,7 @@ class _CustomerScreenState extends State<CustomerScreen> {
                                   ),
                                 );
                               }
-                              return Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: _CustomerBubble(x: m, first: first, last: last, line: both ? line : null));
+                              return Padding(padding: EdgeInsets.only(top: first ? 6 : 0), child: _CustomerBubble(x: m, first: first, last: last, line: marked ? line : null));
                             },
                           ),
                         ),
@@ -731,24 +807,40 @@ class _CustomerScreenState extends State<CustomerScreen> {
                       ),
                     ),
                   ),
-                  if (note != null) _Note(text: note.text, stop: note.stop),
-                  if (c != null && both && canSend)
-                    _LineChooser(
-                      lines: c.lines!,
-                      on: on!,
-                      onPick: (l) => setState(() => _line = l),
+                  // What is said over the box, and the chooser: at most 30%
+                  // of the screen, scrolled beyond (large text on a
+                  // small phone), so the thread keeps its room.
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.3),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (moved != null && canSend) _Note(text: moved, stop: false, key: const ValueKey('line-moved')),
+                          if (note != null) _Note(text: note.text, stop: note.stop),
+                          if (c != null && both && canSend)
+                            _LineChooser(
+                              lines: c.lines!,
+                              on: on!,
+                              onPick: (l) => setState(() => _line = l),
+                            ),
+                          if (canSend && tooLong)
+                            _Note(
+                              stop: true,
+                              text: 'Too long to send now: after a day, a reply can be up to $lateReplyMax characters. This one is ${lateLength(_text.text)}.',
+                            ),
+                        ],
+                      ),
                     ),
-                  if (canSend && tooLong)
-                    _Note(
-                      stop: true,
-                      text: 'Too long to send now: after a day, a reply can be up to $lateReplyMax characters. This one is ${lateLength(_text.text)}.',
-                    ),
+                  ),
                   if (canSend)
                     _ReplyBox(
                       text: _text,
                       onSend: d.busy || tooLong ? null : _send,
                       bottom: pad.bottom,
-                      label: 'Reply to $title',
+                      // The box says the line a reply goes on (CustomerChat.tsx).
+                      label: 'Reply to $title${on == null ? '' : ' ${lineWords(on)}'}',
+                      hint: on == null ? 'Reply' : 'Reply ${lineWords(on)}',
                       onMore: d.appOpen && !d.busy ? () => showRichReply(context, d, pickers: widget.pickers, box: _text) : null,
                     ),
                 ],
@@ -848,7 +940,7 @@ class _LineStates extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
-    final shown = [...lines]..sort((a, b) => a.line == 'whatsapp' ? -1 : (b.line == 'whatsapp' ? 1 : 0));
+    final shown = lines; // The server's order: the app, then WhatsApp.
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 6, 12, 2),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -910,21 +1002,27 @@ class _LineChooser extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
-    final shown = [...lines]..sort((a, b) => a.line == 'whatsapp' ? -1 : (b.line == 'whatsapp' ? 1 : 0));
+    // The server's order (the app, then WhatsApp), as the web's pills.
+    final shown = lines;
     final shut = [for (final l in shown) if (lineShut(l) != null) l];
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // The web's label; on its own line, as the web's on a phone.
+          ExcludeSemantics(
+            child: Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 4),
+              child: Text('Your reply goes', style: tkText(size: 13, weight: 600, color: t.muted)),
+            ),
+          ),
           Row(
             children: [
-              Text('Reply', style: tkText(size: 13, weight: 600, color: t.muted)),
-              const SizedBox(width: 8),
               Expanded(
                 child: Semantics(
                   container: true,
-                  label: 'Where the reply goes',
+                  label: 'Your reply goes',
                   explicitChildNodes: true,
                   child: Container(
                     padding: const EdgeInsets.all(2),
@@ -984,7 +1082,7 @@ class _LineChooser extends StatelessWidget {
 
 /// `.customer-note`: how a reply goes (warn), or that it cannot (stop).
 class _Note extends StatelessWidget {
-  const _Note({required this.text, required this.stop});
+  const _Note({super.key, required this.text, required this.stop});
   final String text;
   final bool stop;
 
@@ -1009,11 +1107,14 @@ class _Note extends StatelessWidget {
 
 /// CustomerPane's box: the round box alone, and Send.
 class _ReplyBox extends StatelessWidget {
-  const _ReplyBox({required this.text, required this.onSend, required this.bottom, required this.label, this.onMore});
+  const _ReplyBox({required this.text, required this.onSend, required this.bottom, required this.label, this.hint = 'Reply', this.onMore});
   final TextEditingController text;
   final VoidCallback? onSend;
   final double bottom;
   final String label;
+
+  /// The words in the empty box: "Reply", or where it goes ("Reply in the app").
+  final String hint;
 
   /// The + of an app customer's thread: an order, a pay link, a booking
   /// offer, a product, a photo or a file.
@@ -1071,7 +1172,7 @@ class _ReplyBox extends StatelessWidget {
                       cursorColor: t.text,
                       showCursor: !TkField.debugHideCaret,
                       style: tkText(size: 15.5, lineHeight: 1.4, color: t.text),
-                      decoration: InputDecoration.collapsed(hintText: 'Reply', hintStyle: tkText(size: 15.5, lineHeight: 1.4, color: t.muted)),
+                      decoration: InputDecoration.collapsed(hintText: hint, hintStyle: tkText(size: 15.5, lineHeight: 1.4, color: t.muted)),
                     ),
                   ),
                 ),

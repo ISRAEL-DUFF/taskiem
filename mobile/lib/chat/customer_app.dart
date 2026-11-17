@@ -50,6 +50,15 @@ Future<void> showRichReply(BuildContext context, CustomerData d, {Pickers picker
         showTkToast(context, 'Write the offer in the box first, then send it as an offer.', error: true);
         return;
       }
+      // It goes as an offer, in the app, or not at all: never as a plain
+      // message because the app line shut or they said no to offers while
+      // the sheet was open (customerlines.ts offerRefused). The words stay.
+      final refused = d.offerRefused();
+      if (refused != null) {
+        showTkToast(context, refused, error: true);
+        return;
+      }
+      if (d.busy) return;
       box.clear();
       await d.send(words, offer: true);
     case RichKind.order || RichKind.pay || RichKind.invoice || RichKind.delivery || RichKind.booking || RichKind.product:

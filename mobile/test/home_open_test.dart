@@ -107,6 +107,40 @@ void main() {
       await links.close();
     });
 
+    testWidgets('a customer opened by their WhatsApp line’s id holds back notifications by their own id', (t) async {
+      // One customer on both lines (§11): the pair's id is the app thread's,
+      // the tag the server's notifications carry (`c-{id}`).
+      const wa = 'b0b0b0b0-0000-4000-8000-00000000000a', app = 'a0a0a0a0-0000-4000-8000-00000000000a';
+      Map<String, dynamic> l(String line, String id) => {'line': line, 'id': id, 'phone': '+2348031230000', 'window_open': true, 'stopped': false, 'blocked': false, 'last_in_at': null};
+      Future<http.Response?> also(http.Request req) async {
+        if (req.url.path == '/v1/customer-chats/$wa') {
+          return _json({
+            'id': app, 'name': 'Tolu Ade', 'phone': '+2348031230000', 'line': 'app', 'stopped': false, 'blocked': false, 'window_open': true, 'archived': false,
+            'last': 'Hi', 'last_at': '2026-11-16T10:00:00Z', 'last_mine': false, 'unread': 0, 'lines': [l('app', app), l('whatsapp', wa)], 'reply_line': 'app',
+          });
+        }
+        if (req.url.path == '/v1/customer-chats/$wa/messages') return _json({'messages': <Object>[], 'more': false});
+        return null;
+      }
+      final links = StreamController<Uri>();
+      final inbox = LinkInbox(links: links.stream, first: () async => null);
+      t.view.physicalSize = const Size(390, 844);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final auth = Fixture('chats').auth(also: also);
+      final notify = PhoneNotifications(auth: auth, keys: MemoryKeyStore(), platform: FakeFirebase());
+      final prefs = await t.runAsync(noLock);
+      await t.pumpWidget(TaskiemApp(auth: auth, unlocker: FakeUnlocker(), prefs: prefs, links: inbox, notify: notify));
+      await settle(t);
+      links.add(Uri.parse('https://staging.ispend.name.ng/chat?with=c-$wa'));
+      await settle(t);
+      expect(find.byType(CustomerScreen), findsOneWidget);
+      expect(notify.showing, 'c-$app');
+      await links.close();
+      await t.pumpWidget(const SizedBox());
+      await t.pump();
+    });
+
     testWidgets('in a business, a link to the person’s own order or Discover opens over the business', (t) async {
       final links = StreamController<Uri>();
       final inbox = LinkInbox(links: links.stream, first: () async => null);
