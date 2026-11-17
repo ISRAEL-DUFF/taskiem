@@ -5,7 +5,8 @@
 // phone's share sheet), **Make a new link** (the old one says "This link no
 // longer works" for 30 days); whether the business takes chats (never while
 // its Orders area is off), its shop's chat button, the link at the end of
-// updates on Taskiem's number; the closed reply and its words, Needs you,
+// updates on Taskiem's number; Chat on WhatsApp on the link, for a business
+// with its own number (§11, `link_whatsapp`); the closed reply and its words, Needs you,
 // and telling the owner; and **Send an offer** to every customer who said
 // yes to offers.
 
@@ -223,6 +224,14 @@ class _ChatLinkPageState extends State<ChatLinkPage> {
                 on: s.takesChats,
                 onChanged: can && !ordersOff ? (v) => _settings(PutChatSettingsRequest(takesChats: v)) : null,
               ),
+              // Only said by a server that knows it (stage 4, §11).
+              if (s.linkWhatsapp != null)
+                TkSwitchRow(
+                  label: 'Offer WhatsApp on your chat link',
+                  hint: 'With your own WhatsApp number: your link offers Chat on WhatsApp beside Chat on Taskiem.',
+                  on: s.linkWhatsapp!,
+                  onChanged: can ? (v) => _settings(PutChatSettingsRequest(linkWhatsapp: v)) : null,
+                ),
               TkSwitchRow(
                 label: 'Your link at the end of updates',
                 hint: 'On updates you send from Taskiem’s WhatsApp number: “Reply in the Taskiem app”.',

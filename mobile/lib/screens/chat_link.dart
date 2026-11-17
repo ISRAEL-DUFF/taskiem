@@ -5,6 +5,11 @@
 // out, the card shows over the phone way in, which passes the code on
 // (`chat_code`), and the chat starts once signed in. A link replaced more
 // than 30 days ago, or never made, says "This link no longer works".
+//
+// A business with its own WhatsApp number that offers it on its link (§11,
+// `choices`) gets two buttons: **Chat on Taskiem** and **Chat on WhatsApp**
+// (its wa.me link, opened outside the app), or WhatsApp alone while it
+// takes no chats in Taskiem.
 
 import 'dart:async';
 
@@ -13,12 +18,14 @@ import 'package:flutter/widgets.dart';
 import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
+import '../app/links.dart' show openOutside;
 import '../chat/cards.dart' show CardButton, CardPill;
 import '../chat/door.dart' show BusinessFace;
 import '../chat/my_chat.dart';
 import '../chat/words.dart' show CardTone;
 import '../kit/kit.dart';
 import '../kit/look.dart' show TkSquare, TkTopCard, tkTabular;
+import '../kit/modal.dart' show openOrSay;
 import '../kit/mobile.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
@@ -47,6 +54,19 @@ List<(String, String)> hoursLines(Map<String, dynamic>? hours) {
       ),
   ];
 }
+
+/// The business's WhatsApp number, when its link offers Chat on WhatsApp
+/// (§11), or null.
+ChatLinkCardWhatsapp? whatsappChoice(ChatLinkCard c) => (c.choices ?? const []).contains('whatsapp') ? c.whatsapp : null;
+
+/// Chat in Taskiem: the link offers it (`choices`, or, from a server before
+/// them, while it takes chats).
+bool taskiemChoice(ChatLinkCard c) => c.choices == null ? c.takesChats : c.choices!.contains('taskiem') && c.takesChats;
+
+/// Chat on WhatsApp: the business's own number, in WhatsApp (outside the
+/// app).
+Future<void> chatOnWhatsApp(BuildContext context, ChatLinkCardWhatsapp w) =>
+    openOrSay(context, () => openOutside(Uri.parse(w.link)), 'WhatsApp didn’t open. Try again.');
 
 /// The words of a link that no longer works.
 const linkGone = 'This link no longer works';
@@ -143,7 +163,7 @@ class _ChatLinkScreenState extends State<ChatLinkScreen> {
       final a = await readChatLinkCard(widget.auth.api, widget.code);
       if (!mounted) return;
       setState(() => (_card = a.card, _gone = a.gone, _loaded = true));
-      if (widget.autoStart && a.card != null && a.card!.takesChats) unawaited(_start());
+      if (widget.autoStart && a.card != null && taskiemChoice(a.card!)) unawaited(_start());
     } on Object catch (e) {
       if (mounted) setState(() => (_error = sayFailure(e), _loaded = true));
     }
@@ -179,6 +199,7 @@ class _ChatLinkScreenState extends State<ChatLinkScreen> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final c = _card;
+    final wa = c == null ? null : whatsappChoice(c);
     return TkScreen(
       title: c?.name ?? 'Chat link',
       children: [
@@ -192,7 +213,14 @@ class _ChatLinkScreenState extends State<ChatLinkScreen> {
               children: [
                 ChatLinkCardView(card: c),
                 const SizedBox(height: 18),
-                if (c.takesChats)
+                if (wa != null) ...[
+                  // Both ways, or WhatsApp alone (§11).
+                  if (taskiemChoice(c)) ...[
+                    CardButton(label: _busy ? 'Opening the chat…' : 'Chat on Taskiem', primary: true, busy: _busy, onTap: _start),
+                    const SizedBox(height: 10),
+                  ],
+                  CardButton(label: 'Chat on WhatsApp', primary: !taskiemChoice(c), onTap: () => chatOnWhatsApp(context, wa)),
+                ] else if (c.takesChats)
                   CardButton(label: _busy ? 'Opening the chat…' : 'Chat with ${c.name}', primary: true, busy: _busy, onTap: _start)
                 else
                   Text('${c.name} isn’t taking chats in Taskiem right now.', textAlign: TextAlign.center, style: tkText(size: 14, color: t.muted)),

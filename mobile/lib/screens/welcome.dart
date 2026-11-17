@@ -13,6 +13,7 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/links.dart';
 import '../app/phone.dart';
+import '../chat/cards.dart' show CardButton;
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'chat_link.dart';
@@ -215,7 +216,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
   }
 
   List<Widget> _phoneStep(TkTokens t) => [
-        if (_link?.card != null) ...[ChatLinkCardView(card: _link!.card!), const SizedBox(height: 20)],
+        if (_link?.card != null) ...[
+          ChatLinkCardView(card: _link!.card!),
+          const SizedBox(height: 20),
+          // Their own WhatsApp number (§11): no signing in needed for it.
+          if (whatsappChoice(_link!.card!) case final wa?) ...[
+            CardButton(label: 'Chat on WhatsApp', onTap: () => chatOnWhatsApp(context, wa)),
+            const SizedBox(height: 20),
+          ],
+        ],
         if (_link?.gone != null) ...[LinkGone(words: _link!.gone!), const SizedBox(height: 16)],
         const AuthTitle('Welcome to Taskiem', bottom: 8),
         Padding(
