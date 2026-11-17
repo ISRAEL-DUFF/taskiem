@@ -21239,6 +21239,265 @@ paths:
                     type: integer
         default:
           $ref: '#/components/responses/Error'
+  /v1/discover/search:
+    post:
+      operationId: discoverSearch
+      tags:
+      - You
+      summary: Search Discover
+      description: 'Businesses the public may find in Discover (taskiem-for-everyone §10): by name, what they sell (`q`:
+        "rice", "hair", "cakes"; each word must match the start of a word of the listing, and a plural finds the
+        singular), `area` (part of the listing''s area) and `category` (a key of GET /v1/discover/categories). With `near`,
+        the person''s place for this search only, the nearest businesses that gave a place come first, each with `km`.
+        A POST so the place travels in the body: nothing of a search is kept or logged. Only businesses listed in
+        Discover with a category, an area, a photo and hours, not hidden by moderators. A number that could be a phone
+        finds nothing. 20 a page (`offset`, up to 200; `more` says another page waits). A personal session reaches it, and
+        so does a business session for its person; API keys are refused (403). 30 searches a minute per person (429).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                q:
+                  type: string
+                  maxLength: 100
+                area:
+                  type: string
+                  maxLength: 80
+                category:
+                  type: string
+                near:
+                  type: object
+                  required: [lat, lng]
+                  properties:
+                    lat:
+                      type: number
+                      minimum: -90
+                      maximum: 90
+                    lng:
+                      type: number
+                      minimum: -180
+                      maximum: 180
+                offset:
+                  type: integer
+                  minimum: 0
+                  maximum: 200
+      responses:
+        '200':
+          description: What was found
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results, more]
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DiscoverResult'
+                  more:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/discover/categories:
+    get:
+      operationId: discoverCategories
+      tags:
+      - You
+      summary: Discover's categories
+      description: The categories a listing in Discover has, in the order Discover shows them, for its filter.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The categories
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [categories]
+                properties:
+                  categories:
+                    type: array
+                    items:
+                      type: object
+                      required: [key, name]
+                      properties:
+                        key:
+                          type: string
+                        name:
+                          type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/discover/{business}:
+    get:
+      operationId: discoverProfile
+      tags:
+      - You
+      summary: A business's profile in Discover
+      description: 'Its photos, hours (with the line under its name), address and map link, its page''s address, and what it
+        offers a person: `can_chat` (Chat starts the conversation through the customer door: POST /v1/me/chats
+        `{business_id, from: "discover"}`), `has_shop` and `has_book` (Their shop and Book, the chat''s tools, once the chat
+        is open). `chat` is the person''s own conversation with the business when they have one. Read through the narrow
+        definer: nothing beyond the listing. 404 for a business that is not listed, or whose listing is hidden.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: business
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverProfile'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/discover/{business}/report:
+    post:
+      operationId: discoverReport
+      tags:
+      - You
+      summary: Report a business in Discover
+      description: 'A report on a listing to Taskiem''s moderators (taskiem-for-everyone §10, §15), beside the reports on
+        pages (GET /v1/ops/reports, kind `discover`). `reason` is one of the pages'' list. When three different people have
+        open reports from the last 30 days, the listing is hidden until a moderator looks. Three a day from one person
+        for one listing (429), and twelve reports every two hours in all. 404 for a business not in Discover.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: business
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  enum: [scam, impersonation, prohibited, offensive, other]
+                note:
+                  type: string
+                  maxLength: 500
+      responses:
+        '202':
+          description: Taken
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reported, words]
+                properties:
+                  reported:
+                    type: boolean
+                  words:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/settings/discover:
+    get:
+      operationId: getDiscoverSettings
+      tags:
+      - Customers
+      summary: The business's listing in Discover
+      description: '"Found by the public in the Taskiem app" (taskiem-for-everyone §10): whether the business is listed
+        (`listed`: its own choice `chosen`, else the `default`, on with a published storefront; never for a workflows
+        workspace), what the listing lacks to be shown (`missing`: `category`, `area`, `photo`, `hours`, and
+        `missing_line` in words), whether it is shown, why not when it is hidden (`hidden`: `removed` by Taskiem''s
+        moderators with `removed_note`, `reported` by several people until a moderator looks, `suspended` with its
+        page), why it has no Chat button (`chat_off`: `orders_off` or `chats_off`), and the listing as it shows. Reading
+        it writes the listing to the index again.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      responses:
+        '200':
+          description: The settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverSettings'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putDiscoverSettings
+      tags:
+      - Customers
+      summary: Change the business's listing in Discover
+      description: 'Turns the listing on or off (`listed`; `default: true` goes back to the default), and gives the
+        listing''s own `category` (a key of the categories), `area`, `hours` (for a business whose page gives none;
+        `clear_hours`) and place on the map (`location`, kept to three decimals; `clear_location`). An empty category or
+        area goes back to the profile''s or the page''s. A field left out keeps its value. The listing is written to the
+        index at once. 409 for a workflows workspace turning it on. Audited as `discover.settings`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      x-taskiem-permission: storefront.manage
+      x-taskiem-all-environments: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                listed:
+                  type: boolean
+                default:
+                  type: boolean
+                category:
+                  type: string
+                area:
+                  type: string
+                  maxLength: 80
+                hours:
+                  type: object
+                  additionalProperties: true
+                clear_hours:
+                  type: boolean
+                location:
+                  $ref: '#/components/schemas/DiscoverLocation'
+                clear_location:
+                  type: boolean
+      responses:
+        '200':
+          description: The settings now
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscoverSettings'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/storefront-orders:
     get:
       operationId: myStorefrontOrders
@@ -38130,6 +38389,202 @@ components:
           items:
             type: string
           description: Their first names
+    DiscoverLocation:
+      type: object
+      required: [lat, lng]
+      description: A place on the map.
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
+    DiscoverPhoto:
+      type: object
+      required: [urls]
+      properties:
+        urls:
+          type: object
+          additionalProperties:
+            type: string
+          description: The photo's sizes, by width.
+        caption:
+          type: string
+    DiscoverResult:
+      type: object
+      required: [business, name, photo, category, category_name, area, open_now, line, can_chat]
+      description: A business a search in Discover found.
+      properties:
+        business:
+          type: string
+          format: uuid
+        name:
+          type: string
+        photo:
+          type: object
+          additionalProperties:
+            type: string
+          description: Its photo's sizes, by width.
+        category:
+          type: string
+        category_name:
+          type: string
+        area:
+          type: string
+        open_now:
+          type: boolean
+        line:
+          type: string
+          description: The line under its name ("Open now, closes at 18:00", "Closed now. Opens tomorrow at 09:00").
+        can_chat:
+          type: boolean
+          description: It takes chats (the Chat button).
+        km:
+          type: number
+          description: How far it is, when the search gave `near` and the business its place.
+    DiscoverListing:
+      type: object
+      required: [business, name, photos, hours, can_chat, has_shop, has_book]
+      description: A business's listing in Discover.
+      properties:
+        business:
+          type: string
+          format: uuid
+        name:
+          type: string
+        tagline:
+          type: string
+        category:
+          type: string
+        area:
+          type: string
+        address:
+          type: string
+        map_link:
+          type: string
+        photo:
+          $ref: '#/components/schemas/DiscoverPhoto'
+        photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiscoverPhoto'
+        hours:
+          type: object
+          additionalProperties: true
+          description: Opening hours, Monday first (as a storefront's).
+        location:
+          $ref: '#/components/schemas/DiscoverLocation'
+        shop:
+          type: string
+          description: Its published storefront's address.
+        can_chat:
+          type: boolean
+        has_shop:
+          type: boolean
+        has_book:
+          type: boolean
+    DiscoverProfile:
+      type: object
+      required: [business, name, photos, hours, can_chat, has_shop, has_book, category_name, open_now, line]
+      description: A business's profile in Discover (its listing, with its hours' line and the person's own chat).
+      properties:
+        business:
+          type: string
+          format: uuid
+        name:
+          type: string
+        tagline:
+          type: string
+        category:
+          type: string
+        category_name:
+          type: string
+        area:
+          type: string
+        address:
+          type: string
+        map_link:
+          type: string
+        photo:
+          $ref: '#/components/schemas/DiscoverPhoto'
+        photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiscoverPhoto'
+        hours:
+          type: object
+          additionalProperties: true
+          description: Opening hours, Monday first (as a storefront's).
+        open_now:
+          type: boolean
+        line:
+          type: string
+          description: The line under its name ("Open now, closes at 18:00"; "" when it keeps no hours).
+        shop:
+          type: string
+          description: Its published storefront's address.
+        can_chat:
+          type: boolean
+          description: Chat is offered (POST /v1/me/chats with from discover).
+        has_shop:
+          type: boolean
+          description: Their shop is offered, in the chat.
+        has_book:
+          type: boolean
+          description: Book is offered, in the chat.
+        chat:
+          type: string
+          format: uuid
+          description: The person's own conversation with the business, when they have one.
+    DiscoverSettings:
+      type: object
+      required: [listed, chosen, default, missing, shown, listing]
+      description: A business's listing in Discover, its switch and what it lacks (taskiem-for-everyone §10).
+      properties:
+        listed:
+          type: boolean
+          description: Listed now (its choice, else the default).
+        chosen:
+          type: [boolean, 'null']
+          description: The business's own choice; null leaves it to the default.
+        default:
+          type: boolean
+          description: On with a published storefront.
+        workspace:
+          type: boolean
+          description: A workflows workspace, never listed.
+        category:
+          type: string
+          description: The listing's own category, when the business gave one.
+        area:
+          type: string
+        hours:
+          type: object
+          additionalProperties: true
+        location:
+          $ref: '#/components/schemas/DiscoverLocation'
+        missing:
+          type: array
+          items:
+            type: string
+            enum: [category, area, photo, hours]
+        missing_line:
+          type: string
+        shown:
+          type: boolean
+        hidden:
+          type: string
+          enum: [removed, reported, suspended]
+        removed_note:
+          type: string
+        chat_off:
+          type: string
+          enum: [orders_off, chats_off]
+        listing:
+          $ref: '#/components/schemas/DiscoverListing'
     PersonChat:
       type: object
       additionalProperties: false

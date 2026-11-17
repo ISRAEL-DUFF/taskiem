@@ -467,6 +467,7 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/auth/second-proof/passkey", s.secondProofPasskey)
 			r.Post("/me/start", s.startSomething)                // a business or workflows (start.go)
 			s.customerDoorRoutes(r)                              // a person's chats with businesses (customer_door.go)
+			s.discoverRoutes(r)                                  // the public finding businesses (discover.go)
 			r.Get("/me/storefront-orders", s.myStorefrontOrders) // a person's own orders, by their phone (customer_links.go)
 			r.Post("/me/storefront-orders/confirm", s.confirmStorefrontOrders)
 			r.Get("/me/devices", s.listDevices) // Your phones (devices.go)
@@ -503,6 +504,9 @@ func (s *Server) Handler() http.Handler {
 			r.With(s.need(PermOrders)).Get("/customers/chat-link/qr", s.chatLinkQR)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Post("/customers/chat-link", s.newChatLink)
 			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/customers/chat-settings", s.putChatSettings)
+			// Discover's listing (discover.go, docs/spec/taskiem-for-everyone.md §10).
+			r.With(s.need(PermStorefrontManage)).Get("/settings/discover", s.getDiscoverSettings)
+			r.With(s.need(PermStorefrontManage), s.tenantWide).Put("/settings/discover", s.putDiscoverSettings)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Post("/reach/page", s.newReachPage)
 			r.With(s.need(PermWorkflowPublish), s.tenantWide).Delete("/reach/contacts/{id}", s.removeReachContact)
 			r.With(s.need(PermAlertManage)).Get("/whatsapp/outbox", s.listWhatsAppOutbox)
