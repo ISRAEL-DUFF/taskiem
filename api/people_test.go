@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/israel-duff/taskiem/engine/people"
+	"github.com/israel-duff/taskiem/engine/peoplechats"
 )
 
 // Finding people ("As built: stage 5a, server (finding people)" in
@@ -16,21 +17,21 @@ import (
 // lookups by number, a person's link and its page, contact matching,
 // presence, and deleting an account.
 
-type peopleWorld struct {
+type findWorld struct {
 	*world
 	sms *fakeSMS
 }
 
-func newPeopleWorld(t *testing.T) *peopleWorld {
+func newFindWorld(t *testing.T) *findWorld {
 	t.Helper()
 	w, sms := phoneWorld(t)
-	w.srv.People = &people.People{Pool: w.env.DB.App, Key: bytes.Repeat([]byte{5}, 32), Base: w.base}
+	w.srv.People = peoplechats.JoinPeople(&people.People{Pool: w.env.DB.App, Key: bytes.Repeat([]byte{5}, 32), Base: w.base})
 	w.srv.AppGetURL = "https://get.taskiem.test"
-	return &peopleWorld{world: w, sms: sms}
+	return &findWorld{world: w, sms: sms}
 }
 
 // personNamed signs a new person in by phone and names them.
-func (w *peopleWorld) personNamed(t *testing.T, number, name string) *client {
+func (w *findWorld) personNamed(t *testing.T, number, name string) *client {
 	t.Helper()
 	c, _ := phoneIn(t, w.world, w.sms, number, nil)
 	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE users SET name = $2 WHERE id = $1`, personID(t, c), name); err != nil {
@@ -42,7 +43,7 @@ func (w *peopleWorld) personNamed(t *testing.T, number, name string) *client {
 func idOf(t *testing.T, c *client) string { return personID(t, c).String() }
 
 // add finds other by number as c and adds them to c's contacts.
-func (w *peopleWorld) add(t *testing.T, c *client, number string) map[string]any {
+func (w *findWorld) add(t *testing.T, c *client, number string) map[string]any {
 	t.Helper()
 	f := c.must(200, "POST", "/v1/people/lookup", map[string]any{"phone": number})
 	if f["found"] != true {
@@ -56,7 +57,7 @@ func (w *peopleWorld) add(t *testing.T, c *client, number string) map[string]any
 // refused when not one; an API key refused; a business session acts for
 // its person.
 func TestPeoplePrivacySettings(t *testing.T) {
-	w := newPeopleWorld(t)
+	w := newFindWorld(t)
 	tolu := w.personNamed(t, "+2348032000001", "Tolu")
 	got := tolu.must(200, "GET", "/v1/me/privacy/people", nil)
 	want := map[string]any{"find_by_number": "contacts", "find_from_contacts": true, "message": "everyone", "last_seen": "contacts", "read_ticks": true, "photo": "contacts", "show_number": false}
@@ -90,7 +91,7 @@ func TestPeoplePrivacySettings(t *testing.T) {
 // token; contacts listed, renamed and removed; a bad number 400; fifty a
 // day.
 func TestPeopleLookupAndContacts(t *testing.T) {
-	w := newPeopleWorld(t)
+	w := newFindWorld(t)
 	tolu := w.personNamed(t, "+2348032000011", "Tolu")
 	ada := w.personNamed(t, "+2348032000012", "Ada")
 	f := tolu.must(200, "POST", "/v1/people/lookup", map[string]any{"phone": "0803 200 0012"})
@@ -160,7 +161,7 @@ func TestPeopleLookupAndContacts(t *testing.T) {
 // photo only for everyone), the signed-in view with a token; replaced,
 // the old one 410 with "no longer works", on the API and the page /p/.
 func TestPersonLinkAndPage(t *testing.T) {
-	w := newPeopleWorld(t)
+	w := newFindWorld(t)
 	tolu := w.personNamed(t, "+2348032000021", "Tolu")
 	ada := w.personNamed(t, "+2348032000022", "Ada")
 	l := tolu.must(200, "GET", "/v1/me/link", nil)
@@ -240,7 +241,7 @@ func TestPersonLinkAndPage(t *testing.T) {
 // Contact matching (§5.3): the key, then only the people who let
 // themselves be found from contacts; an old key 409; nothing kept.
 func TestContactMatching(t *testing.T) {
-	w := newPeopleWorld(t)
+	w := newFindWorld(t)
 	tolu := w.personNamed(t, "+2348032000031", "Tolu")
 	ada := w.personNamed(t, "+2348032000032", "Ada")
 	bola := w.personNamed(t, "+2348032000033", "Bola")
@@ -275,7 +276,7 @@ func TestContactMatching(t *testing.T) {
 // Presence: the heartbeat and the goodbye; shown per the settings, hidden
 // both ways.
 func TestPeoplePresence(t *testing.T) {
-	w := newPeopleWorld(t)
+	w := newFindWorld(t)
 	tolu := w.personNamed(t, "+2348032000041", "Tolu")
 	ada := w.personNamed(t, "+2348032000042", "Ada")
 	ada.must(204, "POST", "/v1/me/presence", map[string]any{"online": true})
@@ -301,7 +302,7 @@ func TestPeoplePresence(t *testing.T) {
 // settings, link and presence go; their link names no one; they are a
 // deleted account by id.
 func TestDeleteAccountForgetsPeople(t *testing.T) {
-	w := newPeopleWorld(t)
+	w := newFindWorld(t)
 	const number = "+2348032000051"
 	tolu := w.personNamed(t, number, "Tolu")
 	ada := w.personNamed(t, "+2348032000052", "Ada")

@@ -115,13 +115,13 @@ func (p *People) NumberShownTo(ctx context.Context, owner, viewer uuid.UUID) (st
 	if err != nil || c == nil || c.Deleted || c.number == nil {
 		return "", err
 	}
-	if b, err := p.blocked(ctx, owner, viewer); err != nil || b {
+	if b, err := p.blocked(ctx, viewer, owner); err != nil || b {
 		return "", err
 	}
 	if !c.TheyAddedYou {
 		chatting := false
 		if p.Chatting != nil {
-			if chatting, err = p.Chatting(ctx, owner, viewer); err != nil {
+			if chatting, err = p.Chatting(ctx, viewer, owner); err != nil {
 				return "", err
 			}
 		}

@@ -321,16 +321,13 @@ func (p *People) MatchContacts(ctx context.Context, viewer uuid.UUID, keyID stri
 		if err != nil {
 			return err
 		}
+		blocked, err := p.blockedSetTx(ctx, tx, viewer, ids)
+		if err != nil {
+			return err
+		}
 		for _, x := range hits {
 			c, ok := cards[x.id]
-			if !ok || c.Deleted {
-				continue
-			}
-			b, err := p.blocked(ctx, viewer, x.id)
-			if err != nil {
-				return err
-			}
-			if b {
+			if !ok || c.Deleted || blocked[x.id] {
 				continue
 			}
 			out = append(out, Match{Hash: byRaw[string(x.hash)], Found: Found{Card: *c, AddToken: p.AddToken(viewer, x.id)}})

@@ -74,11 +74,15 @@ type People struct {
 	// Base is where links are served (TASKIEM_PUBLIC_URL), without a
 	// trailing slash.
 	Base string
-	// Blocked reports whether either of a and b blocked the other (stream
-	// A's person blocks). Nil: no person blocks yet.
+	// Blocked reports whether either of a and b blocked the other (the
+	// people chats' blocks). a is the person the request is for, so it is
+	// answered in a's scope. Nil: no person blocks.
 	Blocked func(ctx context.Context, a, b uuid.UUID) (bool, error)
+	// BlockedSet is Blocked for many at once, in tx (viewer's scope): the
+	// others either blocked or blocked by viewer. Nil: Blocked one by one.
+	BlockedSet func(ctx context.Context, tx pgx.Tx, viewer uuid.UUID, others []uuid.UUID) (map[uuid.UUID]bool, error)
 	// Chatting reports whether a and b have a people chat that is no
-	// longer a request (stream A). Nil: none.
+	// longer a request, in a's scope as Blocked. Nil: none.
 	Chatting func(ctx context.Context, a, b uuid.UUID) (bool, error)
 	// Now is the clock (tests); time.Now when nil.
 	Now func() time.Time
@@ -102,6 +106,25 @@ func (p *People) blocked(ctx context.Context, a, b uuid.UUID) (bool, error) {
 		return false, nil
 	}
 	return p.Blocked(ctx, a, b)
+}
+
+// blockedSetTx is which of others a block stands between viewer and;
+// tx is in viewer's scope.
+func (p *People) blockedSetTx(ctx context.Context, tx pgx.Tx, viewer uuid.UUID, others []uuid.UUID) (map[uuid.UUID]bool, error) {
+	if p.BlockedSet != nil {
+		return p.BlockedSet(ctx, tx, viewer, others)
+	}
+	out := map[uuid.UUID]bool{}
+	for _, id := range others {
+		b, err := p.blocked(ctx, viewer, id)
+		if err != nil {
+			return nil, err
+		}
+		if b {
+			out[id] = true
+		}
+	}
+	return out, nil
 }
 
 // --- settings ---
@@ -273,6 +296,16 @@ func (p *People) CardsTx(ctx context.Context, tx pgx.Tx, viewer uuid.UUID, owner
 		return nil, err
 	}
 	out := make([]Card, 0, len(got))
+	ids := make([]uuid.UUID, 0, len(got))
+	for id := range got {
+		if id != viewer {
+			ids = append(ids, id)
+		}
+	}
+	blocked, err := p.blockedSetTx(ctx, tx, viewer, ids)
+	if err != nil {
+		return nil, err
+	}
 	seen := map[uuid.UUID]bool{}
 	for _, id := range owners {
 		c, ok := got[id]
@@ -280,11 +313,7 @@ func (p *People) CardsTx(ctx context.Context, tx pgx.Tx, viewer uuid.UUID, owner
 			continue
 		}
 		seen[id] = true
-		b, err := p.blocked(ctx, viewer, id)
-		if err != nil {
-			return nil, err
-		}
-		if b {
+		if blocked[id] {
 			c.PhotoAt, c.LastSeenAt, c.Online = nil, nil, nil
 		}
 		out = append(out, *c)

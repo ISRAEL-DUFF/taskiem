@@ -922,6 +922,145 @@ class TaskiemApi {
     final j = await _t.send('GET', '/v1/person-links/${Uri.encodeComponent(code)}');
     return GetPersonLinkCardResponse.fromJson(j as Map<String, dynamic>);
   }
+
+  /// You's Chats, businesses and people together (`GET /v1/me/conversations`)
+  Future<ListAllMyChatsResponse> listAllMyChats({String? archived}) async {
+    final j = await _t.send('GET', '/v1/me/conversations', query: {'archived': ?archived});
+    return ListAllMyChatsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your chats with people (`GET /v1/me/people`)
+  Future<ListPeopleChatsResponse> listPeopleChats({String? archived}) async {
+    final j = await _t.send('GET', '/v1/me/people', query: {'archived': ?archived});
+    return ListPeopleChatsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Start a chat with a person (`POST /v1/me/people`)
+  Future<PeopleChat> startPeopleChat({required StartPeopleChatRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/people', body: body.toJson());
+    return PeopleChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Message requests (`GET /v1/me/people/requests`)
+  Future<ListPeopleRequestsResponse> listPeopleRequests() async {
+    final j = await _t.send('GET', '/v1/me/people/requests');
+    return ListPeopleRequestsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// People you blocked (`GET /v1/me/people/blocked`)
+  Future<ListPeopleBlockedResponse> listPeopleBlocked() async {
+    final j = await _t.send('GET', '/v1/me/people/blocked');
+    return ListPeopleBlockedResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Forward a message (`POST /v1/me/people/forward`)
+  Future<ForwardPeopleMessageResponse> forwardPeopleMessage({required ForwardPeopleMessageRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/people/forward', body: body.toJson());
+    return ForwardPeopleMessageResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One chat with a person (`GET /v1/me/people/{id}`)
+  Future<PeopleChat> getPeopleChat({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/people/${Uri.encodeComponent(id)}');
+    return PeopleChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Mute or archive a chat (`PUT /v1/me/people/{id}`)
+  Future<PeopleChat> putPeopleChat({required PutPeopleChatRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/people/${Uri.encodeComponent(id)}', body: body.toJson());
+    return PeopleChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Delete a chat for you (`DELETE /v1/me/people/{id}`)
+  Future<void> deletePeopleChat({required String id}) async {
+    await _t.send('DELETE', '/v1/me/people/${Uri.encodeComponent(id)}');
+  }
+
+  /// Accept a request (`POST /v1/me/people/{id}/accept`)
+  Future<PeopleChat> acceptPeopleRequest({required String id}) async {
+    final j = await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/accept');
+    return PeopleChat.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Delete a request (`POST /v1/me/people/{id}/decline`)
+  Future<void> declinePeopleRequest({required String id}) async {
+    await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/decline');
+  }
+
+  /// Block a person (`POST /v1/me/people/{id}/block`)
+  Future<BlockPersonResponse> blockPerson({required BlockPersonRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/block', body: body.toJson());
+    return BlockPersonResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Unblock a person (`DELETE /v1/me/people/{id}/block`)
+  Future<UnblockPersonResponse> unblockPerson({required String id}) async {
+    final j = await _t.send('DELETE', '/v1/me/people/${Uri.encodeComponent(id)}/block');
+    return UnblockPersonResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Report a person or chat to Taskiem (`POST /v1/me/people/{id}/report`)
+  Future<ReportPersonResponse> reportPerson({required PeopleReport body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/report', body: body.toJson());
+    return ReportPersonResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Mark a chat read (`POST /v1/me/people/{id}/read`)
+  Future<void> readPeopleChat({required String id}) async {
+    await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/read');
+  }
+
+  /// Messages of a chat with a person (`GET /v1/me/people/{id}/messages`)
+  Future<PeopleMessagesResponse> peopleMessages({required String id, String? before, String? starred}) async {
+    final j = await _t.send('GET', '/v1/me/people/${Uri.encodeComponent(id)}/messages', query: {'before': ?before, 'starred': ?starred});
+    return PeopleMessagesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Write to a person (`POST /v1/me/people/{id}/messages`)
+  Future<PeopleMessage> sendPeopleMessage({required SendPeopleMessageRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/messages', body: body.toJson());
+    return PeopleMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Star or react to a message (`PUT /v1/me/people/{id}/messages/{message}`)
+  Future<PeopleMessage> markPeopleMessage({required MarkPeopleMessageRequest body, required String id, required String message}) async {
+    final j = await _t.send('PUT', '/v1/me/people/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}', body: body.toJson());
+    return PeopleMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Delete a message (`DELETE /v1/me/people/{id}/messages/{message}`)
+  Future<void> deletePeopleMessage({required String id, required String message, String? for}) async {
+    await _t.send('DELETE', '/v1/me/people/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}', query: {'for': ?for});
+  }
+
+  /// Mark a share paid (`POST /v1/me/people/{id}/messages/{message}/paid`)
+  Future<PeopleMessage> markSplitPaid({required MarkSplitPaidRequest body, required String id, required String message}) async {
+    final j = await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}/paid', body: body.toJson());
+    return PeopleMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Open a shared card (`GET /v1/me/people/{id}/messages/{message}/card`)
+  Future<OpenPeopleCardResponse> openPeopleCard({required String id, required String message}) async {
+    final j = await _t.send('GET', '/v1/me/people/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}/card');
+    return OpenPeopleCardResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your bank account for being paid back (`GET /v1/me/payout-account`)
+  Future<PayoutAccountAnswer> getPayoutAccount() async {
+    final j = await _t.send('GET', '/v1/me/payout-account');
+    return PayoutAccountAnswer.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Save your bank account for being paid back (`PUT /v1/me/payout-account`)
+  Future<PayoutAccountAnswer> putPayoutAccount({required PayoutAccount body}) async {
+    final j = await _t.send('PUT', '/v1/me/payout-account', body: body.toJson());
+    return PayoutAccountAnswer.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove your saved bank account (`DELETE /v1/me/payout-account`)
+  Future<void> deletePayoutAccount() async {
+    await _t.send('DELETE', '/v1/me/payout-account');
+  }
 }
 
 class AppConfig {
@@ -7778,46 +7917,60 @@ class DeleteAccountResponse {
       };
 }
 
-/// Which pushes the person's own devices get from businesses.
+/// Which pushes the person's own devices get.
 class YouNotifications {
-  const YouNotifications({required this.messages, required this.offers, required this.updates});
+  const YouNotifications({required this.messages, required this.offers, required this.people, required this.requests, required this.updates});
 
   /// Someone at a business wrote to them.
   final bool messages;
   /// Offers from businesses they said yes to.
   final bool offers;
+  /// A person wrote to them (push kind person).
+  final bool people;
+  /// A stranger's first message waits in their Requests (push kind request).
+  final bool requests;
   /// A business's automatic words (an order's or a booking's news).
   final bool updates;
 
   factory YouNotifications.fromJson(Map<String, dynamic> j) => YouNotifications(
         messages: j['messages'] as bool,
         offers: j['offers'] as bool,
+        people: j['people'] as bool,
+        requests: j['requests'] as bool,
         updates: j['updates'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
         'messages': messages,
         'offers': offers,
+        'people': people,
+        'requests': requests,
         'updates': updates,
       };
 }
 
 class PutMyNotificationsRequest {
-  const PutMyNotificationsRequest({this.messages, this.offers, this.updates});
+  const PutMyNotificationsRequest({this.messages, this.offers, this.people, this.requests, this.updates});
 
   final bool? messages;
   final bool? offers;
+  final bool? people;
+  final bool? requests;
   final bool? updates;
 
   factory PutMyNotificationsRequest.fromJson(Map<String, dynamic> j) => PutMyNotificationsRequest(
         messages: j['messages'] == null ? null : j['messages'] as bool,
         offers: j['offers'] == null ? null : j['offers'] as bool,
+        people: j['people'] == null ? null : j['people'] as bool,
+        requests: j['requests'] == null ? null : j['requests'] as bool,
         updates: j['updates'] == null ? null : j['updates'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
         'messages': ?messages,
         'offers': ?offers,
+        'people': ?people,
+        'requests': ?requests,
         'updates': ?updates,
       };
 }
@@ -8406,5 +8559,823 @@ class GetPersonLinkCardResponse {
         'link': link,
         'name': name,
         'photo': ?photo,
+      };
+}
+
+class ListAllMyChatsResponse {
+  const ListAllMyChatsResponse({required this.chats, required this.requests, required this.unread});
+
+  final List<ChatListItem> chats;
+  final int requests;
+  final int unread;
+
+  factory ListAllMyChatsResponse.fromJson(Map<String, dynamic> j) => ListAllMyChatsResponse(
+        chats: (j['chats'] as List).map((e) => ChatListItem.fromJson(e as Map<String, dynamic>)).toList(),
+        requests: (j['requests'] as num).toInt(),
+        unread: (j['unread'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chats': chats.map((e) => e.toJson()).toList(),
+        'requests': requests,
+        'unread': unread,
+      };
+}
+
+/// One row of You's one Chats list: a business chat (`kind: business`, open
+/// `/v1/me/chats/{id}`) or a people chat (`kind: person`, open
+/// `/v1/me/people/{id}`).
+class ChatListItem {
+  const ChatListItem({required this.archived, required this.blocked, this.businessId, this.gone, required this.id, required this.kind, required this.last, required this.lastAt, required this.lastMine, required this.muted, required this.name, this.person, this.personId, required this.unread, this.waiting});
+
+  final bool archived;
+  /// You blocked them.
+  final bool blocked;
+  final String? businessId;
+  /// The person deleted their account (shown as "Deleted account").
+  final bool? gone;
+  final String id;
+  final String kind;
+  final String last;
+  final DateTime lastAt;
+  final bool lastMine;
+  final bool muted;
+  final String name;
+  /// A people chat's other person as their settings let you see them: photo,
+  /// last seen and online. None once they deleted their account.
+  final PersonCard? person;
+  final String? personId;
+  final int unread;
+  /// Your first messages wait for them to accept.
+  final bool? waiting;
+
+  factory ChatListItem.fromJson(Map<String, dynamic> j) => ChatListItem(
+        archived: j['archived'] as bool,
+        blocked: j['blocked'] as bool,
+        businessId: j['business_id'] == null ? null : j['business_id'] as String,
+        gone: j['gone'] == null ? null : j['gone'] as bool,
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        last: j['last'] as String,
+        lastAt: DateTime.parse(j['last_at'] as String),
+        lastMine: j['last_mine'] as bool,
+        muted: j['muted'] as bool,
+        name: j['name'] as String,
+        person: j['person'] == null ? null : PersonCard.fromJson(j['person'] as Map<String, dynamic>),
+        personId: j['person_id'] == null ? null : j['person_id'] as String,
+        unread: (j['unread'] as num).toInt(),
+        waiting: j['waiting'] == null ? null : j['waiting'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'archived': archived,
+        'blocked': blocked,
+        'business_id': ?businessId,
+        'gone': ?gone,
+        'id': id,
+        'kind': kind,
+        'last': last,
+        'last_at': lastAt.toUtc().toIso8601String(),
+        'last_mine': lastMine,
+        'muted': muted,
+        'name': name,
+        'person': ?person?.toJson(),
+        'person_id': ?personId,
+        'unread': unread,
+        'waiting': ?waiting,
+      };
+}
+
+class ListPeopleChatsResponse {
+  const ListPeopleChatsResponse({required this.chats, required this.requests, required this.unread});
+
+  final List<PeopleChat> chats;
+  final int requests;
+  final int unread;
+
+  factory ListPeopleChatsResponse.fromJson(Map<String, dynamic> j) => ListPeopleChatsResponse(
+        chats: (j['chats'] as List).map((e) => PeopleChat.fromJson(e as Map<String, dynamic>)).toList(),
+        requests: (j['requests'] as num).toInt(),
+        unread: (j['unread'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chats': chats.map((e) => e.toJson()).toList(),
+        'requests': requests,
+        'unread': unread,
+      };
+}
+
+/// A chat with a person, the person's own copy (people-chatting §7): kept by
+/// Taskiem, sealed under the person's key, readable by Taskiem's servers; not
+/// end-to-end encrypted.
+class PeopleChat {
+  const PeopleChat({required this.archived, required this.blocked, this.contact, required this.gone, required this.id, this.kept, required this.kind, required this.last, required this.lastAt, required this.lastMine, required this.muted, required this.name, this.person, required this.personId, this.phone, required this.request, required this.unread, required this.waiting});
+
+  final bool archived;
+  /// You blocked them.
+  final bool blocked;
+  /// One chat only. They are in your contacts.
+  final bool? contact;
+  final bool gone;
+  final String id;
+  /// How people chats are kept, to show in the chat's info.
+  final String? kept;
+  final String kind;
+  final String last;
+  final DateTime lastAt;
+  final bool lastMine;
+  final bool muted;
+  /// The name you gave them in your contacts, else their own, or "Deleted
+  /// account" once they deleted it (`gone`).
+  final String name;
+  /// The other person as their settings let you see them (finding people): the
+  /// name you gave them, photo, last seen and online, whether read ticks go
+  /// between you. None once they deleted their account.
+  final PersonCard? person;
+  final String personId;
+  /// One chat only. Their number, only when they chose to show it.
+  final Object? phone;
+  /// A stranger's first messages, waiting in your Requests.
+  final bool request;
+  final int unread;
+  /// Your first messages wait for them to accept (no read ticks until then).
+  final bool waiting;
+
+  factory PeopleChat.fromJson(Map<String, dynamic> j) => PeopleChat(
+        archived: j['archived'] as bool,
+        blocked: j['blocked'] as bool,
+        contact: j['contact'] == null ? null : j['contact'] as bool,
+        gone: j['gone'] as bool,
+        id: j['id'] as String,
+        kept: j['kept'] == null ? null : j['kept'] as String,
+        kind: j['kind'] as String,
+        last: j['last'] as String,
+        lastAt: DateTime.parse(j['last_at'] as String),
+        lastMine: j['last_mine'] as bool,
+        muted: j['muted'] as bool,
+        name: j['name'] as String,
+        person: j['person'] == null ? null : PersonCard.fromJson(j['person'] as Map<String, dynamic>),
+        personId: j['person_id'] as String,
+        phone: j['phone'],
+        request: j['request'] as bool,
+        unread: (j['unread'] as num).toInt(),
+        waiting: j['waiting'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'archived': archived,
+        'blocked': blocked,
+        'contact': ?contact,
+        'gone': gone,
+        'id': id,
+        'kept': ?kept,
+        'kind': kind,
+        'last': last,
+        'last_at': lastAt.toUtc().toIso8601String(),
+        'last_mine': lastMine,
+        'muted': muted,
+        'name': name,
+        'person': ?person?.toJson(),
+        'person_id': personId,
+        'phone': ?phone,
+        'request': request,
+        'unread': unread,
+        'waiting': waiting,
+      };
+}
+
+class StartPeopleChatRequest {
+  const StartPeopleChatRequest({this.linkCode, this.personId});
+
+  final String? linkCode;
+  final String? personId;
+
+  factory StartPeopleChatRequest.fromJson(Map<String, dynamic> j) => StartPeopleChatRequest(
+        linkCode: j['link_code'] == null ? null : j['link_code'] as String,
+        personId: j['person_id'] == null ? null : j['person_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'link_code': ?linkCode,
+        'person_id': ?personId,
+      };
+}
+
+class ListPeopleRequestsResponse {
+  const ListPeopleRequestsResponse({required this.requests});
+
+  final List<PeopleChat> requests;
+
+  factory ListPeopleRequestsResponse.fromJson(Map<String, dynamic> j) => ListPeopleRequestsResponse(
+        requests: (j['requests'] as List).map((e) => PeopleChat.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'requests': requests.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ListPeopleBlockedResponse {
+  const ListPeopleBlockedResponse({required this.people});
+
+  final List<ListPeopleBlockedResponsePeopleItem> people;
+
+  factory ListPeopleBlockedResponse.fromJson(Map<String, dynamic> j) => ListPeopleBlockedResponse(
+        people: (j['people'] as List).map((e) => ListPeopleBlockedResponsePeopleItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'people': people.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ListPeopleBlockedResponsePeopleItem {
+  const ListPeopleBlockedResponsePeopleItem({required this.at, required this.chatId, required this.name, required this.personId});
+
+  final DateTime at;
+  final String chatId;
+  final String name;
+  final String personId;
+
+  factory ListPeopleBlockedResponsePeopleItem.fromJson(Map<String, dynamic> j) => ListPeopleBlockedResponsePeopleItem(
+        at: DateTime.parse(j['at'] as String),
+        chatId: j['chat_id'] as String,
+        name: j['name'] as String,
+        personId: j['person_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toUtc().toIso8601String(),
+        'chat_id': chatId,
+        'name': name,
+        'person_id': personId,
+      };
+}
+
+class ForwardPeopleMessageRequest {
+  const ForwardPeopleMessageRequest({required this.chatId, required this.messageId, required this.to});
+
+  final String chatId;
+  final String messageId;
+  final List<String> to;
+
+  factory ForwardPeopleMessageRequest.fromJson(Map<String, dynamic> j) => ForwardPeopleMessageRequest(
+        chatId: j['chat_id'] as String,
+        messageId: j['message_id'] as String,
+        to: (j['to'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat_id': chatId,
+        'message_id': messageId,
+        'to': to.map((e) => e).toList(),
+      };
+}
+
+class ForwardPeopleMessageResponse {
+  const ForwardPeopleMessageResponse({required this.failed, required this.sent});
+
+  final List<ForwardPeopleMessageResponseFailedItem> failed;
+  final List<ForwardPeopleMessageResponseSentItem> sent;
+
+  factory ForwardPeopleMessageResponse.fromJson(Map<String, dynamic> j) => ForwardPeopleMessageResponse(
+        failed: (j['failed'] as List).map((e) => ForwardPeopleMessageResponseFailedItem.fromJson(e as Map<String, dynamic>)).toList(),
+        sent: (j['sent'] as List).map((e) => ForwardPeopleMessageResponseSentItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'failed': failed.map((e) => e.toJson()).toList(),
+        'sent': sent.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ForwardPeopleMessageResponseFailedItem {
+  const ForwardPeopleMessageResponseFailedItem({required this.chatId, required this.error});
+
+  final String chatId;
+  final String error;
+
+  factory ForwardPeopleMessageResponseFailedItem.fromJson(Map<String, dynamic> j) => ForwardPeopleMessageResponseFailedItem(
+        chatId: j['chat_id'] as String,
+        error: j['error'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat_id': chatId,
+        'error': error,
+      };
+}
+
+class ForwardPeopleMessageResponseSentItem {
+  const ForwardPeopleMessageResponseSentItem({required this.chatId, required this.message});
+
+  final String chatId;
+  final PeopleMessage message;
+
+  factory ForwardPeopleMessageResponseSentItem.fromJson(Map<String, dynamic> j) => ForwardPeopleMessageResponseSentItem(
+        chatId: j['chat_id'] as String,
+        message: PeopleMessage.fromJson(j['message'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat_id': chatId,
+        'message': message.toJson(),
+      };
+}
+
+/// One message of the person's copy of a people chat, opened.
+class PeopleMessage {
+  const PeopleMessage({this.attachment, required this.body, this.card, required this.createdAt, this.deleted, this.forwarded, this.forwardedMany, required this.id, required this.kind, this.location, required this.mine, this.myReaction, this.readAt, this.replyTo, this.starred, this.status, this.theirReaction, this.warn, this.warnTransfer});
+
+  final ChatAttachment? attachment;
+  /// The words, a file's caption, or "This message was deleted" (`deleted`).
+  final String body;
+  final PeopleCard? card;
+  final DateTime createdAt;
+  final bool? deleted;
+  final bool? forwarded;
+  /// Forwarded five or more times on its way here; it can be forwarded to one
+  /// chat at a time.
+  final bool? forwardedMany;
+  final String id;
+  final String kind;
+  final PeopleLocation? location;
+  final bool mine;
+  final String? myReaction;
+  final Object? readAt;
+  final String? replyTo;
+  final bool? starred;
+  /// Your own messages: sent (one tick: not delivered, as while they block
+  /// you), delivered, read (only once the chat is accepted).
+  final String? status;
+  final String? theirReaction;
+  /// The safety checks found it looks like a scam or spam.
+  final bool? warn;
+  /// Their message asks for a transfer to an account; warn before paying.
+  final bool? warnTransfer;
+
+  factory PeopleMessage.fromJson(Map<String, dynamic> j) => PeopleMessage(
+        attachment: j['attachment'] == null ? null : ChatAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
+        body: j['body'] as String,
+        card: j['card'] == null ? null : PeopleCard.fromJson(j['card'] as Map<String, dynamic>),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        deleted: j['deleted'] == null ? null : j['deleted'] as bool,
+        forwarded: j['forwarded'] == null ? null : j['forwarded'] as bool,
+        forwardedMany: j['forwarded_many'] == null ? null : j['forwarded_many'] as bool,
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        location: j['location'] == null ? null : PeopleLocation.fromJson(j['location'] as Map<String, dynamic>),
+        mine: j['mine'] as bool,
+        myReaction: j['my_reaction'] == null ? null : j['my_reaction'] as String,
+        readAt: j['read_at'],
+        replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
+        starred: j['starred'] == null ? null : j['starred'] as bool,
+        status: j['status'] == null ? null : j['status'] as String,
+        theirReaction: j['their_reaction'] == null ? null : j['their_reaction'] as String,
+        warn: j['warn'] == null ? null : j['warn'] as bool,
+        warnTransfer: j['warn_transfer'] == null ? null : j['warn_transfer'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'attachment': ?attachment?.toJson(),
+        'body': body,
+        'card': ?card?.toJson(),
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'deleted': ?deleted,
+        'forwarded': ?forwarded,
+        'forwarded_many': ?forwardedMany,
+        'id': id,
+        'kind': kind,
+        'location': ?location?.toJson(),
+        'mine': mine,
+        'my_reaction': ?myReaction,
+        'read_at': ?readAt,
+        'reply_to': ?replyTo,
+        'starred': ?starred,
+        'status': ?status,
+        'their_reaction': ?theirReaction,
+        'warn': ?warn,
+        'warn_transfer': ?warnTransfer,
+      };
+}
+
+/// A card in a people chat (people-chatting §10.1, §11 A), carrying only what
+/// is needed to show and open it: a product (business, item, its price when
+/// shared), a business, an order or a delivery (business, reference, state, the
+/// rider's progress when shared), or a share (amount, what for, the account to
+/// pay to, paid).
+class PeopleCard {
+  const PeopleCard({this.amountKobo, this.area, this.business, this.businessId, this.delivery, this.itemId, this.paid, this.paidAt, this.paidByMe, this.payTo, this.priceKobo, this.reference, this.state, required this.title, required this.type, this.what});
+
+  final int? amountKobo;
+  final String? area;
+  final String? business;
+  final String? businessId;
+  final DeliveryProgress? delivery;
+  final String? itemId;
+  final bool? paid;
+  final DateTime? paidAt;
+  final bool? paidByMe;
+  final PayoutAccount? payTo;
+  final int? priceKobo;
+  final String? reference;
+  final String? state;
+  final String title;
+  final String type;
+  final String? what;
+
+  factory PeopleCard.fromJson(Map<String, dynamic> j) => PeopleCard(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        area: j['area'] == null ? null : j['area'] as String,
+        business: j['business'] == null ? null : j['business'] as String,
+        businessId: j['business_id'] == null ? null : j['business_id'] as String,
+        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
+        itemId: j['item_id'] == null ? null : j['item_id'] as String,
+        paid: j['paid'] == null ? null : j['paid'] as bool,
+        paidAt: j['paid_at'] == null ? null : DateTime.parse(j['paid_at'] as String),
+        paidByMe: j['paid_by_me'] == null ? null : j['paid_by_me'] as bool,
+        payTo: j['pay_to'] == null ? null : PayoutAccount.fromJson(j['pay_to'] as Map<String, dynamic>),
+        priceKobo: j['price_kobo'] == null ? null : (j['price_kobo'] as num).toInt(),
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        state: j['state'] == null ? null : j['state'] as String,
+        title: j['title'] as String,
+        type: j['type'] as String,
+        what: j['what'] == null ? null : j['what'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'area': ?area,
+        'business': ?business,
+        'business_id': ?businessId,
+        'delivery': ?delivery?.toJson(),
+        'item_id': ?itemId,
+        'paid': ?paid,
+        'paid_at': ?paidAt?.toUtc().toIso8601String(),
+        'paid_by_me': ?paidByMe,
+        'pay_to': ?payTo?.toJson(),
+        'price_kobo': ?priceKobo,
+        'reference': ?reference,
+        'state': ?state,
+        'title': title,
+        'type': type,
+        'what': ?what,
+      };
+}
+
+/// A person's own bank account for being paid back, as they typed it; never
+/// checked by Taskiem, which moves no money.
+class PayoutAccount {
+  const PayoutAccount({required this.accountName, required this.accountNumber, required this.bank});
+
+  final String accountName;
+  /// Ten digits (spaces and dashes are taken out).
+  final String accountNumber;
+  final String bank;
+
+  factory PayoutAccount.fromJson(Map<String, dynamic> j) => PayoutAccount(
+        accountName: j['account_name'] as String,
+        accountNumber: j['account_number'] as String,
+        bank: j['bank'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': accountName,
+        'account_number': accountNumber,
+        'bank': bank,
+      };
+}
+
+class PeopleLocation {
+  const PeopleLocation({this.label, required this.lat, required this.lng});
+
+  final String? label;
+  final double lat;
+  final double lng;
+
+  factory PeopleLocation.fromJson(Map<String, dynamic> j) => PeopleLocation(
+        label: j['label'] == null ? null : j['label'] as String,
+        lat: (j['lat'] as num).toDouble(),
+        lng: (j['lng'] as num).toDouble(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'label': ?label,
+        'lat': lat,
+        'lng': lng,
+      };
+}
+
+class PutPeopleChatRequest {
+  const PutPeopleChatRequest({this.archived, this.muted});
+
+  final bool? archived;
+  final bool? muted;
+
+  factory PutPeopleChatRequest.fromJson(Map<String, dynamic> j) => PutPeopleChatRequest(
+        archived: j['archived'] == null ? null : j['archived'] as bool,
+        muted: j['muted'] == null ? null : j['muted'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'archived': ?archived,
+        'muted': ?muted,
+      };
+}
+
+class BlockPersonRequest {
+  const BlockPersonRequest({this.report});
+
+  final PeopleReport? report;
+
+  factory BlockPersonRequest.fromJson(Map<String, dynamic> j) => BlockPersonRequest(
+        report: j['report'] == null ? null : PeopleReport.fromJson(j['report'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'report': ?report?.toJson(),
+      };
+}
+
+class PeopleReport {
+  const PeopleReport({required this.consent, this.note, required this.reason});
+
+  /// The last 20 messages go to Taskiem's moderators only with it.
+  final bool consent;
+  final String? note;
+  final String reason;
+
+  factory PeopleReport.fromJson(Map<String, dynamic> j) => PeopleReport(
+        consent: j['consent'] as bool,
+        note: j['note'] == null ? null : j['note'] as String,
+        reason: j['reason'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'consent': consent,
+        'note': ?note,
+        'reason': reason,
+      };
+}
+
+class BlockPersonResponse {
+  const BlockPersonResponse({required this.blocked, required this.removed, required this.reported});
+
+  final bool blocked;
+  final bool removed;
+  final bool reported;
+
+  factory BlockPersonResponse.fromJson(Map<String, dynamic> j) => BlockPersonResponse(
+        blocked: j['blocked'] as bool,
+        removed: j['removed'] as bool,
+        reported: j['reported'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'blocked': blocked,
+        'removed': removed,
+        'reported': reported,
+      };
+}
+
+class UnblockPersonResponse {
+  const UnblockPersonResponse({required this.blocked});
+
+  final bool blocked;
+
+  factory UnblockPersonResponse.fromJson(Map<String, dynamic> j) => UnblockPersonResponse(
+        blocked: j['blocked'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'blocked': blocked,
+      };
+}
+
+class ReportPersonResponse {
+  const ReportPersonResponse({required this.id, required this.messagesSent, required this.said});
+
+  final String id;
+  final bool messagesSent;
+  final String said;
+
+  factory ReportPersonResponse.fromJson(Map<String, dynamic> j) => ReportPersonResponse(
+        id: j['id'] as String,
+        messagesSent: j['messages_sent'] as bool,
+        said: j['said'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'messages_sent': messagesSent,
+        'said': said,
+      };
+}
+
+class PeopleMessagesResponse {
+  const PeopleMessagesResponse({required this.messages, required this.more});
+
+  final List<PeopleMessage> messages;
+  final bool more;
+
+  factory PeopleMessagesResponse.fromJson(Map<String, dynamic> j) => PeopleMessagesResponse(
+        messages: (j['messages'] as List).map((e) => PeopleMessage.fromJson(e as Map<String, dynamic>)).toList(),
+        more: j['more'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((e) => e.toJson()).toList(),
+        'more': more,
+      };
+}
+
+class SendPeopleMessageRequest {
+  const SendPeopleMessageRequest({this.card, this.clientId, this.location, this.replyTo, this.text});
+
+  /// What to share. product: business_id and item_id (from its shop); business:
+  /// business_id; order or delivery: business_id and reference of one of your
+  /// own orders (a delivery once a rider has it); split: amount_kobo, what, and
+  /// pay_to (else your saved payout account).
+  final SendPeopleMessageRequestCard? card;
+  final String? clientId;
+  final PeopleLocation? location;
+  final String? replyTo;
+  final String? text;
+
+  factory SendPeopleMessageRequest.fromJson(Map<String, dynamic> j) => SendPeopleMessageRequest(
+        card: j['card'] == null ? null : SendPeopleMessageRequestCard.fromJson(j['card'] as Map<String, dynamic>),
+        clientId: j['client_id'] == null ? null : j['client_id'] as String,
+        location: j['location'] == null ? null : PeopleLocation.fromJson(j['location'] as Map<String, dynamic>),
+        replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
+        text: j['text'] == null ? null : j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'card': ?card?.toJson(),
+        'client_id': ?clientId,
+        'location': ?location?.toJson(),
+        'reply_to': ?replyTo,
+        'text': ?text,
+      };
+}
+
+/// What to share. product: business_id and item_id (from its shop); business:
+/// business_id; order or delivery: business_id and reference of one of your own
+/// orders (a delivery once a rider has it); split: amount_kobo, what, and
+/// pay_to (else your saved payout account).
+class SendPeopleMessageRequestCard {
+  const SendPeopleMessageRequestCard({this.amountKobo, this.businessId, this.itemId, this.payTo, this.reference, required this.type, this.what});
+
+  final int? amountKobo;
+  final String? businessId;
+  final String? itemId;
+  final PayoutAccount? payTo;
+  final String? reference;
+  final String type;
+  final String? what;
+
+  factory SendPeopleMessageRequestCard.fromJson(Map<String, dynamic> j) => SendPeopleMessageRequestCard(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        businessId: j['business_id'] == null ? null : j['business_id'] as String,
+        itemId: j['item_id'] == null ? null : j['item_id'] as String,
+        payTo: j['pay_to'] == null ? null : PayoutAccount.fromJson(j['pay_to'] as Map<String, dynamic>),
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        type: j['type'] as String,
+        what: j['what'] == null ? null : j['what'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'business_id': ?businessId,
+        'item_id': ?itemId,
+        'pay_to': ?payTo?.toJson(),
+        'reference': ?reference,
+        'type': type,
+        'what': ?what,
+      };
+}
+
+class MarkPeopleMessageRequest {
+  const MarkPeopleMessageRequest({this.reaction, this.starred});
+
+  final String? reaction;
+  final bool? starred;
+
+  factory MarkPeopleMessageRequest.fromJson(Map<String, dynamic> j) => MarkPeopleMessageRequest(
+        reaction: j['reaction'] == null ? null : j['reaction'] as String,
+        starred: j['starred'] == null ? null : j['starred'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'reaction': ?reaction,
+        'starred': ?starred,
+      };
+}
+
+class MarkSplitPaidRequest {
+  const MarkSplitPaidRequest({required this.paid});
+
+  final bool paid;
+
+  factory MarkSplitPaidRequest.fromJson(Map<String, dynamic> j) => MarkSplitPaidRequest(
+        paid: j['paid'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'paid': paid,
+      };
+}
+
+class OpenPeopleCardResponse {
+  const OpenPeopleCardResponse({required this.card, required this.live});
+
+  final PeopleCard card;
+  final OpenPeopleCardResponseLive live;
+
+  factory OpenPeopleCardResponse.fromJson(Map<String, dynamic> j) => OpenPeopleCardResponse(
+        card: PeopleCard.fromJson(j['card'] as Map<String, dynamic>),
+        live: OpenPeopleCardResponseLive.fromJson(j['live'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'card': card.toJson(),
+        'live': live.toJson(),
+      };
+}
+
+class OpenPeopleCardResponseLive {
+  const OpenPeopleCardResponseLive({this.business, this.delivery, this.order, this.product, required this.yours});
+
+  final OpenPeopleCardResponseLiveBusiness? business;
+  final DeliveryProgress? delivery;
+  final PersonOrder? order;
+  final ShopItem? product;
+  final bool yours;
+
+  factory OpenPeopleCardResponseLive.fromJson(Map<String, dynamic> j) => OpenPeopleCardResponseLive(
+        business: j['business'] == null ? null : OpenPeopleCardResponseLiveBusiness.fromJson(j['business'] as Map<String, dynamic>),
+        delivery: j['delivery'] == null ? null : DeliveryProgress.fromJson(j['delivery'] as Map<String, dynamic>),
+        order: j['order'] == null ? null : PersonOrder.fromJson(j['order'] as Map<String, dynamic>),
+        product: j['product'] == null ? null : ShopItem.fromJson(j['product'] as Map<String, dynamic>),
+        yours: j['yours'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business': ?business?.toJson(),
+        'delivery': ?delivery?.toJson(),
+        'order': ?order?.toJson(),
+        'product': ?product?.toJson(),
+        'yours': yours,
+      };
+}
+
+class OpenPeopleCardResponseLiveBusiness {
+  const OpenPeopleCardResponseLiveBusiness({this.area, required this.name, this.openNow, this.shop, this.tagline, required this.takesChats});
+
+  final String? area;
+  final String name;
+  final bool? openNow;
+  final String? shop;
+  final String? tagline;
+  final bool takesChats;
+
+  factory OpenPeopleCardResponseLiveBusiness.fromJson(Map<String, dynamic> j) => OpenPeopleCardResponseLiveBusiness(
+        area: j['area'] == null ? null : j['area'] as String,
+        name: j['name'] as String,
+        openNow: j['open_now'] == null ? null : j['open_now'] as bool,
+        shop: j['shop'] == null ? null : j['shop'] as String,
+        tagline: j['tagline'] == null ? null : j['tagline'] as String,
+        takesChats: j['takes_chats'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'area': ?area,
+        'name': name,
+        'open_now': ?openNow,
+        'shop': ?shop,
+        'tagline': ?tagline,
+        'takes_chats': takesChats,
+      };
+}
+
+class PayoutAccountAnswer {
+  const PayoutAccountAnswer({this.account, required this.checked, required this.words});
+
+  final Object? account;
+  /// Always false, since Taskiem does not check the account.
+  final bool checked;
+  final String words;
+
+  factory PayoutAccountAnswer.fromJson(Map<String, dynamic> j) => PayoutAccountAnswer(
+        account: j['account'],
+        checked: j['checked'] as bool,
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account': ?account,
+        'checked': checked,
+        'words': words,
       };
 }

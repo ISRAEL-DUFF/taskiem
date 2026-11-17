@@ -158,6 +158,19 @@ const KindYou = "you"
 // YouKinds are the kinds a person's own device may take.
 var YouKinds = []string{KindYou}
 
+// The kinds of push of chats between people (people-chatting §13): a
+// person's message, and a request (a stranger's first message). They go
+// to a person's own devices, which take them as they take KindYou.
+const (
+	KindPerson  = "person"
+	KindRequest = "request"
+)
+
+// youSide is whether a push kind is one of a person's own side.
+func youSide(kind string) bool {
+	return kind == KindYou || kind == KindPerson || kind == KindRequest
+}
+
 // KindsFor are the kinds a device may take: a business's (tenant set) or
 // the person's own (uuid.Nil).
 func KindsFor(tenant uuid.UUID) []string {
@@ -523,6 +536,9 @@ type Target struct {
 
 // Takes reports whether the device takes this kind of push.
 func (t Target) Takes(kind string) bool {
+	if kind == KindPerson || kind == KindRequest {
+		kind = KindYou
+	}
 	for _, k := range t.Kinds {
 		if k == kind {
 			return true
@@ -686,6 +702,11 @@ func (p Payload) For(t Target) Payload {
 		case KindYou:
 			// Which businesses a person deals with is theirs too.
 			p.Title, p.Body = "Taskiem", "A business wrote to you"
+		case KindPerson:
+			// And whom they chat with.
+			p.Title, p.Body = "Taskiem", "Someone wrote to you"
+		case KindRequest:
+			p.Title, p.Body = "Taskiem", "You have a new message request"
 		default:
 			p.Title, p.Body = "Taskiem", "Something needs you"
 		}
@@ -724,7 +745,7 @@ func EnqueueTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, users []uuid.UU
 	}
 	// A newer push for the same person and conversation takes the place of
 	// one still waiting: retried later, the older would replace it.
-	if tenant == uuid.Nil {
+	if tenant == uuid.Nil && !youSide(q.Kind) {
 		q.Kind = KindYou
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM push_outbox WHERE `+scope(tenant)+` AND user_id = ANY ($2) AND tag = left($3, 200)`, tenantArg(tenant), users, q.Tag); err != nil {

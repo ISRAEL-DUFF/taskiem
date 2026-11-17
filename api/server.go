@@ -45,6 +45,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/media"
 	"github.com/israel-duff/taskiem/engine/people"
+	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/phoneindex"
 	"github.com/israel-duff/taskiem/engine/push"
 	"github.com/israel-duff/taskiem/engine/reach"
@@ -69,6 +70,17 @@ type Server struct {
 	// (taskiem-for-everyone §8.2; stream B's customer_chat_codes); nil
 	// knows no code (customer_app.go).
 	ChatCodes ChatCodeResolver
+	// ChatPolicy answers who may message whom, contacts, shown numbers,
+	// read ticks and the stranger checks for chats between people
+	// (people-chatting §5.4, §8.4); nil is finding people's own (People,
+	// through peopleJoin, people_join.go). Tests set another.
+	ChatPolicy peoplechats.Policy
+	// PersonLinks finds the person a person's link names (§5.2); nil is
+	// People's links (peopleJoin).
+	PersonLinks peoplechats.LinkResolver
+	// peopleKeys seal each person's copy of their people chats.
+	peopleKeysOnce sync.Once
+	peopleKeys     *peoplechats.Keys
 	// CustomerAnswered hears when a business writes to a person in the app
 	// (taskiem-for-everyone §9: the browser chat's SMS fallback, stream B);
 	// nil tells no one.
@@ -271,6 +283,9 @@ type Server struct {
 	// (people.go, engine/people); nil: one with no key (no links, contact
 	// matching or adding contacts).
 	People *people.People
+	// peopleDefault is finding people without a key, when People is nil.
+	peopleOnce    sync.Once
+	peopleDefault *people.People
 	// Answered tells a person in the browser chat that a business answered
 	// them (engine/chatlinks.Tell); nil tells no one.
 	Answered chatlinks.Teller
@@ -480,6 +495,7 @@ func (s *Server) Handler() http.Handler {
 			s.personAddressRoutes(r)            // saved addresses (person_addresses.go)
 			s.personAccountRoutes(r)            // deleting the account, photo, pushes, privacy (person_account.go)
 			s.peopleRoutes(r)                   // finding people, contacts, the person's link, privacy towards people (people.go)
+			s.peopleChatRoutes(r)               // chats between people (people_chats.go)
 			r.Get("/me/devices", s.listDevices) // Your phones (devices.go)
 			r.Delete("/me/devices/{id}", s.removeDevice)
 			r.Get("/me/passkeys", s.listPasskeys)

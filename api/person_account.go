@@ -367,6 +367,16 @@ func (s *Server) deletePerson(ctx context.Context, person uuid.UUID, how, ip str
 		}
 		// The person's own side.
 		for _, q := range []string{
+			// Their copies of people chats, their blocks, saved payout
+			// account and their key (people-chatting §14): the other
+			// person's copy keeps the messages, shown as from "Deleted
+			// account".
+			`DELETE FROM people_files WHERE person_id = $1`,
+			`DELETE FROM people_messages WHERE person_id = $1`,
+			`DELETE FROM people_chats WHERE person_id = $1`,
+			`DELETE FROM people_blocks WHERE person_id = $1`,
+			`DELETE FROM person_payout_accounts WHERE person_id = $1`,
+			`DELETE FROM person_keys WHERE person_id = $1`,
 			`DELETE FROM person_files WHERE person_id = $1`,
 			`DELETE FROM person_messages WHERE person_id = $1`,
 			`DELETE FROM person_conversations WHERE person_id = $1`,
@@ -531,11 +541,16 @@ type notifySettings struct {
 	Updates bool `json:"updates"`
 	// Offers: a business's offers (only from those they said yes to).
 	Offers bool `json:"offers"`
+	// People: a person wrote to them; Requests: a stranger's first
+	// message waits in their Requests (people-chatting §13).
+	People   bool `json:"people"`
+	Requests bool `json:"requests"`
 }
 
 func notifyTx(ctx context.Context, tx pgx.Tx, person uuid.UUID) (notifySettings, error) {
-	n := notifySettings{Messages: true, Updates: true, Offers: true}
-	err := tx.QueryRow(ctx, `SELECT messages, updates, offers FROM person_notify WHERE person_id = $1`, person).Scan(&n.Messages, &n.Updates, &n.Offers)
+	n := notifySettings{Messages: true, Updates: true, Offers: true, People: true, Requests: true}
+	err := tx.QueryRow(ctx, `SELECT messages, updates, offers, people, requests FROM person_notify WHERE person_id = $1`, person).
+		Scan(&n.Messages, &n.Updates, &n.Offers, &n.People, &n.Requests)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = nil
 	}
@@ -596,6 +611,8 @@ func (s *Server) putMyNotifications(w http.ResponseWriter, r *http.Request) {
 		Messages *bool `json:"messages"`
 		Updates  *bool `json:"updates"`
 		Offers   *bool `json:"offers"`
+		People   *bool `json:"people"`
+		Requests *bool `json:"requests"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -603,11 +620,12 @@ func (s *Server) putMyNotifications(w http.ResponseWriter, r *http.Request) {
 	}
 	var n notifySettings
 	err = db.InPersonTx(r.Context(), s.Store.Pool, person, func(tx pgx.Tx) error {
-		return tx.QueryRow(r.Context(), `INSERT INTO person_notify (person_id, messages, updates, offers)
-			VALUES ($1, COALESCE($2, true), COALESCE($3, true), COALESCE($4, true))
+		return tx.QueryRow(r.Context(), `INSERT INTO person_notify (person_id, messages, updates, offers, people, requests)
+			VALUES ($1, COALESCE($2, true), COALESCE($3, true), COALESCE($4, true), COALESCE($5, true), COALESCE($6, true))
 			ON CONFLICT (person_id) DO UPDATE SET messages = COALESCE($2, person_notify.messages), updates = COALESCE($3, person_notify.updates),
-			  offers = COALESCE($4, person_notify.offers), updated_at = now()
-			RETURNING messages, updates, offers`, person, req.Messages, req.Updates, req.Offers).Scan(&n.Messages, &n.Updates, &n.Offers)
+			  offers = COALESCE($4, person_notify.offers), people = COALESCE($5, person_notify.people), requests = COALESCE($6, person_notify.requests), updated_at = now()
+			RETURNING messages, updates, offers, people, requests`, person, req.Messages, req.Updates, req.Offers, req.People, req.Requests).
+			Scan(&n.Messages, &n.Updates, &n.Offers, &n.People, &n.Requests)
 	})
 	if err != nil {
 		s.fail(w, r, err)

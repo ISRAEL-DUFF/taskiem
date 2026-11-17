@@ -1,6 +1,6 @@
 # People chatting with people (stage 5 of Taskiem for everyone)
 
-Status: **plan, settled** (17 November 2026; every question settled the same day, §17; decision [0069](../decisions/0069-people-chatting-with-people.md) accepted the same day). Stage 5 of [Taskiem for everyone](taskiem-for-everyone.md) (§16, §20), under decision [0068](../decisions/0068-taskiem-for-everyone.md), which left this stage "its own plan and decisions". Stage 5a's server for finding people is built (see "As built" at the end); the rest is not. The founder's answers are in §17.
+Status: **plan, settled** (17 November 2026; every question settled the same day, §17; decision [0069](../decisions/0069-people-chatting-with-people.md) accepted the same day). Stage 5 of [Taskiem for everyone](taskiem-for-everyone.md) (§16, §20), under decision [0068](../decisions/0068-taskiem-for-everyone.md), which left this stage "its own plan and decisions". Stage 5a's server (finding people, and one-to-one chats) is built and joined (see the "As built" sections at the end); the rest is not. The founder's answers are in §17.
 
 ## 1. Summary
 
@@ -373,3 +373,137 @@ func ForgetTx(ctx context.Context, tx pgx.Tx, person uuid.UUID) (int64, error) /
 - Presence from any request: only the heartbeat, and stream A's connection, record it.
 - A per-week hash table for contact matching at scale (above). The limits per address are per server.
 - The privacy notice's words on contact matching and the checks (§15, with the lawyer), and the moderators' view of held messages and verdicts (§8.3, §8.4).
+
+## As built: stage 5a, server (chats)
+
+Built on branch `stage5a-chats`, on 093b2f44 (stages 1 to 4 merged; decision 0069 accepted): the server of §7, §8.1 to §8.3, §10.1, §11 A, §13 and §14 for one-to-one chats. Finding people (§5: by number, a person's link, contacts), the privacy settings (§5.4), presence and last seen, and the automated stranger checks are stream B's (`stage5a-finding`, migrations 00475 and after); this stream's migration is `00471_people_chats.sql` alone (00472 to 00474 are unused). The web and app screens are later streams; the API is written for them.
+
+**People chats are kept by Taskiem, sealed at rest under each person's own key and readable by Taskiem's servers. They are not end-to-end encrypted, and nothing in the API says they are.**
+
+**Data (00471).**
+- **Each person's copy**: `people_chats` (the person, the other person, the conversation, who started it, `request_at` for a request waiting for this person, `waiting_at` for this person's own first messages waiting, `accepted_at`, `muted`, `archived`, `hidden_at` for deleted for me), `people_messages` (the same id on both copies; `mine`; `kind` text, media, card or location; `sealed`; `attachment` {kind, type, size}; `card_type`; `reply_to`; `forwards`; `client_id`; `delivered_at`; `read_at`; `starred_at`; `my_reaction`; `their_reaction`; `deleted_at`; `screen`; `paid_at`; `paid_by_me`) and `people_files` (a file's bytes, sealed). The conversation id is the pair's (`taskiem_people_pair`, checked on every copy), so neither copy reads the other to name it.
+- **Sealing per person** (`engine/peoplechats`): each person has a 32-byte data key in `person_keys`, sealed with the platform's root key for that person alone (`Vault.SealPlatform`, purpose `person-key:{id}`); opened keys are kept in memory five minutes. A message's words, card, place and file name are one AES-GCM value bound to its owner and its row (`m:{id}`), a file's bytes another (`f:{id}`), the saved payout account a third. A copy of the database opens nothing; deleting the account deletes the key.
+- **Scope**: every table is the person's own (`person_own`: `taskiem_person_scope()`, and never with a business's door open: `taskiem_person_business()` null). The one crossing is `taskiem_people_reach(chat)`: from a person's own transaction with no business in scope, for one of their own copies, it puts that one conversation of the other person's copy in reach (`app.people_reach`, `app.people_peer`) to read, write and update, never to delete (but a file of a message deleted for everyone); with the other's key (read, and made the first time) and their block of this person (read). It refuses (`P0002`, hint `gone`) when the other account is no longer active. A business's transaction reaches nothing.
+- `people_blocks` (the person's own; the other reads only whether they are blocked, through the reach); `person_payout_accounts` (sealed); `people_reports` (insert only, as the reporter); `people_requests`, the requests' ledger (sender, recipient, sent, outcome `waiting`, `accepted`, `deleted` or `blocked`), read and written only by definers; `person_profiles`, a person's name and whether the account is active or deleted, kept from `users` by a trigger, since the dispatch role may never read `users.name` (`TestDispatchRoleCannotReadPayloads`).
+- **Definers** (in `engine/db/definers.tsv`): `taskiem_people_reach`; `taskiem_people_writable` (an active account other than the asker); `taskiem_people_names` (names of the people the asker has a copy with; a deleted account's empty, `gone`); `taskiem_people_phone` (the number of someone the asker chats with: the API asks the policy first); `taskiem_people_request_mark`; `taskiem_people_request_counts` (the asker's own, as counts); `taskiem_people_card_enter` (the card door, below). `taskiem_person_delete` also ends the person's requests.
+- **Pushes**: `push_outbox` takes the kinds `person` and `request` on the person's side (a person's device takes them as it takes `you`); `person_notify` gains `people` and `requests`.
+
+**Who may message whom: the interface for stream B.** `engine/peoplechats.Policy`:
+
+```go
+MayMessage(ctx, from, to) (allowed, asRequest bool, err error) // asked only when the two have no accepted chat
+IsContact(ctx, a, b) (bool, error)                             // b is in a's contacts
+NumberShownTo(ctx, owner, viewer) (bool, error)                // owner's number shown to viewer
+ScreenStranger(ctx, from, to, text) (Verdict, error)           // Allow; Warn (delivered, marked warn); Refuse (403 with Reason)
+```
+
+- `peoplechats.Stub` is the default: everyone may write, always as a request; nobody is a contact; numbers are hidden; nothing is screened.
+- `peoplechats.LinkResolver.ResolvePersonLink(ctx, code) (person, error)`, with `ErrLinkUnknown` (404) and `ErrLinkReplaced` (410 `link_replaced`); `NoLinks` until B's lands.
+- **Wiring:** set `Server.People` and `Server.PersonLinks` in `cmd/taskiem/serve.go`, beside `ChatCodes`; nil keeps the stub. `TestPeoplePolicy` shows a policy wired in: contacts write straight to chats, "nobody" refuses, numbers shown by choice, a warned and a refused message.
+
+**Endpoints** (in `api/openapi/openapi.yaml`, tag **People**; the app's in `mobile/api.txt`, `mobile/lib/api/api.g.dart` regenerated). A personal session reaches all of them (`peoplePersonRoutes`), and so does a business session for its person; an API key is refused (403).
+
+| Endpoint | What |
+| --- | --- |
+| `GET /v1/me/conversations?archived=1` | **You's one Chats list** (§17 Q6): `{chats: [ChatListItem], unread, requests}`, business and people chats together, newest first, each marked `kind: business` (open `/v1/me/chats/{id}`) or `person` (open `/v1/me/people/{id}`). **Clients use this for the Chats tab**; `GET /v1/me/chats` stays the business chats alone |
+| `GET /v1/me/people?archived=1` | People chats: `{chats: [PeopleChat], unread, requests}` |
+| `POST /v1/me/people` `{person_id \| link_code}` | Start (201) or the one you have (200), with `kept`. 404 no such person; 403 not taking messages; 410 `link_replaced`; 429 new chats (10 an hour, 30 a day; half in the first week) |
+| `GET /v1/me/people/requests` | Requests waiting for you |
+| `GET /v1/me/people/blocked` | `{people: [{person_id, name, chat_id, at}]}` |
+| `GET`/`PUT`/`DELETE /v1/me/people/{id}` | One chat (`contact`, `phone` only when shown, `kept`); `{muted?, archived?}`; delete for me (on a request: Delete) |
+| `POST /v1/me/people/{id}/accept`, `…/decline` | Accept (read ticks shown from then on); Delete a request (the sender is not told) |
+| `POST /v1/me/people/{id}/block` `{report?}`, `DELETE …/block` | Block (and report), unblock |
+| `POST /v1/me/people/{id}/report` `{reason, note?, consent: true}` | The last 20 messages of your copy, opened, to Taskiem's moderators |
+| `POST /v1/me/people/{id}/read` | Read marks |
+| `GET /v1/me/people/{id}/messages?before=&starred=1` | Your copy, 50 a page |
+| `POST /v1/me/people/{id}/messages` `{text?, client_id?, reply_to?, location?, card?}` | Write (201; a repeated `client_id` 200) |
+| `POST /v1/me/people/{id}/files` (multipart `file`, `text`, `client_id`, `reply_to`); `GET …/files/{message}` | A photo, voice note or file; your copy of it |
+| `PUT /v1/me/people/{id}/messages/{message}` `{starred?, reaction?}` | Star (yours); react (both copies; `""` removes it) |
+| `DELETE /v1/me/people/{id}/messages/{message}?for=me\|everyone` | Delete for me, or for everyone within 24 hours |
+| `POST /v1/me/people/forward` `{chat_id, message_id, to: [chat ids]}` | Forward: `{sent: [{chat_id, message}], failed: [{chat_id, error}]}` |
+| `POST /v1/me/people/{id}/messages/{message}/paid` `{paid}` | Mark a share paid, either side |
+| `GET /v1/me/people/{id}/messages/{message}/card` | `{card, live: {yours, product?, business?, order?, delivery?}}` |
+| `GET`/`PUT`/`DELETE /v1/me/payout-account` | `{account: {bank, account_number, account_name} \| null, checked: false, words}` |
+| `GET`/`PUT /v1/me/notifications` | Gains `people` and `requests` |
+
+- `PeopleMessage`: `id, mine, kind (text|media|card|location), body, card?, location? {lat, lng, label?}, attachment? {kind, type, size, name}, reply_to?, forwarded?, forwarded_many?, status? (sent|delivered|read; your own), starred?, my_reaction?, their_reaction?, deleted?, warn_transfer?, warn?, read_at, created_at`.
+- `PeopleChat`: `id, kind: person, person_id, name ("Deleted account" when gone), gone, last, last_mine, last_at, unread, muted, archived, request, waiting, blocked, contact?, phone?, kept?`.
+- `PeopleCard`: `type (product|business|order|delivery|split), title, business_id?, business?, area?, item_id?, price_kobo?, reference?, state?, delivery?, amount_kobo?, what?, pay_to?, paid?, paid_at?, paid_by_me?`.
+- `appPaths` gains `/you/people/*`, so a push's link opens the app where it is installed.
+
+**How it behaves.**
+- **A message** is kept in the sender's copy and, unless the other blocked them, in the other's (made the first time), in one transaction, each sealed under its owner's key. `status` is `sent` (one tick) while undelivered, then `delivered`, then `read`. A message into a request, and a new chat's messages until the other has written, go past `ScreenStranger` first.
+- **Requests.** A message is direct when the other's copy is an accepted chat, or the two accepted one before; otherwise `MayMessage` decides (the stub: a request).
+  - A request waits in the other's Requests; reading it tells the sender nothing.
+  - Accept (or writing back) moves it to their chats, clears the sender's `waiting` and shows the read marks made meanwhile.
+  - Delete removes the other's copy without telling the sender; a later message is a request again.
+  - Each new request is in the ledger. A sender may have `peoplechats.RequestAllowance(newWeek, accepted, refused)` waiting at once and sent in a day: 5 and 10 (2 and 3 in the first week), plus half the accepted (up to 15) and the accepted (up to 40); a third of that (at least 1) when three or more were deleted or blocked and they are more than half of those decided. Past it: 429 "You have many messages waiting…".
+- **Limits** (§8.2): 20 messages a minute in a chat, 10 new chats an hour and 30 a day (half in the first week). A message is forwarded to at most 5 chats at once, and one forwarded five times or more on its way (`forwarded_many`) to one at a time (429 with `forwarded_many`). A forwarded file is copied and sealed again for each.
+- **Blocking** (§8.1): the blocked person's messages stay on their side with one tick, and nothing else tells them (their chat shows nothing, and there is no push). Their reactions, read marks and deletes for everyone do not reach the blocker, and the blocker's number is never shown to them. Blocking a request removes it (`removed`), keeps the copy hidden so the block is listed by name, and records `blocked` in the ledger. Unblocking delivers nothing sent meanwhile.
+- **Reports** (§8.3): with `consent`, the last 20 messages of the reporter's copy, opened (words, cards, places, what each file was and its name), the person reported, and whether it came from a request, in `people_reports`. Twelve every two hours, shared with reports of businesses.
+- **Delete for everyone** (within 24 hours): both copies keep only that it was (the sealed value, attachment, file, reactions and star go), shown "This message was deleted".
+- **Push** (§13): to the other's own devices when delivered and their chat is not muted.
+  - Kind `request` ("Message request: …", link `/you/people/requests/{chat}`) or `person` (their words, link `/you/people/{chat}`); title the sender's name; tag `person:{chat}`.
+  - A device's preview off says "Taskiem" and "You have a new message request" or "Someone wrote to you".
+  - None when the person turned `requests` or `people` off, and none for a blocked sender. The badge counts people chats with something unread too.
+- **The transfer warning** (§8.4): `warn_transfer` on the other's text messages, as in business chats (`warnTransfer`); cards never warn.
+- **Cards** (§10.1) are made by the server from what the sharer can see:
+  - a product of a business's published shop, or a business, through the **card door** (`taskiem_people_card_enter`: the person in scope, no other door open, an active business with a published shop or a Discover listing shown, that has not blocked them; audited `customer.card` in the business's chain);
+  - one of the sharer's own orders (Orders on You's row: business, reference, state), or its delivery once a rider holds it (through the order door).
+  - Opening a card reads it live as the person opening it: the product's current price and stock, the business's card, an order only when it is theirs (`yours`); otherwise only what was shared. 403 `blocked` when that business blocked them. Looks are limited per person, as looks at orders are.
+- **Share cards** (§11 A): `{type: split, amount_kobo, what, pay_to?}`, with the account as typed, else the person's saved payout account (sealed, never checked by Taskiem, which moves no money). Either side marks it paid; it is not forwarded.
+- **Account deletion** (§14): the person's copies, files, blocks, saved account and key go, with their requests. The other person's copy keeps the messages, shown as from "Deleted account" (`gone`), and takes no more (409).
+
+**Deviations from the plan.**
+- **Read ticks** are always shown once a chat is accepted: §5.4's "Read ticks off" is stream B's setting, not asked yet.
+- **Typing, presence and last seen** are not built here (stream B).
+- **People's photos** are not shown in people chats (§5.4's "Profile photo" is stream B's setting).
+- A delivery card needs a rider holding the order; before that, the order is shared.
+- A message from someone unblocked, into a request that was blocked, is not a new request in the ledger.
+
+**Tests.** `api/people_chats_test.go`:
+- `TestPeopleChats`: start; a request; nothing told before accepting; both copies sealed apart; accept and read ticks; a reply; a repeat; reactions and stars; the transfer warning; a place; a photo scanned, checked and sealed; malware refused; delete for everyone and for me; 24 hours; mute and archive; the one list with a business chat; deleting a chat for me.
+- `TestPeopleChatsIsolation`: a third person reaches nothing by the API or the database; the reach refuses another's chat and a business's transaction; a door open hides every people row; the reach never deletes the other's copy; a business session sees only its own person's; an API key refused.
+- `TestPeopleRequestsAndLimits`: two waiting in the first week; a decline not told and counted; more after accepting; fewer after many refusals; writing back accepts; a request again after a decline; 10 messages a minute and 5 new chats an hour in the first week.
+- `TestPeopleBlocksAndReports`: block and report from a request with 20 messages; one tick; nothing told; unblocking delivers nothing sent meanwhile.
+- `TestPeopleForwards`, `TestPeoplePush` (kinds, words, links, preview off, settings, mute, block), `TestPeopleCards` (a product and a business opened live and audited; an order opened by someone else showing only what was shared, and by its owner live; a delivery without a rider; a business that blocked the opener; share cards with a typed and a saved account, marked paid on both sides), `TestPeopleAccountDeletion`, `TestPeoplePolicy`.
+- `engine/peoplechats`: `TestSealIsBoundToItsOwnerAndRow`, `TestRequestAllowance`. `engine/db`: `TestPeopleChatsMigrationUpDownUp`; the definers, dispatch columns and table checks cover 00471.
+
+**Left over.**
+- The web's and the app's screens: the one Chats list, a people chat, Requests, blocked people, cards and share cards, the payout account, Notifications' two new switches, and the push kinds' channels (`person`, `request`) and `/you/people/*` in the app's own router.
+- Moderators' screens for `people_reports` (and stage 2's `customer_reports`).
+- Stream B's policy and link resolver wired in `serve.go`; the read-ticks setting.
+- Search across a person's own chats (§6.2), and starred messages across chats (today per chat).
+
+## As built: stage 5a, the two streams joined
+
+Branch `stage5a-joined`: stream B (finding people, 989edad4, on 093b2f44) with stream A (people chats, `stage5a-chats`) merged into it, and the seams between them made one. Migration `00476_people_joined.sql`; the join in Go is `engine/peoplechats/join.go` and `api/people_join.go`. The sections above are as each stream left them; where they differ from this one, this one holds.
+
+**One table of names.** Each stream kept its own trigger-made copy of `users.name` so that `taskiem_dispatch` never reads `users.name` (`TestDispatchRoleCannotReadPayloads`): A's `person_profiles` (name, active, deleted) and B's `person_names` (name). `person_profiles` serves both, so 00476 keeps it alone:
+- `taskiem_people_cards` and `taskiem_person_link_find` read `person_profiles`; `person_names`, its trigger `person_name_sync` and `taskiem_person_name_sync()` go. One trigger on `users` (`users_person_profile`, on name, status and deleted_at) remains.
+- `person_profiles` takes `person_names`' narrower grant: `taskiem_dispatch` may update only the columns the trigger writes (name, active, deleted, updated_at); the application still reads nothing of it.
+
+**Blocks and chats for finding people.** `taskiem_people_between(others[])` (in `definers.tsv`) answers, for the person in scope (no business in scope) and up to 500 others, whether either blocked the other and whether a chat between them is no longer a request (either copy accepted); nothing else. `taskiem_dispatch` may read `people_blocks (person_id, blocked_id)` and `people_chats.accepted_at` for it. `peoplechats.JoinPeople(p)` sets `People.Blocked` and `People.Chatting` from it (each in the scope of the person the request is for), and a new `People.BlockedSet` reads many at once in the caller's transaction (cards, contact matching), so a list of 200 chats is one query, not 200. B's `NumberShownTo` now asks about the viewer first, so the request is always answered in the viewer's scope. `cmd/taskiem/serve.go` calls `JoinPeople(srv.People)`; the server's keyless fallback is joined too.
+
+**Who may message whom.** `Server.ChatPolicy` (A's `Server.People`, renamed: B's `Server.People` is the `*people.People`) and `Server.PersonLinks` are left nil in `serve.go`; nil means `peopleJoin` over `People` (`api/people_join.go`). Tests may set another policy. `peoplechats.Stub` and `NoLinks` stay for that.
+- `MayMessage`: B's `Decision` as `(Allowed, AsRequest)`. A refusal for a block (`blocked`) is let through as a request: the chats keep the message on the sender's side with one tick and tell them nothing, as A does for blocks; a block is never a 403.
+- `ScreenStranger`: `ok` → Allow, `warn` → Warn (delivered with `warn: true`), `hold` → Refuse (403, "This message was not sent: it looks like a scam…"). B keeps the verdict either way.
+- `NumberShownTo`: B's number, as whether one is shown; the chat still reads it through `taskiem_people_phone`.
+- `ResolvePersonLink`: B's `Resolve`; `ErrLinkReplaced` → 410 `link_replaced`; not found, no such account or a server without the key → 404.
+
+**Read ticks** follow B's `ReadTicks(a, b)` (both have them on), not "always once accepted": a read is not passed to the sender's copy while either has them off (on reading, and on accepting a request), and the sender's own messages show `delivered` with no `read_at` while either has them off, so a read made earlier is hidden too. A read made while off is not told when they are turned back on.
+
+**The other person's card.** `PeopleChat` and You's `ChatListItem` gain `person` (`PersonCard`, from B's `CardsTx` in the viewer's transaction): the name the viewer gave them, the photo by the photo setting, last seen and online by both settings, whether read ticks go between them. None once the account was deleted. A chat's `name` is the name the viewer gave them in contacts, else their own. The number stays `phone` (by `NumberShownTo`).
+
+**Presence.** Neither stream has a person's live connection (the chat stream is the business Chat page's), so presence comes from the app's heartbeat (`POST /v1/me/presence`, which also says when it goes to the background: `Away`) and, now, from using the people chats: every `/v1/me/people…` and `/v1/me/conversations` request `Touch`es the person, at most every 30 seconds per server (`peopleHere`).
+
+**Contacts from chats.** Accepting a request, or writing back to one, adds the sender to the accepter's contacts (`AddContact(…, people.FromChat)`, after the transaction commits; the accept answer's `contact` says so). Only the accepter's: the sender's contacts are theirs to choose. A full list or a deleted account leaves the contacts as they were.
+
+**Deleting an account** runs once, in one transaction in the person's scope, in this order: `taskiem_person_delete` (stages 1 to 4, and A's ending of their requests), `people.ForgetTx` (B: they leave every other person's contacts; their settings, contacts, link, presence and verdicts go), then the person's own people chats, files, blocks, payout account and key (A), the rest of their side, and the tombstone, whose update marks `person_profiles` deleted. Every view then says "Deleted account": the other's chat and the one list (A), `GET /v1/people/{id}` (B), and a deleted account has no card.
+
+**Tests.** `api/people_joined_test.go` `TestPeopleJoined`: a stranger's message asking for a code held (403, nothing delivered) and an account number delivered with `warn`, both verdicts kept; accepting adds a `chat` contact; read ticks shown, then hidden with either side's off (and a read while off not told later); the card's last seen, online and photo hidden until both have each other as contacts, last seen "Nobody" hiding them again and the number shown by choice; "Nobody" refusing a new chat; "My contacts" letting only an added person write, straight to the chats; a block made before any chat answering one tick and nothing more; a chat from a person's link, 410 for a replaced one and 404 for an unknown one; writing back adding a contact; deletion showing "Deleted account" in the chat, the one list and by id, and leaving the other's contacts. `engine/db`: `TestPeopleJoinedMigrationUpDownUp`. A's `TestPeopleBlocksAndReports` now sends words the checks let through (its 20 "send me money" messages were held by the repeat rule, which the stub never had).
+
+**Left over.**
+- The screens (web and app) both streams list; the app's `appPageOf` for `/p/{code}` and `/you/people/*` in its router.
+- A held message is refused, not kept for moderators (§8.4's "held for review"): there is no moderators' queue yet.
+- Typing indicators.

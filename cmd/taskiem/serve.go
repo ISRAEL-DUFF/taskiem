@@ -61,6 +61,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/moneydigest"
 	"github.com/israel-duff/taskiem/engine/moneylog"
 	"github.com/israel-duff/taskiem/engine/people"
+	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/pii"
 	"github.com/israel-duff/taskiem/engine/publicweb"
 	"github.com/israel-duff/taskiem/engine/push"
@@ -1849,12 +1850,16 @@ func (e *engine) chat(srv *api.Server) {
 		srv.Answered = &chatlinks.Tell{Pool: e.pool, Links: srv.ChatLinks, Messages: e.messages, Push: srv.PersonPusher()}
 	}
 	// Finding people (docs/spec/people-chatting.md §5): links, contact
-	// matching and adding contacts need the same key. The people chats
-	// (stream A) set Blocked and Chatting.
+	// matching and adding contacts need the same key. Joined with the
+	// people chats: their blocks and accepted chats answer Blocked and
+	// Chatting, and the chats ask People who may message whom and resolve
+	// a person's link through it (srv.ChatPolicy and srv.PersonLinks left
+	// nil: api's peopleJoin).
 	srv.People = &people.People{Pool: e.pool, Base: e.cfg.PublicURL}
 	if len(e.cfg.Messages.HashKey) == 32 {
 		srv.People.Key = e.cfg.Messages.HashKey
 	}
+	peoplechats.JoinPeople(srv.People)
 	srv.AppGetURL, srv.UpdateChatTemplate = e.cfg.AppGetURL, e.cfg.UpdateChatTemplate
 	// A person's own sign-in code by SMS, through the same providers: no
 	// tenant, no outbox (docs/spec/taskiem-for-everyone.md §5.1).

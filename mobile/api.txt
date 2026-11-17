@@ -212,3 +212,31 @@ lookupPerson
 personByLink
 getPerson
 getPersonLinkCard
+
+# Chats between people and You's one Chats list (people-chatting, stage 5a).
+# Files go as multipart forms and come back as bytes: the app's own calls,
+# as a business chat's files are.
+listAllMyChats
+listPeopleChats
+startPeopleChat
+listPeopleRequests
+listPeopleBlocked
+forwardPeopleMessage
+getPeopleChat
+putPeopleChat
+deletePeopleChat
+acceptPeopleRequest
+declinePeopleRequest
+blockPerson
+unblockPerson
+reportPerson
+readPeopleChat
+peopleMessages
+sendPeopleMessage
+markPeopleMessage
+deletePeopleMessage
+markSplitPaid
+openPeopleCard
+getPayoutAccount
+putPayoutAccount
+deletePayoutAccount

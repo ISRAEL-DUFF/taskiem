@@ -555,9 +555,11 @@ func (s *Server) drainPushOf(ctx context.Context, tenant, person uuid.UUID) (int
 			return err
 		}
 		if tenant == uuid.Nil {
-			// The person's chats with businesses with something unread.
+			// The person's chats with businesses, and with people, with
+			// something unread.
 			unread = pushUnread{chat: map[uuid.UUID]bool{person: true}}
-			return tx.QueryRow(ctx, `SELECT count(DISTINCT conversation_id) FROM person_messages WHERE person_id = $1 AND NOT mine AND read_at IS NULL`, person).Scan(&unread.links)
+			return tx.QueryRow(ctx, `SELECT (SELECT count(DISTINCT conversation_id) FROM person_messages WHERE person_id = $1 AND NOT mine AND read_at IS NULL)
+				+ (SELECT count(DISTINCT chat_id) FROM people_messages WHERE person_id = $1 AND NOT mine AND read_at IS NULL AND deleted_at IS NULL)`, person).Scan(&unread.links)
 		}
 		unread, err = pushUnreadTx(ctx, tx)
 		return err

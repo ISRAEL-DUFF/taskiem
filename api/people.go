@@ -25,6 +25,7 @@ import (
 
 	"github.com/israel-duff/taskiem/engine/chatlinks"
 	"github.com/israel-duff/taskiem/engine/people"
+	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/storefront"
 )
 
@@ -62,7 +63,10 @@ func (s *Server) people() *people.People {
 	if s.People != nil {
 		return s.People
 	}
-	return &people.People{Pool: s.Store.Pool}
+	s.peopleOnce.Do(func() {
+		s.peopleDefault = peoplechats.JoinPeople(&people.People{Pool: s.Store.Pool})
+	})
+	return s.peopleDefault
 }
 
 // peopleFail answers engine/people's refusals.
