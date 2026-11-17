@@ -52,6 +52,10 @@ typedef OpenMyChat = Future<void> Function(String id, {String? notice, String dr
 /// The person's chat with [business]: [chat] when they have one, else
 /// started (`POST /v1/me/chats {business_id, from}`), then opened with
 /// [open]. A refusal is said as a toast.
+///
+/// One at a time for each [open] (each You): pressed again while a chat is
+/// being started or is open (a second tap on Chat, Chat about this), nothing
+/// more happens, so no second chat is started and none opens twice.
 Future<void> chatWithBusiness(
   BuildContext context,
   Auth auth,
@@ -62,14 +66,21 @@ Future<void> chatWithBusiness(
   String draft = '',
   String? tool,
 }) async {
-  if (chat != null && chat.isNotEmpty) return open(chat, draft: draft, tool: tool);
+  if (!_opening.add(open)) return;
   try {
+    if (chat != null && chat.isNotEmpty) return await open(chat, draft: draft, tool: tool);
     final c = await auth.api.startMyChat(body: StartMyChatRequest(businessId: business, from: from));
     await open(c.id, notice: c.notice, draft: draft, tool: tool);
   } on Object catch (e) {
     if (context.mounted) showTkToast(context, sayFailure(e), error: true);
+  } finally {
+    _opening.remove(open);
   }
 }
+
+/// The [OpenMyChat]s opening a chat now (a tear-off of the same home is
+/// equal to itself, so one home opens one chat at a time).
+final _opening = <OpenMyChat>{};
 
 /// How often an open conversation reads again (CustomerChat.tsx's 4 s).
 const _poll = Duration(seconds: 4);
