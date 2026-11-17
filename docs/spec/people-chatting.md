@@ -1,12 +1,12 @@
 # People chatting with people (stage 5 of Taskiem for everyone)
 
-Status: **draft for review** (17 November 2026). Stage 5 of [Taskiem for everyone](taskiem-for-everyone.md) (§16, §20), under decision [0068](../decisions/0068-taskiem-for-everyone.md), which left this stage "its own plan and decisions". Nothing here is built. The questions in §17 are for the founder; a decision record (0069) follows the answers.
+Status: **draft for review** (17 November 2026; encryption settled the same day, §17). Stage 5 of [Taskiem for everyone](taskiem-for-everyone.md) (§16, §20), under decision [0068](../decisions/0068-taskiem-for-everyone.md), which left this stage "its own plan and decisions". Nothing here is built. The questions in §18 are for the founder; a decision record (0069) follows the answers.
 
 ## 1. Summary
 
 Stages 1 to 4 made the Taskiem app a chat app for everyone: a person signs up with a phone, chats with the businesses they buy from, finds new ones in Discover, and sees their orders in one place. Stage 5 lets people chat **with each other**.
 
-The proposal, in one paragraph: one-to-one chats between people first, found by phone number, a person's link or (with consent) the phone's contacts; groups next; calls last. A stranger's first message waits as a **request** until it is accepted. Chats between people are **end-to-end encrypted by default**: Taskiem cannot read them, unlike chats with businesses, and the app says so plainly. What makes Taskiem worth using for this is what WhatsApp lacks: **the businesses are already here**. A person can share a product, an order, a business or a pay link into a chat, a group can order together from one business, and friends can split what they paid.
+The proposal, in one paragraph: one-to-one chats between people first, found by phone number, a person's link or (with consent) the phone's contacts; groups next; calls last. A stranger's first message waits as a **request** until it is accepted. Chats between people are **kept on Taskiem's servers, encrypted at rest and readable by Taskiem's servers**, as chats with businesses are (founder, §17): not end-to-end encrypted, and the app says so plainly. What makes Taskiem worth using for this is what WhatsApp lacks: **the businesses are already here**. A person can share a product, an order, a business or a pay link into a chat, a group can order together from one business, and friends can split what they paid.
 
 ## 2. Why this stage, and what brings people's own chats
 
@@ -29,7 +29,7 @@ So the first version is not "WhatsApp again". It is people chats with businesses
 | Two-copy conversations (stage 2) | Each side keeps its own copy, deletes its own | Kept for people chats: each person's copy is theirs (§9) |
 | Push on You (stage 2 fixes) | A person's devices, kinds, preview setting | New kinds: a person's message, a request, a group |
 | Blocking and reporting (stage 2) | Person ↔ business | Person ↔ person, with requests (§8) |
-| Media (stage 2) | Checked, per side, limits | Reused; for encrypted chats the server stores only ciphertext (§6) |
+| Media (stage 2) | Checked, per side, limits | Reused as is: people chats' media are checked and kept per copy (§6, §13) |
 | Phone index (stage 3) | Keyed hashes of phones, platform key | The model for contact matching (§5.3) |
 | Cards (stages 2–4) | Order, pay, booking, product, invoice, delivery | Shared into people chats (§10) |
 
@@ -78,41 +78,49 @@ In You → Privacy:
 
 The person's number is shown to people they chat with only if they choose to (§17 Q5). Names are shown; numbers are not, by default, which is the opposite of WhatsApp and safer for people meeting through Discover or groups.
 
-## 6. Encryption
+## 6. Encryption and where chats are kept
 
-### 6.1 The choice
+### 6.1 The choice (settled: B)
 
-Chats with businesses cannot be end-to-end encrypted: Taskiem reads them to draft orders, translate and remind (§14 of the plan), and the business keeps a copy under its retention. People will expect chats with each other to be private, as on WhatsApp.
+Three ways were weighed:
 
-| Option | What it means | Cost and risk |
-| --- | --- | --- |
-| **A. End-to-end encrypted by default** (proposed) | Each device holds keys; the server stores and forwards only ciphertext. Built on the Signal protocol (X3DH key agreement, double ratchet; groups with sender keys), using an audited library, not our own cryptography | The largest build: keys per device, a new device needs the chats moved to it or starts empty, backups need a person-held key, moderation cannot read reports' context unless the reporter forwards it (§8.3). Web chat is harder (keys in the browser) |
-| **B. Encrypted on the server, readable by Taskiem** | As business chats today: sealed at rest, read only by the server | Much cheaper, full moderation and backup, search on the server; but people's private chats are readable by Taskiem and reachable by a lawful request. Out of step with what people expect of a chat app |
-| **C. B by default, with opt-in "secret chats"** (Telegram's model) | Ordinary chats are B; a person can start an end-to-end chat on one device | Two kinds of chat to explain; most people never turn it on, so most chats stay readable |
+| Option | What it means |
+| --- | --- |
+| A. End-to-end encrypted by default | Keys on each device; the server forwards only what it cannot open (the Signal protocol) |
+| **B. Encrypted on the server, readable by Taskiem's servers** (chosen) | As business chats today: sealed at rest, opened only by Taskiem's servers |
+| C. B by default, with opt-in "secret chats" | Telegram's model |
 
-Proposed: **A**, because the app is asking people to trust it with private conversations, and a business-run company reading friends' chats is the worst headline it could have. The business features in people chats (§10) work without reading messages: a shared card is the card's data, sent like any message.
+**The founder chose B** (17 November 2026). People chats work the way business chats already do, so stage 5 reuses what stages 1 to 4 built, and the features that make Taskiem worth it (live cards, ordering together, search, backup, the web chat) work everywhere without a phone holding keys.
 
-### 6.2 What A means in the product
+### 6.2 What B means in the product
 
-- **Shown plainly.** In a people chat: "Messages here are end-to-end encrypted. Taskiem can't read them." In a business chat: "Messages with businesses can be read by Taskiem to help with your orders." (as today).
-- **Devices.** The phone app is the main device. The web chat and a second phone are linked from it (scan a code); history moves from the phone to the new device if the person asks, encrypted end to end.
-- **Backup.** Off by default; on, it is encrypted with a key or passphrase the person keeps. A person who loses their phone without a backup loses their people chats (not their business chats or orders).
-- **Safety numbers.** A person can compare a code with a contact to be sure no one is in the middle; a change of a contact's keys is shown in the chat.
-- **What the server still sees:** who talks to whom and when, sizes, and device keys, which is enough to deliver and push. Push carries no message words for people chats; the app decrypts on the device (§17 Q2 on preview).
+- **Kept on the server.** Every message, photo, voice note and file of a people chat is stored by Taskiem, sealed at rest under the person's own key (as a person's copy of a business chat is in stage 2), and opened only by Taskiem's servers to show it to the people in the chat.
+- **Every device has the chats.** A new phone, the web chat or a second phone shows the whole history after signing in; nothing is lost with a phone. No backup step is needed.
+- **The web works on its own,** with no phone app needed.
+- **Search** runs on the server across the person's own chats.
+- **Push** can carry the sender and the words, as the person's preview setting says.
+- **Files** get the checks business chats' files get (`engine/media`: the real type, PDFs without scripts, the malware scan), before the other side can open them.
+- **Shown plainly.** The app never calls people chats end-to-end encrypted. In a people chat's info: "Messages are stored securely by Taskiem. Taskiem does not read your chats with people except to keep you safe: when you report them, to stop spam, or when the law requires it" (wording for legal review, §18 Q13).
 
-### 6.3 What A rules out or makes harder
+### 6.3 What Taskiem does and does not do with people chats
 
-- Server-side search of people chats (search runs on the device).
-- Reading reports' context without the reporter (§8.3).
-- Translations and drafts by Taskiem in people chats (they could run on the device later).
-- A quick web-only start: web chat needs a linked phone.
+Readable by Taskiem's servers does not mean read. Proposed rules (§18 Q13–Q15):
+
+- **No one at Taskiem reads people chats** except a moderator handling a report of that chat, or under a lawful request (§8.5), each logged.
+- **No machine reads them for business features.** Order drafts, translations and reminders, which business chats get, are not run on people chats unless the person turns them on in that chat (§18 Q14).
+- **Automated safety checks** may run on messages to stop spam, scams and abuse (§8.4), and keep nothing but their verdict.
+- **Never used to train models or for advertising.**
+
+### 6.4 What this rules out
+
+People who want chats only they can read will not get them here (WhatsApp offers that). The app says so honestly rather than suggesting otherwise. A later stage could add opt-in secret chats (option C) if people ask for it.
 
 ## 7. One-to-one chats (stage 5a)
 
 - Text, photos, voice notes, files and location; replies, reactions, read ticks, typing, delete for me and delete for everyone (within a time limit), forward (with a "forwarded" mark), star.
 - **Requests.** A message from someone who is not a contact and has not chatted before arrives in **Requests**: the person sees the name, no photo unless allowed, and the first message, and can Accept, Delete or Block and report. Nothing tells the sender it was read until accepted. A sender can have a limited number of requests waiting (§8.2).
 - **Lists.** You's Chats tab holds business chats and people chats together, newest first, each marked by what it is (a business has its name and trust line; a person their name). §17 Q6 asks whether they should be split.
-- **Each copy is the person's.** As stage 2: each person keeps, archives and deletes their own. "Delete for everyone" asks the other's devices to remove it; it cannot guarantee that a device that saved it forgets it.
+- **Each copy is the person's.** As stage 2: each person keeps, archives and deletes their own. "Delete for everyone" removes it from the other person's copy on the server and their devices; a screenshot or a forward made before cannot be undone.
 
 ## 8. Safety at the scale of strangers
 
@@ -129,15 +137,15 @@ Block a person from the chat or the request: they can no longer message, call or
 
 ### 8.3 Reporting
 
-Report a person or a group from the chat or a request. With end-to-end encryption the server cannot read the chat, so the reporter's device sends the **last messages it holds** (proposed: 20, as for business chats), decrypted, with the reporter's consent, to Taskiem's moderators. Moderators can warn, limit, suspend or close accounts; their decisions are appealable.
+Report a person or a group from the chat or a request. With the person's consent, the **last messages of that chat** (proposed: 20, as for business chats) are sent to Taskiem's moderators from the server's copy, with any photos and files in them. Moderators can warn, limit, suspend or close accounts; their decisions are appealable.
 
-### 8.4 Spam and abuse without reading
+### 8.4 Spam and abuse
 
-Signals that need no message words: how fast an account sends requests, how often they are declined, blocked or reported, new accounts messaging many strangers, many accounts from one device. Thresholds slow or stop the sender; moderators review.
+Signals from behaviour: how fast an account sends requests, how often they are declined, blocked or reported, new accounts messaging many strangers, many accounts from one device. With B, automated checks may also look at messages from strangers (requests and new chats) for known scam patterns: the warning on a message asking for a transfer to a personal account (§15 of the plan) shows in people chats too. They keep only their verdict. Thresholds slow or stop the sender; moderators review.
 
 ### 8.5 Lawful requests
 
-Under Nigerian law (NDPA 2023, the Cybercrimes Act 2015) Taskiem may be asked for data. For people chats it can give only what it holds: account details, who talked to whom and when, and reported messages. It cannot give message words it never had. A transparency note in the privacy notice says this; legal review first (§17 Q9).
+Under Nigerian law (NDPA 2023, the Cybercrimes Act 2015) Taskiem may be required to give data. With B, that can include people chats' words. Taskiem answers only proper legal process, gives the least that is asked, tells the person where the law allows, and publishes how many requests it received. The process and the words in the privacy notice are agreed with a lawyer before 5a (§18 Q9).
 
 ### 8.6 Age
 
@@ -147,7 +155,7 @@ The minimum age is 18 (§23 of the plan). People chats do not change that.
 
 - Up to 256 people at first (§17 Q7), with admins who add, remove and choose who can post.
 - **Joining:** added by an admin who has them as a contact, or by a group's invite link; people can choose that only contacts may add them to groups.
-- **Encryption:** sender keys (the Signal protocol's group method), re-keyed when someone leaves.
+- **Kept on the server** like one-to-one chats; someone who joins sees the group from when they joined (§18 Q16).
 - **Ordering together** (§10.3) works in groups.
 - **A business in a group:** not in this stage. A group can share a business's card and order from it (§10.3), but the business does not join a people group; it chats with the person who orders, in its own conversation.
 
@@ -155,7 +163,7 @@ The minimum age is 18 (§23 of the plan). People chats do not change that.
 
 ### 10.1 Sharing cards
 
-From any business chat, Discover profile, product, order or delivery: **Share** → pick a person or group. The card is sent as a message (encrypted like any other), carrying what is needed to show it and open it: the business, the product and its price when shared, an order's reference. Opening it reads the live data through the door as the person opening it (a product's current price; an order only if it is theirs to see, else just what was shared).
+From any business chat, Discover profile, product, order or delivery: **Share** → pick a person or group. The card is sent as a message, carrying what is needed to show it and open it: the business, the product and its price when shared, an order's reference. Opening it reads the live data through the door as the person opening it (a product's current price; an order only if it is theirs to see, else just what was shared).
 
 ### 10.2 A friend opens a shop
 
@@ -181,59 +189,68 @@ Proposed: A for splitting, C for ordering together. B is its own plan, later, if
 
 ## 12. Calls (stage 5c)
 
-Voice, then video, one-to-one, then group: end-to-end encrypted (WebRTC with keys from the chat's session), through relays (TURN) that cannot read them. Calls need their own infrastructure and cost, a push channel that wakes the phone (VoIP push on iPhone) and app-store review of calling. Planned last; its own short spec when stages 5a and 5b are in use.
+Voice, then video, one-to-one, then group, over WebRTC through Taskiem's relays (TURN). WebRTC encrypts calls between the devices in any case; calls are not recorded or kept. Calls need their own infrastructure and cost, a push channel that wakes the phone (VoIP push on iPhone) and app-store review of calling. Planned last; its own short spec when stages 5a and 5b are in use.
 
 ## 13. The server
 
-- **Delivery:** a queue per device; messages kept (encrypted) until every device of the recipient has them, then deleted from the server after a short time (proposed 30 days if undelivered). The server keeps no history for people chats: the devices do.
+- **Storage:** each person's copy of a people chat is kept on the server, sealed under that person's key, as their copy of a business chat is. A one-to-one chat is two copies; a group keeps one copy for the group, sealed under a group key, with each member's own marks (read, deleted for me).
 - **Presence and typing:** over the app's live connection, sent only to people allowed to see them (§5.4).
-- **Push:** a person's devices (stage 2's push on You), kinds for a person's message, a request, a group; no words in the push.
-- **Media:** uploaded encrypted by the sender's device; the server stores ciphertext with a size limit and deletes it after delivery plus a short time. The malware scan businesses' files get cannot run on encrypted media; the receiving app shows files as "from a person" and never opens them automatically.
-- **Scale:** the business chat server sized for consumers: more connections, fan-out for groups, rate limits. A load test before stage 5b.
-- **Web chat:** a linked device of the phone (§6.2), with keys in the browser's storage; signing out removes them.
+- **Push:** a person's devices (stage 2's push on You), kinds for a person's message, a request, a group.
+- **Media:** checked and stored like business chats' media, per copy.
+- **Scale:** the business chat server sized for consumers: more connections, fan-out for groups, storage growth (people chats are kept), rate limits. A load test before stage 5b.
+- **Retention:** kept until the people delete them or their account (§18 Q12).
 
 ## 14. Privacy and data
 
 | What | Who keeps it | Deleted when |
 | --- | --- | --- |
-| People chats' messages and media | Each person's devices (encrypted); the server only until delivered | The person deletes them; the server after delivery or 30 days |
-| Who talked to whom, when | The server, as delivery records | 90 days (proposed), except what a report or lawful hold keeps |
+| A person's copy of a people chat, with its media | Taskiem, sealed under the person's key | The person deletes the chat or their account (or after the retention in §18 Q12) |
+| A group's messages | Taskiem, sealed under the group's key | The group is deleted, or each message per the same retention |
+| Who talked to whom, when | Taskiem, with the messages | With them |
 | Contacts sent for matching | Nobody: answered and forgotten | At once |
 | Reports | Taskiem's moderators | Per the moderation policy |
-| Device keys | The server (public keys only) | With the device or the account |
 
-Deleting an account (stage 3) also deletes the person's people-chat records on the server and their keys; the other people keep their own copies, with the person shown as "Deleted account".
+Deleting an account (stage 3) deletes the person's copies of people chats and their messages in groups' copies are shown as from "Deleted account" (§18 Q17); the other people keep their own copies.
 
 ## 15. Stages
 
 Each ships on Android, iPhone and the web together, as before:
 
-1. **5a — One-to-one people chats:** finding people (number, link, contacts opt-in), requests, privacy settings, end-to-end encryption on the phone, linking the web, blocking, reporting, sharing business cards, splitting cards.
-2. **5b — Groups and ordering together:** groups, invite links, sender keys, the shared basket.
+1. **5a — One-to-one people chats:** finding people (number, link, contacts opt-in), requests, privacy settings, blocking, reporting, sharing business cards, splitting cards.
+2. **5b — Groups and ordering together:** groups, invite links, the shared basket.
 3. **5c — Calls.**
 
-Before 5a: the encryption choice settled (§17 Q1), the library chosen and reviewed, a security review of the design, the privacy notice and terms rewritten (legal), and app-store listings updated.
+Before 5a: the privacy notice and terms rewritten, including what Taskiem does with people chats (§6.3) and lawful requests (§8.5), with a lawyer; and app-store listings updated.
 
 ## 16. Risks
 
-- **Encryption done wrong** loses people's chats or protects nothing. Mitigation: an audited library, an outside security review, no home-made cryptography.
-- **Losing chats with a lost phone** surprises people used to WhatsApp's backup. Mitigation: offer backup at the first people chat, plainly.
-- **Abuse by strangers,** including fraud ("send me money for this"). Mitigation: requests, limits, the transfer warning businesses' chats have (§15 of the plan) shown in people chats too, reporting.
+- **Trust.** People may expect private chats to be end-to-end encrypted. Mitigation: say plainly what Taskiem does and does not do (§6.2, §6.3), never claim end-to-end encryption, keep the rules and log every human access.
+- **A breach** exposes chats that are kept on the server. Mitigation: sealed at rest under each person's key (as business data is), access only through the server, an outside security review before 5a.
+- **Lawful requests** for chats' words. Mitigation: the process in §8.5, legal review, the published count.
+- **Abuse by strangers,** including fraud ("send me money for this"). Mitigation: requests, limits, the transfer warning, automated checks on strangers' messages, reporting.
 - **Nobody comes.** People stay on WhatsApp. Mitigation: build only what businesses make better (sharing, ordering together, splitting) first; measure use before groups and calls.
-- **Cost:** consumer-scale delivery, media and calls. Mitigation: keep no server history; delete media after delivery; calls last.
-- **Lawful requests and law changes** on encryption in Nigeria. Mitigation: legal review; the transparency note.
+- **Cost:** consumer-scale storage, delivery, media and calls. Mitigation: retention (§18 Q12), media size limits, calls last.
 
-## 17. Questions for the founder
+## 17. Settled
 
-1. **Encryption:** end-to-end by default (A), readable by Taskiem like business chats (B), or B with opt-in secret chats (C)? Proposed: A.
-2. **Push previews** for people chats: show the sender's name only, or name and words (decrypted on the phone where the platform allows)? Proposed: name and words when the phone can decrypt them, as WhatsApp does; the setting to hide words stays.
-3. **Who can message me by default:** everyone as a request, or contacts only? Proposed: everyone, as a request.
-4. **Contact matching:** keyed hashes with a rotated key (cheaper; Taskiem could in principle reverse them), or private set intersection (much costlier; Taskiem learns nothing)? Proposed: keyed hashes first, stated honestly in the privacy notice.
-5. **Showing numbers:** hide a person's number from people they chat with unless they choose to show it, or show it as WhatsApp does? Proposed: hide by default.
-6. **The Chats list:** one list with businesses and people together, or two (Businesses / People)? Proposed: one list, marked.
-7. **Group size** at first: 256, or smaller? Proposed: 256.
-8. **Money between people:** share cards only (A) plus paying the business for your share (C), or a licensed partner wallet (B)? Proposed: A and C now.
-9. **Lawful requests and the transparency note:** agreed with a lawyer before 5a.
-10. **Backups:** offered at the first people chat (encrypted with a passphrase), or later? Proposed: at the first people chat.
-11. **Web without a phone:** allow people chats on the web for someone with no phone app (keys in the browser only, no linking)? Proposed: no; the web is a linked device.
-12. **Calls:** keep them for last (5c), or are they needed to launch? Proposed: last.
+| # | Question | Answer |
+| --- | --- | --- |
+| 1 | Encryption | **B: encrypted on the server, readable by Taskiem's servers**, as business chats (founder, 17 November 2026). Not end-to-end; said plainly (§6) |
+
+## 18. Questions for the founder
+
+Still open (proposals in brackets). Q2, Q10 and Q11 of the first draft fell away with B: push carries the words as the person's setting says, there is no backup step, and the web works without a phone.
+
+3. **Who can message me by default:** everyone as a request, or contacts only? (Everyone, as a request.)
+4. **Contact matching:** keyed hashes with a rotated key, or private set intersection? (Keyed hashes, stated honestly in the privacy notice.)
+5. **Showing numbers:** hide a person's number from people they chat with unless they choose to show it? (Hide by default.)
+6. **The Chats list:** one list with businesses and people, or two? (One list, marked.)
+7. **Group size** at first: (256.)
+8. **Money between people:** share cards plus paying the business for your share, or a licensed partner wallet? (Share cards and pay-your-share now.)
+9. **Lawful requests:** the process in §8.5 and the privacy notice agreed with a lawyer before 5a. (Yes.)
+12. **Retention of people chats:** kept until the people delete them, or deleted after a time (e.g. 2 years) unless kept? (Kept until deleted, as WhatsApp's backups are; storage cost watched.)
+13. **What Taskiem does with people chats** (§6.3): no human reads them except for a report or a lawful request, each logged; never used for training or advertising. (Yes, and in the privacy notice.)
+14. **Business features in people chats** (order drafts, translations): off, or opt-in per chat? (Off; opt-in per chat later.)
+15. **Automated safety checks** on strangers' messages (requests and new chats) for scams: yes or no? (Yes, keeping only the verdict.)
+16. **Joining a group:** see its history from before you joined, or from when you joined? (From when you joined.)
+17. **A deleted account's messages in groups:** removed from the group, or kept as "Deleted account"? (Kept, as "Deleted account", so the group's conversation still makes sense.)
