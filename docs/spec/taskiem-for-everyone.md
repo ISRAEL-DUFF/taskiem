@@ -341,6 +341,8 @@ Nothing in a business's own data changes. An order placed before the account was
 
 ## 16. People chatting with people (a later stage, its own spec)
 
+Its spec: [People chatting with people](people-chatting.md) (draft for review, 17 November 2026).
+
 This spec only lists what that stage must decide, so stages 1 to 4 do not close any doors:
 
 - **Contacts.** Finding people from the phone's address book (matched by keyed hash, opt-in, never uploaded in clear), by phone number, or by a person's link.
