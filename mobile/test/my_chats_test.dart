@@ -6,8 +6,8 @@
 // consent); its tools (their shop with sizes, few left and delivery, an
 // order placed once with its Idempotency-Key; Book; Pay); a chat link (the
 // card, the chat started, a link that no longer works, the way in signed
-// out passing chat_code); and shop orders on You ("These are mine", "Chat
-// with {business} about this order").
+// out passing chat_code). Orders on You, Discover and saved addresses are
+// test/you_stage3_test.dart's.
 
 import 'dart:convert';
 
@@ -504,45 +504,6 @@ void main() {
     expect(api.body(api.sent('POST', '/v1/auth/phone/start').single), {'phone': '+2348031230000', 'chat_code': 'k7m2q9x4pz'});
     expect(links.shownSignedOut, isTrue, reason: 'the chat starts at once once signed in');
     expect(links.waiting, isTrue, reason: 'the link waits behind signing in');
-    await drain(t);
-  });
-
-  testWidgets('shop orders on You: "These are mine", and chatting about an order', (t) async {
-    phone(t);
-    final api = conversation(c: chat(offers: 'no', ask: false));
-    api.routes['GET /v1/me/chats'] = (_) => {'chats': <Object>[], 'unread': 0};
-    api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
-    var confirmed = false;
-    // Only confirmed orders are listed; those made before the phone was on
-    // the account are only counted until "These are mine".
-    api.routes['GET /v1/me/storefront-orders'] = (_) => {
-      'orders': [
-        {'reference': 'MK-1042', 'state': 'accepted', 'total_kobo': 450000, 'made_at': '2026-11-15T10:00:00Z', 'business': 'Mama’s Kitchen', 'business_id': 'b1'},
-        if (confirmed) {'reference': 'BS-77', 'state': 'completed', 'total_kobo': 120000, 'made_at': '2026-10-01T10:00:00Z', 'business': 'Bola Stores', 'business_id': 'b2'},
-      ],
-      'waiting': !confirmed,
-      'waiting_count': confirmed ? 0 : 1,
-    };
-    api.routes['POST /v1/me/storefront-orders/confirm'] = (_) {
-      confirmed = true;
-      return {'confirmed': true};
-    };
-    api.routes['POST /v1/me/chats'] = (_) => chat(offers: 'no', ask: false);
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), now: () => at)));
-    await settle(t);
-    expect(find.text('No chats yet'), findsOneWidget);
-    expect(find.text('Your shop orders'), findsOneWidget);
-    expect(find.textContaining('We found an order made with your number'), findsOneWidget);
-    expect(find.text('Bola Stores'), findsNothing, reason: 'nothing of a waiting order shows');
-    await press(t, find.text('It’s mine'));
-    expect(api.sent('POST', '/v1/me/storefront-orders/confirm'), hasLength(1));
-    expect(find.textContaining('We found an order'), findsNothing);
-    expect(find.text('Bola Stores'), findsOneWidget);
-
-    await press(t, find.text('Mama’s Kitchen'));
-    await press(t, find.text('Chat with Mama’s Kitchen about this order'));
-    expect(api.body(api.sent('POST', '/v1/me/chats').single), {'business_id': 'b1', 'from': 'order'});
-    expect((t.widget(find.byType(EditableText)) as EditableText).controller.text, 'About my order MK-1042: ');
     await drain(t);
   });
 

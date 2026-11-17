@@ -45,6 +45,32 @@ String sayFailure(Object e) => switch (e) {
   _ => 'Something went wrong. Try again.',
 };
 
+/// Opens a person's chat by its id over You (its notice said once, the box
+/// started with [draft], and a tool opened over it: `shop` or `book`).
+typedef OpenMyChat = Future<void> Function(String id, {String? notice, String draft, String? tool});
+
+/// The person's chat with [business]: [chat] when they have one, else
+/// started (`POST /v1/me/chats {business_id, from}`), then opened with
+/// [open]. A refusal is said as a toast.
+Future<void> chatWithBusiness(
+  BuildContext context,
+  Auth auth,
+  OpenMyChat open, {
+  required String business,
+  String? chat,
+  required String from,
+  String draft = '',
+  String? tool,
+}) async {
+  if (chat != null && chat.isNotEmpty) return open(chat, draft: draft, tool: tool);
+  try {
+    final c = await auth.api.startMyChat(body: StartMyChatRequest(businessId: business, from: from));
+    await open(c.id, notice: c.notice, draft: draft, tool: tool);
+  } on Object catch (e) {
+    if (context.mounted) showTkToast(context, sayFailure(e), error: true);
+  }
+}
+
 /// How often an open conversation reads again (CustomerChat.tsx's 4 s).
 const _poll = Duration(seconds: 4);
 
@@ -434,8 +460,12 @@ class MyChatData extends ChangeNotifier {
 
 /// The conversation with a business, on You.
 class MyChatScreen extends StatefulWidget {
-  const MyChatScreen({super.key, required this.data, this.onBack, this.draft = '', this.pickers = const Pickers(), this.recorder, this.notify});
+  const MyChatScreen({super.key, required this.data, this.onBack, this.draft = '', this.pickers = const Pickers(), this.recorder, this.notify, this.tool});
   final MyChatData data;
+
+  /// A tool opened over the conversation once it is read: `shop` (Their
+  /// shop) or `book` (Book), from Discover's profile.
+  final String? tool;
   final VoidCallback? onBack;
 
   /// The phone's photos and files, and the voice recorder (a test's own).
@@ -462,7 +492,18 @@ class _MyChatScreenState extends State<MyChatScreen> {
   @override
   void initState() {
     super.initState();
-    if (d.messages == null) d.open();
+    final opening = d.messages == null ? d.open() : Future<void>.value();
+    final tool = widget.tool;
+    if (tool != null) {
+      opening.then((_) {
+        if (!mounted || d.chat == null) return;
+        if (tool == 'shop') {
+          showShopSheet(context, d);
+        } else if (tool == 'book') {
+          showBookSheet(context, auth: d.auth, link: '', business: d.name, customer: d.base, onBooked: (_) => d.refresh());
+        }
+      });
+    }
     widget.notify?.show(d.tag, this);
     _text.addListener(() {
       if (_text.text.trim().isNotEmpty) d.typing();

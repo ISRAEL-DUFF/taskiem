@@ -1,9 +1,10 @@
 // You: a person's own side (docs/spec/taskiem-for-everyone.md §6, §7). A
-// personal session opens here: the chats with businesses (§8.3, with the
-// archived ones apart), orders made on businesses' shops with this phone
-// (§13: "These are mine", and "Chat with {business} about this order"),
-// **Start something**, invitations waiting, the switcher when the person
-// is in businesses, and Settings: name, phone (Change number, §5.5) and
+// personal session opens here, on three tabs: **Chats** (the chats with
+// businesses, §8.3, with the archived ones apart; **Start something**,
+// invitations waiting, the switcher when the person is in businesses),
+// **Orders** (every order and booking with any business, §13) and
+// **Discover** (businesses to find, §10). Settings, in the head: name,
+// phone (Change number, §5.5), saved addresses (§13), notifications and
 // signing out. A business's chat link opens its card here (§8.2).
 
 import 'dart:async';
@@ -23,9 +24,10 @@ import '../kit/forms.dart' show TkSwitch;
 import '../theme/look.dart';
 import 'settings_more.dart' show SettingsPage;
 import 'signed_in.dart' show NotificationsCard;
-import '../chat/door.dart' show doorTone, yourOrderStatus;
+import '../chat/addresses.dart' show SavedAddressesPage;
+import '../chat/discover.dart' show DiscoverTab;
 import '../chat/my_chat.dart';
-import '../chat/words.dart' show naira, listTime;
+import '../chat/your_orders.dart' show YourOrdersTab;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty;
 import '../kit/mobile.dart';
@@ -33,6 +35,7 @@ import '../kit/modal.dart' show showTkConfirm, showTkToast;
 import '../kit/sheet.dart' show TkKitField;
 import '../theme/theme.dart';
 import 'chat_link.dart';
+import 'home_tabs.dart';
 import 'second_proof.dart';
 import 'start_something.dart';
 import 'switcher.dart';
@@ -66,7 +69,6 @@ class _YouHomeState extends State<YouHome> {
   String? _error;
   bool _busy = false;
   late final MyChats _chats = MyChats(widget.auth);
-  MyStorefrontOrdersResponse? _orders;
   Timer? _poll;
 
   @override
@@ -159,59 +161,17 @@ class _YouHomeState extends State<YouHome> {
           // None shown; read again next time.
         }
       }(),
-      _loadOrders(),
     ]);
   }
 
-  Future<void> _loadOrders() async {
-    try {
-      final r = await widget.auth.api.myStorefrontOrders(limit: '20');
-      if (mounted) setState(() => _orders = r);
-    } on Object {
-      // None shown; read again next time (no phone yet: none to find).
-    }
-  }
-
   /// A chat opened, and the list read again when it is closed.
-  Future<void> _open(PersonChat c, {String? notice, String draft = ''}) async {
-    await tkPush<void>(context, MyChatScreen(data: MyChatData(widget.auth, c.id, notice: notice, now: widget.now), draft: draft, notify: widget.notify));
+  Future<void> _open(PersonChat c, {String? notice, String draft = ''}) => _openId(c.id, notice: notice, draft: draft);
+
+  /// A chat opened by its id (from Orders and Discover too), with a tool
+  /// over it when asked; the list read again when it is closed.
+  Future<void> _openId(String id, {String? notice, String draft = '', String? tool}) async {
+    await tkPush<void>(context, MyChatScreen(data: MyChatData(widget.auth, id, notice: notice, now: widget.now), draft: draft, notify: widget.notify, tool: tool));
     await _chats.load();
-  }
-
-  /// "Chat with {business} about this order" (§8.1): the chat with the
-  /// business of a shop order, started if there is none, the order named
-  /// in the box.
-  Future<void> _chatAbout(PhoneOrder o) async {
-    try {
-      final c = await widget.auth.api.startMyChat(body: StartMyChatRequest(businessId: o.businessId, from: 'order'));
-      if (!mounted) return;
-      await _open(c, notice: c.notice, draft: 'About my order ${o.reference}: ');
-    } on Object catch (e) {
-      if (mounted) showTkToast(context, _say(e), error: true);
-    }
-  }
-
-  /// "These are mine": orders made with this phone before it was on the
-  /// account (§13).
-  Future<void> _theseAreMine() async {
-    try {
-      await widget.auth.api.confirmStorefrontOrders();
-      await _loadOrders();
-      if (mounted) showTkToast(context, 'Done: these orders are on your account now.');
-    } on Object catch (e) {
-      if (mounted) showTkToast(context, _say(e), error: true);
-    }
-  }
-
-  Future<void> _order(PhoneOrder o) async {
-    final yes = await showTkConfirm(
-      context,
-      title: 'Order ${o.reference}',
-      body: '${o.business} · ${yourOrderStatus(o.state)} · ${naira(o.totalKobo)}',
-      ok: 'Chat with ${o.business} about this order',
-      cancel: 'Close',
-    );
-    if (yes) await _chatAbout(o);
   }
 
   /// The email's link to confirm this phone (§5.4), or a business's chat
@@ -309,62 +269,20 @@ class _YouHomeState extends State<YouHome> {
     if (mounted) setState(() => _busy = false);
   }
 
-  /// Orders made on businesses' shops with this phone (§13): those made
-  /// before the phone was on the account wait for "These are mine".
-  Widget? _ordersSection(TkTokens t) {
-    final r = _orders;
-    if (r == null || (r.orders.isEmpty && r.waitingCount == 0)) return null;
-    // Orders made before the phone was on the account: only a count until
-    // the person says they are theirs (§13), so a reissued number never
-    // sees the earlier holder's orders.
-    final waiting = r.waitingCount;
-    final mine = r.orders;
-    return TkSection(
-      title: 'Your shop orders',
-      count: waiting,
-      children: [
-        if (waiting > 0)
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    waiting == 1
-                        ? 'We found an order made with your number before it was on your account. Is it yours?'
-                        : 'We found $waiting orders made with your number before it was on your account. Are they yours?',
-                    style: tkText(size: 14.5, lineHeight: 1.4, color: t.text),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text('Nothing of them shows until you say so.', style: tkText(size: 12.5, color: t.muted)),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TkSmallButton(label: waiting == 1 ? 'It’s mine' : 'These are mine', primary: true, onPressed: _theseAreMine),
-                ),
-              ],
-            ),
-          ),
-        for (final o in mine)
-          TkListRow(
-            title: o.business,
-            sub: '${o.reference} · ${listTime(o.madeAt, widget.now())}',
-            letters: o.business,
-            amount: naira(o.totalKobo),
-            status: yourOrderStatus(o.state),
-            statusTone: doorTone(o.state),
-            semanticsLabel: 'Order ${o.reference} with ${o.business}, ${yourOrderStatus(o.state)}, ${naira(o.totalKobo)}',
-            onTap: () => _order(o),
-          ),
-      ],
-    );
-  }
-
+  /// You's tabs (§7): Chats, Orders and Discover; Settings is in the head.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => HomeTabs(
+    count: () => _chats.unread,
+    counted: _chats,
+    offline: widget.auth.transport.offline,
+    tabs: [
+      (label: 'Chats', icon: 'b-chat', build: _chatsTab),
+      (label: 'Orders', icon: 'b-box', build: (_) => YourOrdersTab(auth: widget.auth, onOpenChat: _openId, now: widget.now)),
+      (label: 'Discover', icon: 'b-search', build: (_) => DiscoverTab(auth: widget.auth, onOpenChat: _openId)),
+    ],
+  );
+
+  Widget _chatsTab(BuildContext context) {
     final auth = widget.auth;
     final t = TkTheme.tokens(context);
     final businesses = auth.me?.businesses ?? const <BusinessEntry>[];
@@ -460,7 +378,6 @@ class _YouHomeState extends State<YouHome> {
               );
             },
           ),
-          ?_ordersSection(t),
           TkButton(
             label: 'Start something',
             primary: true,
@@ -576,6 +493,20 @@ class YouSettingsScreen extends StatelessWidget {
                   ),
                 ),
                 if (email != null) line('Email', email),
+              ],
+            ),
+            // Saved addresses (§13): kept on your side, offered when ordering.
+            TkSection(
+              title: 'Ordering',
+              inset: 56,
+              children: [
+                TkListRow(
+                  title: 'Saved addresses',
+                  sub: 'Where your orders are delivered',
+                  icon: 'b-pin',
+                  square: TkLook.of(context).orange,
+                  onTap: () => tkPush<void>(context, SavedAddressesPage(auth: auth)),
+                ),
               ],
             ),
             if (notify != null) _YouNotifications(notify: notify!),

@@ -610,7 +610,12 @@ class TkListRow extends StatelessWidget {
     this.level,
     this.levelColor,
     this.trailing,
+    this.face,
   });
+
+  /// A tile of its own, 40 px round (a business's photo), in place of the
+  /// letters or the icon.
+  final Widget? face;
 
   /// At the row's end in place of an amount: a switch, or quiet words
   /// ("Linked") before the chevron.
@@ -655,7 +660,9 @@ class TkListRow extends StatelessWidget {
     // an icon on a soft round tile; or the letters on a face's gradient
     // (warm or red when the row warns).
     final Widget face;
-    if (small) {
+    if (this.face != null) {
+      face = SizedBox(width: size, height: size, child: this.face);
+    } else if (small) {
       face = Container(
         width: size,
         height: size,
