@@ -1058,3 +1058,40 @@ Built on branch `stage2-fix-door`, on stage 2 as merged (530b4dbe): the reviewer
 - A fresh subject for an erased customer who writes again (the conversation stays closed).
 - `verified.payments` reads a payment provider's connection; a business paid only through Taskiem's own accounts shows false.
 - The clients' use of the new fields (the header's photo and badges, the transfer warning, invoice and delivery cards, `offers_asked`).
+
+## As built: stage 2, web review fixes
+
+Built on branch `stage2-fix-web`, on 1308508b (stage 1, main, stage 2 and both server review fixes merged): the web's use of what the server's fixes added, and the review's findings on the stage 2 screens, each checked again before it was fixed. Main's recent web commits (to e3f19cc1) changed no screen near these (its redesign was the phone app's), so nothing of the look moved.
+
+**The server's changes, used.**
+- **Orders from shops** (`MyShopOrders`): only confirmed orders are listed; `waiting_count` is said as "We found N orders made with your number before it was on your account. Are they yours?" with **These are mine**, and nothing else of them (`waitingWords`). The card shows with only waiting orders too.
+- **The conversation's header**: the business's photo (`photo`, at 320 px; kept for the tab, `sessionStorage`, so the list's row shows it once the chat was opened: the list itself carries none) and what it has proved under the hours, in words (`trustWords`: "Phone checked · Business checked · Payments through Taskiem · Trading 8 months", "New on Taskiem" under a month, years from 12 months).
+- **The offers question, asked once**: Yes, No, and **Not now**, which passes it over (`PUT {offers_asked: true}`); leaving the chat with it shown and unanswered passes it over too. `offers_refused` on a PUT is said ("… so your answer about offers was not kept").
+- **`warn_transfer`**: under such a business message, "Pay only through Taskiem's pay links. Taskiem never asks you to send money to a personal account." (`TRANSFER_WARNING`, a `role="note"` on the warning's tint); never under the person's own.
+- **Invoice and delivery cards** on both sides (`AppCardView`): an invoice (its number, what is due, **Pay** to its page while something is due; on the business's side **Open** goes to the invoice) and a delivery (the rider's line, a pill, and four steps as a bar, `deliveryStep`). The business's card sheet gains **Delivery** (an order's reference) and **Invoice** (its number, found with `GET /v1/invoices/{number}`, sent as `invoice_id`). **Your orders** shows each order's `delivery` line and steps.
+- **`in_app`**: **Write to them in the app** shows on any order or booking made in the app (`in_app`, or the kind `app`), with "booked" words for a booking.
+- **Orders off**: Taking chats says "Your Orders area is off, so chats are closed…" with a link to the areas, and its switch is off and disabled (`orders_off`, `ORDERS_OFF_WORDS`).
+- **An erased customer**: a 409 whose words say the details were erased closes the box on either side, saying so plainly in its place (`erasedWords`: the server's sentence, or ours for the WhatsApp thread's terse one). Typing is not posted while either side blocked the other, and a refused typing (403, 409) is ignored.
+- **Push on You** (§9): under the person's conversation, where the browser can take a push, **Tell me when they answer** registers it as the person's own device with the existing web push flow (`enableYouPush`: permission, the worker, the subscription, then `PUT /v1/me/push?side=you` with the keys, the device's name and `kinds: ["you"]`; `?side=you` is always sent, which a personal session takes as it is); then "We'll tell you on this device when they answer." Where it cannot (an iPhone's browser not on the Home Screen, no worker or push, the server without keys): "We'll text you when they answer." Signing out also sends `DELETE /v1/me/push?side=you {endpoint}` before the browser forgets its subscription. The worker knows the kind `you`; a push with no `business` opens its link as it is (`/you/chats/{id}`), and You now follows the worker's word to an open window (`useWorkerGo`, shared with the business's app). A business's session opened at `/you/chats/{id}` (a window that was in a business) shows "A chat of your own" with **Open it on You**, which switches by the person's tap.
+
+**Review findings, fixed.**
+1. **Cards' orders**: read again whenever the cards name another order or a new order or delivery card comes (`cardsKey`), every 15 seconds while such cards are shown, and up to three times soon after a failed read; an order's card shows the order's state now and a delivery card the rider's progress now (`liveCard`), not the snapshot.
+2. **Send an offer**: one `client_id` per offer, kept until it is sent or its words change.
+3. **Polls and sends**: the last look's error is cleared by the next one that works; send errors are kept apart and shown first (both sides).
+4. **The business's box**: a card or a file is no longer dropped while another message is on its way: each send has its own `client_id` and nothing waits on another (`act.busy` gates no send).
+5. **A send whose answer never came** (no connection, or 5xx: `mayHaveArrived`): its words come back with their `client_id` kept, and the same words sent again reuse it (`clientFor`), on both sides.
+6. **`PersonChatPage` is keyed by the chat's id**, so nothing of one chat shows in the next.
+7. **Archived**: each list answer says which list it is; the toggle shows the skeleton until its own list is back.
+8. **The business's clip** in an app thread accepts voice notes (`audio/*`).
+9. **`payWords`** says "You pay when it reaches you." for `on_delivery`.
+10. **When nobody answers**: turning a switch keeps closed-reply words typed and not saved; only saving the words ends their edit.
+11. **The chat link's page** tells You from a business as `App.tsx` does (`personal || (tenant_id === null && !gate_only)`).
+12. **Their shop**: changing pickup or delivery starts a new order key.
+13. **`.chat-link-qr`** takes `--qr-ground` (white in both themes, for a camera).
+
+**Tests.** `lib/personchat.test.ts` (waiting words, trust words, the warning, photos, erasure words, kept client ids, `on_delivery`, invoice and delivery cards and `liveCard`, `cardsKey`), `lib/customerlinks.test.ts` (orders off), `lib/push.test.ts` (a `you` push opens `/you/chats/{id}` with no business). `e2e/customer-chat.spec.ts`: on the real server, the header's "New on Taskiem" and a business's message with an account number warned on the person's side (and their other message not); with stand-ins at 390 and 360 px, the waiting count and nothing of those orders, the trust line, the warning, invoice and delivery cards (the delivery card following the order's rider), **Tell me when they answer** present, the offers question answered (390) or passed over (360) once and not asked again after a reload. `accessibility.spec.ts`'s person's chat adds the trust line, the warning and both new cards to axe in both themes.
+
+**Left over.**
+- The list of chats carries no photo: a row shows the business's photo only once its chat was opened in the tab.
+- **Tell me when they answer** cannot be pressed through in the browser tests (the worker is blocked there); its request is the business flow's with `?side=you` and `kinds`.
+- The business's Invoice card is found by its number with `invoice.read`; a member who handles orders without it cannot send one.
