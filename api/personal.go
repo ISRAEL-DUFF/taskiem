@@ -47,7 +47,7 @@ var discoverPersonRoutes = regexp.MustCompile(`^(POST /v1/discover/search|GET /v
 
 func personalAllowed(method, path string) bool {
 	route := method + " " + strings.TrimSuffix(path, "/")
-	return personalRoutes.MatchString(route) || discoverPersonRoutes.MatchString(route)
+	return personalRoutes.MatchString(route) || discoverPersonRoutes.MatchString(route) || peoplePersonRoutes.MatchString(route)
 }
 
 // deviceCookie names a browser, so a second proof made there holds for it

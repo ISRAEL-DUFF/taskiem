@@ -127,6 +127,9 @@ tags:
 - name: You
   description: 'A person''s own side: their chats with businesses, and the tools of each through the customer door (taskiem-for-everyone §7, §8).'
   x-taskiem-guide: spec/taskiem-for-everyone
+- name: People
+  description: 'Chats between people, one to one (people-chatting, stage 5a): kept by Taskiem, sealed under each person''s own key and readable by Taskiem''s servers (not end-to-end encrypted); requests, blocks, reports, shared business cards and share cards; and You''s one Chats list.'
+  x-taskiem-guide: spec/people-chatting
 - name: Links
   description: Links with other businesses on Taskiem, made with both sides' consent (decision 0061).
   x-taskiem-guide: spec/business-links
@@ -21516,6 +21519,1034 @@ paths:
                 $ref: '#/components/schemas/DiscoverSettings'
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/conversations:
+    get:
+      operationId: listAllMyChats
+      tags:
+      - People
+      summary: You's Chats, businesses and people together
+      description: 'You''s one Chats list (people-chatting §7, §17 Q6): the person''s chats with businesses and with people together, the latest first, each marked by `kind` (`business`: open `/v1/me/chats/{id}`; `person`: open `/v1/me/people/{id}`); archived ones with archived=1. Requests waiting are not listed, only counted (`requests`; `GET /v1/me/people/requests`). The clients use this list for the Chats tab; `GET /v1/me/chats` stays the business chats alone. A personal session, or a business session for its person; API keys are refused (403).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: archived
+        in: query
+        schema:
+          type: string
+          enum: ['1']
+      responses:
+        '200':
+          description: The chats
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [chats, unread, requests]
+                properties:
+                  chats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatListItem'
+                  unread:
+                    type: integer
+                  requests:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people:
+    get:
+      operationId: listPeopleChats
+      tags:
+      - People
+      summary: Your chats with people
+      description: 'The person''s own chats with people, the latest first (archived=1 the archived ones); requests are apart (`requests` counts them). Kept by Taskiem, sealed under the person''s own key, readable by Taskiem''s servers: not end-to-end encrypted.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: archived
+        in: query
+        schema:
+          type: string
+          enum: ['1']
+      responses:
+        '200':
+          description: The chats
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [chats, unread, requests]
+                properties:
+                  chats:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PeopleChat'
+                  unread:
+                    type: integer
+                  requests:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: startPeopleChat
+      tags:
+      - People
+      summary: Start a chat with a person
+      description: 'Opens the person''s chat with someone found by finding people (by number, a person''s link, contacts: their `person_id`), or by a person''s link''s code; answers the one they have (200). Nothing reaches the other person until the first message, which waits in their Requests unless they know each other. 404 for no such person (or one deleted); 403 `This person is not taking messages…` when their settings refuse; 410 `link_replaced`; new chats are limited per hour and a day, lower in an account''s first week (429). `kept` says how people chats are kept.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                person_id:
+                  type: string
+                  format: uuid
+                link_code:
+                  type: string
+                  maxLength: 80
+      responses:
+        '201':
+          description: Started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeopleChat'
+        '200':
+          description: The chat the person already has
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeopleChat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/requests:
+    get:
+      operationId: listPeopleRequests
+      tags:
+      - People
+      summary: Message requests
+      description: 'Strangers'' first messages waiting for the person: Accept (`…/accept`), Delete (`…/decline`) or Block and report (`…/block` with `report`). The sender is not told they were read until accepted.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The requests
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [requests]
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PeopleChat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/blocked:
+    get:
+      operationId: listPeopleBlocked
+      tags:
+      - People
+      summary: People you blocked
+      description: Unblock one with `DELETE /v1/me/people/{chat_id}/block`.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The people
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [people]
+                properties:
+                  people:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [person_id, name, chat_id, at]
+                      properties:
+                        person_id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        chat_id:
+                          type: string
+                          format: uuid
+                        at:
+                          type: string
+                          format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/forward:
+    post:
+      operationId: forwardPeopleMessage
+      tags:
+      - People
+      summary: Forward a message
+      description: 'One message of a people chat to other people chats, each marked forwarded; one forwarded five or more times on its way is `forwarded_many`. At most 5 chats at once, and one at a time for a message forwarded many times (429 with `forwarded_many`). A share card is not forwarded (409). Each chat is sent to as a message is; those refused are in `failed` with the reason.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [chat_id, message_id, to]
+              properties:
+                chat_id:
+                  type: string
+                  format: uuid
+                message_id:
+                  type: string
+                  format: uuid
+                to:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Forwarded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [sent, failed]
+                properties:
+                  sent:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [chat_id, message]
+                      properties:
+                        chat_id:
+                          type: string
+                          format: uuid
+                        message:
+                          $ref: '#/components/schemas/PeopleMessage'
+                  failed:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [chat_id, error]
+                      properties:
+                        chat_id:
+                          type: string
+                          format: uuid
+                        error:
+                          type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/{id}:
+    get:
+      operationId: getPeopleChat
+      tags:
+      - People
+      summary: One chat with a person
+      description: 'The chat, with `contact` (in your contacts) and `phone` only when they chose to show their number (finding people''s settings; never while either blocked the other). `kept` says how people chats are kept.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The chat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeopleChat'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putPeopleChat
+      tags:
+      - People
+      summary: Mute or archive a chat
+      description: The person's own settings for the chat.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                muted:
+                  type: boolean
+                archived:
+                  type: boolean
+      responses:
+        '200':
+          description: The chat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeopleChat'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deletePeopleChat
+      tags:
+      - People
+      summary: Delete a chat for you
+      description: 'The person''s copy''s messages go and the chat is hidden until a new message; the other person''s copy is theirs and stays. On a request, it is Delete (declined).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/{id}/accept:
+    post:
+      operationId: acceptPeopleRequest
+      tags:
+      - People
+      summary: Accept a request
+      description: 'The request moves to your chats; the sender''s first messages stop waiting, and from now on they see your read ticks. Writing back to a request accepts it too. 409 when the chat is not a request.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The chat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeopleChat'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/{id}/decline:
+    post:
+      operationId: declinePeopleRequest
+      tags:
+      - People
+      summary: Delete a request
+      description: The request goes; the sender is not told. A later message from them is a request again. Requests deleted or blocked count against the sender's limits.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/{id}/block:
+    post:
+      operationId: blockPerson
+      tags:
+      - People
+      summary: Block a person
+      description: 'They can no longer message you: what they send stays on their side with one tick, and nothing else tells them; nor do they see your number. On a request, the request goes (`removed`). With `report`, the chat is also reported ("Block and report"), as `…/report`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                report:
+                  $ref: '#/components/schemas/PeopleReport'
+      responses:
+        '200':
+          description: Blocked
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [blocked, reported, removed]
+                properties:
+                  blocked:
+                    type: boolean
+                  reported:
+                    type: boolean
+                  removed:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: unblockPerson
+      tags:
+      - People
+      summary: Unblock a person
+      description: What they sent while blocked never arrives.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Unblocked
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [blocked]
+                properties:
+                  blocked:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/{id}/report:
+    post:
+      operationId: reportPerson
+      tags:
+      - People
+      summary: Report a person or chat to Taskiem
+      description: 'Sends the person and the chat''s last 20 messages, from the server''s copy (yours), with what photos and files they had, to Taskiem''s moderators, only with `consent: true` (400 without). Twelve reports in two hours, shared with reports of businesses (429).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PeopleReport'
+      responses:
+        '201':
+          description: Reported
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [id, messages_sent, said]
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  messages_sent:
+                    type: boolean
+                  said:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/{id}/read:
+    post:
+      operationId: readPeopleChat
+      tags:
+      - People
+      summary: Mark a chat read
+      description: The other's messages read in your copy; their copy shows them read only once the chat is accepted, never while it is a request or either blocked the other.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/{id}/messages:
+    get:
+      operationId: peopleMessages
+      tags:
+      - People
+      summary: Messages of a chat with a person
+      description: Your copy, opened, 50 a page, the latest last; `before` a message for the page before it; `starred=1` your starred messages only.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: before
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: starred
+        in: query
+        schema:
+          type: string
+          enum: ['1']
+      responses:
+        '200':
+          description: The messages
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages, more]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PeopleMessage'
+                  more:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: sendPeopleMessage
+      tags:
+      - People
+      summary: Write to a person
+      description: 'A text, a place (`location`) or a card (`card`: a product, a business, one of your orders or its delivery, or a share), kept in both copies, each sealed under its owner''s key. A first message to someone who does not know you waits in their Requests (limits per sender: waiting at once and a day, fewer in an account''s first week and for senders whose requests are often deleted or blocked: 429). A stranger''s messages are looked at by the automated safety checks, which keep only their verdict (403 when refused). Writing back to a request accepts it. While they blocked you it stays on your side with one tick (`status: sent`). 409 when you blocked them, or their account was deleted; 429 past 20 messages a minute in a chat (10 in the first week). A repeat of a `client_id` answers the first (200).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                text:
+                  type: string
+                  maxLength: 4000
+                client_id:
+                  type: string
+                  maxLength: 80
+                reply_to:
+                  type: string
+                  format: uuid
+                location:
+                  $ref: '#/components/schemas/PeopleLocation'
+                card:
+                  type: object
+                  additionalProperties: false
+                  required: [type]
+                  description: 'What to share. product: business_id and item_id (from its shop); business: business_id; order or delivery: business_id and reference of one of your own orders (a delivery once a rider has it); split: amount_kobo, what, and pay_to (else your saved payout account).'
+                  properties:
+                    type:
+                      type: string
+                      enum: [product, business, order, delivery, split]
+                    business_id:
+                      type: string
+                      format: uuid
+                    item_id:
+                      type: string
+                    reference:
+                      type: string
+                    amount_kobo:
+                      type: integer
+                      format: int64
+                    what:
+                      type: string
+                      maxLength: 120
+                    pay_to:
+                      $ref: '#/components/schemas/PayoutAccount'
+      responses:
+        '201':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeopleMessage'
+        '200':
+          description: The message already sent with this client_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeopleMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/{id}/files:
+    post:
+      operationId: sendPeopleFile
+      tags:
+      - People
+      summary: Send a photo, voice note or file to a person
+      description: 'Multipart: `file`; `text` (a caption), `client_id`, `reply_to`. Scanned for malware and checked as business chats'' files are (engine/media: photos 10 MB, voice notes 5 minutes, files 25 MB, PDFs without scripts) before either copy is kept, each sealed under its owner''s key. Otherwise as a message.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                text:
+                  type: string
+                client_id:
+                  type: string
+                reply_to:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeopleMessage'
+        '200':
+          description: The message already sent with this client_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeopleMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/{id}/files/{message}:
+    get:
+      operationId: peopleFile
+      tags:
+      - People
+      summary: A file of a chat with a person
+      description: Your own copy of a message's photo, voice note or file, opened.
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            audio/ogg:
+              schema:
+                type: string
+                format: binary
+            audio/webm:
+              schema:
+                type: string
+                format: binary
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/mp4:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/{id}/messages/{message}:
+    put:
+      operationId: markPeopleMessage
+      tags:
+      - People
+      summary: Star or react to a message
+      description: 'A star is your own; a reaction (one emoji; "" takes it away) shows on both copies.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                starred:
+                  type: boolean
+                reaction:
+                  type: string
+                  maxLength: 16
+      responses:
+        '200':
+          description: The message
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeopleMessage'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deletePeopleMessage
+      tags:
+      - People
+      summary: Delete a message
+      description: '`for=me` (the default) deletes your copy of it; `for=everyone` (your own message, within 24 hours of sending: 409 after) also removes it from the other''s copy on the server and their devices, which show "This message was deleted". A screenshot or a forward made before cannot be undone.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: for
+        in: query
+        schema:
+          type: string
+          enum: [me, everyone]
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/{id}/messages/{message}/paid:
+    post:
+      operationId: markSplitPaid
+      tags:
+      - People
+      summary: Mark a share paid
+      description: 'Either side marks a "your share" card paid (or, with `paid: false`, not yet); both copies show it. Taskiem moves no money and checks no payment. 409 for any other message.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [paid]
+              properties:
+                paid:
+                  type: boolean
+      responses:
+        '200':
+          description: The message
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PeopleMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/{id}/messages/{message}/card:
+    get:
+      operationId: openPeopleCard
+      tags:
+      - People
+      summary: Open a shared card
+      description: 'The card as shared, and `live`: as it is now, read through the doors as the person opening it (each look audited in the business''s chain, limited per person, 429): a product''s current price and stock; a business''s card; an order or delivery only when it is your own (`yours`), else only what was shared. 403 `blocked` when the business blocked you.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The card
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [card, live]
+                properties:
+                  card:
+                    $ref: '#/components/schemas/PeopleCard'
+                  live:
+                    type: object
+                    additionalProperties: false
+                    required: [yours]
+                    properties:
+                      yours:
+                        type: boolean
+                      product:
+                        $ref: '#/components/schemas/ShopItem'
+                      business:
+                        type: object
+                        additionalProperties: true
+                        required: [name, takes_chats]
+                        properties:
+                          name:
+                            type: string
+                          tagline:
+                            type: string
+                          area:
+                            type: string
+                          open_now:
+                            type: boolean
+                          takes_chats:
+                            type: boolean
+                          shop:
+                            type: string
+                      order:
+                        $ref: '#/components/schemas/PersonOrder'
+                      delivery:
+                        $ref: '#/components/schemas/DeliveryProgress'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/payout-account:
+    get:
+      operationId: getPayoutAccount
+      tags:
+      - People
+      summary: Your bank account for being paid back
+      description: 'The account you saved for share cards (`account: null` without one), as you typed it; Taskiem does not check it and moves no money (`checked: false`).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutAccountAnswer'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putPayoutAccount
+      tags:
+      - People
+      summary: Save your bank account for being paid back
+      description: Kept on your side, sealed under your key; used by share cards that name no other account. 400 for a missing bank or name, or an account number that is not 10 digits.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayoutAccount'
+      responses:
+        '200':
+          description: The account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutAccountAnswer'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deletePayoutAccount
+      tags:
+      - People
+      summary: Remove your saved bank account
+      description: Share cards already sent keep the account they carry.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/storefront-orders:
     get:
       operationId: myStorefrontOrders
@@ -22096,6 +23127,10 @@ paths:
                 updates:
                   type: boolean
                 offers:
+                  type: boolean
+                people:
+                  type: boolean
+                requests:
                   type: boolean
       responses:
         '200':
@@ -39398,6 +40433,256 @@ components:
           type: integer
         name:
           type: string
+    ChatListItem:
+      type: object
+      additionalProperties: false
+      required: [kind, id, name, last, last_mine, last_at, unread, muted, archived, blocked]
+      description: 'One row of You''s one Chats list: a business chat (`kind: business`, open `/v1/me/chats/{id}`) or a people chat (`kind: person`, open `/v1/me/people/{id}`).'
+      properties:
+        kind:
+          type: string
+          enum: [business, person]
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        business_id:
+          type: string
+          format: uuid
+        person_id:
+          type: string
+          format: uuid
+        gone:
+          type: boolean
+          description: The person deleted their account (shown as "Deleted account").
+        last:
+          type: string
+        last_mine:
+          type: boolean
+        last_at:
+          type: string
+          format: date-time
+        unread:
+          type: integer
+        muted:
+          type: boolean
+        archived:
+          type: boolean
+        blocked:
+          type: boolean
+          description: You blocked them.
+        waiting:
+          type: boolean
+          description: Your first messages wait for them to accept.
+    PeopleChat:
+      type: object
+      additionalProperties: false
+      required: [id, kind, person_id, name, gone, last, last_mine, last_at, unread, muted, archived, request, waiting, blocked]
+      description: 'A chat with a person, the person''s own copy (people-chatting §7): kept by Taskiem, sealed under the person''s key, readable by Taskiem''s servers; not end-to-end encrypted.'
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [person]
+        person_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Their name, or "Deleted account" once they deleted it (`gone`).
+        gone:
+          type: boolean
+        last:
+          type: string
+        last_mine:
+          type: boolean
+        last_at:
+          type: string
+          format: date-time
+        unread:
+          type: integer
+        muted:
+          type: boolean
+        archived:
+          type: boolean
+        request:
+          type: boolean
+          description: A stranger's first messages, waiting in your Requests.
+        waiting:
+          type: boolean
+          description: Your first messages wait for them to accept (no read ticks until then).
+        blocked:
+          type: boolean
+          description: You blocked them.
+        contact:
+          type: boolean
+          description: One chat only. They are in your contacts.
+        phone:
+          type: [string, 'null']
+          description: One chat only. Their number, only when they chose to show it.
+        kept:
+          type: string
+          description: How people chats are kept, to show in the chat's info.
+    PeopleLocation:
+      type: object
+      additionalProperties: false
+      required: [lat, lng]
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
+        label:
+          type: string
+          maxLength: 200
+    PayoutAccount:
+      type: object
+      additionalProperties: false
+      required: [bank, account_number, account_name]
+      description: A person's own bank account for being paid back, as they typed it; never checked by Taskiem, which moves no money.
+      properties:
+        bank:
+          type: string
+          maxLength: 80
+        account_number:
+          type: string
+          description: Ten digits (spaces and dashes are taken out).
+        account_name:
+          type: string
+          maxLength: 120
+    PayoutAccountAnswer:
+      type: object
+      additionalProperties: false
+      required: [account, checked, words]
+      properties:
+        account:
+          oneOf:
+          - $ref: '#/components/schemas/PayoutAccount'
+          - type: 'null'
+        checked:
+          type: boolean
+          description: Always false, since Taskiem does not check the account.
+        words:
+          type: string
+    PeopleReport:
+      type: object
+      additionalProperties: false
+      required: [reason, consent]
+      properties:
+        reason:
+          type: string
+          enum: [spam, scam, abuse, other]
+        note:
+          type: string
+          maxLength: 1000
+        consent:
+          type: boolean
+          description: The last 20 messages go to Taskiem's moderators only with it.
+    PeopleCard:
+      type: object
+      additionalProperties: false
+      required: [type, title]
+      description: 'A card in a people chat (people-chatting §10.1, §11 A), carrying only what is needed to show and open it: a product (business, item, its price when shared), a business, an order or a delivery (business, reference, state, the rider''s progress when shared), or a share (amount, what for, the account to pay to, paid).'
+      properties:
+        type:
+          type: string
+          enum: [product, business, order, delivery, split]
+        title:
+          type: string
+        business_id:
+          type: string
+          format: uuid
+        business:
+          type: string
+        area:
+          type: string
+        item_id:
+          type: string
+        price_kobo:
+          type: integer
+          format: int64
+        reference:
+          type: string
+        state:
+          type: string
+        delivery:
+          $ref: '#/components/schemas/DeliveryProgress'
+        amount_kobo:
+          type: integer
+          format: int64
+        what:
+          type: string
+        pay_to:
+          $ref: '#/components/schemas/PayoutAccount'
+        paid:
+          type: boolean
+        paid_at:
+          type: string
+          format: date-time
+        paid_by_me:
+          type: boolean
+    PeopleMessage:
+      type: object
+      additionalProperties: false
+      required: [id, mine, kind, body, read_at, created_at]
+      description: One message of the person's copy of a people chat, opened.
+      properties:
+        id:
+          type: string
+          format: uuid
+        mine:
+          type: boolean
+        kind:
+          type: string
+          enum: [text, media, card, location]
+        body:
+          type: string
+          description: The words, a file's caption, or "This message was deleted" (`deleted`).
+        card:
+          $ref: '#/components/schemas/PeopleCard'
+        location:
+          $ref: '#/components/schemas/PeopleLocation'
+        attachment:
+          $ref: '#/components/schemas/ChatAttachment'
+        reply_to:
+          type: string
+          format: uuid
+        forwarded:
+          type: boolean
+        forwarded_many:
+          type: boolean
+          description: Forwarded five or more times on its way here; it can be forwarded to one chat at a time.
+        status:
+          type: string
+          enum: [sent, delivered, read]
+          description: 'Your own messages: sent (one tick: not delivered, as while they block you), delivered, read (only once the chat is accepted).'
+        starred:
+          type: boolean
+        my_reaction:
+          type: string
+        their_reaction:
+          type: string
+        deleted:
+          type: boolean
+        warn_transfer:
+          type: boolean
+          description: Their message asks for a transfer to an account; warn before paying.
+        warn:
+          type: boolean
+          description: The safety checks found it looks like a scam or spam.
+        read_at:
+          type: [string, 'null']
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
     ShopItem:
       type: object
       additionalProperties: false
@@ -39649,9 +40934,15 @@ components:
     YouNotifications:
       type: object
       additionalProperties: false
-      required: [messages, updates, offers]
-      description: Which pushes the person's own devices get from businesses.
+      required: [messages, updates, offers, people, requests]
+      description: Which pushes the person's own devices get.
       properties:
+        people:
+          type: boolean
+          description: A person wrote to them (push kind person).
+        requests:
+          type: boolean
+          description: A stranger's first message waits in their Requests (push kind request).
         messages:
           type: boolean
           description: Someone at a business wrote to them.

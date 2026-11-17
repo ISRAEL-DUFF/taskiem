@@ -44,6 +44,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/lru"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/media"
+	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/phoneindex"
 	"github.com/israel-duff/taskiem/engine/push"
 	"github.com/israel-duff/taskiem/engine/reach"
@@ -68,6 +69,16 @@ type Server struct {
 	// (taskiem-for-everyone §8.2; stream B's customer_chat_codes); nil
 	// knows no code (customer_app.go).
 	ChatCodes ChatCodeResolver
+	// People answers who may message whom, contacts, shown numbers and the
+	// stranger checks for chats between people (people-chatting §5.4,
+	// §8.4; finding people, stream B); nil is peoplechats.Stub.
+	People peoplechats.Policy
+	// PersonLinks finds the person a person's link names (§5.2, stream
+	// B); nil knows no link.
+	PersonLinks peoplechats.LinkResolver
+	// peopleKeys seal each person's copy of their people chats.
+	peopleKeysOnce sync.Once
+	peopleKeys     *peoplechats.Keys
 	// CustomerAnswered hears when a business writes to a person in the app
 	// (taskiem-for-everyone §9: the browser chat's SMS fallback, stream B);
 	// nil tells no one.
@@ -473,6 +484,7 @@ func (s *Server) Handler() http.Handler {
 			s.personOrderRoutes(r)              // Orders on You (person_orders.go)
 			s.personAddressRoutes(r)            // saved addresses (person_addresses.go)
 			s.personAccountRoutes(r)            // deleting the account, photo, pushes, privacy (person_account.go)
+			s.peopleRoutes(r)                   // chats between people (people_chats.go)
 			r.Get("/me/devices", s.listDevices) // Your phones (devices.go)
 			r.Delete("/me/devices/{id}", s.removeDevice)
 			r.Get("/me/passkeys", s.listPasskeys)
