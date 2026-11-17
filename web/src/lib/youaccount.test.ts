@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ApiError } from "../api";
 import {
+  accountDeletedPath,
   deleteBlocked,
   deleteBody,
   deletedWords,
@@ -11,6 +12,7 @@ import {
   photoFileProblem,
   photoProblem,
   privacyLine,
+  toldOf,
 } from "./youaccount";
 
 describe("You's photo", () => {
@@ -78,6 +80,14 @@ describe("deleting the account", () => {
     expect(deleteProblem(new ApiError(409, "x", [], { no_phone: true }))).toMatch(/no phone/);
     expect(deleteProblem(new ApiError(429, "x"))).toMatch(/Too many tries/);
     expect(deleteProblem(new ApiError(500, "x"))).toBeNull();
+  });
+
+  it("carries only a count to the signed-out page", () => {
+    expect(accountDeletedPath(2)).toBe("/account-deleted?told=2");
+    expect(accountDeletedPath(-1)).toBe("/account-deleted?told=0");
+    expect(toldOf("?told=2")).toBe(2);
+    expect(toldOf("?told=x")).toBeUndefined();
+    expect(toldOf("")).toBeUndefined();
   });
 
   it("says it is gone, and what the businesses were told", () => {

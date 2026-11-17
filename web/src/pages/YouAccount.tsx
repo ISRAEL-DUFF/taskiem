@@ -1,10 +1,11 @@
 import { useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { ApiError, del, get, post, put, putForm, type ProofWays } from "../api";
 import { useAuth } from "../auth";
 import { dateLabel } from "../lib/invoices";
 import { showPhone } from "../lib/phone";
 import {
+  accountDeletedPath,
   deleteBlocked,
   deleteBody,
   deletedWords,
@@ -16,6 +17,7 @@ import {
   photoFileProblem,
   photoProblem,
   privacyLine,
+  toldOf,
   type DeleteProof,
   type YouNotifications,
   type YouPrivacy,
@@ -229,10 +231,30 @@ export function YouPrivacyPage() {
   );
 }
 
+/** An action whose refusal the page itself shows where it happened. */
+function useOnPage() {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>();
+  const run = async (fn: () => Promise<unknown>, _success: false) => {
+    void _success;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await fn();
+      return true;
+    } catch (e) {
+      setError(e);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { busy, error, run, clear: () => setError(undefined) };
+}
+
 /** /you/settings/delete: deleting the account, with a fresh proof. */
 export function DeleteAccountPage() {
   const { me, gone } = useAuth();
-  const nav = useNavigate();
   const ways = deleteProofs(me?.user?.phone, me?.factors, passkeysSupported());
   const [way, setWay] = useState<DeleteProof | undefined>(ways[0]);
   const [sent, setSent] = useState<{ sent_via: string }>();
@@ -242,7 +264,8 @@ export function DeleteAccountPage() {
   const [proving, setProving] = useState<ProofWays>();
   const [proved, setProved] = useState(false);
   const [left, wait] = useCountdown();
-  const act = useAction();
+  // Every refusal is said on this page, beside its button (no toast over it).
+  const act = useOnPage();
   const blocked = deleteBlocked(act.error);
   const said = deleteProblem(act.error);
   const phone = me?.user?.phone ?? "";
@@ -264,9 +287,10 @@ export function DeleteAccountPage() {
           "/v1/me/delete",
           deleteBody({ code: way === "code" ? code : undefined, password: way === "password" ? password : undefined, credential }),
         );
-        // Gone: the signed-out page says so, and this tab forgets the person.
-        nav("/account-deleted", { replace: true, state: { told: r.businesses_told } });
+        // Gone: this tab forgets the person, and the page that says so is
+        // loaded afresh (signed out, nothing of the account left in memory).
         gone();
+        window.location.replace(accountDeletedPath(r.businesses_told));
       } catch (e) {
         // A new device first proves itself another way (§5.4), then deletes.
         if (e instanceof ApiError && e.body.second_proof_required) {
@@ -390,7 +414,7 @@ export function DeleteAccountPage() {
 /** /account-deleted: the account is gone (signed out by then). */
 export function AccountDeleted() {
   const loc = useLocation();
-  const told = (loc.state as { told?: number } | null)?.told;
+  const told = toldOf(loc.search);
   return (
     <div className="login card" data-testid="account-deleted">
       <h1>Your account is deleted</h1>

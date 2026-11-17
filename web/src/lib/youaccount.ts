@@ -138,6 +138,16 @@ export function deleteBody(proof: { code?: string; password?: string; credential
   return body;
 }
 
+/** The signed-out page that says the account is gone, with how many
+ * businesses were told (a count, nothing about the person). */
+export const accountDeletedPath = (told: number) => `/account-deleted?told=${Math.max(0, Math.floor(told))}`;
+
+/** The count back from that page's address; undefined without one. */
+export function toldOf(search: string): number | undefined {
+  const t = new URLSearchParams(search).get("told");
+  return t !== null && /^\d{1,6}$/.test(t) ? Number(t) : undefined;
+}
+
 /** What the page says once the account is gone. */
 export function deletedWords(told: number): string {
   const who =

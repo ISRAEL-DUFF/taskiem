@@ -22,7 +22,8 @@ interface Auth {
   loginWithPasskey: () => Promise<void>;
   logout: () => Promise<void>;
   /** The account was deleted: the server ended every session already, so
-   * this tab forgets the person at once, asking the server nothing. */
+   * this tab forgets what it kept of the person, asking the server nothing
+   * (the page that says so is then loaded afresh, signed out). */
   gone: () => void;
   refresh: () => Promise<void>;
 }
@@ -101,7 +102,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAppBadge(0);
       forgetTab();
       forgetViewed();
-      signedOut();
     },
   };
   if (leaving === "stuck")
