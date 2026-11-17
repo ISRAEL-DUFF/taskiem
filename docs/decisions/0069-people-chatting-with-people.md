@@ -1,6 +1,6 @@
 # 0069 — People chatting with people: chats kept by Taskiem, businesses inside them
 
-Date: 2026-11-17 · Status: **Proposed** · Plan: [People chatting with people](../spec/people-chatting.md)
+Date: 2026-11-17 · Status: **Accepted** (17 November 2026; not built) · Plan: [People chatting with people](../spec/people-chatting.md)
 
 ## Context
 

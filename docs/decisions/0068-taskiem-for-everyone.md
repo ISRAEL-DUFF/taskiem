@@ -107,3 +107,7 @@ The founder's direction: make the Taskiem app a full app for customers too, and 
 ## Provenance
 
 The founder's questions of 16 November 2026: what happens when a consumer downloads the app or signs up, how a customer finds and chats with a business on WhatsApp or Telegram today, and how one customer would chat with several businesses on the shared number. The founder chose the app over the shared number, one app with chat in the browser, and a general chat app as the direction, and answered the plan's eight questions the same day. Nothing here copies another product's code or design.
+
+## Amendment, 2026-11-17
+
+Point 11 (chats between people, a later stage with its own decisions) is answered by [0069](0069-people-chatting-with-people.md): people chats are kept by Taskiem, encrypted at rest and readable by its servers as business chats are, found by number, a person's link or opt-in contacts, strangers writing as requests, with businesses inside them (live cards, ordering together) and no money moved between people.
