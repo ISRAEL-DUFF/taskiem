@@ -2515,7 +2515,7 @@ class ListCustomerChatsResponse {
 }
 
 class CustomerChat {
-  const CustomerChat({required this.archived, this.blocked, required this.id, required this.last, required this.lastAt, required this.lastMine, this.line, this.muted, required this.name, this.notice, this.offers, this.openInvoices, this.owesKobo, required this.phone, required this.stopped, this.typing, required this.unread, required this.windowOpen, this.windowUntil});
+  const CustomerChat({required this.archived, this.blocked, required this.id, required this.last, required this.lastAt, required this.lastMine, this.line, this.lines, this.muted, required this.name, this.notice, this.offers, this.openInvoices, this.owesKobo, required this.phone, this.replyLine, required this.stopped, this.typing, required this.unread, required this.windowOpen, this.windowUntil});
 
   final bool archived;
   /// The business blocked this customer (app).
@@ -2528,6 +2528,14 @@ class CustomerChat {
   /// Taskiem app (or the browser chat). An app thread has no 24-hour window and
   /// no template; `stopped` there is the customer's Block.
   final String? line;
+  /// The customer's lines in this thread (taskiem-for-everyone §11): one, or
+  /// both once the person in the app and the business's WhatsApp thread of
+  /// their verified phone are one customer. Then `id` and `line` are the app
+  /// thread's (either line's id opens the thread), the list shows one row for
+  /// the customer (the latest message and unread count of both lines), and
+  /// `window_open`, `window_until`, `stopped`, `blocked` and `notice` are those
+  /// of `reply_line`.
+  final List<CustomerThreadLine>? lines;
   /// Nobody is told of its messages (no bell item, no push).
   final bool? muted;
   /// The customer's name in the business's book, or their number.
@@ -2541,6 +2549,10 @@ class CustomerChat {
   final int? owesKobo;
   /// Empty when the customer's details were erased.
   final String phone;
+  /// Where a reply goes unless another line is chosen (`line` on the reply):
+  /// the line the customer last wrote on, or the other when that one cannot
+  /// take messages (STOP, a block, left) and the other can.
+  final String? replyLine;
   /// The customer sent STOP; nothing is sent until START.
   final bool stopped;
   /// One app thread only, the customer is typing.
@@ -2559,6 +2571,7 @@ class CustomerChat {
         lastAt: DateTime.parse(j['last_at'] as String),
         lastMine: j['last_mine'] as bool,
         line: j['line'] == null ? null : j['line'] as String,
+        lines: j['lines'] == null ? null : (j['lines'] as List).map((e) => CustomerThreadLine.fromJson(e as Map<String, dynamic>)).toList(),
         muted: j['muted'] == null ? null : j['muted'] as bool,
         name: j['name'] as String,
         notice: j['notice'] == null ? null : j['notice'] as String,
@@ -2566,6 +2579,7 @@ class CustomerChat {
         openInvoices: j['open_invoices'] == null ? null : (j['open_invoices'] as num).toInt(),
         owesKobo: j['owes_kobo'] == null ? null : (j['owes_kobo'] as num).toInt(),
         phone: j['phone'] as String,
+        replyLine: j['reply_line'] == null ? null : j['reply_line'] as String,
         stopped: j['stopped'] as bool,
         typing: j['typing'] == null ? null : j['typing'] as bool,
         unread: (j['unread'] as num).toInt(),
@@ -2581,6 +2595,7 @@ class CustomerChat {
         'last_at': lastAt.toUtc().toIso8601String(),
         'last_mine': lastMine,
         'line': ?line,
+        'lines': ?lines?.map((e) => e.toJson()).toList(),
         'muted': ?muted,
         'name': name,
         'notice': ?notice,
@@ -2588,9 +2603,62 @@ class CustomerChat {
         'open_invoices': ?openInvoices,
         'owes_kobo': ?owesKobo,
         'phone': phone,
+        'reply_line': ?replyLine,
         'stopped': stopped,
         'typing': ?typing,
         'unread': unread,
+        'window_open': windowOpen,
+        'window_until': ?windowUntil,
+      };
+}
+
+/// One of a customer's lines in a thread (§11), with what stops it. Each keeps
+/// its own meaning: on WhatsApp `stopped` is STOP; in the app it is the
+/// customer's Block (or their having left Taskiem) and `blocked` is the
+/// business's.
+class CustomerThreadLine {
+  const CustomerThreadLine({required this.blocked, required this.id, this.lastInAt, required this.line, this.notice, required this.phone, required this.stopped, required this.windowOpen, this.windowUntil});
+
+  final bool blocked;
+  /// The line's own thread.
+  final String id;
+  /// When the customer last wrote on this line.
+  final Object? lastInAt;
+  final String line;
+  /// "This customer sent STOP on WhatsApp", "This customer has stopped
+  /// messages", "You blocked this customer in the app", "This customer changed
+  /// their number" (a WhatsApp thread whose customer moved their app line to
+  /// another number), "This customer left Taskiem".
+  final String? notice;
+  /// The number on the line; empty once erased.
+  final String phone;
+  final bool stopped;
+  /// A reply goes as words now: on WhatsApp within 24 hours of the customer's
+  /// last message there (after them, the approved template), in the app always
+  /// unless blocked.
+  final bool windowOpen;
+  final Object? windowUntil;
+
+  factory CustomerThreadLine.fromJson(Map<String, dynamic> j) => CustomerThreadLine(
+        blocked: j['blocked'] as bool,
+        id: j['id'] as String,
+        lastInAt: j['last_in_at'],
+        line: j['line'] as String,
+        notice: j['notice'] == null ? null : j['notice'] as String,
+        phone: j['phone'] as String,
+        stopped: j['stopped'] as bool,
+        windowOpen: j['window_open'] as bool,
+        windowUntil: j['window_until'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'blocked': blocked,
+        'id': id,
+        'last_in_at': ?lastInAt,
+        'line': line,
+        'notice': ?notice,
+        'phone': phone,
+        'stopped': stopped,
         'window_open': windowOpen,
         'window_until': ?windowUntil,
       };
@@ -3374,7 +3442,7 @@ class ListCustomerMessagesResponse {
 }
 
 class CustomerMessage {
-  const CustomerMessage({this.attachment, required this.body, this.card, required this.createdAt, this.delivery, this.failure, required this.id, required this.kind, required this.mine, this.offer, this.readAt, this.senderName, this.sentAs});
+  const CustomerMessage({this.attachment, required this.body, this.card, required this.createdAt, this.delivery, this.failure, required this.id, required this.kind, this.line, required this.mine, this.offer, this.readAt, this.senderName, this.sentAs});
 
   final ChatAttachment? attachment;
   final String body;
@@ -3386,6 +3454,9 @@ class CustomerMessage {
   final String? failure;
   final String id;
   final String kind;
+  /// Where the message went: on WhatsApp (the business's own number) or in the
+  /// app; a thread with both lines holds both, in time order (§11).
+  final String? line;
   /// From the business.
   final bool mine;
   /// An offer to a customer who agreed to offers (app, §15).
@@ -3403,6 +3474,7 @@ class CustomerMessage {
         failure: j['failure'] == null ? null : j['failure'] as String,
         id: j['id'] as String,
         kind: j['kind'] as String,
+        line: j['line'] == null ? null : j['line'] as String,
         mine: j['mine'] as bool,
         offer: j['offer'] == null ? null : j['offer'] as bool,
         readAt: j['read_at'],
@@ -3419,6 +3491,7 @@ class CustomerMessage {
         'failure': ?failure,
         'id': id,
         'kind': kind,
+        'line': ?line,
         'mine': mine,
         'offer': ?offer,
         'read_at': ?readAt,
@@ -3553,16 +3626,22 @@ class PutCustomerChatRequest {
 }
 
 class ReplyCustomerRequest {
-  const ReplyCustomerRequest({this.card, this.clientId, this.offer, this.text});
+  const ReplyCustomerRequest({this.card, this.clientId, this.line, this.offer, this.text});
 
   final ReplyCustomerRequestCard? card;
   final String? clientId;
+  /// For a customer with both lines (taskiem-for-everyone §11; the thread's
+  /// `lines`): the line the reply goes on. Left out, `reply_line` (the line the
+  /// customer last wrote on). Cards, offers and files go in the app whatever it
+  /// says. 409 when the customer has no such line.
+  final String? line;
   final bool? offer;
   final String? text;
 
   factory ReplyCustomerRequest.fromJson(Map<String, dynamic> j) => ReplyCustomerRequest(
         card: j['card'] == null ? null : ReplyCustomerRequestCard.fromJson(j['card'] as Map<String, dynamic>),
         clientId: j['client_id'] == null ? null : j['client_id'] as String,
+        line: j['line'] == null ? null : j['line'] as String,
         offer: j['offer'] == null ? null : j['offer'] as bool,
         text: j['text'] == null ? null : j['text'] as String,
       );
@@ -3570,6 +3649,7 @@ class ReplyCustomerRequest {
   Map<String, dynamic> toJson() => {
         'card': ?card?.toJson(),
         'client_id': ?clientId,
+        'line': ?line,
         'offer': ?offer,
         'text': ?text,
       };
@@ -3719,7 +3799,7 @@ class ListMyChatsResponse {
 /// One of a person's chats with a business, as their own side shows it
 /// (taskiem-for-everyone §7, §8).
 class PersonChat {
-  const PersonChat({required this.archived, required this.askOffers, required this.blocked, required this.blockedYou, required this.business, this.hours, required this.id, required this.last, required this.lastAt, required this.lastMine, required this.muted, required this.name, this.notice, required this.offers, this.offersRefused, this.photo, this.typing, required this.unread, this.verified});
+  const PersonChat({required this.archived, required this.askOffers, required this.blocked, required this.blockedYou, required this.business, this.hours, required this.id, required this.last, required this.lastAt, required this.lastMine, this.lines, required this.muted, required this.name, this.notice, required this.offers, this.offersRefused, this.photo, this.typing, required this.unread, this.verified});
 
   final bool archived;
   /// Ask it now (once, at the first chat or order). False once answered, once
@@ -3737,6 +3817,10 @@ class PersonChat {
   final String last;
   final DateTime lastAt;
   final bool lastMine;
+  /// Where this chat runs: the app, and WhatsApp once your messages with the
+  /// business on its own WhatsApp number, from the phone on your account, are
+  /// shown here too, marked on WhatsApp (§11).
+  final List<String>? lines;
   final bool muted;
   /// The business's name.
   final String name;
@@ -3769,6 +3853,7 @@ class PersonChat {
         last: j['last'] as String,
         lastAt: DateTime.parse(j['last_at'] as String),
         lastMine: j['last_mine'] as bool,
+        lines: j['lines'] == null ? null : (j['lines'] as List).map((e) => e as String).toList(),
         muted: j['muted'] as bool,
         name: j['name'] as String,
         notice: j['notice'] == null ? null : j['notice'] as String,
@@ -3791,6 +3876,7 @@ class PersonChat {
         'last': last,
         'last_at': lastAt.toUtc().toIso8601String(),
         'last_mine': lastMine,
+        'lines': ?lines?.map((e) => e).toList(),
         'muted': muted,
         'name': name,
         'notice': ?notice,
@@ -3938,7 +4024,7 @@ class ListMyChatMessagesResponse {
 }
 
 class PersonMessage {
-  const PersonMessage({this.attachment, required this.body, this.card, required this.createdAt, required this.id, required this.kind, required this.mine, this.offer, this.readAt, this.senderName, this.warnTransfer});
+  const PersonMessage({this.attachment, required this.body, this.card, required this.createdAt, required this.id, required this.kind, this.line, required this.mine, this.offer, this.readAt, this.senderName, this.warnTransfer});
 
   final ChatAttachment? attachment;
   final String body;
@@ -3947,6 +4033,10 @@ class PersonMessage {
   /// The message, the same id on the business's copy.
   final String id;
   final String kind;
+  /// In the app, or on WhatsApp: a message between you and the business on its
+  /// own WhatsApp number, shown here since it was yours (§11). Show it marked
+  /// "on WhatsApp"; it cannot be answered there from here.
+  final String? line;
   /// You sent it.
   final bool mine;
   /// An offer (marked Offer, with Stop offers under it).
@@ -3966,6 +4056,7 @@ class PersonMessage {
         createdAt: DateTime.parse(j['created_at'] as String),
         id: j['id'] as String,
         kind: j['kind'] as String,
+        line: j['line'] == null ? null : j['line'] as String,
         mine: j['mine'] as bool,
         offer: j['offer'] == null ? null : j['offer'] as bool,
         readAt: j['read_at'],
@@ -3980,6 +4071,7 @@ class PersonMessage {
         'created_at': createdAt.toUtc().toIso8601String(),
         'id': id,
         'kind': kind,
+        'line': ?line,
         'mine': mine,
         'offer': ?offer,
         'read_at': ?readAt,
@@ -6914,12 +7006,16 @@ class DeletePushEndpointRequest {
 }
 
 class ChatLinkCard {
-  const ChatLinkCard({this.app, this.area, required this.code, this.hours, required this.link, required this.name, this.openNow, this.photo, this.shop, this.tagline, required this.takesChats, required this.words});
+  const ChatLinkCard({this.app, this.area, this.choices, required this.code, this.hours, required this.link, required this.name, this.openNow, this.photo, this.shop, this.tagline, required this.takesChats, this.whatsapp, required this.words});
 
   /// Where to get the Taskiem app (TASKIEM_APP_GET_URL), for the page's Get the
   /// Taskiem app; absent where it is not listed.
   final String? app;
   final String? area;
+  /// The ways to chat the link offers, in order: `whatsapp` (Chat on WhatsApp,
+  /// `whatsapp.link`) and `taskiem` (Chat on Taskiem: the app, or the browser);
+  /// empty when neither.
+  final List<String>? choices;
   final String code;
   final Map<String, dynamic>? hours;
   final String link;
@@ -6929,11 +7025,15 @@ class ChatLinkCard {
   final String? shop;
   final String? tagline;
   final bool takesChats;
+  /// Chat on WhatsApp, for a business with its own WhatsApp number that offers
+  /// it on its link (taskiem-for-everyone §11): its number and its wa.me link.
+  final ChatLinkCardWhatsapp? whatsapp;
   final String words;
 
   factory ChatLinkCard.fromJson(Map<String, dynamic> j) => ChatLinkCard(
         app: j['app'] == null ? null : j['app'] as String,
         area: j['area'] == null ? null : j['area'] as String,
+        choices: j['choices'] == null ? null : (j['choices'] as List).map((e) => e as String).toList(),
         code: j['code'] as String,
         hours: j['hours'] == null ? null : j['hours'] as Map<String, dynamic>,
         link: j['link'] as String,
@@ -6943,12 +7043,14 @@ class ChatLinkCard {
         shop: j['shop'] == null ? null : j['shop'] as String,
         tagline: j['tagline'] == null ? null : j['tagline'] as String,
         takesChats: j['takes_chats'] as bool,
+        whatsapp: j['whatsapp'] == null ? null : ChatLinkCardWhatsapp.fromJson(j['whatsapp'] as Map<String, dynamic>),
         words: j['words'] as String,
       );
 
   Map<String, dynamic> toJson() => {
         'app': ?app,
         'area': ?area,
+        'choices': ?choices?.map((e) => e).toList(),
         'code': code,
         'hours': ?hours,
         'link': link,
@@ -6958,7 +7060,27 @@ class ChatLinkCard {
         'shop': ?shop,
         'tagline': ?tagline,
         'takes_chats': takesChats,
+        'whatsapp': ?whatsapp?.toJson(),
         'words': words,
+      };
+}
+
+/// Chat on WhatsApp, for a business with its own WhatsApp number that offers it
+/// on its link (taskiem-for-everyone §11): its number and its wa.me link.
+class ChatLinkCardWhatsapp {
+  const ChatLinkCardWhatsapp({required this.link, required this.number});
+
+  final String link;
+  final String number;
+
+  factory ChatLinkCardWhatsapp.fromJson(Map<String, dynamic> j) => ChatLinkCardWhatsapp(
+        link: j['link'] as String,
+        number: j['number'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'link': link,
+        'number': number,
       };
 }
 
@@ -6994,10 +7116,14 @@ class ChatLink {
 }
 
 class ChatSettings {
-  const ChatSettings({this.linkInUpdates, this.ordersOff, required this.storefrontButton, required this.takesChats, required this.updatesLink});
+  const ChatSettings({this.linkInUpdates, this.linkWhatsapp, this.ordersOff, required this.storefrontButton, required this.takesChats, required this.updatesLink});
 
   /// The business's own choice; null for the default
   final Object? linkInUpdates;
+  /// Whether the chat link offers Chat on WhatsApp, on the business's own
+  /// number, beside Chat on Taskiem (on unless turned off; only for a business
+  /// with its own number).
+  final bool? linkWhatsapp;
   /// The Orders area is off, so no chats are taken whatever takes_chats was set
   /// to
   final bool? ordersOff;
@@ -7009,6 +7135,7 @@ class ChatSettings {
 
   factory ChatSettings.fromJson(Map<String, dynamic> j) => ChatSettings(
         linkInUpdates: j['link_in_updates'],
+        linkWhatsapp: j['link_whatsapp'] == null ? null : j['link_whatsapp'] as bool,
         ordersOff: j['orders_off'] == null ? null : j['orders_off'] as bool,
         storefrontButton: j['storefront_button'] as String,
         takesChats: j['takes_chats'] as bool,
@@ -7017,6 +7144,7 @@ class ChatSettings {
 
   Map<String, dynamic> toJson() => {
         'link_in_updates': ?linkInUpdates,
+        'link_whatsapp': ?linkWhatsapp,
         'orders_off': ?ordersOff,
         'storefront_button': storefrontButton,
         'takes_chats': takesChats,
@@ -7025,16 +7153,21 @@ class ChatSettings {
 }
 
 class PutChatSettingsRequest {
-  const PutChatSettingsRequest({this.linkInUpdates, this.linkInUpdatesDefault, this.storefrontButton, this.takesChats});
+  const PutChatSettingsRequest({this.linkInUpdates, this.linkInUpdatesDefault, this.linkWhatsapp, this.storefrontButton, this.takesChats});
 
   final bool? linkInUpdates;
   final bool? linkInUpdatesDefault;
+  /// Whether the chat link offers Chat on WhatsApp (the business's own number)
+  /// beside Chat on Taskiem; on by default; only when the business has a
+  /// WhatsApp number of its own.
+  final bool? linkWhatsapp;
   final String? storefrontButton;
   final bool? takesChats;
 
   factory PutChatSettingsRequest.fromJson(Map<String, dynamic> j) => PutChatSettingsRequest(
         linkInUpdates: j['link_in_updates'] == null ? null : j['link_in_updates'] as bool,
         linkInUpdatesDefault: j['link_in_updates_default'] == null ? null : j['link_in_updates_default'] as bool,
+        linkWhatsapp: j['link_whatsapp'] == null ? null : j['link_whatsapp'] as bool,
         storefrontButton: j['storefront_button'] == null ? null : j['storefront_button'] as String,
         takesChats: j['takes_chats'] == null ? null : j['takes_chats'] as bool,
       );
@@ -7042,6 +7175,7 @@ class PutChatSettingsRequest {
   Map<String, dynamic> toJson() => {
         'link_in_updates': ?linkInUpdates,
         'link_in_updates_default': ?linkInUpdatesDefault,
+        'link_whatsapp': ?linkWhatsapp,
         'storefront_button': ?storefrontButton,
         'takes_chats': ?takesChats,
       };
