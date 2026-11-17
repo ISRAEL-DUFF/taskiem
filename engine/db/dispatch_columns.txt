@@ -269,6 +269,7 @@ customer_conversations.id
 customer_conversations.last_inbound_at
 customer_conversations.last_reply_at
 customer_conversations.line
+customer_conversations.link_checked_at
 customer_conversations.owner_told_at
 customer_conversations.person_blocked_at
 customer_conversations.person_id
