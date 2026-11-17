@@ -6,7 +6,8 @@
 // that is on is hidden (taken out by the moderators, reported, the page
 // suspended); why it shows without Chat; and the listing as customers see
 // it (`GET`/`PUT /v1/settings/discover`). Its pin on the map is not here
-// yet. Without `storefront.manage` it is shown, not changed.
+// yet. Only for `storefront.manage`, as the web's: Settings lists it for
+// them alone (the server reads it for no one else).
 
 import 'package:flutter/widgets.dart';
 
@@ -44,13 +45,12 @@ String? discoverChatOffWords(String? off) => switch (off) {
   _ => null,
 };
 
-/// The Settings row's line: where the listing stands.
-String discoverLine(DiscoverSettings s) {
-  if (s.workspace == true) return 'Not for a workflows workspace';
-  if (!s.listed) return 'Off';
-  if (s.shown) return 'Customers can find you';
-  if (s.hidden != null) return 'Hidden';
-  return 'Not shown yet';
+/// Where the listing stands: a tag and a line (the web's `standing`).
+({String tag, String line}) discoverStanding(DiscoverSettings s) {
+  if (!s.listed) return (tag: 'Off', line: 'Customers can’t find you in Discover.');
+  if (s.hidden != null) return (tag: 'Hidden', line: 'Your listing is hidden for now.');
+  if (!s.shown || s.missing.isNotEmpty) return (tag: 'Not shown yet', line: 'Your listing needs a little more before customers see it.');
+  return (tag: 'Listed', line: 'Customers can find you in Discover.');
 }
 
 class DiscoverSettingsPage extends StatefulWidget {
@@ -67,7 +67,10 @@ class _DiscoverSettingsPageState extends State<DiscoverSettingsPage> {
   bool _busy = false;
   final _area = TextEditingController();
 
-  bool get _can => widget.auth.can('storefront.manage');
+  /// The area as last saved: what is typed and not saved yet stays when
+  /// another setting is changed.
+  String _savedArea = '';
+  String? _areaError;
 
   @override
   void initState() {
@@ -81,9 +84,11 @@ class _DiscoverSettingsPageState extends State<DiscoverSettingsPage> {
     super.dispose();
   }
 
-  void _take(DiscoverSettings s) {
+  void _take(DiscoverSettings s, {bool area = false}) {
     _s = s;
-    _area.text = s.area ?? '';
+    // Typed and not saved: left as typed.
+    if (area || _area.text.trim() == _savedArea) _area.text = s.area ?? '';
+    _savedArea = s.area ?? '';
     _error = null;
   }
 
@@ -96,20 +101,24 @@ class _DiscoverSettingsPageState extends State<DiscoverSettingsPage> {
     }
   }
 
-  Future<bool> _put(PutDiscoverSettingsRequest body) async {
+  /// A change; refused, it is said where it was made: a toast, and the
+  /// area's under its field ([area]).
+  Future<bool> _put(PutDiscoverSettingsRequest body, {bool area = false}) async {
     if (_busy) return false;
-    setState(() => (_busy = true, _error = null));
+    setState(() => (_busy = true, _areaError = area ? null : _areaError));
     try {
       final s = await widget.auth.api.putDiscoverSettings(body: body);
       if (mounted) {
         setState(() {
-          _take(s);
+          _take(s, area: area);
           _busy = false;
         });
       }
       return true;
     } on Object catch (e) {
-      if (mounted) setState(() => (_error = sayFailure(e), _busy = false));
+      if (!mounted) return false;
+      setState(() => (_busy = false, _areaError = area ? sayFailure(e) : _areaError));
+      if (!area) showTkToast(context, sayFailure(e), error: true);
       return false;
     }
   }
@@ -119,14 +128,15 @@ class _DiscoverSettingsPageState extends State<DiscoverSettingsPage> {
     final pick = await showTkModalChoices(
       context,
       title: 'Your category in Discover',
-      value: s.category ?? s.listing.category,
-      choices: [for (final e in exploreCategoryNames.entries) (e.key, e.value)],
+      value: s.category ?? '',
+      // "From my profile": no category of its own ("" clears it).
+      choices: [('', 'From my profile'), for (final e in exploreCategoryNames.entries) (e.key, e.value)],
     );
-    if (pick != null && mounted) await _put(PutDiscoverSettingsRequest(category: pick));
+    if (pick != null && pick != (s.category ?? '') && mounted) await _put(PutDiscoverSettingsRequest(category: pick));
   }
 
   Future<void> _saveArea() async {
-    if (await _put(PutDiscoverSettingsRequest(area: _area.text.trim())) && mounted) showTkToast(context, 'Area saved');
+    if (await _put(PutDiscoverSettingsRequest(area: _area.text.trim()), area: true) && mounted) showTkToast(context, 'Area saved');
   }
 
   Future<void> _hours() async {
@@ -156,9 +166,9 @@ class _DiscoverSettingsPageState extends State<DiscoverSettingsPage> {
                     ? 'A workflows workspace isn’t listed in Discover.'
                     : 'Customers find you in Taskiem’s Discover and chat with you. Apart from Explore, where businesses find you.',
                 on: s.listed,
-                onChanged: !_can || _busy || s.workspace == true ? null : (v) => _put(PutDiscoverSettingsRequest(listed: v)),
+                onChanged: _busy || s.workspace == true ? null : (v) => _put(PutDiscoverSettingsRequest(listed: v)),
               ),
-              if (s.chosen != null && s.workspace != true && _can)
+              if (s.chosen != null && s.workspace != true)
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TkLinkButton(
@@ -183,16 +193,16 @@ class _DiscoverSettingsPageState extends State<DiscoverSettingsPage> {
                   sub: _categoryWords(s),
                   icon: 'b-bag',
                   square: s.missing.contains('category') ? look.orange : look.teal,
-                  onTap: _can && !_busy ? _category : null,
+                  onTap: _busy ? null : _category,
                 ),
                 TkListRow(
                   title: 'Opening hours',
                   sub: _hoursWords(s),
                   icon: 'b-clock',
                   square: s.missing.contains('hours') ? look.orange : look.blue,
-                  onTap: _can && !_busy ? _hours : null,
+                  onTap: _busy ? null : _hours,
                 ),
-                if (s.hours != null && _can)
+                if (s.hours != null)
                   TkListRow(title: 'Use your shop’s hours', icon: 'b-store', square: look.violet, onTap: _busy ? null : () => _put(const PutDiscoverSettingsRequest(clearHours: true))),
               ],
             ),
@@ -203,23 +213,23 @@ class _DiscoverSettingsPageState extends State<DiscoverSettingsPage> {
                 TkKitField(
                   label: 'Where customers find you',
                   hint: s.area == null ? 'Empty: your profile’s or your shop’s area${(s.listing.area ?? '').isEmpty ? '' : ' (${s.listing.area})'}.' : null,
-                  child: TkTextBox(controller: _area, max: 80, enabled: _can),
+                  child: TkTextBox(controller: _area, max: 80),
                 ),
-                if (_can) Align(alignment: Alignment.centerLeft, child: TkSmallButton(label: _busy ? 'Saving…' : 'Save', primary: true, onPressed: _busy ? null : _saveArea)),
+                if (_areaError != null) Semantics(liveRegion: true, child: TkErrorBox(_areaError!)),
+                Align(alignment: Alignment.centerLeft, child: TkSmallButton(label: _busy ? 'Saving…' : 'Save', primary: true, onPressed: _busy ? null : _saveArea)),
               ],
             ),
           if (s.missing.contains('photo')) const SettingsNote('Your photo comes from your profile or your shop. Add a logo there.'),
-          if (!_can) const SettingsNote('Only those who manage your shop can change this.'),
         ],
       ],
     );
   }
 
   String _categoryWords(DiscoverSettings s) {
-    final key = s.category ?? s.listing.category;
-    if (key == null) return 'Not chosen yet';
+    final key = (s.category ?? '').isNotEmpty ? s.category : s.listing.category;
+    if (key == null || key.isEmpty) return 'Not chosen yet';
     final name = exploreCategoryNames[key] ?? key;
-    return s.category == null ? '$name · from your profile' : name;
+    return (s.category ?? '').isEmpty ? 'From my profile: $name' : name;
   }
 
   String _hoursWords(DiscoverSettings s) {
@@ -269,11 +279,12 @@ class _Preview extends StatelessWidget {
     final look = TkLook.of(context);
     final l = s.listing;
     final category = l.category == null ? null : exploreCategoryNames[l.category] ?? l.category;
+    final now = discoverStanding(s);
     return TkTopCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TkEyebrow('YOUR LISTING', color: look.limeInk, icon: 'b-search', trailing: s.shown ? 'Shown' : (s.listed ? 'Not shown' : 'Off')),
+          TkEyebrow('YOUR LISTING', color: look.limeInk, icon: 'b-search', trailing: now.tag),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -303,22 +314,15 @@ class _Preview extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            s.shown
-                ? 'Customers can find you in Discover.'
-                : !s.listed
-                ? 'You’re not in Discover. Turn it on below to be found.'
-                : 'Customers can’t find you in Discover yet.',
-            style: tkText(size: 13, lineHeight: 1.4, color: t.muted),
-          ),
+          Text(now.line, style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
         ],
       ),
     );
   }
 }
 
-/// The listing's own opening hours: a line a day, open or closed, from
-/// and to (HH:MM).
+/// The listing's own opening hours: each day open or closed, with every
+/// opening it has (a lunch break makes two), each from and to (HH:MM).
 class DiscoverHoursSheet extends StatefulWidget {
   const DiscoverHoursSheet({super.key, required this.hours});
   final Map<String, dynamic>? hours;
@@ -327,64 +331,80 @@ class DiscoverHoursSheet extends StatefulWidget {
   State<DiscoverHoursSheet> createState() => _DiscoverHoursSheetState();
 }
 
+/// One opening, as typed.
+typedef _Opening = ({TextEditingController from, TextEditingController to});
+
 class _DiscoverHoursSheetState extends State<DiscoverHoursSheet> {
   static const _days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  /// The most openings a day has here.
+  static const _most = 4;
   late final List<bool> _open;
-  late final List<TextEditingController> _from;
-  late final List<TextEditingController> _to;
+  late final List<List<_Opening>> _openings;
   String? _error;
+
+  static _Opening _opening(String from, String to) => (from: TextEditingController(text: from), to: TextEditingController(text: to));
 
   @override
   void initState() {
     super.initState();
     final days = widget.hours?['days'];
-    Map<String, dynamic>? first(int i) {
-      if (days is! List || days.length != 7 || days[i] is! List || (days[i] as List).isEmpty) return null;
-      final s = (days[i] as List).first;
-      return s is Map<String, dynamic> ? s : null;
+    List<Map<String, dynamic>> of(int i) {
+      if (days is! List || days.length != 7 || days[i] is! List) return const [];
+      return [for (final s in days[i] as List) if (s is Map<String, dynamic>) s];
     }
 
-    _open = [for (var i = 0; i < 7; i++) first(i) != null];
-    _from = [for (var i = 0; i < 7; i++) TextEditingController(text: first(i)?['open'] as String? ?? '09:00')];
-    _to = [for (var i = 0; i < 7; i++) TextEditingController(text: first(i)?['close'] as String? ?? '18:00')];
+    _open = [for (var i = 0; i < 7; i++) of(i).isNotEmpty];
+    _openings = [
+      for (var i = 0; i < 7; i++)
+        of(i).isEmpty
+            ? [_opening('09:00', '18:00')]
+            : [for (final s in of(i)) _opening(s['open'] as String? ?? '09:00', s['close'] as String? ?? '18:00')],
+    ];
   }
 
   @override
   void dispose() {
-    for (final c in [..._from, ..._to]) {
-      c.dispose();
+    for (final day in _openings) {
+      for (final o in day) {
+        o.from.dispose();
+        o.to.dispose();
+      }
     }
     super.dispose();
   }
 
-  /// A day's openings as they came, when its first is unchanged.
-  List<Object?>? _kept(int i) {
-    final days = widget.hours?['days'];
-    if (days is! List || days.length != 7 || days[i] is! List || (days[i] as List).isEmpty) return null;
-    final first = (days[i] as List).first;
-    if (first is! Map || first['open'] != _from[i].text.trim() || first['close'] != _to[i].text.trim()) return null;
-    return days[i] as List<Object?>;
+  static final _time = RegExp(r'^([01]\d|2[0-3]):[0-5]\d$');
+
+  void _add(int i) {
+    final last = _openings[i].last;
+    setState(() => _openings[i].add(_opening(last.to.text.trim(), '')));
   }
 
-  static final _time = RegExp(r'^([01]\d|2[0-3]):[0-5]\d$');
+  void _remove(int i, int k) {
+    final o = _openings[i].removeAt(k);
+    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      o.from.dispose();
+      o.to.dispose();
+    });
+  }
 
   void _save() {
     for (var i = 0; i < 7; i++) {
-      if (_open[i] && (!_time.hasMatch(_from[i].text.trim()) || !_time.hasMatch(_to[i].text.trim()) || _from[i].text.trim() == _to[i].text.trim())) {
-        return setState(() => _error = 'Opening hours are times like 08:00 to 18:30 (${_days[i]}).');
+      if (!_open[i]) continue;
+      for (final o in _openings[i]) {
+        final from = o.from.text.trim(), to = o.to.text.trim();
+        if (!_time.hasMatch(from) || !_time.hasMatch(to) || from == to) {
+          return setState(() => _error = 'Opening hours are times like 08:00 to 18:30 (${_days[i]}).');
+        }
       }
     }
     if (!_open.contains(true)) return setState(() => _error = 'Open at least one day.');
     Navigator.of(context).pop(<String, dynamic>{
       'days': [
         for (var i = 0; i < 7; i++)
-          if (!_open[i])
-            <Object>[]
-          // A day left as it was keeps all its openings.
-          else if (_kept(i) != null)
-            _kept(i)!
-          else
-            [{'open': _from[i].text.trim(), 'close': _to[i].text.trim()}],
+          if (!_open[i]) <Object>[] else [for (final o in _openings[i]) {'open': o.from.text.trim(), 'close': o.to.text.trim()}],
       ],
       if (widget.hours?['note'] is String && (widget.hours!['note'] as String).isNotEmpty) 'note': widget.hours!['note'],
     });
@@ -413,22 +433,41 @@ class _DiscoverHoursSheetState extends State<DiscoverHoursSheet> {
                       TkSwitch(label: '${_days[i]} open', on: _open[i], onChanged: (v) => setState(() => _open[i] = v)),
                     ],
                   ),
-                  if (_open[i])
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Row(
-                        children: [
-                          Expanded(child: TkKitField(label: 'Opens', child: TkTextBox(controller: _from[i], height: 44, size: 16, hint: '09:00', max: 5))),
-                          const SizedBox(width: 10),
-                          Expanded(child: TkKitField(label: 'Closes', child: TkTextBox(controller: _to[i], height: 44, size: 16, hint: '18:00', max: 5))),
-                        ],
+                  if (_open[i]) ...[
+                    for (var k = 0; k < _openings[i].length; k++)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: TkKitField(
+                                label: k == 0 ? 'Opens' : 'Opens again',
+                                child: TkTextBox(controller: _openings[i][k].from, height: 44, size: 16, hint: '09:00', max: 5),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TkKitField(label: 'Closes', child: TkTextBox(controller: _openings[i][k].to, height: 44, size: 16, hint: '18:00', max: 5)),
+                            ),
+                            if (_openings[i].length > 1) ...[
+                              const SizedBox(width: 4),
+                              TkHeadButton(icon: 'b-x', label: 'Take away ${_days[i]}’s opening ${k + 1}', onCard: true, onTap: () => _remove(i, k)),
+                            ],
+                          ],
+                        ),
                       ),
-                    ),
+                    if (_openings[i].length < _most)
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TkLinkButton(label: 'Add an opening on ${_days[i]}', onPressed: () => _add(i)),
+                      ),
+                  ],
                 ],
               ),
           ],
         ),
-        Text('A day you leave as it is keeps all its openings.', style: tkText(size: 13, color: t.muted)),
+        Text('A day can open more than once, as with a break at midday.', style: tkText(size: 13, color: t.muted)),
         if (_error != null) TkErrorBox(_error!),
       ],
     );
