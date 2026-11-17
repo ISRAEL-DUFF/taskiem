@@ -302,9 +302,9 @@ void main() {
       'created_at': '2026-11-16T08:00:00Z',
       'words': 'Chat with Mama’s Kitchen on Taskiem: https://app.taskiem.com/m/k7m2q9x4pz',
       'qr': '/v1/customers/chat-link/qr',
-      'settings': {'takes_chats': true, 'storefront_button': 'both', 'link_in_updates': null, 'updates_link': true, 'link_whatsapp': true},
+      'settings': {'takes_chats': true, 'storefront_button': 'both', 'link_in_updates': null, 'updates_link': true, 'link_whatsapp': true, 'own_number': '+2348031234567'},
     };
-    api.routes['PUT /v1/customers/chat-settings'] = (r) => {'takes_chats': true, 'storefront_button': 'both', 'link_in_updates': null, 'updates_link': true, 'link_whatsapp': api.body(r)['link_whatsapp'] ?? true};
+    api.routes['PUT /v1/customers/chat-settings'] = (r) => {'takes_chats': true, 'storefront_button': 'both', 'link_in_updates': null, 'updates_link': true, 'link_whatsapp': api.body(r)['link_whatsapp'] ?? true, 'own_number': '+2348031234567'};
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: ChatLinkPage(auth: api.auth(permissions: const ['storefront.manage', 'order.handle'], personal: false))));
     await settle(t);
     expect(find.text('Offer WhatsApp on your chat link'), findsOneWidget);

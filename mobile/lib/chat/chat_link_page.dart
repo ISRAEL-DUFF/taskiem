@@ -224,11 +224,12 @@ class _ChatLinkPageState extends State<ChatLinkPage> {
                 on: s.takesChats,
                 onChanged: can && !ordersOff ? (v) => _settings(PutChatSettingsRequest(takesChats: v)) : null,
               ),
-              // Only said by a server that knows it (stage 4, §11).
-              if (s.linkWhatsapp != null)
+              // Only for a business with its own WhatsApp number, as the web
+              // shows it (stage 4, §11; `own_number`).
+              if (s.linkWhatsapp != null && (s.ownNumber ?? '').isNotEmpty)
                 TkSwitchRow(
                   label: 'Offer WhatsApp on your chat link',
-                  hint: 'With your own WhatsApp number: your link offers Chat on WhatsApp beside Chat on Taskiem.',
+                  hint: 'Your link offers Chat on WhatsApp, on your own number ${s.ownNumber}, beside Chat on Taskiem. A customer on both is one chat here.',
                   on: s.linkWhatsapp!,
                   onChanged: can ? (v) => _settings(PutChatSettingsRequest(linkWhatsapp: v)) : null,
                 ),
