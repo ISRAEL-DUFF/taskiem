@@ -6,6 +6,7 @@
 // view placed on opening and following what comes only at the bottom).
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart' show TapGestureRecognizer;
 import 'package:flutter/rendering.dart' show RenderDecoratedBox;
@@ -1004,6 +1005,10 @@ Future<void> showHeadMenu(BuildContext context, {required Rect at, required List
       pageBuilder: (context, _, _) {
         final t = TkTheme.tokens(context);
         final width = MediaQuery.sizeOf(context).width;
+        // It hangs from the button's right edge, so it is never wider than
+        // the room left of that edge (16 px kept clear of the screen's own
+        // edge); a long item wraps rather than running off the screen.
+        final room = (at.right - 16).clamp(120.0, width - 32);
         return Stack(
           children: [
             Positioned.fill(child: Backdrop(onClose: () => Navigator.of(context).pop())),
@@ -1015,7 +1020,7 @@ Future<void> showHeadMenu(BuildContext context, {required Rect at, required List
                 explicitChildNodes: true,
                 child: Container(
                   // `.chat-menu`: 6 px, 18 px corners, the lift, no line.
-                  constraints: BoxConstraints(minWidth: 200, maxWidth: width - 32),
+                  constraints: BoxConstraints(minWidth: math.min(200.0, room), maxWidth: room),
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     color: t.panel,

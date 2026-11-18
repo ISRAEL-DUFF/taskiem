@@ -1601,6 +1601,33 @@ const _lineDrift = 0.31;
 
 Widget _maybeIntrinsic(bool on, Widget child) => on ? IntrinsicWidth(child: child) : child;
 
+/// Your own bubble's words: white on pine in the light (the dark's deep
+/// green keeps the light words it has), lime where the web tints.
+@visibleForTesting
+Widget ownWords(BuildContext context, bool on, Widget child) {
+  if (!on || TkTheme.of(context).mode == TkMode.dark) return child;
+  const white = Color(0xFFFFFFFF);
+  return TkTheme.recolour(
+    context,
+    (t) => t.copyWith(
+      text: white,
+      muted: const Color(0xB3FFFFFF),
+      accent: const Color(0xFFC8F169),
+      tintText: const Color(0xFFC8F169),
+      tint: const Color(0x1AFFFFFF),
+      accentSoft: const Color(0x1AFFFFFF),
+      panel: const Color(0x1AFFFFFF),
+      panel2: const Color(0x1AFFFFFF),
+      border: const Color(0x33FFFFFF),
+      tkSoft: const Color(0x1AFFFFFF),
+    ),
+    child,
+    // Pills and a tag's letters in the bright inks: the light's dark green
+    // ink on a faint lime did not show on pine.
+    look: tkLookOnPine,
+  );
+}
+
 /// lib/thread.ts startsRun: the first of a run has the bubble's tail.
 bool _startsRun(LinkMessage prev, LinkMessage m) {
   if (prev.kind == 'card' || m.kind == 'card') return true;

@@ -20,6 +20,7 @@ import '../theme/theme.dart';
 import 'cards.dart' show CardPill;
 import 'give_task.dart';
 import 'words.dart';
+import '../school/school_money.dart' show SchoolApproveSheet;
 
 // --- words (web/src/lib/alerts.ts, lib/approvals.ts, lib/staff.ts) ---
 
@@ -32,6 +33,7 @@ const alertLook = <String, ({String icon, CardTone tone})>{
   'confirm': (icon: 'money', tone: CardTone.lime),
   'unmatched': (icon: 'money', tone: CardTone.plain),
   'approval': (icon: 'approvals', tone: CardTone.plain),
+  'school_approval': (icon: 'approvals', tone: CardTone.plain),
   'deal': (icon: 'money', tone: CardTone.warn),
   'order_draft': (icon: 'chat', tone: CardTone.lime),
 };
@@ -130,6 +132,31 @@ class BriefingCard extends StatefulWidget {
 }
 
 class _BriefingCardState extends State<BriefingCard> {
+  /// A school's headline: the fees that came in yesterday (from its close;
+  /// this week's before one was taken), and how much of the term's is in.
+  Widget _schoolHead(GetChatBriefingResponseSchool s, Color on, Color Function(double) mix, Color accent) {
+    final y = s.yesterday;
+    final cut = s.term.lastIndexOf(' ');
+    final term = cut > 0 ? s.term.substring(0, cut) : s.term;
+    final close = y == null ? '' : (y.reconciles ? ' · the close reconciles' : ' · the close does not reconcile');
+    final label = y == null ? 'Fees in this week' : 'Fees collected yesterday';
+    final figure = naira(y?.collectedKobo ?? s.thisWeekKobo);
+    return Semantics(
+      label: '$label $figure. ${s.collectedPercent}% of $term’s fees in$close',
+      excludeSemantics: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(label, style: tkText(size: 13.5, color: mix(0.8))),
+          const SizedBox(height: 2),
+          Text(figure, style: tkText(size: 32, weight: 800, letterSpacing: -0.64, color: on)),
+          const SizedBox(height: 2),
+          Text('${s.collectedPercent}% of $term’s fees in$close', style: tkText(size: 13.5, weight: 600, color: accent)),
+        ],
+      ),
+    );
+  }
+
   bool _gone = false;
   bool _failed = false;
 
@@ -196,8 +223,17 @@ class _BriefingCardState extends State<BriefingCard> {
         ),
       );
     }
+    // A school's (as drawn): what is still owed, who is cleared, what waits
+    // for this person as the second person, what is not matched.
+    final school = b.school;
     final tiles = <Widget>[
-      if (b.owedKobo != null) tile('Owed to you', naira(b.owedKobo!), 'owed'),
+      if (school != null) ...[
+        tile('Still owed', naira(school.debtorsKobo), 'school:debtors'),
+        tile('Cleared', '${_grouped(school.cleared)} of ${_grouped(school.students)}', 'school:clearance'),
+        if (school.waiting != null) tile('Waiting for you', '${school.waiting}', 'school:waiting'),
+        if (school.yesterday case final y?) tile('Not matched', '${y.unmatched}', 'school:match'),
+      ],
+      if (b.owedKobo != null && school == null) tile('Owed to you', naira(b.owedKobo!), 'owed'),
       if (b.low != null) tile('Low stock', b.low == 1 ? '1 item' : '${b.low} items', 'stock'),
       if (b.deliveries != null) tile('Deliveries', '${b.deliveries} today', 'deliveries'),
       if (b.staff case final n?) tile('Staff', staffTile(n.in_.length, n.late.length), 'staff'),
@@ -242,6 +278,7 @@ class _BriefingCardState extends State<BriefingCard> {
           ),
         ],
       ),
+      if (school != null && sales == null) _schoolHead(school, on, mix, t.brandDark),
       if (sales != null)
         Semantics(
           button: true,
@@ -437,7 +474,19 @@ class _AlertCardsState extends State<AlertCards> {
                 TkIn.cardRise(
                   key: ValueKey(a.key),
                   index: i + 1,
-                  child: a.kind == 'approval'
+                  child: a.kind == 'school_approval' && a.school != null
+                    ? _ApprovalCard(
+                        a: a,
+                        now: widget.now,
+                        onDecide: (d) async {
+                          final decided = await showTkSheet<bool>(
+                            context,
+                            (_) => SchoolApproveSheet(auth: widget.auth, request: schoolRequestMap(a.school!), declining: d == 'rejected'),
+                          );
+                          if (decided == true) _done(a);
+                        },
+                      )
+                    : a.kind == 'approval'
                     ? _ApprovalCard(
                         a: a,
                         now: widget.now,
@@ -731,12 +780,26 @@ class _ApprovalCard extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final dark = TkTheme.of(context).mode == TkMode.dark;
     final ap = a.approval;
-    if (ap == null) return const SizedBox.shrink();
-    final w = subjectWords(ap.subject);
+    final sp = a.school;
+    if (ap == null && sp == null) return const SizedBox.shrink();
+    // A school's request (cash at the desk, a discount), as drawn: what it
+    // is for, the amount, and the student's class, how and invoice.
+    final w = ap != null
+        ? subjectWords(ap.subject)
+        : (
+            amount: naira(sp!.amountKobo) as String?,
+            to: null as String?,
+            rest: const <(String, String)>[],
+            account: [
+              [?sp.class_, if (sp.details['how'] is String) '${sp.details['how']}'].join(' · '),
+              ?sp.invoiceNumber,
+            ].where((x) => x.isNotEmpty).join('\n') as String?,
+          );
+    final title = sp == null ? a.title : '${schoolKindWords(sp.kind)} for ${sp.admissionNumber ?? 'a student'}';
     final notes = <Widget>[
-      if (ap.firstPayment == true) const CardPill('First payment to this account', CardTone.warn),
-      if (ap.levels > 1) CardPill('Level ${ap.level} of ${ap.levels}', CardTone.plain),
-      if (ap.required > 1) CardPill('${ap.approvals} of ${ap.required} approvals', CardTone.plain),
+      if (ap?.firstPayment == true) const CardPill('First payment to this account', CardTone.warn),
+      if (ap != null && ap.levels > 1) CardPill('Level ${ap.level} of ${ap.levels}', CardTone.plain),
+      if (ap != null && ap.required > 1) CardPill('${ap.approvals} of ${ap.required} approvals', CardTone.plain),
     ];
     final parts = <Widget>[
       Row(
@@ -747,7 +810,7 @@ class _ApprovalCard extends StatelessWidget {
           Text(ago(a.at, now), style: tkText(size: 13, color: t.muted)),
         ],
       ),
-      Text(a.who != null ? '${a.who} asks: ${a.title}' : a.title, style: tkText(size: 15, weight: 600, lineHeight: 1.3, color: t.text)),
+      Text(a.who != null ? '${a.who} asks: $title' : title, style: tkText(size: 15, weight: 600, lineHeight: 1.3, color: t.text)),
       if (w.amount != null || w.to != null || w.account != null)
         Wrap(
           alignment: WrapAlignment.spaceBetween,
@@ -780,7 +843,7 @@ class _ApprovalCard extends StatelessWidget {
               // As drawn: 40 px; Approve in pine (lime in the dark).
               SizedBox(width: no + room / 2.4, child: TapArea(child: _Pill(label: 'Decline', named: a.title, kind: 'soft', height: 40, onTap: () => onDecide('rejected')))),
               const SizedBox(width: 10),
-              SizedBox(width: yes + room * 1.4 / 2.4, child: TapArea(child: _Pill(label: 'Approve', named: a.title, icon: 'fingerprint', height: 40, onTap: () => onDecide('approved')))),
+              SizedBox(width: yes + room * 1.4 / 2.4, child: TapArea(child: _Pill(label: 'Approve', named: a.title, icon: sp == null ? 'fingerprint' : null, height: 40, onTap: () => onDecide('approved')))),
             ],
           );
         },
@@ -806,3 +869,30 @@ class _ApprovalCard extends StatelessWidget {
     );
   }
 }
+
+/// A school request's kind in a card's words ("cash", "a discount").
+String schoolKindWords(String kind) => switch (kind) {
+  'cash_posting' => 'cash',
+  'cash_match' => 'money matched by hand',
+  'discount' => 'a discount',
+  'discount_amendment' => 'a discount on an invoice',
+  'term_invoice' => 'a term invoice',
+  _ => 'a request',
+};
+
+/// A school request as its approve sheet reads it (the server's JSON).
+Map<String, dynamic> schoolRequestMap(SchoolPosting p) => {
+  'id': p.id,
+  'kind': p.kind,
+  'status': p.status,
+  'amount_kobo': p.amountKobo,
+  'name': ?p.name,
+  'class': ?p.class_,
+  'admission_number': ?p.admissionNumber,
+  'invoice_number': ?p.invoiceNumber,
+  'student_id': ?p.studentId,
+  'details': p.details,
+  'requested_by': p.requestedBy,
+  'requested_email': ?p.requestedEmail,
+  'requested_at': p.requestedAt.toIso8601String(),
+};

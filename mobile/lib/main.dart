@@ -27,7 +27,7 @@ import 'chat/bills_page.dart' show openBill;
 import 'chat/invoices_page.dart' show openInvoice;
 import 'chat/money_page.dart' show MoneyPage;
 import 'chat/purchases_page.dart' show openPurchase;
-import 'chat/storefront_orders_page.dart' show openStorefrontOrder;
+import 'chat/storefront_orders_page.dart' show StorefrontOrdersPage, openStorefrontOrder;
 import 'chat/trade_orders_page.dart' show openTradeOrder;
 import 'chat/order_sheet.dart' show showOrderSheet;
 import 'chat/orders_tab.dart' show OrdersTab;
@@ -44,6 +44,8 @@ import 'chat/taskiem.dart';
 import 'screens/chat_link.dart';
 import 'chat/people_chat.dart' show PeopleChatData, PeopleChatScreen;
 import 'chat/people_find.dart' show PersonLinkScreen;
+import 'school/school_clearance.dart' show GateScreen;
+import 'school/school_tab.dart' show SchoolTab;
 import 'screens/home_tabs.dart';
 import 'screens/signed_in.dart';
 import 'screens/forgot_password.dart';
@@ -550,7 +552,13 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
       return;
     }
     final route = routeOf(path);
-    _tabs.currentState?.show(route.tab);
+    // A school's orders open over Today: School is in Orders' place.
+    final overToday = _school && route.tab == tabOrders;
+    _tabs.currentState?.show(overToday ? tabToday : route.tab);
+    if (overToday && route.screen == RouteScreen.none) {
+      nav.push(TkRoute<void>(pageBuilder: (_, _, _) => StorefrontOrdersPage(auth: _chats.auth)));
+      return;
+    }
     final auth = _chats.auth;
     final id = route.id;
     switch (route.screen) {
@@ -623,8 +631,14 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  /// A school (Schools on, and they may read it): School in Orders' place
+  /// (docs/spec/mobile-app-look.md, "The school"); orders open from Today.
+  bool get _school => widget.auth.me?.schools == true && widget.auth.can('school.read');
+
   @override
   Widget build(BuildContext context) {
+    // Someone with the gate role only: the gate is the app.
+    if (widget.auth.me?.gateOnly == true) return GateScreen(auth: widget.auth, onSignOut: () => widget.auth.signOut());
     return HomeTabs(
       key: _tabs,
       count: () => _chats.tabCount,
@@ -641,11 +655,14 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
           icon: 'b-money',
           build: (_) => MoneyPage(auth: _chats.auth, tab: true),
         ),
-        (
-          label: 'Orders',
-          icon: 'b-box',
-          build: (_) => OrdersTab(auth: _chats.auth),
-        ),
+        if (_school)
+          (label: 'School', icon: 'b-school', build: (_) => SchoolTab(auth: _chats.auth))
+        else
+          (
+            label: 'Orders',
+            icon: 'b-box',
+            build: (_) => OrdersTab(auth: _chats.auth),
+          ),
       ],
     );
   }

@@ -541,8 +541,11 @@ class TkLines extends StatelessWidget {
 
 /// kit.tsx KitField (`.tk-field`): the label, the box, an error, a hint.
 class TkKitField extends StatelessWidget {
-  const TkKitField({super.key, required this.label, required this.child, this.hint, this.error, this.field = true});
+  const TkKitField({super.key, required this.label, required this.child, this.hint, this.error, this.field = true, this.count});
   final String label;
+
+  /// Quiet at the label's end: how much is typed of how much ("32 / 300").
+  final String? count;
   final Widget child;
 
   /// [child] is a text box, named by [label] (not a row of buttons).
@@ -562,7 +565,19 @@ class TkKitField extends StatelessWidget {
           field,
           Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [Text(label, style: tkText(size: 13, weight: 600, color: t.muted)), const SizedBox(height: 6), child],
+            children: [
+              if (count == null)
+                Text(label, style: tkText(size: 13, weight: 600, color: t.muted))
+              else
+                Row(
+                  children: [
+                    Expanded(child: Text(label, style: tkText(size: 13, weight: 600, color: t.muted))),
+                    Text(count!, style: tkText(size: 12.5, color: t.muted)),
+                  ],
+                ),
+              const SizedBox(height: 6),
+              child,
+            ],
           ),
         ),
         if (error != null) ...[const SizedBox(height: 6), Text(error!, style: tkText(size: 13, weight: 600, color: t.danger))],

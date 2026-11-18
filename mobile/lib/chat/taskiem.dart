@@ -42,7 +42,7 @@ import 'tool_forms.dart' show toolDetail;
 import 'sell_sheet.dart' show showHandoverSheet, showSellSheet;
 import 'availability_sheet.dart' show showAvailabilitySheet;
 import 'bookings_page.dart' show BookingsPage;
-import 'invoice_match.dart' show showMatchSheet;
+import 'invoice_match.dart' show InvoiceMatchPage, showMatchSheet;
 import 'bills_page.dart' show openBill;
 import 'invoices_page.dart' show InvoicesPage, openInvoice;
 import 'purchases_page.dart' show openPurchase;
@@ -54,6 +54,10 @@ import 'tools.dart';
 import 'tools_panel.dart';
 import 'words.dart';
 import '../kit/mobile.dart' show TkRoute;
+import '../school/school_chasing.dart' show DebtorsPage;
+import '../school/school_clearance.dart' show ClearancePage;
+import '../school/school_money.dart' show PaymentsPage;
+import '../school/students_page.dart' show StudentsPage;
 
 /// TaskiemChat.tsx EVERY_MS: what is newer, every 5 seconds (20 with the
 /// stream connected).
@@ -213,7 +217,7 @@ class TaskiemData extends ChangeNotifier {
   ];
 
   /// TaskiemChat.tsx briefs: the briefing card is for those who sell or bill.
-  bool get briefs => chats.chatTools && chats.auth.can('storefront.manage|invoice.manage');
+  bool get briefs => chats.chatTools && chats.auth.can('storefront.manage|invoice.manage|school.manage');
 
   /// How often the briefing was asked back: its card is drawn afresh (a
   /// card put away with Got it comes back).
@@ -565,6 +569,25 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
     );
   }
 
+  /// A school's tools, first (as drawn): its students, cash at the desk,
+  /// debtors and clearance, each its School page.
+  List<ExtraTile> _schoolTiles(TaskiemData d) {
+    final auth = d.chats.auth;
+    if (auth.me?.schools != true || !auth.can('school.read')) return const [];
+    void go(Widget page) {
+      _tools.close();
+      Navigator.of(context).push(TkRoute<void>(pageBuilder: (_, _, _) => page));
+    }
+
+    return [
+      (key: 'school-students', title: 'Students', icon: 'b-person', line: 'Their balance, their account', onPick: () => go(StudentsPage(auth: auth))),
+      if (auth.can('school.manage'))
+        (key: 'school-payment', title: 'Record a payment', icon: 'b-fees', line: 'Cash at the desk', onPick: () => go(StudentsPage(auth: auth))),
+      (key: 'school-debtors', title: 'Debtors', icon: 'b-hand', line: 'Reminders, promises', onPick: () => go(DebtorsPage(auth: auth))),
+      (key: 'school-clearance', title: 'Clearance', icon: 'b-gate', line: 'Who may sit exams', onPick: () => go(ClearancePage(auth: auth))),
+    ];
+  }
+
   /// TaskiemChat.tsx extras: the briefing, tasks, and clocking in and out.
   List<ExtraTile> _extras(TaskiemData d) {
     final can = d.chats.auth.can;
@@ -685,7 +708,7 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                 ToolsAnchor(
                   tools: _tools,
                   panel: (context, room) =>
-                      ToolsPanel(tools: _tools, onOpen: _openTool, extras: _extras(d), recent: d.chats.prefs?.recentTools ?? const [], maxHeight: room),
+                      ToolsPanel(tools: _tools, onOpen: _openTool, lead: _schoolTiles(d), extras: _extras(d), recent: d.chats.prefs?.recentTools ?? const [], maxHeight: room),
                 ),
                 Composer(
                   tools: d.chats.chatTools ? _tools : null,
@@ -806,6 +829,14 @@ class _TaskiemScreenState extends State<TaskiemScreen> {
                             push(StaffPage(auth: auth));
                           case 'tasks':
                             push(TasksPage(auth: auth));
+                          case 'school:debtors':
+                            push(DebtorsPage(auth: auth));
+                          case 'school:clearance':
+                            push(ClearancePage(auth: auth));
+                          case 'school:waiting':
+                            push(PaymentsPage(auth: auth, status: 'pending'));
+                          case 'school:match':
+                            push(InvoiceMatchPage(auth: auth));
                           default:
                             showComingSoon(context);
                         }

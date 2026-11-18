@@ -20,6 +20,7 @@ import (
 	"github.com/israel-duff/taskiem/engine/links"
 	"github.com/israel-duff/taskiem/engine/matching"
 	"github.com/israel-duff/taskiem/engine/pii"
+	"github.com/israel-duff/taskiem/engine/schools"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/variants"
 )
@@ -43,7 +44,7 @@ const maxChatAlerts = 20
 type chatAlert struct {
 	// Key names the alert for Later: its kind and what it is about.
 	Key  string    `json:"key"`
-	Kind string    `json:"kind"` // low_stock | overdue | new_order | rider | confirm | unmatched | approval | deal | order_draft
+	Kind string    `json:"kind"` // low_stock | overdue | new_order | rider | confirm | unmatched | approval | school_approval | deal | order_draft
 	At   time.Time `json:"at"`
 	// Title and Line are the card's words.
 	Title      string `json:"title"`
@@ -63,6 +64,10 @@ type chatAlert struct {
 	// Cells are a product's sizes and colours that are low, when the card
 	// is about a product that has them: its stock form opens on them.
 	Cells []string `json:"cells,omitempty"`
+	// School is a school's request waiting for a second person (cash at
+	// the desk, a discount), as the school's Payments page has it, the
+	// student's name masked.
+	School *schools.Posting `json:"school,omitempty"`
 }
 
 type alertReorder struct {
@@ -114,7 +119,7 @@ func (s *Server) getChatAlerts(w http.ResponseWriter, r *http.Request) {
 	}
 	// Each kind on its own: one that cannot be read leaves the others.
 	for _, kind := range []func(context.Context, *Principal) ([]chatAlert, error){
-		s.lowStockAlerts, s.overdueAlerts, s.newOrderAlerts, s.riderAlerts, s.confirmAlerts, s.unmatchedAlerts, s.approvalAlerts, s.dealAlerts, s.orderDraftAlerts,
+		s.lowStockAlerts, s.overdueAlerts, s.newOrderAlerts, s.riderAlerts, s.confirmAlerts, s.unmatchedAlerts, s.approvalAlerts, s.schoolApprovalAlerts, s.dealAlerts, s.orderDraftAlerts,
 		s.customerWaitingAlerts,
 	} {
 		got, err := kind(ctx, p)
@@ -143,7 +148,7 @@ func capAlerts(all []chatAlert) []chatAlert {
 	out := []chatAlert{}
 	for _, pass := range []bool{true, false} {
 		for _, a := range all {
-			if (a.Kind == "approval") != pass || n[a.Kind] >= perKind || len(out) >= maxChatAlerts {
+			if (a.Kind == "approval" || a.Kind == "school_approval") != pass || n[a.Kind] >= perKind || len(out) >= maxChatAlerts {
 				continue
 			}
 			n[a.Kind]++
@@ -614,6 +619,60 @@ func (s *Server) approvalAlerts(ctx context.Context, p *Principal) ([]chatAlert,
 			}
 			out = append(out, chatAlert{Key: "approval:" + a.RunID.String() + "/" + a.StepID, Kind: "approval", At: a.RequestedAt,
 				ID: a.RunID.String(), Title: title, Line: line, Approval: &a, Who: who})
+		}
+		return nil
+	})
+	return out, err
+}
+
+// schoolApprovalAlerts are the school's requests waiting for a second
+// person (whatsapp_school_approvals.go sends them to the chat apps), for
+// those who may decide them (school.approve), never their own: each
+// decided on its card through POST /v1/schools/approvals/{id}.
+func (s *Server) schoolApprovalAlerts(ctx context.Context, p *Principal) ([]chatAlert, error) {
+	if !p.Can(PermSchoolApprove) {
+		return nil, nil
+	}
+	var out []chatAlert
+	err := db0(ctx, s, p.TenantID, func(tx pgx.Tx) error {
+		on, err := schools.Enabled(ctx, tx, p.TenantID)
+		if err != nil || !on {
+			return err
+		}
+		list, err := s.schoolsSvc().Postings(ctx, tx, p.TenantID, schools.PostingFilter{Status: "pending", Limit: perKind * 2})
+		if err != nil {
+			return err
+		}
+		for i := range list {
+			a := list[i]
+			if a.RequestedUser != nil && *a.RequestedUser == p.Human() {
+				continue
+			}
+			maskPosting(&a)
+			who := a.RequestedEmail
+			if who == "" {
+				who = a.RequestedBy
+			}
+			what := schools.KindWords(a.Kind)
+			if what == "" {
+				what = "a request"
+			}
+			title := strings.ToUpper(what[:1]) + what[1:]
+			if a.Kind == schools.KindCashPosting {
+				title = "Cash at the desk"
+			}
+			var line []string
+			for _, x := range []string{a.AdmissionNumber, a.Class, a.InvoiceNumber} {
+				if x != "" {
+					line = append(line, x)
+				}
+			}
+			if who != "" {
+				line = append(line, "asked by "+who)
+			}
+			amount := a.AmountKobo
+			out = append(out, chatAlert{Key: "school_approval:" + a.ID.String(), Kind: "school_approval", At: a.RequestedAt, ID: a.ID.String(),
+				Title: title, Line: strings.Join(line, " · "), AmountKobo: &amount, Who: who, School: &a})
 		}
 		return nil
 	})

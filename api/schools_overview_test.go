@@ -103,3 +103,39 @@ func TestSchoolOverviewAndClose(t *testing.T) {
 		t.Fatalf("last close %v", lc)
 	}
 }
+
+// The school in the in-app briefing: the current term's fees for those
+// who read the school (as the Overview has them), what waits for the
+// person as the second person; none when schools are off.
+func TestSchoolInTheBriefing(t *testing.T) {
+	w := newWorld(t)
+	owner, _, _, _ := clearanceSchool(t, w)
+	owner.must(200, "PUT", "/v1/settings/chat-tools", map[string]any{"chat_tools": true})
+	b := owner.must(200, "GET", "/v1/chat-briefing?show=1", nil)
+	sc, ok := b["school"].(map[string]any)
+	if !ok {
+		t.Fatalf("no school in the briefing: %v", b)
+	}
+	for k, want := range map[string]any{"term": "First term 2026/2027", "expected_kobo": float64(30_000_000), "collected_kobo": float64(14_000_000), "collected_percent": float64(46),
+		"overdue_kobo": float64(16_000_000), "debtors": float64(2), "debtors_kobo": float64(16_000_000), "not_cleared": float64(2), "cleared": float64(1), "students": float64(3), "waiting": float64(0)} {
+		if sc[k] != want {
+			t.Errorf("school %s = %v, want %v", k, sc[k], want)
+		}
+	}
+	if sc["last_close"] != nil || sc["yesterday"] != nil {
+		t.Fatalf("a close before any was taken: %v", sc)
+	}
+	owner.must(200, "POST", "/v1/schools/close", nil)
+	sc = owner.must(200, "GET", "/v1/chat-briefing?show=1", nil)["school"].(map[string]any)
+	if sc["last_close"].(map[string]any)["reconciles"] != true {
+		t.Fatalf("the close in the briefing: %v", sc)
+	}
+	if y := sc["yesterday"].(map[string]any); y["reconciles"] != true || y["collected_kobo"] != float64(0) || y["unmatched"] != float64(0) {
+		t.Fatalf("yesterday in the briefing: %v", y)
+	}
+	// Schools off: no school part.
+	owner.must(200, "PUT", "/v1/settings/schools", map[string]any{"enabled": false})
+	if b := owner.must(200, "GET", "/v1/chat-briefing?show=1", nil); b["school"] != nil {
+		t.Fatalf("schools off, still in the briefing: %v", b["school"])
+	}
+}

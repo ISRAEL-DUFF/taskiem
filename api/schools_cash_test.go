@@ -248,3 +248,58 @@ func TestSchoolCashApprovalsAndReceipts(t *testing.T) {
 		}
 	}
 }
+
+// A school's requests for a second person as cards in the Taskiem chat
+// (chat-alerts): for those with school.approve, the name masked, never
+// the requester's own; gone once decided.
+func TestSchoolApprovalCardsInTheChat(t *testing.T) {
+	w := newWorld(t)
+	owner, _, _, _ := clearanceSchool(t, w)
+	owner.must(200, "PUT", "/v1/settings/chat-tools", map[string]any{"chat_tools": true})
+	owner.must(200, "PUT", "/v1/settings/schools", map[string]any{"enabled": true, "cash_threshold_naira": 0})
+	admin := addMember(t, w, owner, "ade", "admin")
+	second := addMember(t, w, owner, "bola", "owner")
+	cards := func(c *client) []map[string]any {
+		var out []map[string]any
+		for _, a := range c.must(200, "GET", "/v1/chat-alerts", nil)["alerts"].([]any) {
+			if a.(map[string]any)["kind"] == "school_approval" {
+				out = append(out, a.(map[string]any))
+			}
+		}
+		return out
+	}
+	code, out := admin.do("POST", "/v1/schools/payments", map[string]any{"student": "GCA/003", "amount_kobo": 5_000_000, "how": "cash"})
+	if code != 202 || out["code"] != "needs_approval" {
+		t.Fatalf("cash for a second person: %d %v", code, out)
+	}
+	id := out["request"].(map[string]any)["id"].(string)
+	got := cards(owner)
+	if len(got) != 1 || got[0]["id"] != id || got[0]["title"] != "Cash at the desk" || got[0]["amount_kobo"] != float64(5_000_000) ||
+		!strings.Contains(got[0]["line"].(string), "GCA/003") || got[0]["school"].(map[string]any)["name"] != "T•••" {
+		t.Fatalf("the owner's cards: %v", got)
+	}
+	if got := cards(admin); len(got) != 0 {
+		t.Fatalf("the requester (no school.approve) has cards: %v", got)
+	}
+	// The owner's own request is not theirs to decide: the second owner's.
+	code, out = owner.do("POST", "/v1/schools/payments", map[string]any{"student": "GCA/002", "amount_kobo": 1_000_000, "how": "cash"})
+	if code != 202 {
+		t.Fatalf("the owner's cash: %d %v", code, out)
+	}
+	if got := cards(owner); len(got) != 1 {
+		t.Fatalf("the owner sees their own request: %v", got)
+	}
+	if got := cards(second); len(got) != 2 {
+		t.Fatalf("the second owner's cards: %v", got)
+	}
+	// Decided on the card: gone.
+	owner.must(200, "POST", "/v1/schools/approvals/"+id, map[string]any{"decision": "approved"})
+	if got := cards(owner); len(got) != 0 {
+		t.Fatalf("decided, still a card: %v", got)
+	}
+	// Schools off: no cards.
+	owner.must(200, "PUT", "/v1/settings/schools", map[string]any{"enabled": false})
+	if got := cards(second); len(got) != 0 {
+		t.Fatalf("schools off, still cards: %v", got)
+	}
+}

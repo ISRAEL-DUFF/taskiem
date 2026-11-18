@@ -108,6 +108,44 @@ void main() {
     return (asked, d);
   }
 
+  testWidgets('a message naming several documents stays short: a row each, opened one at a time', (t) async {
+    await tunde(
+      t,
+      messages: [
+        {
+          'id': 'm1',
+          'link': _tunde,
+          'mine': true,
+          'kind': 'text',
+          'body': 'Can we settle #INV-0001, #INV-0002 and #INV-0003?',
+          'created_at': '2026-11-11T12:00:00Z',
+          'mentions': [
+            {'kind': 'invoice', 'name': 'INV-0001', 'ref': 'inv-1', 'status': 'sent'},
+            {'kind': 'invoice', 'name': 'INV-0002', 'ref': 'inv-2', 'status': 'sent'},
+            {'kind': 'invoice', 'name': 'INV-0003', 'ref': 'inv-3', 'status': 'sent'},
+          ],
+        },
+      ],
+    );
+    final cards = find.byType(RefCard);
+    expect(cards, findsNWidgets(3));
+    expect(find.text('2 × Rice, 50kg bag'), findsNothing, reason: 'all folded');
+    for (final c in cards.evaluate()) {
+      expect(c.size!.height, lessThan(80), reason: 'each a short row');
+    }
+    await t.tap(find.descendant(of: cards.first, matching: find.byType(GestureDetector)).first);
+    await t.pumpAndSettle();
+    expect(find.text('2 × Rice, 50kg bag'), findsOneWidget, reason: 'only the one pressed opens');
+    // Your own message in the light: its buttons white on the pine, not
+    // pine on pine (they looked as if they could not be pressed).
+    for (final b in ['Open', 'Give this to…']) {
+      expect(t.widget<Text>(find.descendant(of: cards.first, matching: find.text(b))).style!.color, const Color(0xFFFFFFFF), reason: b);
+    }
+    await t.tap(find.descendant(of: cards.first, matching: find.byType(GestureDetector)).first);
+    await t.pumpAndSettle();
+    expect(find.text('2 × Rice, 50kg bag'), findsNothing);
+  });
+
   testWidgets('G6: an invoice named in a message is its card, read now; its reminder sent once', (t) async {
     final (asked, _) = await tunde(
       t,
@@ -128,12 +166,28 @@ void main() {
     );
     expect(asked.map((a) => a.$2), contains('/v1/link-chats/$_tunde/card?kind=invoice&name=INV-0001'));
     expect(find.byType(RefCard), findsOneWidget);
+    // A short row first: what it is, where it stands, how much; no lines.
+    expect(find.descendant(of: find.byType(RefCard), matching: find.text('INV-0001')), findsOneWidget);
+    expect(find.text('Overdue'), findsOneWidget);
+    expect(find.text('₦30,000'), findsOneWidget);
+    expect(find.text('2 × Rice, 50kg bag'), findsNothing, reason: 'folded until pressed');
+    expect(find.bySemanticsLabel('Send a reminder Invoice INV-0001'), findsNothing);
+    final row = find.descendant(of: find.byType(RefCard), matching: find.text('INV-0001'));
+    await t.ensureVisible(row);
+    await t.tap(row);
+    await t.pumpAndSettle();
     expect(find.text('INVOICE'), findsOneWidget);
     expect(find.text('Overdue'), findsOneWidget);
     expect(find.text('₦30,000'), findsOneWidget, reason: 'what is still to pay');
     expect(find.text('₦15,000 paid'), findsOneWidget);
     expect(find.text('2 × Rice, 50kg bag'), findsOneWidget);
     expect(find.bySemanticsLabel('Give this to… Invoice INV-0001'), findsOneWidget);
+    // Pressed again, a row once more; and open again for what follows.
+    await t.tap(find.descendant(of: find.byType(RefCard), matching: find.text('INV-0001')));
+    await t.pumpAndSettle();
+    expect(find.text('2 × Rice, 50kg bag'), findsNothing);
+    await t.tap(find.descendant(of: find.byType(RefCard), matching: find.text('INV-0001')));
+    await t.pumpAndSettle();
     final remind = find.bySemanticsLabel('Send a reminder Invoice INV-0001');
     await t.ensureVisible(remind);
     await t.pumpAndSettle();

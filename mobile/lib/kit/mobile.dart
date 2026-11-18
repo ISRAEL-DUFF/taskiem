@@ -611,11 +611,24 @@ class TkListRow extends StatelessWidget {
     this.levelColor,
     this.trailing,
     this.face,
+    this.leading,
+    this.subLines = 2,
+    this.titleLines,
   });
 
   /// A tile of its own, 40 px round (a business's photo), in place of the
   /// letters or the icon.
   final Widget? face;
+
+  /// How many lines the title may take (one; two beside a switch).
+  final int? titleLines;
+
+  /// In place of the tile: a tick box when rows are chosen (as drawn), no
+  /// chevron after.
+  final Widget? leading;
+
+  /// How many lines the sub may take.
+  final int subLines;
 
   /// At the row's end in place of an amount: a switch, or quiet words
   /// ("Linked") before the chevron.
@@ -715,6 +728,9 @@ class TkListRow extends StatelessWidget {
             padding: EdgeInsets.symmetric(horizontal: 14, vertical: small ? 11 : 10),
             child: Row(
               children: [
+                if (leading != null)
+                  leading!
+                else
                 ExcludeSemantics(
                   child: SizedBox(
                     width: size,
@@ -749,7 +765,7 @@ class TkListRow extends StatelessWidget {
                       Text(
                         title,
                         // A setting's words wrap beside its switch, as drawn.
-                        maxLines: trailing is TkSwitch ? 2 : 1,
+                        maxLines: titleLines ?? (trailing is TkSwitch ? 2 : 1),
                         overflow: TextOverflow.ellipsis,
                         style: tkText(size: 15.5, weight: 500, lineHeight: 1.3, color: t.text),
                       ),
@@ -757,7 +773,7 @@ class TkListRow extends StatelessWidget {
                         // Up to two lines, as drawn.
                         Text(
                           sub,
-                          maxLines: 2,
+                          maxLines: subLines,
                           overflow: TextOverflow.ellipsis,
                           style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted),
                         ),
@@ -820,7 +836,7 @@ class TkListRow extends StatelessWidget {
                 ],
                 if (trailing != null) ...[const SizedBox(width: 10), trailing!],
                 // A row that opens has its chevron, after its amount too (as drawn).
-                if (onTap != null && status == null && trailing is! TkSwitch) ...[
+                if (onTap != null && status == null && leading == null && trailing is! TkSwitch) ...[
                   const SizedBox(width: 6),
                   ExcludeSemantics(child: TkIcon('chevron', size: 16, color: t.muted.withValues(alpha: 0.6))),
                 ],
@@ -953,7 +969,7 @@ class TkSkeleton extends StatelessWidget {
 /// screens"): the sheet's title large, what it is about over it, the form
 /// on the ground, and its buttons at the foot: the main one last, wide.
 class TkFormSheet extends StatelessWidget {
-  const TkFormSheet({super.key, required this.title, this.crumb, required this.children, required this.action, this.onAction, this.second, this.onSecond, this.secondDanger = false, this.overlay});
+  const TkFormSheet({super.key, required this.title, this.crumb, required this.children, required this.action, this.onAction, this.second, this.onSecond, this.secondDanger = false, this.overlay, this.actionIcon});
   final String title;
   final String? crumb;
   final List<Widget> children;
@@ -969,6 +985,9 @@ class TkFormSheet extends StatelessWidget {
 
   /// The saved tick, over everything.
   final Widget? overlay;
+
+  /// The main button's icon (Send's paper plane), as drawn.
+  final String? actionIcon;
 
   @override
   Widget build(BuildContext context) => TkAppLook(
@@ -986,8 +1005,10 @@ class TkFormSheet extends StatelessWidget {
       bareFooter: true,
       footer: Row(
         children: [
-          if (second != null) ...[Expanded(child: TkGhostButton(label: second!, danger: secondDanger, onTap: onSecond)), const SizedBox(width: 10)],
-          Expanded(child: TkCta(label: action, onTap: onAction)),
+          // A long action ("Save JSS 1A's fees") takes more of the row, so it
+          // stays on one line, as drawn.
+          if (second != null) ...[Expanded(flex: 4, child: TkGhostButton(label: second!, danger: secondDanger, onTap: onSecond)), const SizedBox(width: 10)],
+          Expanded(flex: action.length + (actionIcon == null ? 0 : 3) > 15 ? 6 : 4, child: TkCta(label: action, icon: actionIcon, onTap: onAction)),
         ],
       ),
     ),
