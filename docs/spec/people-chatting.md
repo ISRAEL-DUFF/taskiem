@@ -1427,7 +1427,7 @@ Branch `stage5b-groups-fix`, on 8af21b41 (tested in `mobile/test/groups_review_t
 - **@ mentions**: each pick keeps the member's id with the name picked (`PickedMention`), so two members of one name are both kept; a name counts only as a whole word ("@Ada" is not in "@Adamu"). A send that fails gives back its words and its picks.
 - **A copy cleared on another device** (`group` with `hidden: true`) empties the messages, not the group, unless it was left or closed; a `group` event with the group again (a new message) reads it afresh.
 - **Report this group** stays for a former member (the server allows it), in the chat's menu and Group info.
-- **Invites gone**: a `group_invite` event with `invite: null` takes the invite out of Requests at once; a 404 from Accept or Decline reads the invites again. The server sends that event (migration `00485_group_invites_gone.sql`: `group_invites_gone`, kept an hour, written by a definer trigger on `group_invites`) when an invite is taken back, accepted or declined on another device, or its group is gone; tested in `api/people_groups_invite_gone_test.go`.
+- **Invites gone**: a `group_invite` event with `invite: null` takes the invite out of Requests at once; a 404 from Accept or Decline reads the invites again. The server sends that event (migration `00487_group_invites_gone.sql`: `group_invites_gone`, kept an hour, written by a definer trigger on `group_invites`) when an invite is taken back, accepted or declined on another device, or its group is gone; tested in `api/people_groups_invite_gone_test.go`.
 
 ## As built: stage 5b, groups (web)
 
