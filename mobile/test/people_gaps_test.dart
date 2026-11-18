@@ -277,6 +277,7 @@ void main() {
               ],
               'unread': 0,
               'requests': 0,
+              'invites': 0,
               'more': false,
             };
       api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};

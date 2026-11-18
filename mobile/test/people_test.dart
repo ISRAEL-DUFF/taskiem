@@ -294,7 +294,7 @@ void main() {
               {'kind': 'business', 'id': 'c1', 'name': 'Mama’s Kitchen', 'business_id': 'b1', 'last': 'Your order is ready', 'last_mine': false, 'last_at': '2026-11-17T08:00:00Z', 'unread': 0, 'muted': false, 'archived': false, 'blocked': false},
             ],
             'unread': 1,
-            'requests': 2, 'more': false,
+            'requests': 2, 'invites': 0, 'more': false,
           };
     api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), now: () => at, presence: false)));
