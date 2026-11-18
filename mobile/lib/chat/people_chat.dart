@@ -45,11 +45,16 @@ import 'menu.dart';
 import 'my_chat.dart' show OpenMyChat, sayFailure;
 import 'people.dart';
 import 'people_cards.dart';
+import 'people_live.dart';
 import 'thread.dart';
 import 'words.dart';
 
 /// How often an open chat reads again.
 const _poll = Duration(seconds: 4);
+
+/// How often "typing" is said while the box changes (the server passes it
+/// on at most every 3 seconds).
+const typingBeat = Duration(seconds: 3);
 
 /// How long a message can be deleted for everyone (§7).
 const deleteForEveryoneWithin = Duration(hours: 24);
@@ -89,9 +94,38 @@ String sendFailure(Object e) {
 class PeopleChatData extends ChangeNotifier {
   /// [started] is the chat as `POST /v1/me/people` answered it: a chat just
   /// opened is in no list until its first message, so it opens from that.
-  PeopleChatData(this.auth, this.id, {this.follow = true, DateTime Function()? now, PeopleChat? started}) : now = now ?? DateTime.now, chat = started;
+  ///
+  /// [live] is You's live connection (by default the one You holds for
+  /// [auth]): while it is open, what it tells shows at once and the chat is
+  /// read again only to reconcile. [focus] opens the chat at that message
+  /// (a search's hit, a starred message): older pages are read until it is
+  /// there.
+  PeopleChatData(this.auth, this.id, {this.follow = true, DateTime Function()? now, PeopleChat? started, PeopleLive? live, this.focus, DateTime Function()? clock})
+    : now = now ?? DateTime.now,
+      _clock = clock ?? DateTime.now,
+      chat = started,
+      live = live ?? PeopleLive.of(auth) {
+    _events = this.live?.events.listen(_heard);
+    this.live?.addListener(_liveChanged);
+  }
   final Auth auth;
   final String id;
+
+  /// You's live connection, when open.
+  final PeopleLive? live;
+
+  /// The message the chat opens at.
+  final String? focus;
+
+  /// Older pages are being read to reach [focus]: the thread waits.
+  bool focusing = false;
+
+  /// Real time, for the typing beat and the slow poll ([now] may be a
+  /// test's fixed time).
+  final DateTime Function() _clock;
+  StreamSubscription<PeopleLiveEvent>? _events;
+  late final _slow = SlowWhileLive(clock: _clock);
+  Timer? _readSoon;
 
   /// Read again every few seconds while seen (the screen polls).
   final bool follow;
@@ -149,16 +183,100 @@ class PeopleChatData extends ChangeNotifier {
   bool get readTicks => chat?.person?.readTicks ?? true;
 
   Future<void> open() async {
+    final at = focus;
+    if (at != null) {
+      focusing = true;
+      _changed();
+    }
     await _chat();
     await _pull(first: true);
+    if (at != null) {
+      // Older pages until the message is there (or none are left).
+      for (var n = 0; n < 40 && !_disposed && hasOlder && !(messages ?? const []).any((m) => m.id == at); n++) {
+        final had = messages?.length ?? 0;
+        await older();
+        if ((messages?.length ?? 0) == had) break;
+      }
+      focusing = false;
+      _changed();
+    }
   }
 
-  /// Read again (the screen's poll, while the chat is seen).
+  /// Whether the message [focus] names is in the chat as read.
+  bool get focusFound => focus != null && (messages ?? const []).any((m) => m.id == focus);
+
+  /// Read again (the screen's poll, while the chat is seen): while the
+  /// live connection is open, only every 30 seconds, to reconcile.
   void poll() {
     if (_disposed || missing) return;
+    if (!_slow.due(live)) return;
     _chat();
     _pull(first: false);
   }
+
+  /// The other person is typing now (the live connection says so).
+  bool get typingNow => live?.typing.contains(id) == true && chat?.request != true;
+
+  /// Their card, with what the live connection said of them since.
+  PersonCard? get person {
+    final p = chat?.person;
+    return p == null ? null : withPresence(p, live?.presence[id]);
+  }
+
+  void _liveChanged() => _changed();
+
+  /// What the live connection tells of this chat.
+  void _heard(PeopleLiveEvent e) {
+    if (_disposed || e.chatId != id) return;
+    switch (e) {
+      case PeopleLiveMessage(:final message):
+        // Ours sent from here is already shown with its clock: the
+        // server's copy takes its place when the send answers.
+        messages = _merge(messages ?? const [], [PeopleLine(message)]);
+        _changed();
+        if (!message.mine && message.readAt == null && chat != null && seen()) {
+          _readSoon?.cancel();
+          _readSoon = Timer(const Duration(milliseconds: 300), () {
+            if (!_disposed && seen()) unawaited(api.readPeopleChat(id: id).catchError((Object _) {}));
+          });
+        }
+      case PeopleLiveChat(:final hidden, chat: final c):
+        if (hidden) {
+          missing = true;
+        } else if (c != null) {
+          chat = c;
+        }
+        _changed();
+      case PeopleLiveGone(id: final gone):
+        if (gone == null) {
+          missing = true;
+        } else {
+          messages = messages?.where((m) => m.id != gone).toList();
+        }
+        _changed();
+    }
+  }
+
+  /// You are typing: said at most every 3 seconds while the box changes
+  /// (the server passes it on no more often), and that you stopped when it
+  /// empties. Never in a request, a blocked or a deleted chat.
+  void typing(String text) {
+    final c = chat;
+    if (c == null || c.request || c.waiting || c.blocked || c.gone || c.suspended == true) return;
+    final now = _clock();
+    if (text.trim().isEmpty) {
+      if (_typingAt != null) {
+        _typingAt = null;
+        unawaited(api.typingPeople(id: id, body: const TypingPeopleRequest(typing: false)).catchError((Object _) {}));
+      }
+      return;
+    }
+    if (_typingAt != null && now.difference(_typingAt!) < typingBeat) return;
+    _typingAt = now;
+    unawaited(api.typingPeople(id: id, body: const TypingPeopleRequest(typing: true)).catchError((Object _) {}));
+  }
+
+  DateTime? _typingAt;
 
   Future<void> refresh() => Future.wait([_chat(), _pull(first: false)]);
 
@@ -254,6 +372,8 @@ class PeopleChatData extends ChangeNotifier {
   Future<void> send(String text, {PickedFile? file, PeopleMessage? reply}) async {
     final words = text.trim();
     if (words.isEmpty && file == null) return;
+    // A message ends typing on the server: the next key says it again.
+    _typingAt = null;
     final what = file == null ? 'text:$words' : 'file:${file.name}:${file.type}:${file.bytes.length}:${_sum(file.bytes)}:$words';
     final client = _clientFor(what);
     final mine = PeopleLine(
@@ -475,6 +595,9 @@ class PeopleChatData extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _readSoon?.cancel();
+    _events?.cancel();
+    live?.removeListener(_liveChanged);
     _back.close();
     files.dispose();
     super.dispose();
@@ -483,14 +606,15 @@ class PeopleChatData extends ChangeNotifier {
 
 /// The line under the person's name: online or last seen as their
 /// settings and yours allow, "Message request", or the account deleted.
-String peopleHeadLine(PeopleChat? c, DateTime now, {bool offline = false}) {
+String peopleHeadLine(PeopleChat? c, DateTime now, {bool offline = false, bool typing = false, PersonCard? person}) {
   if (offline) return 'Waiting for network…';
   if (c == null) return '';
   if (c.gone) return 'This account was deleted';
   if (c.suspended == true) return suspendedWords;
   if (c.request) return 'Message request';
   if (c.blocked) return 'Blocked';
-  return lastSeenWords(c.person, now) ?? 'Person';
+  if (typing) return 'typing…';
+  return lastSeenWords(person ?? c.person, now) ?? 'Person';
 }
 
 /// The chat with a person.
@@ -534,6 +658,16 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
     _back = d.givenBack.listen((w) {
       if (_text.text.isEmpty) _text.text = w;
     });
+    _text.addListener(_typed);
+  }
+
+  /// Typing, said to them while the box changes (throttled by the data).
+  String _was = '';
+  void _typed() {
+    final now = _text.text;
+    if (now == _was) return;
+    _was = now;
+    d.typing(now);
   }
 
   @override
@@ -776,7 +910,8 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                         onAvatar: c == null ? null : _info,
                         avatar: PersonFace(name: name, transport: d.auth.transport, photo: c?.person?.photo, size: 40, letterSize: 15),
                         title: name,
-                        subtitle: peopleHeadLine(c, now, offline: d.offline),
+                        typing: d.typingNow && !d.offline,
+                        subtitle: peopleHeadLine(c, now, offline: d.offline, person: d.person),
                       ),
                     ),
                   ),
@@ -785,12 +920,15 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                     child: d.missing
                         ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('This chat is no longer here.', textAlign: TextAlign.center, style: tkHint(t))))
                         : ThreadView<PeopleLine>(
-                            items: list,
+                            // Opened at a message: shown once it is read.
+                            items: d.focusing ? null : list,
+                            focus: d.focusFound ? d.focus : null,
                             of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
                             now: now,
                             hasOlder: d.hasOlder,
                             onOlder: d.older,
                             errors: [?d.error],
+                            tail: d.typingNow ? const TypingBubble() : null,
                             empty: Text(
                               c?.waiting == true ? 'Your message waits for $name to accept it.' : 'Say hello to $name.',
                               textAlign: TextAlign.center,

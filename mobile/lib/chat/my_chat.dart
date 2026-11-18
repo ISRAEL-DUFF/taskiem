@@ -45,6 +45,7 @@ import 'door.dart';
 import 'my_chat_tools.dart';
 import 'people.dart' show PersonFace;
 import 'people_cards.dart' show shareWithPeople;
+import 'people_live.dart';
 import 'thread.dart';
 import 'words.dart';
 
@@ -147,8 +148,20 @@ class ChatPages {
 /// chats answers 404 there: its chats with businesses alone
 /// (`GET /v1/me/chats`).
 class MyChats extends ChangeNotifier {
-  MyChats(this.auth);
+  /// [live]: You's live connection; a people chat's change it tells reads
+  /// the list again at once (a burst once).
+  MyChats(this.auth, {this.live}) {
+    _events = live?.events.listen((_) {
+      _soon?.cancel();
+      _soon = Timer(const Duration(milliseconds: 400), () {
+        if (!_disposed) unawaited(load());
+      });
+    });
+  }
   final Auth auth;
+  final PeopleLive? live;
+  StreamSubscription<PeopleLiveEvent>? _events;
+  Timer? _soon;
 
   List<ChatListItem>? chats;
   List<ChatListItem> archived = const [];
@@ -257,9 +270,15 @@ class MyChats extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _soon?.cancel();
+    _events?.cancel();
     super.dispose();
   }
 }
+
+/// A business row's trust line, in the head's words (`verified`).
+String listTrustWords(ChatListItemVerified? v) =>
+    v == null ? '' : verifiedWords(PersonChatVerified(phone: v.phone, business: v.business, payments: v.payments, months: v.months));
 
 /// A chat's line in the list: theirs, or yours with "You:".
 String myChatPreview(ChatListItem c) {
@@ -274,10 +293,13 @@ String myChatPreview(ChatListItem c) {
 /// The rows of your chats (You's Chats, and Archived): a business marked
 /// Business, a person with their face, online and last line.
 class MyChatRows extends StatelessWidget {
-  const MyChatRows({super.key, required this.chats, required this.now, required this.onOpen, this.transport});
+  const MyChatRows({super.key, required this.chats, required this.now, required this.onOpen, this.transport, this.live});
   final List<ChatListItem> chats;
   final DateTime now;
   final ValueChanged<ChatListItem> onOpen;
+
+  /// You's live connection: who is typing, who is online now.
+  final PeopleLive? live;
 
   /// For a person's photo.
   final Transport? transport;
@@ -285,32 +307,63 @@ class MyChatRows extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final c in chats)
-          Semantics(
-            // Online is said, not only drawn as the dot.
-            label: c.kind == 'person' ? (c.person?.online == true ? 'Chat with a person, online' : 'Chat with a person') : 'Chat with a business',
+          _row(context, c, t, look),
+      ],
+    );
+  }
+
+  Widget _row(BuildContext context, ChatListItem c, TkTokens t, TkLook look) {
+    final person = c.kind == 'person';
+    final online = person && (live?.presence.containsKey(c.id) == true ? live!.presence[c.id]!.online == true : c.person?.online == true);
+    final typing = person && live?.typing.contains(c.id) == true && c.blocked != true && c.gone != true;
+    final trust = c.kind == 'business' ? listTrustWords(c.verified) : '';
+    final line = typing
+        ? Text('typing…', maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14, weight: 600, color: look.limeInk))
+        : Text(myChatPreview(c), maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14, color: t.muted));
+    return Semantics(
+            // Online and typing are said, not only drawn.
+            label: person ? ['Chat with a person', if (online) 'online', if (typing) 'typing'].join(', ') : (trust.isEmpty ? 'Chat with a business' : 'Chat with a business, $trust'),
             container: true,
             child: ChatRow(
               key: ValueKey('row my ${c.id}'),
               title: c.name,
               letter: c.name,
               avatar: c.kind == 'person' && transport != null
-                  ? PersonFace(name: c.name, transport: transport!, photo: c.person?.photo, size: 48, online: c.person?.online == true)
+                  ? PersonFace(name: c.name, transport: transport!, photo: c.person?.photo, size: 48, online: online)
                   // A business's logo, as Orders and the chat's head show it.
                   : (c.kind == 'business' && c.photo != null ? BusinessFace(name: c.name, urls: c.photo!.urls, size: 48) : null),
               marks: c.kind == 'business' ? const [(label: 'Business', off: false)] : const [],
               time: listTime(c.lastAt, now),
-              preview: Text(myChatPreview(c), maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14, color: t.muted)),
+              // A business's trust line, in its chat head's words, over
+              // the last line.
+              preview: trust.isEmpty
+                  ? line
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ExcludeSemantics(
+                          child: Row(
+                            children: [
+                              TkIcon('b-shield', size: 12, stroke: 2, color: look.limeInk),
+                              const SizedBox(width: 4),
+                              Expanded(child: Text(trust, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 12, color: t.muted))),
+                            ],
+                          ),
+                        ),
+                        line,
+                      ],
+                    ),
               unread: c.unread,
               muted: c.muted,
               onTap: () => onOpen(c),
             ),
-          ),
-      ],
-    );
+          );
   }
 }
 
@@ -329,7 +382,7 @@ class _ArchivedChatsScreenState extends State<ArchivedChatsScreen> {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: widget.data,
+      listenable: Listenable.merge([widget.data, ?widget.data.live]),
       builder: (context, _) => TkScreen(
         title: 'Archived',
         onRefresh: widget.data.load,
@@ -338,7 +391,7 @@ class _ArchivedChatsScreenState extends State<ArchivedChatsScreen> {
             const TkPanel(children: [TkEmpty(icon: 'chat', title: 'No archived chats', line: 'Chats you archive show here.')])
           else
             TkPanel(
-              children: [MyChatRows(chats: widget.data.archived, now: widget.now(), onOpen: widget.onOpen, transport: widget.data.auth.transport)],
+              children: [MyChatRows(chats: widget.data.archived, now: widget.now(), onOpen: widget.onOpen, transport: widget.data.auth.transport, live: widget.data.live)],
             ),
           if (widget.data.moreArchived) TkLoadMore(label: 'Show more chats', onMore: () => widget.data.loadMore(archivedOnes: true)),
         ],

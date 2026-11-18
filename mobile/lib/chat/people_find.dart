@@ -6,6 +6,8 @@
 // Also Requests (§7): strangers' first messages, opened without telling
 // the sender.
 
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:share_plus/share_plus.dart';
@@ -21,6 +23,7 @@ import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty, TkLoading;
 import '../kit/mobile.dart';
 import '../kit/modal.dart';
+import '../kit/polling.dart';
 import '../kit/sheet.dart' show TkKitField;
 import '../theme/look.dart';
 import '../theme/theme.dart';
@@ -29,6 +32,7 @@ import 'chats.dart' show ChatRow;
 import 'my_chat.dart' show sayFailure;
 import 'people.dart';
 import 'people_contacts.dart';
+import 'people_live.dart';
 import 'words.dart';
 
 /// Opens a chat with a person by its id (over You); [started] is the chat
@@ -492,23 +496,55 @@ class _MyPersonLinkScreenState extends State<MyPersonLinkScreen> {
 /// have not added. Opening one tells the sender nothing; in it, Accept,
 /// Delete, or Block and report.
 class PeopleRequestsScreen extends StatefulWidget {
-  const PeopleRequestsScreen({super.key, required this.auth, required this.openChat, this.now = DateTime.now});
+  const PeopleRequestsScreen({super.key, required this.auth, required this.openChat, this.now = DateTime.now, this.live});
   final Auth auth;
   final OpenPeopleChat openChat;
   final DateTime Function() now;
+
+  /// You's live connection (by default the one You holds): a request new,
+  /// answered or deleted elsewhere reads the list again at once.
+  final PeopleLive? live;
 
   @override
   State<PeopleRequestsScreen> createState() => _PeopleRequestsScreenState();
 }
 
-class _PeopleRequestsScreenState extends State<PeopleRequestsScreen> {
+class _PeopleRequestsScreenState extends State<PeopleRequestsScreen> with Polling {
   List<PeopleChat>? _requests;
   String? _error;
+  late final PeopleLive? _live = widget.live ?? PeopleLive.of(widget.auth);
+  StreamSubscription<PeopleLiveEvent>? _events;
+  Timer? _soon;
+  final _slow = SlowWhileLive();
 
   @override
   void initState() {
     super.initState();
     _load();
+    _events = _live?.events.listen((e) {
+      final mine = _requests?.any((c) => c.id == e.chatId) == true;
+      final about = switch (e) {
+        PeopleLiveMessage(:final request) => request || mine,
+        PeopleLiveChat() => true,
+        PeopleLiveGone(:final id) => id == null || mine,
+      };
+      if (!about) return;
+      _soon?.cancel();
+      _soon = Timer(const Duration(milliseconds: 300), () {
+        if (mounted) _load();
+      });
+    });
+    // Polled slowly as the fallback while the connection is not open.
+    startPolling(const Duration(seconds: 10), () {
+      if (_slow.due(_live)) _load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _events?.cancel();
+    _soon?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {

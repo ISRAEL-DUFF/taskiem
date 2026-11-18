@@ -25,6 +25,7 @@ import '../chat/people_cards.dart' show PayoutAccountPage;
 import '../chat/people_chat.dart' show PeopleChatData, PeopleChatScreen;
 import '../chat/people_contacts.dart' show PeopleContactsScreen, PhoneContacts, DevicePhoneContacts;
 import '../chat/people_find.dart';
+import '../chat/people_live.dart';
 import '../chat/people_settings.dart' show BlockedPeopleScreen, PeoplePrivacyPage;
 import '../chat/your_orders.dart' show YourOrderPage;
 import '../app/prefs.dart' show Prefs;
@@ -60,8 +61,12 @@ String _say(Object e) => switch (e) {
     };
 
 class YouHome extends StatefulWidget {
-  const YouHome({super.key, required this.auth, this.links, this.now = DateTime.now, this.notify, this.prefs, this.contacts = const DevicePhoneContacts(), this.presence = true});
+  const YouHome({super.key, required this.auth, this.links, this.now = DateTime.now, this.notify, this.prefs, this.contacts = const DevicePhoneContacts(), this.presence = true, this.live});
   final Auth auth;
+
+  /// You's live connection (`GET /v1/me/live`): made here while [presence]
+  /// is on, unless a test gives its own.
+  final PeopleLive? live;
 
   /// The phone's contacts, read only once the person agrees (a test's own).
   final PhoneContacts contacts;
@@ -86,8 +91,15 @@ class _YouHomeState extends State<YouHome> with Polling {
   List<Invitation> _invitations = const [];
   String? _error;
   bool _busy = false;
-  late final MyChats _chats = MyChats(widget.auth);
-  late final Presence _presence = Presence(widget.auth.api);
+  /// You's live connection: open while the app is in front (Presence opens
+  /// and closes it); the screens on You read what it tells.
+  late final PeopleLive? _live = widget.live ?? (widget.presence ? PeopleLive(widget.auth.transport) : null);
+  late final MyChats _chats = MyChats(widget.auth, live: _live);
+  late final Presence _presence = Presence(widget.auth.api, live: _live);
+
+  /// The list read again every 10 seconds, or every 30 while the live
+  /// connection is open (only to reconcile).
+  final _slow = SlowWhileLive();
 
   /// Told each time Orders is shown again: it reads itself again.
   final _ordersShown = ValueNotifier<int>(0);
@@ -98,14 +110,21 @@ class _YouHomeState extends State<YouHome> with Polling {
   @override
   void initState() {
     super.initState();
+    PeopleLive.hold(widget.auth, _live);
     _load();
-    if (widget.presence) _presence.start();
+    if (widget.presence) {
+      _presence.start();
+    } else {
+      _live?.start();
+    }
     widget.links?.addListener(_linked);
     WidgetsBinding.instance.addPostFrameCallback((_) => _linked());
     // New messages show in the list while it is seen: not while the app
     // is put away (the server takes a read as the person being here) or
     // a screen covers it.
-    startPolling(const Duration(seconds: 10), _chats.load);
+    startPolling(const Duration(seconds: 10), () {
+      if (_slow.due(_live)) _chats.load();
+    });
     // Notifications on this phone, on the person's own side: a tapped one
     // opens its chat; one that comes with the app open is a toast; asked
     // once.
@@ -178,6 +197,12 @@ class _YouHomeState extends State<YouHome> with Polling {
     notify?.removeListener(_notified);
     if (notify?.onArrived == _arrived) notify?.onArrived = null;
     if (widget.presence) _presence.stop();
+    if (PeopleLive.of(widget.auth) == _live) PeopleLive.hold(widget.auth, null);
+    if (widget.live == null) {
+      _live?.dispose();
+    } else {
+      _live?.stop();
+    }
     widget.links?.removeListener(_linked);
     _chats.dispose();
     _ordersShown.dispose();
@@ -420,7 +445,7 @@ class _YouHomeState extends State<YouHome> with Polling {
               ],
             ),
           ListenableBuilder(
-            listenable: _chats,
+            listenable: Listenable.merge([_chats, ?_live]),
             builder: (context, _) {
               final chats = _chats.chats;
               final archived = _chats.archived;
@@ -463,7 +488,7 @@ class _YouHomeState extends State<YouHome> with Polling {
                             semanticsLabel: 'Archived chats, ${archived.length}${_chats.moreArchived ? ' or more' : ''}',
                             onTap: () => tkPush<void>(context, ArchivedChatsScreen(data: _chats, now: widget.now, onOpen: _openItem)),
                           ),
-                        MyChatRows(chats: chats, now: widget.now(), onOpen: _openItem, transport: auth.transport),
+                        MyChatRows(chats: chats, now: widget.now(), onOpen: _openItem, transport: auth.transport, live: _live),
                       ],
                     ),
                   // The next page as the list is scrolled to its end.
