@@ -466,6 +466,11 @@ ALTER TABLE group_pushed FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON group_pushed FROM PUBLIC;
 CREATE POLICY dispatch_all ON group_pushed TO taskiem_dispatch USING (true) WITH CHECK (true);
 GRANT INSERT ON group_pushed TO taskiem_dispatch;
+-- Seen by the message's sender alone; written only by the definer.
+CREATE POLICY sender_read ON group_pushed FOR SELECT TO taskiem_app
+  USING (EXISTS (SELECT 1 FROM group_messages x WHERE x.group_id = group_pushed.group_id AND x.id = group_pushed.message_id
+                   AND x.sender_id = taskiem_person_scope()));
+GRANT SELECT ON group_pushed TO taskiem_app;
 CREATE POLICY dispatch_read ON group_messages FOR SELECT TO taskiem_dispatch USING (true);
 GRANT SELECT (group_id, id, sender_id, kind, created_at, mentions) ON group_messages TO taskiem_dispatch;
 GRANT SELECT (muted, mentions) ON group_members TO taskiem_dispatch;
