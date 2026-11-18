@@ -89,6 +89,12 @@ REVOKE EXECUTE ON FUNCTION taskiem_group_marks_changed() FROM PUBLIC;
 
 -- --- memberships: the API's rules, by row-level security too ---
 
+-- 00482's leaving took two clock readings, so what someone who left sees
+-- could run a moment past left_at: it ends at left_at (the guard below
+-- holds it so).
+UPDATE group_members SET visible = visible - tstzmultirange(tstzrange(left_at, NULL))
+ WHERE left_at IS NOT NULL AND visible && tstzmultirange(tstzrange(left_at, NULL));
+
 -- As the API (taskiem_app, the person in scope): one's own row, admin or
 -- not, changes only in one's own settings and marks, and by leaving (left
 -- now, seeing nothing from then); an admin's role may be given up. Another

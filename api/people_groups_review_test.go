@@ -384,6 +384,10 @@ func TestGroupsReviewRowLevelSecurityHoldsTheRules(t *testing.T) {
 	if seen(chidiID) != 1 {
 		t.Fatalf("Chidi sees %d after leaving", seen(chidiID))
 	}
+	// Their own settings still change once left.
+	if g := chidi.must(200, "PUT", "/v1/me/groups/"+gid+"/me", map[string]any{"archived": true}); g["archived"] != true {
+		t.Fatalf("archived after leaving: %v", g)
+	}
 	refused("someone who left moves their leaving", chidiID, `UPDATE group_members SET left_at = left_at + interval '1 hour' WHERE group_id = $1 AND person_id = $2`, g, chidiID)
 	refused("an admin widens someone who left", adaID, `UPDATE group_members SET visible = tstzmultirange(tstzrange(NULL, NULL)) WHERE group_id = $1 AND person_id = $2`, g, chidiID)
 

@@ -11,9 +11,9 @@ import (
 
 // 00483 (the groups review's fixes) goes up, down and up again: up, someone
 // removed before is kept as removed (group_removed, from their membership),
-// group_members has marks_at, the link's preview no longer says whether
-// joining waits, and the new definers are there; down, all is as 00482
-// left it.
+// what someone who left sees ends at left_at, group_members has marks_at,
+// the link's preview no longer says whether joining waits, and the new
+// definers are there; down, all is as 00482 left it.
 func TestPeopleGroupsReviewMigrationUpDownUp(t *testing.T) {
 	dsn := emptyDatabase(t)
 	ctx := context.Background()
@@ -45,7 +45,8 @@ func TestPeopleGroupsReviewMigrationUpDownUp(t *testing.T) {
 		`INSERT INTO people_groups (id, sealed) VALUES ('` + group + `', '\x00')`,
 		`INSERT INTO group_members (group_id, person_id, role, how, visible) VALUES ('` + group + `', '` + ada + `', 'admin', 'created', tstzmultirange(tstzrange(now(), NULL)))`,
 		`INSERT INTO group_members (group_id, person_id, how, left_at, left_how, removed_by, visible)
-		 VALUES ('` + group + `', '` + bola + `', 'added', now(), 'removed', '` + ada + `', '{}')`,
+		 VALUES ('` + group + `', '` + bola + `', 'added', now() - interval '30 minutes', 'removed', '` + ada + `',
+		         tstzmultirange(tstzrange(now() - interval '1 hour', now() - interval '29 minutes')))`,
 	} {
 		if _, err := conn.Exec(ctx, q); err != nil {
 			t.Fatal(err)
@@ -53,6 +54,7 @@ func TestPeopleGroupsReviewMigrationUpDownUp(t *testing.T) {
 	}
 	type st struct {
 		removed     int
+		past        bool
 		marks, find bool
 		approve     bool
 		definers    int
@@ -63,6 +65,9 @@ func TestPeopleGroupsReviewMigrationUpDownUp(t *testing.T) {
 			EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'group_members' AND column_name = 'marks_at'),
 			EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'taskiem_group_link_find' AND 'approve_joins' = ANY (proargnames)),
 			(SELECT count(*)::int FROM pg_proc WHERE proname IN ('taskiem_group_forget', 'taskiem_group_push'))`).Scan(&s.find, &s.marks, &s.approve, &s.definers); err != nil {
+			t.Fatal(err)
+		}
+		if err := conn.QueryRow(ctx, `SELECT visible && tstzmultirange(tstzrange(left_at, NULL)) FROM group_members WHERE person_id = '`+bola+`'`).Scan(&s.past); err != nil {
 			t.Fatal(err)
 		}
 		if s.find {
@@ -76,7 +81,7 @@ func TestPeopleGroupsReviewMigrationUpDownUp(t *testing.T) {
 		if _, err := p.UpTo(ctx, 483); err != nil {
 			t.Fatal(err)
 		}
-		if s := state(); s.removed != 1 || !s.marks || !s.find || s.approve || s.definers != 2 {
+		if s := state(); s.removed != 1 || !s.marks || !s.find || s.approve || s.definers != 2 || s.past {
 			t.Fatalf("up: %+v", s)
 		}
 		if _, err := p.DownTo(ctx, 482); err != nil {
