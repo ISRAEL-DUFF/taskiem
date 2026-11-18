@@ -4,7 +4,9 @@ Date: 18 November 2026 · Branch `ccr-87497aa3-gf060z` (PR #198) · Base: main a
 
 The founder will redesign these screens to the app's own look ([mobile-app-look.md](mobile-app-look.md) and the drawings). Many of them were built to match the web and borrow its look. This list names every app screen, sheet and shared widget the branch added or changed, where it lives, how a person reaches it, what it holds, and where it borrows the web's look today (from a read-only audit on 18 November 2026). Behaviour and wording are not in question here, only the look.
 
-Tags: **[web]** clearly the web's look · **[off]** unlike the app's own screens · **[minor]** · **[fine]** already the app's look.
+**18 November:** every screen below tagged [web], [off] or [minor] has been redesigned to the app's own look, in the patterns of main's redesign (TkPageScreen, TkSection and TkListRow, TkFormSheet and TkFormGroup, TkTopCard, TkCallout, TkCta, TkSmallButton and TkButtonRow, TkChips, CodeBoxes, and the group screens' pickOneOf, pickAction and askSure). Each is now tagged [done 18 Nov] with what changed. One thing is left out on purpose: a business chat on You has no Search button, because business chats have no search on the server yet.
+
+Tags: **[web]** clearly the web's look · **[off]** unlike the app's own screens · **[minor]** · **[fine]** already the app's look · **[done 18 Nov]** redesigned to the app's own look on 18 November (what changed is said beside it).
 
 Kit notes that explain most tags:
 - `TkButton` (`kit/kit.dart`) is the web's button. The app's buttons are `TkCta`, `TkSmallButton`, `TkButtonRow`, `CardButton`, `AuthButton` and `TkHeadButton`.
@@ -15,24 +17,24 @@ Kit notes that explain most tags:
 
 | Screen | File | Reached from | Holds | Look today |
 | --- | --- | --- | --- | --- |
-| Welcome: the phone way in (number, code, name, 18+) | `screens/welcome.dart` `WelcomeScreen` | First open, signed out | Phone number, WhatsApp/SMS code, name, adult check | [web] Continue and Create are `TkButton`s; the code is a 6-digit field, not `CodeBoxes`; ground is the web's `t.bg`; "Chat on WhatsApp" is a `CardButton` |
+| Welcome: the phone way in (number, code, name, 18+) | `screens/welcome.dart` `WelcomeScreen` | First open, signed out | Phone number, WhatsApp/SMS code, name, adult check | [done 18 Nov] page ground; AuthButton for Continue, Create and Chat on WhatsApp; the code as CodeBoxes |
 | Sign in (changes) | `screens/sign_in.dart` | Signed out | Phone way in added beside email | [fine] |
-| Second proof (step-up into a business) | `screens/second_proof.dart` `SecondProof` | Opening a business that needs passkey, email link, password or PIN | The ways to prove it's you | [web] five stacked `TkButton`s; sheet not in `TkAppLook`, so "Send it again" is the web's underlined link |
-| Switcher: You and your businesses | `screens/switcher.dart` `SwitcherSheet` | Head of You, a business's menu | Rows for You and each business; passkey step | [web] "Use your passkey" is a `TkButton`; sheets not in `TkAppLook` [minor] |
-| Start something | `screens/start_something.dart` `StartSomethingScreen` | You › Start something | A business or workflows; what the business does | [web] web radio lists; a full-width `TkButton` foot; title in 17/700 instead of the app's display type |
-| Change number | `screens/you.dart` `ChangeNumberScreen` | You › Settings | New number, code, confirm | [web] stacked `TkButton`s in a paragraph-led panel; code in a field, not `CodeBoxes` |
+| Second proof (step-up into a business) | `screens/second_proof.dart` `SecondProof` | Opening a business that needs passkey, email link, password or PIN | The ways to prove it's you | [done 18 Nov] ways in as rows, password and PIN in form groups with TkCta, a sent link as a callout; sheet in TkAppLook |
+| Switcher: You and your businesses | `screens/switcher.dart` `SwitcherSheet` | Head of You, a business's menu | Rows for You and each business; passkey step | [done 18 Nov] sheets in TkAppLook; Use your passkey a TkCta; an organisation's sign-in a callout |
+| Start something | `screens/start_something.dart` `StartSomethingScreen` | You › Start something | A business or workflows; what the business does | [done 18 Nov] large-title page; choices as ticked rows; the kind as sign-up's KindTile; name in a form group; TkCta |
+| Change number | `screens/you.dart` `ChangeNumberScreen` | You › Settings | New number, code, confirm | [done 18 Nov] large-title page; number in a form group; the old-number question as rows; codes as CodeBoxes on a card |
 
 ## 2. You: home, Chats tab and settings (stages 1 to 3)
 
 | Screen | File | Reached from | Holds | Look today |
 | --- | --- | --- | --- | --- |
-| You home (Chats tab head, search, list) | `screens/you.dart` `YouHome` | Signed in on the person's side | Chats with businesses and people, Requests row, Archived row, invitations, Start something, Your businesses, second-proof notice, contacts-on-Taskiem notice | [off] head is "Chats" and "You" side by side, not main's big title with the name under it; + is not primary and there is no ⋯; Switch and Settings get their own head buttons. [off] hand-made search pill, not `_Search`/`TkSearchBox`. [off] no All/Unread/Starred/Archived chips; Requests and Archived are rows. [web] second-proof notice is a panel with a `TkButton`; "Start something" is a full-width `TkButton` with a hint paragraph |
-| Invitation row | `screens/you.dart` `_InvitationRow` | You home | Join or decline a business | [web] Join and Decline are `TkButton`s |
-| You › Settings | `screens/you.dart` `YouSettingsScreen` | You head | Photo, name, phone, Change number, notifications, privacy, chats with people, contacts, your link, blocked people, bank account for shares, Your standing, Sign out | [off] label-over-value lines instead of `YouCard`; [web] "Change number" and "Sign out" are `TkButton`s |
+| You home (Chats tab head, search, list) | `screens/you.dart` `YouHome` | Signed in on the person's side | Chats with businesses and people, Requests row, Archived row, invitations, Start something, Your businesses, second-proof notice, contacts-on-Taskiem notice | [done 18 Nov] main's head (Chats large, the name under it, ⋯ with Settings, Switch and Start something, + primary); the app's search box; All, Unread, Archived chips; the locked notice a callout; Start something a row |
+| Invitation row | `screens/you.dart` `_InvitationRow` | You home | Join or decline a business | [done 18 Nov] Join and Decline as TkSmallButtons in a TkButtonRow |
+| You › Settings | `screens/you.dart` `YouSettingsScreen` | You head | Photo, name, phone, Change number, notifications, privacy, chats with people, contacts, your link, blocked people, bank account for shares, Your standing, Sign out | [done 18 Nov] you at the top (photo, name, email); Change number a row; Sign out a red row |
 | Your photo card | `screens/you_account.dart` `MyPhotoCard` | You › Settings | Photo only you see | [fine] |
 | Notifications | `screens/you_account.dart` `YouNotificationsPage` | You › Settings | Kinds (businesses, people, requests), preview, sound | [fine] |
 | Privacy | `screens/you_account.dart` `YouPrivacyPage` | You › Settings | What businesses see, links to privacy with people and the lawful-requests page | [fine] |
-| Delete account | `screens/you_account.dart` `DeleteAccountScreen` | You › Settings › Privacy | Fresh proof, then delete | [web] proof ways are three `TkButton`s; "Delete my account" is a pine button, not red; code not in `CodeBoxes`; `_Fact` is a hand-made label/value table [minor] |
+| Delete account | `screens/you_account.dart` `DeleteAccountScreen` | You › Settings › Privacy | Fresh proof, then delete | [done 18 Nov] ways to confirm as rows; the code as CodeBoxes; Delete my account red; a refusal a callout; Privacy's facts as TkLines |
 | Saved addresses | `chat/addresses.dart` `SavedAddressesPage`, `AddressSheet` | You › Settings, a shop's check step | Saved delivery addresses | [fine] |
 | Links on You | `screens/you_links.dart` | App links | Routing only | n/a |
 | Home tabs (changes) | `screens/home_tabs.dart` | Signed in | Orders tab kept in place, re-read when shown | [fine] |
@@ -42,20 +44,20 @@ Kit notes that explain most tags:
 
 | Screen | File | Reached from | Holds | Look today |
 | --- | --- | --- | --- | --- |
-| A chat with a business | `chat/my_chat.dart` `MyChatScreen` | You › Chats, a chat link, a push | The thread, cards, composer, request bar, offers, verified line | [off] head has no Search button and no tap on the avatar |
-| Report a business | `chat/my_chat.dart` `_ReportSheet` | A business chat's ⋯ | Reason, consent | [web] not in `TkAppLook`: browser checkbox and radios |
+| A chat with a business | `chat/my_chat.dart` `MyChatScreen` | You › Chats, a chat link, a push | The thread, cards, composer, request bar, offers, verified line | [done 18 Nov] the business's photo opens its profile. Search is not added: business chats have no search on the server yet |
+| Report a business | `chat/my_chat.dart` `_ReportSheet` | A business chat's ⋯ | Reason, consent | [done 18 Nov] TkFormSheet in TkAppLook, reasons and consent as rows with the app's tick |
 | Archived chats | `chat/my_chat.dart` `ArchivedChatsScreen` | You home | Archived business and people chats | [fine] |
 | Tools in a business chat (the + sheet) | `chat/my_chat_tools.dart` `_ToolsSheet` | A business chat's + | Their shop, Book, Your orders, Pay, Share | [fine] |
-| Their shop and the check step | `chat/my_chat_tools.dart` `ShopSheet` | Tools › Their shop | Items, bag, how you get it, zones, address, pay | [off] pick up/deliver, zones and saved addresses are web radio lists (spec: a switch, chips, rows with a tick); "Sold out" is a web `TkPill` [minor] |
+| Their shop and the check step | `chat/my_chat_tools.dart` `ShopSheet` | Tools › Their shop | Items, bag, how you get it, zones, address, pay | [done 18 Nov] pick up or delivery as TkChips, areas as chips, saved addresses as ticked rows; Sold out a CardPill |
 | Your orders with this business | `chat/my_chat_tools.dart` `MyOrdersSheet` | Tools › Your orders | Orders and bookings | [fine] |
 | Book | `chat/book_sheet.dart` (changes) | Tools › Book | Services, times | [fine] |
-| Cards in a chat (order, pay, booking, product, invoice, delivery) | `chat/door.dart` `DoorCard`, `DoorBubble`, `OfferMark`, `TransferWarning`, `DoorTicks`, `BusinessFace`, `LineMark` | Inside every chat on You | Live cards, ticks, offers, the transfer warning | [minor] `OfferMark` is a web `TkPill`; declined and cancelled are not red; no "View order ›" row under a hairline on order cards |
-| Your own bubble (shared) | `chat/thread.dart` `BubbleFrame`, `ownWords` | Every chat on You and every people chat | Your own pine bubble | [off, a bug] this copy of `ownWords` lacks main's fix (`tkLookOnPine`, the soft veil), so pills, lime accents and file cards inside your own bubble take dark inks, and a `CardButton` is pine on pine |
+| Cards in a chat (order, pay, booking, product, invoice, delivery) | `chat/door.dart` `DoorCard`, `DoorBubble`, `OfferMark`, `TransferWarning`, `DoorTicks`, `BusinessFace`, `LineMark` | Inside every chat on You | Live cards, ticks, offers, the transfer warning | [done 18 Nov] View order › / View delivery › as the card's foot under a hairline; declined, cancelled, no-show red; Offer a CardPill |
+| Your own bubble (shared) | `chat/thread.dart` `BubbleFrame`, `ownWords` | Every chat on You and every people chat | Your own pine bubble | [done 18 Nov] thread.dart's ownWords has main's pine fix (tkSoft, tkLookOnPine) |
 | Send sheet and card picker | `chat/customer_app.dart` `_CardPicker`, `_RichMenu` | Business side: sending a card to a customer | Cards to send | [fine] |
-| Chat link (opened) | `screens/chat_link.dart` `ChatLinkScreen`, `ChatLinkCardView` | A `/m/{code}` link | The business, Chat on Taskiem or WhatsApp | [minor] "Add your phone" is a `CardButton` on the bare page ground |
-| Your chat link (business side) | `chat/chat_link_page.dart` `ChatLinkPage`, `_CustomersSheet` | A business's Settings › Customers | QR, link, new link, shop's chat button, offers | [minor] "Your shop's chat button" is a web radio list (spec: a switch of three); QR ground hard-coded white instead of `qrGround` |
-| A customer's thread, both lines (business side) | `chat/customer.dart` (changes), `_LineChooser` | A business's Chats › a customer | App and WhatsApp lines in one thread, which line the reply goes to | [off] `_LineChooser` is a hand-made switch with hard-coded colours and comments saying "as the web's pills"; the shut line uses a web token |
-| Chat rows marks (shared) | `chat/chats.dart` `ChatRow` marks | Business Chats list and You's list | "Business", "WhatsApp", "App" marks | [minor] web tokens instead of `CardPill` with the app's accents |
+| Chat link (opened) | `screens/chat_link.dart` `ChatLinkScreen`, `ChatLinkCardView` | A `/m/{code}` link | The business, Chat on Taskiem or WhatsApp | [done 18 Nov] Add your phone a row |
+| Your chat link (business side) | `chat/chat_link_page.dart` `ChatLinkPage`, `_CustomersSheet` | A business's Settings › Customers | QR, link, new link, shop's chat button, offers | [done 18 Nov] the shop's chat button as TkChips of three; the QR on qrGround |
+| A customer's thread, both lines (business side) | `chat/customer.dart` (changes), `_LineChooser` | A business's Chats › a customer | App and WhatsApp lines in one thread, which line the reply goes to | [done 18 Nov] Your reply goes is TkChips (gains off: a shut line quiet, with why) |
+| Chat rows marks (shared) | `chat/chats.dart` `ChatRow` marks | Business Chats list and You's list | "Business", "WhatsApp", "App" marks | [done 18 Nov] CardPill: a stopped line red, WhatsApp lime, the rest plain |
 | Customers in the Taskiem chat, Tools › Customers, "Write to them in the app" | `chat/conversation.dart`, `chat/taskiem.dart`, `chat/tools.dart`, `chat/tools_panel.dart`, `chat/storefront_orders_page.dart` (small changes) | A business's chats and orders | Entry points | [fine] |
 | Attachments and composer (changes) | `chat/attachments.dart`, `chat/composer.dart` | Every chat | Files from You's chats | [fine] |
 
@@ -63,41 +65,41 @@ Kit notes that explain most tags:
 
 | Screen | File | Reached from | Holds | Look today |
 | --- | --- | --- | --- | --- |
-| Discover | `chat/discover.dart` `DiscoverTab` | You › Discover | Search, area, categories, businesses | [web] "Show more businesses" is a `TkButton` (the app has `TkLoadMore`); [minor] categories are a segmented switch, not the drawn chips |
-| A business's profile | `chat/discover.dart` `DiscoverProfileScreen` | Discover | Chat, Their shop, Book, Share, Report | [minor] stacked full-width `CardButton`s on the top card instead of a `TkButtonRow` of `TkSmallButton`s |
+| Discover | `chat/discover.dart` `DiscoverTab` | You › Discover | Search, area, categories, businesses | [done 18 Nov] categories as Explore's chips; Show more businesses the app's small button (pages still on a tap: its races are tested) |
+| A business's profile | `chat/discover.dart` `DiscoverProfileScreen` | Discover | Chat, Their shop, Book, Share, Report | [done 18 Nov] Chat, Their shop and Book as a TkButtonRow of TkSmallButtons; sharing a link under them |
 | Report a listing | `chat/discover.dart` `DiscoverReportSheet` | A profile's ⋯ | Reason | [fine] |
-| Discover settings (business side) | `chat/discover_settings.dart` `DiscoverSettingsPage`, `DiscoverHoursSheet` | A business's Settings › Discover | Listing, category, hours, what you offer | [minor] web `TkPill`s; category picker is a web modal; `_Note` re-makes `TkCallout` |
-| Your orders | `chat/your_orders.dart` `YourOrdersTab` | You › Orders | Every order and booking | [web] "Show older orders" is a `TkButton` (use `TkLoadMore`) |
-| An order | `chat/your_orders.dart` `YourOrderPage` | Your orders | Lines, state, Pay, Chat, Share | [minor] stacked `CardButton`s instead of a `TkButtonRow` |
+| Discover settings (business side) | `chat/discover_settings.dart` `DiscoverSettingsPage`, `DiscoverHoursSheet` | A business's Settings › Discover | Listing, category, hours, what you offer | [done 18 Nov] CardPills; the category from pickOneOf; notes tinted as callouts (whole words) |
+| Your orders | `chat/your_orders.dart` `YourOrdersTab` | You › Orders | Every order and booking | [done 18 Nov] Show older orders the app's small button |
+| An order | `chat/your_orders.dart` `YourOrderPage` | Your orders | Lines, state, Pay, Chat, Share | [done 18 Nov] Pay and Chat as a TkButtonRow; sharing a link under them |
 
 ## 5. People chats (stage 5a)
 
 | Screen | File | Reached from | Holds | Look today |
 | --- | --- | --- | --- | --- |
-| A chat with a person | `chat/people_chat.dart` `PeopleChatScreen`, `PeopleBubble` | You › Chats, a push, a link | Messages, ticks, replies, reactions, forward, delete, photos, voice, files, places, cards, typing, last seen | [off] reactions are one flat pill under the bubble, not main's chips hanging over the bubble with counts; Search is only in ⋯, not a round head button; delete for me/everyone is a web modal [minor] |
+| A chat with a person | `chat/people_chat.dart` `PeopleChatScreen`, `PeopleBubble` | You › Chats, a push, a link | Messages, ticks, replies, reactions, forward, delete, photos, voice, files, places, cards, typing, last seen | [done 18 Nov] reactions as GroupReactionChips with counts; Search a round head button; delete and confirmations as pickAction and askSure |
 | Request bar | `chat/people_chat.dart` `_RequestBar` | A request opened | Accept, Delete, Block and report | [fine] |
-| Contact info | `chat/people_chat.dart` `PersonInfoScreen` | A people chat's head | Card, mute, archive, block, report, where the chat is kept | [fine] apart from the "where this chat is kept" panel [minor] |
-| Report / Block and report | `chat/people_chat.dart` `_ReportSheet` | A people chat or request | Reason, consent to send the last 20 | [web] not in `TkAppLook`: browser checkboxes and radios |
-| Requests | `chat/people_find.dart` `PeopleRequestsScreen` | You home | Waiting first messages | [off] a description paragraph under the title |
-| New chat | `chat/people_find.dart` `NewPeopleChatScreen` | You home + | By number, by link, scan, from contacts, invite | [web] form cards with full-width `TkButton`s; "Not on Taskiem yet" in 17/700 |
-| A found person | `chat/people_find.dart` `FoundPerson` | New chat, a link | Name, photo, Chat, Add to contacts | [web] Chat and Add are `TkButton`s; name in 17/700 |
+| Contact info | `chat/people_chat.dart` `PersonInfoScreen` | A people chat's head | Card, mute, archive, block, report, where the chat is kept | [done 18 Nov] where the chat is kept a quiet note (as Group info) |
+| Report / Block and report | `chat/people_chat.dart` `_ReportSheet` | A people chat or request | Reason, consent to send the last 20 | [done 18 Nov] TkFormSheet in TkAppLook, each choice a row with the app's tick |
+| Requests | `chat/people_find.dart` `PeopleRequestsScreen` | You home | Waiting first messages | [done 18 Nov] what they are, a quiet note under the list |
+| New chat | `chat/people_find.dart` `NewPeopleChatScreen` | You home + | By number, by link, scan, from contacts, invite | [done 18 Nov] large-title page; the ways in as rows (Scan among them); number and link in form groups with the app's buttons; Not on Taskiem yet a callout with Invite |
+| A found person | `chat/people_find.dart` `FoundPerson` | New chat, a link | Name, photo, Chat, Add to contacts | [done 18 Nov] a top card, the name in the display type, Chat and Add as a TkButtonRow |
 | A person's link (opened) | `chat/people_find.dart` `PersonLinkScreen` | A `/p/{code}` link | Who it is, Chat, Add | [fine] |
-| Your link and QR | `chat/people_find.dart` `MyPersonLinkScreen` | You › Settings, New chat | QR, Share, Copy, Replace | [web] a paragraph, the QR and three `TkButton`s; QR ground hard-coded white (the app's "Linked businesses" page is the pattern) |
-| Name a contact | `chat/people.dart` `askContactName` (`_NameForm`) | Add to contacts anywhere | A name | [web] a web modal with a `TkButton` (the app's pattern is a form sheet, as Saved addresses) |
-| From your contacts | `chat/people_contacts.dart` `ContactsMatchScreen` | New chat › From your contacts | Explainer, agree, found people | [web] ask step is paragraph cards with stacked `TkButton`s; "Checked N of M" is a plain panel [minor] |
-| Your contacts | `chat/people_contacts.dart` `PeopleContactsScreen` | You › Settings | Contacts, rename, remove | [fine] apart from the actions being a web modal [minor] |
-| Scan a QR code | `chat/people_scan.dart` `_ScanScreen` | New chat › Scan | Camera, paste a link | [off] a description paragraph; [web] "Type or paste their link instead" is a `TkButton` |
-| Send a place | `chat/people_place.dart` `_PlaceSheet` | A people chat's + › A place | Where you are, a name, map link | [off] not in `TkAppLook`; [web] "Open your phone's settings" and "See it on the map" are `TkButton`s |
-| Search messages | `chat/people_search.dart` `PeopleSearchScreen`, `FoundRow` | Search bar on Chats, a chat's menu | Results with snippets | [off] a form field, not the app's search on a card; footnote paragraph [minor] |
+| Your link and QR | `chat/people_find.dart` `MyPersonLinkScreen` | You › Settings, New chat | QR, Share, Copy, Replace | [done 18 Nov] as GroupLinkScreen: a top card, the QR on qrGround, Share and Copy, Replace a row |
+| Name a contact | `chat/people.dart` `askContactName` (`_NameForm`) | Add to contacts anywhere | A name | [done 18 Nov] TkFormSheet |
+| From your contacts | `chat/people_contacts.dart` `ContactsMatchScreen` | New chat › From your contacts | Explainer, agree, found people | [done 18 Nov] the ask on a top card, TkCta and a Not now link; the day's limit a callout |
+| Your contacts | `chat/people_contacts.dart` `PeopleContactsScreen` | You › Settings | Contacts, rename, remove | [done 18 Nov] a contact's actions from pickAction; removing asks with askSure |
+| Scan a QR code | `chat/people_scan.dart` `_ScanScreen` | New chat › Scan | Camera, paste a link | [done 18 Nov] what to do under the camera; the other way a link |
+| Send a place | `chat/people_place.dart` `_PlaceSheet` | A people chat's + › A place | Where you are, a name, map link | [done 18 Nov] in TkAppLook; a problem a callout with Settings; the map a link; the name in a form group |
+| Search messages | `chat/people_search.dart` `PeopleSearchScreen`, `FoundRow` | Search bar on Chats, a chat's menu | Results with snippets | [done 18 Nov] the app's search box (TkSearchBox); the note quiet |
 | Starred messages | `chat/people_search.dart` `PeopleStarredScreen` | Search screen, Settings | Starred messages | [fine] |
-| Privacy with people | `chat/people_settings.dart` `PeoplePrivacyPage` | You › Settings | Who can find me, message me, last seen, photo, number, read ticks, contacts; Check my contacts daily (this phone’s switch) | [minor] each choice is a form row whose value opens a web modal (the app's settings open a page or sheet of rows) |
+| Privacy with people | `chat/people_settings.dart` `PeoplePrivacyPage` | You › Settings | Who can find me, message me, last seen, photo, number, read ticks, contacts; Check my contacts daily (this phone’s switch) | [done 18 Nov] each choice from pickOneOf |
 | Blocked people | `chat/people_settings.dart` `BlockedPeopleScreen` | You › Settings | Blocked list, Unblock | [fine] |
 | Share and split cards in a chat | `chat/people_cards.dart` `PeopleCardView`, `_LiveCardSheet`, `_CardPicker`, `_SplitForm` | A people chat's + › Share | Business, product, order, delivery, your share | [fine] |
 | Forward / share-with picker | `chat/people_cards.dart` `_PeoplePicker` | Forward, Share with someone | Chats to pick | [off] web radio and checkbox rows with a hand-laid face (`TkListRow` has `face:` and a tick box) |
-| Bank account for shares | `chat/people_cards.dart` `PayoutAccountPage` | You › Settings | Bank, number, name | [web] one paragraph card and `TkButton`s "Save" and "Remove it" (Remove not red) |
-| Your standing | `chat/people_standing.dart` `YourStandingScreen` | You › Settings, a push, a refused send | State, decisions, appeals | [off] description paragraph; state is a plain panel; [web] decisions are stacked panels of long wrapped lines with a `CardButton` each |
-| Appeal | `chat/people_standing.dart` `_AppealSheet` | Your standing | Your words | [minor] not in `TkAppLook` |
-| Standing notice | `chat/people_standing.dart` `StandingNotice` | Top of You when unseen | A short notice | [off] hand-made box with web danger tokens (the app has `TkCallout`) |
+| Bank account for shares | `chat/people_cards.dart` `PayoutAccountPage` | You › Settings | Bank, number, name | [done 18 Nov] large-title page; the account in a form group; Save a TkCta; Remove it a red row |
+| Your standing | `chat/people_standing.dart` `YourStandingScreen` | You › Settings, a push, a refused send | State, decisions, appeals | [done 18 Nov] where you stand on a top card; each decision a row with its state, its story and Appeal in a sheet |
+| Appeal | `chat/people_standing.dart` `_AppealSheet` | Your standing | Your words | [done 18 Nov] TkFormSheet |
+| Standing notice | `chat/people_standing.dart` `StandingNotice` | Top of You when unseen | A short notice | [done 18 Nov] a red TkCallout with Read |
 | Live updates and presence | `chat/people_live.dart`, `app/presence.dart` | Behind You | No screen | n/a |
 
 ## 5b. Groups (stage 5b, branch `stage5b-groups-app`)
