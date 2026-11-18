@@ -1045,6 +1045,23 @@ class TaskiemApi {
     return OpenPeopleCardResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Say you are typing, or stopped (`POST /v1/me/people/{id}/typing`)
+  Future<void> typingPeople({required TypingPeopleRequest body, required String id}) async {
+    await _t.send('POST', '/v1/me/people/${Uri.encodeComponent(id)}/typing', body: body.toJson());
+  }
+
+  /// Search your people chats (`GET /v1/me/people/search`)
+  Future<SearchPeopleResponse> searchPeople({String? q, String? chat, String? before}) async {
+    final j = await _t.send('GET', '/v1/me/people/search', query: {'q': ?q, 'chat': ?chat, 'before': ?before});
+    return SearchPeopleResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your starred messages across your people chats (`GET /v1/me/people/starred`)
+  Future<StarredPeopleResponse> starredPeople({String? before}) async {
+    final j = await _t.send('GET', '/v1/me/people/starred', query: {'before': ?before});
+    return StarredPeopleResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Your bank account for being paid back (`GET /v1/me/payout-account`)
   Future<PayoutAccountAnswer> getPayoutAccount() async {
     final j = await _t.send('GET', '/v1/me/payout-account');
@@ -9762,6 +9779,91 @@ class OpenPeopleCardResponseLiveBusiness {
         'shop': ?shop,
         'tagline': ?tagline,
         'takes_chats': takesChats,
+      };
+}
+
+class TypingPeopleRequest {
+  const TypingPeopleRequest({this.typing});
+
+  final bool? typing;
+
+  factory TypingPeopleRequest.fromJson(Map<String, dynamic> j) => TypingPeopleRequest(
+        typing: j['typing'] == null ? null : j['typing'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'typing': ?typing,
+      };
+}
+
+class SearchPeopleResponse {
+  const SearchPeopleResponse({required this.more, this.next, required this.results});
+
+  final bool more;
+  final String? next;
+  final List<PeopleFound> results;
+
+  factory SearchPeopleResponse.fromJson(Map<String, dynamic> j) => SearchPeopleResponse(
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
+        results: (j['results'] as List).map((e) => PeopleFound.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'more': more,
+        'next': ?next,
+        'results': results.map((e) => e.toJson()).toList(),
+      };
+}
+
+/// A message of your own people chats, found by search or starred, with its
+/// chat.
+class PeopleFound {
+  const PeopleFound({required this.chat, required this.chatId, required this.message, this.snippet, this.starredAt});
+
+  final PeopleChat chat;
+  final String chatId;
+  final PeopleMessage message;
+  /// Search: a little of the message around what was searched for (up to 120
+  /// characters, with … where cut).
+  final String? snippet;
+  /// Starred: when you starred it.
+  final DateTime? starredAt;
+
+  factory PeopleFound.fromJson(Map<String, dynamic> j) => PeopleFound(
+        chat: PeopleChat.fromJson(j['chat'] as Map<String, dynamic>),
+        chatId: j['chat_id'] as String,
+        message: PeopleMessage.fromJson(j['message'] as Map<String, dynamic>),
+        snippet: j['snippet'] == null ? null : j['snippet'] as String,
+        starredAt: j['starred_at'] == null ? null : DateTime.parse(j['starred_at'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat': chat.toJson(),
+        'chat_id': chatId,
+        'message': message.toJson(),
+        'snippet': ?snippet,
+        'starred_at': ?starredAt?.toUtc().toIso8601String(),
+      };
+}
+
+class StarredPeopleResponse {
+  const StarredPeopleResponse({required this.more, this.next, required this.starred});
+
+  final bool more;
+  final String? next;
+  final List<PeopleFound> starred;
+
+  factory StarredPeopleResponse.fromJson(Map<String, dynamic> j) => StarredPeopleResponse(
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
+        starred: (j['starred'] as List).map((e) => PeopleFound.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'more': more,
+        'next': ?next,
+        'starred': starred.map((e) => e.toJson()).toList(),
       };
 }
 

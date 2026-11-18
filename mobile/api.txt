@@ -237,6 +237,11 @@ markPeopleMessage
 deletePeopleMessage
 markSplitPaid
 openPeopleCard
+# Stage 5a gaps: typing, search and starred across people chats (the live
+# connection, GET /v1/me/live, is read as a stream: lib/chat/people_live.dart).
+typingPeople
+searchPeople
+starredPeople
 getPayoutAccount
 putPayoutAccount
 deletePayoutAccount
