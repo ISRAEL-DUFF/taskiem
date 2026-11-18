@@ -675,13 +675,17 @@ type chatItem struct {
 	// Person: a people chat's other person, as GET /v1/me/people shows
 	// them (photo, last seen and online by their settings).
 	Person *personCardOut `json:"person,omitempty"`
+	// Group: a group's row (kind group, open /v1/me/groups/{id}), as GET
+	// /v1/me/groups shows it (photo, members, role, left, mentioned).
+	Group *groupView `json:"group,omitempty"`
 }
 
 // listAllChats is GET /v1/me/conversations (?archived=1&before=): You's
-// Chats tab, business chats and people chats together, the latest first,
-// each marked by kind, 200 a page (more, and next to pass as before for
-// the page after); requests are counted (GET /v1/me/people/requests lists
-// them), and unread counts every chat of the list, not the page alone.
+// Chats tab, business chats, people chats and groups together, the latest
+// first, each marked by kind, 200 a page (more, and next to pass as before
+// for the page after); requests are counted (GET /v1/me/people/requests
+// lists them), and invites to groups (GET /v1/me/groups/invites), and
+// unread counts every chat of the list, not the page alone.
 // GET /v1/me/chats stays the business chats alone.
 func (s *Server) listAllChats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -698,8 +702,8 @@ func (s *Server) listAllChats(w http.ResponseWriter, r *http.Request) {
 	archived := r.URL.Query().Get("archived") == "1"
 	limit := peopleListPage
 	items := []chatItem{}
-	var requests, unread int
-	morePeople := false
+	var requests, unread, invites int
+	morePeople, moreGroups := false, false
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 		q := `SELECT ` + personChatCols + ` FROM person_conversations c WHERE c.person_id = $1 AND c.archived = $2`
 		args := []any{person, archived}
@@ -745,6 +749,26 @@ func (s *Server) listAllChats(w http.ResponseWriter, r *http.Request) {
 			items = append(items, chatItem{Kind: "person", ID: c.ID, Name: c.Name, PersonID: &p, Gone: c.Gone, Suspended: c.Suspended, Last: c.Last, LastMine: c.LastMine,
 				LastAt: c.LastAt, Unread: c.Unread, Muted: c.Muted, Archived: c.Archived, Blocked: c.Blocked, Waiting: c.Waiting, Person: c.Person})
 		}
+		groups, more, err := s.groupListTx(ctx, tx, person, archived, before, limit)
+		if err != nil {
+			return err
+		}
+		moreGroups = more
+		if err := groupDeliveredTx(ctx, tx, person, groups); err != nil {
+			return err
+		}
+		for i := range groups {
+			g := groups[i]
+			items = append(items, chatItem{Kind: "group", ID: g.ID, Name: g.Name, Last: g.Last, LastMine: g.LastMine, LastAt: g.LastAt,
+				Unread: g.Unread, Muted: g.Muted, Archived: g.Archived, Group: &g})
+		}
+		groupUnread, err := groupUnreadTx(ctx, tx, person, archived)
+		if err != nil {
+			return err
+		}
+		if invites, err = groupInvitesCountTx(ctx, tx, person); err != nil {
+			return err
+		}
 		var bizUnread int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM person_messages m JOIN person_conversations c ON c.person_id = m.person_id AND c.id = m.conversation_id
 			WHERE c.person_id = $1 AND c.archived = $2 AND NOT m.mine AND m.read_at IS NULL`, person, archived).Scan(&bizUnread); err != nil {
@@ -754,7 +778,7 @@ func (s *Server) listAllChats(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		unread = bizUnread + peopleUnread
+		unread = bizUnread + peopleUnread + groupUnread
 		return tx.QueryRow(ctx, `SELECT count(*) FROM people_chats WHERE person_id = $1 AND request_at IS NOT NULL AND hidden_at IS NULL`, person).Scan(&requests)
 	})
 	if err != nil {
@@ -769,11 +793,11 @@ func (s *Server) listAllChats(w http.ResponseWriter, r *http.Request) {
 		return bytes.Compare(items[i].ID[:], items[j].ID[:]) > 0
 	})
 	// More: either list had more than a page, or the two together do.
-	more := morePeople || len(items) > limit
+	more := morePeople || moreGroups || len(items) > limit
 	if len(items) > limit {
 		items = items[:limit]
 	}
-	body := map[string]any{"chats": items, "unread": unread, "requests": requests, "more": more}
+	body := map[string]any{"chats": items, "unread": unread, "requests": requests, "invites": invites, "more": more}
 	if more {
 		last := items[len(items)-1]
 		body["next"] = listCursor{last.LastAt, last.ID}.String()

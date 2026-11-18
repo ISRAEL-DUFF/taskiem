@@ -249,6 +249,7 @@ func (s *Server) peopleLive(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	msgs, chats, gone := &liveWindow{since}, &liveWindow{since}, &liveWindow{since}
+	groups := newGroupLive(since)
 
 	rc := http.NewResponseController(w)
 	h := w.Header()
@@ -474,6 +475,15 @@ func (s *Server) peopleLive(w http.ResponseWriter, r *http.Request) {
 				more = true
 			}
 
+			// The person's groups (people_group_live.go).
+			gev, gnow, gmore, err := s.liveGroupsTx(ctx, tx, person, groups)
+			if err != nil {
+				return err
+			}
+			out = append(out, gev...)
+			more = more || gmore
+			defer func() { out = append(out, gnow...) }()
+
 			// Who is typing to the person now: only in their chats that are
 			// accepted and not deleted, and not from someone they blocked
 			// (typing is only written so in any case).
@@ -567,6 +577,7 @@ func (s *Server) peopleLive(w http.ResponseWriter, r *http.Request) {
 			}
 			lastWrite = time.Now()
 		}
+		groups.prune()
 		for _, m := range []struct {
 			seen  map[seenKey]struct{}
 			since time.Time
