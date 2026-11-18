@@ -24,11 +24,64 @@ import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'chats.dart' show ChatRow;
 import 'my_chat.dart' show sayFailure;
+import 'groups.dart' show groupLine;
 import 'people.dart';
 import 'words.dart';
 
 /// Opens a people chat at one of its messages.
 typedef OpenPeopleChatAt = Future<void> Function(String chatId, String messageId);
+
+/// A found message: in a chat with a person ([person]) or in a group
+/// ([group]).
+class AnyFound {
+  AnyFound.person(PeopleFound this.person) : group = null;
+  AnyFound.group(GroupFound this.group) : person = null;
+  final PeopleFound? person;
+  final GroupFound? group;
+
+  /// The chat's or the group's id.
+  String get chatId => person?.chatId ?? group!.groupId;
+  String get messageId => person?.message.id ?? group!.message.id;
+
+  /// When it was starred, else sent: the merged lists' order.
+  DateTime get at => person?.starredAt ?? group?.starredAt ?? person?.message.createdAt ?? group!.message.createdAt;
+}
+
+/// The cursors of a merged list (people chats', groups'), as one.
+String? _joinNext(String? people, String? groups) => people == null && groups == null ? null : '${people ?? ''}|${groups ?? ''}';
+(String?, String?) _splitNext(String next) {
+  final i = next.indexOf('|');
+  String? or(String s) => s.isEmpty ? null : s;
+  return i < 0 ? (or(next), null) : (or(next.substring(0, i)), or(next.substring(i + 1)));
+}
+
+/// People chats' pages and groups' pages read together and merged by
+/// time (the newest first); a server without groups (404) gives none of
+/// groups.
+Future<FoundPage> mergedPage(
+  String? before, {
+  required Future<({List<PeopleFound> found, bool more, String? next})> Function(String? before) people,
+  required Future<({List<GroupFound> found, bool more, String? next})> Function(String? before) groups,
+}) async {
+  final (p, g) = before == null ? (null, null) : _splitNext(before);
+  final readPeople = before == null || p != null;
+  final readGroups = before == null || g != null;
+  Future<({List<GroupFound> found, bool more, String? next})> groupsOrNone() async {
+    try {
+      return await groups(g);
+    } on ApiError catch (e) {
+      if (e.status == 404) return (found: const <GroupFound>[], more: false, next: null);
+      rethrow;
+    }
+  }
+
+  final pr = readPeople ? await people(p) : null;
+  final gr = readGroups ? await groupsOrNone() : null;
+  final found = [...?pr?.found.map(AnyFound.person), ...?gr?.found.map(AnyFound.group)]..sort((a, b) => b.at.compareTo(a.at));
+  final pNext = pr != null && pr.more ? pr.next : null;
+  final gNext = gr != null && gr.more ? gr.next : null;
+  return (found: found, more: pNext != null || gNext != null, next: _joinNext(pNext, gNext));
+}
 
 /// Whether [q] can be searched: a word of two letters or more (the server
 /// answers 400 otherwise).
@@ -42,7 +95,7 @@ String searchFailure(Object e) {
 }
 
 /// One page of found messages (search or starred).
-typedef FoundPage = ({List<PeopleFound> found, bool more, String? next});
+typedef FoundPage = ({List<AnyFound> found, bool more, String? next});
 
 /// A list of found messages read a page at a time.
 class FoundList extends ChangeNotifier {
@@ -51,7 +104,7 @@ class FoundList extends ChangeNotifier {
   /// Reads the page after [before] (null: the first).
   final Future<FoundPage> Function(String? before) read;
 
-  List<PeopleFound>? found;
+  List<AnyFound>? found;
   bool more = false;
   String? _next;
   String? error;
@@ -88,7 +141,7 @@ class FoundList extends ChangeNotifier {
     try {
       final p = await read(next);
       if (round != _round || _disposed) return;
-      found = [...?found, ...p.found.where((f) => !(found ?? const []).any((g) => g.message.id == f.message.id))];
+      found = [...?found, ...p.found.where((f) => !(found ?? const []).any((g) => g.messageId == f.messageId))];
       more = p.more;
       _next = p.next;
     } on Object catch (e) {
@@ -124,7 +177,7 @@ class FoundList extends ChangeNotifier {
 /// found (or the message's line), and when.
 class FoundRow extends StatelessWidget {
   const FoundRow({super.key, required this.f, required this.now, required this.transport, required this.onTap, this.showChat = true});
-  final PeopleFound f;
+  final AnyFound f;
   final DateTime now;
   final Transport transport;
   final VoidCallback onTap;
@@ -133,18 +186,40 @@ class FoundRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    final m = f.message;
-    final who = m.mine ? 'You' : f.chat.name;
-    final words = (f.snippet ?? '').isNotEmpty ? f.snippet! : peopleLine(m);
+    final g = f.group;
+    if (g != null) {
+      final m = g.message;
+      final who = m.mine ? 'You' : m.sender;
+      final words = (g.snippet ?? '').isNotEmpty ? g.snippet! : groupLine(m);
+      return Semantics(
+        label: 'Message ${m.mine ? 'from you' : 'from $who'}${showChat ? ' in the group ${g.group.name}' : ''}: $words',
+        button: true,
+        excludeSemantics: true,
+        child: ChatRow(
+          key: ValueKey('found ${m.id}'),
+          title: showChat ? g.group.name : who,
+          letter: g.group.name,
+          avatar: PersonFace(name: g.group.name, transport: transport, photo: g.group.photo, size: 48),
+          marks: showChat ? const [(label: 'Group', off: false)] : const [],
+          time: listTime(m.createdAt, now),
+          preview: Text(showChat ? '$who: $words' : words, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 14, color: t.muted)),
+          onTap: onTap,
+        ),
+      );
+    }
+    final p = f.person!;
+    final m = p.message;
+    final who = m.mine ? 'You' : p.chat.name;
+    final words = (p.snippet ?? '').isNotEmpty ? p.snippet! : peopleLine(m);
     return Semantics(
-      label: 'Message ${m.mine ? 'from you' : 'from ${f.chat.name}'}${showChat ? ' in your chat with ${f.chat.name}' : ''}: $words',
+      label: 'Message ${m.mine ? 'from you' : 'from ${p.chat.name}'}${showChat ? ' in your chat with ${p.chat.name}' : ''}: $words',
       button: true,
       excludeSemantics: true,
       child: ChatRow(
         key: ValueKey('found ${m.id}'),
-        title: showChat ? f.chat.name : who,
-        letter: f.chat.name,
-        avatar: PersonFace(name: f.chat.name, transport: transport, photo: f.chat.person?.photo, size: 48),
+        title: showChat ? p.chat.name : who,
+        letter: p.chat.name,
+        avatar: PersonFace(name: p.chat.name, transport: transport, photo: p.chat.person?.photo, size: 48),
         time: listTime(m.createdAt, now),
         preview: Text(showChat ? '$who: $words' : words, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 14, color: t.muted)),
         onTap: onTap,
@@ -153,15 +228,18 @@ class FoundRow extends StatelessWidget {
   }
 }
 
-/// Search your people chats ([chat]: only that one). With [onPick], a
-/// found message is given back (the chat it is in jumps to it); else it is
-/// opened with [openAt].
+/// Search your people chats and groups ([chat]: only that chat; [group]:
+/// only that group). With [onPick], a found message is given back (the
+/// chat it is in jumps to it); else it is opened with [openAt] (a group's
+/// with [openGroupAt]).
 class PeopleSearchScreen extends StatefulWidget {
-  const PeopleSearchScreen({super.key, required this.auth, this.openAt, this.onPick, this.chat, this.chatName, this.now = DateTime.now, this.wait = const Duration(milliseconds: 400)});
+  const PeopleSearchScreen({super.key, required this.auth, this.openAt, this.openGroupAt, this.onPick, this.chat, this.group, this.chatName, this.now = DateTime.now, this.wait = const Duration(milliseconds: 400)});
   final Auth auth;
   final OpenPeopleChatAt? openAt;
+  final OpenPeopleChatAt? openGroupAt;
   final ValueChanged<String>? onPick;
   final String? chat;
+  final String? group;
   final String? chatName;
   final DateTime Function() now;
 
@@ -177,8 +255,25 @@ class _PeopleSearchScreenState extends State<PeopleSearchScreen> {
   // The words last searched, not the box's: Show more pages what is shown
   // even while new words are being typed (not yet searched).
   late final FoundList _list = FoundList((before) async {
-    final r = await widget.auth.api.searchPeople(q: _searched, chat: widget.chat, before: before);
-    return (found: r.results, more: r.more, next: r.next);
+    if (widget.group != null) {
+      final r = await widget.auth.api.searchGroups(q: _searched, group: widget.group, before: before);
+      return (found: r.results.map(AnyFound.group).toList(), more: r.more, next: r.next);
+    }
+    if (widget.chat != null) {
+      final r = await widget.auth.api.searchPeople(q: _searched, chat: widget.chat, before: before);
+      return (found: r.results.map(AnyFound.person).toList(), more: r.more, next: r.next);
+    }
+    return mergedPage(
+      before,
+      people: (b) async {
+        final r = await widget.auth.api.searchPeople(q: _searched, before: b);
+        return (found: r.results, more: r.more, next: r.next);
+      },
+      groups: (b) async {
+        final r = await widget.auth.api.searchGroups(q: _searched, before: b);
+        return (found: r.results, more: r.more, next: r.next);
+      },
+    );
   });
   Timer? _soon;
   String _searched = '';
@@ -213,30 +308,30 @@ class _PeopleSearchScreenState extends State<PeopleSearchScreen> {
     });
   }
 
-  Future<void> _open(PeopleFound f) async {
+  Future<void> _open(AnyFound f) async {
     final pick = widget.onPick;
     if (pick != null) {
       Navigator.of(context).pop();
-      return pick(f.message.id);
+      return pick(f.messageId);
     }
-    await widget.openAt?.call(f.chatId, f.message.id);
+    await (f.group != null ? widget.openGroupAt : widget.openAt)?.call(f.chatId, f.messageId);
   }
 
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
-    final one = widget.chat != null;
+    final one = widget.chat != null || widget.group != null;
     return ListenableBuilder(
       listenable: _list,
       builder: (context, _) {
         final found = _list.found;
         final q = _q.text.trim();
         return TkScreen(
-          title: one ? 'Search this chat' : 'Search chats with people',
+          title: widget.group != null ? 'Search this group' : (one ? 'Search this chat' : 'Search chats with people'),
           children: [
             Semantics(
-              label: one ? 'Search your chat with ${widget.chatName ?? 'them'}' : 'Search your chats with people',
+              label: widget.group != null ? 'Search the group ${widget.chatName ?? ''}' : (one ? 'Search your chat with ${widget.chatName ?? 'them'}' : 'Search your chats with people and groups'),
               textField: true,
               child: TkTextBox(key: const ValueKey('people-search'), controller: _q, hint: 'Words, a file’s name, a place…', max: 200),
             ),
@@ -246,10 +341,10 @@ class _PeopleSearchScreenState extends State<PeopleSearchScreen> {
                 children: [
                   TkListRow(
                     title: 'Starred messages',
-                    sub: 'Messages you starred, in every chat with people',
+                    sub: 'Messages you starred, in every chat with people and group',
                     icon: 'star',
                     square: look.orange,
-                    onTap: () => tkPush<void>(context, PeopleStarredScreen(auth: widget.auth, openAt: widget.openAt ?? (_, _) async {}, now: widget.now)),
+                    onTap: () => tkPush<void>(context, PeopleStarredScreen(auth: widget.auth, openAt: widget.openAt ?? (_, _) async {}, openGroupAt: widget.openGroupAt, now: widget.now)),
                   ),
                 ],
               ),
@@ -280,9 +375,12 @@ class _PeopleSearchScreenState extends State<PeopleSearchScreen> {
 /// Your starred messages across your people chats, the most recently
 /// starred first; each opens its chat at it.
 class PeopleStarredScreen extends StatefulWidget {
-  const PeopleStarredScreen({super.key, required this.auth, required this.openAt, this.now = DateTime.now});
+  const PeopleStarredScreen({super.key, required this.auth, required this.openAt, this.openGroupAt, this.now = DateTime.now});
   final Auth auth;
   final OpenPeopleChatAt openAt;
+
+  /// Opens a group at a starred message of it.
+  final OpenPeopleChatAt? openGroupAt;
   final DateTime Function() now;
 
   @override
@@ -290,10 +388,19 @@ class PeopleStarredScreen extends StatefulWidget {
 }
 
 class _PeopleStarredScreenState extends State<PeopleStarredScreen> {
-  late final FoundList _list = FoundList((before) async {
-    final r = await widget.auth.api.starredPeople(before: before);
-    return (found: r.starred, more: r.more, next: r.next);
-  });
+  late final FoundList _list = FoundList(
+    (before) => mergedPage(
+      before,
+      people: (b) async {
+        final r = await widget.auth.api.starredPeople(before: b);
+        return (found: r.starred, more: r.more, next: r.next);
+      },
+      groups: (b) async {
+        final r = await widget.auth.api.starredGroups(before: b);
+        return (found: r.starred, more: r.more, next: r.next);
+      },
+    ),
+  );
 
   @override
   void initState() {
@@ -307,8 +414,12 @@ class _PeopleStarredScreenState extends State<PeopleStarredScreen> {
     super.dispose();
   }
 
-  Future<void> _open(PeopleFound f) async {
-    await widget.openAt(f.chatId, f.message.id);
+  Future<void> _open(AnyFound f) async {
+    if (f.group != null) {
+      await widget.openGroupAt?.call(f.chatId, f.messageId);
+    } else {
+      await widget.openAt(f.chatId, f.messageId);
+    }
     // Unstarred in the chat: gone from here too.
     if (mounted) await _list.load();
   }
@@ -325,7 +436,7 @@ class _PeopleStarredScreenState extends State<PeopleStarredScreen> {
           if (_list.error != null) TkErrorBox(_list.error!),
           if (found == null && _list.error == null) const TkLoading(label: 'Loading…'),
           if (found != null && found.isEmpty)
-            const TkPanel(children: [TkEmpty(icon: 'star', title: 'No starred messages', line: 'Hold a message in a chat with a person and choose Star to keep it here.')]),
+            const TkPanel(children: [TkEmpty(icon: 'star', title: 'No starred messages', line: 'Hold a message in a chat or a group and choose Star to keep it here.')]),
           if (found != null && found.isNotEmpty)
             TkPanel(
               inset: 76,

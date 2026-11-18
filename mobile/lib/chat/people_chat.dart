@@ -1181,8 +1181,20 @@ class PeopleBubble extends StatelessWidget {
     this.onOpenCard,
     this.onPaid,
     this.busy = false,
+    this.head,
+    this.quoteName,
+    this.spans,
   });
   final PeopleLine line;
+
+  /// Over the rest inside the bubble: who wrote it (a group's sender).
+  final Widget? head;
+
+  /// Who wrote the message answered, when not [other] (a group's member).
+  final String? quoteName;
+
+  /// The words drawn as spans (a group's @mentions picked out).
+  final InlineSpan Function(String words, TextStyle style)? spans;
   final bool first;
   final bool last;
   final String other;
@@ -1215,7 +1227,7 @@ class PeopleBubble extends StatelessWidget {
     final forwarded = m.forwarded == true && !deleted
         ? Text(m.forwardedMany == true ? 'Forwarded many times' : 'Forwarded', style: tkText(size: 12, color: meta).copyWith(fontStyle: FontStyle.italic))
         : null;
-    final q = quote == null && !quoteMissing ? null : _Quote(m: quote, mine: mine, other: other);
+    final q = quote == null && !quoteMissing ? null : _Quote(m: quote, mine: mine, other: quoteName ?? other);
     final a = deleted ? null : m.attachment;
     final words = deleted ? '' : (a != null && const {'Photo', 'Voice note', 'File'}.contains(m.body) ? '' : (c != null && m.body == c.title ? '' : m.body));
     final place = deleted ? null : m.location;
@@ -1232,6 +1244,7 @@ class PeopleBubble extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
+                ?head,
                 ?forwarded,
                 ?q,
                 PeopleCardView(card: c, mine: mine, onOpen: onOpenCard, onPaid: onPaid, busy: busy),
@@ -1253,6 +1266,7 @@ class PeopleBubble extends StatelessWidget {
             stamp: stamp,
             inline: false,
             children: [
+              ?head,
               ?forwarded,
               ?q,
               if (a != null) AttachmentView(m: doorFileMessage(id: m.id, mine: mine, a: a, at: m.createdAt), files: files, other: other, room: room, local: line.file),
@@ -1284,7 +1298,9 @@ class PeopleBubble extends StatelessWidget {
               if (deleted)
                 Text('This message was deleted', style: tkText(size: 15, lineHeight: 23 / 16, color: meta).copyWith(fontStyle: FontStyle.italic))
               else if (words.isNotEmpty)
-                Text(words, style: tkText(size: 16, lineHeight: 23 / 16, color: t.text)),
+                spans == null
+                    ? Text(words, style: tkText(size: 16, lineHeight: 23 / 16, color: t.text))
+                    : Text.rich(spans!(words, tkText(size: 16, lineHeight: 23 / 16, color: t.text))),
             ],
           );
         },

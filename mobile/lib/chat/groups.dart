@@ -512,3 +512,60 @@ Timer soonOnce(Timer? was, VoidCallback f, [Duration d = const Duration(millisec
   was?.cancel();
   return Timer(d, f);
 }
+
+// --- asking first, and a few actions, in the app's look ---
+
+/// Asks first, in a sheet of the app's own look; true when the person
+/// agrees.
+Future<bool> askSure(BuildContext context, {required String title, String? body, required String ok, String cancel = 'Cancel', bool danger = false}) async {
+  final yes = await showTkSheet<bool>(
+    context,
+    (context) => TkAppLook(
+      child: TkSheet(
+        title: title,
+        bareFooter: true,
+        footer: Row(
+          children: [
+            Expanded(child: TkGhostButton(label: cancel, onTap: () => Navigator.of(context).pop(false))),
+            const SizedBox(width: 10),
+            Expanded(child: TkCta(label: ok, danger: danger, onTap: () => Navigator.of(context).pop(true))),
+          ],
+        ),
+        body: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+          children: [if (body != null) Text(body, style: tkText(size: 15, lineHeight: 1.45, color: TkTheme.tokens(context).text))],
+        ),
+      ),
+    ),
+  );
+  return yes ?? false;
+}
+
+/// One of a few actions (key, words, icon, danger), as rows on a card;
+/// [note] under them; null when put away.
+Future<String?> pickAction(BuildContext context, {required String title, required List<(String, String, String, bool)> actions, String? note}) => showTkSheet<String>(
+  context,
+  (context) {
+    final look = TkLook.of(context);
+    return TkAppLook(
+      child: TkSheet(
+        title: title,
+        body: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+          children: [
+            if (note != null) Padding(padding: const EdgeInsets.fromLTRB(4, 0, 4, 12), child: Text(note, style: tkHint(TkTheme.tokens(context)))),
+            TkSection(
+              inset: 56,
+              children: [
+                for (final (k, words, icon, danger) in actions)
+                  TkListRow(title: words, icon: icon, square: danger ? look.red : look.teal, onTap: () => Navigator.of(context).pop(k)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  },
+);

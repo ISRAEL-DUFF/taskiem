@@ -148,11 +148,15 @@ class PeopleCardView extends StatelessWidget {
 /// A card opened live, through the customer door as the person opening it
 /// (§10.1): a product's price now, the business's card, an order only when
 /// it is theirs. Chat starts their own chat with the business (§10.2).
-Future<void> showPeopleCard(BuildContext context, {required Auth auth, required String chat, required String message, required OpenMyChat openBusiness, void Function(String business, String reference)? openOrder}) =>
-    showTkSheet<void>(context, (_) => _LiveCardSheet(auth: auth, chat: chat, message: message, openBusiness: openBusiness, openOrder: openOrder));
+///
+/// [load] reads it another way (a group's card: `GET
+/// /v1/me/groups/{id}/messages/{message}/card`).
+Future<void> showPeopleCard(BuildContext context, {required Auth auth, required String chat, required String message, required OpenMyChat openBusiness, void Function(String business, String reference)? openOrder, Future<OpenPeopleCardResponse> Function()? load}) =>
+    showTkSheet<void>(context, (_) => _LiveCardSheet(auth: auth, chat: chat, message: message, openBusiness: openBusiness, openOrder: openOrder, load: load));
 
 class _LiveCardSheet extends StatefulWidget {
-  const _LiveCardSheet({required this.auth, required this.chat, required this.message, required this.openBusiness, this.openOrder});
+  const _LiveCardSheet({required this.auth, required this.chat, required this.message, required this.openBusiness, this.openOrder, this.load});
+  final Future<OpenPeopleCardResponse> Function()? load;
   final Auth auth;
   final String chat;
   final String message;
@@ -175,7 +179,7 @@ class _LiveCardSheetState extends State<_LiveCardSheet> {
 
   Future<void> _load() async {
     try {
-      final r = await widget.auth.api.openPeopleCard(id: widget.chat, message: widget.message);
+      final r = await (widget.load ?? () => widget.auth.api.openPeopleCard(id: widget.chat, message: widget.message))();
       if (mounted) setState(() => _r = r);
     } on ApiError catch (e) {
       if (mounted) setState(() => _error = e.status == 403 ? 'This business is not taking messages from you.' : e.message);
