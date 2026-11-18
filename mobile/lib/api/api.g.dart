@@ -923,7 +923,7 @@ class TaskiemApi {
     return GetPersonLinkCardResponse.fromJson(j as Map<String, dynamic>);
   }
 
-  /// You's Chats, businesses and people together (`GET /v1/me/conversations`)
+  /// You's Chats, businesses, people and groups together (`GET /v1/me/conversations`)
   Future<ListAllMyChatsResponse> listAllMyChats({String? archived, String? before}) async {
     final j = await _t.send('GET', '/v1/me/conversations', query: {'archived': ?archived, 'before': ?before});
     return ListAllMyChatsResponse.fromJson(j as Map<String, dynamic>);
@@ -1100,6 +1100,224 @@ class TaskiemApi {
   Future<GetLawfulRequestCountsResponse> getLawfulRequestCounts() async {
     final j = await _t.send('GET', '/v1/transparency/lawful-requests');
     return GetLawfulRequestCountsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your groups (`GET /v1/me/groups`)
+  Future<ListGroupsResponse> listGroups({String? archived, String? before}) async {
+    final j = await _t.send('GET', '/v1/me/groups', query: {'archived': ?archived, 'before': ?before});
+    return ListGroupsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a group (`POST /v1/me/groups`)
+  Future<CreateGroupResponse> createGroup({required CreateGroupRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/groups', body: body.toJson());
+    return CreateGroupResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Invites to groups waiting for you (`GET /v1/me/groups/invites`)
+  Future<ListGroupInvitesResponse> listGroupInvites() async {
+    final j = await _t.send('GET', '/v1/me/groups/invites');
+    return ListGroupInvitesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Accept an invite to a group (`POST /v1/me/groups/invites/{id}/accept`)
+  Future<Group> acceptGroupInvite({required String id}) async {
+    final j = await _t.send('POST', '/v1/me/groups/invites/${Uri.encodeComponent(id)}/accept');
+    return Group.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Decline an invite to a group (`POST /v1/me/groups/invites/{id}/decline`)
+  Future<void> declineGroupInvite({required String id}) async {
+    await _t.send('POST', '/v1/me/groups/invites/${Uri.encodeComponent(id)}/decline');
+  }
+
+  /// Search your groups (`GET /v1/me/groups/search`)
+  Future<SearchGroupsResponse> searchGroups({String? q, String? group, String? before}) async {
+    final j = await _t.send('GET', '/v1/me/groups/search', query: {'q': ?q, 'group': ?group, 'before': ?before});
+    return SearchGroupsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Your starred messages in groups (`GET /v1/me/groups/starred`)
+  Future<StarredGroupsResponse> starredGroups({String? before}) async {
+    final j = await _t.send('GET', '/v1/me/groups/starred', query: {'before': ?before});
+    return StarredGroupsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Forward a message to people and groups (`POST /v1/me/forward`)
+  Future<ForwardMessageResponse> forwardMessage({required ForwardMessageRequest body}) async {
+    final j = await _t.send('POST', '/v1/me/forward', body: body.toJson());
+    return ForwardMessageResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Join a group by its link (`POST /v1/me/group-links/{code}/join`)
+  Future<JoinGroupByLinkResponse> joinGroupByLink({required String code}) async {
+    final j = await _t.send('POST', '/v1/me/group-links/${Uri.encodeComponent(code)}/join');
+    return JoinGroupByLinkResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// One group (`GET /v1/me/groups/{id}`)
+  Future<Group> getGroup({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}');
+    return Group.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Change a group's info or settings (`PUT /v1/me/groups/{id}`)
+  Future<Group> putGroup({required PutGroupRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/groups/${Uri.encodeComponent(id)}', body: body.toJson());
+    return Group.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Delete a group for you (`DELETE /v1/me/groups/{id}`)
+  Future<void> deleteGroupForMe({required String id}) async {
+    await _t.send('DELETE', '/v1/me/groups/${Uri.encodeComponent(id)}');
+  }
+
+  /// Your own settings for a group (`PUT /v1/me/groups/{id}/me`)
+  Future<Group> putMyGroup({required PutMyGroupRequest body, required String id}) async {
+    final j = await _t.send('PUT', '/v1/me/groups/${Uri.encodeComponent(id)}/me', body: body.toJson());
+    return Group.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Leave a group (`POST /v1/me/groups/{id}/leave`)
+  Future<LeaveGroupResponse> leaveGroup({required String id}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/leave');
+    return LeaveGroupResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove a group's photo (`DELETE /v1/me/groups/{id}/photo`)
+  Future<Group> deleteGroupPhoto({required String id}) async {
+    final j = await _t.send('DELETE', '/v1/me/groups/${Uri.encodeComponent(id)}/photo');
+    return Group.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// A group's members (`GET /v1/me/groups/{id}/members`)
+  Future<GroupMembersResponse> groupMembers({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/members');
+    return GroupMembersResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Add people to a group (`POST /v1/me/groups/{id}/members`)
+  Future<AddGroupMembersResponse> addGroupMembers({required AddGroupMembersRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/members', body: body.toJson());
+    return AddGroupMembersResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Make a member an admin, or not (`PUT /v1/me/groups/{id}/members/{person}`)
+  Future<SetGroupAdminResponse> setGroupAdmin({required SetGroupAdminRequest body, required String id, required String person}) async {
+    final j = await _t.send('PUT', '/v1/me/groups/${Uri.encodeComponent(id)}/members/${Uri.encodeComponent(person)}', body: body.toJson());
+    return SetGroupAdminResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Remove a member (`DELETE /v1/me/groups/{id}/members/{person}`)
+  Future<void> removeGroupMember({required String id, required String person}) async {
+    await _t.send('DELETE', '/v1/me/groups/${Uri.encodeComponent(id)}/members/${Uri.encodeComponent(person)}');
+  }
+
+  /// Block a member of a group (`POST /v1/me/groups/{id}/members/{person}/block`)
+  Future<BlockGroupMemberResponse> blockGroupMember({required String id, required String person}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/members/${Uri.encodeComponent(person)}/block');
+    return BlockGroupMemberResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Take an invite back (`DELETE /v1/me/groups/{id}/invites/{person}`)
+  Future<void> cancelGroupInvite({required String id, required String person}) async {
+    await _t.send('DELETE', '/v1/me/groups/${Uri.encodeComponent(id)}/invites/${Uri.encodeComponent(person)}');
+  }
+
+  /// A group's invite link (`GET /v1/me/groups/{id}/link`)
+  Future<GroupLink> groupLink({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/link');
+    return GroupLink.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Turn a group's link on, or replace it (`POST /v1/me/groups/{id}/link`)
+  Future<GroupLink> newGroupLink({required String id}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/link');
+    return GroupLink.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Turn a group's link off (`DELETE /v1/me/groups/{id}/link`)
+  Future<void> groupLinkOff({required String id}) async {
+    await _t.send('DELETE', '/v1/me/groups/${Uri.encodeComponent(id)}/link');
+  }
+
+  /// People waiting to join a group (`GET /v1/me/groups/{id}/joins`)
+  Future<GroupJoinRequestsResponse> groupJoinRequests({required String id}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/joins');
+    return GroupJoinRequestsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Let someone waiting in (`POST /v1/me/groups/{id}/joins/{person}/approve`)
+  Future<void> approveGroupJoin({required String id, required String person}) async {
+    await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/joins/${Uri.encodeComponent(person)}/approve');
+  }
+
+  /// Turn someone waiting away (`POST /v1/me/groups/{id}/joins/{person}/decline`)
+  Future<void> declineGroupJoin({required String id, required String person}) async {
+    await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/joins/${Uri.encodeComponent(person)}/decline');
+  }
+
+  /// A group's messages (`GET /v1/me/groups/{id}/messages`)
+  Future<GroupMessagesResponse> groupMessages({required String id, String? before, String? starred}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/messages', query: {'before': ?before, 'starred': ?starred});
+    return GroupMessagesResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Send a message to a group (`POST /v1/me/groups/{id}/messages`)
+  Future<GroupMessage> sendGroupMessage({required SendGroupMessageRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/messages', body: body.toJson());
+    return GroupMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Star or react to a group message (`PUT /v1/me/groups/{id}/messages/{message}`)
+  Future<GroupMessage> markGroupMessage({required MarkGroupMessageRequest body, required String id, required String message}) async {
+    final j = await _t.send('PUT', '/v1/me/groups/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}', body: body.toJson());
+    return GroupMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Delete a group message (`DELETE /v1/me/groups/{id}/messages/{message}`)
+  Future<void> deleteGroupMessage({required String id, required String message, String? for_}) async {
+    await _t.send('DELETE', '/v1/me/groups/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}', query: {'for': ?for_});
+  }
+
+  /// Who read your group message (`GET /v1/me/groups/{id}/messages/{message}/info`)
+  Future<GroupMessageInfoResponse> groupMessageInfo({required String id, required String message}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}/info');
+    return GroupMessageInfoResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Who reacted to a group message (`GET /v1/me/groups/{id}/messages/{message}/reactions`)
+  Future<GroupMessageReactionsResponse> groupMessageReactions({required String id, required String message}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}/reactions');
+    return GroupMessageReactionsResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Open a card shared in a group (`GET /v1/me/groups/{id}/messages/{message}/card`)
+  Future<OpenGroupCardResponse> openGroupCard({required String id, required String message}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}/card');
+    return OpenGroupCardResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Mark a share card in a group paid (`POST /v1/me/groups/{id}/messages/{message}/paid`)
+  Future<GroupMessage> markGroupSplitPaid({required MarkGroupSplitPaidRequest body, required String id, required String message}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/messages/${Uri.encodeComponent(message)}/paid', body: body.toJson());
+    return GroupMessage.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Mark a group read (`POST /v1/me/groups/{id}/read`)
+  Future<void> readGroup({required String id}) async {
+    await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/read');
+  }
+
+  /// Say you are typing in a group, or stopped (`POST /v1/me/groups/{id}/typing`)
+  Future<void> typingGroup({required TypingGroupRequest body, required String id}) async {
+    await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/typing', body: body.toJson());
+  }
+
+  /// A group's preview, by its link (`GET /v1/group-links/{code}`)
+  Future<GroupLinkPreviewResponse> groupLinkPreview({required String code}) async {
+    final j = await _t.send('GET', '/v1/group-links/${Uri.encodeComponent(code)}');
+    return GroupLinkPreviewResponse.fromJson(j as Map<String, dynamic>);
   }
 }
 
@@ -8240,8 +8458,11 @@ class DeleteAccountResponse {
 
 /// Which pushes the person's own devices get.
 class YouNotifications {
-  const YouNotifications({required this.messages, required this.offers, required this.people, required this.requests, required this.updates});
+  const YouNotifications({required this.groups, required this.messages, required this.offers, required this.people, required this.requests, required this.updates});
 
+  /// A message in one of their groups (push kind group; an invite to a group is
+  /// a request, kind group_invite).
+  final bool groups;
   /// Someone at a business wrote to them.
   final bool messages;
   /// Offers from businesses they said yes to.
@@ -8254,6 +8475,7 @@ class YouNotifications {
   final bool updates;
 
   factory YouNotifications.fromJson(Map<String, dynamic> j) => YouNotifications(
+        groups: j['groups'] as bool,
         messages: j['messages'] as bool,
         offers: j['offers'] as bool,
         people: j['people'] as bool,
@@ -8262,6 +8484,7 @@ class YouNotifications {
       );
 
   Map<String, dynamic> toJson() => {
+        'groups': groups,
         'messages': messages,
         'offers': offers,
         'people': people,
@@ -8271,8 +8494,9 @@ class YouNotifications {
 }
 
 class PutMyNotificationsRequest {
-  const PutMyNotificationsRequest({this.messages, this.offers, this.people, this.requests, this.updates});
+  const PutMyNotificationsRequest({this.groups, this.messages, this.offers, this.people, this.requests, this.updates});
 
+  final bool? groups;
   final bool? messages;
   final bool? offers;
   final bool? people;
@@ -8280,6 +8504,7 @@ class PutMyNotificationsRequest {
   final bool? updates;
 
   factory PutMyNotificationsRequest.fromJson(Map<String, dynamic> j) => PutMyNotificationsRequest(
+        groups: j['groups'] == null ? null : j['groups'] as bool,
         messages: j['messages'] == null ? null : j['messages'] as bool,
         offers: j['offers'] == null ? null : j['offers'] as bool,
         people: j['people'] == null ? null : j['people'] as bool,
@@ -8288,6 +8513,7 @@ class PutMyNotificationsRequest {
       );
 
   Map<String, dynamic> toJson() => {
+        'groups': ?groups,
         'messages': ?messages,
         'offers': ?offers,
         'people': ?people,
@@ -8383,7 +8609,7 @@ class MyPrivacyResponseShownToBusinesses {
 
 /// A person's privacy towards other people (people-chatting §5.4).
 class PeoplePrivacy {
-  const PeoplePrivacy({required this.findByNumber, required this.findFromContacts, required this.lastSeen, required this.message, required this.photo, required this.readTicks, required this.showNumber});
+  const PeoplePrivacy({required this.findByNumber, required this.findFromContacts, required this.groupsAdd, required this.lastSeen, required this.message, required this.photo, required this.readTicks, required this.showNumber});
 
   final String findByNumber;
   /// People who have the person's number in their phone's contacts find them by
@@ -8391,6 +8617,10 @@ class PeoplePrivacy {
   /// My contacts lets only people the person added match them, and Nobody no
   /// one.
   final bool findFromContacts;
+  /// Who can add me to groups (5b A3): contacts (the default: only people I
+  /// added), everyone, or nobody. Anyone else's add becomes an invite that
+  /// waits in my Requests.
+  final String groupsAdd;
   final String lastSeen;
   final String message;
   final String photo;
@@ -8403,6 +8633,7 @@ class PeoplePrivacy {
   factory PeoplePrivacy.fromJson(Map<String, dynamic> j) => PeoplePrivacy(
         findByNumber: j['find_by_number'] as String,
         findFromContacts: j['find_from_contacts'] as bool,
+        groupsAdd: j['groups_add'] as String,
         lastSeen: j['last_seen'] as String,
         message: j['message'] as String,
         photo: j['photo'] as String,
@@ -8413,6 +8644,7 @@ class PeoplePrivacy {
   Map<String, dynamic> toJson() => {
         'find_by_number': findByNumber,
         'find_from_contacts': findFromContacts,
+        'groups_add': groupsAdd,
         'last_seen': lastSeen,
         'message': message,
         'photo': photo,
@@ -8906,9 +9138,11 @@ class GetPersonLinkCardResponse {
 }
 
 class ListAllMyChatsResponse {
-  const ListAllMyChatsResponse({required this.chats, required this.more, this.next, required this.requests, required this.unread});
+  const ListAllMyChatsResponse({required this.chats, required this.invites, required this.more, this.next, required this.requests, required this.unread});
 
   final List<ChatListItem> chats;
+  /// Invites to groups waiting for you (`GET /v1/me/groups/invites`).
+  final int invites;
   /// There are more chats after this page (200 a page).
   final bool more;
   /// With `more`, pass it as `before` for the page after.
@@ -8920,6 +9154,7 @@ class ListAllMyChatsResponse {
 
   factory ListAllMyChatsResponse.fromJson(Map<String, dynamic> j) => ListAllMyChatsResponse(
         chats: (j['chats'] as List).map((e) => ChatListItem.fromJson(e as Map<String, dynamic>)).toList(),
+        invites: (j['invites'] as num).toInt(),
         more: j['more'] as bool,
         next: j['next'] == null ? null : j['next'] as String,
         requests: (j['requests'] as num).toInt(),
@@ -8928,6 +9163,7 @@ class ListAllMyChatsResponse {
 
   Map<String, dynamic> toJson() => {
         'chats': chats.map((e) => e.toJson()).toList(),
+        'invites': invites,
         'more': more,
         'next': ?next,
         'requests': requests,
@@ -8936,10 +9172,11 @@ class ListAllMyChatsResponse {
 }
 
 /// One row of You's one Chats list: a business chat (`kind: business`, open
-/// `/v1/me/chats/{id}`) or a people chat (`kind: person`, open
-/// `/v1/me/people/{id}`).
+/// `/v1/me/chats/{id}`), a people chat (`kind: person`, open
+/// `/v1/me/people/{id}`) or a group (`kind: group`, open `/v1/me/groups/{id}`,
+/// with `group`).
 class ChatListItem {
-  const ChatListItem({required this.archived, required this.blocked, this.businessId, this.gone, required this.id, required this.kind, required this.last, required this.lastAt, required this.lastMine, required this.muted, required this.name, this.person, this.personId, this.photo, this.suspended, required this.unread, this.verified, this.waiting});
+  const ChatListItem({required this.archived, required this.blocked, this.businessId, this.gone, this.group, required this.id, required this.kind, required this.last, required this.lastAt, required this.lastMine, required this.muted, required this.name, this.person, this.personId, this.photo, this.suspended, required this.unread, this.verified, this.waiting});
 
   final bool archived;
   /// You blocked them.
@@ -8947,6 +9184,9 @@ class ChatListItem {
   final String? businessId;
   /// The person deleted their account (shown as "Deleted account").
   final bool? gone;
+  /// A group: as `GET /v1/me/groups` shows it (photo, members, role, left,
+  /// mentioned).
+  final Group? group;
   final String id;
   final String kind;
   final String last;
@@ -8980,6 +9220,7 @@ class ChatListItem {
         blocked: j['blocked'] as bool,
         businessId: j['business_id'] == null ? null : j['business_id'] as String,
         gone: j['gone'] == null ? null : j['gone'] as bool,
+        group: j['group'] == null ? null : Group.fromJson(j['group'] as Map<String, dynamic>),
         id: j['id'] as String,
         kind: j['kind'] as String,
         last: j['last'] as String,
@@ -9001,6 +9242,7 @@ class ChatListItem {
         'blocked': blocked,
         'business_id': ?businessId,
         'gone': ?gone,
+        'group': ?group?.toJson(),
         'id': id,
         'kind': kind,
         'last': last,
@@ -9015,6 +9257,107 @@ class ChatListItem {
         'unread': unread,
         'verified': ?verified?.toJson(),
         'waiting': ?waiting,
+      };
+}
+
+/// A group as one of its members (or someone who was one) sees it
+/// (people-chatting §9, stage 5b): one copy, kept by Taskiem, sealed under the
+/// group's own key, readable by Taskiem's servers; not end-to-end encrypted.
+class Group {
+  const Group({required this.adminsOnlyEdit, required this.adminsOnlyPost, required this.approveJoins, required this.archived, required this.canEdit, required this.canPost, required this.description, required this.id, this.joinRequests, required this.joinedAt, this.kept, required this.kind, required this.last, required this.lastAt, required this.lastMine, this.lastSender, required this.left, this.leftHow, required this.members, required this.mentioned, required this.mentions, required this.muted, required this.name, this.photo, required this.role, required this.unread});
+
+  /// Only admins change the name, photo and description (on by default, A2).
+  final bool adminsOnlyEdit;
+  final bool adminsOnlyPost;
+  /// Joining by the link waits for an admin (A4).
+  final bool approveJoins;
+  final bool archived;
+  final bool canEdit;
+  final bool canPost;
+  final String description;
+  final String id;
+  /// Admins: people waiting to join by the link.
+  final int? joinRequests;
+  final DateTime joinedAt;
+  final String? kept;
+  final String kind;
+  final String last;
+  final DateTime lastAt;
+  final bool lastMine;
+  /// Who wrote the last message, as you see them ("You" for you).
+  final String? lastSender;
+  /// You left or were removed (`left_how`): your copy up to then stays yours
+  /// until you delete it; nothing new comes and you can't write (A5).
+  final bool left;
+  final String? leftHow;
+  /// How many are in it now (at most 256).
+  final int members;
+  /// An unread message mentions you.
+  final bool mentioned;
+  /// A message mentioning you pushes even while the group is muted (A7).
+  final bool mentions;
+  final bool muted;
+  final String name;
+  final Object? photo;
+  final String role;
+  final int unread;
+
+  factory Group.fromJson(Map<String, dynamic> j) => Group(
+        adminsOnlyEdit: j['admins_only_edit'] as bool,
+        adminsOnlyPost: j['admins_only_post'] as bool,
+        approveJoins: j['approve_joins'] as bool,
+        archived: j['archived'] as bool,
+        canEdit: j['can_edit'] as bool,
+        canPost: j['can_post'] as bool,
+        description: j['description'] as String,
+        id: j['id'] as String,
+        joinRequests: j['join_requests'] == null ? null : (j['join_requests'] as num).toInt(),
+        joinedAt: DateTime.parse(j['joined_at'] as String),
+        kept: j['kept'] == null ? null : j['kept'] as String,
+        kind: j['kind'] as String,
+        last: j['last'] as String,
+        lastAt: DateTime.parse(j['last_at'] as String),
+        lastMine: j['last_mine'] as bool,
+        lastSender: j['last_sender'] == null ? null : j['last_sender'] as String,
+        left: j['left'] as bool,
+        leftHow: j['left_how'] == null ? null : j['left_how'] as String,
+        members: (j['members'] as num).toInt(),
+        mentioned: j['mentioned'] as bool,
+        mentions: j['mentions'] as bool,
+        muted: j['muted'] as bool,
+        name: j['name'] as String,
+        photo: j['photo'],
+        role: j['role'] as String,
+        unread: (j['unread'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'admins_only_edit': adminsOnlyEdit,
+        'admins_only_post': adminsOnlyPost,
+        'approve_joins': approveJoins,
+        'archived': archived,
+        'can_edit': canEdit,
+        'can_post': canPost,
+        'description': description,
+        'id': id,
+        'join_requests': ?joinRequests,
+        'joined_at': joinedAt.toUtc().toIso8601String(),
+        'kept': ?kept,
+        'kind': kind,
+        'last': last,
+        'last_at': lastAt.toUtc().toIso8601String(),
+        'last_mine': lastMine,
+        'last_sender': ?lastSender,
+        'left': left,
+        'left_how': ?leftHow,
+        'members': members,
+        'mentioned': mentioned,
+        'mentions': mentions,
+        'muted': muted,
+        'name': name,
+        'photo': ?photo,
+        'role': role,
+        'unread': unread,
       };
 }
 
@@ -10067,5 +10410,952 @@ class GetLawfulRequestCountsResponsePeriodsItem {
         'received': received,
         'refused': refused,
         'year': year,
+      };
+}
+
+class ListGroupsResponse {
+  const ListGroupsResponse({required this.groups, required this.invites, required this.more, this.next, required this.unread});
+
+  final List<Group> groups;
+  final int invites;
+  final bool more;
+  /// With `more`, pass it as `before` for the page after.
+  final String? next;
+  final int unread;
+
+  factory ListGroupsResponse.fromJson(Map<String, dynamic> j) => ListGroupsResponse(
+        groups: (j['groups'] as List).map((e) => Group.fromJson(e as Map<String, dynamic>)).toList(),
+        invites: (j['invites'] as num).toInt(),
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
+        unread: (j['unread'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'groups': groups.map((e) => e.toJson()).toList(),
+        'invites': invites,
+        'more': more,
+        'next': ?next,
+        'unread': unread,
+      };
+}
+
+class CreateGroupRequest {
+  const CreateGroupRequest({this.description, required this.name, this.personIds});
+
+  final String? description;
+  final String name;
+  final List<String>? personIds;
+
+  factory CreateGroupRequest.fromJson(Map<String, dynamic> j) => CreateGroupRequest(
+        description: j['description'] == null ? null : j['description'] as String,
+        name: j['name'] as String,
+        personIds: j['person_ids'] == null ? null : (j['person_ids'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'description': ?description,
+        'name': name,
+        'person_ids': ?personIds?.map((e) => e).toList(),
+      };
+}
+
+class CreateGroupResponse {
+  const CreateGroupResponse({required this.added, required this.group});
+
+  final List<GroupAdded> added;
+  final Group group;
+
+  factory CreateGroupResponse.fromJson(Map<String, dynamic> j) => CreateGroupResponse(
+        added: (j['added'] as List).map((e) => GroupAdded.fromJson(e as Map<String, dynamic>)).toList(),
+        group: Group.fromJson(j['group'] as Map<String, dynamic>),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'added': added.map((e) => e.toJson()).toList(),
+        'group': group.toJson(),
+      };
+}
+
+class GroupAdded {
+  const GroupAdded({required this.personId, required this.state});
+
+  final String personId;
+  final String state;
+
+  factory GroupAdded.fromJson(Map<String, dynamic> j) => GroupAdded(
+        personId: j['person_id'] as String,
+        state: j['state'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'person_id': personId,
+        'state': state,
+      };
+}
+
+class ListGroupInvitesResponse {
+  const ListGroupInvitesResponse({required this.invites});
+
+  final List<GroupInvite> invites;
+
+  factory ListGroupInvitesResponse.fromJson(Map<String, dynamic> j) => ListGroupInvitesResponse(
+        invites: (j['invites'] as List).map((e) => GroupInvite.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'invites': invites.map((e) => e.toJson()).toList(),
+      };
+}
+
+class GroupInvite {
+  const GroupInvite({required this.at, required this.by, required this.groupId, required this.invitedBy, required this.name, this.photo});
+
+  final DateTime at;
+  /// Who invited you, as you see them.
+  final String by;
+  final String groupId;
+  final String invitedBy;
+  final String name;
+  final Object? photo;
+
+  factory GroupInvite.fromJson(Map<String, dynamic> j) => GroupInvite(
+        at: DateTime.parse(j['at'] as String),
+        by: j['by'] as String,
+        groupId: j['group_id'] as String,
+        invitedBy: j['invited_by'] as String,
+        name: j['name'] as String,
+        photo: j['photo'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toUtc().toIso8601String(),
+        'by': by,
+        'group_id': groupId,
+        'invited_by': invitedBy,
+        'name': name,
+        'photo': ?photo,
+      };
+}
+
+class SearchGroupsResponse {
+  const SearchGroupsResponse({required this.more, this.next, required this.results});
+
+  final bool more;
+  /// With `more`, pass it as `before` for the page after.
+  final String? next;
+  final List<GroupFound> results;
+
+  factory SearchGroupsResponse.fromJson(Map<String, dynamic> j) => SearchGroupsResponse(
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
+        results: (j['results'] as List).map((e) => GroupFound.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'more': more,
+        'next': ?next,
+        'results': results.map((e) => e.toJson()).toList(),
+      };
+}
+
+class GroupFound {
+  const GroupFound({required this.group, required this.groupId, required this.message, this.snippet, this.starredAt});
+
+  final Group group;
+  final String groupId;
+  final GroupMessage message;
+  final String? snippet;
+  final DateTime? starredAt;
+
+  factory GroupFound.fromJson(Map<String, dynamic> j) => GroupFound(
+        group: Group.fromJson(j['group'] as Map<String, dynamic>),
+        groupId: j['group_id'] as String,
+        message: GroupMessage.fromJson(j['message'] as Map<String, dynamic>),
+        snippet: j['snippet'] == null ? null : j['snippet'] as String,
+        starredAt: j['starred_at'] == null ? null : DateTime.parse(j['starred_at'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'group': group.toJson(),
+        'group_id': groupId,
+        'message': message.toJson(),
+        'snippet': ?snippet,
+        'starred_at': ?starredAt?.toUtc().toIso8601String(),
+      };
+}
+
+/// One message of a group as a member sees it.
+class GroupMessage {
+  const GroupMessage({this.attachment, required this.body, this.card, required this.createdAt, this.deleted, this.event, this.forwarded, this.forwardedMany, required this.groupId, required this.id, required this.kind, this.location, this.mentions, this.mentionsMe, required this.mine, this.myReaction, this.reactions, this.replyTo, required this.sender, this.senderId, this.starred, this.status, this.warnTransfer});
+
+  final ChatAttachment? attachment;
+  /// The words, a caption, an event in words ("Ada added Bola"), or "This
+  /// message was deleted".
+  final String body;
+  final PeopleCard? card;
+  final DateTime createdAt;
+  final bool? deleted;
+  final GroupMessageEvent? event;
+  final bool? forwarded;
+  final bool? forwardedMany;
+  final String groupId;
+  final String id;
+  final String kind;
+  final PeopleLocation? location;
+  final List<String>? mentions;
+  final bool? mentionsMe;
+  final bool mine;
+  final String? myReaction;
+  final List<GroupMessageReactionsItem>? reactions;
+  final String? replyTo;
+  /// Who wrote it, as you see them ("You"; "Deleted account" once their account
+  /// was deleted, §17 Q17).
+  final String sender;
+  final Object? senderId;
+  final bool? starred;
+  /// Your own messages (A6): delivered once every member now in the group has
+  /// it; read once every one of them with read ticks on (theirs and yours) has
+  /// read it.
+  final String? status;
+  /// It asks for a transfer to an account (words that ask, or a share card from
+  /// someone you have not added); warn before paying.
+  final bool? warnTransfer;
+
+  factory GroupMessage.fromJson(Map<String, dynamic> j) => GroupMessage(
+        attachment: j['attachment'] == null ? null : ChatAttachment.fromJson(j['attachment'] as Map<String, dynamic>),
+        body: j['body'] as String,
+        card: j['card'] == null ? null : PeopleCard.fromJson(j['card'] as Map<String, dynamic>),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        deleted: j['deleted'] == null ? null : j['deleted'] as bool,
+        event: j['event'] == null ? null : GroupMessageEvent.fromJson(j['event'] as Map<String, dynamic>),
+        forwarded: j['forwarded'] == null ? null : j['forwarded'] as bool,
+        forwardedMany: j['forwarded_many'] == null ? null : j['forwarded_many'] as bool,
+        groupId: j['group_id'] as String,
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        location: j['location'] == null ? null : PeopleLocation.fromJson(j['location'] as Map<String, dynamic>),
+        mentions: j['mentions'] == null ? null : (j['mentions'] as List).map((e) => e as String).toList(),
+        mentionsMe: j['mentions_me'] == null ? null : j['mentions_me'] as bool,
+        mine: j['mine'] as bool,
+        myReaction: j['my_reaction'] == null ? null : j['my_reaction'] as String,
+        reactions: j['reactions'] == null ? null : (j['reactions'] as List).map((e) => GroupMessageReactionsItem.fromJson(e as Map<String, dynamic>)).toList(),
+        replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
+        sender: j['sender'] as String,
+        senderId: j['sender_id'],
+        starred: j['starred'] == null ? null : j['starred'] as bool,
+        status: j['status'] == null ? null : j['status'] as String,
+        warnTransfer: j['warn_transfer'] == null ? null : j['warn_transfer'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'attachment': ?attachment?.toJson(),
+        'body': body,
+        'card': ?card?.toJson(),
+        'created_at': createdAt.toUtc().toIso8601String(),
+        'deleted': ?deleted,
+        'event': ?event?.toJson(),
+        'forwarded': ?forwarded,
+        'forwarded_many': ?forwardedMany,
+        'group_id': groupId,
+        'id': id,
+        'kind': kind,
+        'location': ?location?.toJson(),
+        'mentions': ?mentions?.map((e) => e).toList(),
+        'mentions_me': ?mentionsMe,
+        'mine': mine,
+        'my_reaction': ?myReaction,
+        'reactions': ?reactions?.map((e) => e.toJson()).toList(),
+        'reply_to': ?replyTo,
+        'sender': sender,
+        'sender_id': ?senderId,
+        'starred': ?starred,
+        'status': ?status,
+        'warn_transfer': ?warnTransfer,
+      };
+}
+
+class GroupMessageEvent {
+  const GroupMessageEvent({required this.actorId, this.targetId, required this.type});
+
+  final String actorId;
+  final String? targetId;
+  final String type;
+
+  factory GroupMessageEvent.fromJson(Map<String, dynamic> j) => GroupMessageEvent(
+        actorId: j['actor_id'] as String,
+        targetId: j['target_id'] == null ? null : j['target_id'] as String,
+        type: j['type'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'actor_id': actorId,
+        'target_id': ?targetId,
+        'type': type,
+      };
+}
+
+class GroupMessageReactionsItem {
+  const GroupMessageReactionsItem({required this.count, required this.reaction});
+
+  final int count;
+  final String reaction;
+
+  factory GroupMessageReactionsItem.fromJson(Map<String, dynamic> j) => GroupMessageReactionsItem(
+        count: (j['count'] as num).toInt(),
+        reaction: j['reaction'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'count': count,
+        'reaction': reaction,
+      };
+}
+
+class StarredGroupsResponse {
+  const StarredGroupsResponse({required this.more, this.next, required this.starred});
+
+  final bool more;
+  /// With `more`, pass it as `before` for the page after.
+  final String? next;
+  final List<GroupFound> starred;
+
+  factory StarredGroupsResponse.fromJson(Map<String, dynamic> j) => StarredGroupsResponse(
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
+        starred: (j['starred'] as List).map((e) => GroupFound.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'more': more,
+        'next': ?next,
+        'starred': starred.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ForwardMessageRequest {
+  const ForwardMessageRequest({this.chatId, this.groupId, required this.messageId, this.toChats, this.toGroups});
+
+  final String? chatId;
+  final String? groupId;
+  final String messageId;
+  final List<String>? toChats;
+  final List<String>? toGroups;
+
+  factory ForwardMessageRequest.fromJson(Map<String, dynamic> j) => ForwardMessageRequest(
+        chatId: j['chat_id'] == null ? null : j['chat_id'] as String,
+        groupId: j['group_id'] == null ? null : j['group_id'] as String,
+        messageId: j['message_id'] as String,
+        toChats: j['to_chats'] == null ? null : (j['to_chats'] as List).map((e) => e as String).toList(),
+        toGroups: j['to_groups'] == null ? null : (j['to_groups'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'chat_id': ?chatId,
+        'group_id': ?groupId,
+        'message_id': messageId,
+        'to_chats': ?toChats?.map((e) => e).toList(),
+        'to_groups': ?toGroups?.map((e) => e).toList(),
+      };
+}
+
+class ForwardMessageResponse {
+  const ForwardMessageResponse({required this.failed, required this.sent});
+
+  final List<ForwardMessageResponseFailedItem> failed;
+  final List<ForwardMessageResponseSentItem> sent;
+
+  factory ForwardMessageResponse.fromJson(Map<String, dynamic> j) => ForwardMessageResponse(
+        failed: (j['failed'] as List).map((e) => ForwardMessageResponseFailedItem.fromJson(e as Map<String, dynamic>)).toList(),
+        sent: (j['sent'] as List).map((e) => ForwardMessageResponseSentItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'failed': failed.map((e) => e.toJson()).toList(),
+        'sent': sent.map((e) => e.toJson()).toList(),
+      };
+}
+
+class ForwardMessageResponseFailedItem {
+  const ForwardMessageResponseFailedItem({required this.error, required this.id, required this.kind});
+
+  final String error;
+  final String id;
+  final String kind;
+
+  factory ForwardMessageResponseFailedItem.fromJson(Map<String, dynamic> j) => ForwardMessageResponseFailedItem(
+        error: j['error'] as String,
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'error': error,
+        'id': id,
+        'kind': kind,
+      };
+}
+
+class ForwardMessageResponseSentItem {
+  const ForwardMessageResponseSentItem({required this.id, required this.kind, required this.messageId});
+
+  final String id;
+  final String kind;
+  final String messageId;
+
+  factory ForwardMessageResponseSentItem.fromJson(Map<String, dynamic> j) => ForwardMessageResponseSentItem(
+        id: j['id'] as String,
+        kind: j['kind'] as String,
+        messageId: j['message_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'kind': kind,
+        'message_id': messageId,
+      };
+}
+
+class JoinGroupByLinkResponse {
+  const JoinGroupByLinkResponse({this.group, required this.state});
+
+  final Group? group;
+  final String state;
+
+  factory JoinGroupByLinkResponse.fromJson(Map<String, dynamic> j) => JoinGroupByLinkResponse(
+        group: j['group'] == null ? null : Group.fromJson(j['group'] as Map<String, dynamic>),
+        state: j['state'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'group': ?group?.toJson(),
+        'state': state,
+      };
+}
+
+class PutGroupRequest {
+  const PutGroupRequest({this.adminsOnlyEdit, this.adminsOnlyPost, this.approveJoins, this.description, this.name});
+
+  final bool? adminsOnlyEdit;
+  final bool? adminsOnlyPost;
+  final bool? approveJoins;
+  final String? description;
+  final String? name;
+
+  factory PutGroupRequest.fromJson(Map<String, dynamic> j) => PutGroupRequest(
+        adminsOnlyEdit: j['admins_only_edit'] == null ? null : j['admins_only_edit'] as bool,
+        adminsOnlyPost: j['admins_only_post'] == null ? null : j['admins_only_post'] as bool,
+        approveJoins: j['approve_joins'] == null ? null : j['approve_joins'] as bool,
+        description: j['description'] == null ? null : j['description'] as String,
+        name: j['name'] == null ? null : j['name'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'admins_only_edit': ?adminsOnlyEdit,
+        'admins_only_post': ?adminsOnlyPost,
+        'approve_joins': ?approveJoins,
+        'description': ?description,
+        'name': ?name,
+      };
+}
+
+class PutMyGroupRequest {
+  const PutMyGroupRequest({this.archived, this.mentions, this.muted});
+
+  final bool? archived;
+  final bool? mentions;
+  final bool? muted;
+
+  factory PutMyGroupRequest.fromJson(Map<String, dynamic> j) => PutMyGroupRequest(
+        archived: j['archived'] == null ? null : j['archived'] as bool,
+        mentions: j['mentions'] == null ? null : j['mentions'] as bool,
+        muted: j['muted'] == null ? null : j['muted'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'archived': ?archived,
+        'mentions': ?mentions,
+        'muted': ?muted,
+      };
+}
+
+class LeaveGroupResponse {
+  const LeaveGroupResponse({required this.closed, this.group, required this.left});
+
+  final bool closed;
+  final Object? group;
+  final bool left;
+
+  factory LeaveGroupResponse.fromJson(Map<String, dynamic> j) => LeaveGroupResponse(
+        closed: j['closed'] as bool,
+        group: j['group'],
+        left: j['left'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'closed': closed,
+        'group': ?group,
+        'left': left,
+      };
+}
+
+class GroupMembersResponse {
+  const GroupMembersResponse({this.invited, required this.members, this.waiting});
+
+  final List<GroupPending>? invited;
+  final List<GroupMember> members;
+  final List<GroupPending>? waiting;
+
+  factory GroupMembersResponse.fromJson(Map<String, dynamic> j) => GroupMembersResponse(
+        invited: j['invited'] == null ? null : (j['invited'] as List).map((e) => GroupPending.fromJson(e as Map<String, dynamic>)).toList(),
+        members: (j['members'] as List).map((e) => GroupMember.fromJson(e as Map<String, dynamic>)).toList(),
+        waiting: j['waiting'] == null ? null : (j['waiting'] as List).map((e) => GroupPending.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'invited': ?invited?.map((e) => e.toJson()).toList(),
+        'members': members.map((e) => e.toJson()).toList(),
+        'waiting': ?waiting?.map((e) => e.toJson()).toList(),
+      };
+}
+
+class GroupPending {
+  const GroupPending({required this.at, required this.name, required this.personId});
+
+  final DateTime at;
+  final String name;
+  final String personId;
+
+  factory GroupPending.fromJson(Map<String, dynamic> j) => GroupPending(
+        at: DateTime.parse(j['at'] as String),
+        name: j['name'] as String,
+        personId: j['person_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toUtc().toIso8601String(),
+        'name': name,
+        'person_id': personId,
+      };
+}
+
+class GroupMember {
+  const GroupMember({required this.joinedAt, required this.name, this.person, required this.personId, this.phone, required this.role, required this.you});
+
+  final DateTime joinedAt;
+  final String name;
+  final PersonCard? person;
+  final String personId;
+  /// Only when they chose to show their number.
+  final String? phone;
+  final String role;
+  final bool you;
+
+  factory GroupMember.fromJson(Map<String, dynamic> j) => GroupMember(
+        joinedAt: DateTime.parse(j['joined_at'] as String),
+        name: j['name'] as String,
+        person: j['person'] == null ? null : PersonCard.fromJson(j['person'] as Map<String, dynamic>),
+        personId: j['person_id'] as String,
+        phone: j['phone'] == null ? null : j['phone'] as String,
+        role: j['role'] as String,
+        you: j['you'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'joined_at': joinedAt.toUtc().toIso8601String(),
+        'name': name,
+        'person': ?person?.toJson(),
+        'person_id': personId,
+        'phone': ?phone,
+        'role': role,
+        'you': you,
+      };
+}
+
+class AddGroupMembersRequest {
+  const AddGroupMembersRequest({required this.personIds});
+
+  final List<String> personIds;
+
+  factory AddGroupMembersRequest.fromJson(Map<String, dynamic> j) => AddGroupMembersRequest(
+        personIds: (j['person_ids'] as List).map((e) => e as String).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'person_ids': personIds.map((e) => e).toList(),
+      };
+}
+
+class AddGroupMembersResponse {
+  const AddGroupMembersResponse({required this.added});
+
+  final List<GroupAdded> added;
+
+  factory AddGroupMembersResponse.fromJson(Map<String, dynamic> j) => AddGroupMembersResponse(
+        added: (j['added'] as List).map((e) => GroupAdded.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'added': added.map((e) => e.toJson()).toList(),
+      };
+}
+
+class SetGroupAdminRequest {
+  const SetGroupAdminRequest({required this.admin});
+
+  final bool admin;
+
+  factory SetGroupAdminRequest.fromJson(Map<String, dynamic> j) => SetGroupAdminRequest(
+        admin: j['admin'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'admin': admin,
+      };
+}
+
+class SetGroupAdminResponse {
+  const SetGroupAdminResponse({required this.admin, required this.personId});
+
+  final bool admin;
+  final String personId;
+
+  factory SetGroupAdminResponse.fromJson(Map<String, dynamic> j) => SetGroupAdminResponse(
+        admin: j['admin'] as bool,
+        personId: j['person_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'admin': admin,
+        'person_id': personId,
+      };
+}
+
+class BlockGroupMemberResponse {
+  const BlockGroupMemberResponse({required this.blocked, required this.chatId});
+
+  final bool blocked;
+  final String chatId;
+
+  factory BlockGroupMemberResponse.fromJson(Map<String, dynamic> j) => BlockGroupMemberResponse(
+        blocked: j['blocked'] as bool,
+        chatId: j['chat_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'blocked': blocked,
+        'chat_id': chatId,
+      };
+}
+
+class GroupLink {
+  const GroupLink({this.code, this.createdAt, this.qr, this.true_, this.url, this.words});
+
+  final String? code;
+  final DateTime? createdAt;
+  final String? qr;
+  final bool? true_;
+  final String? url;
+  final String? words;
+
+  factory GroupLink.fromJson(Map<String, dynamic> j) => GroupLink(
+        code: j['code'] == null ? null : j['code'] as String,
+        createdAt: j['created_at'] == null ? null : DateTime.parse(j['created_at'] as String),
+        qr: j['qr'] == null ? null : j['qr'] as String,
+        true_: j['true'] == null ? null : j['true'] as bool,
+        url: j['url'] == null ? null : j['url'] as String,
+        words: j['words'] == null ? null : j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'code': ?code,
+        'created_at': ?createdAt?.toUtc().toIso8601String(),
+        'qr': ?qr,
+        'true': ?true_,
+        'url': ?url,
+        'words': ?words,
+      };
+}
+
+class GroupJoinRequestsResponse {
+  const GroupJoinRequestsResponse({required this.requests});
+
+  final List<GroupPending> requests;
+
+  factory GroupJoinRequestsResponse.fromJson(Map<String, dynamic> j) => GroupJoinRequestsResponse(
+        requests: (j['requests'] as List).map((e) => GroupPending.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'requests': requests.map((e) => e.toJson()).toList(),
+      };
+}
+
+class GroupMessagesResponse {
+  const GroupMessagesResponse({required this.messages, required this.more});
+
+  final List<GroupMessage> messages;
+  final bool more;
+
+  factory GroupMessagesResponse.fromJson(Map<String, dynamic> j) => GroupMessagesResponse(
+        messages: (j['messages'] as List).map((e) => GroupMessage.fromJson(e as Map<String, dynamic>)).toList(),
+        more: j['more'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((e) => e.toJson()).toList(),
+        'more': more,
+      };
+}
+
+class SendGroupMessageRequest {
+  const SendGroupMessageRequest({this.card, this.clientId, this.location, this.mentions, this.replyTo, this.text});
+
+  final SendGroupMessageRequestCard? card;
+  final String? clientId;
+  final PeopleLocation? location;
+  final List<String>? mentions;
+  final String? replyTo;
+  final String? text;
+
+  factory SendGroupMessageRequest.fromJson(Map<String, dynamic> j) => SendGroupMessageRequest(
+        card: j['card'] == null ? null : SendGroupMessageRequestCard.fromJson(j['card'] as Map<String, dynamic>),
+        clientId: j['client_id'] == null ? null : j['client_id'] as String,
+        location: j['location'] == null ? null : PeopleLocation.fromJson(j['location'] as Map<String, dynamic>),
+        mentions: j['mentions'] == null ? null : (j['mentions'] as List).map((e) => e as String).toList(),
+        replyTo: j['reply_to'] == null ? null : j['reply_to'] as String,
+        text: j['text'] == null ? null : j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'card': ?card?.toJson(),
+        'client_id': ?clientId,
+        'location': ?location?.toJson(),
+        'mentions': ?mentions?.map((e) => e).toList(),
+        'reply_to': ?replyTo,
+        'text': ?text,
+      };
+}
+
+class SendGroupMessageRequestCard {
+  const SendGroupMessageRequestCard({this.amountKobo, this.businessId, this.itemId, this.payTo, this.reference, required this.type, this.what});
+
+  final int? amountKobo;
+  final String? businessId;
+  final String? itemId;
+  final SendGroupMessageRequestCardPayTo? payTo;
+  final String? reference;
+  final String type;
+  final String? what;
+
+  factory SendGroupMessageRequestCard.fromJson(Map<String, dynamic> j) => SendGroupMessageRequestCard(
+        amountKobo: j['amount_kobo'] == null ? null : (j['amount_kobo'] as num).toInt(),
+        businessId: j['business_id'] == null ? null : j['business_id'] as String,
+        itemId: j['item_id'] == null ? null : j['item_id'] as String,
+        payTo: j['pay_to'] == null ? null : SendGroupMessageRequestCardPayTo.fromJson(j['pay_to'] as Map<String, dynamic>),
+        reference: j['reference'] == null ? null : j['reference'] as String,
+        type: j['type'] as String,
+        what: j['what'] == null ? null : j['what'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'amount_kobo': ?amountKobo,
+        'business_id': ?businessId,
+        'item_id': ?itemId,
+        'pay_to': ?payTo?.toJson(),
+        'reference': ?reference,
+        'type': type,
+        'what': ?what,
+      };
+}
+
+class SendGroupMessageRequestCardPayTo {
+  const SendGroupMessageRequestCardPayTo({this.accountName, this.accountNumber, this.bank});
+
+  final String? accountName;
+  final String? accountNumber;
+  final String? bank;
+
+  factory SendGroupMessageRequestCardPayTo.fromJson(Map<String, dynamic> j) => SendGroupMessageRequestCardPayTo(
+        accountName: j['account_name'] == null ? null : j['account_name'] as String,
+        accountNumber: j['account_number'] == null ? null : j['account_number'] as String,
+        bank: j['bank'] == null ? null : j['bank'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'account_name': ?accountName,
+        'account_number': ?accountNumber,
+        'bank': ?bank,
+      };
+}
+
+class MarkGroupMessageRequest {
+  const MarkGroupMessageRequest({this.reaction, this.starred});
+
+  final String? reaction;
+  final bool? starred;
+
+  factory MarkGroupMessageRequest.fromJson(Map<String, dynamic> j) => MarkGroupMessageRequest(
+        reaction: j['reaction'] == null ? null : j['reaction'] as String,
+        starred: j['starred'] == null ? null : j['starred'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'reaction': ?reaction,
+        'starred': ?starred,
+      };
+}
+
+class GroupMessageInfoResponse {
+  const GroupMessageInfoResponse({required this.deliveredTo, required this.readBy, required this.waiting});
+
+  final List<GroupReader> deliveredTo;
+  final List<GroupReader> readBy;
+  final int waiting;
+
+  factory GroupMessageInfoResponse.fromJson(Map<String, dynamic> j) => GroupMessageInfoResponse(
+        deliveredTo: (j['delivered_to'] as List).map((e) => GroupReader.fromJson(e as Map<String, dynamic>)).toList(),
+        readBy: (j['read_by'] as List).map((e) => GroupReader.fromJson(e as Map<String, dynamic>)).toList(),
+        waiting: (j['waiting'] as num).toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'delivered_to': deliveredTo.map((e) => e.toJson()).toList(),
+        'read_by': readBy.map((e) => e.toJson()).toList(),
+        'waiting': waiting,
+      };
+}
+
+class GroupReader {
+  const GroupReader({this.at, required this.name, required this.personId});
+
+  final Object? at;
+  final String name;
+  final String personId;
+
+  factory GroupReader.fromJson(Map<String, dynamic> j) => GroupReader(
+        at: j['at'],
+        name: j['name'] as String,
+        personId: j['person_id'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': ?at,
+        'name': name,
+        'person_id': personId,
+      };
+}
+
+class GroupMessageReactionsResponse {
+  const GroupMessageReactionsResponse({required this.reactions});
+
+  final List<GroupMessageReactionsResponseReactionsItem> reactions;
+
+  factory GroupMessageReactionsResponse.fromJson(Map<String, dynamic> j) => GroupMessageReactionsResponse(
+        reactions: (j['reactions'] as List).map((e) => GroupMessageReactionsResponseReactionsItem.fromJson(e as Map<String, dynamic>)).toList(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'reactions': reactions.map((e) => e.toJson()).toList(),
+      };
+}
+
+class GroupMessageReactionsResponseReactionsItem {
+  const GroupMessageReactionsResponseReactionsItem({required this.at, required this.name, required this.personId, required this.reaction});
+
+  final DateTime at;
+  final String name;
+  final String personId;
+  final String reaction;
+
+  factory GroupMessageReactionsResponseReactionsItem.fromJson(Map<String, dynamic> j) => GroupMessageReactionsResponseReactionsItem(
+        at: DateTime.parse(j['at'] as String),
+        name: j['name'] as String,
+        personId: j['person_id'] as String,
+        reaction: j['reaction'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toUtc().toIso8601String(),
+        'name': name,
+        'person_id': personId,
+        'reaction': reaction,
+      };
+}
+
+class OpenGroupCardResponse {
+  const OpenGroupCardResponse({required this.card, required this.live});
+
+  final PeopleCard card;
+  final Map<String, dynamic> live;
+
+  factory OpenGroupCardResponse.fromJson(Map<String, dynamic> j) => OpenGroupCardResponse(
+        card: PeopleCard.fromJson(j['card'] as Map<String, dynamic>),
+        live: j['live'] as Map<String, dynamic>,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'card': card.toJson(),
+        'live': live,
+      };
+}
+
+class MarkGroupSplitPaidRequest {
+  const MarkGroupSplitPaidRequest({required this.paid});
+
+  final bool paid;
+
+  factory MarkGroupSplitPaidRequest.fromJson(Map<String, dynamic> j) => MarkGroupSplitPaidRequest(
+        paid: j['paid'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'paid': paid,
+      };
+}
+
+class TypingGroupRequest {
+  const TypingGroupRequest({this.typing});
+
+  final bool? typing;
+
+  factory TypingGroupRequest.fromJson(Map<String, dynamic> j) => TypingGroupRequest(
+        typing: j['typing'] == null ? null : j['typing'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'typing': ?typing,
+      };
+}
+
+class GroupLinkPreviewResponse {
+  const GroupLinkPreviewResponse({required this.approve, required this.code, required this.full, required this.link, required this.members, required this.name, this.photo});
+
+  final bool approve;
+  final String code;
+  final bool full;
+  final String link;
+  final int members;
+  final String name;
+  final Object? photo;
+
+  factory GroupLinkPreviewResponse.fromJson(Map<String, dynamic> j) => GroupLinkPreviewResponse(
+        approve: j['approve'] as bool,
+        code: j['code'] as String,
+        full: j['full'] as bool,
+        link: j['link'] as String,
+        members: (j['members'] as num).toInt(),
+        name: j['name'] as String,
+        photo: j['photo'],
+      );
+
+  Map<String, dynamic> toJson() => {
+        'approve': approve,
+        'code': code,
+        'full': full,
+        'link': link,
+        'members': members,
+        'name': name,
+        'photo': ?photo,
       };
 }

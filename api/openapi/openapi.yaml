@@ -21653,8 +21653,8 @@ paths:
       operationId: listAllMyChats
       tags:
       - People
-      summary: You's Chats, businesses and people together
-      description: 'You''s one Chats list (people-chatting §7, §17 Q6): the person''s chats with businesses and with people together, the latest first, each marked by `kind` (`business`: open `/v1/me/chats/{id}`; `person`: open `/v1/me/people/{id}`); archived ones with archived=1. 200 a page: `more` says there are more, and `next`, passed as `before`, asks for them. A people chat opened (`POST /v1/me/people`) is listed from its first message. Requests waiting are not listed, only counted (`requests`; `GET /v1/me/people/requests`). The clients use this list for the Chats tab; `GET /v1/me/chats` stays the business chats alone. A personal session, or a business session for its person; API keys are refused (403).'
+      summary: You's Chats, businesses, people and groups together
+      description: 'You''s one Chats list (people-chatting §7, §17 Q6): the person''s chats with businesses, with people and their groups together, the latest first, each marked by `kind` (`business`: open `/v1/me/chats/{id}`; `person`: open `/v1/me/people/{id}`; `group`: open `/v1/me/groups/{id}`); archived ones with archived=1. 200 a page: `more` says there are more, and `next`, passed as `before`, asks for them. A people chat opened (`POST /v1/me/people`) is listed from its first message. Requests waiting are not listed, only counted (`requests`; `GET /v1/me/people/requests`). The clients use this list for the Chats tab; `GET /v1/me/chats` stays the business chats alone. A personal session, or a business session for its person; API keys are refused (403).'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -21678,7 +21678,7 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [chats, unread, requests, more]
+                required: [chats, unread, requests, invites, more]
                 properties:
                   chats:
                     type: array
@@ -21689,6 +21689,9 @@ paths:
                     description: Unread messages in every chat of the list (archived or not, as asked), not the page alone.
                   requests:
                     type: integer
+                  invites:
+                    type: integer
+                    description: Invites to groups waiting for you (`GET /v1/me/groups/invites`).
                   more:
                     type: boolean
                     description: There are more chats after this page (200 a page).
@@ -21950,6 +21953,1750 @@ paths:
                     type: boolean
                   next:
                     type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups:
+    get:
+      operationId: listGroups
+      tags:
+      - People
+      summary: Your groups
+      description: 'The person''s groups (people-chatting §9, stage 5b), the latest first (archived=1 the archived ones), 200 a page (`more`, `next` passed as `before`); those they left or were removed from stay (`left`) until they delete them. `unread` counts every group of the list; `invites` the invites waiting (`GET /v1/me/groups/invites`). Listing marks each group''s last message delivered to the person. The one Chats list (`GET /v1/me/conversations`) has the groups too, `kind: group`. Kept by Taskiem, sealed under the group''s own key, readable by Taskiem''s servers: not end-to-end encrypted.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: archived
+        in: query
+        schema:
+          type: string
+          enum: ['1']
+      - name: before
+        in: query
+        description: 'The page after another: that page''s `next`. Without it, the first page.'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Your groups
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [groups, unread, invites, more]
+                properties:
+                  groups:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Group'
+                  unread:
+                    type: integer
+                  invites:
+                    type: integer
+                  more:
+                    type: boolean
+                  next:
+                    type: string
+                    description: With `more`, pass it as `before` for the page after.
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createGroup
+      tags:
+      - People
+      summary: Make a group
+      description: 'A new group (§9, §17 Q7: up to 256 people): its name (up to 80 characters) and description (up to 500), the person its first member and admin. `person_ids` are added as an admin adds them (`POST /v1/me/groups/{id}/members`): each `added` only when you have them as a contact and their "Who can add me to groups" lets you, else `invited` (an invite waits in their Requests). The group''s key is made and sealed for it alone. Kept by Taskiem, sealed under the group''s own key, readable by Taskiem''s servers: not end-to-end encrypted.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 400
+                description:
+                  type: string
+                  maxLength: 2000
+                person_ids:
+                  type: array
+                  maxItems: 300
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '201':
+          description: Made
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [group, added]
+                properties:
+                  group:
+                    $ref: '#/components/schemas/Group'
+                  added:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupAdded'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/invites:
+    get:
+      operationId: listGroupInvites
+      tags:
+      - People
+      summary: Invites to groups waiting for you
+      description: 'Invites to groups waiting in your Requests (A3): someone you have not added, or whose add your "Who can add me to groups" did not allow, invited you. The group''s name and photo, and who invited you; Accept or Decline. Whoever invited is not told a decline.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: The invites
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [invites]
+                properties:
+                  invites:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupInvite'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/invites/{id}/accept:
+    post:
+      operationId: acceptGroupInvite
+      tags:
+      - People
+      summary: Accept an invite to a group
+      description: 'You join the group from now (§17 Q16: you see its messages from when you joined). 409 when it is full (256); 404 without such an invite.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Joined
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/invites/{id}/decline:
+    post:
+      operationId: declineGroupInvite
+      tags:
+      - People
+      summary: Decline an invite to a group
+      description: 'The invite goes; whoever invited you is not told.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Declined
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/search:
+    get:
+      operationId: searchGroups
+      tags:
+      - People
+      summary: Search your groups
+      description: 'The messages of your groups that you see (from when you joined, up to when you left; never one deleted for you or for everyone), the newest first, 30 a page (`more`, `next` passed as `before`); `group` keeps to one group. A message is found when each word of `q` (two letters or more) begins one of its words, accents and case aside, in its words, a file''s name, a card or a place. The index holds keyed tokens under a key derived from each group''s own key, never words. 400 without a word of two letters; 429 when searching very fast.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 800
+      - name: group
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: before
+        in: query
+        description: 'The page after another: that page''s `next`. Without it, the first page.'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Found
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [results, more]
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupFound'
+                  more:
+                    type: boolean
+                  next:
+                    type: string
+                    description: With `more`, pass it as `before` for the page after.
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/starred:
+    get:
+      operationId: starredGroups
+      tags:
+      - People
+      summary: Your starred messages in groups
+      description: 'Your starred messages across your groups, the most recently starred first, 50 a page (`more`, `next` passed as `before`), each with its group.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: before
+        in: query
+        description: 'The page after another: that page''s `next`. Without it, the first page.'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Starred
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [starred, more]
+                properties:
+                  starred:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupFound'
+                  more:
+                    type: boolean
+                  next:
+                    type: string
+                    description: With `more`, pass it as `before` for the page after.
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/forward:
+    post:
+      operationId: forwardMessage
+      tags:
+      - People
+      summary: Forward a message to people and groups
+      description: 'One message of a people chat (`chat_id`) or a group (`group_id`) to other people chats (`to_chats`) and groups (`to_groups`), each marked forwarded (`forwarded_many` once forwarded five times or more on its way). At most 5 at once, one at a time for a message forwarded many times (429 with `forwarded_many`). A share card or a group''s event is not forwarded (409, 404). Each is sent to as a message is; those refused are in `failed` with the reason.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [message_id]
+              properties:
+                chat_id:
+                  type: string
+                  format: uuid
+                group_id:
+                  type: string
+                  format: uuid
+                message_id:
+                  type: string
+                  format: uuid
+                to_chats:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: string
+                    format: uuid
+                to_groups:
+                  type: array
+                  maxItems: 50
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Forwarded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [sent, failed]
+                properties:
+                  sent:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [kind, id, message_id]
+                      properties:
+                        kind:
+                          type: string
+                          enum: [person, group]
+                        id:
+                          type: string
+                          format: uuid
+                        message_id:
+                          type: string
+                          format: uuid
+                  failed:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [kind, id, error]
+                      properties:
+                        kind:
+                          type: string
+                          enum: [person, group]
+                        id:
+                          type: string
+                          format: uuid
+                        error:
+                          type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/group-links/{code}/join:
+    post:
+      operationId: joinGroupByLink
+      tags:
+      - People
+      summary: Join a group by its link
+      description: 'Opening a group''s invite link (A4): you join at once (`joined`, with the group), or wait for an admin (`waiting`) when the group approves new members; `member` when you are in it already. 409 when it is full; 429 after many joins (yours, or the group''s in an hour); 410 `gone` for a link replaced or turned off; 404 for no such link; 503 where group links are not set up.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Joined or waiting
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [state]
+                properties:
+                  state:
+                    type: string
+                    enum: [joined, waiting, member]
+                  group:
+                    $ref: '#/components/schemas/Group'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}:
+    get:
+      operationId: getGroup
+      tags:
+      - People
+      summary: One group
+      description: 'One of your groups (one you left stays until you delete it). Kept by Taskiem, sealed under the group''s own key, readable by Taskiem''s servers: not end-to-end encrypted.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putGroup
+      tags:
+      - People
+      summary: Change a group's info or settings
+      description: 'The name and description: admins only by default, everyone when `admins_only_edit` is off (A2). The settings (`admins_only_post`: only admins send messages; `admins_only_edit`; `approve_joins`: joining by the link waits for an admin, A4): admins only. Each change is an event message in the group.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  maxLength: 400
+                description:
+                  type: string
+                  maxLength: 2000
+                admins_only_post:
+                  type: boolean
+                admins_only_edit:
+                  type: boolean
+                approve_joins:
+                  type: boolean
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteGroupForMe
+      tags:
+      - People
+      summary: Delete a group for you
+      description: 'Your copy goes. Left or removed: the group leaves your list for good, with your marks. Still in it: your copy up to now is cleared and it leaves your list until a new message.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Deleted for you
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/me:
+    put:
+      operationId: putMyGroup
+      tags:
+      - People
+      summary: Your own settings for a group
+      description: '`muted`, `archived`, and `mentions`: a message mentioning you pushes even while the group is muted (A7), on by default.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                muted:
+                  type: boolean
+                archived:
+                  type: boolean
+                mentions:
+                  type: boolean
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/leave:
+    post:
+      operationId: leaveGroup
+      tags:
+      - People
+      summary: Leave a group
+      description: 'You leave (A5): your copy up to now stays yours until you delete it; you see nothing new and can''t write. The last admin to leave makes the member there longest an admin; the last one out closes the group, deleting all of it (§14).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Left
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [left, closed, group]
+                properties:
+                  left:
+                    type: boolean
+                  closed:
+                    type: boolean
+                  group:
+                    oneOf:
+                    - type: 'null'
+                    - $ref: '#/components/schemas/Group'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/photo:
+    get:
+      operationId: groupPhoto
+      tags:
+      - People
+      summary: A group's photo
+      description: 'For its members, and someone invited.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The photo
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putGroupPhoto
+      tags:
+      - People
+      summary: Change a group's photo
+      description: 'A multipart form with `file` (a photo up to 10 MB, checked and cleaned as your own photo is), sealed under the group''s key; by whoever may edit the group''s info (A2).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteGroupPhoto
+      tags:
+      - People
+      summary: Remove a group's photo
+      description: 'By whoever may edit the group''s info.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/members:
+    get:
+      operationId: groupMembers
+      tags:
+      - People
+      summary: A group's members
+      description: 'The members now, admins first, each named as you see them (the name you gave them in contacts, else theirs) with their card as their settings let you see them (photo, last seen; none across a block either way) and their number only when they chose to show it (§17 Q5). To admins also `invited` (invites waiting; an add across a block is listed as any invite, A8) and `waiting` (people waiting to join by the link). 403 once you left.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The members
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [members]
+                properties:
+                  members:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupMember'
+                  invited:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupPending'
+                  waiting:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupPending'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addGroupMembers
+      tags:
+      - People
+      summary: Add people to a group
+      description: 'An admin adds people (§9). Each is `added` at once only when the admin has them as a contact and their "Who can add me to groups" lets the admin (A3); otherwise `invited`: an invite waits in their Requests. An add across a block either way is answered `invited` too, and they never see it (A8). `member`: in it already; `full`: 256 already; `unavailable`: no such active account.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [person_ids]
+              properties:
+                person_ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 300
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Added or invited
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [added]
+                properties:
+                  added:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupAdded'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/members/{person}:
+    put:
+      operationId: setGroupAdmin
+      tags:
+      - People
+      summary: Make a member an admin, or not
+      description: 'An admin makes a member an admin (`admin: true`) or no longer one; a group keeps at least one admin (409).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: person
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [admin]
+              properties:
+                admin:
+                  type: boolean
+      responses:
+        '200':
+          description: Changed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [person_id, admin]
+                properties:
+                  person_id:
+                    type: string
+                    format: uuid
+                  admin:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: removeGroupMember
+      tags:
+      - People
+      summary: Remove a member
+      description: 'An admin removes a member (A5): their copy up to now stays theirs; they see nothing new and can''t write. To leave yourself, use leave.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: person
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/members/{person}/block:
+    post:
+      operationId: blockGroupMember
+      tags:
+      - People
+      summary: Block a member of a group
+      description: 'A8: you still see their messages in the group; they can no longer message you one to one, nor add you to groups (an add becomes an invite you never see), nor see your last seen or photo. Listed with your blocked people (`GET /v1/me/people/blocked`); unblock with `DELETE /v1/me/people/{chat_id}/block`.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: person
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Blocked
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [blocked, chat_id]
+                properties:
+                  blocked:
+                    type: boolean
+                  chat_id:
+                    type: string
+                    format: uuid
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/invites/{person}:
+    delete:
+      operationId: cancelGroupInvite
+      tags:
+      - People
+      summary: Take an invite back
+      description: 'An admin takes an invite back.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: person
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Taken back
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/link:
+    get:
+      operationId: groupLink
+      tags:
+      - People
+      summary: A group's invite link
+      description: 'Admins: the group''s invite link when it is on (`on`, `code`, `url`, `words` to share, `qr`), else `{on: false}`. 503 where group links are not set up.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The link
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupLink'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: newGroupLink
+      tags:
+      - People
+      summary: Turn a group's link on, or replace it
+      description: 'Admins: a new invite link; the one before (if any) answers 410 from now ("This group link no longer works").'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '201':
+          description: The new link
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupLink'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: groupLinkOff
+      tags:
+      - People
+      summary: Turn a group's link off
+      description: 'Admins: no link; the last one answers 410 from now.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Turned off
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/link/qr:
+    get:
+      operationId: groupLinkQR
+      tags:
+      - People
+      summary: A group's link as a QR code
+      description: 'Admins; 404 while the link is off.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: format
+        in: query
+        schema:
+          type: string
+          enum: [svg, png]
+          default: svg
+      responses:
+        '200':
+          description: The QR code
+          content:
+            image/svg+xml:
+              schema:
+                type: string
+            image/png:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/joins:
+    get:
+      operationId: groupJoinRequests
+      tags:
+      - People
+      summary: People waiting to join a group
+      description: 'Admins: who opened the group''s link while "Approve new members" is on (A4), or must be let in (someone an admin removed before, or blocked), waiting.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Waiting
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [requests]
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupPending'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/joins/{person}/approve:
+    post:
+      operationId: approveGroupJoin
+      tags:
+      - People
+      summary: Let someone waiting in
+      description: 'Admins: they join from now. 409 when the group is full.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: person
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: In
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/joins/{person}/decline:
+    post:
+      operationId: declineGroupJoin
+      tags:
+      - People
+      summary: Turn someone waiting away
+      description: 'Admins; they are not told.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: person
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Turned away
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/messages:
+    get:
+      operationId: groupMessages
+      tags:
+      - People
+      summary: A group's messages
+      description: 'The group as you see it: only from when you joined (§17 Q16), and, once you left or were removed, up to then (A5); never one deleted for you. 50 a page, the latest last: `before` a message for the page before it; `starred=1` your starred ones. Reading it marks it delivered to you.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: before
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: starred
+        in: query
+        schema:
+          type: string
+          enum: ['1']
+      responses:
+        '200':
+          description: Messages
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages, more]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupMessage'
+                  more:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: sendGroupMessage
+      tags:
+      - People
+      summary: Send a message to a group
+      description: 'A text (up to 4,000 characters), a place (`location`) or a card (`card`, as in people chats: a business, a product, an order, a delivery, or a share). `mentions`: members it mentions (@name), by id: each is pushed even while they mute the group, unless they turned that off for it (A7). `client_id` makes it safe to retry (200 with the message already sent). 403 once you left, or when only admins post; 429 at 20 a minute (10 in your first week).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                text:
+                  type: string
+                  maxLength: 16000
+                client_id:
+                  type: string
+                  maxLength: 80
+                reply_to:
+                  type: string
+                  format: uuid
+                location:
+                  $ref: '#/components/schemas/PeopleLocation'
+                card:
+                  type: object
+                  additionalProperties: false
+                  required: [type]
+                  properties:
+                    type:
+                      type: string
+                      enum: [product, business, order, delivery, split]
+                    business_id:
+                      type: string
+                      format: uuid
+                    item_id:
+                      type: string
+                    reference:
+                      type: string
+                    amount_kobo:
+                      type: integer
+                    what:
+                      type: string
+                    pay_to:
+                      type: object
+                      additionalProperties: false
+                      properties:
+                        bank:
+                          type: string
+                        account_number:
+                          type: string
+                        account_name:
+                          type: string
+                mentions:
+                  type: array
+                  maxItems: 256
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '201':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupMessage'
+        '200':
+          description: The message already sent with this client_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/files:
+    post:
+      operationId: sendGroupFile
+      tags:
+      - People
+      summary: Send a photo, voice note or file to a group
+      description: 'Multipart: `file`; `text` (a caption), `client_id`, `reply_to`, `mentions` (member ids separated by commas). Checked as people chats'' files are (engine/media), then sealed under the group''s key, one copy for the group.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                text:
+                  type: string
+                client_id:
+                  type: string
+                reply_to:
+                  type: string
+                  format: uuid
+                mentions:
+                  type: string
+      responses:
+        '201':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupMessage'
+        '200':
+          description: The message already sent with this client_id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/files/{message}:
+    get:
+      operationId: groupFile
+      tags:
+      - People
+      summary: A file of a group
+      description: 'A message''s photo, voice note or file, opened, for a member who sees the message.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The file
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/messages/{message}:
+    put:
+      operationId: markGroupMessage
+      tags:
+      - People
+      summary: Star or react to a group message
+      description: '`starred`: your own. `reaction` (one emoji; "" takes yours away): seen by the members, counted on the message (`reactions`); not once you left.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                starred:
+                  type: boolean
+                reaction:
+                  type: string
+                  maxLength: 16
+      responses:
+        '200':
+          description: Marked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupMessage'
+        default:
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteGroupMessage
+      tags:
+      - People
+      summary: Delete a group message
+      description: '`for=me` hides it from your copy; `for=everyone` (your own message, within 24 hours, while you are in the group) leaves only that it was, for every member: its words, file and search tokens go.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: for
+        in: query
+        schema:
+          type: string
+          enum: [me, everyone]
+      responses:
+        '204':
+          description: Deleted
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/messages/{message}/info:
+    get:
+      operationId: groupMessageInfo
+      tags:
+      - People
+      summary: Who read your group message
+      description: 'For the message''s sender only (403 otherwise; A6): `read_by` lists only members with read ticks on (theirs and yours), with when; `delivered_to` the members who have it (a member with read ticks off who read it is here, never in `read_by`); `waiting` how many in the group now have not had it yet.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Who read it
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [read_by, delivered_to, waiting]
+                properties:
+                  read_by:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupReader'
+                  delivered_to:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupReader'
+                  waiting:
+                    type: integer
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/messages/{message}/reactions:
+    get:
+      operationId: groupMessageReactions
+      tags:
+      - People
+      summary: Who reacted to a group message
+      description: 'Each member''s reaction, with when.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Reactions
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [reactions]
+                properties:
+                  reactions:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [person_id, name, reaction, at]
+                      properties:
+                        person_id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        reaction:
+                          type: string
+                        at:
+                          type: string
+                          format: date-time
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/messages/{message}/card:
+    get:
+      operationId: openGroupCard
+      tags:
+      - People
+      summary: Open a card shared in a group
+      description: 'As `GET /v1/me/people/{id}/messages/{message}/card`: the card as shared, and `live`, as it is now for you.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The card
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                required: [card, live]
+                properties:
+                  card:
+                    $ref: '#/components/schemas/PeopleCard'
+                  live:
+                    type: object
+                    additionalProperties: true
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/messages/{message}/paid:
+    post:
+      operationId: markGroupSplitPaid
+      tags:
+      - People
+      summary: Mark a share card in a group paid
+      description: 'A member marks a share card paid (or not yet). Taskiem moves no money and checks no payment.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: message
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [paid]
+              properties:
+                paid:
+                  type: boolean
+      responses:
+        '200':
+          description: Marked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupMessage'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/read:
+    post:
+      operationId: readGroup
+      tags:
+      - People
+      summary: Mark a group read
+      description: 'You read the group up to its latest message. Senders are shown it ("Read by") only while your read ticks are on (A6).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Read
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/typing:
+    post:
+      operationId: typingGroup
+      tags:
+      - People
+      summary: Say you are typing in a group, or stopped
+      description: 'Shown to the members'' live connections (`group_typing`) for about 6 seconds, or until you stop or send; passed on at most every 3 seconds. Always 204; 404 for a group that is not yours.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                typing:
+                  type: boolean
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/group-links/{code}:
+    get:
+      operationId: groupLinkPreview
+      tags:
+      - People
+      summary: A group's preview, by its link
+      description: 'For anyone holding the link, signed in or not (A4): the group''s name, photo and how many are in it; nothing of its members or messages. `approve`: joining waits for an admin; `full`: 256 already. 410 `gone` for a link replaced or turned off; 404 for no such link; 503 where group links are not set up. Thirty a second per address.'
+      security: []
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The preview
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [code, link, name, photo, members, approve, full]
+                properties:
+                  code:
+                    type: string
+                  link:
+                    type: string
+                  name:
+                    type: string
+                  photo:
+                    oneOf:
+                    - type: 'null'
+                    - $ref: '#/components/schemas/PersonPhotoRef'
+                  members:
+                    type: integer
+                  approve:
+                    type: boolean
+                  full:
+                    type: boolean
+        '410':
+          description: The link was replaced or turned off
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [error, gone]
+                properties:
+                  error:
+                    type: string
+                  gone:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/group-links/{code}/photo:
+    get:
+      operationId: groupLinkPhoto
+      tags:
+      - People
+      summary: A group's photo, by its link
+      description: 'For the link''s preview.'
+      security: []
+      parameters:
+      - name: code
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The photo
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
         default:
           $ref: '#/components/responses/Error'
   /v1/me/people/forward:
@@ -23506,6 +25253,8 @@ paths:
                   type: boolean
                 requests:
                   type: boolean
+                groups:
+                  type: boolean
       responses:
         '200':
           description: The settings
@@ -23986,7 +25735,7 @@ paths:
       tags:
       - People
       summary: Your live connection
-      description: 'Server-sent events: what changes in your own people chats as it happens, so the app and the web need not poll every few seconds (keep polling as the fallback, and merge). `message`: a message of one of your chats, new or changed (delivered, read, a reaction, a star, deleted for everyone): `{chat_id, request, message: PeopleMessage}`; `request` is true for a message waiting in your Requests. `chat`: one of your chats changed (a new chat or request, its last message, accepted, muted, archived): `{id, hidden: false, chat: PeopleChat}`, or deleted for you: `{id, hidden: true}`. `gone`: a message deleted for you on another device, `{chat_id, id}`, or a request you deleted, `{chat_id, id: null}`. `typing`: the chats whose other person is typing now, `{typing: [chat ids]}` (sent when it changes). `presence`: the people you chat with whose online or last seen changed, as their settings and yours let you see them, `{people: [{person_id, chat_id, online, last_seen_at}]}` (all of them on connecting; both null when hidden). Message, chat and gone events have an id, the change''s time in microseconds: reconnecting with Last-Event-ID sends what was missed (at most an hour back); an event may come twice across a reconnection. A `ready` event comes first, `{connection}`, and a `ping` at least every ten seconds; the connection closes after half an hour and clients reconnect. Presence follows the connection: while one of your connections is in front you are online (last seen now); when the last closes, or says it is away (`POST /v1/me/presence {online: false, connection}`), you are away, last seen then. `away=1` opens one that starts away. Only your own copy is ever on it. Ten open per person (429 with Retry-After).'
+      description: 'Server-sent events: what changes in your own people chats as it happens, so the app and the web need not poll every few seconds (keep polling as the fallback, and merge). `message`: a message of one of your chats, new or changed (delivered, read, a reaction, a star, deleted for everyone): `{chat_id, request, message: PeopleMessage}`; `request` is true for a message waiting in your Requests. `chat`: one of your chats changed (a new chat or request, its last message, accepted, muted, archived): `{id, hidden: false, chat: PeopleChat}`, or deleted for you: `{id, hidden: true}`. `gone`: a message deleted for you on another device, `{chat_id, id}`, or a request you deleted, `{chat_id, id: null}`. `typing`: the chats whose other person is typing now, `{typing: [chat ids]}` (sent when it changes). `presence`: the people you chat with whose online or last seen changed, as their settings and yours let you see them, `{people: [{person_id, chat_id, online, last_seen_at}]}` (all of them on connecting; both null when hidden). Message, chat and gone events have an id, the change''s time in microseconds: reconnecting with Last-Event-ID sends what was missed (at most an hour back); an event may come twice across a reconnection. A `ready` event comes first, `{connection}`, and a `ping` at least every ten seconds; the connection closes after half an hour and clients reconnect. Presence follows the connection: while one of your connections is in front you are online (last seen now); when the last closes, or says it is away (`POST /v1/me/presence {online: false, connection}`), you are away, last seen then. `away=1` opens one that starts away. Only your own copy is ever on it. Ten open per person (429 with Retry-After). Groups (stage 5b): `group_message`, a message of one of your groups that you see, new or changed (a reaction, deleted for everyone, a share marked paid, your own star elsewhere): `{group_id, message: GroupMessage}`; `group`, one of your groups changed (a new message, its info or settings, your own membership): `{id, hidden: false, group: Group}`, or deleted for you until a new message: `{id, hidden: true}`; `group_receipts`, the ticks of your own recent messages in a group moved: `{group_id, messages: [{id, status}]}`; `group_invite`, an invite waiting for you: `{group_id, invite: GroupInvite}`; `group_typing`, who is typing in your groups now: `{groups: [{group_id, people: [ids]}]}` (sent when it changes). A group message deleted for you elsewhere, or a group whose copy you deleted, is `gone` with the group''s id as `chat_id`.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -41465,11 +43214,11 @@ components:
       type: object
       additionalProperties: false
       required: [kind, id, name, last, last_mine, last_at, unread, muted, archived, blocked]
-      description: 'One row of You''s one Chats list: a business chat (`kind: business`, open `/v1/me/chats/{id}`) or a people chat (`kind: person`, open `/v1/me/people/{id}`).'
+      description: 'One row of You''s one Chats list: a business chat (`kind: business`, open `/v1/me/chats/{id}`), a people chat (`kind: person`, open `/v1/me/people/{id}`) or a group (`kind: group`, open `/v1/me/groups/{id}`, with `group`).'
       properties:
         kind:
           type: string
-          enum: [business, person]
+          enum: [business, person, group]
         id:
           type: string
           format: uuid
@@ -41526,6 +43275,9 @@ components:
         person:
           $ref: '#/components/schemas/PersonCard'
           description: 'A people chat''s other person as their settings let you see them: photo, last seen and online. None once they deleted their account.'
+        group:
+          $ref: '#/components/schemas/Group'
+          description: 'A group: as `GET /v1/me/groups` shows it (photo, members, role, left, mentioned).'
     PeopleFound:
       type: object
       additionalProperties: false
@@ -41546,6 +43298,285 @@ components:
           type: string
           format: date-time
           description: 'Starred: when you starred it.'
+    Group:
+      type: object
+      additionalProperties: false
+      required: [id, kind, name, description, photo, members, role, left, admins_only_post, admins_only_edit, approve_joins, can_post, can_edit, muted, archived, mentions, unread, mentioned, last, last_mine, last_at, joined_at]
+      description: 'A group as one of its members (or someone who was one) sees it (people-chatting §9, stage 5b): one copy, kept by Taskiem, sealed under the group''s own key, readable by Taskiem''s servers; not end-to-end encrypted.'
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [group]
+        name:
+          type: string
+        description:
+          type: string
+        photo:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/PersonPhotoRef'
+        members:
+          type: integer
+          description: How many are in it now (at most 256).
+        role:
+          type: string
+          enum: [admin, member]
+        left:
+          type: boolean
+          description: 'You left or were removed (`left_how`): your copy up to then stays yours until you delete it; nothing new comes and you can''t write (A5).'
+        left_how:
+          type: string
+          enum: [left, removed]
+        admins_only_post:
+          type: boolean
+        admins_only_edit:
+          type: boolean
+          description: Only admins change the name, photo and description (on by default, A2).
+        approve_joins:
+          type: boolean
+          description: Joining by the link waits for an admin (A4).
+        can_post:
+          type: boolean
+        can_edit:
+          type: boolean
+        muted:
+          type: boolean
+        archived:
+          type: boolean
+        mentions:
+          type: boolean
+          description: A message mentioning you pushes even while the group is muted (A7).
+        unread:
+          type: integer
+        mentioned:
+          type: boolean
+          description: An unread message mentions you.
+        last:
+          type: string
+        last_mine:
+          type: boolean
+        last_sender:
+          type: string
+          description: Who wrote the last message, as you see them ("You" for you).
+        last_at:
+          type: string
+          format: date-time
+        joined_at:
+          type: string
+          format: date-time
+        join_requests:
+          type: integer
+          description: 'Admins: people waiting to join by the link.'
+        kept:
+          type: string
+    GroupMessage:
+      type: object
+      additionalProperties: false
+      required: [id, group_id, mine, sender_id, sender, kind, body, created_at]
+      description: One message of a group as a member sees it.
+      properties:
+        id:
+          type: string
+          format: uuid
+        group_id:
+          type: string
+          format: uuid
+        mine:
+          type: boolean
+        sender_id:
+          type: [string, 'null']
+          format: uuid
+        sender:
+          type: string
+          description: Who wrote it, as you see them ("You"; "Deleted account" once their account was deleted, §17 Q17).
+        kind:
+          type: string
+          enum: [text, media, card, location, event]
+        body:
+          type: string
+          description: 'The words, a caption, an event in words ("Ada added Bola"), or "This message was deleted".'
+        event:
+          type: object
+          additionalProperties: false
+          required: [type, actor_id]
+          properties:
+            type:
+              type: string
+              enum: [created, added, joined, left, removed, admin, unadmin, info, photo, settings]
+            actor_id:
+              type: string
+              format: uuid
+            target_id:
+              type: string
+              format: uuid
+        card:
+          $ref: '#/components/schemas/PeopleCard'
+        location:
+          $ref: '#/components/schemas/PeopleLocation'
+        attachment:
+          $ref: '#/components/schemas/ChatAttachment'
+        reply_to:
+          type: string
+          format: uuid
+        forwarded:
+          type: boolean
+        forwarded_many:
+          type: boolean
+        mentions:
+          type: array
+          items:
+            type: string
+            format: uuid
+        mentions_me:
+          type: boolean
+        status:
+          type: string
+          enum: [sent, delivered, read]
+          description: 'Your own messages (A6): delivered once every member now in the group has it; read once every one of them with read ticks on (theirs and yours) has read it.'
+        starred:
+          type: boolean
+        my_reaction:
+          type: string
+        reactions:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [reaction, count]
+            properties:
+              reaction:
+                type: string
+              count:
+                type: integer
+        deleted:
+          type: boolean
+        warn_transfer:
+          type: boolean
+          description: It asks for a transfer to an account (words that ask, or a share card from someone you have not added); warn before paying.
+        created_at:
+          type: string
+          format: date-time
+    GroupMember:
+      type: object
+      additionalProperties: false
+      required: [person_id, name, role, joined_at, you]
+      properties:
+        person_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        role:
+          type: string
+          enum: [admin, member]
+        joined_at:
+          type: string
+          format: date-time
+        you:
+          type: boolean
+        person:
+          $ref: '#/components/schemas/PersonCard'
+        phone:
+          type: string
+          description: Only when they chose to show their number.
+    GroupPending:
+      type: object
+      additionalProperties: false
+      required: [person_id, name, at]
+      properties:
+        person_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        at:
+          type: string
+          format: date-time
+    GroupAdded:
+      type: object
+      additionalProperties: false
+      required: [person_id, state]
+      properties:
+        person_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum: [added, invited, member, full, unavailable]
+    GroupInvite:
+      type: object
+      additionalProperties: false
+      required: [group_id, name, photo, invited_by, by, at]
+      properties:
+        group_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        photo:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/PersonPhotoRef'
+        invited_by:
+          type: string
+          format: uuid
+        by:
+          type: string
+          description: Who invited you, as you see them.
+        at:
+          type: string
+          format: date-time
+    GroupFound:
+      type: object
+      additionalProperties: false
+      required: [group_id, group, message]
+      properties:
+        group_id:
+          type: string
+          format: uuid
+        group:
+          $ref: '#/components/schemas/Group'
+        message:
+          $ref: '#/components/schemas/GroupMessage'
+        snippet:
+          type: string
+        starred_at:
+          type: string
+          format: date-time
+    GroupLink:
+      type: object
+      additionalProperties: false
+      required: [on]
+      properties:
+        on:
+          type: boolean
+        code:
+          type: string
+        url:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        words:
+          type: string
+        qr:
+          type: string
+    GroupReader:
+      type: object
+      additionalProperties: false
+      required: [person_id, name, at]
+      properties:
+        person_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        at:
+          type: [string, 'null']
+          format: date-time
     PeopleChat:
       type: object
       additionalProperties: false
@@ -42089,7 +44120,7 @@ components:
     PeoplePrivacy:
       type: object
       additionalProperties: false
-      required: [find_by_number, find_from_contacts, message, last_seen, read_ticks, photo, show_number]
+      required: [find_by_number, find_from_contacts, message, last_seen, read_ticks, photo, show_number, groups_add]
       description: A person's privacy towards other people (people-chatting §5.4).
       properties:
         find_by_number:
@@ -42109,6 +44140,9 @@ components:
         show_number:
           type: boolean
           description: The person's number is shown to people they chat with or added.
+        groups_add:
+          $ref: '#/components/schemas/PeopleAudience'
+          description: 'Who can add me to groups (5b A3): contacts (the default: only people I added), everyone, or nobody. Anyone else''s add becomes an invite that waits in my Requests.'
     PersonPhotoRef:
       type: object
       additionalProperties: false
@@ -42296,9 +44330,12 @@ components:
     YouNotifications:
       type: object
       additionalProperties: false
-      required: [messages, updates, offers, people, requests]
+      required: [messages, updates, offers, people, requests, groups]
       description: Which pushes the person's own devices get.
       properties:
+        groups:
+          type: boolean
+          description: A message in one of their groups (push kind group; an invite to a group is a request, kind group_invite).
         people:
           type: boolean
           description: A person wrote to them (push kind person).

@@ -249,3 +249,44 @@ getMyStanding
 appealMyStanding
 seenMyStanding
 getLawfulRequestCounts
+# Groups (people-chatting §9, stage 5b): files go as multipart forms and
+# come back as bytes, the app's own calls (groupPhoto, putGroupPhoto,
+# sendGroupFile, groupFile, groupLinkQR, groupLinkPhoto), as people chats'.
+listGroups
+createGroup
+listGroupInvites
+acceptGroupInvite
+declineGroupInvite
+searchGroups
+starredGroups
+forwardMessage
+joinGroupByLink
+getGroup
+putGroup
+deleteGroupForMe
+putMyGroup
+leaveGroup
+deleteGroupPhoto
+groupMembers
+addGroupMembers
+setGroupAdmin
+removeGroupMember
+blockGroupMember
+cancelGroupInvite
+groupLink
+newGroupLink
+groupLinkOff
+groupJoinRequests
+approveGroupJoin
+declineGroupJoin
+groupMessages
+sendGroupMessage
+markGroupMessage
+deleteGroupMessage
+groupMessageInfo
+groupMessageReactions
+openGroupCard
+markGroupSplitPaid
+readGroup
+typingGroup
+groupLinkPreview
