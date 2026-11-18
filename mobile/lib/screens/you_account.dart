@@ -183,6 +183,7 @@ class _YouNotificationsPageState extends State<YouNotificationsPage> {
     messages: messages ?? n.messages,
     updates: updates ?? n.updates,
     offers: offers ?? n.offers,
+    groups: n.groups,
     people: people ?? n.people,
     requests: requests ?? n.requests,
   );

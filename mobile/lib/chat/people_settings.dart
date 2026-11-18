@@ -92,6 +92,7 @@ class _PeoplePrivacyPageState extends State<PeoplePrivacyPage> {
     return PeoplePrivacy(
       findByNumber: findByNumber ?? p.findByNumber,
       findFromContacts: findFromContacts ?? p.findFromContacts,
+      groupsAdd: p.groupsAdd,
       message: message ?? p.message,
       lastSeen: lastSeen ?? p.lastSeen,
       photo: photo ?? p.photo,
