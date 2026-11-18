@@ -117,6 +117,19 @@ export function requestsWithGone(rows: PeopleChat[] | undefined, e: LiveGone): P
   return rows.filter((r) => r.id !== e.chat_id);
 }
 
+/** How often the pages poll: slowly while the live connection is open. */
+export const livePoll = (connected: boolean, fallbackMs: number) => (connected ? Math.max(fallbackMs, 60_000) : fallbackMs);
+
+/** The one Chats list has a chat with a business. */
+export const hasBusinessRow = (rows: readonly Pick<ChatListItem, "kind">[] | undefined) => !!rows?.some((r) => r.kind === "business");
+
+/** How often the one Chats list is read again: the live connection tells
+ * of people chats only, so while the list has a business row it is read as
+ * often as with no connection. */
+export function chatsPoll(connected: boolean, business: boolean, fallbackMs: number): number {
+  return business ? fallbackMs : livePoll(connected, fallbackMs);
+}
+
 /** What a connection's `ready` says of the tab (POST /v1/me/presence
  * {online}): the server starts a connection away when its address has
  * `?away=1`, which the browser's own reconnection reuses however the tab is

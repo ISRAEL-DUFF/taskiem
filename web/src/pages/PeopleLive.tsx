@@ -44,8 +44,7 @@ const NONE: PeopleLive = { connected: false, typing: EMPTY, presence: NO_PRESENC
 const Ctx = createContext<PeopleLive>(NONE);
 export const usePeopleLive = () => useContext(Ctx);
 
-/** How often the pages poll: slowly while the connection is open. */
-export const livePoll = (connected: boolean, fallbackMs: number) => (connected ? Math.max(fallbackMs, 60_000) : fallbackMs);
+export { livePoll } from "../lib/peoplelive";
 
 /** The person's side's live connection, for everything under it. */
 export function PeopleLiveProvider({ on, children }: { on: boolean; children: ReactNode }) {

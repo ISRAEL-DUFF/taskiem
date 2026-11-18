@@ -17,6 +17,8 @@ import {
   snippetParts,
   starredURL,
   threadWithGone,
+  chatsPoll,
+  hasBusinessRow,
   readySays,
   threadWithLive,
   TypingGate,
@@ -99,6 +101,17 @@ describe("the live connection's events", () => {
     expect(threadWithLive(local, "c1", { chat_id: "c1", request: false, message: msg("x", "2026-11-18T09:00:00Z") })?.map((m) => m.id)).toEqual(["x", "local-1"]);
     // An empty chat takes it.
     expect(threadWithLive([], "c1", { chat_id: "c1", request: false, message: msg("x", "2026-11-18T09:00:00Z") })?.map((m) => m.id)).toEqual(["x"]);
+  });
+
+  it("reads the Chats list every 8 seconds while it has a business row, live or not", () => {
+    expect(hasBusinessRow([row("person", "c1", "2026-11-18T10:00:00Z"), row("business", "shop", "2026-11-18T10:05:00Z")])).toBe(true);
+    expect(hasBusinessRow([row("person", "c1", "2026-11-18T10:00:00Z")])).toBe(false);
+    expect(hasBusinessRow(undefined)).toBe(false);
+    expect(chatsPoll(true, true, 8000)).toBe(8000);
+    expect(chatsPoll(false, true, 8000)).toBe(8000);
+    // People chats only: the live connection tells; a slow look as a fallback.
+    expect(chatsPoll(true, false, 8000)).toBe(60_000);
+    expect(chatsPoll(false, false, 8000)).toBe(8000);
   });
 
   it("says in front on a reconnection that reused ?away=1, and away on one opened in front", () => {

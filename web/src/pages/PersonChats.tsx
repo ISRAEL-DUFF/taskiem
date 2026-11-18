@@ -48,8 +48,8 @@ import { NewChatSheet, ShareToPerson } from "./People";
 import { peopleDraft } from "./PeopleChat";
 import { photoOf as peoplePhoto, requestsWords, rowKey, rowPath, rowPreview, type ChatList, type ChatListItem } from "../lib/people";
 import { usePagedList } from "../lib/usePagedList";
-import { rowsWithChat } from "../lib/peoplelive";
-import { livePoll, usePeopleLive } from "./PeopleLive";
+import { chatsPoll, hasBusinessRow, rowsWithChat } from "../lib/peoplelive";
+import { usePeopleLive } from "./PeopleLive";
 import { MoreRows } from "./MoreRows";
 
 // A person's chats with businesses, on their own side (You;
@@ -118,8 +118,13 @@ export function PersonChatList() {
   // while (slowly while the live connection tells what changes); each list
   // (archived or not) is its own, so a toggle never shows the other's rows
   // while its own are on their way.
-  const list = usePagedList<ChatList, ChatListItem>(`/v1/me/conversations${archived ? "?archived=1" : ""}`, (r) => r.chats ?? [], rowKey, livePoll(live.connected, POLL_MS * 2));
+  // Business rows change only by polling (the live connection tells of
+  // people chats): every 8 seconds while the list has one.
+  const [business, setBusiness] = useState(false);
+  const list = usePagedList<ChatList, ChatListItem>(`/v1/me/conversations${archived ? "?archived=1" : ""}`, (r) => r.chats ?? [], rowKey, chatsPoll(live.connected, business, POLL_MS * 2));
   const { patch, reload } = list;
+  const hasBusiness = hasBusinessRow(list.rows);
+  useEffect(() => setBusiness(hasBusiness), [hasBusiness]);
   // A people chat's change is put in place at once; the list is read again
   // a moment later for what is the whole list's (unread, requests).
   const soon = useRef<number>(undefined);
