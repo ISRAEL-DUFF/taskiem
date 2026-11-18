@@ -100,6 +100,29 @@ Kit notes that explain most tags:
 | Standing notice | `chat/people_standing.dart` `StandingNotice` | Top of You when unseen | A short notice | [off] hand-made box with web danger tokens (the app has `TkCallout`) |
 | Live updates and presence | `chat/people_live.dart`, `app/presence.dart` | Behind You | No screen | n/a |
 
+## 5b. Groups (stage 5b, branch `stage5b-groups-app`)
+
+Built in the app's own look from the start (no `TkButton`, web modal, `TkRadio` or `TkChoiceRow`; every sheet in `TkAppLook`; guarded by `test/groups_test.dart`'s look test), so listed for the founder's review rather than as web borrowings. Where a group screen reuses a 5a part, the 5a part's tag above still applies.
+
+| Screen | File | Reached from | Holds | Look today |
+| --- | --- | --- | --- | --- |
+| A group | `chat/group_chat.dart` `GroupChatScreen` | You › Chats, a push, a link | Messages with each sender's name and face, events and Taskiem's as centred pills, reaction chips with counts, @mention picker, Read by, closed/left/admins-only callouts | [fine] head with the round Search button and ⋯; the bubble is 5a's `PeopleBubble` (its [off] notes above hold), the reactions are chips with counts as main's |
+| Message info (Read by) | `chat/group_chat.dart` `showReadBy` | Hold your message › Info | Read by, delivered to, how many don't have it | [fine] |
+| Who reacted | `chat/group_chat.dart` `showGroupReactions` | Hold a message, or hold a reaction chip | Each member's reaction | [fine] |
+| Group info | `chat/group_info.dart` `GroupInfoScreen` | A group's head or ⋯ | Top card (photo, name, description, Add people, Invite link, Edit), waiting to join, notifications switches, settings (who posts, who edits, approve new members), members, invited, archive, report, leave, delete, where groups are kept | [fine] |
+| Edit the group | `chat/group_info.dart` `_InfoForm` | Group info › Edit | Name, description | [fine] `TkFormSheet` |
+| Invite link | `chat/group_info.dart` `GroupLinkScreen` | Group info › Invite link | Top card with QR on `qrGround`, Share and Copy, replace, turn off, approve new members | [fine] |
+| Report a group or a member | `chat/group_info.dart` `_ReportSheet` | Group info, a member, ⋯ | Reason, note, consent, then leave or block | [fine] `TkFormSheet`, app ticks |
+| Appeal a closed group | `chat/group_info.dart` `_AppealSheet` | The closed callout, Group info | Why it should open | [fine] |
+| New group | `chat/group_new.dart` `NewGroupScreen` | New chat › New group | Photo, name, description, people, Make the group | [fine] |
+| People to add | `chat/groups.dart` `pickGroupPeople` | New group, Group info › Add people | Contacts and chats with a search and app ticks | [fine] |
+| Add answers | `chat/groups.dart` `showGroupAdded` | After adding | Each person's answer in the server's words | [fine] |
+| Forward to chats and groups | `chat/groups.dart` `pickChatsAndGroups` | Forward in a group or a people chat | People chats and groups with app ticks | [fine] (5a's `_PeoplePicker` stays for Share with) |
+| Join a group | `chat/group_new.dart` `GroupJoinScreen` | A `/g/{code}` link, a scanned QR, New chat's link box | Photo, name, count, Join, waiting, take back | [fine] |
+| Invites to groups | `chat/group_new.dart` `GroupInvitesSection` | Requests | Accept, Decline | [fine]; sits in 5a's Requests screen ([off] above) |
+| Choices, confirms and actions | `chat/groups.dart` `pickOneOf`, `askSure`, `pickAction` | Settings, delete, leave, member actions | App-look sheets in place of the web's modals | [fine]; 5a screens could move onto them |
+| Who can add me to groups | `chat/people_settings.dart` (a row) | Privacy with people | My contacts, Everyone, Nobody | [fine] a `pickOneOf` sheet; the page's other rows keep their [minor] note |
+
 ## 6. Shared parts the branch added or changed
 
 | Part | File | Note |

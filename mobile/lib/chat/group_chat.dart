@@ -974,7 +974,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
         if (live && m.card?.type != 'split') MenuItem('forward', 'Forward', () => _forward(m)),
         if (live) MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => d.star(m)),
         if (m.mine && live) MenuItem('info', 'Info', () => showReadBy(context, d, m)),
-        if (live && (m.reactions ?? const []).isNotEmpty) MenuItem('smile', 'Who reacted', () => showGroupReactions(context, d, m)),
+        if (live && (m.reactions ?? const []).isNotEmpty) MenuItem('emoji', 'Who reacted', () => showGroupReactions(context, d, m)),
         MenuItem('trash', 'Delete', () => _delete(m), danger: true, separated: true),
       ],
     );
