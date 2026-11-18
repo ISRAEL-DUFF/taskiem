@@ -3,7 +3,6 @@
 // its Discover profile, a product from a business's shop in its chat, and a
 // delivery from an order's page once a rider has it, each into chats picked.
 
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:taskiem/chat/discover.dart' show DiscoverProfileScreen;
 import 'package:taskiem/chat/your_orders.dart' show YourOrderPage;
