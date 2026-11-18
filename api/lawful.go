@@ -65,6 +65,10 @@ type lawfulRequest struct {
 	RefusedReason *string    `json:"refused_reason"`
 	ToldAt        *time.Time `json:"told_at"`
 	NotToldReason *string    `json:"not_told_reason"`
+	// Groups: whether the request asks for the person's group messages:
+	// none; sent (their own messages in groups); seen (every group message
+	// they could see, within their own time in each group).
+	Groups string `json:"groups"`
 }
 
 func (s *Server) lawfulTx(r *http.Request, id *uuid.UUID) ([]lawfulRequest, error) {
@@ -121,6 +125,7 @@ func (s *Server) opsRecordLawful(w http.ResponseWriter, r *http.Request) {
 		Files        bool       `json:"files"`
 		ScopeNote    string     `json:"scope_note"`
 		ReceivedAt   time.Time  `json:"received_at"`
+		Groups       string     `json:"groups"`
 		StepUp       *opsStepUp `json:"step_up,omitempty"`
 	}
 	if err := decodeBody(r, &req); err != nil {
@@ -142,6 +147,14 @@ func (s *Server) opsRecordLawful(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnprocessableEntity, "name the person (person_id), the dates asked for (from before to) and when it was received (received_at)")
 		return
 	}
+	switch req.Groups {
+	case "":
+		req.Groups = "none"
+	case "none", "sent", "seen":
+	default:
+		writeErr(w, http.StatusUnprocessableEntity, "groups is none, sent (the person's own messages in groups) or seen (every group message they could see)")
+		return
+	}
 	if utf8.RuneCountInString(req.ScopeNote) > 1000 {
 		writeErr(w, http.StatusUnprocessableEntity, "scope_note is up to 1,000 characters")
 		return
@@ -152,12 +165,12 @@ func (s *Server) opsRecordLawful(w http.ResponseWriter, r *http.Request) {
 	o := operatorFrom(ctx)
 	id := uuid.Must(uuid.NewV7())
 	err := s.opsTx(r, func(tx pgx.Tx, _ func(uuid.UUID) error) error {
-		if _, err := tx.Exec(ctx, `SELECT taskiem_ops_lawful_record($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`, id, req.Authority, req.Reference,
-			req.LegalBasis, req.PersonID, req.From, req.To, req.WithPersonID, req.Files, req.ScopeNote, req.ReceivedAt, o.Actor()); err != nil {
+		if _, err := tx.Exec(ctx, `SELECT taskiem_ops_lawful_record($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`, id, req.Authority, req.Reference,
+			req.LegalBasis, req.PersonID, req.From, req.To, req.WithPersonID, req.Files, req.ScopeNote, req.ReceivedAt, o.Actor(), req.Groups); err != nil {
 			return err
 		}
 		return ops.AuditTx(ctx, tx, o.Actor(), "ops.lawful.record", id.String(), map[string]any{"authority": req.Authority, "reference": req.Reference,
-			"person": req.PersonID, "from": req.From, "to": req.To, "with": req.WithPersonID, "files": req.Files})
+			"person": req.PersonID, "from": req.From, "to": req.To, "with": req.WithPersonID, "files": req.Files, "groups": req.Groups})
 	})
 	if err != nil {
 		s.opsDBFail(w, r, err)
@@ -284,6 +297,7 @@ func (s *Server) opsLawfulExport(w http.ResponseWriter, r *http.Request) {
 	}
 	person := *lr.PersonID
 	var chats []lawfulChat
+	var groups []lawfulGroup
 	given, files := 0, 0
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 		key, err := s.keys().KeyTx(ctx, tx, person, false)
@@ -366,6 +380,11 @@ func (s *Server) opsLawfulExport(w http.ResponseWriter, r *http.Request) {
 		}
 		return nil
 	})
+	if err == nil && lr.Groups != "none" {
+		var n, f int
+		groups, n, f, err = s.lawfulGroupsExport(ctx, person, lr)
+		given, files = given+n, files+f
+	}
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -377,7 +396,8 @@ func (s *Server) opsLawfulExport(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		return ops.AuditTx(ctx, tx, o.Actor(), "ops.lawful.export", id.String(), map[string]any{"why": "lawful request " + lr.Reference,
-			"authority": lr.Authority, "person": person, "from": lr.From, "to": lr.To, "with": lr.WithPersonID, "messages": given, "files": files})
+			"authority": lr.Authority, "person": person, "from": lr.From, "to": lr.To, "with": lr.WithPersonID, "groups": lr.Groups, "group_count": len(groups),
+			"messages": given, "files": files})
 	})
 	if err != nil {
 		s.opsDBFail(w, r, err)
@@ -385,7 +405,8 @@ func (s *Server) opsLawfulExport(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Disposition", `attachment; filename="lawful-request-`+id.String()+`.json"`)
-	writeJSON(w, http.StatusOK, map[string]any{"request": lr, "person_id": person, "chats": nonNil(chats), "messages_given": given, "files_given": files,
+	writeJSON(w, http.StatusOK, map[string]any{"request": lr, "person_id": person, "chats": nonNil(chats), "groups": nonNil(groups), "messages_given": given,
+		"files_given": files,
 		"exported_by": o.Actor(), "exported_at": time.Now().UTC()})
 }
 

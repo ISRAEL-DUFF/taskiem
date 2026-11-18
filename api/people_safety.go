@@ -19,7 +19,6 @@ import (
 	"github.com/israel-duff/taskiem/engine/ops"
 	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/peoplesafety"
-	"github.com/israel-duff/taskiem/engine/push"
 	"github.com/israel-duff/taskiem/engine/telemetry"
 )
 
@@ -121,6 +120,12 @@ type heldContent struct {
 // with its verdict's reasons, for moderators to release or confirm
 // (§8.4). The recipient gets nothing.
 func (s *Server) holdTx(ctx context.Context, tx pgx.Tx, me, peer, chat uuid.UUID, d peopleDraft, reasons []string) error {
+	return s.keepHeldTx(ctx, tx, me, &peer, &chat, nil, d, nil, reasons)
+}
+
+// keepHeldTx keeps a held message: of a one-to-one chat (peer, the
+// sender's copy chat) or of a group (group, with the mentions).
+func (s *Server) keepHeldTx(ctx context.Context, tx pgx.Tx, me uuid.UUID, peer, chat, group *uuid.UUID, d peopleDraft, mentions []uuid.UUID, reasons []string) error {
 	if s.Vault == nil {
 		return nil
 	}
@@ -149,22 +154,29 @@ func (s *Server) holdTx(ctx context.Context, tx pgx.Tx, me, peer, chat uuid.UUID
 	if reasons == nil {
 		reasons = []string{}
 	}
+	if mentions == nil {
+		mentions = []uuid.UUID{}
+	}
 	_, err = tx.Exec(ctx, `INSERT INTO people_held (id, sender_id, recipient_id, chat_id, kind, reply_to, forwards, reasons, sealed, file_sealed, file_type,
-		file_size, box_key, kms_key) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-		id, me, peer, chat, d.kind, d.replyTo, d.forwards, reasons, sealed, fileSealed, fileType, fileSize, box.Sealed, box.KMSKey)
+		file_size, box_key, kms_key, group_id, mentions) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+		id, me, peer, chat, d.kind, d.replyTo, d.forwards, reasons, sealed, fileSealed, fileType, fileSize, box.Sealed, box.KMSKey, group, mentions)
 	return err
 }
 
 // reportMessage is one message of a report, as moderators read it.
 type reportMessage struct {
-	ID           *uuid.UUID      `json:"id,omitempty"`
-	FromReporter bool            `json:"from_reporter"`
-	Kind         string          `json:"kind"`
-	Body         string          `json:"body"`
-	Card         *peopleCard     `json:"card,omitempty"`
-	Location     *peopleLocation `json:"location,omitempty"`
-	Attachment   map[string]any  `json:"attachment,omitempty"`
-	Deleted      bool            `json:"deleted,omitempty"`
+	ID           *uuid.UUID `json:"id,omitempty"`
+	FromReporter bool       `json:"from_reporter"`
+	// SenderID and Sender: who sent it, in a group's report (their own
+	// name; "The reporter" for the reporter).
+	SenderID   *uuid.UUID      `json:"sender_id,omitempty"`
+	Sender     string          `json:"sender,omitempty"`
+	Kind       string          `json:"kind"`
+	Body       string          `json:"body"`
+	Card       *peopleCard     `json:"card,omitempty"`
+	Location   *peopleLocation `json:"location,omitempty"`
+	Attachment map[string]any  `json:"attachment,omitempty"`
+	Deleted    bool            `json:"deleted,omitempty"`
 	// File: the photo or file is kept with the report (FileLeftOut: it
 	// was not, the report's files being full).
 	File        bool      `json:"file,omitempty"`
@@ -509,22 +521,7 @@ func (s *Server) seenStanding(w http.ResponseWriter, r *http.Request) {
 // devices (a push on You opening Your standing); the standing itself is
 // the notice You shows.
 func (s *Server) tellStanding(ctx context.Context, person uuid.UUID, title, body string) {
-	if s.Push == nil || !s.Push.Enabled() {
-		return
-	}
-	err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		live, err := push.LiveYouTx(ctx, tx, person, s.Push.WebPushOn(), s.Push.FCMOn())
-		if err != nil || !live {
-			return err
-		}
-		if len([]rune(body)) > 160 {
-			body = string([]rune(body)[:160]) + "…"
-		}
-		return push.EnqueueTx(ctx, tx, uuid.Nil, []uuid.UUID{person}, push.Queued{Kind: push.KindYou, Title: title, Body: body, Link: standingLink, Tag: "standing"})
-	})
-	if err != nil {
-		s.Logger.Warn("people safety: push", "err", err)
-	}
+	s.tellYou(ctx, person, title, body, standingLink, "standing")
 }
 
 // standingLink is where the person reads their standing.
@@ -585,6 +582,9 @@ func (s *Server) SafetyTick(ctx context.Context) error {
 		if err := s.closeAccount(ctx, d[0], d[1]); err != nil {
 			errs = append(errs, err)
 		}
+	}
+	if err := s.closeGroupsDue(ctx); err != nil {
+		errs = append(errs, err)
 	}
 	if err := s.sweepPeople(ctx); err != nil {
 		errs = append(errs, err)

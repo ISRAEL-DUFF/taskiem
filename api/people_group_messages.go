@@ -42,8 +42,11 @@ type groupMsgRow struct {
 	deletedAt, paidAt *time.Time
 	paidBy            *uuid.UUID
 	createdAt         time.Time
-	starredAt         *time.Time
-	myReaction        *string
+	// screen: the checks warned of it (B1): shown with the warning to the
+	// members who haven't added its sender.
+	screen     *string
+	starredAt  *time.Time
+	myReaction *string
 }
 
 // groupMsgColsAs are a group message's columns from alias a, each named
@@ -53,12 +56,12 @@ func groupMsgColsAs(a string) string {
 		a + ".sealed AS " + a + "_sealed, " + a + ".event AS " + a + "_event, " + a + ".attachment AS " + a + "_attach, " +
 		a + ".card_type AS " + a + "_card, " + a + ".reply_to AS " + a + "_reply, COALESCE(" + a + ".forwards, 0) AS " + a + "_forwards, " +
 		a + ".mentions AS " + a + "_mentions, " + a + ".deleted_at AS " + a + "_deleted, " + a + ".paid_at AS " + a + "_paid, " +
-		a + ".paid_by AS " + a + "_paid_by, COALESCE(" + a + ".created_at, 'epoch') AS " + a + "_at"
+		a + ".paid_by AS " + a + "_paid_by, COALESCE(" + a + ".created_at, 'epoch') AS " + a + "_at, " + a + ".screen AS " + a + "_screen"
 }
 
 func (m *groupMsgRow) dest() []any {
 	return []any{&m.id, &m.sender, &m.kind, &m.sealed, &m.evRaw, &m.attach, &m.cardType, &m.replyTo, &m.forwards, &m.mentions,
-		&m.deletedAt, &m.paidAt, &m.paidBy, &m.createdAt}
+		&m.deletedAt, &m.paidAt, &m.paidBy, &m.createdAt, &m.screen}
 }
 
 func (m *groupMsgRow) decode() {
@@ -73,7 +76,7 @@ func (m *groupMsgRow) decode() {
 // groupMsgSelect reads a group's messages for the person ($1) in a group
 // ($2), with their own star and reaction; never one deleted for them.
 // Row-level security keeps it to their time in the group.
-const groupMsgSelect = `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at" + `,
+const groupMsgSelect = `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen" + `,
 	k.starred_at, (SELECT r.reaction FROM group_reactions r WHERE r.group_id = x.group_id AND r.message_id = x.id AND r.person_id = $1)
 	FROM group_messages x LEFT JOIN group_marks k ON k.group_id = x.group_id AND k.message_id = x.id AND k.person_id = $1
 	WHERE x.group_id = $2 AND k.hidden_at IS NULL`
@@ -135,8 +138,12 @@ type groupMessage struct {
 	// WarnTransfer: it asks for a transfer to an account (a share card
 	// from someone the person has not added, or words that ask): warn
 	// before paying.
-	WarnTransfer bool      `json:"warn_transfer,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
+	WarnTransfer bool `json:"warn_transfer,omitempty"`
+	// Warn: the checks found it looks like a scam (B1), and the person
+	// hasn't added its sender: "Never send money to someone you have not
+	// met".
+	Warn      bool      `json:"warn,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // groupEventOut is an event message's what and who.
@@ -168,7 +175,7 @@ func (s *Server) groupMessagesTx(ctx context.Context, tx pgx.Tx, person, group u
 				mine = append(mine, m.id)
 			}
 		}
-		if m.ev != nil {
+		if m.ev != nil && !taskiemEvent(m.ev) {
 			people = append(people, m.ev.Actor)
 			if m.ev.Target != nil {
 				people = append(people, *m.ev.Target)
@@ -206,9 +213,12 @@ func (s *Server) groupMessagesTx(ctx context.Context, tx pgx.Tx, person, group u
 		v := groupMessage{ID: m.id, GroupID: group, SenderID: m.sender, Kind: m.kind, ReplyTo: m.replyTo, Forwarded: m.forwards > 0,
 			ForwardedMany: m.forwards >= peopleForwardedMany, Mentions: m.mentions, Starred: m.starredAt != nil, CreatedAt: m.createdAt}
 		v.Mine = m.sender != nil && *m.sender == person
-		if m.sender != nil {
+		switch {
+		case m.sender != nil:
 			v.Sender = names[*m.sender]
-		} else {
+		case taskiemEvent(m.ev):
+			v.Sender = "Taskiem"
+		default:
 			v.Sender = peopleGoneName
 		}
 		v.MentionsMe = slices.Contains(m.mentions, person)
@@ -254,6 +264,12 @@ func (s *Server) groupMessagesTx(ctx context.Context, tx pgx.Tx, person, group u
 				known = cards[*m.sender].InContacts
 			}
 			v.WarnTransfer = (v.Kind == "text" && warnTransfer(v.Body)) || (v.Card != nil && v.Card.Type == "split" && v.Card.PayTo != nil && !known)
+			// The checks' mark shows only to those who haven't added the
+			// sender (B1).
+			if m.screen != nil && !known {
+				v.Warn = true
+				v.WarnTransfer = v.WarnTransfer || *m.screen == "transfer"
+			}
 		}
 		out = append(out, v)
 	}
@@ -400,8 +416,9 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 	var out groupMessage
 	var again *groupMessage
 	var owed *groupPush
+	var held error
 	err := s.peopleTx(ctx, me, func(tx pgx.Tx) error {
-		out, again, owed = groupMessage{}, nil, nil
+		out, again, owed, held = groupMessage{}, nil, nil, nil
 		g, err := groupTx(ctx, tx, me, groupID, true)
 		if err != nil {
 			return err
@@ -425,6 +442,9 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 		if st.Suspended {
 			return errPeopleYouSuspended
 		}
+		if err := g.open(); err != nil {
+			return err
+		}
 		if g.AdminsOnlyPost && g.Role != "admin" {
 			return errGroupAdminPost
 		}
@@ -437,7 +457,7 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 			g.ID, me).Scan(&n); err != nil {
 			return err
 		}
-		if n >= limitFor(groupMessagesPerMinute, newWeek || st.Limited) {
+		if n >= limitFor(groupMessagesPerMinute, newWeek || st.Limited) && !d.released {
 			return customerSendErr{http.StatusTooManyRequests, "You are sending messages very fast. Wait a moment and try again."}
 		}
 		if d.replyTo != nil {
@@ -462,6 +482,23 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 		}
 		if tagged == nil {
 			tagged = []uuid.UUID{}
+		}
+		// The checks (B1): in a group younger than a week, or from someone
+		// who joined it by its link in the last day, a message the members
+		// who haven't added its sender would get is checked; only the
+		// verdict is kept. Held: no one gets it (one copy), and it is kept
+		// sealed for moderators; nothing else is written.
+		screen, err := s.groupScreenTx(ctx, tx, me, g, d)
+		if err != nil {
+			return err
+		}
+		if screen.held {
+			held = customerSendErr{http.StatusForbidden, peopleHeldWords}
+			return s.holdGroupTx(ctx, tx, me, g.ID, d, tagged, screen.reasons)
+		}
+		var screenMark *string
+		if screen.warn != "" {
+			screenMark = &screen.warn
 		}
 		key, err := s.keys().GroupKeyTx(ctx, tx, g.ID)
 		if err != nil {
@@ -492,9 +529,9 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 			clientID = &d.clientID
 		}
 		var at time.Time
-		if err := tx.QueryRow(ctx, `INSERT INTO group_messages (group_id, id, sender_id, kind, sealed, attachment, card_type, reply_to, forwards, client_id, mentions)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING created_at`,
-			g.ID, id, me, d.kind, sealed, attach, cardType, d.replyTo, d.forwards, clientID, tagged).Scan(&at); err != nil {
+		if err := tx.QueryRow(ctx, `INSERT INTO group_messages (group_id, id, sender_id, kind, sealed, attachment, card_type, reply_to, forwards, client_id, mentions,
+			screen) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING created_at`,
+			g.ID, id, me, d.kind, sealed, attach, cardType, d.replyTo, d.forwards, clientID, tagged, screenMark).Scan(&at); err != nil {
 			return err
 		}
 		if toks := peoplechats.Tokens(peoplechats.GroupSearchKey(key, g.ID), searchTexts(content)...); len(toks) > 0 {
@@ -531,6 +568,9 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 	})
 	if again != nil {
 		return *again, false, nil
+	}
+	if err == nil && held != nil {
+		return out, false, held
 	}
 	if err != nil {
 		if isUnique(err) && d.clientID != "" {
@@ -1466,7 +1506,7 @@ func (s *Server) searchGroups(w http.ResponseWriter, r *http.Request) {
 		}
 		cur := before
 		for round := 0; round < peopleSearchRounds; round++ {
-			sql := `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at" + `,
+			sql := `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen" + `,
 				k.starred_at, (SELECT r.reaction FROM group_reactions r WHERE r.group_id = x.group_id AND r.message_id = x.id AND r.person_id = $1), x.group_id
 				FROM group_messages x LEFT JOIN group_marks k ON k.group_id = x.group_id AND k.message_id = x.id AND k.person_id = $1
 				WHERE k.hidden_at IS NULL AND x.deleted_at IS NULL AND x.sealed IS NOT NULL
@@ -1544,7 +1584,7 @@ func (s *Server) starredGroups(w http.ResponseWriter, r *http.Request) {
 	out := []groupFound{}
 	more := false
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		sql := `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at" + `,
+		sql := `SELECT ` + "x.id, x.sender_id, x.kind, x.sealed, x.event, x.attachment, x.card_type, x.reply_to, x.forwards, x.mentions, x.deleted_at, x.paid_at, x.paid_by, x.created_at, x.screen" + `,
 			k.starred_at, (SELECT r.reaction FROM group_reactions r WHERE r.group_id = x.group_id AND r.message_id = x.id AND r.person_id = $1), x.group_id
 			FROM group_marks k JOIN group_messages x ON x.group_id = k.group_id AND x.id = k.message_id
 			WHERE k.person_id = $1 AND k.starred_at IS NOT NULL AND k.hidden_at IS NULL AND x.deleted_at IS NULL`

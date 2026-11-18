@@ -185,3 +185,26 @@ func (p *People) VerdictsSince(ctx context.Context, from uuid.UUID, since time.T
 	})
 	return
 }
+
+// ScreenGroupTx checks a message from from to a group (5b B1: the members
+// who have not added from, while the group is young or from joined it by
+// a link lately), in from's own transaction, as ScreenStrangerTx does: a
+// warn or hold is kept with the group and no recipient (one verdict for
+// the group's one copy), never the words.
+func (p *People) ScreenGroupTx(ctx context.Context, tx pgx.Tx, from, group uuid.UUID, text string) (Verdict, error) {
+	v := Screen(text)
+	if v.Verdict == VerdictOK {
+		return v, nil
+	}
+	var n int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM people_screen_verdicts WHERE from_person = $1 AND at > $2`,
+		from, p.now().Add(-24*time.Hour)).Scan(&n); err != nil {
+		return v, err
+	}
+	if n >= RepeatHold && v.Verdict == VerdictWarn {
+		v = Verdict{Verdict: VerdictHold, Reasons: append(v.Reasons, ReasonRepeat)}
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO people_screen_verdicts (id, from_person, to_person, verdict, reasons, at, group_id) VALUES ($1, $2, NULL, $3, $4, $5, $6)`,
+		uuid.Must(uuid.NewV7()), from, v.Verdict, v.Reasons, p.now(), group)
+	return v, err
+}
