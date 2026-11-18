@@ -1,6 +1,6 @@
 # Field work: jobs done at customers' places, the staff who do them, and where they are
 
-Status: **Draft** 2026-11-18, for review, not scheduled · Decision: [0070](../decisions/0070-field-work-and-isps.md) (proposed) · Workstream **F0 to F9**, one pull request per milestone · Written with the founder · First business to use it: an internet provider ([the ISP area](isps.md)) · Replaces: ISPOps, the founder's field-agent system (backend, admin portal, field app, customer app), absorbed here and retired
+Status: **Draft** 2026-11-18, for review, not scheduled · Decision: [0070](../decisions/0070-field-work-and-isps.md) (proposed) · Workstream **F0 to F9**, one pull request per milestone · Written with the founder · First business to use it: an internet provider ([the ISP area](isps.md)) · Replaces: ISPOps, the founder's field-agent system (backend, admin portal, field app, customer app), absorbed here and retired; its repositories and where each feature's implementation is: [§20.1](#201-where-to-find-it-in-ispops)
 
 A business whose staff go out to customers (an internet provider installing and repairing lines, a solar installer, a CCTV company, a generator or air-conditioner repairer, a cleaning firm) needs the same things whatever it sells:
 
@@ -405,6 +405,36 @@ ISPOps is the founder's own code (Go backend, React admin portal, Flutter field 
 | Agents' bank details and name check | Members' bank account for pay lists (§17) | Carried over if needed |
 
 When the business is running on Taskiem, the four ISPOps repositories are archived.
+
+### 20.1 Where to find it in ISPOps
+
+The implementation details to port are in four private repositories (read them for the design; write Taskiem's in its own conventions):
+
+| Repository | What it is |
+| --- | --- |
+| [ISRAEL-DUFF/ispops-backend](https://github.com/ISRAEL-DUFF/ispops-backend) | Go API and PostgreSQL schema: the source of truth for the model and the rules |
+| [ISRAEL-DUFF/exact-hue-hearth](https://github.com/ISRAEL-DUFF/exact-hue-hearth) | The admin portal (React, TanStack Router): what the office sees |
+| [ISRAEL-DUFF/ispops-mobile](https://github.com/ISRAEL-DUFF/ispops-mobile) | The field agent's app (Flutter, package `field_agent`) |
+| [ISRAEL-DUFF/ispops-customer-app](https://github.com/ISRAEL-DUFF/ispops-customer-app) | The customer app (React PWA), replaced by PR #198 |
+
+| For | Look at |
+| --- | --- |
+| The job, its statuses, assignments, notes, history (§6, §7) | backend `migrations/000001_initial_schema.up.sql` (`jobs`, `job_status_history`, `job_notes`, `agent_assignments`), `migrations/000013_multi_job_assignment.up.sql`, `internal/service/job/service.go`; every route in `internal/httpapi/server.go` |
+| Templates, checklists and schedules (§6, §8) | backend `migrations/000018_job_templates_schedules.up.sql`, `migrations/000020_job_checklist.up.sql`, `internal/service/scheduling`; portal `src/routes/_app.scheduling.tsx` |
+| Steps with time and place, offline idempotency (§7, §12) | backend `clock_events` and `sync_queue_log` in `migrations/000001_initial_schema.up.sql`, `internal/service/clock/service.go` (and its completion policy), routes `/clock/in`, `/clock/out`, `/clock/sync`; app `lib/features/home/home_provider.dart`, `lib/features/home/clock_in_sheet.dart`, `lib/core/sync/sync_provider.dart`, `lib/core/database/tables.dart` |
+| The completion photo rule (§4) | backend `migrations/000019_completion_photo_and_schedule_health.up.sql`, `migrations/000016_attachments.up.sql` |
+| Location reports and the live map (§10) | backend `migrations/000008_agent_location_pings.up.sql`, `internal/httpapi/location_handler.go`; app `lib/core/location/location_service.dart`; portal `src/components/job-map.tsx`, `src/routes/_app.dashboard.tsx` |
+| Agent states, suggestions when assigning (§9, §10) | backend routes `/users/agents/status`, `/users/agents/available`; portal `src/routes/_app.agents.tsx`, `src/routes/_app.jobs.new.tsx` |
+| The office's job page (§15) | portal `src/components/job-detail-panel.tsx`, `src/routes/_app.jobs.$jobId.tsx` |
+| Stock with agents (§13) | backend `migrations/000017_inventory.up.sql`, `internal/service/inventory`; portal `src/routes/_app.inventory.tsx` |
+| Ratings (§14) | backend `migrations/000004_ratings.up.sql`, `internal/service/rating`; customer app `src/routes/$slug.rate.$jobId.tsx` |
+| Visit windows (§14) | backend `migrations/000003_customer_pwa.up.sql` (`availability_windows`); customer app `src/routes/$slug._app.availability.tsx`; portal `src/routes/_app.availability.tsx` |
+| Reports and the board's figures (§15) | backend `internal/httpapi/reports_handler.go`, `internal/httpapi/stats_handler.go`; portal `src/routes/_app.reports.tsx` |
+| Settings (§4) | portal `src/routes/_app.settings.tsx`; backend `organization_settings` |
+| Push to the app (§11) | app `lib/core/notifications/fcm_service.dart` |
+| Payroll through Payrolla (§17) | backend `internal/service/payroll` |
+
+**Known faults not to carry over** (found when ISPOps was read, 18 November 2026): the app's offline queue is never filled (`SyncDao.enqueue` has no caller), so clocking fails offline; the weak-GPS check in `clock_in_sheet.dart` compares accuracy with a colour's hash; a failed Depart is swallowed silently; the app handles one job at a time and ignores `on_hold` and `closed`; location is sent in the foreground only and dropped when offline.
 
 ## 21. Milestones
 
