@@ -147,6 +147,10 @@ CREATE INDEX people_moderation_group ON people_moderation (group_id, created_at)
 -- A group's admins read the actions on it (to appeal a closure).
 CREATE POLICY group_admin_read ON people_moderation FOR SELECT TO taskiem_app
   USING (group_id IS NOT NULL AND taskiem_person_business() IS NULL AND taskiem_group_admin(group_id));
+-- An admin's appeal takes the closure's lock (as its carrying out does);
+-- nothing of the action is theirs to change.
+CREATE POLICY group_admin_lock ON people_moderation FOR UPDATE TO taskiem_app
+  USING (group_id IS NOT NULL AND taskiem_person_business() IS NULL AND taskiem_group_admin(group_id)) WITH CHECK (false);
 
 -- An appeal of an action on a group is made by one of its admins, once;
 -- the group's admins read it.
@@ -914,6 +918,7 @@ CREATE POLICY person_own ON people_appeals TO taskiem_app
   USING (taskiem_person_business() IS NULL AND person_id = taskiem_person_scope())
   WITH CHECK (taskiem_person_business() IS NULL AND person_id = taskiem_person_scope() AND state = 'open'
     AND EXISTS (SELECT 1 FROM people_moderation m WHERE m.id = action_id AND m.person_id = taskiem_person_scope()));
+DROP POLICY group_admin_lock ON people_moderation;
 DROP POLICY group_admin_read ON people_moderation;
 DROP INDEX people_moderation_group;
 -- Appeals of groups' actions go with them.
