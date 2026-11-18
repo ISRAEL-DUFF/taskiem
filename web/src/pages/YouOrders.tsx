@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { del, get, post, put } from "../api";
 import { Icon } from "../icons";
+import { ShareToPerson } from "./People";
 import { getDraft, setDraft } from "../lib/drafts";
 import { aboutOrderDraft, deliveryStep, photoURL, stateWords, waitingWords } from "../lib/personchat";
 import { dayLabel, lagosDay, lagosTime } from "../lib/bookings";
@@ -266,6 +267,7 @@ export function YouOrder() {
   const { business = "", reference = "" } = useParams();
   const view = useLoad(() => get<PersonOrderDetail>(orderAPI({ business_id: business, reference })), [business, reference]);
   const chatAbout = useChatAbout();
+  const [sharing, setSharing] = useState(false);
   const o = view.data;
   const st = stateWords(o?.state);
   const step = o?.delivery ? deliveryStep(o.delivery) : 0;
@@ -344,7 +346,13 @@ export function YouOrder() {
             <button type="button" className={o.pay ? "" : "primary"} onClick={() => chatAbout(o)} data-testid="order-chat-about">
               <Icon name="chat" /> Chat about this
             </button>
+            <button type="button" onClick={() => setSharing(true)} data-testid="order-share">
+              <Icon name="forward" /> Share with someone
+            </button>
           </div>
+          {sharing && (
+            <ShareToPerson card={{ type: o.delivery ? "delivery" : "order", business_id: o.business_id, reference: o.reference }} what={`order ${o.reference}`} onClose={() => setSharing(false)} />
+          )}
           {o.delivery && (
             <section className="card" aria-labelledby="you-order-delivery">
               <h2 id="you-order-delivery">Delivery</h2>

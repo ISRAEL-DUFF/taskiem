@@ -609,3 +609,66 @@ Branch `stage5a-app`, on 68001463 (the two server streams joined): the Flutter a
 - Contacts are matched when the person opens From your contacts, not re-checked daily by themselves.
 - No scanner in the app: the phone's camera opens a person's QR code as a link.
 - Discover's profile has no Share yet.
+
+## As built: stage 5a, web
+
+Branch `stage5a-web`, on `stage5` (68001463, the two streams joined): the web's screens for stage 5a, on You. No server change was needed.
+
+**Words.** No screen says or suggests that people chats are end-to-end encrypted (a unit test checks the words). A chat's Contact info and the privacy page say: "Chats with people are kept by Taskiem, stored securely on its servers. No one at Taskiem reads them, except a moderator when a chat is reported to us, or when the law requires it." (`KEPT_WORDS`, `web/src/lib/people.ts`); the server's `kept` is not shown.
+
+**The one Chats list** (`PersonChatList`, `web/src/pages/PersonChats.tsx`) reads `GET /v1/me/conversations`: business and person rows together, newest first. A business row is marked "Business" (with its logo as before); a person's row has their photo when their setting shows it and is named "(a person)" to a screen reader. Each row has its unread count, last line, time, a draft, muted, and Archived apart. "Message requests" with the count sits at the top when `requests` > 0. **New chat** opens the finding sheet.
+
+**A chat with a person**, `/you/people/:id` (`web/src/pages/PeopleChat.tsx`), built from the business chat's parts (`ChatHead`, `ChatStream`, `BubbleShell`, `ComposerView`, `AppAttachmentView`, `useConfirm`, `Sheet`) and filling the window as a business chat does:
+- **The head**: the name the viewer gave them (else theirs), their photo by their setting, "online" or "last seen …" by both settings, and their number only when `phone` is given. Its menu: Contact info, Mute, Archive, Block/Unblock, Report, Delete chat.
+- **Sending**: with `client_id` (a send whose answer never came is sent again with the same one); photos, voice notes and PDFs through `…/files`; a reply's `reply_to`.
+- **Ticks** (`tickState`): one tick for `sent`, two for `delivered`, coloured only for `read`: the client never infers a read.
+- **On a message**: the reply's quote, "Forwarded" or "Forwarded many times", reactions (one of each side), star, Copy, Delete (for me; for everyone within 24 hours, then "This message was deleted"), Forward (a sheet of people chats, at most 5, 1 for one forwarded many times; failures listed).
+- **Warnings** on the receiver's side: `warn_transfer` gives the transfer warning business chats use; `warn` gives "Be careful: this message looks like a scam…".
+- **Refusals** (403 held, 409, 429) are said in the server's own words above the composer; the words go back in the box.
+- **States**: a deleted account's chat says it takes no more messages; a blocked person's offers Unblock; `waiting` says the message waits for them to accept.
+
+**Requests**: `/you/people/requests` lists them; `/you/people/requests/:id` is the same chat with Accept, Delete and Block and report in place of the composer. Opening one marks it read, which tells the sender nothing (the server's rule). Accept moves to `/you/people/:id`.
+
+**Finding people** (`web/src/pages/People.tsx`), in New chat:
+- **By number** (`POST /v1/people/lookup`): the person with **Message** and **Add to contacts** (with a name of one's own), or "Not on Taskiem yet" with Invite on WhatsApp, Invite by text and Copy, sent from the person's own device.
+- **By link**: a pasted link or code (`GET /v1/people/links/{code}`).
+- **Your link**: its QR code (`/v1/me/link/qr`), Copy, Share (the device's share, else WhatsApp) and Replace link.
+- **Contacts matching** is the phone app's. The web says so in one line.
+- **Contacts**: `/you/people/contacts`, with Message, Rename and Remove; Add someone opens New chat.
+
+**A person's link** `/p/{code}` is the web app's own page:
+- **Signed out** (or in a business): their name and photo from `GET /v1/person-links/{code}`, Chat on Taskiem (`/login?next=/p/{code}`, or a move to You) and Get the app.
+- **On You**: Message (`POST /v1/me/people {link_code}`) and Add to contacts.
+- **410** says "This link no longer works".
+
+**Settings** (on You's Settings, "Chats with people"):
+- **Privacy with people** (`/you/settings/people`): the four audiences of §5.4 and the switches for read ticks, showing the number and being found from contacts, each saved as it changes.
+- **Blocked people** (`/you/settings/blocked`), with Unblock.
+- **Your bank account** (`/you/settings/payout`).
+- **Notifications** gain "Messages from people" and "Message requests".
+
+**Block and report**: the report sheet asks why, an optional note, and consent: "Send the last 20 messages of this chat to Taskiem's moderators…". Block too is a tick (on by default from a request's Block and report, which sends `POST …/block {report}`).
+
+**Cards** (§10.1, §11 A):
+- **The share button** in a people chat's composer offers a business (one the person chats with), a product (from that business's shop, `/v1/me/chats/{id}/shop`), one of the person's orders or its delivery, or Your share.
+- **Elsewhere**: Discover's profile ("Share … with someone") and an order's page ("Share with someone") send a business or order card to a chat picked from a sheet.
+- **Opening a card** reads it live (`…/card`): a product's price now and whether it is available, a business's card, an order only when it is yours (with See your order), else what was shared. A product or business offers Chat with the business, which starts the person's own chat with it through the customer door (`from: shop`; the server takes no `shared` yet).
+- **Your share**: an amount, what for, and the saved account (or another typed), saying Taskiem moves no money. Either side's **Mark as paid** shows Paid on both.
+
+**Push**: the service worker knows the kinds `person` and `request`; their links `/you/people/{id}` and `/you/people/requests/{id}` open on You as they are. In a business's session, `/you/people/*` offers "Open it on You" (`PeopleOnYou`), as `/you/chats/:id` does.
+
+**Tests.**
+- `web/src/lib/people.test.ts`: the words (never end-to-end), names, last seen, numbers, ticks, forward caps, 24 hours, rows, link codes, accounts, merging pages, refusals. `push.test.ts`: the two kinds. `youaccount.test.ts`: the five kinds.
+- `web/e2e/people.spec.ts`, on the real server, Ada at 390 px and Bola at 360, axe in both themes at each step:
+  - Bola lets everyone find them by number. Ada finds a number that is nobody's (Invite), then Bola, adds them with a name of her own and writes: the message waits.
+  - Bola sees one request, opens it (Ada's ticks stay unread), accepts (Ada's turn read) and answers. A reply is quoted on the other side; a message deleted for everyone is gone from both.
+  - With Bola's read ticks off, Ada sees no read ticks.
+  - Ada's link and QR code: signed out, then Chidi chats from it, then it is replaced and the old one says it no longer works.
+  - Dayo's prize-and-OTP message is held and said; an account-number message reaches Ada's requests with the warning. Block and report (consent, a report kept), in the blocked list, unblocked. Bola's "Nobody" refuses Dayo's new chat.
+  - A product shared from a business's shop opens live with its new price; a business is shared from Discover; Ada's bank account is saved; Your share ₦3,000 is marked paid by Bola and shows Paid to Ada.
+- `accessibility.spec.ts`: every new page and sheet (the list with Requests, a chat with every kind of message, Contact info, a request, Block and report, New chat, contacts, privacy, blocked, bank account) at 390 and 360 px in both themes, and `/p/{code}` signed out. The You tests stand in `/v1/me/conversations`; `customer-chat.spec.ts` and `you.spec.ts` follow the one list.
+
+**Left over.**
+- **The parity spec** keeps no people screens: its pictures are what the phone app copies, and `mobile/test/parity_test.dart` fails on a web picture with no app screen. They come with the app's people screens.
+- **Not offered on the web**: sending a place (places sent from the app are shown), a starred messages list, search across people chats, typing, and the presence heartbeat (the server Touches the person on every people request).
+- **From the web**: a group's ordering together (5b), and calls (5c).

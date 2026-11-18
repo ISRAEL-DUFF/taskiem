@@ -27,6 +27,7 @@ import {
   type DiscoverResult,
 } from "../lib/discover";
 import { hoursLines, type ChatLinkCard } from "../lib/personchat";
+import { ShareToPerson } from "./People";
 import { EmptyState, ErrorBox, Items, PageHeader, Row, Skeleton, useAction, useLoad } from "../ui";
 import { ChatAvatar } from "./ChatAvatar";
 
@@ -323,6 +324,7 @@ export function DiscoverBusiness() {
   const nav = useNavigate();
   const view = useLoad(() => get<DiscoverProfile>(`/v1/discover/${encodeURIComponent(business)}`), [business]);
   const [reporting, setReporting] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const p = view.data;
   const open = (tool?: "shop" | "book") => {
     if (!p) return;
@@ -423,11 +425,16 @@ export function DiscoverBusiness() {
             </section>
           )}
           <p className="discover-report">
+            <button type="button" className="link" onClick={() => setSharing(true)} data-testid="discover-share">
+              Share {p.name} with someone
+            </button>
+            {" · "}
             <button type="button" className="link" onClick={() => setReporting(true)} data-testid="discover-report">
               Report {p.name}
             </button>
           </p>
           {reporting && <ReportListing business={p.business} name={p.name} onClose={() => setReporting(false)} />}
+          {sharing && <ShareToPerson card={{ type: "business", business_id: p.business }} what={p.name} onClose={() => setSharing(false)} />}
         </>
       )}
     </>
