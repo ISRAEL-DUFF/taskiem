@@ -537,11 +537,11 @@ test("a share asks what for, a refused card is not called sent, a stranger's sha
   await ada.page.getByLabel("Message Bola (school)").fill("Forward me along");
   await ada.page.getByLabel("Message Bola (school)").press("Enter");
   await expect(ada.page.getByTestId("people-message").filter({ hasText: "Forward me along" }).getByTestId("people-ticks")).toBeVisible();
-  await ada.page.route("**/v1/me/people/forward", async (route) => {
+  await ada.page.route("**/v1/me/forward", async (route) => {
     const res = await route.fetch();
-    const out = (await res.json()) as { sent: { chat_id?: string }[]; failed: { chat_id: string; error: string }[] };
+    const out = (await res.json()) as { sent: { kind: string; id: string }[]; failed: { kind: string; id: string; error: string }[] };
     out.sent = out.sent.slice(0, 1);
-    out.failed = [{ chat_id: ekoChat, error: "This account can't get messages right now." }];
+    out.failed = [{ kind: "person", id: ekoChat, error: "This account can't get messages right now." }];
     await route.fulfill({ response: res, json: out });
   });
   await bubbleMenu(ada.page, "Forward me along", "Forward");
@@ -555,7 +555,7 @@ test("a share asks what for, a refused card is not called sent, a stranger's sha
   await expect(ada.page.locator(".toasts .toast-text").filter({ hasText: /^Forwarded$/ })).toHaveCount(1);
   await expect(fw.locator("label").filter({ hasText: "Eko Bassey" }).getByTestId("people-forward-pick")).toBeChecked();
   await expect(fw.locator("input[data-testid=people-forward-pick]:checked")).toHaveCount(1);
-  await ada.page.unroute("**/v1/me/people/forward");
+  await ada.page.unroute("**/v1/me/forward");
 });
 
 /** The browser's push, standing in (as chat-push.spec.ts): one subscription kept in this browser's storage. */
