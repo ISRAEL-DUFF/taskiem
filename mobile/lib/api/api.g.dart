@@ -9272,7 +9272,7 @@ class ChatListItem {
 /// (people-chatting §9, stage 5b): one copy, kept by Taskiem, sealed under the
 /// group's own key, readable by Taskiem's servers; not end-to-end encrypted.
 class Group {
-  const Group({required this.adminsOnlyEdit, required this.adminsOnlyPost, required this.approveJoins, required this.archived, required this.canEdit, required this.canPost, required this.description, required this.id, this.joinRequests, required this.joinedAt, this.kept, required this.kind, required this.last, required this.lastAt, required this.lastMine, this.lastSender, required this.left, this.leftHow, required this.members, required this.mentioned, required this.mentions, required this.muted, required this.name, this.photo, required this.role, required this.unread});
+  const Group({required this.adminsOnlyEdit, required this.adminsOnlyPost, required this.approveJoins, required this.archived, required this.canEdit, required this.canPost, this.closed, required this.description, required this.id, this.joinRequests, required this.joinedAt, this.kept, required this.kind, required this.last, required this.lastAt, required this.lastMine, this.lastSender, required this.left, this.leftHow, this.linkStopped, required this.members, required this.mentioned, required this.mentions, required this.muted, required this.name, this.photo, required this.role, required this.unread});
 
   /// Only admins change the name, photo and description (on by default, A2).
   final bool adminsOnlyEdit;
@@ -9282,6 +9282,7 @@ class Group {
   final bool archived;
   final bool canEdit;
   final bool canPost;
+  final GroupClosed? closed;
   final String description;
   final String id;
   /// Admins: people waiting to join by the link.
@@ -9298,6 +9299,9 @@ class Group {
   /// until you delete it; nothing new comes and you can't write (A5).
   final bool left;
   final String? leftHow;
+  /// Taskiem's moderators turned the group's invite link off; no new one can be
+  /// made for now (403).
+  final bool? linkStopped;
   /// How many are in it now (at most 256).
   final int members;
   /// An unread message mentions you.
@@ -9317,6 +9321,7 @@ class Group {
         archived: j['archived'] as bool,
         canEdit: j['can_edit'] as bool,
         canPost: j['can_post'] as bool,
+        closed: j['closed'] == null ? null : GroupClosed.fromJson(j['closed'] as Map<String, dynamic>),
         description: j['description'] as String,
         id: j['id'] as String,
         joinRequests: j['join_requests'] == null ? null : (j['join_requests'] as num).toInt(),
@@ -9329,6 +9334,7 @@ class Group {
         lastSender: j['last_sender'] == null ? null : j['last_sender'] as String,
         left: j['left'] as bool,
         leftHow: j['left_how'] == null ? null : j['left_how'] as String,
+        linkStopped: j['link_stopped'] == null ? null : j['link_stopped'] as bool,
         members: (j['members'] as num).toInt(),
         mentioned: j['mentioned'] as bool,
         mentions: j['mentions'] as bool,
@@ -9346,6 +9352,7 @@ class Group {
         'archived': archived,
         'can_edit': canEdit,
         'can_post': canPost,
+        'closed': ?closed?.toJson(),
         'description': description,
         'id': id,
         'join_requests': ?joinRequests,
@@ -9358,6 +9365,7 @@ class Group {
         'last_sender': ?lastSender,
         'left': left,
         'left_how': ?leftHow,
+        'link_stopped': ?linkStopped,
         'members': members,
         'mentioned': mentioned,
         'mentions': mentions,
@@ -9366,6 +9374,72 @@ class Group {
         'photo': ?photo,
         'role': role,
         'unread': unread,
+      };
+}
+
+/// Taskiem's moderators closed the group (people-chatting §8.3): no one sends
+/// in it, joins it or changes it; it is deleted with all its messages on
+/// `until` (§14) unless its admins appeal and the decision is overturned.
+/// `words` say so in plain words. For admins, the closure to appeal (POST
+/// /v1/me/groups/{id}/appeal) with its reason and the appeal.
+class GroupClosed {
+  const GroupClosed({this.actionId, this.appeal, required this.at, required this.canAppeal, this.reason, this.until, required this.words});
+
+  final String? actionId;
+  final StandingAppeal? appeal;
+  final DateTime at;
+  final bool canAppeal;
+  final String? reason;
+  final Object? until;
+  final String words;
+
+  factory GroupClosed.fromJson(Map<String, dynamic> j) => GroupClosed(
+        actionId: j['action_id'] == null ? null : j['action_id'] as String,
+        appeal: j['appeal'] == null ? null : StandingAppeal.fromJson(j['appeal'] as Map<String, dynamic>),
+        at: DateTime.parse(j['at'] as String),
+        canAppeal: j['can_appeal'] as bool,
+        reason: j['reason'] == null ? null : j['reason'] as String,
+        until: j['until'],
+        words: j['words'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'action_id': ?actionId,
+        'appeal': ?appeal?.toJson(),
+        'at': at.toUtc().toIso8601String(),
+        'can_appeal': canAppeal,
+        'reason': ?reason,
+        'until': ?until,
+        'words': words,
+      };
+}
+
+class StandingAppeal {
+  const StandingAppeal({required this.at, this.decidedAt, required this.id, this.note, required this.state, required this.text});
+
+  final DateTime at;
+  final Object? decidedAt;
+  final String id;
+  final Object? note;
+  final String state;
+  final String text;
+
+  factory StandingAppeal.fromJson(Map<String, dynamic> j) => StandingAppeal(
+        at: DateTime.parse(j['at'] as String),
+        decidedAt: j['decided_at'],
+        id: j['id'] as String,
+        note: j['note'],
+        state: j['state'] as String,
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'at': at.toUtc().toIso8601String(),
+        'decided_at': ?decidedAt,
+        'id': id,
+        'note': ?note,
+        'state': state,
+        'text': text,
       };
 }
 
@@ -10346,35 +10420,6 @@ class AppealMyStandingResponse {
       };
 }
 
-class StandingAppeal {
-  const StandingAppeal({required this.at, this.decidedAt, required this.id, this.note, required this.state, required this.text});
-
-  final DateTime at;
-  final Object? decidedAt;
-  final String id;
-  final Object? note;
-  final String state;
-  final String text;
-
-  factory StandingAppeal.fromJson(Map<String, dynamic> j) => StandingAppeal(
-        at: DateTime.parse(j['at'] as String),
-        decidedAt: j['decided_at'],
-        id: j['id'] as String,
-        note: j['note'],
-        state: j['state'] as String,
-        text: j['text'] as String,
-      );
-
-  Map<String, dynamic> toJson() => {
-        'at': at.toUtc().toIso8601String(),
-        'decided_at': ?decidedAt,
-        'id': id,
-        'note': ?note,
-        'state': state,
-        'text': text,
-      };
-}
-
 class GetLawfulRequestCountsResponse {
   const GetLawfulRequestCountsResponse({required this.periods, required this.words});
 
@@ -10595,7 +10640,7 @@ class GroupFound {
 
 /// One message of a group as a member sees it.
 class GroupMessage {
-  const GroupMessage({this.attachment, required this.body, this.card, required this.createdAt, this.deleted, this.event, this.forwarded, this.forwardedMany, required this.groupId, required this.id, required this.kind, this.location, this.mentions, this.mentionsMe, required this.mine, this.myReaction, this.reactions, this.replyTo, required this.sender, this.senderId, this.starred, this.status, this.warnTransfer});
+  const GroupMessage({this.attachment, required this.body, this.card, required this.createdAt, this.deleted, this.event, this.forwarded, this.forwardedMany, required this.groupId, required this.id, required this.kind, this.location, this.mentions, this.mentionsMe, required this.mine, this.myReaction, this.reactions, this.replyTo, required this.sender, this.senderId, this.starred, this.status, this.warn, this.warnTransfer});
 
   final ChatAttachment? attachment;
   /// The words, a caption, an event in words ("Ada added Bola"), or "This
@@ -10626,6 +10671,11 @@ class GroupMessage {
   /// it; read once every one of them with read ticks on (theirs and yours) has
   /// read it.
   final String? status;
+  /// Taskiem's checks found it looks like a scam (in a new group, or from
+  /// someone who joined by its link in the last day, B1), and you haven't added
+  /// its sender: show "Never send money to someone you have not met". A share
+  /// card naming an account from someone you haven't added warns too.
+  final bool? warn;
   /// It asks for a transfer to an account (words that ask, or a share card from
   /// someone you have not added); warn before paying.
   final bool? warnTransfer;
@@ -10653,6 +10703,7 @@ class GroupMessage {
         senderId: j['sender_id'],
         starred: j['starred'] == null ? null : j['starred'] as bool,
         status: j['status'] == null ? null : j['status'] as String,
+        warn: j['warn'] == null ? null : j['warn'] as bool,
         warnTransfer: j['warn_transfer'] == null ? null : j['warn_transfer'] as bool,
       );
 
@@ -10679,6 +10730,7 @@ class GroupMessage {
         'sender_id': ?senderId,
         'starred': ?starred,
         'status': ?status,
+        'warn': ?warn,
         'warn_transfer': ?warnTransfer,
       };
 }
@@ -10688,6 +10740,8 @@ class GroupMessageEvent {
 
   final String actorId;
   final String? targetId;
+  /// The taskiem_ events are Taskiem's moderators' (sender "Taskiem", actor the
+  /// nil id): the group closed, reopened, its link turned off or allowed again.
   final String type;
 
   factory GroupMessageEvent.fromJson(Map<String, dynamic> j) => GroupMessageEvent(
