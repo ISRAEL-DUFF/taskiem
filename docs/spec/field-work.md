@@ -133,7 +133,7 @@ Turning it off hides it and refuses its routes, steps, chat words and app screen
 | Late after | 30 minutes past the window | When a job not yet arrived is late (§16) |
 | No time chosen after | 4 hours | When a customer asked for a time and has not answered is an alert (§14.1) |
 | Too long on site after | The template's expected time, plus half; 3 hours when the job has no expected time (ISPOps' overtime threshold) | When a job on site is flagged (§16) |
-| Messages to customers not on Taskiem | SMS | SMS, or email for customers with an email address (ISPOps sent email by default); the business's SMS sender is its Taskiem messages setting, not a key typed here as ISPOps' Termii fields were |
+| Messages to customers not on Taskiem | Email | **Email** to a customer who has an email address, as ISPOps did by default, and SMS to one who has none; or **SMS** for everyone. The business changes it here. The SMS sender is the business's Taskiem messages setting, not a key typed here as ISPOps' Termii fields were |
 | Location every | 30 seconds when moving, 5 minutes when still | How often the phone reports during a job (§10) |
 | Keep trails for | 90 days | Then deleted; steps keep their own place (§18) |
 
@@ -184,7 +184,7 @@ A business keeps **its own list of its customers** in its `customers` table, a k
 
 A saved customer's row is what the New job search finds, and links their jobs: the row's page lists the customer's jobs, and a job's page links to the row. For Field work the table gains two columns, **address** and **location** (a map pin), so a saved customer's place comes with them; the earlier jobs' places are offered too. Changing the row changes nothing on jobs already made: each job keeps the name, phone and place it was made with.
 
-A job reaches a customer the same way whether they are saved or not: in their conversation with the business if they have one (PR #198), else by SMS ([updates](../updates.md)).
+A job reaches a customer the same way whether they are saved or not: in their conversation with the business if they have one (PR #198); otherwise by email or SMS, as the business's setting says (§4), through [updates](../updates.md).
 
 **Job types and templates are lists**, kept as data tables in the business's project (`job_types`, `job_templates`), so an owner edits them like any table and the AI builder reads them. A template's checklist is one line per item ("Test signal | photo", "Customer shown how to use the router"). Recurring jobs are **not** a part of the record: a workflow on a schedule calls `jobs.create` (§8), as monthly invoices are made ([business areas §9](business-areas.md#9-a-service-business-as-the-test-an-isp-or-cloud-provider)).
 
@@ -372,7 +372,7 @@ This replaces ISPOps' availability windows (customers declaring when they are in
 
 **Booking a visit:** the business's conversation gains **Book a visit** when Field work is on and the business chooses to offer it: the customer picks a job type the business lets customers book, gives the place (a saved address, a pin) and picks a time from the windows the business offers (§14.1). That makes a **new** job, unassigned, for the office.
 
-**Customers not on Taskiem** get the same moments by WhatsApp or SMS through [updates](../updates.md), with a link to a page showing the job and, while on the way, the map. The page needs no sign-in, carries a token for that job alone, and ends with the job.
+**Customers not on Taskiem** get the same moments by email (the default, when they have an address) or SMS (§4) through [updates](../updates.md), with a link to a page showing the job and, while on the way, the map. The page needs no sign-in, carries a token for that job alone, and ends with the job.
 
 ## 15. The office's side: web and chat
 
@@ -455,7 +455,7 @@ Alerts, through [alerts](../alerts.md), to the people with `job.manage` (or the 
 
 - **Time on jobs** is travel (Start job to Arrived) and on site (Arrived to End job), as ISPOps' duration from clock-in to clock-out; **jobs** are jobs ended; both per agent per day, in reports and in a kept table for workflows. There is no time on duty: Taskiem does not keep timesheets (§24).
 - Pay stays out of the record. Templates send them where pay is worked out: `payrolla-record-payroll` with jobs and time on jobs, or a pay list (`pay-a-list`) for a per-job fee.
-- **The staff list in Payrolla.** ISPOps pushed its staff (field agents and office staff, names and roles, never pay) into the business's Payrolla company as employees are added, changed and removed, and opened Payrolla's own screen inside its dashboard. Taskiem's Payrolla connector reads employees but cannot push them ([Payrolla](../integrations/payrolla.md)). Field work needs `payrolla@1` to gain a **sync employee** action under Payrolla's sync scope, and a template that runs it when a member with a Field work role is added, changed or removed; Payrolla's own screens open by its links (`get_approval_link`, `create_payslip_link`) rather than inside Taskiem. To be agreed with Payrolla (F8).
+- **Payrolla** is already on Taskiem for the businesses that use it ([Payrolla](../integrations/payrolla.md)), with its own templates; Field work adds nothing to it. ISPOps' own Payrolla code (pushing staff into Payrolla, its screen inside the dashboard) is not carried over.
 - A field agent's bank account for pay is theirs as a member, as riders' are kept, if a pay list is used.
 
 ## 18. Privacy and safety
@@ -553,10 +553,10 @@ On 18 November 2026 every table, route, setting and screen of the four repositor
 | The clock events page and its CSV | The steps log | §15 |
 | Overdue and overtime thresholds | Late after; too long on site, falling back to 3 hours | §4, §16 |
 | The completion-photo rule | A photo is needed to end a job | §4 |
-| Customers told by email or SMS (an org setting, email by default) | SMS, or email for customers who have one | §4 |
+| Customers told by email or SMS (an org setting, email by default) | The same: email by default, SMS for those without an address, or SMS for all as the business chooses | §4 |
 | Ratings 1 to 4 stars by an emailed link | 1 to 5, by card or SMS, for every customer | §14 |
 | The field app's sync diagnostics | **Waiting to send**, with **Send now** | §11 |
-| Staff pushed to Payrolla, and Payrolla's screen inside the dashboard | A sync employee action and template, and Payrolla's links | §17 |
+| Staff pushed to Payrolla, and Payrolla's screen inside the dashboard | Not carried over: Payrolla is already on Taskiem for the businesses that use it | §17 |
 | Job schedules with health (failures counted, a schedule paused after repeated failures, the last error) and **Run due now** | Schedules are workflows (§8), whose runs, failures and alerts are Taskiem's own | §8 |
 | Customers' availability windows linked to jobs | Ask for a time | §14.1 |
 | Notifications list with unread count; device registration; FCM | Taskiem's notifications, alert cards and push | §11, §15.2 |
@@ -567,7 +567,7 @@ On 18 November 2026 every table, route, setting and screen of the four repositor
 | Organisations, platform admins and their pages, the platform settings page | Businesses and Taskiem Ops |
 | Login by organisation slug and email, password reset by code, refresh tokens, **session idle timeout** setting | Taskiem's sign-in and sessions (phone, passkeys, the business's own rules) |
 | The customer app's OTP sign-in, push and its own chat (WebSocket, typing) | PR #198 |
-| Staff answering customers from a **Telegram supergroup**, a topic per customer | The business's conversations in Taskiem's web chat and app; a business wanting Telegram uses Taskiem's Telegram support for its own bot |
+| Staff answering customers from a **Telegram supergroup**, a topic per customer | Dropped with no replacement (founder, 18 November 2026): the business's conversations in Taskiem's web chat and app already do it: one conversation per customer, seen by every staff member whose role may, with push to their phones and replies from there |
 | The iswallet business wallet, KYC, virtual account and payouts (off in ISPOps) | Taskiem Money |
 | Attachments on inventory items and on invoices | Stock's item photos; Money's invoices |
 | Termii API key and sender typed into settings | The business's Taskiem messages settings |
@@ -586,7 +586,7 @@ On 18 November 2026 every table, route, setting and screen of the four repositor
 | F5 | The `job` trigger, signals, `jobs@1`, the templates, the AI builder | M |
 | F6 | The customer's side: the job card, the live map, confirmation, rating, Book a visit, the public page and updates | M |
 | F7 | Stock with agents | M |
-| F8 | Watching for trouble: alerts; Reports, the steps log and CSV; parts costs; jobs and time on jobs to pay templates; the Payrolla staff sync, with Payrolla | M |
+| F8 | Watching for trouble: alerts; Reports, the steps log and CSV; parts costs; jobs and time on jobs to pay templates | M |
 | F9 | The office's tools in chat (§15.2): the tiles and sheets, alert cards, job cards and diary lines, the briefing's part, the customer conversation's actions; `@Taskiem` words for dispatchers; the guide; the business's starting set when it turns Field work on | M |
 
 F0 to F4 are the minimum for the first business to stop using ISPOps; F5 and F6 make it Taskiem's rather than a copy of ISPOps.
