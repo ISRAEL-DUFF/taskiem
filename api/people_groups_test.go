@@ -1257,3 +1257,54 @@ func TestGroupsLinkJoinsPerHour(t *testing.T) {
 		c.must(want, "POST", "/v1/me/group-links/"+code+"/join", nil)
 	}
 }
+
+// Groups in You's one Chats list: kind group, newest first with people
+// chats, paged, archived apart, muted shown, unread counted.
+func TestGroupsInTheOneList(t *testing.T) {
+	defer api.SetPeopleListPage(2)()
+	w := newJoinedWorld(t)
+	ada, _ := w.many(t, "+2348031141601", "Ada Obi")
+	bola, bolaID := w.many(t, "+2348031141602", "Bola Ade")
+	adds(t, ada, bola)
+	adds(t, bola, ada)
+	g1, _ := newGroup(t, ada, "One", bolaID)
+	chat := chatWith(t, ada, bolaID)
+	send(t, ada, chat, "A people chat")
+	g2, _ := newGroup(t, ada, "Two", bolaID)
+	g3, _ := newGroup(t, ada, "Three", bolaID)
+	gsend(t, ada, g1, "One is newest")
+	page := func(c *client, q string) ([]string, map[string]any) {
+		out := c.must(200, "GET", "/v1/me/conversations"+q, nil)
+		var ids []string
+		for _, ch := range out["chats"].([]any) {
+			ids = append(ids, ch.(map[string]any)["kind"].(string)+":"+ch.(map[string]any)["id"].(string))
+		}
+		return ids, out
+	}
+	ids, out := page(bola, "")
+	if !slices.Equal(ids, []string{"group:" + g1, "group:" + g3}) || out["more"] != true || out["unread"] != float64(2) {
+		t.Fatalf("first page: %v %v", ids, out)
+	}
+	ids, out = page(bola, "?before="+out["next"].(string))
+	if !slices.Equal(ids, []string{"group:" + g2, "person:" + chatOf(t, bola, personID(t, ada))}) {
+		t.Fatalf("second page: %v %v", ids, out)
+	}
+	// Archived apart; muted shown.
+	bola.must(200, "PUT", "/v1/me/groups/"+g3+"/me", map[string]any{"archived": true, "muted": true})
+	ids, _ = page(bola, "")
+	if slices.Contains(ids, "group:"+g3) {
+		t.Fatalf("an archived group in the list: %v", ids)
+	}
+	ids, out = page(bola, "?archived=1")
+	if !slices.Equal(ids, []string{"group:" + g3}) || out["chats"].([]any)[0].(map[string]any)["muted"] != true {
+		t.Fatalf("archived: %v %v", ids, out)
+	}
+	if l := bola.must(200, "GET", "/v1/me/groups?archived=1", nil); len(l["groups"].([]any)) != 1 {
+		t.Fatalf("the groups list archived: %v", l)
+	}
+	// Reading clears the group's unread.
+	bola.must(204, "POST", "/v1/me/groups/"+g1+"/read", nil)
+	if _, out := page(bola, ""); out["unread"] != float64(1) {
+		t.Fatalf("after reading: %v", out)
+	}
+}

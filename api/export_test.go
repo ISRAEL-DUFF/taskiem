@@ -79,3 +79,11 @@ func SetGroupLinkJoinsPerHour(n int) func() {
 	groupLinkJoinsPerHour = n
 	return func() { groupLinkJoinsPerHour = old }
 }
+
+// SetPeopleListPage changes how many chats a page of the lists answers,
+// answering a function that puts it back.
+func SetPeopleListPage(n int) func() {
+	old := peopleListPage
+	peopleListPage = n
+	return func() { peopleListPage = old }
+}
