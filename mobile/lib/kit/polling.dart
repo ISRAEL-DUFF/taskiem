@@ -9,6 +9,12 @@ import 'package:flutter/widgets.dart';
 
 import '../api/transport.dart' show Transport;
 
+/// Whether the app is in front (a test's binding may not say: in front).
+bool appInFront() {
+  final s = WidgetsBinding.instance.lifecycleState;
+  return s == null || s == AppLifecycleState.resumed;
+}
+
 mixin Polling<T extends StatefulWidget> on State<T> {
   Timer? _poll;
   AppLifecycleListener? _life;

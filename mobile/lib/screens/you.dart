@@ -36,6 +36,8 @@ import '../chat/my_chat.dart';
 import '../chat/your_orders.dart' show YourOrdersTab;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty;
+import '../kit/load_more.dart';
+import '../kit/polling.dart';
 import '../kit/mobile.dart';
 import '../kit/modal.dart' show showTkConfirm, showTkToast;
 import '../kit/sheet.dart' show TkKitField;
@@ -80,13 +82,12 @@ class YouHome extends StatefulWidget {
   State<YouHome> createState() => _YouHomeState();
 }
 
-class _YouHomeState extends State<YouHome> {
+class _YouHomeState extends State<YouHome> with Polling {
   List<Invitation> _invitations = const [];
   String? _error;
   bool _busy = false;
   late final MyChats _chats = MyChats(widget.auth);
   late final Presence _presence = Presence(widget.auth.api);
-  Timer? _poll;
 
   /// Told each time Orders is shown again: it reads itself again.
   final _ordersShown = ValueNotifier<int>(0);
@@ -101,10 +102,10 @@ class _YouHomeState extends State<YouHome> {
     if (widget.presence) _presence.start();
     widget.links?.addListener(_linked);
     WidgetsBinding.instance.addPostFrameCallback((_) => _linked());
-    // New messages show in the list while it is open.
-    _poll = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (mounted && ModalRoute.of(context)?.isCurrent != false) _chats.load();
-    });
+    // New messages show in the list while it is seen: not while the app
+    // is put away (the server takes a read as the person being here) or
+    // a screen covers it.
+    startPolling(const Duration(seconds: 10), _chats.load);
     // Notifications on this phone, on the person's own side: a tapped one
     // opens its chat; one that comes with the app open is a toast; asked
     // once.
@@ -158,7 +159,7 @@ class _YouHomeState extends State<YouHome> {
   Future<void> _askOnce(PhoneNotifications notify) async {
     final yes = await showTkConfirm(
       context,
-      title: 'Get a notification when a business answers you?',
+      title: 'Get a notification when a business or a person messages you?',
       body: 'Taskiem tells you on this phone, even when the app is closed. You can change this in Settings.',
       ok: 'Yes',
       cancel: 'Not now',
@@ -176,7 +177,6 @@ class _YouHomeState extends State<YouHome> {
     final notify = widget.notify;
     notify?.removeListener(_notified);
     if (notify?.onArrived == _arrived) notify?.onArrived = null;
-    _poll?.cancel();
     if (widget.presence) _presence.stop();
     widget.links?.removeListener(_linked);
     _chats.dispose();
@@ -204,12 +204,13 @@ class _YouHomeState extends State<YouHome> {
   /// A row of the one list: a business's chat, or a person's.
   Future<void> _openItem(ChatListItem c) => c.kind == 'person' ? _openPerson(c.id) : _openId(c.id);
 
-  /// A chat with a person opened by its id; the list read again after.
-  Future<void> _openPerson(String id) async {
+  /// A chat with a person opened by its id (or as just started); the list
+  /// read again after.
+  Future<void> _openPerson(String id, {PeopleChat? started}) async {
     await tkPush<void>(
       context,
       PeopleChatScreen(
-        data: PeopleChatData(widget.auth, id, now: widget.now),
+        data: PeopleChatData(widget.auth, id, now: widget.now, started: started),
         notify: widget.notify,
         openBusiness: _openId,
         openOrder: (business, reference) => tkPush<void>(context, YourOrderPage.of(auth: widget.auth, business: business, reference: reference, onOpenChat: _openId, now: widget.now)),
@@ -458,13 +459,15 @@ class _YouHomeState extends State<YouHome> {
                           TkListRow(
                             title: 'Archived',
                             icon: 'archive',
-                            amount: '${archived.length}',
-                            semanticsLabel: 'Archived chats, ${archived.length}',
+                            amount: '${archived.length}${_chats.moreArchived ? '+' : ''}',
+                            semanticsLabel: 'Archived chats, ${archived.length}${_chats.moreArchived ? ' or more' : ''}',
                             onTap: () => tkPush<void>(context, ArchivedChatsScreen(data: _chats, now: widget.now, onOpen: _openItem)),
                           ),
                         MyChatRows(chats: chats, now: widget.now(), onOpen: _openItem, transport: auth.transport),
                       ],
                     ),
+                  // The next page as the list is scrolled to its end.
+                  if (chats != null && _chats.more) TkLoadMore(label: 'Show more chats', onMore: _chats.loadMore),
                 ],
               );
             },
@@ -661,7 +664,7 @@ class YouSettingsScreen extends StatelessWidget {
                       onChat: (person) => chatWithPerson(
                         context,
                         auth,
-                        onOpenPerson ?? (id) => tkPush<void>(context, PeopleChatScreen(data: PeopleChatData(auth, id, now: now), notify: notify)),
+                        onOpenPerson ?? (id, {started}) => tkPush<void>(context, PeopleChatScreen(data: PeopleChatData(auth, id, now: now, started: started), notify: notify)),
                         person: person,
                       ),
                     ),

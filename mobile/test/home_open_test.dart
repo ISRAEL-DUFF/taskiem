@@ -18,6 +18,7 @@ import 'package:taskiem/app/session.dart';
 import 'package:taskiem/chat/conversation.dart';
 import 'package:taskiem/chat/customer.dart';
 import 'package:taskiem/chat/invoices_page.dart';
+import 'package:taskiem/chat/people_chat.dart' show PeopleChatScreen;
 import 'package:taskiem/chat/discover.dart' show DiscoverTab;
 import 'package:taskiem/chat/taskiem.dart';
 import 'package:taskiem/chat/your_orders.dart' show YourOrderPage;
@@ -164,6 +165,43 @@ void main() {
       expect(find.byType(YourOrderPage), findsNothing);
       expect(find.byType(DiscoverTab), findsOneWidget);
       await links.close();
+    });
+
+    testWidgets('in a business, a person’s chat opens over it with the business chats’ opener and this phone’s notifications', (t) async {
+      final fb = FakeFirebase();
+      final links = StreamController<Uri>();
+      final inbox = LinkInbox(links: links.stream, first: () async => null);
+      Future<http.Response?> also(http.Request req) async {
+        if (req.url.path == '/v1/app/config') {
+          return _json({'min_version': '0.1.0', 'passkeys': false, 'signup': false,
+            'push': {'fcm': {'api_key': 'k', 'app_id_android': '1:1:android:a', 'project_id': 'p', 'sender_id': '1'}}});
+        }
+        if (req.url.path == '/v1/me/push') return _json({'devices': [], 'max': 10, 'kinds': pushKinds, 'browsers': true, 'phones': true});
+        if (req.url.path == '/v1/me/people/pc1') {
+          return _json({'id': 'pc1', 'kind': 'person', 'person_id': 'p1', 'name': 'Ada Obi', 'gone': false, 'last': 'Hi', 'last_mine': false, 'last_at': '2026-11-17T09:10:00Z',
+            'unread': 0, 'muted': false, 'archived': false, 'request': false, 'waiting': false, 'blocked': false});
+        }
+        if (req.url.path == '/v1/me/people/pc1/messages') return _json({'messages': <Object>[], 'more': false});
+        return null;
+      }
+      t.view.physicalSize = const Size(390, 844);
+      t.view.devicePixelRatio = 1;
+      addTearDown(t.view.reset);
+      final auth = Fixture('chats').auth(also: also);
+      final notify = PhoneNotifications(auth: auth, keys: MemoryKeyStore(), platform: fb);
+      final prefs = await t.runAsync(noLock);
+      await t.pumpWidget(TaskiemApp(auth: auth, unlocker: FakeUnlocker(), prefs: prefs, links: inbox, notify: notify));
+      await settle(t);
+      await t.tap(find.text('Not now'));
+      await settle(t);
+      links.add(Uri.parse('https://staging.ispend.name.ng/you/people/pc1'));
+      await settle(t);
+      final chat = t.widget<PeopleChatScreen>(find.byType(PeopleChatScreen));
+      expect(chat.openBusiness, isNotNull, reason: 'a shared card’s Chat opens the person’s chat with that business');
+      expect(identical(chat.notify, notify), isTrue, reason: 'no push of its own while it is on the screen');
+      await links.close();
+      await t.pumpWidget(const SizedBox());
+      await t.pump();
     });
 
     testWidgets('asked once after signing in; with the app open a notification is a toast with Open', (t) async {

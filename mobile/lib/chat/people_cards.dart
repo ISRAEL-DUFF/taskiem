@@ -6,6 +6,8 @@
 // Also: picking people chats to share or forward to, and the bank account
 // a share is paid to (`/v1/me/payout-account`).
 
+import 'dart:convert' show jsonEncode;
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -15,6 +17,7 @@ import '../app/auth.dart';
 import '../kit/forms.dart' show nairaKobo, TkMoneyField;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty, TkLoading;
+import '../kit/load_more.dart';
 import '../kit/mobile.dart';
 import '../kit/modal.dart';
 import '../kit/sheet.dart';
@@ -270,8 +273,8 @@ class _LiveCardSheetState extends State<_LiveCardSheet> {
 // --- picking people chats ---
 
 /// People chats to send to: up to [max], from the chats you have with
-/// people (not requests, not blocked, not a deleted account); null when
-/// put away.
+/// people, archived ones too (not requests, not blocked, not a deleted or
+/// suspended account); null when put away.
 Future<List<String>?> pickPeopleChats(BuildContext context, Auth auth, {required String title, required String what, int max = 5, String? except}) =>
     showTkSheet<List<String>>(context, (_) => _PeoplePicker(auth: auth, title: title, what: what, max: max, except: except));
 
@@ -288,9 +291,14 @@ class _PeoplePicker extends StatefulWidget {
 }
 
 class _PeoplePickerState extends State<_PeoplePicker> {
-  List<PeopleChat>? _chats;
+  List<PeopleChat>? _open;
+  List<PeopleChat> _away = const [];
   String? _error;
   final _picked = <String>[];
+
+  /// The next page of the chats, then of the archived ones (`before`).
+  String? _nextOpen;
+  String? _nextAway;
 
   @override
   void initState() {
@@ -298,10 +306,49 @@ class _PeoplePickerState extends State<_PeoplePicker> {
     _load();
   }
 
+  bool _can(PeopleChat c) => !c.request && !c.gone && !c.blocked && c.suspended != true && c.id != widget.except;
+
+  /// The chats, and the archived ones after them.
+  List<PeopleChat>? get _chats {
+    final open = _open;
+    if (open == null) return null;
+    final seen = <String>{};
+    return [for (final c in [...open, ..._away]) if (_can(c) && seen.add(c.id)) c];
+  }
+
   Future<void> _load() async {
     try {
       final r = await widget.auth.api.listPeopleChats();
-      if (mounted) setState(() => _chats = r.chats.where((c) => !c.request && !c.gone && !c.blocked && c.id != widget.except).toList());
+      ListPeopleChatsResponse? a;
+      try {
+        a = await widget.auth.api.listPeopleChats(archived: '1');
+      } on Object {
+        // The archived ones are left out this time.
+      }
+      if (!mounted) return;
+      setState(() {
+        _open = r.chats;
+        _nextOpen = r.more ? r.next : null;
+        _away = [...?a?.chats.where((c) => c.archived)];
+        _nextAway = a != null && a.more ? a.next : null;
+      });
+    } on Object catch (e) {
+      if (mounted) setState(() => _error = sayFailure(e));
+    }
+  }
+
+  /// The next page: of the chats while there are more, then of the
+  /// archived ones.
+  Future<void> _more() async {
+    final open = _nextOpen;
+    try {
+      if (open != null) {
+        final r = await widget.auth.api.listPeopleChats(before: open);
+        if (mounted) setState(() => (_open = [...?_open, ...r.chats], _nextOpen = r.more ? r.next : null));
+      } else if (_nextAway != null) {
+        final r = await widget.auth.api.listPeopleChats(archived: '1', before: _nextAway);
+        if (mounted) setState(() => (_away = [..._away, ...r.chats.where((c) => c.archived)], _nextAway = r.more ? r.next : null));
+      }
     } on Object catch (e) {
       if (mounted) setState(() => _error = sayFailure(e));
     }
@@ -356,12 +403,20 @@ class _PeoplePickerState extends State<_PeoplePicker> {
                     ),
                 ],
               ),
+            if (chats != null && (_nextOpen != null || _nextAway != null)) TkLoadMore(label: 'Show more chats', onMore: _more),
           ],
         ),
       ),
     );
   }
 }
+
+/// Client ids of shares that may have reached a chat without an answer
+/// (offline, cut off, the server failing), by chat and card: the same
+/// card shared to the same chat again goes with the same id, so the server
+/// keeps one.
+final _unsureShares = <String, String>{};
+var _shareN = 0;
 
 /// Shares [card] (a business, one of its products, one of your orders)
 /// into chats with people the person picks (§10.1); says how it went.
@@ -370,11 +425,15 @@ Future<void> shareWithPeople(BuildContext context, Auth auth, SendPeopleMessageR
   if (to == null || to.isEmpty || !context.mounted) return;
   var sent = 0;
   String? problem;
+  final shared = jsonEncode(card.toJson());
   for (final id in to) {
+    final key = '$id $shared';
+    final client = _unsureShares.remove(key) ?? newClientId(DateTime.now(), ++_shareN);
     try {
-      await auth.api.sendPeopleMessage(id: id, body: SendPeopleMessageRequest(card: card));
+      await auth.api.sendPeopleMessage(id: id, body: SendPeopleMessageRequest(card: card, clientId: client));
       sent++;
     } on Object catch (e) {
+      if (e is! ApiError || e.status >= 500) _unsureShares[key] = client;
       problem ??= sayFailure(e);
     }
   }

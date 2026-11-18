@@ -21,7 +21,7 @@ import '../api/api.g.dart';
 import '../api/transport.dart' show ApiError;
 import '../app/auth.dart';
 import '../app/lock.dart' show stepOut;
-import '../app/phone.dart' show toE164;
+import '../app/phone.dart' show contactE164;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty, TkLoading;
 import '../kit/mobile.dart';
@@ -78,40 +78,55 @@ class DevicePhoneContacts extends PhoneContacts {
 /// the name they have in the phone, and the token to add them.
 typedef ContactMatch = ({PersonCard person, String phoneName, String addToken});
 
+/// What matching found: the people, and whether it stopped before every
+/// number was checked (the day's limit: `max_per_day`, or the server's 429)
+/// with how many were.
+typedef ContactsMatched = ({List<ContactMatch> found, bool stopped, int checked, int total});
+
 /// Finds which of [contacts] are people on Taskiem who let themselves be
 /// found from contacts: the numbers hashed here with the week's key, sent
-/// in batches; asked again once with a new key if it changed meanwhile.
-Future<List<ContactMatch>> matchPhoneContacts(TaskiemApi api, List<PhoneContact> contacts) async {
+/// in batches, no more than the day's `max_per_day`. When the key changes
+/// meanwhile (409), only the batches not yet answered are sent again, with
+/// the new key; at the day's limit (429), what was found so far is kept.
+Future<ContactsMatched> matchPhoneContacts(TaskiemApi api, List<PhoneContact> contacts) async {
   // Each number once, in E.164, with the first name it has in the phone.
   final names = <String, String>{};
   for (final c in contacts) {
     for (final n in c.numbers) {
-      final e = toE164(n);
+      final e = contactE164(n);
       if (e != null) names.putIfAbsent(e, () => c.name);
     }
   }
-  if (names.isEmpty) return const [];
-  for (var attempt = 0; ; attempt++) {
-    final k = await api.contactsKey();
+  final out = <ContactMatch>[];
+  if (names.isEmpty) return (found: out, stopped: false, checked: 0, total: 0);
+  var k = await api.contactsKey();
+  // No more than the day allows (1000 in an account's first week).
+  final numbers = names.keys.take(k.maxPerDay > 0 ? k.maxPerDay : names.length).toList();
+  var done = 0;
+  for (var changes = 0; done < numbers.length;) {
     final key = base64.decode(k.key);
-    final byHash = {for (final e in names.keys) contactHash(key, e): e};
-    final hashes = byHash.keys.take(k.maxPerDay > 0 ? k.maxPerDay : byHash.length).toList();
     final batch = k.maxBatch > 0 ? k.maxBatch : 500;
-    final out = <ContactMatch>[];
+    final part = numbers.sublist(done, (done + batch).clamp(0, numbers.length));
+    final byHash = {for (final e in part) contactHash(key, e): e};
     try {
-      for (var i = 0; i < hashes.length; i += batch) {
-        final r = await api.matchContacts(body: MatchContactsRequest(keyId: k.keyId, hashes: hashes.sublist(i, (i + batch).clamp(0, hashes.length))));
-        for (final m in r.matches) {
-          out.add((person: m.person, phoneName: names[byHash[m.hash]] ?? '', addToken: m.addToken));
-        }
+      final r = await api.matchContacts(body: MatchContactsRequest(keyId: k.keyId, hashes: byHash.keys.toList()));
+      for (final m in r.matches) {
+        out.add((person: m.person, phoneName: names[byHash[m.hash]] ?? '', addToken: m.addToken));
       }
-      return out;
+      done += part.length;
     } on ApiError catch (e) {
-      // The week's key changed while sending: once more with the new one.
-      if (e.status == 409 && attempt == 0) continue;
+      // The week's key changed while sending: the rest with the new one.
+      if (e.status == 409 && changes < 2) {
+        changes++;
+        k = await api.contactsKey();
+        continue;
+      }
+      // The day's limit: who was found so far.
+      if (e.status == 429 && done > 0) return (found: out, stopped: true, checked: done, total: names.length);
       rethrow;
     }
   }
+  return (found: out, stopped: numbers.length < names.length, checked: done, total: names.length);
 }
 
 /// The explainer, said before the phone is asked (§5.3): what is sent, what
@@ -119,9 +134,10 @@ Future<List<ContactMatch>> matchPhoneContacts(TaskiemApi api, List<PhoneContact>
 const contactsAskTitle = 'Find friends from your contacts?';
 const contactsAskWords = [
   'Taskiem can check which of the people in your phone’s contacts are on Taskiem, so you can chat with them.',
-  'Their numbers are not sent to us in readable form. Each number is scrambled on this phone with a key from Taskiem (a keyed hash), and only the scrambled numbers are sent. Taskiem answers which are people who let themselves be found this way, then forgets what was sent. Nothing of your contacts is kept, on this phone or by Taskiem.',
+  'Their numbers are not sent to us in readable form. Each number is scrambled on this phone with a key from Taskiem (a keyed hash), and only the scrambled numbers are sent. Taskiem answers which are people whose settings let you find them this way, then forgets what was sent. Nothing of your contacts is kept, on this phone or by Taskiem.',
   'The honest limit: Taskiem holds the key, and phone numbers are few enough to try them all. So this protects your contacts if what is sent is seen by someone else, but not from Taskiem itself.',
   'Only people who allow it can be found, and you can stop at any time.',
+  'When you tap Add, that person and the name you give them are kept in your contacts on Taskiem, which only you see.',
 ];
 
 /// Finding friends from the phone's contacts: the explainer first, the
@@ -144,6 +160,9 @@ enum _Step { ask, checking, found, refused }
 class _ContactsMatchScreenState extends State<ContactsMatchScreen> {
   _Step _step = _Step.ask;
   List<ContactMatch> _found = const [];
+
+  /// Stopped at the day's limit: how many numbers were checked of how many.
+  ({int checked, int total})? _stopped;
   final _added = <String>{};
   String? _error;
 
@@ -155,8 +174,8 @@ class _ContactsMatchScreenState extends State<ContactsMatchScreen> {
         return;
       }
       final all = await widget.contacts.read();
-      final found = await matchPhoneContacts(widget.auth.api, all);
-      if (mounted) setState(() => (_found = found, _step = _Step.found));
+      final r = await matchPhoneContacts(widget.auth.api, all);
+      if (mounted) setState(() => (_found = r.found, _stopped = r.stopped ? (checked: r.checked, total: r.total) : null, _step = _Step.found));
     } on ApiError catch (e) {
       if (mounted) setState(() => (_error = e.status == 429 ? 'You have checked many numbers today. Try again tomorrow.' : e.message, _step = _Step.ask));
     } on Object catch (e) {
@@ -165,8 +184,11 @@ class _ContactsMatchScreenState extends State<ContactsMatchScreen> {
   }
 
   Future<void> _add(ContactMatch m) async {
+    // The name kept is the one given here: the phone's, unless changed.
+    final name = await askContactName(context, initial: m.phoneName, theirs: m.person.name);
+    if (name == null || !mounted) return;
     try {
-      await widget.auth.api.addContact(body: AddContactRequest(personId: m.person.id, addToken: m.addToken, from: 'contacts', name: m.phoneName.isEmpty ? null : m.phoneName));
+      await widget.auth.api.addContact(body: AddContactRequest(personId: m.person.id, addToken: m.addToken, from: 'contacts', name: name.isEmpty ? null : name));
       if (!mounted) return;
       setState(() => _added.add(m.person.id));
       showTkToast(context, 'Added to your contacts');
@@ -206,6 +228,19 @@ class _ContactsMatchScreenState extends State<ContactsMatchScreen> {
           const TkPanel(children: [TkEmpty(icon: 'b-people', title: 'Contacts not allowed', line: 'The phone did not let Taskiem read your contacts. You can still find people by their number or their link.')]),
         ],
         _Step.found => [
+          if (_stopped != null)
+            TkPanel(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    'Checked ${_stopped!.checked} of your ${_stopped!.total} numbers: that is as many as can be checked in a day. Try again tomorrow for the rest.',
+                    style: tkText(size: 14, color: t.text),
+                  ),
+                ),
+              ],
+            ),
           if (_found.isEmpty)
             const TkPanel(children: [TkEmpty(icon: 'b-people', title: 'No one found yet', line: 'None of your contacts can be found on Taskiem now. Share your link to invite them.')])
           else
@@ -228,7 +263,7 @@ class _ContactsMatchScreenState extends State<ContactsMatchScreen> {
                   ),
               ],
             ),
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text('Nothing of your contacts was kept: not on this phone, not by Taskiem.', style: tkHint(t))),
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text('Nothing of your contacts was kept, on this phone or by Taskiem, except the people you add.', style: tkHint(t))),
         ],
       },
     );

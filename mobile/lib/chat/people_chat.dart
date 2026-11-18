@@ -18,6 +18,7 @@
 // end-to-end encrypted.
 
 import 'dart:async';
+import 'dart:convert' show jsonEncode;
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -27,11 +28,11 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/notify.dart' show PhoneNotifications;
 import '../app/phone.dart' show showPhone;
-import '../app/session.dart' show uuid4;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/mobile.dart';
 import '../kit/modal.dart';
+import '../kit/polling.dart';
 import '../kit/sheet.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
@@ -82,13 +83,23 @@ String sendFailure(Object e) {
   return sayFailure(e);
 }
 
-/// What a chat with a person shows, read every few seconds while open.
+/// What a chat with a person shows, read every few seconds while it is
+/// seen (its screen polls: not while the app is put away or another screen
+/// covers it).
 class PeopleChatData extends ChangeNotifier {
-  PeopleChatData(this.auth, this.id, {this.follow = true, DateTime Function()? now}) : now = now ?? DateTime.now;
+  /// [started] is the chat as `POST /v1/me/people` answered it: a chat just
+  /// opened is in no list until its first message, so it opens from that.
+  PeopleChatData(this.auth, this.id, {this.follow = true, DateTime Function()? now, PeopleChat? started}) : now = now ?? DateTime.now, chat = started;
   final Auth auth;
   final String id;
+
+  /// Read again every few seconds while seen (the screen polls).
   final bool follow;
   final DateTime Function() now;
+
+  /// Whether the chat is seen now: the app in front and the chat on top
+  /// (its screen says). Messages are marked read only then.
+  bool Function() seen = appInFront;
 
   TaskiemApi get api => auth.api;
   String get base => '/v1/me/people/${Uri.encodeComponent(id)}';
@@ -107,16 +118,22 @@ class PeopleChatData extends ChangeNotifier {
 
   /// What a change from the menu could not do, said once by the screen.
   String? actionError;
-  Timer? _timer;
   bool _disposed = false;
   int _localN = 0;
   bool _pulling = false;
   bool _reading = false;
   bool _loadingOlder = false;
 
-  /// The words given back after a send that may have reached the server,
-  /// with their client id: sent again, they go with it.
-  ({String words, String client})? _unsure;
+  /// Older pages were read (Load older): kept across reads of the latest
+  /// page while the server has more before it; [_olderMore] is whether
+  /// there are more before the oldest read.
+  bool _olderLoaded = false;
+  bool _olderMore = false;
+
+  /// What was sent last without an answer (words, a file, a card), with
+  /// its client id: the same sent again goes with the same id, so the
+  /// server keeps one.
+  ({String what, String client})? _unsure;
 
   late final ChatFiles files = ChatFiles(auth.transport, pathOf: (m) => '$base/files/${Uri.encodeComponent(m.id)}');
 
@@ -134,12 +151,13 @@ class PeopleChatData extends ChangeNotifier {
   Future<void> open() async {
     await _chat();
     await _pull(first: true);
-    if (follow && !_disposed) {
-      _timer = Timer.periodic(_poll, (_) {
-        _chat();
-        _pull(first: false);
-      });
-    }
+  }
+
+  /// Read again (the screen's poll, while the chat is seen).
+  void poll() {
+    if (_disposed || missing) return;
+    _chat();
+    _pull(first: false);
   }
 
   Future<void> refresh() => Future.wait([_chat(), _pull(first: false)]);
@@ -155,7 +173,6 @@ class PeopleChatData extends ChangeNotifier {
     } on ApiError catch (e) {
       if (e.status == 404) {
         missing = true;
-        _timer?.cancel();
         _changed();
       } else {
         _fail(e);
@@ -175,16 +192,19 @@ class PeopleChatData extends ChangeNotifier {
       final out = await api.peopleMessages(id: id);
       if (_disposed) return;
       final page = [for (final m in out.messages) PeopleLine(m)];
-      if (first) hasOlder = out.more;
+      // Older messages read before stay while the server has more before
+      // the latest page; when it has none, the page is the whole chat.
       final from = page.isEmpty ? null : page.first.m.createdAt;
-      final kept = (messages ?? const <PeopleLine>[]).where((m) => m.local || (hasOlder && from != null && m.m.createdAt.isBefore(from))).toList();
+      final kept = (messages ?? const <PeopleLine>[]).where((m) => m.local || (out.more && from != null && m.m.createdAt.isBefore(from))).toList();
+      if (!out.more) _olderLoaded = false;
+      hasOlder = _olderLoaded ? _olderMore : out.more;
       messages = _merge(kept, page);
       offline = false;
       error = null;
       _changed();
-      // A request is read without telling the sender: no read marks until
-      // it is accepted (§7).
-      if (!isRequest && chat != null && out.messages.any((m) => !m.mine && m.readAt == null)) await api.readPeopleChat(id: id);
+      // Marked read only while the chat is seen. A request too: the server
+      // tells its sender nothing until it is accepted (§7).
+      if (chat != null && seen() && out.messages.any((m) => !m.mine && m.readAt == null)) await api.readPeopleChat(id: id);
     } on ApiError catch (e) {
       if (e.status == 404) {
         missing = true;
@@ -207,6 +227,8 @@ class PeopleChatData extends ChangeNotifier {
       final out = await api.peopleMessages(id: id, before: oldest.id);
       if (_disposed) return;
       messages = _merge(messages ?? const [], [for (final m in out.messages) PeopleLine(m)]);
+      _olderLoaded = true;
+      _olderMore = out.more;
       hasOlder = out.more;
       _changed();
     } on Object catch (e) {
@@ -232,9 +254,8 @@ class PeopleChatData extends ChangeNotifier {
   Future<void> send(String text, {PickedFile? file, PeopleMessage? reply}) async {
     final words = text.trim();
     if (words.isEmpty && file == null) return;
-    final again = _unsure;
-    final client = file == null && again != null && again.words == words ? again.client : '${now().millisecondsSinceEpoch}-${++_localN}-${uuid4().substring(0, 8)}';
-    _unsure = null;
+    final what = file == null ? 'text:$words' : 'file:${file.name}:${file.type}:${file.bytes.length}:${_sum(file.bytes)}:$words';
+    final client = _clientFor(what);
     final mine = PeopleLine(
       PeopleMessage(
         id: 'local-$client',
@@ -270,7 +291,7 @@ class PeopleChatData extends ChangeNotifier {
     } on Object catch (e) {
       if (_disposed) return;
       messages = messages?.where((m) => m != mine).toList();
-      if (e is! ApiError || e.status >= 500) _unsure = (words: words, client: client);
+      _keepUnsure(e, what, client);
       if (!_back.isClosed && words.isNotEmpty) _back.add(words);
       error = sendFailure(e);
       unawaited(_chat());
@@ -278,10 +299,35 @@ class PeopleChatData extends ChangeNotifier {
     _changed();
   }
 
+  /// The client id for [what]: the one it went with when it was sent last
+  /// with no answer, else a new one.
+  String _clientFor(String what) {
+    final again = _unsure;
+    _unsure = null;
+    return again != null && again.what == what ? again.client : newClientId(now(), ++_localN);
+  }
+
+  /// A send with no answer (offline, cut off, the server failing) may
+  /// have reached the server: the same sent again goes with [client]. One
+  /// refused for sure takes a new id next time.
+  void _keepUnsure(Object e, String what, String client) {
+    if (e is! ApiError || e.status >= 500) _unsure = (what: what, client: client);
+  }
+
+  static int _sum(List<int> bytes) {
+    var h = 17;
+    for (var i = 0; i < bytes.length; i += 1 + bytes.length ~/ 4096) {
+      h = (h * 31 + bytes[i]) & 0x3fffffff;
+    }
+    return h;
+  }
+
   /// A card (a business, a product, an order, a delivery, your share).
   Future<bool> sendCard(SendPeopleMessageRequestCard card) async {
+    final what = 'card:${jsonEncode(card.toJson())}';
+    final client = _clientFor(what);
     try {
-      final sent = await api.sendPeopleMessage(id: id, body: SendPeopleMessageRequest(card: card, clientId: '${now().millisecondsSinceEpoch}-${++_localN}-${uuid4().substring(0, 8)}'));
+      final sent = await api.sendPeopleMessage(id: id, body: SendPeopleMessageRequest(card: card, clientId: client));
       if (_disposed) return true;
       messages = _merge(messages ?? const [], [PeopleLine(sent)]);
       error = null;
@@ -289,6 +335,7 @@ class PeopleChatData extends ChangeNotifier {
       unawaited(_chat());
       return true;
     } on Object catch (e) {
+      _keepUnsure(e, what, client);
       error = sendFailure(e);
       _changed();
       return false;
@@ -428,7 +475,6 @@ class PeopleChatData extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _timer?.cancel();
     _back.close();
     files.dispose();
     super.dispose();
@@ -441,6 +487,7 @@ String peopleHeadLine(PeopleChat? c, DateTime now, {bool offline = false}) {
   if (offline) return 'Waiting for network…';
   if (c == null) return '';
   if (c.gone) return 'This account was deleted';
+  if (c.suspended == true) return suspendedWords;
   if (c.request) return 'Message request';
   if (c.blocked) return 'Blocked';
   return lastSeenWords(c.person, now) ?? 'Person';
@@ -465,7 +512,7 @@ class PeopleChatScreen extends StatefulWidget {
   State<PeopleChatScreen> createState() => _PeopleChatScreenState();
 }
 
-class _PeopleChatScreenState extends State<PeopleChatScreen> {
+class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
   final _text = TextEditingController();
   StreamSubscription<String>? _back;
   PeopleMessage? _reply;
@@ -473,10 +520,16 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> {
 
   PeopleChatData get d => widget.data;
 
+  /// The app in front and this chat on top: only then is it read again,
+  /// and only then are messages marked read.
+  bool _seen() => mounted && appInFront() && ModalRoute.of(context)?.isCurrent != false;
+
   @override
   void initState() {
     super.initState();
+    d.seen = _seen;
     if (d.messages == null) d.open();
+    if (d.follow) startPolling(_poll, d.poll);
     widget.notify?.show(d.tag, this);
     _back = d.givenBack.listen((w) {
       if (_text.text.isEmpty) _text.text = w;
@@ -493,6 +546,14 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> {
   }
 
   void _close() => (widget.onBack ?? () => Navigator.of(context).maybePop())();
+
+  /// Closes the chat, and any screen over it (the person's info) first.
+  void _closeChat() {
+    if (!mounted) return;
+    final me = ModalRoute.of(context);
+    if (me != null && !me.isCurrent && me.isActive) Navigator.of(context).popUntil((r) => r == me);
+    _close();
+  }
 
   void _say(bool ok, String done) {
     if (!mounted) return;
@@ -518,7 +579,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> {
             () async {
               final ok = await d.put(archived: !c.archived);
               _say(ok, c.archived ? 'Brought back to the chats' : 'Archived');
-              if (ok && !c.archived) _close();
+              if (ok && !c.archived) _closeChat();
             },
           ),
         if (!c.gone) (c.blocked ? 'Unblock ${c.name}' : 'Block ${c.name}', c.blocked ? () async => _say(await d.unblock(), 'Unblocked ${c.name}') : () => _block(report: false)),
@@ -528,7 +589,12 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> {
     );
   }
 
-  Future<void> _info() => tkPush<void>(context, PersonInfoScreen(data: d, onBlock: () => _block(report: false), onReport: () => _block(report: true, blockToo: false)));
+  Future<void> _info() => tkPush<void>(
+    context,
+    PersonInfoScreen(data: d, onBlock: () => _block(report: false), onUnblock: _unblock, onReport: () => _block(report: true, blockToo: false)),
+  );
+
+  Future<void> _unblock() async => _say(await d.unblock(), 'Unblocked ${d.name}');
 
   /// Block (and report): with [report], the reasons and consent first.
   Future<void> _block({required bool report, bool blockToo = true}) async {
@@ -540,7 +606,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> {
         final out = await d.block(report: r.report);
         if (out == null) return _say(false, '');
         _say(true, out.reported ? 'Blocked and reported' : 'Blocked $name');
-        if (out.removed) _close();
+        if (out.removed) _closeChat();
       } else {
         final said = await d.report(r.report.reason, r.report.note ?? '');
         if (!mounted) return;
@@ -560,7 +626,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> {
     final out = await d.block();
     if (out == null) return _say(false, '');
     _say(true, 'Blocked $name');
-    if (out.removed) _close();
+    if (out.removed) _closeChat();
   }
 
   Future<void> _deleteChat() async {
@@ -574,7 +640,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> {
     if (!yes) return;
     final ok = await d.deleteChat();
     _say(ok, 'Chat deleted');
-    if (ok) _close();
+    if (ok) _closeChat();
   }
 
   Future<void> _accept() async {
@@ -593,7 +659,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> {
     if (!yes) return;
     final ok = await d.decline();
     _say(ok, 'Request deleted');
-    if (ok) _close();
+    if (ok) _closeChat();
   }
 
   Future<void> _tools() async {
@@ -629,7 +695,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> {
   Future<void> _hold(PeopleMessage m, Rect at) async {
     if (m.id.startsWith('local-')) return;
     final c = d.chat;
-    final write = c != null && !c.gone && !c.blocked && !c.request;
+    final write = c != null && !c.gone && !c.blocked && !c.request && c.suspended != true;
     await showMessageMenu(
       context,
       bubble: at,
@@ -689,7 +755,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> {
           final name = d.name;
           final now = d.now();
           final list = d.messages;
-          final canSend = c != null && !c.gone && !c.blocked && !c.request && !d.missing;
+          final canSend = c != null && !c.gone && !c.blocked && !c.request && c.suspended != true && !d.missing;
           final byId = {for (final m in list ?? const <PeopleLine>[]) m.id: m.m};
           final nextOf = <String, PeopleLine>{for (var i = 0; list != null && i + 1 < list.length; i++) list[i].id: list[i + 1]};
           return Semantics(
@@ -765,7 +831,8 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> {
                   if (c != null && c.request && !d.missing) _RequestBar(name: name, onAccept: _accept, onDelete: _decline, onBlock: () => _block(report: true)),
                   if (c != null && c.waiting && !c.request) _Note(text: 'Your messages wait in $name’s requests until they accept.'),
                   if (c != null && c.gone) const _Note(text: 'This account was deleted. You can read the chat, but not write to it.'),
-                  if (c != null && c.blocked && !c.gone) _Note(text: 'You blocked $name. They can’t message you.', action: 'Unblock', onAction: () async => _say(await d.unblock(), 'Unblocked $name')),
+                  if (c != null && !c.gone && c.suspended == true) const _Note(text: '$suspendedWords You can read the chat, but not write to it now.'),
+                  if (c != null && c.blocked && !c.gone) _Note(text: 'You blocked $name. They can’t message you.', action: 'Unblock', onAction: _unblock),
                   if (canSend)
                     Composer(
                       text: _text,
@@ -924,8 +991,10 @@ class PeopleBubble extends StatelessWidget {
       );
     }
     final reactions = [if ((m.theirReaction ?? '').isNotEmpty) m.theirReaction!, if ((m.myReaction ?? '').isNotEmpty) m.myReaction!];
-    final warn = !mine && !deleted && m.warn == true;
-    final transfer = !mine && !deleted && m.warnTransfer == true && !warn;
+    // A share card from someone not in your contacts names an account: the
+    // transfer warning, as any message marked warn_transfer.
+    final transfer = !mine && !deleted && (m.warnTransfer == true || (m.card?.type == 'split' && m.warn == true));
+    final warn = !mine && !deleted && m.warn == true && !transfer;
     if (reactions.isEmpty && !warn && !transfer) return shown;
     return Column(
       crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -1081,9 +1150,10 @@ class _Note extends StatelessWidget {
 /// add them to your contacts or rename them; where the chat is kept; Block
 /// and Report.
 class PersonInfoScreen extends StatefulWidget {
-  const PersonInfoScreen({super.key, required this.data, required this.onBlock, required this.onReport});
+  const PersonInfoScreen({super.key, required this.data, required this.onBlock, required this.onReport, this.onUnblock});
   final PeopleChatData data;
   final VoidCallback onBlock;
+  final VoidCallback? onUnblock;
   final VoidCallback onReport;
 
   @override
@@ -1129,7 +1199,12 @@ class _PersonInfoScreenState extends State<PersonInfoScreen> {
                     const SizedBox(height: 12),
                     Semantics(header: true, child: Text(d.name, textAlign: TextAlign.center, style: tkDisplay(size: 22, color: t.text))),
                     if (own && p.name != d.name) Text('Their name: ${p.name}', style: tkHint(t)),
-                    if (c?.gone == true) Text(deletedAccount, style: tkHint(t)) else if (seen != null) Text(seen, style: tkHint(t)),
+                    if (c?.gone == true)
+                      Text(deletedAccount, style: tkHint(t))
+                    else if (c?.suspended == true)
+                      Text(suspendedWords, textAlign: TextAlign.center, style: tkHint(t))
+                    else if (seen != null)
+                      Text(seen, style: tkHint(t)),
                     if (phone != null) ...[const SizedBox(height: 4), Text(showPhone(phone), style: tkText(size: 15, weight: 500, color: t.text))],
                   ],
                 ),
@@ -1158,7 +1233,10 @@ class _PersonInfoScreenState extends State<PersonInfoScreen> {
               TkSection(
                 inset: 56,
                 children: [
-                  if (!c.blocked) TkListRow(title: 'Block ${d.name}', icon: 'b-x-ring', square: look.red, onTap: widget.onBlock),
+                  if (!c.blocked)
+                    TkListRow(title: 'Block ${d.name}', icon: 'b-x-ring', square: look.red, onTap: widget.onBlock)
+                  else if (widget.onUnblock != null)
+                    TkListRow(title: 'Unblock ${d.name}', sub: 'They can message you again', icon: 'b-x-ring', square: look.teal, onTap: widget.onUnblock),
                   TkListRow(title: 'Report ${d.name}', sub: 'The last 20 messages go to Taskiem’s moderators, if you agree', icon: 'b-alert', square: look.red, onTap: widget.onReport),
                 ],
               ),

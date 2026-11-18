@@ -28,8 +28,10 @@ import '../app/session.dart' show uuid4;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty;
+import '../kit/load_more.dart';
 import '../kit/mobile.dart';
 import '../kit/modal.dart';
+import '../kit/polling.dart';
 import '../kit/sheet.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
@@ -95,23 +97,80 @@ const _poll = Duration(seconds: 4);
 
 // --- the list ---
 
+/// One of the lists of chats read a page at a time (200 a page, newest
+/// first): the first page read again each time, the pages after it kept
+/// as read with "Show more" (`before` the last page's `next`).
+class ChatPages {
+  List<ChatListItem> _first = const [];
+  List<ChatListItem> _later = const [];
+
+  /// There are more after the last page read.
+  bool more = false;
+  String? _next;
+
+  /// The rows: the first page, then the later pages' rows not in it.
+  List<ChatListItem> get rows {
+    final seen = {for (final c in _first) c.id};
+    return [..._first, for (final c in _later) if (seen.add(c.id)) c];
+  }
+
+  /// The first page read again; the later pages kept.
+  void first(List<ChatListItem> chats, {required bool more, String? next}) {
+    _first = chats;
+    if (_later.isEmpty) {
+      this.more = more;
+      _next = more ? next : null;
+    }
+  }
+
+  /// The page after the last read.
+  void after(List<ChatListItem> chats, {required bool more, String? next}) {
+    _later = [..._later, ...chats];
+    this.more = more;
+    _next = more ? next : null;
+  }
+
+  String? get next => _next;
+
+  void clear() {
+    _first = const [];
+    _later = const [];
+    more = false;
+    _next = null;
+  }
+}
+
 /// You's one Chats list (people-chatting §7, §17 Q6): chats with businesses
 /// and with people together, latest first, each marked by its kind; how
 /// many are unread, how many requests wait, and the archived ones apart
-/// (`GET /v1/me/conversations`). A server without people chats answers
-/// 404 there: its chats with businesses alone (`GET /v1/me/chats`).
+/// (`GET /v1/me/conversations`, a page at a time). A server without people
+/// chats answers 404 there: its chats with businesses alone
+/// (`GET /v1/me/chats`).
 class MyChats extends ChangeNotifier {
   MyChats(this.auth);
   final Auth auth;
 
   List<ChatListItem>? chats;
   List<ChatListItem> archived = const [];
+
+  /// Unread in every chat of the list, not the page alone.
   int unread = 0;
 
   /// Message requests waiting (people-chatting §7).
   int requests = 0;
   String? error;
   bool _disposed = false;
+
+  /// The pages read of the chats, and of the archived ones.
+  final _open = ChatPages();
+  final _away = ChatPages();
+
+  /// The server has no one list (an older one): no pages.
+  bool _old = false;
+
+  /// There are more chats (or archived ones) than read so far.
+  bool get more => !_old && _open.more;
+  bool get moreArchived => !_old && _away.more;
 
   static ChatListItem _business(PersonChat c) => ChatListItem(
     kind: 'business',
@@ -127,21 +186,30 @@ class MyChats extends ChangeNotifier {
     blocked: c.blocked,
   );
 
+  void _show() {
+    chats = _open.rows.where((c) => !c.archived).toList();
+    archived = _away.rows.where((c) => c.archived).toList();
+  }
+
   Future<void> load() async {
     try {
       try {
         final r = await auth.api.listAllMyChats();
-        chats = r.chats.where((c) => !c.archived).toList();
+        _old = false;
+        _open.first(r.chats, more: r.more, next: r.next);
         unread = r.unread;
         requests = r.requests;
         error = null;
         try {
-          archived = (await auth.api.listAllMyChats(archived: '1')).chats.where((c) => c.archived).toList();
+          final a = await auth.api.listAllMyChats(archived: '1');
+          _away.first(a.chats, more: a.more, next: a.next);
         } on Object {
           // Read again next time.
         }
+        _show();
       } on ApiError catch (e) {
         if (e.status != 404) rethrow;
+        _old = true;
         final r = await auth.api.listMyChats();
         chats = r.chats.where((c) => !c.archived).map(_business).toList();
         unread = r.unread;
@@ -166,6 +234,26 @@ class MyChats extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  /// The next page of the chats ([archivedOnes]: of the archived ones).
+  Future<void> loadMore({bool archivedOnes = false}) async {
+    final pages = archivedOnes ? _away : _open;
+    final next = pages.next;
+    if (_old || !pages.more || next == null) return;
+    try {
+      final r = await auth.api.listAllMyChats(archived: archivedOnes ? '1' : null, before: next);
+      if (_disposed) return;
+      pages.after(r.chats, more: r.more, next: r.next);
+      if (!archivedOnes) {
+        unread = r.unread;
+        requests = r.requests;
+      }
+      _show();
+    } on Object {
+      // Shown again as Show more.
+    }
+    if (!_disposed) notifyListeners();
+  }
+
   @override
   void dispose() {
     _disposed = true;
@@ -177,6 +265,7 @@ class MyChats extends ChangeNotifier {
 String myChatPreview(ChatListItem c) {
   if (c.blocked) return 'You blocked them';
   if (c.gone == true && c.last.isEmpty) return 'This account was deleted';
+  if (c.suspended == true) return 'This account can’t get messages right now';
   if (c.waiting == true && c.last.isEmpty) return 'Waiting for them to accept';
   if (c.last.isEmpty) return 'No messages yet';
   return '${c.lastMine ? 'You: ' : ''}${c.last}';
@@ -201,13 +290,17 @@ class MyChatRows extends StatelessWidget {
       children: [
         for (final c in chats)
           Semantics(
-            label: c.kind == 'person' ? 'Chat with a person' : 'Chat with a business',
+            // Online is said, not only drawn as the dot.
+            label: c.kind == 'person' ? (c.person?.online == true ? 'Chat with a person, online' : 'Chat with a person') : 'Chat with a business',
             container: true,
             child: ChatRow(
               key: ValueKey('row my ${c.id}'),
               title: c.name,
               letter: c.name,
-              avatar: c.kind == 'person' && transport != null ? PersonFace(name: c.name, transport: transport!, photo: c.person?.photo, size: 48, online: c.person?.online == true) : null,
+              avatar: c.kind == 'person' && transport != null
+                  ? PersonFace(name: c.name, transport: transport!, photo: c.person?.photo, size: 48, online: c.person?.online == true)
+                  // A business's logo, as Orders and the chat's head show it.
+                  : (c.kind == 'business' && c.photo != null ? BusinessFace(name: c.name, urls: c.photo!.urls, size: 48) : null),
               marks: c.kind == 'business' ? const [(label: 'Business', off: false)] : const [],
               time: listTime(c.lastAt, now),
               preview: Text(myChatPreview(c), maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14, color: t.muted)),
@@ -247,6 +340,7 @@ class _ArchivedChatsScreenState extends State<ArchivedChatsScreen> {
             TkPanel(
               children: [MyChatRows(chats: widget.data.archived, now: widget.now(), onOpen: widget.onOpen, transport: widget.data.auth.transport)],
             ),
+          if (widget.data.moreArchived) TkLoadMore(label: 'Show more chats', onMore: () => widget.data.loadMore(archivedOnes: true)),
         ],
       ),
     );
@@ -280,13 +374,20 @@ List<MyLine> _merge(List<MyLine> cur, List<MyLine> more) {
 }
 
 /// What a person's conversation with a business shows, read every few
-/// seconds while it is open.
+/// seconds while it is seen (its screen polls: not while the app is put
+/// away or another screen covers it).
 class MyChatData extends ChangeNotifier {
   MyChatData(this.auth, this.id, {this.follow = true, this.notice, DateTime Function()? now}) : now = now ?? DateTime.now;
   final Auth auth;
   final String id;
+
+  /// Read again every few seconds while seen (the screen polls).
   final bool follow;
   final DateTime Function() now;
+
+  /// Whether the conversation is seen now: the app in front and it on top
+  /// (its screen says). Messages are marked read only then.
+  bool Function() seen = appInFront;
 
   /// Said once, on starting: what the business sees of you, and that
   /// Taskiem may read business conversations (§14). Put away with OK.
@@ -311,10 +412,15 @@ class MyChatData extends ChangeNotifier {
 
   /// What a change from the menu could not do, said once by the screen.
   String? actionError;
-  Timer? _timer;
   bool _disposed = false;
   int _localN = 0;
   bool _loadingOlder = false;
+
+  /// Older pages were read (Load older): kept across reads of the latest
+  /// page while the server has more before it; [_olderMore] is whether
+  /// there are more before the oldest read.
+  bool _olderLoaded = false;
+  bool _olderMore = false;
   bool _pulling = false;
   bool _reading = false;
   DateTime _typedAt = DateTime(2000);
@@ -333,14 +439,13 @@ class MyChatData extends ChangeNotifier {
 
   String get name => chat?.name ?? 'Business';
 
-  Future<void> open() async {
-    await Future.wait([_chat(), _pull(first: true)]);
-    if (follow && !_disposed) {
-      _timer = Timer.periodic(_poll, (_) {
-        _pull(first: false);
-        _chat();
-      });
-    }
+  Future<void> open() => Future.wait([_chat(), _pull(first: true)]);
+
+  /// Read again (the screen's poll, while the conversation is seen).
+  void poll() {
+    if (_disposed) return;
+    _pull(first: false);
+    _chat();
   }
 
   Future<void> refresh() => Future.wait([_chat(), _pull(first: false)]);
@@ -368,14 +473,18 @@ class MyChatData extends ChangeNotifier {
       final out = await api.listMyChatMessages(id: id);
       if (_disposed) return;
       final page = [for (final m in out.messages) MyLine(m)];
-      if (first) hasOlder = out.more;
+      // Older messages read before stay while the server has more before
+      // the latest page; when it has none, the page is the whole chat.
       final from = page.isEmpty ? null : page.first.m.createdAt;
-      final kept = (messages ?? const <MyLine>[]).where((m) => m.local || (hasOlder && from != null && m.m.createdAt.isBefore(from))).toList();
+      final kept = (messages ?? const <MyLine>[]).where((m) => m.local || (out.more && from != null && m.m.createdAt.isBefore(from))).toList();
+      if (!out.more) _olderLoaded = false;
+      hasOlder = _olderLoaded ? _olderMore : out.more;
       messages = _merge(kept, page);
       offline = false;
       error = null;
       _changed();
-      if (out.messages.any((m) => !m.mine && m.readAt == null)) await api.readMyChat(id: id);
+      // Marked read only while the conversation is seen.
+      if (seen() && out.messages.any((m) => !m.mine && m.readAt == null)) await api.readMyChat(id: id);
     } on Object catch (e) {
       _fail(e);
     } finally {
@@ -392,6 +501,8 @@ class MyChatData extends ChangeNotifier {
       final out = await api.listMyChatMessages(id: id, before: oldest.id);
       if (_disposed) return;
       messages = _merge(messages ?? const [], [for (final m in out.messages) MyLine(m)]);
+      _olderLoaded = true;
+      _olderMore = out.more;
       hasOlder = out.more;
       _changed();
     } on Object catch (e) {
@@ -515,7 +626,6 @@ class MyChatData extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _timer?.cancel();
     _back.close();
     files.dispose();
     super.dispose();
@@ -547,16 +657,22 @@ class MyChatScreen extends StatefulWidget {
   State<MyChatScreen> createState() => _MyChatScreenState();
 }
 
-class _MyChatScreenState extends State<MyChatScreen> {
+class _MyChatScreenState extends State<MyChatScreen> with Polling {
   late final _text = TextEditingController(text: widget.draft);
   StreamSubscription<String>? _back;
 
   MyChatData get d => widget.data;
 
+  /// The app in front and this conversation on top: only then is it read
+  /// again, and only then are messages marked read.
+  bool _seen() => mounted && appInFront() && ModalRoute.of(context)?.isCurrent != false;
+
   @override
   void initState() {
     super.initState();
+    d.seen = _seen;
     final opening = d.messages == null ? d.open() : Future<void>.value();
+    if (d.follow) startPolling(_poll, d.poll);
     final tool = widget.tool;
     if (tool != null) {
       opening.then((_) {
