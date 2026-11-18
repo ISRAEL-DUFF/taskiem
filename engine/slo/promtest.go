@@ -311,7 +311,7 @@ func RulesTestYAML() ([]byte, error) {
 				},
 			},
 			{
-				Name:     "people chats' storage grows past its line",
+				Name: "people chats' storage grows past its line",
 				// A sample every 5 minutes: Prometheus counts a sample as current
 				// for 5 minutes only, so hourly samples would leave the rule
 				// without a value for most of each hour and its "for: 1h" would
