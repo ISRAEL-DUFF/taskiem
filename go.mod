@@ -5,13 +5,15 @@ go 1.26.0
 require (
 	blitiri.com.ar/go/spf v1.6.0
 	cel.dev/cel-go v0.32.0
+	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/anthropics/anthropic-sdk-go v1.78.0
 	github.com/beevik/etree v1.7.0
 	github.com/emersion/go-msgauth v0.7.0
 	github.com/emersion/go-smtp v0.25.0
 	github.com/evanw/esbuild v0.28.2
 	github.com/fastschema/qjs v0.0.6
-	github.com/go-chi/chi/v5 v5.3.2
+	github.com/go-chi/chi/v5 v5.5.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/licensecheck v0.3.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.11.0
@@ -40,7 +42,6 @@ require (
 
 require (
 	cel.dev/expr v0.25.2 // indirect
-	github.com/SherClockHolmes/webpush-go v1.4.0 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -50,7 +51,6 @@ require (
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
 	github.com/invopop/jsonschema v0.14.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
