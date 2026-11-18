@@ -56,7 +56,7 @@ Status key: ☐ to build; ◐ built on the server ("As built: stage 5b, groups (
 - ◐ **Scam checks:** automated checks look at messages from people who aren't contacts in new or small groups (?B1).
 - ◐ **Lawful requests:** exports can cover a person's group messages within the scope asked (0069 point 11).
 - ◐ **Storage watching** includes groups (0069 consequences).
-- ☐ **Load test before 5b ships** (§13): many connections, group fan-out, storage growth.
+- ● **Load test before 5b ships** (§13): many connections, group fan-out, storage growth. (Server only: `tools/loadtest -mode people`. Results, fixes and limits are in "As built: stage 5b, load test".)
 
 ## C. Ordering together (§10.3, §11 C, §17 Q8)
 

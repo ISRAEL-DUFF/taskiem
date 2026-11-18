@@ -1563,3 +1563,106 @@ Branch `stage5b-together`, on 8af21b41 (`stage5`: groups on the server, the web 
 - Shares are equal parts of the delivery only (no splitting by weight or by hand), as C2 says.
 - A basket of a chat whose two people both deleted their copies stays, reached by no one, until the accounts go.
 - Live: each watcher's view of a changed open basket reads its shop through the basket door, so a busy group's basket writes an audit entry per watcher per change.
+
+## As built: stage 5b, load test
+
+Branch `stage5b-load`, on 040cbc19: this is [the 5b checklist](people-chatting-5b.md) B, "Load test before 5b ships" (§13: many connections, group fan-out, storage growth). The tool is in `tools/loadtest/people.go` (`-mode people`, next to the engine's modes in [performance.md](../performance.md)). The fixes are in `api/people_group_live.go`, `api/people_groups.go` and migration `00490_group_member_count.sql` (00489 is kept for the basket fixes). The test is `api/people_groups_load_test.go`.
+
+### Method
+
+`tools/loadtest -mode people` makes a fresh, migrated database and starts the built binary's `api` role. With `-apis N` it starts N processes on the one database; each holds at most 2,000 live connections. Then it:
+
+- makes `-people` accounts, each with a personal session (`taskiem_auth_personal_start`, the same call phone sign-in makes). The accounts are dated past their first week, so the first week's lower limits do not shape the load;
+- makes `-groups` groups through the API (so each gets its key), then writes in `-group-size` members (up to 256) the way `TestGroupsFull` does. Groups overlap by half, so each person is in about two;
+- makes `-pairs` pairs of friends through the API (a writes, b accepts);
+- opens `-live` connections (`GET /v1/me/live`, one per person) and measures them idle for `-settle`;
+- then, for `-duration`, sends `-group-rate` group messages and `-pair-rate` one-to-one messages a second (a random group and member, or a random pair and side). A `-read-frac` share of recipients read each message as it reaches them (`POST …/read`, 32 at a time).
+
+It reports:
+
+- send to delivery: from the send to each live recipient's first `group_message` or `message` event for that message, matched by its words;
+- how many deliveries arrived out of those expected;
+- the HTTP time of sends and reads;
+- the database's commits a second and backends, and the CPU used by the api processes and by Postgres's backends;
+- what active backends run and wait on, from `pg_stat_activity` sampled every 200 ms (the shared test server has no `pg_stat_statements`);
+- sequential scans and row writes per table;
+- bytes and rows added per message to each table a message writes.
+
+`summary.md` and the processes' logs go to `-out`.
+
+```sh
+go build -o /tmp/taskiem ./cmd/taskiem
+go run ./tools/loadtest -mode people -dsn "$TASKIEM_TEST_DATABASE_URL" -bin /tmp/taskiem \
+  -apis 2 -people 3000 -live 3000 -groups 12 -group-size 256 -pairs 200 \
+  -group-rate 1 -pair-rate 4 -read-frac 0.2 -duration 45s -settle 15s -out /tmp/people-load
+```
+
+### Where it ran
+
+All runs were on 18 November 2026, on one 4-CPU container (15 GB) that held Postgres 16, the api processes and the load tool. Other agents' builds and tests shared the box: the load average was 4 before the runs and 30 to 47 during the large ones. Read these figures for where the time goes and how cost grows, **not** as capacity.
+
+### Results
+
+| Run | Live connections | Groups × members | Sent (group, 1:1) | Idle commits/s (Postgres cores) | Group delivery p50 / p95 / p99 | 1:1 delivery p50 / p95 | Group send HTTP p50 | Delivered |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Before the fixes | 300 | 2 × 256 | 20, 40 | 154 (3.75, CPU-bound) | about 4.9 s (as 1:1) | 4.9 s / 6.7 s | 4.3 s | 100% |
+| Ticks fix | 300 | 2 × 256 | 20, 40 | 332 (0.69) | 1.18 s / 1.84 s / 2.24 s | 1.02 s / 1.82 s | 0.55 s | 100% |
+| Both fixes | 1,000 | 4 × 256 | 30, 90 | 1,037 (1.42) | 7.2 s / 10.1 s / 11.1 s | 6.4 s / 9.8 s | 5.9 s | 100% |
+| Both fixes | 3,000 (2 apis) | 12 × 256 | 45, 180 | 1,360 (2.92) | 15.5 s / 22.2 s / 24.9 s | 13.3 s / 21.1 s | 12.8 s | 99.5% |
+
+No live connection was refused or failed in any run. Lock waits were negligible: one sample in 226 waited on `people_groups … FOR UPDATE`.
+
+**Idle cost.** Each open connection checks once a second, in one transaction of about 12 statements: messages, chats, gone, baskets, the groups' messages, marks, groups, ticks, typing, invites, invites gone and people typing. Presence and the basket orders are added every 5 s. Idle, the database answered about 1.0 to 1.1 commits a second per connection up to 1,000 connections. At 3,000 it reached only 1,360 commits a second, so each connection checked about every 2.2 s and everything queued behind the checks. **The limit is the polling live connection, not the fan-out.** At 1,000 and 3,000 the shared box (load average 30+) was saturated before any message was sent. That is why delivery there takes many seconds: a message waits for its recipients' next check, and the checks queue for CPU.
+
+**Fan-out.** A group message to 256 people is written as one row plus its index tokens. Each member's connection then reads it (the message's view, the sender's card, the group's view), moves the member's `delivered_upto` and writes a `group_reads` row; 20% also read it. Per message, that is about 255 transactions' worth of reads and about 510 writes. The sender's HTTP time is mostly spent waiting for a database connection (a pool of 20 per process) behind the polls.
+
+**Storage per message** (3,000-connection run; indexes, TOAST and dead rows included):
+
+| Table | Rows / message | Bytes / message |
+| --- | --- | --- |
+| `group_messages` (the one copy) | 1 | 2.0 KB |
+| `group_search` (keyed tokens, per group) | 15.6 | 4.0 KB |
+| `group_reads` (members' delivered and read times) | 215 | 43.7 KB |
+| `group_members` (marks updated in place: dead rows until vacuum) | 0 | 31 KB |
+| `people_messages` (two copies) | 2 | 2.1 KB |
+| `people_search` (both people's tokens) | 33 | 7.8 KB |
+
+The group's own copy is cheap: keeping one copy for the group (§13) costs 2 KB, against 256 copies. The members' delivered marks are **about twenty times the message**, because each delivery writes one `group_reads` row per member. They are pruned (a member's own rows older than 31 days go as new ones come), so they are bounded per member. In a busy group, though, they are most of the storage and most of the write load.
+
+### Bottlenecks found and fixed
+
+1. **The ticks' wake-up checked every member's row each second.** `liveGroupsTx` took `max(marks_at)` per group with a `GROUP BY` over every member whose marks moved in the window. The `member_read` policy on `group_members` runs `taskiem_group_member` for each row: a definer, so it is not inlined, and it costs about 66 µs. In a busy group every member's marks move within the ten-second look-back. So each member's connection paid about 34 ms a second for each busy group of 256. Idle at 300 connections this was 91.7% of the database's time: 3.75 cores for 154 checks a second. Now a `LATERAL max()` per group reads the index `(group_id, marks_at)` backwards and stops at the first row the policy lets through. It takes 0.6 ms and gives the same answer. Idle at 300 connections: Postgres went from 3.75 to 0.69 cores, commits from 154 to 332 a second, and group delivery p50 from 4.9 s to 1.2 s.
+2. **A Group's member count checked every member's row.** `groupListCols` counted `group_members` under the same policy. That took about 17 ms for a group of 256, paid by each member's connection for each message (the `group` event) and on every list. Now `taskiem_group_count(group)` (00490, listed in `definers.tsv`) checks the person once, as `member_read` does (they are or were in the group; anyone else gets 0), then counts. Under load at 300 connections its share of active samples fell from 32% to under 3%.
+
+The new test is `TestGroupsLoadFixes`, on a group of 256: the count to a member and 0 to an outsider, the sender's delivered tick over the live connection, and a plan for the wake-up that reads one row. These also pass: `TestGroupsLive`, `TestGroupsReadBy`, `TestGroupsFull`, `TestGroupsInTheOneList`, `TestGroupsHistoryLeaveAndRemove`, `TestDefinersAllowList`.
+
+### Bottlenecks found and not fixed (for the next slice)
+
+- **One transaction per connection per second is the ceiling:** about 1,000 to 1,400 checks a second on this shared 4-CPU box. Options that need no client change:
+  - lengthen the interval for connections with nothing new (most are idle);
+  - start each check with one cheap query, and skip the group statements when none of the person's groups' `changed_at` or marks moved;
+  - run one poller per group, so members' connections only filter what it finds;
+  - read a change table by sequence (as the Chat page's stream notes).
+- **Delivered marks' writes and storage** (`group_reads`: 215 rows and 44 KB a message). Either keep `delivered_upto` on the membership and write `group_reads` for reads only, or write a member's delivered time at most once a minute per group. "Read by" would then give delivered times to the minute.
+- **The ticks' wake-up is still the most frequent group statement:** 20% to 40% of active samples at 1,000 and 3,000 connections. Each call is now cheap, but every connection runs it every second. Folding it into one statement with the groups' check would halve the group statements.
+- **The basket orders' check** (`people_baskets_live.go`) runs every five seconds per connection, even with no baskets: 1,496 index scans of an empty `people_baskets` in 20 s at 300 connections. Also, a changed open basket's view is built per watcher, reading the shop through the basket door and writing an audit entry each time. Both belong to the basket fix (00489) and are not changed here. Re-run this test after that fix.
+- **The sender's card per watcher.** Each member's connection reads the sender's `PersonCard` (and `taskiem_people_between`) for every message: 10% to 17% of active samples under load. A connection could keep cards for a minute, as it already keeps a group's ticks for 30 s.
+- `person_contacts`, `people_chats` and `users` show many sequential scans. They hold only a few hundred rows here, where the planner prefers a scan; check the plans on production-sized data.
+- `max_connections` here is 100. Two api processes with pools of 20 fit; more do not.
+
+### Re-run on production-like hardware
+
+Run the same command with Postgres on its own machine, the api processes on another and the load tool on a third:
+
+- at 2,000, 5,000 and 10,000 connections, with `-apis` = connections / 2,000 and `-api-pool` sized to Postgres's `max_connections`;
+- with groups of 256 at 1, 5 and 20 messages a second;
+- with `pg_stat_statements` on, for the per-statement times this server could not give.
+
+Record:
+
+- idle commits a second per connection (want at least 1);
+- group delivery p95 (want at most 2 s: the polling interval plus one check);
+- Postgres CPU per 1,000 connections;
+- `group_reads` bytes per message.
+
+Run it again after the basket fix (00489) and after any change to the polling above.
