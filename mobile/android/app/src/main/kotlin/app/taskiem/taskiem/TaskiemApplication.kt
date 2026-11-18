@@ -31,6 +31,10 @@ class TaskiemApplication : Application() {
             "alerts" to "Alerts",
             // A business answering the person's own chat (You).
             "you" to "Chats with businesses",
+            // Chats with people (people-chatting §13): a person's message,
+            // and a first message from someone new.
+            "person" to "Chats with people",
+            "request" to "Message requests",
         )
 
         fun makeChannels(context: Context) {

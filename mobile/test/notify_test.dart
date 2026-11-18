@@ -13,6 +13,7 @@ import 'package:taskiem/api/api.g.dart';
 import 'package:taskiem/api/transport.dart';
 import 'package:taskiem/app/auth.dart';
 import 'package:taskiem/app/notify.dart';
+import 'package:taskiem/app/route.dart';
 import 'package:taskiem/app/session.dart';
 import 'package:taskiem/main.dart';
 import 'package:taskiem/screens/signed_in.dart';
@@ -503,6 +504,33 @@ void main() {
       await pumpEventQueue();
       expect(said, ['Bola Stores']);
     });
+  });
+
+  test('pushes of chats with people: kind person opens the chat, kind request Requests and the request; on the screen, none shows', () async {
+    final (_, n, fb, _) = await signedIn(PushServer());
+    await n.start();
+    fb.taps.add({'link': '/you/people/c9', 'tag': 'person:c9', 'kind': 'person'});
+    await pumpEventQueue();
+    final person = n.takePending();
+    expect(person, '/you/people/c9');
+    expect(appPath(person), isTrue);
+    expect(youChatOf(person), isNull, reason: 'not a chat with a business');
+    expect(youRouteOf(person!), (page: YouPage.person, id: 'c9', ref: '', tool: null));
+    expect(routeOf(person).screen, RouteScreen.youPage);
+
+    fb.taps.add({'link': '/you/people/requests/c8', 'tag': 'person:c8', 'kind': 'request'});
+    await pumpEventQueue();
+    final request = n.takePending();
+    expect(request, '/you/people/requests/c8');
+    expect(youRouteOf(request!), (page: YouPage.request, id: 'c8', ref: '', tool: null));
+
+    final said = <String>[];
+    n.onArrived = (note) => said.add(note.title);
+    n.showing = 'person:c9';
+    fb.notes.add(const PushNote(title: 'Ada Obi', body: 'Hi', data: {'tag': 'person:c9', 'link': '/you/people/c9', 'kind': 'person'}));
+    fb.notes.add(const PushNote(title: 'Chidi', body: 'Message request: hello', data: {'tag': 'person:c8', 'link': '/you/people/requests/c8', 'kind': 'request'}));
+    await pumpEventQueue();
+    expect(said, ['Chidi'], reason: 'the chat on the screen shows nothing');
   });
 
   group('Settings', () {

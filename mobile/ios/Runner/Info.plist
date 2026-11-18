@@ -12,6 +12,8 @@
 	<string>Taskiem opens your photos when you choose one to send in a chat.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Taskiem uses the microphone while you record a voice note to send in a chat.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Only if you agree: Taskiem checks which of your contacts are on Taskiem. Their numbers are scrambled on this phone before they are sent, and nothing of your contacts is kept.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Taskiem opens with Face ID when you come back to it, so no one else reads your business's chats.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>

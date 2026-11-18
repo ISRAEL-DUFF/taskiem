@@ -29,6 +29,7 @@ import 'book_sheet.dart' show lagosTime, whenLabel;
 import 'cards.dart' show CardButton, CardPill;
 import 'door.dart';
 import 'my_chat.dart';
+import 'people_cards.dart' show shareWithPeople;
 import 'words.dart';
 
 /// The words asking about orders made with the phone before it was on the
@@ -464,6 +465,15 @@ class _YourOrderPageState extends State<YourOrderPage> with WidgetsBindingObserv
                   primary: earlier,
                   onTap: () => chatAboutOrder(context, widget.auth, widget.onOpenChat, business: widget.business, chat: o.chatId, reference: widget.reference),
                 ),
+                // Shared into a chat with a person (people-chatting §10.1):
+                // they see it live only if it is theirs too.
+                if (!earlier) ...[
+                  const SizedBox(height: 8),
+                  CardButton(
+                    label: 'Share with someone',
+                    onTap: () => shareWithPeople(context, widget.auth, SendPeopleMessageRequestCard(type: 'order', businessId: widget.business, reference: widget.reference), what: '$word ${widget.reference}'),
+                  ),
+                ],
               ],
             ),
           ),

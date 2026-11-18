@@ -6,10 +6,11 @@
 enum RouteScreen { none, conversation, customer, taskiem, invoice, bill, purchase, tradeOrder, storefrontOrder, you, youPage }
 
 /// A page of You (taskiem-for-everyone §7) a link opens.
-enum YouPage { chats, chat, newChat, orders, order, discover, business }
+enum YouPage { chats, chat, newChat, orders, order, discover, business, person, requests, request }
 
-/// A page of You: [id] is the chat, the business (an order's, a profile's,
-/// a chat's to start) ; [ref] an order's reference; [tool] Their shop or
+/// A page of You: [id] is the chat (a business's, or a person's, a
+/// request's: people-chatting §7), the business (an order's, a profile's,
+/// a chat's to start); [ref] an order's reference; [tool] Their shop or
 /// Book over a chat started.
 typedef YouRoute = ({YouPage page, String id, String ref, String? tool});
 
@@ -53,6 +54,18 @@ YouRoute? _youRouteOf(String path) {
       }
       final id = part(2);
       return id == null ? r(YouPage.chats) : r(YouPage.chat, id);
+    // A chat with a person (/you/people/{chat}) and Requests
+    // (/you/people/requests[/{chat}]): a push of kind person or request.
+    case 'people':
+      if (parts.length == 2) return r(YouPage.chats);
+      if (parts[2] == 'requests') {
+        if (parts.length == 3) return r(YouPage.requests);
+        final id = parts.length == 4 ? part(3) : null;
+        return id == null ? r(YouPage.requests) : r(YouPage.request, id);
+      }
+      if (parts.length != 3) return null;
+      final id = part(2);
+      return id == null ? r(YouPage.chats) : r(YouPage.person, id);
     case 'orders':
       if (parts.length == 2) return r(YouPage.orders);
       if (parts.length != 4) return null;

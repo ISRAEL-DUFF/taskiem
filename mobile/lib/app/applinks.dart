@@ -17,8 +17,12 @@ import 'config.dart';
 /// Discover and a business's profile; You's settings stay on the web.
 final _opens = RegExp(
   r'^/(chat|approvals|invoices/[^/]+|trade-orders/[^/]+|storefront/orders/[^/]+|bills/[^/]+|purchases/[^/]+'
-  r'|you|you/chats|you/chats/[^/]+|you/orders|you/orders/[^/]+/[^/]+|you/discover|you/discover/[^/]+)/?$',
+  r'|you|you/chats|you/chats/[^/]+|you/orders|you/orders/[^/]+/[^/]+|you/discover|you/discover/[^/]+'
+  r'|you/people/[^/]+|you/people/requests/[^/]+)/?$',
 );
+
+/// The code of a person's link the app opens (`/p/{code}`), or null.
+String? personLinkOf(String page) => RegExp(r'^/p/([A-Za-z0-9]{4,40})$').firstMatch(page)?[1];
 
 /// A part of a /you link's question: letters, digits and dashes.
 final _plain = RegExp(r'^[A-Za-z0-9\-]{1,80}$');
@@ -38,6 +42,10 @@ String? appPageOf(Uri uri, {String server = taskiemUrl}) {
   // chat with it.
   final m = RegExp(r'^/m/([A-Za-z0-9]{4,40})/?$').firstMatch(uri.path);
   if (m != null) return '/m/${m[1]}';
+  // A person's link, or their QR code scanned with the phone's camera
+  // (people-chatting §5.2): who it is, then a chat with them.
+  final p = RegExp(r'^/p/([A-Za-z0-9]{4,40})/?$').firstMatch(uri.path);
+  if (p != null) return '/p/${p[1]}';
   if (!_opens.hasMatch(uri.path)) return null;
   final with_ = uri.queryParameters['with'];
   if (uri.path == '/chat' && with_ != null) {

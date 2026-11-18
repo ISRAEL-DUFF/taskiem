@@ -42,6 +42,8 @@ import 'chat/profile_screen.dart';
 import 'chat/live.dart';
 import 'chat/taskiem.dart';
 import 'screens/chat_link.dart';
+import 'chat/people_chat.dart' show PeopleChatData, PeopleChatScreen;
+import 'chat/people_find.dart' show PersonLinkScreen;
 import 'screens/home_tabs.dart';
 import 'screens/signed_in.dart';
 import 'screens/forgot_password.dart';
@@ -538,6 +540,21 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     final code = chatCodeOf(path);
     if (code != null) {
       unawaited(tkPush<void>(context, ChatLinkScreen(auth: _chats.auth, code: code)));
+      return;
+    }
+    // A person's link (people-chatting §5.2): who it is, and the person's
+    // own chat with them, over the business.
+    final person = personLinkOf(path);
+    if (person != null) {
+      final auth = _chats.auth;
+      unawaited(tkPush<void>(
+        context,
+        PersonLinkScreen(
+          auth: auth,
+          code: person,
+          openChat: (id) => tkPush<void>(context, PeopleChatScreen(data: PeopleChatData(auth, id), notify: widget.notify)),
+        ),
+      ));
       return;
     }
     final route = routeOf(path);

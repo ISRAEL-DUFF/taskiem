@@ -9,6 +9,9 @@
     <!-- Notifications on this phone (lib/app/notify.dart): Android 13 and
          later asks the person when they turn them on. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Finding friends from the phone's contacts (lib/chat/people_contacts.dart),
+         asked only after the person agrees in the app; read, hashed, never kept. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS"/>
     <application
         android:label="Taskiem"
         android:name=".TaskiemApplication"
@@ -50,6 +53,8 @@
                 <data android:pathPrefix="/storefront/orders/"/>
                 <data android:pathPrefix="/bills/"/>
                 <data android:pathPrefix="/purchases/"/>
+                <!-- A person's link and its QR code (people-chatting §5.2). -->
+                <data android:pathPrefix="/p/"/>
                 <!-- A password reset's link (lib/screens/forgot_password.dart). -->
                 <data android:path="/reset-password"/>
             </intent-filter>

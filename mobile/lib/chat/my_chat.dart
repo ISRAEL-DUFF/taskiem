@@ -41,6 +41,8 @@ import 'chats.dart' show ChatRow;
 import 'composer.dart';
 import 'door.dart';
 import 'my_chat_tools.dart';
+import 'people.dart' show PersonFace;
+import 'people_cards.dart' show shareWithPeople;
 import 'thread.dart';
 import 'words.dart';
 
@@ -93,29 +95,63 @@ const _poll = Duration(seconds: 4);
 
 // --- the list ---
 
-/// Your chats with businesses: latest first, with how many are unread, and
-/// the archived ones apart.
+/// You's one Chats list (people-chatting §7, §17 Q6): chats with businesses
+/// and with people together, latest first, each marked by its kind; how
+/// many are unread, how many requests wait, and the archived ones apart
+/// (`GET /v1/me/conversations`). A server without people chats answers
+/// 404 there: its chats with businesses alone (`GET /v1/me/chats`).
 class MyChats extends ChangeNotifier {
   MyChats(this.auth);
   final Auth auth;
 
-  List<PersonChat>? chats;
-  List<PersonChat> archived = const [];
+  List<ChatListItem>? chats;
+  List<ChatListItem> archived = const [];
   int unread = 0;
+
+  /// Message requests waiting (people-chatting §7).
+  int requests = 0;
   String? error;
   bool _disposed = false;
 
+  static ChatListItem _business(PersonChat c) => ChatListItem(
+    kind: 'business',
+    id: c.id,
+    name: c.name,
+    businessId: c.business,
+    last: c.last,
+    lastMine: c.lastMine,
+    lastAt: c.lastAt,
+    unread: c.unread,
+    muted: c.muted,
+    archived: c.archived,
+    blocked: c.blocked,
+  );
+
   Future<void> load() async {
     try {
-      final r = await auth.api.listMyChats();
-      chats = r.chats.where((c) => !c.archived).toList();
-      unread = r.unread;
-      error = null;
-      // The archived ones, for their row; one failing leaves the rest.
       try {
-        archived = (await auth.api.listMyChats(archived: '1')).chats.where((c) => c.archived).toList();
-      } on Object {
-        // Read again next time.
+        final r = await auth.api.listAllMyChats();
+        chats = r.chats.where((c) => !c.archived).toList();
+        unread = r.unread;
+        requests = r.requests;
+        error = null;
+        try {
+          archived = (await auth.api.listAllMyChats(archived: '1')).chats.where((c) => c.archived).toList();
+        } on Object {
+          // Read again next time.
+        }
+      } on ApiError catch (e) {
+        if (e.status != 404) rethrow;
+        final r = await auth.api.listMyChats();
+        chats = r.chats.where((c) => !c.archived).map(_business).toList();
+        unread = r.unread;
+        requests = 0;
+        error = null;
+        try {
+          archived = (await auth.api.listMyChats(archived: '1')).chats.where((c) => c.archived).map(_business).toList();
+        } on Object {
+          // Read again next time.
+        }
       }
     } on ApiError catch (e) {
       // A server without chats yet answers 404: none to show.
@@ -138,18 +174,24 @@ class MyChats extends ChangeNotifier {
 }
 
 /// A chat's line in the list: theirs, or yours with "You:".
-String myChatPreview(PersonChat c) {
+String myChatPreview(ChatListItem c) {
   if (c.blocked) return 'You blocked them';
+  if (c.gone == true && c.last.isEmpty) return 'This account was deleted';
+  if (c.waiting == true && c.last.isEmpty) return 'Waiting for them to accept';
   if (c.last.isEmpty) return 'No messages yet';
   return '${c.lastMine ? 'You: ' : ''}${c.last}';
 }
 
-/// The rows of your chats (You's Chats, and Archived).
+/// The rows of your chats (You's Chats, and Archived): a business marked
+/// Business, a person with their face, online and last line.
 class MyChatRows extends StatelessWidget {
-  const MyChatRows({super.key, required this.chats, required this.now, required this.onOpen});
-  final List<PersonChat> chats;
+  const MyChatRows({super.key, required this.chats, required this.now, required this.onOpen, this.transport});
+  final List<ChatListItem> chats;
   final DateTime now;
-  final ValueChanged<PersonChat> onOpen;
+  final ValueChanged<ChatListItem> onOpen;
+
+  /// For a person's photo.
+  final Transport? transport;
 
   @override
   Widget build(BuildContext context) {
@@ -158,16 +200,21 @@ class MyChatRows extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final c in chats)
-          ChatRow(
-            key: ValueKey('row my ${c.id}'),
-            title: c.name,
-            letter: c.name,
-            avatar: c.photo?.urls == null ? null : BusinessFace(name: c.name, urls: c.photo!.urls, size: 48),
-            time: listTime(c.lastAt, now),
-            preview: Text(myChatPreview(c), maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14, color: t.muted)),
-            unread: c.unread,
-            muted: c.muted,
-            onTap: () => onOpen(c),
+          Semantics(
+            label: c.kind == 'person' ? 'Chat with a person' : 'Chat with a business',
+            container: true,
+            child: ChatRow(
+              key: ValueKey('row my ${c.id}'),
+              title: c.name,
+              letter: c.name,
+              avatar: c.kind == 'person' && transport != null ? PersonFace(name: c.name, transport: transport!, photo: c.person?.photo, size: 48, online: c.person?.online == true) : null,
+              marks: c.kind == 'business' ? const [(label: 'Business', off: false)] : const [],
+              time: listTime(c.lastAt, now),
+              preview: Text(myChatPreview(c), maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14, color: t.muted)),
+              unread: c.unread,
+              muted: c.muted,
+              onTap: () => onOpen(c),
+            ),
           ),
       ],
     );
@@ -178,7 +225,7 @@ class MyChatRows extends StatelessWidget {
 class ArchivedChatsScreen extends StatefulWidget {
   const ArchivedChatsScreen({super.key, required this.data, required this.onOpen, this.now = DateTime.now});
   final MyChats data;
-  final Future<void> Function(PersonChat c) onOpen;
+  final Future<void> Function(ChatListItem c) onOpen;
   final DateTime Function() now;
 
   @override
@@ -198,7 +245,7 @@ class _ArchivedChatsScreenState extends State<ArchivedChatsScreen> {
             const TkPanel(children: [TkEmpty(icon: 'chat', title: 'No archived chats', line: 'Chats you archive show here.')])
           else
             TkPanel(
-              children: [MyChatRows(chats: widget.data.archived, now: widget.now(), onOpen: widget.onOpen)],
+              children: [MyChatRows(chats: widget.data.archived, now: widget.now(), onOpen: widget.onOpen, transport: widget.data.auth.transport)],
             ),
         ],
       ),
@@ -567,6 +614,8 @@ class _MyChatScreenState extends State<MyChatScreen> {
         if (c.offers == 'yes') ('Stop offers from ${c.name}', _stopOffers) else ('Get offers from ${c.name}', () => _say(d.put(offers: true), 'You’ll get offers from ${c.name}')),
         if (c.blocked) ('Unblock ${c.name}', () => _say(d.block(false), 'Unblocked ${c.name}')) else ('Block ${c.name}', _block),
         ('Report ${c.name}', () => showReportSheet(context, d)),
+        // Their card into a chat with a person (people-chatting §10.1).
+        ('Share ${c.name} with someone', () => shareWithPeople(context, d.auth, SendPeopleMessageRequestCard(type: 'business', businessId: c.business), what: c.name)),
       ],
     );
   }

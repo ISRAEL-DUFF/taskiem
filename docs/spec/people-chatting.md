@@ -507,3 +507,105 @@ Branch `stage5a-joined`: stream B (finding people, 989edad4, on 093b2f44) with s
 - The screens (web and app) both streams list; the app's `appPageOf` for `/p/{code}` and `/you/people/*` in its router.
 - A held message is refused, not kept for moderators (§8.4's "held for review"): there is no moderators' queue yet.
 - Typing indicators.
+
+## As built: stage 5a, app
+
+Branch `stage5a-app`, on 68001463 (the two server streams joined): the Flutter app's side of stage 5a, on **You** (`mobile/lib`). People chats look and behave as chats with businesses do there: the same thread, bubbles, composer, menus, cards and theme. Nothing in the app calls people chats end-to-end encrypted. Where it says how they are kept, it says they are kept by Taskiem, readable by its servers and so not end-to-end encrypted, and read by no one at Taskiem except a moderator handling a report or under a lawful request (`peopleKeptWords`, §6.2, §6.3).
+
+**Where.**
+- `lib/chat/people.dart`: a person's face (their photo through `/v1/people/{id}/photo` when their setting lets you see it, else their letters; a lime dot when online), last seen in words, a message in a line, the warnings under a stranger's message, the report reasons, the kept-by-Taskiem words, and the contact-name modal.
+- `lib/chat/people_chat.dart`: `PeopleChatData` and `PeopleChatScreen` (`/you/people/{id}`), `PersonInfoScreen`, the report and block-and-report sheet.
+- `lib/chat/people_find.dart`: New chat, a person's link screen (`/p/{code}`), your link and QR code, Requests.
+- `lib/chat/people_contacts.dart`: the contacts hash, `PhoneContacts` (the phone's address book behind an interface; `DevicePhoneContacts` uses flutter_contacts), matching, the explainer, Your contacts.
+- `lib/chat/people_settings.dart`: Privacy with people, Blocked people.
+- `lib/chat/people_cards.dart`: shared cards, opening one live, picking chats to share or forward to, the + menu's cards, "Your share", the bank account for shares.
+- `lib/app/presence.dart`: the heartbeat.
+- Changed: `my_chat.dart` (the one list; Share {business} with someone), `screens/you.dart` (Chats, New chat, Settings' "You and people"), `screens/you_links.dart`, `app/route.dart`, `app/applinks.dart`, `app/notify.dart`, `main.dart` (a person's link in a business session), `your_orders.dart` (Share with someone), `screens/you_account.dart` (Notifications' two new switches).
+
+**The one Chats list** (§7, §17 Q6) reads `GET /v1/me/conversations` (and `?archived=1` for Archived): business and person rows together, newest first.
+- A business's row is marked **Business**; a person's has their face and online dot; a screen reader hears each as a chat with a business or with a person.
+- Unread, the last line ("You: …", "You blocked them", "Waiting for them to accept", "This account was deleted"), the time and mute show as before.
+- **Message requests**, with its count, heads the list when any wait. **New chat** is in the head.
+- A server without the one list (404) falls back to `GET /v1/me/chats`.
+
+**A chat with a person.**
+- Sent with a `client_id`. The words go back to the box when a send fails, and are sent again with the same id when the answer never came.
+- Ticks: a clock while it goes, one when sent, two when delivered, two lime when read. Read shows only while the chat's `person.read_ticks` says read ticks go between the two (the server hides reads too).
+- Reply by swiping or from the menu, with the quote above the bubble ("An earlier message" when it is not loaded); reactions; star; Copy.
+- Forward to at most five chats (one at a time for a message forwarded many times), shown "Forwarded" or "Forwarded many times".
+- Delete for me; delete for everyone only for your own message within 24 hours ("This message was deleted").
+- Photos, PDFs and voice notes as in business chats (`doorFiles`), fetched from `/v1/me/people/{id}/files/{message}`.
+- The head: the name you gave them (else theirs), their photo and online or last seen as both settings allow, or "Message request", "Blocked", "This account was deleted". Tapping it opens their card: the number only when the chat's `phone` is given, Rename or add, the kept-by-Taskiem words, Block, Report.
+- A stranger's message marked by the checks (`warn`) carries a warning under it, on the receiver's side only; `warn_transfer` carries the transfer warning in people's words.
+- A message the checks hold (403) is not sent: the server's own words show, and the words go back to the box.
+- A deleted account's chat reads "Deleted account" and has no box.
+- The ⋯ menu: About, Mute, Archive, Block or Unblock, Report, Delete this chat.
+
+**Requests** (`/you/people/requests`): listed with the first message, and opened without the read call, so the sender is told nothing.
+- **Accept**: the box appears; the sender sees reads from then.
+- **Delete**: asked first; the sender is not told.
+- **Block and report**: a reason, an optional note, consent to send the last 20 messages with their photos and files, and Block ticked.
+
+**Finding people.**
+- **By number** (`POST /v1/people/lookup`): the person found, with Chat (`POST /v1/me/people {person_id}`) and Add to contacts (with the answer's `add_token`, `from: number`); oneself; or "Not on Taskiem yet" with **Invite**, the server's words shared from the person's own phone.
+- **By link**: pasted, or opened as `/p/{code}` (`appPageOf` passes `/p/{code}` on; Android's intent filter takes `/p/`). A QR code is scanned with the phone's own camera, which opens the link. The link screen shows who it is (`GET /v1/people/links/{code}`), Chat by `link_code`, Add (`from: link`), and plain words for a replaced (410) or unknown (404) link.
+- **Your link** (`/v1/me/link`): the words, the QR code (`/v1/me/link/qr?format=png`), Share, Copy, Replace (asked first).
+- **From the phone's contacts**, only after the person agrees:
+  - The explainer says what is sent and kept, and the method's limit: Taskiem holds the key and numbers are few enough to try them all, so it protects against others seeing what is sent, not against Taskiem.
+  - Only after **Agree** is the phone asked (`READ_CONTACTS`, `NSContactsUsageDescription`) and the contacts read.
+  - Each number is put in E.164 (`toE164`, Nigeria by default), each once. With `GET /v1/me/contacts/key`, each is hashed as `SHA-256(key ‖ "taskiem-contacts:" ‖ E.164)` in hex (`contactHash`) and sent in batches of the key's `max_batch` (`POST /v1/me/contacts/match`); on 409 it is asked again once with the new key.
+  - Nothing is stored: not the numbers, the hashes or the answer.
+  - Found people show by the name the phone has, with Add (`from: contacts`, that name) and Chat.
+  - A fixed vector checks the hash against the server's: `engine/people/hash_test.go` (`TestContactHashVector`) and `mobile/test/people_test.dart` hold the same key, number and 64 digits.
+- **Your contacts** (`/v1/me/contacts`): by the name you see, with Chat, Rename (empty for their own name) and Remove.
+
+**Settings, "You and people".**
+- Privacy with people (`/v1/me/privacy/people`): find me by number (Everyone, My contacts, Nobody), from contacts (on, off), who can message me (Everyone as a request, My contacts, Nobody), last seen and online, profile photo, show my number, read ticks. Each is saved at once and put back if refused.
+- Your contacts; your link and QR code; Blocked people (`/v1/me/people/blocked`, Unblock asked first); your bank account for shares.
+- Notifications gains Messages from people and Message requests (`people`, `requests`).
+
+**Presence.** While You is open, the app says `POST /v1/me/presence {online: true}` at once, every 30 seconds, and again when it comes back to the front; `{online: false}` when it goes to the background or You closes (`Presence`, a `WidgetsBindingObserver`).
+
+**Cards** (§10.1, §11 A).
+- Shared into a person's chat from its +: a business you chat with, a product of its shop (`GET /v1/me/chats/{id}/shop`), one of your orders or its delivery (`GET /v1/me/orders`), or **Your share**. Also from a business chat's ⋯ (Share {business} with someone) and from one of your orders (Share with someone), into chats you pick.
+- A card shows its kind, its business, its price or state, and a delivery's progress.
+- **Open** reads it live (`…/card`) as the person opening it:
+  - a product's price now (and what it was when shared), few left, and Order from their shop;
+  - a business's card, and Chat with them;
+  - an order live only when it is yours (See your order), else only what was shared.
+  
+  Chat starts the person's own chat with the business, `from: shared`.
+- **Your share**: the amount, what for, and who to pay (your saved account, or one typed). The receiver gets Copy number and Mark as paid; either side can set it back to Not paid yet. "Taskiem moves no money."
+- The bank account for shares (`/v1/me/payout-account`) is saved, shown and removed in Settings.
+
+**Pushes and links.**
+- `route.dart` knows `/you/people/{chat}` (a person's chat), `/you/people/requests` and `/you/people/requests/{chat}`; `appPageOf` opens them and `/p/{code}`.
+- A tapped push of kind `person` opens the chat; of kind `request`, Requests with the request over it. A people chat on the screen shows no push of its own (tag `person:{chat}`).
+- Android gains the channels `person` (Chats with people) and `request` (Message requests).
+
+**Server and generator changes made here.**
+- `POST /v1/me/chats` refused `from: shared` (400), which §10.2's Chat on a shared card needs. It now takes `shared` (`api/customer_door.go`, the OpenAPI enum); `TestPeopleCards` starts one and refuses an unknown `from`.
+- `tools/mobilegen` names a parameter that is one of Dart's own words with a trailing `_`. The `for` of `DELETE …/messages/{m}?for=` had made `api.g.dart` fail to compile (`TestAPIClientReservedParameter`).
+
+**Tests.**
+- `mobile/test/people_test.dart`:
+  - the hash vector; matching (E.164, each number once, batches, a changed key, no number in readable form); routes and links; the words (no claim of end-to-end encryption anywhere in the people chats' code);
+  - the one list with Requests;
+  - a chat's head, ticks, quote, Forwarded many times and deleted message; read ticks off; sending with a client id and a reply, and a held message; the warning; delete for everyone within 24 hours; forward and its cap; a deleted account;
+  - a request opened without a read, Accept, Delete, Block and report with consent; Requests;
+  - the person's card with and without their number;
+  - sharing a business, a product, an order;
+  - New chat by number with Add, Chat and Invite; a person's link and a replaced one; your link, its QR code and Replace;
+  - contacts not read before Agree, then matched and added; the phone saying no; Your contacts renamed and removed;
+  - Privacy with people; blocked people;
+  - a product opened live and a share marked paid; a share sent with a typed account, and the bank account saved;
+  - a link (as a push's) to a request and to a chat; presence.
+- `notify_test.dart`: pushes of kinds person and request routed, and none shown for the chat on the screen.
+- `you_settings_test.dart`: the two new notification switches.
+
+**Left over.**
+- Typing in people chats (the server has none yet), search across a person's own people chats, and starred messages across chats.
+- Location messages are shown, not sent from the app.
+- Contacts are matched when the person opens From your contacts, not re-checked daily by themselves.
+- No scanner in the app: the phone's camera opens a person's QR code as a link.
+- Discover's profile has no Share yet.

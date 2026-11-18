@@ -4,12 +4,16 @@
 // business's session (a business session is its person too), the screen
 // pushed over the business's home.
 
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import '../app/auth.dart';
 import '../app/route.dart';
 import '../chat/discover.dart' show DiscoverProfileScreen, DiscoverTab;
 import '../chat/my_chat.dart';
+import '../chat/people_chat.dart' show PeopleChatData, PeopleChatScreen;
+import '../chat/people_find.dart' show OpenPeopleChat, PeopleRequestsScreen;
 import '../chat/your_orders.dart' show YourOrderPage, YourOrdersTab, aboutOrderDraft;
 import '../kit/mobile.dart' show tkPush;
 
@@ -18,9 +22,30 @@ const youTabChats = 0, youTabOrders = 1, youTabDiscover = 2;
 
 /// Opens [r]: [showTab] brings one of You's tabs to the front (null in a
 /// business's session: Orders and Discover are pushed instead); [open]
-/// opens a chat by its id.
-Future<void> openYouPage(BuildContext context, Auth auth, YouRoute r, {required OpenMyChat open, void Function(int tab)? showTab, DateTime Function() now = DateTime.now}) async {
+/// opens a chat with a business by its id, [openPerson] one with a person
+/// (pushed here when not given).
+Future<void> openYouPage(
+  BuildContext context,
+  Auth auth,
+  YouRoute r, {
+  required OpenMyChat open,
+  OpenPeopleChat? openPerson,
+  void Function(int tab)? showTab,
+  DateTime Function() now = DateTime.now,
+}) async {
+  final person = openPerson ?? (id) => tkPush<void>(context, PeopleChatScreen(data: PeopleChatData(auth, id, now: now), openBusiness: open));
   switch (r.page) {
+    case YouPage.person:
+      showTab?.call(youTabChats);
+      await person(r.id);
+    case YouPage.requests:
+      showTab?.call(youTabChats);
+      await tkPush<void>(context, PeopleRequestsScreen(auth: auth, openChat: person, now: now));
+    case YouPage.request:
+      // Requests, and the request over it: answered, Requests is there.
+      showTab?.call(youTabChats);
+      unawaited(tkPush<void>(context, PeopleRequestsScreen(auth: auth, openChat: person, now: now)));
+      await person(r.id);
     case YouPage.chats:
       showTab?.call(youTabChats);
     case YouPage.chat:

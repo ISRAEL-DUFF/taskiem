@@ -35,6 +35,8 @@ const youKind = 'you';
 
 const kindWords = {
   'you': ('Chats with businesses', 'When a business you buy from writes to you'),
+  'person': ('Chats with people', 'When someone you chat with writes to you'),
+  'request': ('Message requests', 'When someone new writes to you first'),
   'business': ('Businesses you work with', 'Messages from linked businesses'),
   'customers': ('Customers', 'When a customer writes'),
   'orders': ('Orders and money', 'New orders, bills, payments and reminders'),

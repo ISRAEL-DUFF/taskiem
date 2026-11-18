@@ -1,6 +1,8 @@
 // You: a person's own side (docs/spec/taskiem-for-everyone.md §6, §7). A
-// personal session opens here, on three tabs: **Chats** (the chats with
-// businesses, §8.3, with the archived ones apart; **Start something**,
+// personal session opens here, on three tabs: **Chats** (the one list of
+// chats with businesses and with people, docs/spec/people-chatting.md §7,
+// with Requests and the archived ones apart; New chat finds people;
+// **Start something**,
 // invitations waiting, the switcher when the person is in businesses),
 // **Orders** (every order and booking with any business, §13) and
 // **Discover** (businesses to find, §10). Settings, in the head: name,
@@ -18,6 +20,13 @@ import '../app/auth.dart';
 import '../app/phone.dart';
 import '../chat/approve.dart' show TkTextBox;
 import '../app/notify.dart' show PhoneNotifications, PushNote, youChatOf;
+import '../app/presence.dart';
+import '../chat/people_cards.dart' show PayoutAccountPage;
+import '../chat/people_chat.dart' show PeopleChatData, PeopleChatScreen;
+import '../chat/people_contacts.dart' show PeopleContactsScreen, PhoneContacts, DevicePhoneContacts;
+import '../chat/people_find.dart';
+import '../chat/people_settings.dart' show BlockedPeopleScreen, PeoplePrivacyPage;
+import '../chat/your_orders.dart' show YourOrderPage;
 import '../app/prefs.dart' show Prefs;
 import '../app/sound.dart' show chime;
 import '../theme/look.dart';
@@ -49,8 +58,14 @@ String _say(Object e) => switch (e) {
     };
 
 class YouHome extends StatefulWidget {
-  const YouHome({super.key, required this.auth, this.links, this.now = DateTime.now, this.notify, this.prefs});
+  const YouHome({super.key, required this.auth, this.links, this.now = DateTime.now, this.notify, this.prefs, this.contacts = const DevicePhoneContacts(), this.presence = true});
   final Auth auth;
+
+  /// The phone's contacts, read only once the person agrees (a test's own).
+  final PhoneContacts contacts;
+
+  /// Says the person is here while the app is open (people-chatting §13).
+  final bool presence;
 
   /// Notifications on this phone, here You's: a business answering a chat.
   final PhoneNotifications? notify;
@@ -70,6 +85,7 @@ class _YouHomeState extends State<YouHome> {
   String? _error;
   bool _busy = false;
   late final MyChats _chats = MyChats(widget.auth);
+  late final Presence _presence = Presence(widget.auth.api);
   Timer? _poll;
 
   /// Told each time Orders is shown again: it reads itself again.
@@ -82,6 +98,7 @@ class _YouHomeState extends State<YouHome> {
   void initState() {
     super.initState();
     _load();
+    if (widget.presence) _presence.start();
     widget.links?.addListener(_linked);
     WidgetsBinding.instance.addPostFrameCallback((_) => _linked());
     // New messages show in the list while it is open.
@@ -104,16 +121,24 @@ class _YouHomeState extends State<YouHome> {
     }
   }
 
-  /// A tapped notification: its chat, over the list.
+  /// A tapped notification: its chat (a business's or a person's), or
+  /// Requests, over the list.
   void _notified() {
     final notify = widget.notify;
     if (notify == null || !mounted) return;
     final problem = notify.takeProblem();
     if (problem != null) showTkToast(context, problem, error: true);
-    final id = youChatOf(notify.takePending());
-    if (id == null) return;
+    final link = notify.takePending();
+    final id = youChatOf(link);
+    if (id != null) {
+      Navigator.of(context).popUntil((r) => r.isFirst);
+      unawaited(_open(PersonChat.fromJson(_stub(id))));
+      return;
+    }
+    final you = link == null ? null : youRouteOf(link);
+    if (you == null) return;
     Navigator.of(context).popUntil((r) => r.isFirst);
-    unawaited(_open(PersonChat.fromJson(_stub(id))));
+    unawaited(openYouPage(context, widget.auth, you, open: _openId, openPerson: _openPerson, showTab: (i) => _tabs.currentState?.show(i), now: widget.now));
   }
 
   /// Enough of a chat to open it by its id (the rest is read as it opens).
@@ -152,6 +177,7 @@ class _YouHomeState extends State<YouHome> {
     notify?.removeListener(_notified);
     if (notify?.onArrived == _arrived) notify?.onArrived = null;
     _poll?.cancel();
+    if (widget.presence) _presence.stop();
     widget.links?.removeListener(_linked);
     _chats.dispose();
     _ordersShown.dispose();
@@ -175,6 +201,29 @@ class _YouHomeState extends State<YouHome> {
   /// A chat opened, and the list read again when it is closed.
   Future<void> _open(PersonChat c, {String? notice, String draft = ''}) => _openId(c.id, notice: notice, draft: draft);
 
+  /// A row of the one list: a business's chat, or a person's.
+  Future<void> _openItem(ChatListItem c) => c.kind == 'person' ? _openPerson(c.id) : _openId(c.id);
+
+  /// A chat with a person opened by its id; the list read again after.
+  Future<void> _openPerson(String id) async {
+    await tkPush<void>(
+      context,
+      PeopleChatScreen(
+        data: PeopleChatData(widget.auth, id, now: widget.now),
+        notify: widget.notify,
+        openBusiness: _openId,
+        openOrder: (business, reference) => tkPush<void>(context, YourOrderPage.of(auth: widget.auth, business: business, reference: reference, onOpenChat: _openId, now: widget.now)),
+      ),
+    );
+    await _chats.load();
+  }
+
+  /// New chat: finding people (people-chatting §5).
+  Future<void> _newChat() async {
+    await tkPush<void>(context, NewPeopleChatScreen(auth: widget.auth, openChat: _openPerson, contacts: widget.contacts));
+    await _chats.load();
+  }
+
   /// A chat opened by its id (from Orders and Discover too), with a tool
   /// over it when asked; the list read again when it is closed.
   Future<void> _openId(String id, {String? notice, String draft = '', String? tool}) async {
@@ -187,6 +236,14 @@ class _YouHomeState extends State<YouHome> {
   Future<void> _linked() async {
     final page = widget.links?.waiting == true ? widget.links!.take() : null;
     if (page == null || !mounted) return;
+    // A person's link (people-chatting §5.2): who it is, then the chat.
+    final person = personLinkOf(page);
+    if (person != null) {
+      Navigator.of(context).popUntil((r) => r.isFirst);
+      await tkPush<void>(context, PersonLinkScreen(auth: widget.auth, code: person, openChat: _openPerson));
+      await _chats.load();
+      return;
+    }
     final code = chatCodeOf(page);
     if (code != null) {
       // Seen on the way in: the chat starts at once.
@@ -212,7 +269,7 @@ class _YouHomeState extends State<YouHome> {
     final you = youRouteOf(page);
     if (you != null) {
       Navigator.of(context).popUntil((r) => r.isFirst);
-      await openYouPage(context, widget.auth, you, open: _openId, showTab: (i) => _tabs.currentState?.show(i), now: widget.now);
+      await openYouPage(context, widget.auth, you, open: _openId, openPerson: _openPerson, showTab: (i) => _tabs.currentState?.show(i), now: widget.now);
       return;
     }
     final token = Uri.parse(page).queryParameters['token'];
@@ -323,9 +380,10 @@ class _YouHomeState extends State<YouHome> {
           await _load();
         },
         actions: [
-          if (businesses.isNotEmpty) TkHeadButton(icon: 'loop', label: 'Switch', onTap: () => showSwitcher(context, auth)),
+          TkHeadButton(icon: 'b-plus', label: 'New chat', onTap: _newChat),
           const SizedBox(width: 6),
-          TkHeadButton(icon: 'settings', label: 'Settings', onTap: () => tkPush<void>(context, YouSettingsScreen(auth: auth, notify: widget.notify, onOpenChat: _openId, now: widget.now))),
+          if (businesses.isNotEmpty) ...[TkHeadButton(icon: 'loop', label: 'Switch', onTap: () => showSwitcher(context, auth)), const SizedBox(width: 6)],
+          TkHeadButton(icon: 'settings', label: 'Settings', onTap: () => tkPush<void>(context, YouSettingsScreen(auth: auth, notify: widget.notify, onOpenChat: _openId, onOpenPerson: _openPerson, now: widget.now))),
         ],
         children: [
           if (_invitations.isNotEmpty)
@@ -365,33 +423,46 @@ class _YouHomeState extends State<YouHome> {
             builder: (context, _) {
               final chats = _chats.chats;
               final archived = _chats.archived;
+              final requests = _chats.requests;
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (_chats.error != null && chats == null) TkErrorBox(_chats.error!),
-                  if (chats != null && chats.isEmpty && archived.isEmpty)
+                  if (chats != null && chats.isEmpty && archived.isEmpty && requests == 0)
                     const TkPanel(
                       children: [
                         TkEmpty(
                           icon: 'chat',
                           title: 'No chats yet',
-                          line: 'Chats with businesses will show here.',
+                          line: 'Chats with businesses and people will show here. Start one with New chat.',
                         ),
                       ],
                     ),
-                  if (chats != null && (chats.isNotEmpty || archived.isNotEmpty))
+                  if (chats != null && (chats.isNotEmpty || archived.isNotEmpty || requests > 0))
                     TkPanel(
                       inset: 76,
                       children: [
+                        if (requests > 0)
+                          TkListRow(
+                            title: 'Message requests',
+                            sub: 'From people you haven’t chatted with',
+                            icon: 'b-people',
+                            amount: '$requests',
+                            semanticsLabel: 'Message requests, $requests',
+                            onTap: () async {
+                              await tkPush<void>(context, PeopleRequestsScreen(auth: auth, openChat: _openPerson, now: widget.now));
+                              await _chats.load();
+                            },
+                          ),
                         if (archived.isNotEmpty)
                           TkListRow(
                             title: 'Archived',
                             icon: 'archive',
                             amount: '${archived.length}',
                             semanticsLabel: 'Archived chats, ${archived.length}',
-                            onTap: () => tkPush<void>(context, ArchivedChatsScreen(data: _chats, now: widget.now, onOpen: (c) => _open(c))),
+                            onTap: () => tkPush<void>(context, ArchivedChatsScreen(data: _chats, now: widget.now, onOpen: _openItem)),
                           ),
-                        MyChatRows(chats: chats, now: widget.now(), onOpen: (c) => _open(c)),
+                        MyChatRows(chats: chats, now: widget.now(), onOpen: _openItem, transport: auth.transport),
                       ],
                     ),
                 ],
@@ -467,8 +538,11 @@ class _InvitationRow extends StatelessWidget {
 /// their phone with Change number, saved addresses, notifications, privacy,
 /// signing out and deleting the account.
 class YouSettingsScreen extends StatelessWidget {
-  const YouSettingsScreen({super.key, required this.auth, this.notify, this.onOpenChat, this.pickers = const Pickers(), this.now = DateTime.now});
+  const YouSettingsScreen({super.key, required this.auth, this.notify, this.onOpenChat, this.onOpenPerson, this.pickers = const Pickers(), this.now = DateTime.now});
   final Auth auth;
+
+  /// Opens a chat with a person (Your contacts' Chat); else it is pushed.
+  final OpenPeopleChat? onOpenPerson;
 
   /// Notifications on this phone, for You.
   final PhoneNotifications? notify;
@@ -560,6 +634,58 @@ class YouSettingsScreen extends StatelessWidget {
                     context,
                     YouPrivacyPage(auth: auth, onOpenChat: onOpenChat ?? (id, {notice, draft = '', tool}) => _openChat(context, id, notice: notice, draft: draft, tool: tool), now: now),
                   ),
+                ),
+              ],
+            ),
+            // Chats with people (people-chatting §5.4, §8.1, §11).
+            TkSection(
+              title: 'You and people',
+              inset: 56,
+              children: [
+                TkListRow(
+                  title: 'Privacy with people',
+                  sub: 'Who can find you, message you and see your last seen',
+                  icon: 'b-shield',
+                  square: look.teal,
+                  onTap: () => tkPush<void>(context, PeoplePrivacyPage(auth: auth)),
+                ),
+                TkListRow(
+                  title: 'Your contacts',
+                  sub: 'People you added',
+                  icon: 'b-people',
+                  square: look.blue,
+                  onTap: () => tkPush<void>(
+                    context,
+                    PeopleContactsScreen(
+                      auth: auth,
+                      onChat: (person) => chatWithPerson(
+                        context,
+                        auth,
+                        onOpenPerson ?? (id) => tkPush<void>(context, PeopleChatScreen(data: PeopleChatData(auth, id, now: now), notify: notify)),
+                        person: person,
+                      ),
+                    ),
+                  ),
+                ),
+                TkListRow(
+                  title: 'Your link and QR code',
+                  sub: 'So people can chat with you without your number',
+                  icon: 'b-qr',
+                  square: look.violet,
+                  onTap: () => tkPush<void>(context, MyPersonLinkScreen(auth: auth)),
+                ),
+                TkListRow(
+                  title: 'Blocked people',
+                  icon: 'b-x-ring',
+                  square: look.red,
+                  onTap: () => tkPush<void>(context, BlockedPeopleScreen(auth: auth, now: now)),
+                ),
+                TkListRow(
+                  title: 'Your bank account for shares',
+                  sub: 'Where friends pay you back. Taskiem moves no money',
+                  icon: 'b-bank',
+                  square: look.lime,
+                  onTap: () => tkPush<void>(context, PayoutAccountPage(auth: auth)),
                 ),
               ],
             ),

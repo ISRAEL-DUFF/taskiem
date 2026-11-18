@@ -170,7 +170,7 @@ void main() {
     expect(auth.transport.token, 'tok-p');
     expect(auth.personal, isTrue);
     expect(find.byType(YouHome), findsOneWidget);
-    expect(find.text('Chats with businesses will show here.'), findsOneWidget);
+    expect(find.text('Chats with businesses and people will show here. Start one with New chat.'), findsOneWidget);
     expect(find.text('Start something'), findsOneWidget);
     await snap(t, 'you');
     expect(find.bySemanticsLabel('Switch'), findsNothing, reason: 'no switcher for a person in no business');

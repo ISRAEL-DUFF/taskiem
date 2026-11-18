@@ -1,0 +1,1246 @@
+// A chat with a person, on **You** (docs/spec/people-chatting.md §7, §8,
+// §10, §11; `/v1/me/people/{id}…`), drawn as a chat with a business is:
+// words, photos, voice notes and files, sent with a client id so a send
+// tried again is kept once; ticks (read only while both have read ticks
+// on); replies and quotes; reactions and stars; forward (to at most five
+// chats, marked Forwarded, or Forwarded many times); delete for me, or for
+// everyone within 24 hours; shared cards and "Your share". Its head is the
+// person's card: the name you gave them, their photo and last seen as
+// their settings let you see them, and their number only if they show it.
+//
+// A request (a stranger's first message) opens here too, without telling
+// the sender: Accept, Delete, or Block and report. The warning shows under
+// a stranger's message that the checks marked. A message held by the
+// checks is not sent, and the server's words say why.
+//
+// People chats are kept by Taskiem and readable by its servers; the info
+// says so plainly (people.dart, peopleKeptWords) and nothing says they are
+// end-to-end encrypted.
+
+import 'dart:async';
+
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
+
+import '../api/api.g.dart';
+import '../api/transport.dart';
+import '../app/auth.dart';
+import '../app/notify.dart' show PhoneNotifications;
+import '../app/phone.dart' show showPhone;
+import '../app/session.dart' show uuid4;
+import '../kit/icon.dart';
+import '../kit/kit.dart';
+import '../kit/mobile.dart';
+import '../kit/modal.dart';
+import '../kit/sheet.dart';
+import '../theme/look.dart';
+import '../theme/theme.dart';
+import 'approve.dart' show TkTextBox;
+import 'attachments.dart';
+import 'cards.dart' show CardButton, cardDecoration;
+import 'composer.dart';
+import 'door.dart' show doorFileMessage, doorFiles;
+import 'menu.dart';
+import 'my_chat.dart' show OpenMyChat, sayFailure;
+import 'people.dart';
+import 'people_cards.dart';
+import 'thread.dart';
+import 'words.dart';
+
+/// How often an open chat reads again.
+const _poll = Duration(seconds: 4);
+
+/// How long a message can be deleted for everyone (§7).
+const deleteForEveryoneWithin = Duration(hours: 24);
+
+/// A message of the chat; one of yours on its way is [local], with its
+/// file.
+class PeopleLine {
+  PeopleLine(this.m, {this.local = false, this.file});
+  final PeopleMessage m;
+  final bool local;
+  final PickedFile? file;
+  String get id => m.id;
+}
+
+List<PeopleLine> _merge(List<PeopleLine> cur, List<PeopleLine> more) {
+  final by = {for (final m in cur) m.id: m};
+  for (final m in more) {
+    by[m.id] = m;
+  }
+  return by.values.toList()
+    ..sort((a, b) {
+      final t = a.m.createdAt.compareTo(b.m.createdAt);
+      return t != 0 ? t : a.id.compareTo(b.id);
+    });
+}
+
+/// The words for a send that did not go: the server's own (a message held
+/// by the checks, too many requests waiting), or the rate's.
+String sendFailure(Object e) {
+  if (e is ApiError && e.status == 429 && !e.body.containsKey('error')) return 'You are sending too fast. Wait a moment and try again.';
+  return sayFailure(e);
+}
+
+/// What a chat with a person shows, read every few seconds while open.
+class PeopleChatData extends ChangeNotifier {
+  PeopleChatData(this.auth, this.id, {this.follow = true, DateTime Function()? now}) : now = now ?? DateTime.now;
+  final Auth auth;
+  final String id;
+  final bool follow;
+  final DateTime Function() now;
+
+  TaskiemApi get api => auth.api;
+  String get base => '/v1/me/people/${Uri.encodeComponent(id)}';
+
+  /// The tag of this chat's notifications: none shows while it is open.
+  String get tag => 'person:$id';
+
+  PeopleChat? chat;
+  List<PeopleLine>? messages;
+  bool hasOlder = false;
+  String? error;
+  bool offline = false;
+
+  /// The chat is not there (deleted, or a request deleted elsewhere).
+  bool missing = false;
+
+  /// What a change from the menu could not do, said once by the screen.
+  String? actionError;
+  Timer? _timer;
+  bool _disposed = false;
+  int _localN = 0;
+  bool _pulling = false;
+  bool _reading = false;
+  bool _loadingOlder = false;
+
+  /// The words given back after a send that may have reached the server,
+  /// with their client id: sent again, they go with it.
+  ({String words, String client})? _unsure;
+
+  late final ChatFiles files = ChatFiles(auth.transport, pathOf: (m) => '$base/files/${Uri.encodeComponent(m.id)}');
+
+  final _back = StreamController<String>.broadcast();
+  Stream<String> get givenBack => _back.stream;
+
+  String get name => chat?.name ?? 'Chat';
+
+  /// A request waiting for you: reading it tells the sender nothing.
+  bool get isRequest => chat?.request == true;
+
+  /// Read ticks go between you two (both have them on, §5.4).
+  bool get readTicks => chat?.person?.readTicks ?? true;
+
+  Future<void> open() async {
+    await _chat();
+    await _pull(first: true);
+    if (follow && !_disposed) {
+      _timer = Timer.periodic(_poll, (_) {
+        _chat();
+        _pull(first: false);
+      });
+    }
+  }
+
+  Future<void> refresh() => Future.wait([_chat(), _pull(first: false)]);
+
+  Future<void> _chat() async {
+    if (_reading) return;
+    _reading = true;
+    try {
+      final c = await api.getPeopleChat(id: id);
+      if (_disposed) return;
+      chat = c;
+      _changed();
+    } on ApiError catch (e) {
+      if (e.status == 404) {
+        missing = true;
+        _timer?.cancel();
+        _changed();
+      } else {
+        _fail(e);
+      }
+    } on Object catch (e) {
+      _fail(e);
+    } finally {
+      _reading = false;
+    }
+  }
+
+  Future<void> _pull({required bool first}) async {
+    if (missing) return;
+    if (_pulling && !first) return;
+    _pulling = true;
+    try {
+      final out = await api.peopleMessages(id: id);
+      if (_disposed) return;
+      final page = [for (final m in out.messages) PeopleLine(m)];
+      if (first) hasOlder = out.more;
+      final from = page.isEmpty ? null : page.first.m.createdAt;
+      final kept = (messages ?? const <PeopleLine>[]).where((m) => m.local || (hasOlder && from != null && m.m.createdAt.isBefore(from))).toList();
+      messages = _merge(kept, page);
+      offline = false;
+      error = null;
+      _changed();
+      // A request is read without telling the sender: no read marks until
+      // it is accepted (§7).
+      if (!isRequest && chat != null && out.messages.any((m) => !m.mine && m.readAt == null)) await api.readPeopleChat(id: id);
+    } on ApiError catch (e) {
+      if (e.status == 404) {
+        missing = true;
+        _changed();
+      } else {
+        _fail(e);
+      }
+    } on Object catch (e) {
+      _fail(e);
+    } finally {
+      _pulling = false;
+    }
+  }
+
+  Future<void> older() async {
+    final oldest = messages?.where((m) => !m.local).firstOrNull;
+    if (oldest == null || _loadingOlder) return;
+    _loadingOlder = true;
+    try {
+      final out = await api.peopleMessages(id: id, before: oldest.id);
+      if (_disposed) return;
+      messages = _merge(messages ?? const [], [for (final m in out.messages) PeopleLine(m)]);
+      hasOlder = out.more;
+      _changed();
+    } on Object catch (e) {
+      _fail(e);
+    } finally {
+      _loadingOlder = false;
+    }
+  }
+
+  void _fail(Object e) {
+    if (_disposed) return;
+    if (e is Offline && messages != null) {
+      offline = true;
+    } else {
+      error = e is Offline ? 'You’re offline. The chat shows when you’re back online.' : sayFailure(e);
+    }
+    _changed();
+  }
+
+  /// Words, or a file with its caption, answering [reply] when given:
+  /// shown at once with a clock, then the server's copy; not sent, the
+  /// words come back to the box and the reason is said.
+  Future<void> send(String text, {PickedFile? file, PeopleMessage? reply}) async {
+    final words = text.trim();
+    if (words.isEmpty && file == null) return;
+    final again = _unsure;
+    final client = file == null && again != null && again.words == words ? again.client : '${now().millisecondsSinceEpoch}-${++_localN}-${uuid4().substring(0, 8)}';
+    _unsure = null;
+    final mine = PeopleLine(
+      PeopleMessage(
+        id: 'local-$client',
+        mine: true,
+        kind: file == null ? 'text' : 'media',
+        body: words,
+        createdAt: now(),
+        replyTo: reply?.id,
+        attachment: file == null ? null : ChatAttachment(kind: file.photo ? 'photo' : (file.type.startsWith('audio/') ? 'voice' : 'file'), name: file.name, size: file.bytes.length, type: file.type),
+      ),
+      local: true,
+      file: file,
+    );
+    messages = _merge(messages ?? const [], [mine]);
+    error = null;
+    _changed();
+    try {
+      final PeopleMessage sent;
+      if (file != null) {
+        final j = await auth.transport.upload('$base/files', bytes: file.bytes, filename: file.name, type: file.type, fields: {
+          'client_id': client,
+          if (words.isNotEmpty) 'text': words,
+          if (reply != null) 'reply_to': reply.id,
+        });
+        sent = PeopleMessage.fromJson((j as Map).cast<String, dynamic>());
+        unawaited(files.keep(sent.id, Uint8List.fromList(file.bytes)));
+      } else {
+        sent = await api.sendPeopleMessage(id: id, body: SendPeopleMessageRequest(text: words, clientId: client, replyTo: reply?.id));
+      }
+      if (_disposed) return;
+      messages = _merge((messages ?? const []).where((m) => m != mine).toList(), [PeopleLine(sent)]);
+      unawaited(_chat());
+    } on Object catch (e) {
+      if (_disposed) return;
+      messages = messages?.where((m) => m != mine).toList();
+      if (e is! ApiError || e.status >= 500) _unsure = (words: words, client: client);
+      if (!_back.isClosed && words.isNotEmpty) _back.add(words);
+      error = sendFailure(e);
+      unawaited(_chat());
+    }
+    _changed();
+  }
+
+  /// A card (a business, a product, an order, a delivery, your share).
+  Future<bool> sendCard(SendPeopleMessageRequestCard card) async {
+    try {
+      final sent = await api.sendPeopleMessage(id: id, body: SendPeopleMessageRequest(card: card, clientId: '${now().millisecondsSinceEpoch}-${++_localN}-${uuid4().substring(0, 8)}'));
+      if (_disposed) return true;
+      messages = _merge(messages ?? const [], [PeopleLine(sent)]);
+      error = null;
+      _changed();
+      unawaited(_chat());
+      return true;
+    } on Object catch (e) {
+      error = sendFailure(e);
+      _changed();
+      return false;
+    }
+  }
+
+  void _replace(PeopleMessage m) {
+    if (_disposed) return;
+    messages = _merge(messages ?? const [], [PeopleLine(m)]);
+    _changed();
+  }
+
+  /// Your reaction ("" takes it away).
+  Future<void> react(PeopleMessage m, String emoji) async {
+    try {
+      _replace(await api.markPeopleMessage(id: id, message: m.id, body: MarkPeopleMessageRequest(reaction: m.myReaction == emoji ? '' : emoji)));
+    } on Object catch (e) {
+      error = sayFailure(e);
+      _changed();
+    }
+  }
+
+  Future<void> star(PeopleMessage m) async {
+    try {
+      _replace(await api.markPeopleMessage(id: id, message: m.id, body: MarkPeopleMessageRequest(starred: m.starred != true)));
+    } on Object catch (e) {
+      error = sayFailure(e);
+      _changed();
+    }
+  }
+
+  /// Whether [m] can still be deleted for everyone (yours, within 24 h).
+  bool canDeleteForEveryone(PeopleMessage m) => m.mine && m.deleted != true && now().difference(m.createdAt) < deleteForEveryoneWithin;
+
+  /// Deletes [m] for you, or for everyone.
+  Future<bool> delete(PeopleMessage m, {required bool everyone}) async {
+    try {
+      await api.deletePeopleMessage(id: id, message: m.id, for_: everyone ? 'everyone' : 'me');
+      if (_disposed) return true;
+      if (everyone) {
+        _replace(PeopleMessage(id: m.id, mine: m.mine, kind: m.kind, body: '', createdAt: m.createdAt, deleted: true, status: m.status, readAt: m.readAt));
+      } else {
+        messages = messages?.where((x) => x.id != m.id).toList();
+        _changed();
+      }
+      unawaited(_chat());
+      return true;
+    } on Object catch (e) {
+      actionError = sayFailure(e);
+      _changed();
+      return false;
+    }
+  }
+
+  /// Forwards [m] to [to] (at most five chats); the words of how it went.
+  Future<String> forward(PeopleMessage m, List<String> to) async {
+    try {
+      final r = await api.forwardPeopleMessage(body: ForwardPeopleMessageRequest(chatId: id, messageId: m.id, to: to));
+      if (r.failed.isEmpty) return r.sent.length == 1 ? 'Forwarded' : 'Forwarded to ${r.sent.length} chats';
+      final why = r.failed.first.error;
+      return r.sent.isEmpty ? why : 'Forwarded to ${r.sent.length}. $why';
+    } on Object catch (e) {
+      return sayFailure(e);
+    }
+  }
+
+  /// A share marked paid, or not yet: both sides see it.
+  Future<void> markPaid(PeopleMessage m, bool paid) async {
+    try {
+      _replace(await api.markSplitPaid(id: id, message: m.id, body: MarkSplitPaidRequest(paid: paid)));
+    } on Object catch (e) {
+      error = sayFailure(e);
+      _changed();
+    }
+  }
+
+  /// Your settings with them: mute, archive.
+  Future<bool> put({bool? muted, bool? archived}) => _act(() async => chat = await api.putPeopleChat(id: id, body: PutPeopleChatRequest(muted: muted, archived: archived)));
+
+  /// Accept a request: it moves to your chats, and they see your read marks.
+  Future<bool> accept() => _act(() async => chat = await api.acceptPeopleRequest(id: id));
+
+  /// Delete a request: the sender is not told.
+  Future<bool> decline() => _act(() => api.declinePeopleRequest(id: id));
+
+  /// Block them (and report, with consent: the last 20 messages).
+  Future<BlockPersonResponse?> block({PeopleReport? report}) async {
+    BlockPersonResponse? out;
+    final ok = await _act(() async {
+      out = await api.blockPerson(id: id, body: BlockPersonRequest(report: report));
+      if (out!.removed) {
+        missing = true;
+      } else {
+        await _chat();
+      }
+    });
+    return ok ? out : null;
+  }
+
+  Future<bool> unblock() => _act(() async {
+    await api.unblockPerson(id: id);
+    await _chat();
+  });
+
+  /// Report them: the last 20 messages of your copy to Taskiem's moderators.
+  Future<String?> report(String reason, String note) async {
+    try {
+      final r = await api.reportPerson(id: id, body: PeopleReport(reason: reason, note: note.isEmpty ? null : note, consent: true));
+      return r.said;
+    } on Object catch (e) {
+      actionError = sayFailure(e);
+      _changed();
+      return null;
+    }
+  }
+
+  /// Delete this chat for you (they keep theirs).
+  Future<bool> deleteChat() => _act(() => api.deletePeopleChat(id: id));
+
+  Future<bool> _act(Future<void> Function() f) async {
+    try {
+      await f();
+      actionError = null;
+      _changed();
+      return true;
+    } on Object catch (e) {
+      actionError = sayFailure(e);
+      _changed();
+      return false;
+    }
+  }
+
+  void _changed() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _timer?.cancel();
+    _back.close();
+    files.dispose();
+    super.dispose();
+  }
+}
+
+/// The line under the person's name: online or last seen as their
+/// settings and yours allow, "Message request", or the account deleted.
+String peopleHeadLine(PeopleChat? c, DateTime now, {bool offline = false}) {
+  if (offline) return 'Waiting for network…';
+  if (c == null) return '';
+  if (c.gone) return 'This account was deleted';
+  if (c.request) return 'Message request';
+  if (c.blocked) return 'Blocked';
+  return lastSeenWords(c.person, now) ?? 'Person';
+}
+
+/// The chat with a person.
+class PeopleChatScreen extends StatefulWidget {
+  const PeopleChatScreen({super.key, required this.data, this.onBack, this.pickers = const Pickers(), this.recorder, this.notify, this.openBusiness, this.openOrder});
+  final PeopleChatData data;
+  final VoidCallback? onBack;
+  final Pickers pickers;
+  final Recorder? recorder;
+  final PhoneNotifications? notify;
+
+  /// Opens a chat with a business (a shared card's Chat), by its id.
+  final OpenMyChat? openBusiness;
+
+  /// Opens one of your orders (a shared order's See your order).
+  final void Function(String business, String reference)? openOrder;
+
+  @override
+  State<PeopleChatScreen> createState() => _PeopleChatScreenState();
+}
+
+class _PeopleChatScreenState extends State<PeopleChatScreen> {
+  final _text = TextEditingController();
+  StreamSubscription<String>? _back;
+  PeopleMessage? _reply;
+  String? _paying;
+
+  PeopleChatData get d => widget.data;
+
+  @override
+  void initState() {
+    super.initState();
+    if (d.messages == null) d.open();
+    widget.notify?.show(d.tag, this);
+    _back = d.givenBack.listen((w) {
+      if (_text.text.isEmpty) _text.text = w;
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.notify?.unshow(this);
+    _back?.cancel();
+    _text.dispose();
+    d.dispose();
+    super.dispose();
+  }
+
+  void _close() => (widget.onBack ?? () => Navigator.of(context).maybePop())();
+
+  void _say(bool ok, String done) {
+    if (!mounted) return;
+    showTkToast(context, ok ? done : (d.actionError ?? 'Something went wrong. Try again.'), error: !ok);
+  }
+
+  Future<void> _openBusiness(String id, {String? notice, String draft = '', String? tool}) async {
+    final open = widget.openBusiness;
+    if (open != null) return open(id, notice: notice, draft: draft, tool: tool);
+  }
+
+  Future<void> _menu(Rect at) {
+    final c = d.chat!;
+    return showHeadMenu(
+      context,
+      at: at,
+      items: [
+        ('About ${c.name}', _info),
+        if (!c.request) (c.muted ? 'Unmute notifications' : 'Mute notifications', () async => _say(await d.put(muted: !c.muted), c.muted ? 'Notifications on for ${c.name}' : 'Muted')),
+        if (!c.request)
+          (
+            c.archived ? 'Unarchive' : 'Archive',
+            () async {
+              final ok = await d.put(archived: !c.archived);
+              _say(ok, c.archived ? 'Brought back to the chats' : 'Archived');
+              if (ok && !c.archived) _close();
+            },
+          ),
+        if (!c.gone) (c.blocked ? 'Unblock ${c.name}' : 'Block ${c.name}', c.blocked ? () async => _say(await d.unblock(), 'Unblocked ${c.name}') : () => _block(report: false)),
+        if (!c.gone) ('Report ${c.name}', () => _block(report: true, blockToo: false)),
+        ('Delete this chat', _deleteChat),
+      ],
+    );
+  }
+
+  Future<void> _info() => tkPush<void>(context, PersonInfoScreen(data: d, onBlock: () => _block(report: false), onReport: () => _block(report: true, blockToo: false)));
+
+  /// Block (and report): with [report], the reasons and consent first.
+  Future<void> _block({required bool report, bool blockToo = true}) async {
+    final name = d.name;
+    if (report) {
+      final r = await showPeopleReport(context, name: name, block: blockToo);
+      if (r == null || !mounted) return;
+      if (r.block) {
+        final out = await d.block(report: r.report);
+        if (out == null) return _say(false, '');
+        _say(true, out.reported ? 'Blocked and reported' : 'Blocked $name');
+        if (out.removed) _close();
+      } else {
+        final said = await d.report(r.report.reason, r.report.note ?? '');
+        if (!mounted) return;
+        if (said != null) showTkToast(context, said);
+        if (said == null) _say(false, '');
+      }
+      return;
+    }
+    final yes = await showTkConfirm(
+      context,
+      title: 'Block $name?',
+      body: 'They can no longer message you or see your last seen and photo. They are not told. You can unblock them at any time.',
+      ok: 'Block',
+      danger: true,
+    );
+    if (!yes) return;
+    final out = await d.block();
+    if (out == null) return _say(false, '');
+    _say(true, 'Blocked $name');
+    if (out.removed) _close();
+  }
+
+  Future<void> _deleteChat() async {
+    final yes = await showTkConfirm(
+      context,
+      title: 'Delete this chat?',
+      body: 'It goes from your chats, on every phone you use. ${d.name} keeps their copy.',
+      ok: 'Delete',
+      danger: true,
+    );
+    if (!yes) return;
+    final ok = await d.deleteChat();
+    _say(ok, 'Chat deleted');
+    if (ok) _close();
+  }
+
+  Future<void> _accept() async {
+    final ok = await d.accept();
+    _say(ok, 'Accepted. ${d.name} is in your chats now.');
+  }
+
+  Future<void> _decline() async {
+    final yes = await showTkConfirm(
+      context,
+      title: 'Delete this request?',
+      body: '${d.name} is not told. If they write again, it comes as a new request.',
+      ok: 'Delete',
+      danger: true,
+    );
+    if (!yes) return;
+    final ok = await d.decline();
+    _say(ok, 'Request deleted');
+    if (ok) _close();
+  }
+
+  Future<void> _tools() async {
+    final kind = await showPeopleShareMenu(context);
+    if (kind == null || !mounted) return;
+    switch (kind) {
+      case PeopleShare.photo:
+        final f = await widget.pickers.photo();
+        if (f != null && mounted) await _file(f);
+      case PeopleShare.file:
+        final f = await widget.pickers.document();
+        if (f != null && mounted) await _file(f);
+      case PeopleShare.split:
+        final card = await showSplitForm(context, d.auth);
+        if (card != null) await d.sendCard(card);
+      case PeopleShare.business || PeopleShare.product || PeopleShare.order || PeopleShare.delivery:
+        final card = await pickShareCard(context, d.auth, kind);
+        if (card != null) await d.sendCard(card);
+    }
+  }
+
+  Future<void> _file(PickedFile f) async {
+    final problem = fileProblem(f, doorFiles);
+    if (problem != null) {
+      showTkToast(context, problem, error: true);
+      return;
+    }
+    final reply = _reply;
+    setState(() => _reply = null);
+    await d.send('', file: f, reply: reply);
+  }
+
+  Future<void> _hold(PeopleMessage m, Rect at) async {
+    if (m.id.startsWith('local-')) return;
+    final c = d.chat;
+    final write = c != null && !c.gone && !c.blocked && !c.request;
+    await showMessageMenu(
+      context,
+      bubble: at,
+      mine: m.mine,
+      what: peopleLine(m),
+      mineEmoji: m.myReaction,
+      onReact: write && m.deleted != true ? (e) => d.react(m, e) : null,
+      items: [
+        if (write && m.deleted != true) MenuItem('reply', 'Reply', () => setState(() => _reply = m)),
+        if (m.deleted != true && m.card == null && m.body.isNotEmpty) MenuItem('copy', 'Copy', () => Clipboard.setData(ClipboardData(text: m.body)), done: 'Copied'),
+        if (m.deleted != true && m.card?.type != 'split') MenuItem('forward', 'Forward', () => _forward(m)),
+        if (m.deleted != true) MenuItem('star', m.starred == true ? 'Unstar' : 'Star', () => d.star(m)),
+        MenuItem('trash', 'Delete', () => _delete(m), danger: true, separated: true),
+      ],
+    );
+  }
+
+  Future<void> _forward(PeopleMessage m) async {
+    if (m.forwardedMany == true) {
+      showTkToast(context, 'This message has been forwarded many times. It can go to one chat at a time.');
+    }
+    final to = await pickPeopleChats(context, d.auth, title: 'Forward to', what: peopleLine(m), max: m.forwardedMany == true ? 1 : 5, except: d.id);
+    if (to == null || to.isEmpty || !mounted) return;
+    final words = await d.forward(m, to);
+    if (mounted) showTkToast(context, words, error: !words.startsWith('Forwarded'));
+  }
+
+  Future<void> _delete(PeopleMessage m) async {
+    final everyone = d.canDeleteForEveryone(m);
+    final choice = await showTkModalChoices(
+      context,
+      title: 'Delete this message?',
+      choices: [('me', 'Delete for me'), if (everyone) ('everyone', 'Delete for everyone')],
+    );
+    if (choice == null || !mounted) return;
+    final ok = await d.delete(m, everyone: choice == 'everyone');
+    _say(ok, choice == 'everyone' ? 'Deleted for everyone' : 'Deleted for you');
+  }
+
+  Future<void> _paid(PeopleMessage m, bool paid) async {
+    setState(() => _paying = m.id);
+    await d.markPaid(m, paid);
+    if (mounted) setState(() => _paying = null);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final pad = MediaQuery.paddingOf(context);
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+      child: ListenableBuilder(
+        listenable: d,
+        builder: (context, _) {
+          final c = d.chat;
+          final name = d.name;
+          final now = d.now();
+          final list = d.messages;
+          final canSend = c != null && !c.gone && !c.blocked && !c.request && !d.missing;
+          final byId = {for (final m in list ?? const <PeopleLine>[]) m.id: m.m};
+          final nextOf = <String, PeopleLine>{for (var i = 0; list != null && i + 1 < list.length; i++) list[i].id: list[i + 1]};
+          return Semantics(
+            label: 'Chat with $name',
+            container: true,
+            child: WallpaperBox(
+              ground: t.chatWallpaper,
+              doodle: t.chatDoodle,
+              child: Column(
+                children: [
+                  ColoredBox(
+                    color: t.chatWallpaper,
+                    child: Padding(
+                      padding: EdgeInsets.only(top: pad.top),
+                      child: ChatHeadBar(
+                        onBack: widget.onBack,
+                        onMore: c == null ? null : _menu,
+                        onAvatar: c == null ? null : _info,
+                        avatar: PersonFace(name: name, transport: d.auth.transport, photo: c?.person?.photo, size: 40, letterSize: 15),
+                        title: name,
+                        subtitle: peopleHeadLine(c, now, offline: d.offline),
+                      ),
+                    ),
+                  ),
+                  if (c != null && c.request) _RequestNote(name: name),
+                  Expanded(
+                    child: d.missing
+                        ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('This chat is no longer here.', textAlign: TextAlign.center, style: tkHint(t))))
+                        : ThreadView<PeopleLine>(
+                            items: list,
+                            of: (id: (m) => m.id, at: (m) => m.m.createdAt, mine: (m) => m.m.mine),
+                            now: now,
+                            hasOlder: d.hasOlder,
+                            onOlder: d.older,
+                            errors: [?d.error],
+                            empty: Text(
+                              c?.waiting == true ? 'Your message waits for $name to accept it.' : 'Say hello to $name.',
+                              textAlign: TextAlign.center,
+                              style: tkHint(t),
+                            ),
+                            render: (x, prev) {
+                              final m = x.m;
+                              final first = prev == null || prev.m.mine != m.mine || prev.m.card != null || m.card != null;
+                              final next = nextOf[x.id];
+                              final last = next == null || next.m.mine != m.mine || next.m.card != null || dayLabel(next.m.createdAt, now) != dayLabel(m.createdAt, now);
+                              final quoted = m.replyTo == null ? null : byId[m.replyTo];
+                              return Padding(
+                                padding: EdgeInsets.only(top: first ? 6 : 0),
+                                child: BubbleHold(
+                                  label: m.mine ? 'Your message' : 'Message from $name',
+                                  onHold: x.local ? null : (at) => _hold(m, at),
+                                  onReply: canSend && !x.local && m.deleted != true ? () => setState(() => _reply = m) : null,
+                                  child: PeopleBubble(
+                                    line: x,
+                                    first: first,
+                                    last: last,
+                                    other: name,
+                                    files: d.files,
+                                    quote: quoted,
+                                    quoteMissing: m.replyTo != null && quoted == null,
+                                    readTicks: d.readTicks,
+                                    busy: _paying == m.id,
+                                    onOpenCard: m.card == null || m.card!.type == 'split'
+                                        ? null
+                                        : () => showPeopleCard(context, auth: d.auth, chat: d.id, message: m.id, openBusiness: _openBusiness, openOrder: widget.openOrder),
+                                    onPaid: m.card?.type == 'split' && canSend ? (p) => _paid(m, p) : null,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  if (c != null && c.request && !d.missing) _RequestBar(name: name, onAccept: _accept, onDelete: _decline, onBlock: () => _block(report: true)),
+                  if (c != null && c.waiting && !c.request) _Note(text: 'Your messages wait in $name’s requests until they accept.'),
+                  if (c != null && c.gone) const _Note(text: 'This account was deleted. You can read the chat, but not write to it.'),
+                  if (c != null && c.blocked && !c.gone) _Note(text: 'You blocked $name. They can’t message you.', action: 'Unblock', onAction: () async => _say(await d.unblock(), 'Unblocked $name')),
+                  if (canSend)
+                    Composer(
+                      text: _text,
+                      bottom: pad.bottom,
+                      rules: doorFiles,
+                      label: 'Message $name',
+                      pickers: widget.pickers,
+                      recorder: widget.recorder,
+                      replying: _reply == null ? null : (_reply!.mine ? 'your message: ' : '$name: ') + peopleLine(_reply!),
+                      onCancelReply: () => setState(() => _reply = null),
+                      onTools: _tools,
+                      onSend: (text, file) {
+                        final reply = _reply;
+                        setState(() => _reply = null);
+                        d.send(text, file: file, reply: reply);
+                      },
+                    )
+                  else
+                    SizedBox(height: pad.bottom),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// A message's ticks: a clock while it goes, one when sent, two when
+/// delivered, two lime once read (only while both have read ticks on).
+class PeopleTicks extends StatelessWidget {
+  const PeopleTicks({super.key, required this.sending, required this.status, required this.readTicks, required this.meta});
+  final bool sending;
+  final String? status;
+  final bool readTicks;
+  final Color meta;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    if (sending) return Semantics(label: 'Sending', child: TkIcon('clock', size: 16, stroke: 2, color: meta));
+    if (status == 'read' && readTicks) return Semantics(label: 'Read', child: TkIcon('tick-double', size: 16, stroke: 2, color: t.chatTickRead));
+    if (status == 'read' || status == 'delivered') return Semantics(label: 'Delivered', child: TkIcon('tick-double', size: 16, stroke: 2, color: meta));
+    return Semantics(label: 'Sent', child: TkIcon('tick', size: 16, stroke: 2, color: meta));
+  }
+}
+
+/// One message of a people chat: Forwarded, the message it answers, its
+/// file, its card, its words (or that it was deleted), the reactions, and
+/// the warnings under a stranger's message.
+class PeopleBubble extends StatelessWidget {
+  const PeopleBubble({
+    super.key,
+    required this.line,
+    required this.first,
+    required this.last,
+    required this.other,
+    required this.files,
+    this.quote,
+    this.quoteMissing = false,
+    this.readTicks = true,
+    this.onOpenCard,
+    this.onPaid,
+    this.busy = false,
+  });
+  final PeopleLine line;
+  final bool first;
+  final bool last;
+  final String other;
+  final ChatFiles files;
+  final PeopleMessage? quote;
+
+  /// It answers a message no longer shown (older, or deleted for you).
+  final bool quoteMissing;
+  final bool readTicks;
+  final VoidCallback? onOpenCard;
+  final ValueChanged<bool>? onPaid;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final m = line.m;
+    final mine = m.mine;
+    final deleted = m.deleted == true;
+    final c = deleted ? null : m.card;
+    final meta = mine && c == null ? t.chatOutMeta : t.muted;
+    final stamp = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (m.starred == true) ...[Semantics(label: 'Starred', child: TkIcon('star', size: 12, stroke: 2, color: meta)), const SizedBox(width: 3)],
+        Text(clock(m.createdAt), style: tkText(size: 11, lineHeight: 16 / 11, color: meta)),
+        if (mine) ...[const SizedBox(width: 4), PeopleTicks(sending: line.local, status: m.status, readTicks: readTicks, meta: meta)],
+      ],
+    );
+    final forwarded = m.forwarded == true && !deleted
+        ? Text(m.forwardedMany == true ? 'Forwarded many times' : 'Forwarded', style: tkText(size: 12, color: meta).copyWith(fontStyle: FontStyle.italic))
+        : null;
+    final q = quote == null && !quoteMissing ? null : _Quote(m: quote, mine: mine, other: other);
+    final a = deleted ? null : m.attachment;
+    final words = deleted ? '' : (a != null && const {'Photo', 'Voice note', 'File'}.contains(m.body) ? '' : (c != null && m.body == c.title ? '' : m.body));
+    final place = deleted ? null : m.location;
+    final Widget shown;
+    if (c != null) {
+      shown = LayoutBuilder(
+        builder: (context, box) => Align(
+          alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: (box.maxWidth * 0.86).clamp(0.0, 360.0),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+            decoration: cardDecoration(context, mine: mine, first: first),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ?forwarded,
+                ?q,
+                PeopleCardView(card: c, mine: mine, onOpen: onOpenCard, onPaid: onPaid, busy: busy),
+                if (words.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 8), child: Text(words, style: tkText(size: 15, lineHeight: 1.4, color: t.text))),
+                Padding(padding: const EdgeInsets.only(top: 4), child: Align(alignment: Alignment.centerRight, child: stamp)),
+              ],
+            ),
+          ),
+        ),
+      );
+    } else {
+      shown = LayoutBuilder(
+        builder: (context, box) {
+          final room = (box.maxWidth * 0.78 - 24).clamp(120.0, 360.0);
+          return BubbleFrame(
+            mine: mine,
+            first: first,
+            last: last,
+            stamp: stamp,
+            inline: false,
+            children: [
+              ?forwarded,
+              ?q,
+              if (a != null) AttachmentView(m: doorFileMessage(id: m.id, mine: mine, a: a, at: m.createdAt), files: files, other: other, room: room, local: line.file),
+              if (place != null)
+                Row(
+                  children: [
+                    TkIcon('pin', size: 16, stroke: 2, color: meta),
+                    const SizedBox(width: 6),
+                    Flexible(child: Text((place.label ?? '').isEmpty ? 'A place' : place.label!, style: tkText(size: 15, weight: 600, color: t.text))),
+                  ],
+                ),
+              if (deleted)
+                Text('This message was deleted', style: tkText(size: 15, lineHeight: 23 / 16, color: meta).copyWith(fontStyle: FontStyle.italic))
+              else if (words.isNotEmpty)
+                Text(words, style: tkText(size: 16, lineHeight: 23 / 16, color: t.text)),
+            ],
+          );
+        },
+      );
+    }
+    final reactions = [if ((m.theirReaction ?? '').isNotEmpty) m.theirReaction!, if ((m.myReaction ?? '').isNotEmpty) m.myReaction!];
+    final warn = !mine && !deleted && m.warn == true;
+    final transfer = !mine && !deleted && m.warnTransfer == true && !warn;
+    if (reactions.isEmpty && !warn && !transfer) return shown;
+    return Column(
+      crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        shown,
+        if (reactions.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 2, left: 8, right: 8),
+            child: Semantics(
+              label: 'Reactions: ${reactions.map((e) => reactionNames[e] ?? e).join(', ')}',
+              excludeSemantics: true,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(999)),
+                child: Text(reactions.join(' '), style: tkText(size: 13)),
+              ),
+            ),
+          ),
+        if (warn) const PeopleWarning(strangerWarning),
+        if (transfer) const PeopleWarning(peopleTransferWarning),
+      ],
+    );
+  }
+}
+
+/// The message answered: who wrote it and its first line.
+class _Quote extends StatelessWidget {
+  const _Quote({required this.m, required this.mine, required this.other});
+  final PeopleMessage? m;
+  final bool mine;
+  final String other;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    final q = m;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(9, 5, 9, 5),
+      decoration: BoxDecoration(
+        color: mine ? const Color(0x1AFFFFFF) : t.tkSoft,
+        border: Border(left: BorderSide(color: look.lime, width: 3)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (q != null) Text(q.mine ? 'You' : other, style: tkText(size: 12.5, weight: 700, color: mine || dark ? look.lime : look.limeInk)),
+          Text(
+            q == null ? 'An earlier message' : peopleLine(q),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: tkText(size: 13, color: mine ? t.chatOutMeta : t.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Over a request: who it is from, and that reading it tells them nothing.
+class _RequestNote extends StatelessWidget {
+  const _RequestNote({required this.name});
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Text(
+        '$name wants to chat with you. They are not told you read this unless you accept.',
+        textAlign: TextAlign.center,
+        style: tkText(size: 12.5, lineHeight: 1.35, color: t.muted),
+      ),
+    );
+  }
+}
+
+/// A request's answers: Accept, Delete, Block and report.
+class _RequestBar extends StatelessWidget {
+  const _RequestBar({required this.name, required this.onAccept, required this.onDelete, required this.onBlock});
+  final String name;
+  final VoidCallback onAccept;
+  final VoidCallback onDelete;
+  final VoidCallback onBlock;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final pad = MediaQuery.paddingOf(context);
+    return Container(
+      margin: EdgeInsets.fromLTRB(12, 4, 12, 8 + pad.bottom),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+      decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(20)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Accept a chat with $name?', style: tkDisplay(size: 16, lineHeight: 1.3, color: t.text)),
+          const SizedBox(height: 2),
+          Text('Once you accept, they can see you read their messages.', style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: CardButton(label: 'Accept', primary: true, onTap: onAccept)),
+              const SizedBox(width: 8),
+              Expanded(child: CardButton(label: 'Delete', onTap: onDelete)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          CardButton(label: 'Block and report', onTap: onBlock),
+        ],
+      ),
+    );
+  }
+}
+
+/// A line over the box: what is so, and what to do about it.
+class _Note extends StatelessWidget {
+  const _Note({required this.text, this.action, this.onAction});
+  final String text;
+  final String? action;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+        decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(16)),
+        child: Row(
+          children: [
+            Expanded(child: Text(text, style: tkText(size: 13.5, lineHeight: 1.4, color: t.text))),
+            if (action != null && onAction != null) ...[const SizedBox(width: 8), CardButton(label: action!, primary: true, onTap: onAction)],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- About the person ---
+
+/// The person's card (§5.4): the name you gave them (and theirs), their
+/// photo by their setting, last seen, their number only if they show it;
+/// add them to your contacts or rename them; where the chat is kept; Block
+/// and Report.
+class PersonInfoScreen extends StatefulWidget {
+  const PersonInfoScreen({super.key, required this.data, required this.onBlock, required this.onReport});
+  final PeopleChatData data;
+  final VoidCallback onBlock;
+  final VoidCallback onReport;
+
+  @override
+  State<PersonInfoScreen> createState() => _PersonInfoScreenState();
+}
+
+class _PersonInfoScreenState extends State<PersonInfoScreen> {
+  PeopleChatData get d => widget.data;
+
+  Future<void> _rename(PersonCard p) async {
+    final name = await askContactName(context, initial: p.contactName is String ? p.contactName as String : '', theirs: p.name);
+    if (name == null || !mounted) return;
+    try {
+      await d.api.renameContact(person: p.id, body: RenameContactRequest(name: name.isEmpty ? null : name));
+      await d.refresh();
+      if (mounted) showTkToast(context, 'Saved');
+    } on Object catch (e) {
+      if (mounted) showTkToast(context, sayFailure(e), error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    return ListenableBuilder(
+      listenable: d,
+      builder: (context, _) {
+        final c = d.chat;
+        final p = c?.person;
+        final seen = lastSeenWords(p, d.now());
+        final phone = c?.phone is String && (c!.phone as String).isNotEmpty ? c.phone as String : null;
+        final own = p?.contactName is String && (p!.contactName as String).isNotEmpty;
+        return TkScreen(
+          title: d.name,
+          children: [
+            TkPanel(
+              padding: const EdgeInsets.all(20),
+              children: [
+                Column(
+                  children: [
+                    PersonFace(name: d.name, transport: d.auth.transport, photo: p?.photo, size: 96, letterSize: 32),
+                    const SizedBox(height: 12),
+                    Semantics(header: true, child: Text(d.name, textAlign: TextAlign.center, style: tkDisplay(size: 22, color: t.text))),
+                    if (own && p.name != d.name) Text('Their name: ${p.name}', style: tkHint(t)),
+                    if (c?.gone == true) Text(deletedAccount, style: tkHint(t)) else if (seen != null) Text(seen, style: tkHint(t)),
+                    if (phone != null) ...[const SizedBox(height: 4), Text(showPhone(phone), style: tkText(size: 15, weight: 500, color: t.text))],
+                  ],
+                ),
+              ],
+            ),
+            if (p != null && c?.gone != true)
+              TkSection(
+                inset: 56,
+                children: [
+                  if (p.inContacts)
+                    TkListRow(title: own ? 'Rename' : 'Give them a name', sub: 'Only you see the name you give them', icon: 'b-people', square: look.teal, onTap: () => _rename(p))
+                  else
+                    TkListRow(title: 'Not in your contacts', sub: p.theyAddedYou ? 'They have you in theirs' : 'Accepting a chat adds them', icon: 'b-people', square: look.teal),
+                ],
+              ),
+            TkSection(
+              title: 'Where this chat is kept',
+              children: [
+                TkPanel(
+                  padding: const EdgeInsets.all(16),
+                  children: [Text(peopleKeptWords, style: tkText(size: 14, lineHeight: 1.45, color: t.text))],
+                ),
+              ],
+            ),
+            if (c != null && !c.gone)
+              TkSection(
+                inset: 56,
+                children: [
+                  if (!c.blocked) TkListRow(title: 'Block ${d.name}', icon: 'b-x-ring', square: look.red, onTap: widget.onBlock),
+                  TkListRow(title: 'Report ${d.name}', sub: 'The last 20 messages go to Taskiem’s moderators, if you agree', icon: 'b-alert', square: look.red, onTap: widget.onReport),
+                ],
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// --- Report, and Block and report ---
+
+/// What a report sheet answers: the report, and whether to block too.
+typedef PeopleReportAnswer = ({PeopleReport report, bool block});
+
+/// Report a person (§8.3): why, a note, and consent to send the last 20
+/// messages of this chat to Taskiem's moderators; with [block], they are
+/// blocked too (Block and report).
+Future<PeopleReportAnswer?> showPeopleReport(BuildContext context, {required String name, bool block = true}) =>
+    showTkSheet<PeopleReportAnswer>(context, (_) => _ReportSheet(name: name, block: block));
+
+class _ReportSheet extends StatefulWidget {
+  const _ReportSheet({required this.name, required this.block});
+  final String name;
+  final bool block;
+
+  @override
+  State<_ReportSheet> createState() => _ReportSheetState();
+}
+
+class _ReportSheetState extends State<_ReportSheet> {
+  String? _reason;
+  bool _consent = false;
+  late bool _block = widget.block;
+  String? _error;
+  final _note = TextEditingController();
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  void _send() {
+    final r = _reason;
+    if (r == null) return setState(() => _error = 'Choose why you are reporting them.');
+    if (!_consent) return setState(() => _error = 'Agree to send the last 20 messages, so the moderators can see what happened.');
+    final note = _note.text.trim();
+    Navigator.of(context).pop((report: PeopleReport(reason: r, note: note.isEmpty ? null : note, consent: true), block: _block));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    return TkSheet(
+      title: widget.block ? 'Block and report ${widget.name}' : 'Report ${widget.name}',
+      footer: TkCta(label: _block ? 'Block and report' : 'Send report', danger: true, onTap: _send),
+      body: TkFormBody(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final (k, words) in peopleReportReasons)
+                TkChoiceRow(control: TkRadio(checked: _reason == k), label: Text(words, style: tkText(size: 15, color: t.text)), onTap: () => setState(() => _reason = k)),
+            ],
+          ),
+          TkKitField(label: 'What happened', hint: 'Optional', child: TkTextBox(controller: _note, lines: 3, max: 1000)),
+          TkChoiceRow(
+            radio: false,
+            control: TkCheckbox(checked: _consent),
+            label: Text('Send the last 20 messages of this chat, with their photos and files, to Taskiem’s moderators', style: tkText(size: 14, color: t.text)),
+            onTap: () => setState(() => _consent = !_consent),
+          ),
+          TkChoiceRow(
+            radio: false,
+            control: TkCheckbox(checked: _block),
+            label: Text('Block ${widget.name} too', style: tkText(size: 14, color: t.text)),
+            onTap: () => setState(() => _block = !_block),
+          ),
+          if (_error != null) TkErrorBox(_error!),
+        ],
+      ),
+    );
+  }
+}
