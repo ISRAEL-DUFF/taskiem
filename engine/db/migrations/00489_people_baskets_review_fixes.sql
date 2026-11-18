@@ -155,26 +155,23 @@ END
 $$;
 -- +goose StatementEnd
 
--- The baskets the person in scope reaches, by their memberships (a group
--- they are in now, their own copy of a chat, a placed basket they placed
--- or have lines in), changed after p_since: the live connection's read.
+-- The baskets the person in scope reaches changed after p_since, for the
+-- live connection: the few baskets changed since its last look (the
+-- changed_at index; nothing more when none changed, as on most looks),
+-- each kept when the person is in its group now, has their own copy of
+-- its chat, or, once placed, placed it or has lines in it: plain joins on
+-- their memberships, not reach asked of every basket changed.
 -- +goose StatementBegin
 CREATE FUNCTION taskiem_baskets_changed(p_since timestamptz, p_limit int)
 RETURNS TABLE (id uuid, changed_at timestamptz)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
-  WITH me AS (SELECT taskiem_person_scope() AS p WHERE taskiem_person_scope() IS NOT NULL AND taskiem_person_business() IS NULL),
-  mine AS (
-    SELECT b.id FROM me, group_members m JOIN people_baskets b ON b.group_id = m.group_id
-     WHERE m.person_id = me.p AND m.left_at IS NULL AND b.changed_at > p_since
-    UNION
-    SELECT b.id FROM me, people_chats c JOIN people_baskets b ON b.conversation_id = c.conversation_id
-     WHERE c.person_id = me.p AND b.changed_at > p_since
-    UNION
-    SELECT b.id FROM me, people_baskets b WHERE b.state = 'placed' AND b.placed_by = me.p AND b.changed_at > p_since
-    UNION
-    SELECT b.id FROM me, people_basket_lines l JOIN people_baskets b ON b.id = l.basket_id
-     WHERE l.person_id = me.p AND b.state = 'placed' AND b.changed_at > p_since)
-  SELECT b.id, b.changed_at FROM people_baskets b WHERE b.id IN (SELECT mine.id FROM mine)
+  WITH me AS (SELECT taskiem_person_scope() AS p WHERE taskiem_person_scope() IS NOT NULL AND taskiem_person_business() IS NULL)
+  SELECT b.id, b.changed_at FROM me, people_baskets b
+   WHERE b.changed_at > p_since
+     AND ((b.group_id IS NOT NULL AND EXISTS (SELECT 1 FROM group_members m WHERE m.group_id = b.group_id AND m.person_id = me.p AND m.left_at IS NULL))
+       OR (b.conversation_id IS NOT NULL AND EXISTS (SELECT 1 FROM people_chats c WHERE c.conversation_id = b.conversation_id AND c.person_id = me.p))
+       OR (b.state = 'placed' AND (b.placed_by = me.p
+         OR EXISTS (SELECT 1 FROM people_basket_lines l WHERE l.basket_id = b.id AND l.person_id = me.p))))
    ORDER BY b.changed_at, b.id LIMIT least(GREATEST(p_limit, 1), 500)
 $$;
 -- +goose StatementEnd
