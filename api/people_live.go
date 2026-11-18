@@ -3,6 +3,7 @@ package api
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
@@ -13,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/db"
+	"github.com/israel-duff/taskiem/engine/peoplechats"
 )
 
 // You's live connection (people-chatting §13; "As built: stage 5a gaps,
@@ -134,7 +136,7 @@ func (s *Server) liveClose(person, conn uuid.UUID) {
 	var front, others, active bool
 	err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `DELETE FROM person_live WHERE person_id = $1 AND id = $2 RETURNING front`, person, conn).Scan(&front)
-		if err != nil && err != pgx.ErrNoRows {
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
 		if err := tx.QueryRow(ctx, `SELECT status = 'active' AND deleted_at IS NULL FROM users WHERE id = $1`, person).Scan(&active); err != nil {
@@ -292,8 +294,10 @@ func (s *Server) peopleLive(w http.ResponseWriter, r *http.Request) {
 		err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 			out = nil
 			key, err := s.keys().KeyTx(ctx, tx, person, false)
-			if err != nil {
-				key = nil // nothing sealed yet: messages show without words
+			if errors.Is(err, peoplechats.ErrNoKey) {
+				key = nil // nothing kept yet
+			} else if err != nil {
+				return err
 			}
 			// Messages, new or changed.
 			rows, err := tx.Query(ctx, `SELECT `+peopleMessageCols+`, chat_id, changed_at FROM people_messages
