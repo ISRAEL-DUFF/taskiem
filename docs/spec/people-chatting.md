@@ -915,3 +915,82 @@ All under `/v1/ops`, with the operator's session; every write carries `step_up` 
 - The people items PC1 to PC7 in `docs/needs-people.md`; the moderation policy (PC6) replaces the runbook's interim rules.
 - Held messages are seeded only by the server (they are sealed), so the real-server e2e covers reports, actions, appeals and lawful requests; held messages are covered by the Go test and the stood-in accessibility test.
 - A closure deletes the account as the person would; there is no separate ban on signing up again with the same number beyond the abuse signals.
+
+## As built: stage 5a gaps, app
+
+Branch `stage5a-gaps-app`, on 4691022d (stage 5a with the server's gaps, chat features and safety joined): the Flutter app's side of every gap left over above (the app's "Left over", the chat features' "For the web and the app", and safety's "The app"). Where this differs from the sections above, it holds. People chats are still kept by Taskiem, sealed at rest and readable by its servers; nothing added here says they are end-to-end encrypted.
+
+**Generated client.** `mobile/api.txt` gains `typingPeople`, `searchPeople` and `starredPeople`, and `api.g.dart` was written again by `go run ./tools/mobilegen` (the live connection is read as a stream, not through the generated client).
+
+**The live connection** (`lib/chat/people_live.dart`, `PeopleLive`).
+- `GET /v1/me/live` read as server-sent events with the business chat's reader (`readSse`, `LiveTiming`, `lib/chat/live.dart`): `ready` (its `connection`), `message`, `chat`, `gone`, `typing`, `presence`, `ping`. Reopened after a drop or a 30-second silence with `Last-Event-ID` (the last event's id); a 429 waits at least 30 seconds; what came twice is merged by id.
+- You (`YouHome`) holds one per session (`PeopleLive.hold`/`of`, so screens opened from links and pushes find it); a business session has none and polls as before.
+- Open only while the app is in front: `Presence` (`lib/app/presence.dart`) starts it on resuming and, on going to the background, says `POST /v1/me/presence {online: false, connection}` and closes it. When `ready` comes in front it says `{online: true, connection}`. The 30-second heartbeat (`{online}` alone) runs only while the connection is not open (refused, offline, not yet ready), and once at once on coming back.
+- A chat (`PeopleChatData`): a `message` is merged (and read, while the chat is seen), `gone` takes one away (or, for a request, the whole chat), `chat` replaces the head or says it is no longer here; `typing` and `presence` show in the head (`withPresence` lays what the connection said over the person's card).
+- The Chats list (`MyChats`) and Requests (`PeopleRequestsScreen`) read again at once on an event that concerns them (a burst once); rows show "typing…" and the online dot from the connection.
+- Polling stays as the fallback: while connected, a chat, the list and Requests read again only every 30 seconds (`SlowWhileLive`), to reconcile; otherwise at their usual pace (Requests now polls every 10 seconds too).
+
+**Typing.** While the box changes, `POST /v1/me/people/{id}/typing` at most every 3 seconds (`typingBeat`), `{typing: false}` when it empties; a send ends it. Never from a request, a waiting, blocked, deleted or suspended chat. "typing…" in the chat's head (with the typing bubble) and on the list's row.
+
+**Search and starred** (`lib/chat/people_search.dart`).
+- Search from You's Chats head (Search chats with people) and from a chat's ⋯ (Search this chat, `chat=`). Searched 400 ms after typing rests, only with a word of two letters (`searchable`); 30 a page by `before` (Show more as the end comes into view); each row the chat's name, who wrote it and the `snippet`. The server's refusals said (`searchFailure`).
+- Starred messages (`GET /v1/me/people/starred`), from the search screen, read again after one is opened.
+- A hit opens its chat at the message: `PeopleChatData(focus:)` reads older pages until it is there (at most 40), then the thread is placed at it and flashes it (`ThreadView.focus`). Inside a chat, a hit jumps there (`jump`, the thread placed again).
+
+**The trust line on the one list.** A business row with `verified` says it in the head's words (`listTrustWords`, through `verifiedWords`: "Phone checked · Payments through Taskiem · Trading 8 months") over its last line, and a screen reader hears it.
+
+**A place** (`lib/chat/people_place.dart`).
+- The chat's + has **A place**. Only then is the phone asked (geolocator 14.1.2; `ACCESS_COARSE_LOCATION`/`ACCESS_FINE_LOCATION`, `NSLocationWhenInUseUsageDescription`), and it is read once.
+- The place is shown before it goes (where, how close, See it on the map), with an optional name (200 characters), and sent as `location` with a client id.
+- Refused, refused for good, the phone's location off, or not found: plain words (`placeProblemWords`), Try again, and the phone's settings where they help.
+- A place in a chat opens in the phone's map app (`geo:` on Android, Apple Maps on an iPhone, the web's map when nothing takes it).
+- The phone's location is behind `PlaceFinder`.
+
+**Sharing from outside a chat** (§10.1), into chats picked (`shareWithPeople`):
+- Discover's profile: Share with someone (the business's card).
+- A product's Share in a business's shop (in its chat).
+- An order's page: Share the delivery, only once it has a delivery (a rider). The order itself was already shared from there.
+
+**A QR code scanned in the app** (`lib/chat/people_scan.dart`).
+- New chat's By their link has **Scan their QR code**. The camera (mobile_scanner 7.5.0; `CAMERA`, the camera words) is asked for only then.
+- A code that is a person's Taskiem link (`scannedPersonCode`) opens who it is (`PersonLinkScreen`); anything else says so.
+- Beside it: type, **Paste** (the clipboard's link) and Open the link.
+- The camera is behind `QrScanner`.
+
+**Contacts checked again** (§5.3).
+- Once the person agrees and their contacts are checked, the day is kept (`Prefs.contactsChecked`, Lagos's day; forgotten on signing out).
+- When You opens, they are checked again by themselves (`recheckContacts`) only if that day is kept and is not today, and the phone still allows reading them without asking (`PhoneContacts.allowed`).
+- The people found who are not in the person's contacts are offered on Chats ("N of your contacts are on Taskiem"), opening the same found list. They are kept in memory only, until You closes or the list is opened.
+- The explainer and the found list say so: the day is all that is kept.
+
+**Delete for everyone** says over its choices that copies, forwards or screenshots they made before stay (`deleteForEveryoneNote`, `showTkModalChoices(note:)`).
+
+**Your standing** (`lib/chat/people_standing.dart`), in the web's words.
+- `YourStandingScreen` reads `GET /v1/me/standing`: the state's title and words, then each decision with when, why, whether it is in force or lifted, its appeal's outcome, and **Appeal** while `can_appeal`. Opened with unseen decisions, it says `POST /v1/me/standing/seen`.
+- The appeal sheet (`POST /v1/me/standing/appeals`) needs words. Its answers are said plainly (`appealFailure`): 400 write why, 404 no longer on the account, 409 already appealed or no longer in force, 429 many this hour. Sent, the server's `said` is toasted.
+- The notice heads You's Chats while `unseen > 0`. It is read quietly (nothing shown when it cannot be read), and opened, it goes.
+- `/you/settings/standing` is a page of You (`YouPage.standing`): a push of kind `you` (tag `standing`) opens it on You, or over a business's home. Settings' You and people has Your standing.
+- A send refused with the suspended person's 403 shows the server's words and a note with **Your standing** (`pointsToStanding`); starting a chat refused so toasts with Your standing.
+- Privacy with people and Your standing link to the published count, `/transparency` on the web (`openTransparency`).
+
+**Tests.**
+- `mobile/test/people_gaps_test.dart`:
+  - the connection's events and `Last-Event-ID`, a 429 waiting;
+  - presence on the connection, and the heartbeat only without it;
+  - a chat live (a message read as it comes, a reaction, gone, typing, online, hidden);
+  - slow polling while connected; typing throttled and stopped, never in a request;
+  - the list's trust line, typing and online, read again once on a burst; Requests live;
+  - search (a word of two letters, once when it rests, pages, snippets, opening at the message), its refusal; starred; a chat opened at a message by older pages; search this chat jumping;
+  - a place refused, refused for good, allowed, sent and opened in maps, and the map links;
+  - the scanner (only on tap, put away, a person's link) and Paste;
+  - the daily re-check's guard (never agreed, today, no longer allowed, Lagos's day) and You offering what it found once a day;
+  - delete for everyone's words;
+  - Your standing, the appeal's refusals and sending once, the notice, the push's link, a suspended sender's 403, the published count from Privacy.
+- `mobile/test/people_share_gaps_test.dart`: a business from Discover, a product from its shop, a delivery from an order (only with a rider).
+- `mobile/test/notify_test.dart`: a push of kind `you` to `/you/settings/standing` routed.
+
+**Left over.**
+- The connection carries people chats only (the server's); You's business chats keep their polling.
+- The place is not drawn on a map in the app (no map tiles); the preview gives where it is and See it on the map opens the phone's map app.
+- Typing does not follow "Last seen and online" (the server's rule).
+- The scanner and the location were tested through their interfaces; on a phone they need a device run.
