@@ -10,7 +10,7 @@ People chats are kept by Taskiem, sealed on its servers and readable by them; th
 2. **The least that is asked.** One account, the dates asked for, only the chats with one other person when the request names one, photos and files only when it asks for them. If a request is wider than its legal basis or than the case needs, ask the authority to narrow it, or refuse.
 3. **Two people.** One operator records the request; a second, never the same, approves it before anything is exported. The console enforces both.
 4. **Tell the person where the law allows,** as soon as it allows: what was asked, by whom, and what was given. Record when, or why the law forbids it (a court's non-disclosure order, with its reference and end date).
-5. **Everything is recorded and counted.** Each step is in the platform audit chain with the operator's name. The number of requests received, answered and refused each half-year is published at `/transparency` (and `GET /v1/transparency/lawful-requests`), linked from the privacy pages. Nothing else about a request is published.
+5. **Everything is recorded and counted.** Each step is in the platform audit chain with the operator's name. The number of requests received, answered and refused each half-year is published at `/transparency` once that half-year has ended (so a new request never moves the count) (and `GET /v1/transparency/lawful-requests`), linked from the privacy pages. Nothing else about a request is published.
 
 ## Steps in the operator console
 

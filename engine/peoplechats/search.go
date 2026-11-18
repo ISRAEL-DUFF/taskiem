@@ -22,10 +22,19 @@ import (
 // shows a message that does not match. Deleting the person's key with
 // their account leaves the index unreadable as well as their messages.
 //
-// The honest limit: a keyed hash of a word is the same each time it is
-// used, so someone holding the database and the person's key could test
-// guesses; without the key, the index says only how many distinct word
-// beginnings each message has.
+// The honest limits. A keyed hash of a word beginning is the same each
+// time it is used in the person's copy, so without the key the index
+// still shows which of the person's messages share a word or a word's
+// beginning, how often each token is used (word frequencies, open to
+// frequency analysis), how many tokens each message has and which
+// conversation each message is in. With the person's key (which
+// Taskiem's servers hold, as they hold the messages themselves) the
+// words can be guessed and tested one by one, and a word's chain of
+// beginnings (its first 2, 3, ... 8 letters) rebuilds short words letter
+// by letter. That is acceptable under §6.2 (chats are kept by Taskiem,
+// sealed at rest, readable by its servers, not end-to-end encrypted): the
+// index reveals no more to a holder of the key than the sealed messages
+// it opens.
 
 const (
 	// PrefixMin and PrefixMax are the word beginnings indexed: a query
