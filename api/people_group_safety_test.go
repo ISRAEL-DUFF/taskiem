@@ -573,7 +573,7 @@ func TestLawfulGroupExport(t *testing.T) {
 		}
 		lr := mod.write(201, "ops.lawful.record", bolaID.String(), "/v1/ops/lawful-requests", body)["request"].(map[string]any)
 		id := lr["id"].(string)
-		if lr["groups"] != groups && !(groups == "" && lr["groups"] == "none") {
+		if lr["groups"] != groups && (groups != "" || lr["groups"] != "none") {
 			t.Fatalf("recorded: %v", lr)
 		}
 		second.write(200, "ops.lawful.approve", id, "/v1/ops/lawful-requests/"+id+"/approve", nil)

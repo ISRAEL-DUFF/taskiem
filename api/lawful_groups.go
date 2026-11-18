@@ -128,7 +128,7 @@ func (s *Server) lawfulGroupsExport(ctx context.Context, person uuid.UUID, lr la
 				case m.FromPerson:
 					m.Sender = "The person"
 				default:
-					if c, ok := cards[*m.SenderID]; ok && c.Name != "" && !(c.Deleted && !c.Suspended) {
+					if c, ok := cards[*m.SenderID]; ok && c.Name != "" && (!c.Deleted || c.Suspended) {
 						m.Sender = c.Name
 					} else {
 						m.Sender = peopleGoneName
