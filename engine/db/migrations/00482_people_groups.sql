@@ -107,8 +107,8 @@ CREATE TABLE group_members (
   -- The chat deleted for them: out of their list until a new message.
   hidden_at       timestamptz,
   -- Read and delivered up to (the time of the latest message they had).
-  read_upto       timestamptz NOT NULL DEFAULT '-infinity',
-  delivered_upto  timestamptz NOT NULL DEFAULT '-infinity',
+  read_upto       timestamptz NOT NULL DEFAULT '1970-01-01 00:00:00+00',
+  delivered_upto  timestamptz NOT NULL DEFAULT '1970-01-01 00:00:00+00',
   changed_at      timestamptz NOT NULL DEFAULT clock_timestamp(),
   PRIMARY KEY (group_id, person_id),
   CHECK ((left_at IS NULL) = (left_how IS NULL))

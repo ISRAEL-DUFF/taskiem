@@ -1080,42 +1080,7 @@ func (s *Server) forwardPeopleMessage(w http.ResponseWriter, r *http.Request) {
 		}
 		seen[t] = true
 	}
-	var d peopleDraft
-	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		c, err := peopleCopyTx(ctx, tx, person, in.ChatID.String(), false)
-		if err != nil {
-			return err
-		}
-		m, err := ownMessageTx(ctx, tx, person, c, in.MessageID.String())
-		if err != nil {
-			return err
-		}
-		if m.Deleted {
-			return customerSendErr{http.StatusConflict, "This message was deleted."}
-		}
-		key, err := s.keys().KeyTx(ctx, tx, person, false)
-		if err != nil {
-			return err
-		}
-		_, v := m.view(key, person)
-		d = peopleDraft{kind: m.Kind, body: v.Body, card: v.Card, location: v.Location, forwards: m.forwards + 1}
-		if v.Card != nil && v.Card.Type == "split" {
-			return customerSendErr{http.StatusConflict, "A share card is between the two of you: it is not forwarded."}
-		}
-		if m.attach != nil {
-			var sealed []byte
-			var ctype string
-			if err := tx.QueryRow(ctx, `SELECT sealed, type FROM people_files WHERE person_id = $1 AND message_id = $2`, person, m.ID).Scan(&sealed, &ctype); err != nil {
-				return err
-			}
-			data, err := peoplechats.Open(key, person, fileRow(m.ID), sealed)
-			if err != nil {
-				return err
-			}
-			d.file = &sentFile{Type: ctype, Name: v.Name, Data: data}
-		}
-		return nil
-	})
+	d, err := s.peopleDraftOf(ctx, person, in.ChatID, in.MessageID)
 	if err != nil {
 		s.personFail(w, r, err)
 		return
@@ -1162,4 +1127,47 @@ func (s *Server) forwardPeopleMessage(w http.ResponseWriter, r *http.Request) {
 		out.Sent = append(out.Sent, sent{t, m})
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// peopleDraftOf is one message of the person's people chat as a draft to
+// forward: marked forwarded once more, its file opened to be sealed
+// again; a share card or a deleted message is not forwarded.
+func (s *Server) peopleDraftOf(ctx context.Context, person, chat, msg uuid.UUID) (peopleDraft, error) {
+	var d peopleDraft
+	err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		c, err := peopleCopyTx(ctx, tx, person, chat.String(), false)
+		if err != nil {
+			return err
+		}
+		m, err := ownMessageTx(ctx, tx, person, c, msg.String())
+		if err != nil {
+			return err
+		}
+		if m.Deleted {
+			return customerSendErr{http.StatusConflict, "This message was deleted."}
+		}
+		key, err := s.keys().KeyTx(ctx, tx, person, false)
+		if err != nil {
+			return err
+		}
+		_, v := m.view(key, person)
+		d = peopleDraft{kind: m.Kind, body: v.Body, card: v.Card, location: v.Location, forwards: m.forwards + 1}
+		if v.Card != nil && v.Card.Type == "split" {
+			return customerSendErr{http.StatusConflict, "A share card is between the two of you: it is not forwarded."}
+		}
+		if m.attach != nil {
+			var sealed []byte
+			var ctype string
+			if err := tx.QueryRow(ctx, `SELECT sealed, type FROM people_files WHERE person_id = $1 AND message_id = $2`, person, m.ID).Scan(&sealed, &ctype); err != nil {
+				return err
+			}
+			data, err := peoplechats.Open(key, person, fileRow(m.ID), sealed)
+			if err != nil {
+				return err
+			}
+			d.file = &sentFile{Type: ctype, Name: v.Name, Data: data}
+		}
+		return nil
+	})
+	return d, err
 }

@@ -312,6 +312,14 @@ func (s *Server) openPeopleCard(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
+	s.answerCard(w, r, person, card)
+}
+
+// answerCard answers a card as shared, and as it is now when the person
+// opening it may see it (a people chat's or a group's).
+func (s *Server) answerCard(w http.ResponseWriter, r *http.Request, person uuid.UUID, card *peopleCard) {
+	ctx := r.Context()
+	var err error
 	live := liveCard{}
 	// Each look at a business through a door is in its audit chain:
 	// limited per person, as looks at orders are.

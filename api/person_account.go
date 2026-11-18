@@ -399,6 +399,12 @@ func (s *Server) deletePersonTx(ctx context.Context, tx pgx.Tx, person uuid.UUID
 		if _, err := tx.Exec(ctx, `SELECT taskiem_people_reports_detach($1, $2)`, person, s.reporterMark(person)); err != nil {
 			return err
 		}
+		// Their groups (5b, §14, §17 Q17): they leave each (the last one
+		// out closes it), their marks go, their messages stay as from
+		// "Deleted account".
+		if err := leaveAllGroupsTx(ctx, tx, person); err != nil {
+			return err
+		}
 		// The person's own side.
 		for _, q := range []string{
 			// Their copies of people chats, their blocks, saved payout
@@ -584,12 +590,15 @@ type notifySettings struct {
 	// message waits in their Requests (people-chatting §13).
 	People   bool `json:"people"`
 	Requests bool `json:"requests"`
+	// Groups: a message in one of their groups (an invite to a group is a
+	// request: Requests).
+	Groups bool `json:"groups"`
 }
 
 func notifyTx(ctx context.Context, tx pgx.Tx, person uuid.UUID) (notifySettings, error) {
-	n := notifySettings{Messages: true, Updates: true, Offers: true, People: true, Requests: true}
-	err := tx.QueryRow(ctx, `SELECT messages, updates, offers, people, requests FROM person_notify WHERE person_id = $1`, person).
-		Scan(&n.Messages, &n.Updates, &n.Offers, &n.People, &n.Requests)
+	n := notifySettings{Messages: true, Updates: true, Offers: true, People: true, Requests: true, Groups: true}
+	err := tx.QueryRow(ctx, `SELECT messages, updates, offers, people, requests, groups FROM person_notify WHERE person_id = $1`, person).
+		Scan(&n.Messages, &n.Updates, &n.Offers, &n.People, &n.Requests, &n.Groups)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = nil
 	}
@@ -652,6 +661,7 @@ func (s *Server) putMyNotifications(w http.ResponseWriter, r *http.Request) {
 		Offers   *bool `json:"offers"`
 		People   *bool `json:"people"`
 		Requests *bool `json:"requests"`
+		Groups   *bool `json:"groups"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -659,12 +669,13 @@ func (s *Server) putMyNotifications(w http.ResponseWriter, r *http.Request) {
 	}
 	var n notifySettings
 	err = db.InPersonTx(r.Context(), s.Store.Pool, person, func(tx pgx.Tx) error {
-		return tx.QueryRow(r.Context(), `INSERT INTO person_notify (person_id, messages, updates, offers, people, requests)
-			VALUES ($1, COALESCE($2, true), COALESCE($3, true), COALESCE($4, true), COALESCE($5, true), COALESCE($6, true))
+		return tx.QueryRow(r.Context(), `INSERT INTO person_notify (person_id, messages, updates, offers, people, requests, groups)
+			VALUES ($1, COALESCE($2, true), COALESCE($3, true), COALESCE($4, true), COALESCE($5, true), COALESCE($6, true), COALESCE($7, true))
 			ON CONFLICT (person_id) DO UPDATE SET messages = COALESCE($2, person_notify.messages), updates = COALESCE($3, person_notify.updates),
-			  offers = COALESCE($4, person_notify.offers), people = COALESCE($5, person_notify.people), requests = COALESCE($6, person_notify.requests), updated_at = now()
-			RETURNING messages, updates, offers, people, requests`, person, req.Messages, req.Updates, req.Offers, req.People, req.Requests).
-			Scan(&n.Messages, &n.Updates, &n.Offers, &n.People, &n.Requests)
+			  offers = COALESCE($4, person_notify.offers), people = COALESCE($5, person_notify.people), requests = COALESCE($6, person_notify.requests),
+			  groups = COALESCE($7, person_notify.groups), updated_at = now()
+			RETURNING messages, updates, offers, people, requests, groups`, person, req.Messages, req.Updates, req.Offers, req.People, req.Requests, req.Groups).
+			Scan(&n.Messages, &n.Updates, &n.Offers, &n.People, &n.Requests, &n.Groups)
 	})
 	if err != nil {
 		s.fail(w, r, err)
