@@ -69,10 +69,11 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
   // Where the reader was at the last scroll: at the very end.
   const atEnd = useRef(false);
   const placed = useRef(false);
-  // The message the thread was opened or jumped at (or the first unread),
-  // kept where it was put as the thread's size and content settle (the
-  // composer arriving under it, a card above it filling in), until the
-  // reader moves the thread or new messages are followed.
+  // The message the thread was opened or jumped at (not the first unread,
+  // which is placed once, as the app does), kept where it was put as the
+  // thread's size and content settle (the composer arriving under it, a
+  // card above it filling in), until the reader moves the thread or new
+  // messages are followed.
   const pin = useRef<{ sel: string; block: "start" | "center" } | null>(null);
   const anchor = useRef<{ h: number; top: number } | null>(null);
   const prevNewest = useRef<string>(undefined);
@@ -130,7 +131,7 @@ export function useThread<T extends { id: string; created_at: string }>(o: {
       if (target) {
         const block = id ? "center" : "start";
         scrollWithin(el, target, block);
-        pin.current = { sel: id ? `[data-msg="${id}"]` : "[data-unread]", block };
+        if (id) pin.current = { sel: `[data-msg="${id}"]`, block };
         if (id) setFlashId(id);
       } else el.scrollTop = el.scrollHeight;
       stick.current = atNewestOf(el);
