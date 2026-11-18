@@ -130,6 +130,8 @@ class _YouHomeState extends State<YouHome> with Polling {
       _live?.start();
     }
     widget.links?.addListener(_linked);
+    // Your standing opened from a push or Settings: the notice reads again.
+    standingSeen.addListener(_standingSeen);
     WidgetsBinding.instance.addPostFrameCallback((_) => _linked());
     // New messages show in the list while it is seen: not while the app
     // is put away (the server takes a read as the person being here) or
@@ -219,10 +221,13 @@ class _YouHomeState extends State<YouHome> with Polling {
       _live?.stop();
     }
     widget.links?.removeListener(_linked);
+    standingSeen.removeListener(_standingSeen);
     _chats.dispose();
     _ordersShown.dispose();
     super.dispose();
   }
+
+  void _standingSeen() => unawaited(_readStanding());
 
   /// Your standing, read quietly: nothing shown when it cannot be read.
   Future<void> _readStanding() async {

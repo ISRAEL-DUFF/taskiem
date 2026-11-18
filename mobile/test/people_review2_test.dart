@@ -9,6 +9,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show File;
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -25,6 +26,8 @@ import 'package:taskiem/chat/people_find.dart' show PeopleRequestsScreen;
 import 'package:taskiem/screens/you.dart' show YouHome;
 import 'package:taskiem/chat/people_search.dart' show PeopleSearchScreen;
 import 'package:taskiem/kit/load_more.dart' show TkLoadMore;
+import 'package:taskiem/chat/people_standing.dart' show YourStandingScreen;
+import 'package:taskiem/kit/mobile.dart' show tkPush;
 import 'package:taskiem/chat/attachments.dart' show PickedFile;
 import 'package:taskiem/chat/composer.dart' show Pickers;
 import 'package:taskiem/chat/people_chat.dart';
@@ -541,6 +544,50 @@ void main() {
       await settle(t);
       expect(said(api), [true, false], reason: 'stopped from messaging: no typing');
       await drain(t);
+    });
+  });
+
+  group('10. the standing notice', () {
+    testWidgets('reads again once Your standing is opened another way (a push, Settings)', (t) async {
+      phone(t);
+      final api = Api();
+      var unseen = 1;
+      api.routes['GET /v1/me/standing'] = (_) => {
+        'state': 'suspended', 'words': 'You can’t message people until 24 Nov.', 'until': '2026-11-24T10:00:00Z', 'unseen': unseen, 'appeal_words': '',
+        'actions': [
+          {'id': 'a2', 'action': 'suspend', 'reason': 'Spam', 'at': '2026-11-17T09:00:00Z', 'until': '2026-11-24T10:00:00Z', 'in_force': true, 'lifted_at': null, 'seen': unseen == 0, 'words': 'You can’t message people until 24 Nov.', 'can_appeal': false, 'appeal': null},
+        ],
+      };
+      api.routes['POST /v1/me/standing/seen'] = (_) {
+        unseen = 0;
+        return answer({}, 204);
+      };
+      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'more': false};
+      api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
+      final auth = api.auth();
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: auth, now: () => at, presence: false)));
+      await settle(t);
+      expect(find.text('Read what Taskiem’s moderators decided'), findsOneWidget);
+      // Opened not from the notice (as a push's link or Settings open it).
+      unawaited(tkPush<void>(t.element(find.byType(YouHome)), YourStandingScreen(auth: auth, now: () => at)));
+      await settle(t);
+      expect(api.sent('POST', '/v1/me/standing/seen'), hasLength(1));
+      t.state<NavigatorState>(find.byType(Navigator).first).pop();
+      await settle(t);
+      expect(find.text('Read what Taskiem’s moderators decided'), findsNothing);
+      await drain(t);
+    });
+
+    test('the phone’s words: location says A place, as the menu does; contacts say the daily re-check', () {
+      final plist = File('ios/Runner/Info.plist').readAsStringSync();
+      final manifest = File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+      final location = RegExp(r'NSLocationWhenInUseUsageDescription</key>\s*<string>([^<]*)').firstMatch(plist)!.group(1)!;
+      expect(location, contains('tap A place'));
+      expect(location, isNot(contains('Location:')));
+      expect(manifest, contains('taps A place'));
+      final contacts = RegExp(r'NSContactsUsageDescription</key>\s*<string>([^<]*)').firstMatch(plist)!.group(1)!;
+      expect(contacts, contains('once a day'));
+      expect(contacts, contains('Privacy with people'));
     });
   });
 }

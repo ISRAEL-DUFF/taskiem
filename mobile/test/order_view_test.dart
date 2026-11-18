@@ -3,7 +3,6 @@
 // leaves.
 
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/semantics.dart';
 import 'package:flutter/widgets.dart';

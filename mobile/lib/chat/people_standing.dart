@@ -100,6 +100,10 @@ class YourStandingScreen extends StatefulWidget {
   State<YourStandingScreen> createState() => _YourStandingScreenState();
 }
 
+/// Told each time Your standing marked its decisions seen: the notice on
+/// You's Chats reads the standing again.
+final standingSeen = ValueNotifier<int>(0);
+
 class _YourStandingScreenState extends State<YourStandingScreen> {
   PersonStanding? _s;
   String? _error;
@@ -115,7 +119,9 @@ class _YourStandingScreenState extends State<YourStandingScreen> {
       final s = await widget.auth.api.getMyStanding();
       if (!mounted) return;
       setState(() => (_s = s, _error = null));
-      if (s.unseen > 0) unawaited(widget.auth.api.seenMyStanding().catchError((Object _) {}));
+      // Marked seen, You's notice reads again (however this was opened: its
+      // notice, a push, Settings).
+      if (s.unseen > 0) unawaited(widget.auth.api.seenMyStanding().catchError((Object _) {}).whenComplete(() => standingSeen.value++));
     } on Object catch (e) {
       if (mounted) setState(() => _error = sayFailure(e));
     }

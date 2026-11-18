@@ -6,7 +6,6 @@
 // messages"; Your chat link (its QR code, words to the share sheet, Make a
 // new link) and the customer chat settings.
 
-import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
