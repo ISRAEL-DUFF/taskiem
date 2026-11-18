@@ -173,13 +173,13 @@ var Alerts = []Alert{
 		Description: "The form host turned away submissions because a form went over its limit for every address together (500 an hour after a burst of 100): someone may be flooding it. The form now asks for a phone code first for an hour, and its business's owners are alerted.",
 		Expr:        `sum(increase(taskiem_form_limit_trips_total[15m])) > 0`,
 	},
+	// Every pod measures the same tables (taskiem_people_storage_bytes is a
+	// gauge of the database, not of the pod): one figure a table, however
+	// many pods are scraped.
 	{
 		Name: "TaskiemPeopleStorageLarge", Severity: "ticket", For: "1h",
 		Summary:     "People chats and groups take over 150 GiB, or grew over 8 GiB in a day",
 		Description: "People chats and groups are kept until the people delete them (decision 0069), so their tables only grow; a group keeps one copy of its messages and files (5b). Together they take over 150 GiB on disk, or grew by over 8 GiB in a day: plan the database's disk, and whether photos and files leave Postgres for object storage.",
-		// Every pod measures the same tables (taskiem_people_storage_bytes
-		// is a gauge of the database, not of the pod): one figure a table,
-		// however many pods are scraped.
 		Expr:        `sum(max by (table) (taskiem_people_storage_bytes)) > 161061273600 or (sum(max by (table) (taskiem_people_storage_bytes)) - sum(max by (table) (taskiem_people_storage_bytes offset 1d))) > 8589934592`,
 	},
 	{

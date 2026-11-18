@@ -35,7 +35,7 @@ var (
 	// reaches its members (its info, rules, photo, link, people, admins,
 	// reactions, a share marked paid), in the same words.
 	errGroupClosedChange = customerSendErr{http.StatusConflict, groupClosedRefused}
-	errGroupLinkStopped = customerSendErr{http.StatusForbidden,
+	errGroupLinkStopped  = customerSendErr{http.StatusForbidden,
 		"Taskiem's moderators turned off this group's invite link, so a new one can't be made for now."}
 	errGroupMakeHour = customerSendErr{http.StatusTooManyRequests, "You have made several groups in the last hour. Try again later."}
 	errGroupMakeDay  = customerSendErr{http.StatusTooManyRequests, "You have made many groups today. Try again tomorrow."}
