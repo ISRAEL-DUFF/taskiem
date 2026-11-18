@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/israel-duff/taskiem/api"
 	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/push"
 )
@@ -901,13 +902,30 @@ func TestGroupsBlocking(t *testing.T) {
 	if photoOf(chidi, bolaID) == nil {
 		t.Fatal("no photo before the block")
 	}
+	// Numbers stay hidden (§17 Q5) unless a member chose to show theirs.
+	phoneOf := func(c *client, of uuid.UUID) any {
+		for _, m := range c.must(200, "GET", "/v1/me/groups/"+gid+"/members", nil)["members"].([]any) {
+			mm := m.(map[string]any)
+			if mm["person_id"] == of.String() {
+				return mm["phone"]
+			}
+		}
+		return nil
+	}
+	if phoneOf(chidi, bolaID) != nil || phoneOf(bola, chidiID) != nil {
+		t.Fatal("a number shown unasked")
+	}
+	setPrivacy(t, bola, map[string]any{"show_number": true})
+	if phoneOf(chidi, bolaID) != "+2348031140702" {
+		t.Fatalf("Bola's number: %v", phoneOf(chidi, bolaID))
+	}
 	blk := bola.must(200, "POST", "/v1/me/groups/"+gid+"/members/"+chidiID.String()+"/block", nil)
 	gsend(t, chidi, gid, "Chidi still speaks")
 	if !slices.Contains(gbodies(t, bola, gid), "Chidi still speaks") {
 		t.Fatal("Bola no longer sees Chidi's group messages")
 	}
-	if photoOf(chidi, bolaID) != nil {
-		t.Fatal("Chidi sees Bola's photo across the block")
+	if photoOf(chidi, bolaID) != nil || phoneOf(chidi, bolaID) != nil {
+		t.Fatal("Chidi sees Bola's photo or number across the block")
 	}
 	// One to one: one tick, nothing told.
 	cchat := chatWith(t, chidi, bolaID)
@@ -931,9 +949,29 @@ func TestGroupsBlocking(t *testing.T) {
 		t.Fatalf("blocked people: %v", bl)
 	}
 	bola.must(200, "DELETE", "/v1/me/people/"+blk["chat_id"].(string)+"/block", nil)
-	chidi.must(204, "DELETE", "/v1/me/groups/"+g2+"/invites/"+bolaID.String(), nil)
 	if st := addedOf(t, chidi.must(200, "POST", "/v1/me/groups/"+g2+"/members", map[string]any{"person_ids": []uuid.UUID{bolaID}})); st[bolaID] != "added" {
 		t.Fatalf("after unblocking: %v", st)
+	}
+	// Bola removes Chidi from contacts: a new add is an invite Bola sees.
+	g3, _ := newGroup(t, chidi, "Third")
+	bola.must(204, "DELETE", "/v1/me/contacts/"+chidiID.String(), nil)
+	if st := addedOf(t, chidi.must(200, "POST", "/v1/me/groups/"+g3+"/members", map[string]any{"person_ids": []uuid.UUID{bolaID}})); st[bolaID] != "invited" {
+		t.Fatalf("not a contact: %v", st)
+	}
+	if inv := listOf(t, bola, "/v1/me/groups/invites", "invites"); len(inv) != 1 || inv[0]["group_id"] != g3 {
+		t.Fatalf("Bola's invites: %v", inv)
+	}
+	// An invite kept unseen across a block is seen once asked again after
+	// the block is gone.
+	bola.must(200, "POST", "/v1/me/groups/"+gid+"/members/"+chidiID.String()+"/block", nil)
+	g4, a4 := newGroup(t, chidi, "Fourth", bolaID)
+	if a4[bolaID] != "invited" || len(listOf(t, bola, "/v1/me/groups/invites", "invites")) != 1 {
+		t.Fatalf("across the block again: %v", a4)
+	}
+	bola.must(200, "DELETE", "/v1/me/people/"+blk["chat_id"].(string)+"/block", nil)
+	chidi.must(200, "POST", "/v1/me/groups/"+g4+"/members", map[string]any{"person_ids": []uuid.UUID{bolaID}})
+	if inv := listOf(t, bola, "/v1/me/groups/invites", "invites"); len(inv) != 2 {
+		t.Fatalf("the unseen invite now seen: %v", inv)
 	}
 }
 
@@ -1202,3 +1240,20 @@ func TestGroupsFull(t *testing.T) {
 }
 
 var _ = http.StatusOK
+
+// Joins by a group's link are limited per group in an hour.
+func TestGroupsLinkJoinsPerHour(t *testing.T) {
+	defer api.SetGroupLinkJoinsPerHour(2)()
+	w := newJoinedWorld(t)
+	ada, _ := w.many(t, "+2348031141401", "Ada Obi")
+	gid, _ := newGroup(t, ada, "Popular")
+	code := ada.must(201, "POST", "/v1/me/groups/"+gid+"/link", nil)["code"].(string)
+	for i := 0; i < 3; i++ {
+		c, _ := w.many(t, fmt.Sprintf("+23480311415%02d", i), fmt.Sprintf("Joiner %d", i))
+		want := 200
+		if i == 2 {
+			want = 429
+		}
+		c.must(want, "POST", "/v1/me/group-links/"+code+"/join", nil)
+	}
+}

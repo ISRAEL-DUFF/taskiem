@@ -71,3 +71,11 @@ func (s *Server) FillLimiters() {
 		s.limiter("test-fill:"+uuid.NewString()+string(rune(i%10+'0')), time.Hour, 1)
 	}
 }
+
+// SetGroupLinkJoinsPerHour changes how many may join one group by its link
+// in an hour, answering a function that puts it back.
+func SetGroupLinkJoinsPerHour(n int) func() {
+	old := groupLinkJoinsPerHour
+	groupLinkJoinsPerHour = n
+	return func() { groupLinkJoinsPerHour = old }
+}

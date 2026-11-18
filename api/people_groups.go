@@ -1370,8 +1370,11 @@ func (s *Server) addPeopleTx(ctx context.Context, tx pgx.Tx, admin uuid.UUID, g 
 		if m.blocked || !m.allowed || !contact {
 			// An invite (A3); across a block, one they are never shown (A8):
 			// the admin is told "invited" either way.
+			// An invite kept unseen across a block becomes an ordinary one
+			// when asked again once the block is gone.
 			tag, err := tx.Exec(ctx, `INSERT INTO group_invites (group_id, person_id, invited_by, hidden) VALUES ($1, $2, $3, $4)
-				ON CONFLICT (group_id, person_id) DO NOTHING`, g.ID, id, admin, m.blocked)
+				ON CONFLICT (group_id, person_id) DO UPDATE SET hidden = false, invited_by = EXCLUDED.invited_by, created_at = clock_timestamp()
+				WHERE group_invites.hidden AND NOT EXCLUDED.hidden`, g.ID, id, admin, m.blocked)
 			if err != nil {
 				return nil, nil, err
 			}
