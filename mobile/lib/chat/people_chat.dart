@@ -46,6 +46,7 @@ import 'my_chat.dart' show OpenMyChat, sayFailure;
 import 'people.dart';
 import 'people_cards.dart';
 import 'people_live.dart';
+import 'people_search.dart';
 import 'thread.dart';
 import 'words.dart';
 
@@ -114,8 +115,11 @@ class PeopleChatData extends ChangeNotifier {
   /// You's live connection, when open.
   final PeopleLive? live;
 
-  /// The message the chat opens at.
-  final String? focus;
+  /// The message the chat opens at (or jumped to since: [jump]).
+  String? focus;
+
+  /// Counts the jumps: the thread is placed again at each.
+  int focusRound = 0;
 
   /// Older pages are being read to reach [focus]: the thread waits.
   bool focusing = false;
@@ -190,16 +194,28 @@ class PeopleChatData extends ChangeNotifier {
     }
     await _chat();
     await _pull(first: true);
-    if (at != null) {
-      // Older pages until the message is there (or none are left).
-      for (var n = 0; n < 40 && !_disposed && hasOlder && !(messages ?? const []).any((m) => m.id == at); n++) {
-        final had = messages?.length ?? 0;
-        await older();
-        if ((messages?.length ?? 0) == had) break;
-      }
-      focusing = false;
-      _changed();
+    if (at != null) await _reach(at);
+  }
+
+  /// Older pages until [at] is there (or none are left), then the thread
+  /// placed at it.
+  Future<void> _reach(String at) async {
+    for (var n = 0; n < 40 && !_disposed && hasOlder && !(messages ?? const []).any((m) => m.id == at); n++) {
+      final had = messages?.length ?? 0;
+      await older();
+      if ((messages?.length ?? 0) == had) break;
     }
+    focusing = false;
+    focusRound++;
+    _changed();
+  }
+
+  /// To one of this chat's messages (a search's hit in it).
+  Future<void> jump(String messageId) async {
+    focus = messageId;
+    focusing = true;
+    _changed();
+    await _reach(messageId);
   }
 
   /// Whether the message [focus] names is in the chat as read.
@@ -706,6 +722,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
       at: at,
       items: [
         ('About ${c.name}', _info),
+        ('Search this chat', _search),
         if (!c.request) (c.muted ? 'Unmute notifications' : 'Mute notifications', () async => _say(await d.put(muted: !c.muted), c.muted ? 'Notifications on for ${c.name}' : 'Muted')),
         if (!c.request)
           (
@@ -722,6 +739,12 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
       ],
     );
   }
+
+  /// Search this chat: a message found is jumped to here.
+  Future<void> _search() => tkPush<void>(
+    context,
+    PeopleSearchScreen(auth: d.auth, chat: d.id, chatName: d.name, now: d.now, onPick: (m) => unawaited(d.jump(m))),
+  );
 
   Future<void> _info() => tkPush<void>(
     context,
@@ -920,6 +943,8 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                     child: d.missing
                         ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('This chat is no longer here.', textAlign: TextAlign.center, style: tkHint(t))))
                         : ThreadView<PeopleLine>(
+                            // A jump places the thread again.
+                            key: ValueKey('thread ${d.focusRound}'),
                             // Opened at a message: shown once it is read.
                             items: d.focusing ? null : list,
                             focus: d.focusFound ? d.focus : null,

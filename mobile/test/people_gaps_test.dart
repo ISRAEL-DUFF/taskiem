@@ -19,6 +19,7 @@ import 'package:taskiem/chat/my_chat.dart';
 import 'package:taskiem/chat/people_chat.dart';
 import 'package:taskiem/chat/people_find.dart';
 import 'package:taskiem/chat/people_live.dart';
+import 'package:taskiem/chat/people_search.dart';
 import 'package:taskiem/chat/live.dart' show LiveTiming;
 import 'package:taskiem/main.dart';
 import 'package:taskiem/screens/you.dart';
@@ -328,6 +329,121 @@ void main() {
       expect(api.sent('GET', '/v1/me/conversations').where((r) => r.url.queryParameters['archived'] == null), hasLength(1));
       chats.dispose();
       live.dispose();
+    });
+  });
+
+  group('search and starred', () {
+    Map<String, dynamic> found(String id, {String chat = 'pc1', String name = 'Ada Obi', String body = 'Bring the cake', String? snippet, bool mine = false}) => {
+      'chat_id': chat,
+      'chat': peopleChat(id: chat, name: name),
+      'message': _m(id, body: body, mine: mine),
+      'snippet': ?snippet,
+    };
+
+    testWidgets('search: typed words searched once they rest, a page at a time; a hit opens its chat at the message', (t) async {
+      phone(t);
+      final api = Api();
+      api.routes['GET /v1/me/people/search'] = (r) => r.url.queryParameters['before'] == null
+          ? {'results': [found('m5', snippet: '…Bring the cake at six'), found('x2', chat: 'pc2', name: 'Bola', body: 'cake shop?', mine: true)], 'more': true, 'next': 'n1'}
+          : {'results': [found('x1', chat: 'pc2', name: 'Bola', body: 'Cakes!')], 'more': false};
+      final opened = <(String, String)>[];
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleSearchScreen(auth: api.auth(), now: () => at, openAt: (c, m) async => opened.add((c, m)))));
+      await settle(t);
+      expect(find.text('Starred messages'), findsOneWidget, reason: 'with nothing typed');
+      await typeIn(t, find.byKey(const ValueKey('people-search')), 'c');
+      await t.pump(const Duration(milliseconds: 500));
+      expect(api.sent('GET', '/v1/me/people/search'), isEmpty, reason: 'one letter is not searched');
+      expect(find.text('Type a word of two letters or more.'), findsOneWidget);
+      await typeIn(t, find.byKey(const ValueKey('people-search')), 'ca');
+      await typeIn(t, find.byKey(const ValueKey('people-search')), 'cake');
+      await t.pump(const Duration(milliseconds: 500));
+      await settle(t);
+      expect(api.sent('GET', '/v1/me/people/search').where((r) => r.url.queryParameters['before'] == null).map((r) => r.url.queryParameters['q']), ['cake'], reason: 'once, when typing rests');
+      expect(find.text('You: …Bring the cake at six'.replaceFirst('You', 'Ada Obi')), findsOneWidget, reason: 'the snippet, with who wrote it');
+      expect(find.text('You: cake shop?'), findsOneWidget);
+      // The next page as the list's end comes into view.
+      await settle(t);
+      expect(api.sent('GET', '/v1/me/people/search').last.url.queryParameters['before'], 'n1');
+      expect(find.text('Bola: Cakes!'), findsOneWidget);
+      await press(t, find.text('Ada Obi'));
+      expect(opened, [('pc1', 'm5')]);
+      await drain(t);
+    });
+
+    testWidgets('search: the server’s refusal said (too fast)', (t) async {
+      phone(t);
+      final api = Api();
+      api.routes['GET /v1/me/people/search'] = (_) => answer({'error': 'You are searching too fast. Wait a moment.'}, 429);
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleSearchScreen(auth: api.auth(), now: () => at, wait: Duration.zero)));
+      await typeIn(t, find.byKey(const ValueKey('people-search')), 'cake');
+      await settle(t);
+      expect(find.text('You are searching too fast. Wait a moment.'), findsOneWidget);
+      await drain(t);
+    });
+
+    testWidgets('starred: across chats, each opening its chat at the message', (t) async {
+      phone(t);
+      final api = Api();
+      api.routes['GET /v1/me/people/starred'] = (_) => {
+        'starred': [
+          {...found('m2', body: 'Yes, see you at 6'), 'starred_at': '2026-11-17T09:30:00Z'},
+          {...found('x1', chat: 'pc2', name: 'Bola', body: 'My account is 0123'), 'starred_at': '2026-11-16T09:30:00Z'},
+        ],
+        'more': false,
+      };
+      final opened = <(String, String)>[];
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleStarredScreen(auth: api.auth(), now: () => at, openAt: (c, m) async => opened.add((c, m)))));
+      await settle(t);
+      expect(find.text('Ada Obi: Yes, see you at 6'), findsOneWidget);
+      await press(t, find.text('Bola'));
+      expect(opened, [('pc2', 'x1')]);
+      expect(api.sent('GET', '/v1/me/people/starred'), hasLength(2), reason: 'read again after, an unstarred one gone');
+      await drain(t);
+    });
+
+    testWidgets('a chat opened at a message: older pages read until it is there, and it is shown', (t) async {
+      phone(t);
+      final api = adaChat();
+      api.routes['GET /v1/me/people/pc1/messages'] = (r) => switch (r.url.queryParameters['before']) {
+        null => {'messages': thread().skip(3).toList(), 'more': true},
+        'm4' => {'messages': thread().skip(1).take(2).toList(), 'more': true},
+        _ => {'messages': [
+          {'id': 'm0', 'mine': false, 'kind': 'text', 'body': 'The very first one', 'read_at': null, 'created_at': '2026-11-16T09:00:00Z'},
+          thread().first,
+        ], 'more': false},
+      };
+      final d = PeopleChatData(api.auth(), 'pc1', follow: false, now: () => at, focus: 'm0');
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleChatScreen(data: d)));
+      await settle(t);
+      expect(api.sent('GET', '/v1/me/people/pc1/messages').map((r) => r.url.queryParameters['before']), [null, 'm4', 'm2']);
+      expect(d.focusFound, isTrue);
+      expect(find.text('The very first one'), findsOneWidget);
+      expect(t.getRect(find.text('The very first one')).top, greaterThan(0), reason: 'placed in view');
+      expect(t.getRect(find.text('The very first one')).bottom, lessThan(1600));
+      await drain(t);
+    });
+
+    testWidgets('search this chat, from its menu: a hit jumps there', (t) async {
+      phone(t);
+      final api = adaChat();
+      api.routes['GET /v1/me/people/search'] = (r) {
+        expect(r.url.queryParameters['chat'], 'pc1');
+        return {'results': [found('m2', body: 'Yes, see you at 6', snippet: 'Yes, see you at 6')], 'more': false};
+      };
+      final d = PeopleChatData(api.auth(), 'pc1', follow: false, now: () => at);
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleChatScreen(data: d)));
+      await settle(t);
+      await press(t, find.bySemanticsLabel('More about this conversation'));
+      await press(t, find.text('Search this chat'));
+      await typeIn(t, find.byKey(const ValueKey('people-search')), 'see you');
+      await t.pump(const Duration(milliseconds: 500));
+      await settle(t);
+      final before = d.focusRound;
+      await press(t, find.text('Ada Obi'));
+      expect(find.byType(PeopleSearchScreen), findsNothing);
+      expect(d.focus, 'm2');
+      expect(d.focusRound, before + 1, reason: 'the thread placed again at it');
+      await drain(t);
     });
   });
 }

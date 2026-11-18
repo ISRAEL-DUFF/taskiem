@@ -1,0 +1,337 @@
+// Search across a person's own people chats, and their starred messages
+// (docs/spec/people-chatting.md §6.2, §7; the server's As built, "stage 5a
+// gaps, chat features": `GET /v1/me/people/search`, `GET
+// /v1/me/people/starred`). Each found message opens its chat at it, older
+// pages read until it is there, placed in the middle and flashed.
+//
+// The search runs on Taskiem's server over the person's own copies (people
+// chats are kept by Taskiem, readable by its servers; not end-to-end
+// encrypted). Nothing of a search is kept on the phone.
+
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
+
+import '../api/api.g.dart';
+import '../api/transport.dart';
+import '../app/auth.dart';
+import '../kit/kit.dart';
+import '../kit/list.dart' show TkEmpty, TkLoading;
+import '../kit/load_more.dart';
+import '../kit/mobile.dart';
+import '../theme/look.dart';
+import '../theme/theme.dart';
+import 'approve.dart' show TkTextBox;
+import 'chats.dart' show ChatRow;
+import 'my_chat.dart' show sayFailure;
+import 'people.dart';
+import 'words.dart';
+
+/// Opens a people chat at one of its messages.
+typedef OpenPeopleChatAt = Future<void> Function(String chatId, String messageId);
+
+/// Whether [q] can be searched: a word of two letters or more (the server
+/// answers 400 otherwise).
+bool searchable(String q) => q.trim().length <= 200 && RegExp(r'[\p{L}\p{N}]{2,}', unicode: true).hasMatch(q);
+
+/// The words for a search that could not run: the server's own (too
+/// fast, nothing to search for), or the network's.
+String searchFailure(Object e) {
+  if (e is ApiError && e.status == 429 && !e.body.containsKey('error')) return 'You are searching very fast. Wait a moment and try again.';
+  return sayFailure(e);
+}
+
+/// One page of found messages (search or starred).
+typedef FoundPage = ({List<PeopleFound> found, bool more, String? next});
+
+/// A list of found messages read a page at a time.
+class FoundList extends ChangeNotifier {
+  FoundList(this.read);
+
+  /// Reads the page after [before] (null: the first).
+  final Future<FoundPage> Function(String? before) read;
+
+  List<PeopleFound>? found;
+  bool more = false;
+  String? _next;
+  String? error;
+  bool busy = false;
+  int _round = 0;
+  bool _disposed = false;
+
+  /// The first page, again.
+  Future<void> load() async {
+    final round = ++_round;
+    busy = true;
+    error = null;
+    _changed();
+    try {
+      final p = await read(null);
+      if (round != _round || _disposed) return;
+      found = p.found;
+      more = p.more;
+      _next = p.next;
+    } on Object catch (e) {
+      if (round != _round || _disposed) return;
+      error = searchFailure(e);
+    }
+    busy = false;
+    _changed();
+  }
+
+  /// The page after the last read.
+  Future<void> loadMore() async {
+    final next = _next;
+    if (!more || next == null || busy) return;
+    final round = _round;
+    busy = true;
+    try {
+      final p = await read(next);
+      if (round != _round || _disposed) return;
+      found = [...?found, ...p.found.where((f) => !(found ?? const []).any((g) => g.message.id == f.message.id))];
+      more = p.more;
+      _next = p.next;
+    } on Object catch (e) {
+      if (round == _round && !_disposed) error = searchFailure(e);
+    }
+    busy = false;
+    _changed();
+  }
+
+  /// Nothing shown (the box emptied).
+  void clear() {
+    _round++;
+    found = null;
+    more = false;
+    _next = null;
+    error = null;
+    busy = false;
+    _changed();
+  }
+
+  void _changed() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+}
+
+/// A found message's row: the chat's name, the words around what was
+/// found (or the message's line), and when.
+class FoundRow extends StatelessWidget {
+  const FoundRow({super.key, required this.f, required this.now, required this.transport, required this.onTap, this.showChat = true});
+  final PeopleFound f;
+  final DateTime now;
+  final Transport transport;
+  final VoidCallback onTap;
+  final bool showChat;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final m = f.message;
+    final who = m.mine ? 'You' : f.chat.name;
+    final words = (f.snippet ?? '').isNotEmpty ? f.snippet! : peopleLine(m);
+    return Semantics(
+      label: 'Message ${m.mine ? 'from you' : 'from ${f.chat.name}'}${showChat ? ' in your chat with ${f.chat.name}' : ''}: $words',
+      button: true,
+      excludeSemantics: true,
+      child: ChatRow(
+        key: ValueKey('found ${m.id}'),
+        title: showChat ? f.chat.name : who,
+        letter: f.chat.name,
+        avatar: PersonFace(name: f.chat.name, transport: transport, photo: f.chat.person?.photo, size: 48),
+        time: listTime(m.createdAt, now),
+        preview: Text(showChat ? '$who: $words' : words, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 14, color: t.muted)),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+/// Search your people chats ([chat]: only that one). With [onPick], a
+/// found message is given back (the chat it is in jumps to it); else it is
+/// opened with [openAt].
+class PeopleSearchScreen extends StatefulWidget {
+  const PeopleSearchScreen({super.key, required this.auth, this.openAt, this.onPick, this.chat, this.chatName, this.now = DateTime.now, this.wait = const Duration(milliseconds: 400)});
+  final Auth auth;
+  final OpenPeopleChatAt? openAt;
+  final ValueChanged<String>? onPick;
+  final String? chat;
+  final String? chatName;
+  final DateTime Function() now;
+
+  /// How long typing rests before it is searched.
+  final Duration wait;
+
+  @override
+  State<PeopleSearchScreen> createState() => _PeopleSearchScreenState();
+}
+
+class _PeopleSearchScreenState extends State<PeopleSearchScreen> {
+  final _q = TextEditingController();
+  late final FoundList _list = FoundList((before) async {
+    final r = await widget.auth.api.searchPeople(q: _q.text.trim(), chat: widget.chat, before: before);
+    return (found: r.results, more: r.more, next: r.next);
+  });
+  Timer? _soon;
+  String _searched = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _q.addListener(_typed);
+  }
+
+  @override
+  void dispose() {
+    _soon?.cancel();
+    _q.dispose();
+    _list.dispose();
+    super.dispose();
+  }
+
+  void _typed() {
+    final q = _q.text.trim();
+    if (q == _searched) return;
+    _soon?.cancel();
+    if (!searchable(q)) {
+      _searched = '';
+      _list.clear();
+      return;
+    }
+    _soon = Timer(widget.wait, () {
+      if (!mounted) return;
+      _searched = q;
+      _list.load();
+    });
+  }
+
+  Future<void> _open(PeopleFound f) async {
+    final pick = widget.onPick;
+    if (pick != null) {
+      Navigator.of(context).pop();
+      return pick(f.message.id);
+    }
+    await widget.openAt?.call(f.chatId, f.message.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final look = TkLook.of(context);
+    final one = widget.chat != null;
+    return ListenableBuilder(
+      listenable: _list,
+      builder: (context, _) {
+        final found = _list.found;
+        final q = _q.text.trim();
+        return TkScreen(
+          title: one ? 'Search this chat' : 'Search chats with people',
+          children: [
+            Semantics(
+              label: one ? 'Search your chat with ${widget.chatName ?? 'them'}' : 'Search your chats with people',
+              textField: true,
+              child: TkTextBox(key: const ValueKey('people-search'), controller: _q, hint: 'Words, a file’s name, a place…', max: 200),
+            ),
+            if (!one && q.isEmpty)
+              TkSection(
+                inset: 56,
+                children: [
+                  TkListRow(
+                    title: 'Starred messages',
+                    sub: 'Messages you starred, in every chat with people',
+                    icon: 'star',
+                    square: look.orange,
+                    onTap: () => tkPush<void>(context, PeopleStarredScreen(auth: widget.auth, openAt: widget.openAt ?? (_, _) async {}, now: widget.now)),
+                  ),
+                ],
+              ),
+            if (q.isNotEmpty && !searchable(q)) Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text('Type a word of two letters or more.', style: tkHint(t))),
+            if (_list.error != null) TkErrorBox(_list.error!),
+            if (found == null && _list.busy) const TkLoading(label: 'Searching…'),
+            if (found != null && found.isEmpty)
+              const TkPanel(children: [TkEmpty(icon: 'search', title: 'Nothing found', line: 'No message has those words. Try the start of a word.')]),
+            if (found != null && found.isNotEmpty)
+              TkPanel(
+                inset: 76,
+                children: [
+                  for (final f in found) FoundRow(f: f, now: widget.now(), transport: widget.auth.transport, showChat: !one, onTap: () => _open(f)),
+                ],
+              ),
+            if (found != null && _list.more) TkLoadMore(label: 'Show more', onMore: _list.loadMore),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text('Search runs on Taskiem’s servers, over your own copy of your chats. Nothing you search for is kept.', style: tkHint(t)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Your starred messages across your people chats, the most recently
+/// starred first; each opens its chat at it.
+class PeopleStarredScreen extends StatefulWidget {
+  const PeopleStarredScreen({super.key, required this.auth, required this.openAt, this.now = DateTime.now});
+  final Auth auth;
+  final OpenPeopleChatAt openAt;
+  final DateTime Function() now;
+
+  @override
+  State<PeopleStarredScreen> createState() => _PeopleStarredScreenState();
+}
+
+class _PeopleStarredScreenState extends State<PeopleStarredScreen> {
+  late final FoundList _list = FoundList((before) async {
+    final r = await widget.auth.api.starredPeople(before: before);
+    return (found: r.starred, more: r.more, next: r.next);
+  });
+
+  @override
+  void initState() {
+    super.initState();
+    _list.load();
+  }
+
+  @override
+  void dispose() {
+    _list.dispose();
+    super.dispose();
+  }
+
+  Future<void> _open(PeopleFound f) async {
+    await widget.openAt(f.chatId, f.message.id);
+    // Unstarred in the chat: gone from here too.
+    if (mounted) await _list.load();
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: _list,
+    builder: (context, _) {
+      final found = _list.found;
+      return TkScreen(
+        title: 'Starred messages',
+        onRefresh: _list.load,
+        children: [
+          if (_list.error != null) TkErrorBox(_list.error!),
+          if (found == null && _list.error == null) const TkLoading(label: 'Loading…'),
+          if (found != null && found.isEmpty)
+            const TkPanel(children: [TkEmpty(icon: 'star', title: 'No starred messages', line: 'Hold a message in a chat with a person and choose Star to keep it here.')]),
+          if (found != null && found.isNotEmpty)
+            TkPanel(
+              inset: 76,
+              children: [for (final f in found) FoundRow(f: f, now: widget.now(), transport: widget.auth.transport, onTap: () => _open(f))],
+            ),
+          if (found != null && _list.more) TkLoadMore(label: 'Show more', onMore: _list.loadMore),
+        ],
+      );
+    },
+  );
+}

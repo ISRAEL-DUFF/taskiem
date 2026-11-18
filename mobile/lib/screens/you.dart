@@ -26,6 +26,7 @@ import '../chat/people_chat.dart' show PeopleChatData, PeopleChatScreen;
 import '../chat/people_contacts.dart' show PeopleContactsScreen, PhoneContacts, DevicePhoneContacts;
 import '../chat/people_find.dart';
 import '../chat/people_live.dart';
+import '../chat/people_search.dart';
 import '../chat/people_settings.dart' show BlockedPeopleScreen, PeoplePrivacyPage;
 import '../chat/your_orders.dart' show YourOrderPage;
 import '../app/prefs.dart' show Prefs;
@@ -244,6 +245,21 @@ class _YouHomeState extends State<YouHome> with Polling {
     await _chats.load();
   }
 
+  /// A chat with a person opened at one of its messages (a search's hit, a
+  /// starred message).
+  Future<void> _openPersonAt(String id, String message) async {
+    await tkPush<void>(
+      context,
+      PeopleChatScreen(
+        data: PeopleChatData(widget.auth, id, now: widget.now, focus: message),
+        notify: widget.notify,
+        openBusiness: _openId,
+        openOrder: (business, reference) => tkPush<void>(context, YourOrderPage.of(auth: widget.auth, business: business, reference: reference, onOpenChat: _openId, now: widget.now)),
+      ),
+    );
+    await _chats.load();
+  }
+
   /// New chat: finding people (people-chatting §5).
   Future<void> _newChat() async {
     await tkPush<void>(context, NewPeopleChatScreen(auth: widget.auth, openChat: _openPerson, contacts: widget.contacts));
@@ -406,6 +422,8 @@ class _YouHomeState extends State<YouHome> with Polling {
           await _load();
         },
         actions: [
+          TkHeadButton(icon: 'b-search', label: 'Search chats with people', onTap: () => tkPush<void>(context, PeopleSearchScreen(auth: auth, openAt: _openPersonAt, now: widget.now))),
+          const SizedBox(width: 6),
           TkHeadButton(icon: 'b-plus', label: 'New chat', onTap: _newChat),
           const SizedBox(width: 6),
           if (businesses.isNotEmpty) ...[TkHeadButton(icon: 'loop', label: 'Switch', onTap: () => showSwitcher(context, auth)), const SizedBox(width: 6)],
