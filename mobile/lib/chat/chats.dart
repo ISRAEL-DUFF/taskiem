@@ -27,6 +27,7 @@ import 'customer.dart';
 import 'explore.dart';
 import 'live.dart';
 import 'thread.dart' show showHeadMenu;
+import 'cards.dart' show CardPill;
 import 'words.dart';
 
 /// What the list shows, loaded as the web's page loads it.
@@ -1078,11 +1079,9 @@ class ChatRow extends StatelessWidget {
                         Semantics(
                           label: m.off ? '${m.label}, stopped' : m.label,
                           excludeSemantics: true,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                            decoration: BoxDecoration(color: m.off ? t.tkDangerBg : t.tkSoft, borderRadius: BorderRadius.circular(999)),
-                            child: Text(m.label, style: tkText(size: 11, weight: 600, color: m.off ? t.tkDangerInk : t.muted)),
-                          ),
+                          // The app's pills (cards.dart CardPill): a stopped
+                          // line red, WhatsApp in its lime, the rest plain.
+                          child: CardPill(m.label, m.off ? CardTone.danger : (m.label == 'WhatsApp' ? CardTone.lime : CardTone.plain)),
                         ),
                       ],
                       if (time != null) ...[

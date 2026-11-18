@@ -8,9 +8,14 @@ import 'package:flutter/widgets.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../kit/kit.dart';
+import '../chat/approve.dart' show TkTextBox;
+import '../kit/icon.dart';
 import '../kit/mobile.dart';
+import '../kit/page.dart';
+import '../kit/sheet.dart' show TkKitField, TkCta;
+import '../theme/look.dart';
 import '../theme/theme.dart';
-import 'sign_up.dart' show signupKinds;
+import 'sign_up.dart' show KindTile, signupKinds;
 
 class StartSomethingScreen extends StatefulWidget {
   const StartSomethingScreen({super.key, required this.auth, this.kind});
@@ -63,90 +68,72 @@ class _StartSomethingScreenState extends State<StartSomethingScreen> {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    final words = tkText(size: 14, color: t.text);
+    final look = TkLook.of(context);
     final person = widget.auth.me?.user?.name?.trim();
-    Widget choice(String id, String title, String line) => TkChoiceRow(
-          control: TkRadio(checked: _kind == id),
-          label: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: tkText(size: 15, weight: 600, color: t.text)),
-              Text(line, style: tkHint(t)),
-            ],
-          ),
+    // As the app's own pages: a choice is a row with its tile, ticked when
+    // chosen; a business's kind is main's sign-up tiles; a name is a field
+    // in a form group; the app's main button.
+    Widget choice(String id, String title, String line, String icon, Color color) => TkListRow(
+          title: title,
+          sub: line,
+          icon: icon,
+          square: color,
+          subLines: 2,
+          chevron: false,
+          semanticsLabel: '$title${_kind == id ? ', chosen' : ''}',
+          trailing: _kind == id ? TkIcon('b-check', size: 20, stroke: 2.4, color: look.limeInk) : const SizedBox(width: 20),
           onTap: () => setState(() {
             _kind = id;
             _error = null;
           }),
         );
-    return TkScreen(
+    return TkPageScreen(
       title: 'Start something',
+      titleSize: 30,
+      backLabel: 'Back to You',
       children: [
-        TkPanel(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        TkSection(
+          title: 'What do you want to start?',
+          inset: 56,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: Text('What do you want to start?', style: tkText(size: 17, weight: 700, color: t.text)),
-                ),
-                choice('business', 'A business', 'Sell, take orders and bookings, send invoices, with your staff.'),
-                choice('workflows', 'Workflows', 'Automate work for yourself or a team: forms, reminders, approvals, your other apps.'),
-              ],
-            ),
+            choice('business', 'A business', 'Sell, take orders and bookings, send invoices, with your staff.', 'b-store', look.lime),
+            choice('workflows', 'Workflows', 'Automate work for yourself or a team: forms, reminders, approvals, your other apps.', 'b-flow', look.violet),
           ],
         ),
-        if (_kind == 'business')
-          TkPanel(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TkField(key: const ValueKey('business-name'), label: 'Business name', controller: _name, minHeight: 44),
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Text('What does your business do?', style: tkText(size: 13, weight: 600, color: t.muted)),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Text('This sets up what you see first. Workflows, forms and chat are always there, and you can change it any time.', style: tkHint(t)),
-                  ),
-                  for (final k in signupKinds.where((k) => k.id != 'workflows'))
-                    TkChoiceRow(
-                      control: TkRadio(checked: _does == k.id),
-                      label: Text(k.label, style: words),
-                      onTap: () => setState(() => _does = k.id),
-                    ),
-                ],
-              ),
-            ],
+        if (_kind == 'business') ...[
+          TkFormGroup(children: [TkKitField(key: const ValueKey('business-name'), label: 'Business name', child: TkTextBox(controller: _name, max: 120, size: 15, height: 46))]),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+            child: Semantics(header: true, child: Text('What does your business do?', style: tkDisplay(size: 20, letterSpacing: -0.4, color: t.text))),
           ),
-        if (_kind == 'workflows')
-          TkPanel(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+          LayoutBuilder(
+            builder: (context, box) {
+              final w = (box.maxWidth - 8) / 2;
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  TkField(key: const ValueKey('workflows-name'), label: 'Name (you can leave it empty)', controller: _name, minHeight: 44),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      'Left empty, it\'s called “${person == null || person.isEmpty ? 'My workflows' : '$person\'s workflows'}”. You can rename it later.',
-                      style: tkHint(t),
-                    ),
-                  ),
+                  for (final k in signupKinds.where((k) => k.id != 'workflows'))
+                    SizedBox(width: w, child: KindTile(kind: k, on: _does == k.id, onTap: () => setState(() => _does = k.id))),
                 ],
+              );
+            },
+          ),
+          Text('This sets up what you see first. Workflows, forms and chat are always there, and you can change it any time.', style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
+        ],
+        if (_kind == 'workflows')
+          TkFormGroup(
+            children: [
+              TkKitField(
+                key: const ValueKey('workflows-name'),
+                label: 'Name (you can leave it empty)',
+                hint: 'Left empty, it\'s called “${person == null || person.isEmpty ? 'My workflows' : '$person\'s workflows'}”. You can rename it later.',
+                child: TkTextBox(controller: _name, max: 120, size: 15, height: 46),
               ),
             ],
           ),
         if (_error != null) TkErrorBox(_error!),
-        if (_kind != null)
-          TkButton(label: _busy ? 'Starting…' : (_kind == 'business' ? 'Start the business' : 'Start workflows'), primary: true, minHeight: 44, enabled: !_busy, onPressed: _start),
+        if (_kind != null) TkCta(label: _busy ? 'Starting…' : (_kind == 'business' ? 'Start the business' : 'Start workflows'), onTap: _busy ? null : _start),
       ],
     );
   }

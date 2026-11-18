@@ -13,7 +13,7 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/links.dart';
 import '../app/phone.dart';
-import '../chat/cards.dart' show CardButton;
+import '../theme/look.dart';
 import '../kit/kit.dart';
 import '../theme/theme.dart';
 import 'chat_link.dart';
@@ -196,7 +196,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     return ColoredBox(
-      color: t.bg,
+      color: TkLook.of(context).ground,
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -227,7 +227,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
           // While they take no chats in Taskiem it is the way to them: the
           // main button, and signing in is not for chatting with them.
           if (whatsappChoice(_link!.card!) case final wa?) ...[
-            CardButton(label: 'Chat on WhatsApp', primary: !taskiemChoice(_link!.card!), onTap: () => chatOnWhatsApp(context, wa)),
+            AuthButton(label: 'Chat on WhatsApp', soft: taskiemChoice(_link!.card!), onTap: () => chatOnWhatsApp(context, wa)),
             const SizedBox(height: 20),
           ],
           if (!taskiemChoice(_link!.card!)) ...[
@@ -265,7 +265,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
           child: Text('A Nigerian number can start with 0. For another country, start with + and its code.', style: tkHint(t)),
         ),
         if (error != null) ...[const SizedBox(height: 4), TkErrorBox(error!)] else const SizedBox(height: 16),
-        TkButton(label: busy ? 'Sending…' : 'Continue', primary: true, minHeight: 44, enabled: !busy, onPressed: _send),
+        AuthButton(label: busy ? 'Sending…' : 'Continue', enabled: !busy, onTap: _send),
         Padding(
           // `.way-in-other`: 14 px above, nothing below.
           padding: const EdgeInsets.only(top: 14),
@@ -285,15 +285,10 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
             style: tkText(size: 14, color: t.text)),
         ),
       ),
-      TkField(
+      // As main's sign-in draws a code: six boxes.
+      CodeBoxes(
         key: const ValueKey('code'),
-        label: '6-digit code',
         controller: _code,
-        autofocus: true,
-        keyboard: TextInputType.number,
-        autofill: const [AutofillHints.oneTimeCode],
-        digits: 6,
-        minHeight: 44,
         onChanged: (_) => setState(() {}),
         onSubmitted: (_) => _verify(),
       ),
@@ -304,13 +299,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
           child: Text('You can ask for a new code in ${countdown(_left)}.', style: tkHint(t)),
         ),
       if (error != null) ...[const SizedBox(height: 4), TkErrorBox(error!)] else const SizedBox(height: 16),
-      TkButton(
-        label: busy ? 'Checking…' : 'Continue',
-        primary: true,
-        minHeight: 44,
-        enabled: !busy && _code.text.length == 6,
-        onPressed: _verify,
-      ),
+      AuthButton(label: busy ? 'Checking…' : 'Continue', enabled: !busy && _code.text.length == 6, onTap: _verify),
+      const SizedBox(height: 6),
       if (_sentVia != 'sms')
         Center(child: AuthLink(label: 'Send by SMS instead', onTap: busy ? null : () => _send(sms: true))),
       if (_left <= 0) Center(child: AuthLink(label: 'Send a new code', onTap: busy ? null : () => _send(sms: _sentVia == 'sms'))),
@@ -365,7 +355,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> with AuthActing {
         onTap: () => setState(() => _terms = !_terms),
       ),
       if (error != null) TkErrorBox(error!),
-      TkButton(label: busy ? 'Creating…' : 'Create', primary: true, minHeight: 44, enabled: !busy, onPressed: _create),
+      AuthButton(label: busy ? 'Creating…' : 'Create', enabled: !busy, onTap: _create),
+      const SizedBox(height: 6),
       Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: Center(child: AuthLink(label: 'Use another number', onTap: _back)),

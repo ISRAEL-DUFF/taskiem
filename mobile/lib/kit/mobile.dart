@@ -611,6 +611,7 @@ class TkListRow extends StatelessWidget {
     this.levelColor,
     this.trailing,
     this.face,
+    this.chevron = true,
     this.leading,
     this.subLines = 2,
     this.titleLines,
@@ -622,6 +623,10 @@ class TkListRow extends StatelessWidget {
 
   /// How many lines the title may take (one; two beside a switch).
   final int? titleLines;
+
+  /// Whether a row that opens has its chevron: not a choice, which is
+  /// ticked instead.
+  final bool chevron;
 
   /// In place of the tile: a tick box when rows are chosen (as drawn), no
   /// chevron after.
@@ -836,7 +841,7 @@ class TkListRow extends StatelessWidget {
                 ],
                 if (trailing != null) ...[const SizedBox(width: 10), trailing!],
                 // A row that opens has its chevron, after its amount too (as drawn).
-                if (onTap != null && status == null && leading == null && trailing is! TkSwitch) ...[
+                if (chevron && onTap != null && status == null && leading == null && trailing is! TkSwitch) ...[
                   const SizedBox(width: 6),
                   ExcludeSemantics(child: TkIcon('chevron', size: 16, color: t.muted.withValues(alpha: 0.6))),
                 ],

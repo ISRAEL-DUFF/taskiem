@@ -14,7 +14,10 @@ import '../app/passkey.dart';
 import '../app/phone.dart';
 import '../chat/approve.dart' show TkTextBox;
 import '../kit/kit.dart';
+import '../kit/look.dart';
+import '../kit/mobile.dart';
 import '../kit/sheet.dart';
+import '../theme/look.dart';
 import '../theme/theme.dart';
 
 /// The ways this person can prove a new phone is theirs.
@@ -168,33 +171,53 @@ class _SecondProofState extends State<SecondProof> with WidgetsBindingObserver {
     final ways = widget.ways;
     final sent = _sentTo;
     final what = widget.business == null ? 'First' : 'Before ${widget.business} opens';
+    final look = TkLook.of(context);
+    // The app's own look: what to do as a callout, the ways in as rows of
+    // a section, a password or PIN in a form group with its button.
     final List<Widget> body = sent != null
         ? [
             Semantics(
               liveRegion: true,
-              child: Text('We sent a link to $sent. Open it on this phone within 15 minutes.', style: tkText(size: 16, weight: 600, color: t.text)),
+              child: TkCallout(
+                leading: TkSquare('b-mail', color: look.teal),
+                title: 'We sent a link to $sent',
+                sub: 'Open it on this phone within 15 minutes, then come back here and say so.',
+                color: look.teal,
+              ),
             ),
-            Text('Opened it? Come back here and say so.', style: tkFormNow(t)),
-            TkButton(label: _busy ? 'Checking…' : 'I’ve opened the link', primary: true, minHeight: 44, enabled: !_busy, onPressed: _opened),
-            TkLinkButton(label: 'Send it again', onPressed: _busy ? null : _emailLink),
+            TkCta(label: _busy ? 'Checking…' : 'I’ve opened the link', onTap: _busy ? null : _opened),
+            Center(child: TkLink(label: 'Send it again', onTap: _busy ? null : _emailLink)),
           ]
         : [
             Text(
               'This is a new device for your account. $what, prove it\'s you another way. This keeps your businesses safe if your number ever goes to someone else.',
-              style: tkFormNow(t),
+              style: tkText(size: 14, lineHeight: 1.45, color: t.muted),
             ),
-            if (ways.passkey) TkButton(label: 'Use your passkey', primary: true, minHeight: 44, enabled: !_busy, onPressed: _passkey),
-            if (ways.email) TkButton(label: 'Email me a link', minHeight: 44, enabled: !_busy, onPressed: _emailLink),
+            if (ways.passkey || ways.email)
+              TkSection(
+                inset: 56,
+                children: [
+                  if (ways.passkey)
+                    TkListRow(title: 'Use your passkey', sub: 'Your fingerprint, face or screen lock', icon: 'b-key', square: look.lime, onTap: _busy ? null : _passkey),
+                  if (ways.email)
+                    TkListRow(title: 'Email me a link', sub: 'To the email on your account', icon: 'b-mail', square: look.teal, onTap: _busy ? null : _emailLink),
+                ],
+              ),
             if (ways.password) ...[
-              TkKitField(label: 'Your password', child: TkTextBox(key: const ValueKey('proof-password'), controller: _password, secret: true)),
-              TkButton(label: _busy ? 'Checking…' : 'Confirm with my password', minHeight: 44, enabled: !_busy, onPressed: _usePassword),
+              TkFormGroup(children: [TkKitField(label: 'Your password', child: TkTextBox(key: const ValueKey('proof-password'), controller: _password, secret: true))]),
+              TkCta(label: _busy ? 'Checking…' : 'Confirm with my password', onTap: _busy ? null : _usePassword),
             ],
             if (ways.pin) ...[
-              TkKitField(label: 'Your chat PIN', hint: 'The PIN you set for approving on WhatsApp.', child: TkTextBox(controller: _pin, digits: 8, secret: true)),
-              TkButton(label: _busy ? 'Checking…' : 'Confirm with my PIN', minHeight: 44, enabled: !_busy, onPressed: _usePin),
+              TkFormGroup(children: [TkKitField(label: 'Your chat PIN', hint: 'The PIN you set for approving on WhatsApp.', child: TkTextBox(controller: _pin, digits: 8, secret: true))]),
+              TkCta(label: _busy ? 'Checking…' : 'Confirm with my PIN', onTap: _busy ? null : _usePin),
             ],
             if (ways.none)
-              Text('Your account has no other way to prove it\'s you yet. Add an email or a passkey from a device you have used before.', style: tkFormNow(t)),
+              TkCallout(
+                leading: TkSquare('b-alert', color: look.orange),
+                title: 'No other way yet',
+                sub: 'Your account has no other way to prove it\'s you yet. Add an email or a passkey from a device you have used before.',
+                color: look.orange,
+              ),
           ];
     return TkFormBody(children: [...body, if (_error != null) TkErrorBox(_error!)]);
   }
@@ -205,7 +228,8 @@ class _SecondProofState extends State<SecondProof> with WidgetsBindingObserver {
 Future<void> showSecondProof(BuildContext context, Auth auth, {required ProofWays ways, required Future<void> Function() onProved, String? business}) =>
     showTkSheet<void>(
       context,
-      (c) => TkSheet(
+      (c) => TkAppLook(
+        child: TkSheet(
         title: 'Prove it\'s you',
         body: SecondProof(
           auth: auth,
@@ -216,5 +240,6 @@ Future<void> showSecondProof(BuildContext context, Auth auth, {required ProofWay
             if (c.mounted) Navigator.of(c).maybePop();
           },
         ),
+      ),
       ),
     );

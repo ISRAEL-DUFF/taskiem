@@ -46,7 +46,9 @@ import '../kit/load_more.dart';
 import '../kit/polling.dart';
 import '../kit/mobile.dart';
 import '../kit/modal.dart' show showTkConfirm, showTkToast;
-import '../kit/sheet.dart' show TkKitField;
+import '../kit/page.dart';
+import '../kit/sheet.dart' show TkKitField, TkCta;
+import 'sign_in.dart' show CodeBoxes;
 import '../theme/theme.dart';
 import 'chat_link.dart';
 import 'home_tabs.dart';
@@ -1014,70 +1016,67 @@ class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
     final t = TkTheme.tokens(context);
     final sent = _sent;
     final old = widget.auth.me?.user?.phone as String?;
+    final look = TkLook.of(context);
+    // As the app's own pages: the number in a form group, a choice as rows,
+    // each code as six boxes (as main's sign-in), the app's main button.
     final List<Widget> body = switch (_step) {
       _Step.number => [
-          if (_note != null) ...[Semantics(liveRegion: true, child: Text(_note!, style: tkText(size: 14, color: t.text))), const SizedBox(height: 10)],
-          TkKitField(
-            label: 'New phone number',
-            hint: 'A Nigerian number can start with 0. For another country, start with + and its code.',
-            child: TkTextBox(key: const ValueKey('new-phone'), controller: _phone, phone: true),
+          if (_note != null) Semantics(liveRegion: true, child: Text(_note!, style: tkText(size: 14, color: t.text))),
+          TkFormGroup(
+            children: [
+              TkKitField(
+                label: 'New phone number',
+                hint: 'A Nigerian number can start with 0. For another country, start with + and its code.',
+                child: TkTextBox(key: const ValueKey('new-phone'), controller: _phone, phone: true, size: 15, height: 46),
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
-          TkButton(label: _busy ? 'Sending…' : 'Send a code', primary: true, minHeight: 44, enabled: !_busy, onPressed: _send),
+          TkCta(label: _busy ? 'Sending…' : 'Send a code', onTap: _busy ? null : _send),
         ],
       _Step.old => [
           Text(
             'To keep your account safe, we also check it\'s you. Do you still have your old number${old == null ? '' : ', ${showPhone(old)}'}?',
-            style: tkText(size: 15, color: t.text),
+            style: tkText(size: 15, lineHeight: 1.4, color: t.text),
           ),
-          const SizedBox(height: 14),
-          TkButton(label: 'Yes, send it a code', primary: true, minHeight: 44, enabled: !_busy, onPressed: _yes),
-          const SizedBox(height: 8),
-          TkButton(label: 'No, prove it\'s me another way', minHeight: 44, enabled: !_busy, onPressed: _no),
+          TkSection(
+            inset: 56,
+            children: [
+              TkListRow(title: 'Yes, send it a code', sub: old == null ? '' : showPhone(old), icon: 'b-phone', square: look.lime, onTap: _busy ? null : _yes),
+              TkListRow(title: 'No, prove it\'s me another way', sub: 'A passkey, an email link or your PIN', icon: 'b-shield', square: look.blue, onTap: _busy ? null : _no),
+            ],
+          ),
         ],
       _Step.code => [
           Semantics(
             liveRegion: true,
             child: Text(
               '${sentWords(sent?.sentVia ?? 'whatsapp', _e164)}${_needsOld && old != null && sent?.oldSentVia != null ? ' And one to your old number, ${showPhone(old)}.' : ''}',
-              style: tkText(size: 14, color: t.text),
+              style: tkText(size: 14, lineHeight: 1.45, color: t.muted),
             ),
           ),
-          const SizedBox(height: 14),
-          TkKitField(
-            label: 'Code sent to your new number',
-            child: TkTextBox(key: const ValueKey('new-code'), controller: _code, digits: 6),
+          TkFormGroup(
+            children: [
+              TkKitField(label: 'Code sent to your new number', field: false, child: CodeBoxes(key: const ValueKey('new-code'), controller: _code)),
+              if (_left > 0)
+                Text('You can ask for a new code in ${countdown(_left)}.', style: tkHint(t))
+              else
+                Center(child: TkLink(label: 'Send a new code', onTap: _busy ? null : () => _run(() => _start(_e164, confirmOld: _needsOld)))),
+              if (sent?.sentVia != 'sms')
+                Center(child: TkLink(label: 'Send by SMS instead', onTap: _busy ? null : () => _run(() => _start(_e164, confirmOld: _needsOld, sms: true)))),
+            ],
           ),
-          if (_left > 0)
-            Padding(padding: const EdgeInsets.only(top: 6), child: Text('You can ask for a new code in ${countdown(_left)}.', style: tkHint(t)))
-          else
-            TkLinkButton(label: 'Send a new code', onPressed: _busy ? null : () => _run(() => _start(_e164, confirmOld: _needsOld))),
-          if (sent?.sentVia != 'sms')
-            TkLinkButton(label: 'Send by SMS instead', onPressed: _busy ? null : () => _run(() => _start(_e164, confirmOld: _needsOld, sms: true))),
-          if (_needsOld) ...[
-            const SizedBox(height: 14),
-            TkKitField(label: 'Code sent to your old number', child: TkTextBox(key: const ValueKey('old-code'), controller: _old, digits: 6)),
-          ],
-          const SizedBox(height: 14),
-          TkButton(label: _busy || _done ? 'Checking…' : 'Confirm the new number', primary: true, minHeight: 44, enabled: !_busy && !_done, onPressed: _verify),
+          if (_needsOld)
+            TkFormGroup(children: [TkKitField(label: 'Code sent to your old number', field: false, child: CodeBoxes(key: const ValueKey('old-code'), controller: _old))]),
+          TkCta(label: _busy || _done ? 'Checking…' : 'Confirm the new number', onTap: _busy || _done ? null : _verify),
         ],
     };
-    return TkScreen(
+    return TkPageScreen(
       title: old == null ? 'Add your phone' : 'Change your number',
+      titleSize: 30,
+      backLabel: 'Back to Settings',
       children: [
-        TkPanel(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('Your account keeps everything: your chats, orders and businesses.', style: tkHint(t)),
-                const SizedBox(height: 14),
-                ...body,
-              ],
-            ),
-          ],
-        ),
+        Text('Your account keeps everything: your chats, orders and businesses.', style: tkText(size: 13.5, lineHeight: 1.4, color: t.muted)),
+        ...body,
         if (_error != null) TkErrorBox(_error!),
       ],
     );

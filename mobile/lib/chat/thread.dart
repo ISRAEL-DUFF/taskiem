@@ -905,8 +905,13 @@ Widget ownWords(BuildContext context, bool on, Widget child) {
       panel: const Color(0x1AFFFFFF),
       panel2: const Color(0x1AFFFFFF),
       border: const Color(0x33FFFFFF),
+      tkSoft: const Color(0x1AFFFFFF),
     ),
     child,
+    // Pills and a tag's letters in the bright inks (as main's copy in
+    // conversation.dart): the light's dark green ink on a faint lime did
+    // not show on pine.
+    look: tkLookOnPine,
   );
 }
 

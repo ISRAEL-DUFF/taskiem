@@ -12,7 +12,9 @@ import '../api/transport.dart';
 import '../app/auth.dart';
 import '../app/passkey.dart';
 import '../kit/kit.dart';
+import '../kit/look.dart';
 import '../kit/mobile.dart';
+import '../theme/look.dart';
 import '../kit/sheet.dart';
 import '../theme/theme.dart';
 import 'second_proof.dart';
@@ -34,12 +36,12 @@ String businessLine(BusinessEntry b) {
 
 /// Opens the switcher over [context]; [open] switches to that business at
 /// once, asking for its step if it has one.
-Future<void> showSwitcher(BuildContext context, Auth auth, {BusinessEntry? open}) => showTkSheet<void>(context, (_) => SwitcherSheet(auth: auth, open: open));
+Future<void> showSwitcher(BuildContext context, Auth auth, {BusinessEntry? open}) => showTkSheet<void>(context, (_) => TkAppLook(child: SwitcherSheet(auth: auth, open: open)));
 
 /// A business's step asked for outside the switcher (an invitation
 /// accepted): the step's sheet, then the business.
 Future<void> showBusinessStep(BuildContext context, Auth auth, {required BusinessEntry to, required String need, ProofWays? ways}) =>
-    showTkSheet<void>(context, (_) => SwitcherSheet(auth: auth, to: to, need: need, ways: ways));
+    showTkSheet<void>(context, (_) => TkAppLook(child: SwitcherSheet(auth: auth, to: to, need: need, ways: ways)));
 
 class SwitcherSheet extends StatefulWidget {
   const SwitcherSheet({super.key, required this.auth, this.businesses, this.to, this.need, this.ways, this.open});
@@ -217,13 +219,17 @@ class _SwitcherSheetState extends State<SwitcherSheet> {
     final List<Widget> body;
     if (need == 'sso_required') {
       body = [
-        Text('${b.name} asks you to sign in with your organisation\'s sign-in.', style: tkText(size: 16, weight: 600, color: t.text)),
-        Text('Sign out, then sign in to ${b.name} with your organisation\'s email.', style: tkFormNow(t)),
+        TkCallout(
+          leading: TkSquare('b-lock', color: TkLook.of(context).blue),
+          title: '${b.name} asks for your organisation\'s sign-in',
+          sub: 'Sign out, then sign in to ${b.name} with your organisation\'s email.',
+          color: TkLook.of(context).blue,
+        ),
       ];
     } else {
       body = [
-        Text('${b.name} opens with your passkey: your phone\'s fingerprint, face or PIN.', style: tkText(size: 16, weight: 600, color: t.text)),
-        TkButton(label: 'Use your passkey', primary: true, minHeight: 44, enabled: !_busy, onPressed: _passkey),
+        Text('${b.name} opens with your passkey: your phone\'s fingerprint, face or PIN.', style: tkText(size: 14, lineHeight: 1.45, color: t.muted)),
+        TkCta(label: 'Use your passkey', icon: 'fingerprint', onTap: _busy ? null : _passkey),
       ];
     }
     return TkSheet(

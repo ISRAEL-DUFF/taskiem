@@ -269,7 +269,8 @@ void main() {
     await settle(t);
     await press(t, 'Mama’s Kitchen');
     await press(t, 'Email me a link');
-    expect(find.text('We sent a link to t***@example.com. Open it on this phone within 15 minutes.'), findsOneWidget);
+    expect(find.text('We sent a link to t***@example.com'), findsOneWidget);
+    expect(find.text('Open it on this phone within 15 minutes, then come back here and say so.'), findsOneWidget);
     await press(t, 'I’ve opened the link');
     expect(find.textContaining('The link has not been opened yet'), findsOneWidget);
     proved = true;
