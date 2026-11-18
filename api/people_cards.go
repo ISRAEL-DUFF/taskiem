@@ -381,8 +381,8 @@ func (s *Server) markSplitPaid(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var out peopleMessage
-	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		c, err := peopleCopyTx(ctx, tx, person, chi.URLParam(r, "id"), false)
+	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
+		c, err := peopleCopyTx(ctx, tx, person, chi.URLParam(r, "id"), true)
 		if err != nil {
 			return err
 		}
@@ -397,14 +397,31 @@ func (s *Server) markSplitPaid(w http.ResponseWriter, r *http.Request) {
 			WHERE person_id = $1 AND id = $2`, person, m.ID, in.Paid); err != nil {
 			return err
 		}
-		peer, ok, err := reachIfDeliveredTx(ctx, tx, c, m)
-		if err != nil {
-			return err
-		}
-		if ok {
-			if _, err := tx.Exec(ctx, `UPDATE people_messages SET paid_at = CASE WHEN $4 THEN now() END, paid_by_me = CASE WHEN $4 THEN false END
-				WHERE person_id = $1 AND conversation_id = $2 AND id = $3`, peer, c.Conversation, m.ID, in.Paid); err != nil {
+		// The other's copy shows it only once the chat is no longer a
+		// request on either side and no block stands between them: a
+		// request's sender learns nothing of the recipient (as with read
+		// marks and reactions).
+		if c.RequestAt == nil && !c.Blocked {
+			peer, ok, err := reachIfDeliveredTx(ctx, tx, c, m)
+			if err != nil {
 				return err
+			}
+			if ok {
+				theyBlocked, err := theyBlockedTx(ctx, tx, peer, person)
+				if err != nil {
+					return err
+				}
+				var theirRequest bool
+				if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM people_chats WHERE person_id = $1 AND conversation_id = $2 AND request_at IS NOT NULL)`,
+					peer, c.Conversation).Scan(&theirRequest); err != nil {
+					return err
+				}
+				if !theyBlocked && !theirRequest {
+					if _, err := tx.Exec(ctx, `UPDATE people_messages SET paid_at = CASE WHEN $4 THEN now() END, paid_by_me = CASE WHEN $4 THEN false END
+						WHERE person_id = $1 AND conversation_id = $2 AND id = $3`, peer, c.Conversation, m.ID, in.Paid); err != nil {
+						return err
+					}
+				}
 			}
 		}
 		row, err := ownMessageTx(ctx, tx, person, c, m.ID.String())
@@ -415,7 +432,12 @@ func (s *Server) markSplitPaid(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
+		ticks, err := s.readTicksTx(ctx, tx, person, c.Peer)
+		if err != nil {
+			return err
+		}
 		out, _ = row.view(key, person)
+		out = hideRead(out, ticks)
 		return nil
 	})
 	if err != nil {

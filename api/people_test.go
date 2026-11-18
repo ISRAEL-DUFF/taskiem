@@ -246,9 +246,13 @@ func TestContactMatching(t *testing.T) {
 	ada := w.personNamed(t, "+2348032000032", "Ada")
 	bola := w.personNamed(t, "+2348032000033", "Bola")
 	bola.must(200, "PUT", "/v1/me/privacy/people", map[string]any{"find_from_contacts": false})
+	// Matching follows "find me by my number" too: Ada lets everyone find
+	// her (the default, My contacts, would hide her from Tolu).
+	ada.must(200, "PUT", "/v1/me/privacy/people", map[string]any{"find_by_number": "everyone"})
 	k := tolu.must(200, "GET", "/v1/me/contacts/key", nil)
 	key, err := base64.StdEncoding.DecodeString(k["key"].(string))
-	if err != nil || len(key) != 32 || k["max_batch"] != float64(500) || !strings.Contains(k["words"].(string), "not from Taskiem itself") {
+	// A new account sends 1000 hashes a day, not 5000.
+	if err != nil || len(key) != 32 || k["max_batch"] != float64(500) || k["max_per_day"] != float64(1000) || !strings.Contains(k["words"].(string), "not from Taskiem itself") {
 		t.Fatalf("key: %v", k)
 	}
 	h := func(n string) string { return hex.EncodeToString(people.ContactHash(key, n)) }

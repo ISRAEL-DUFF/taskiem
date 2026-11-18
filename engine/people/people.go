@@ -84,6 +84,9 @@ type People struct {
 	// Chatting reports whether a and b have a people chat that is no
 	// longer a request, in a's scope as Blocked. Nil: none.
 	Chatting func(ctx context.Context, a, b uuid.UUID) (bool, error)
+	// ChattingTx is Chatting in tx (a's scope), so a caller inside a
+	// transaction opens no other connection. Nil: Chatting.
+	ChattingTx func(ctx context.Context, tx pgx.Tx, a, b uuid.UUID) (bool, error)
 	// Now is the clock (tests); time.Now when nil.
 	Now func() time.Time
 }
@@ -106,6 +109,33 @@ func (p *People) blocked(ctx context.Context, a, b uuid.UUID) (bool, error) {
 		return false, nil
 	}
 	return p.Blocked(ctx, a, b)
+}
+
+// blockedTx is blocked in tx (a's scope): BlockedSet when set, so no
+// other connection is opened, else Blocked.
+func (p *People) blockedTx(ctx context.Context, tx pgx.Tx, a, b uuid.UUID) (bool, error) {
+	if a == b {
+		return false, nil
+	}
+	if p.BlockedSet != nil {
+		set, err := p.BlockedSet(ctx, tx, a, []uuid.UUID{b})
+		return set[b], err
+	}
+	return p.blocked(ctx, a, b)
+}
+
+// chattingTx is Chatting in tx (a's scope): ChattingTx when set, else
+// Chatting; false without either.
+func (p *People) chattingTx(ctx context.Context, tx pgx.Tx, a, b uuid.UUID) (bool, error) {
+	switch {
+	case a == b:
+		return false, nil
+	case p.ChattingTx != nil:
+		return p.ChattingTx(ctx, tx, a, b)
+	case p.Chatting != nil:
+		return p.Chatting(ctx, a, b)
+	}
+	return false, nil
 }
 
 // blockedSetTx is which of others a block stands between viewer and;
@@ -521,8 +551,17 @@ func (p *People) Contacts(ctx context.Context, person uuid.UUID) ([]Contact, err
 func (p *People) IsContact(ctx context.Context, owner, other uuid.UUID) (bool, error) {
 	var ok bool
 	err := db.InPersonTx(ctx, p.Pool, owner, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM person_contacts WHERE person_id = $1 AND contact_id = $2)`, owner, other).Scan(&ok)
+		var err error
+		ok, err = IsContactTx(ctx, tx, owner, other)
+		return err
 	})
+	return ok, err
+}
+
+// IsContactTx is IsContact in a transaction in owner's scope.
+func IsContactTx(ctx context.Context, tx pgx.Tx, owner, other uuid.UUID) (bool, error) {
+	var ok bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM person_contacts WHERE person_id = $1 AND contact_id = $2)`, owner, other).Scan(&ok)
 	return ok, err
 }
 

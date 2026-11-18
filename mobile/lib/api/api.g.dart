@@ -924,14 +924,14 @@ class TaskiemApi {
   }
 
   /// You's Chats, businesses and people together (`GET /v1/me/conversations`)
-  Future<ListAllMyChatsResponse> listAllMyChats({String? archived}) async {
-    final j = await _t.send('GET', '/v1/me/conversations', query: {'archived': ?archived});
+  Future<ListAllMyChatsResponse> listAllMyChats({String? archived, String? before}) async {
+    final j = await _t.send('GET', '/v1/me/conversations', query: {'archived': ?archived, 'before': ?before});
     return ListAllMyChatsResponse.fromJson(j as Map<String, dynamic>);
   }
 
   /// Your chats with people (`GET /v1/me/people`)
-  Future<ListPeopleChatsResponse> listPeopleChats({String? archived}) async {
-    final j = await _t.send('GET', '/v1/me/people', query: {'archived': ?archived});
+  Future<ListPeopleChatsResponse> listPeopleChats({String? archived, String? before}) async {
+    final j = await _t.send('GET', '/v1/me/people', query: {'archived': ?archived, 'before': ?before});
     return ListPeopleChatsResponse.fromJson(j as Map<String, dynamic>);
   }
 
@@ -8565,20 +8565,30 @@ class GetPersonLinkCardResponse {
 }
 
 class ListAllMyChatsResponse {
-  const ListAllMyChatsResponse({required this.chats, required this.requests, required this.unread});
+  const ListAllMyChatsResponse({required this.chats, required this.more, this.next, required this.requests, required this.unread});
 
   final List<ChatListItem> chats;
+  /// There are more chats after this page (200 a page).
+  final bool more;
+  /// With `more`, pass it as `before` for the page after.
+  final String? next;
   final int requests;
+  /// Unread messages in every chat of the list (archived or not, as asked), not
+  /// the page alone.
   final int unread;
 
   factory ListAllMyChatsResponse.fromJson(Map<String, dynamic> j) => ListAllMyChatsResponse(
         chats: (j['chats'] as List).map((e) => ChatListItem.fromJson(e as Map<String, dynamic>)).toList(),
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
         requests: (j['requests'] as num).toInt(),
         unread: (j['unread'] as num).toInt(),
       );
 
   Map<String, dynamic> toJson() => {
         'chats': chats.map((e) => e.toJson()).toList(),
+        'more': more,
+        'next': ?next,
         'requests': requests,
         'unread': unread,
       };
@@ -8588,7 +8598,7 @@ class ListAllMyChatsResponse {
 /// `/v1/me/chats/{id}`) or a people chat (`kind: person`, open
 /// `/v1/me/people/{id}`).
 class ChatListItem {
-  const ChatListItem({required this.archived, required this.blocked, this.businessId, this.gone, required this.id, required this.kind, required this.last, required this.lastAt, required this.lastMine, required this.muted, required this.name, this.person, this.personId, required this.unread, this.waiting});
+  const ChatListItem({required this.archived, required this.blocked, this.businessId, this.gone, required this.id, required this.kind, required this.last, required this.lastAt, required this.lastMine, required this.muted, required this.name, this.person, this.personId, this.photo, this.suspended, required this.unread, this.waiting});
 
   final bool archived;
   /// You blocked them.
@@ -8607,6 +8617,14 @@ class ChatListItem {
   /// last seen and online. None once they deleted their account.
   final PersonCard? person;
   final String? personId;
+  /// A business chat: the business's photo (its logo; sizes by width in
+  /// `urls`), as Orders on You and one chat's header show it. None without one,
+  /// or while the business is not taking your messages.
+  final OrderPhoto? photo;
+  /// The person's account is suspended: it can't get messages right now
+  /// (sending answers 409). Not deleted: their name is shown, nothing else of
+  /// them.
+  final bool? suspended;
   final int unread;
   /// Your first messages wait for them to accept.
   final bool? waiting;
@@ -8625,6 +8643,8 @@ class ChatListItem {
         name: j['name'] as String,
         person: j['person'] == null ? null : PersonCard.fromJson(j['person'] as Map<String, dynamic>),
         personId: j['person_id'] == null ? null : j['person_id'] as String,
+        photo: j['photo'] == null ? null : OrderPhoto.fromJson(j['photo'] as Map<String, dynamic>),
+        suspended: j['suspended'] == null ? null : j['suspended'] as bool,
         unread: (j['unread'] as num).toInt(),
         waiting: j['waiting'] == null ? null : j['waiting'] as bool,
       );
@@ -8643,26 +8663,38 @@ class ChatListItem {
         'name': name,
         'person': ?person?.toJson(),
         'person_id': ?personId,
+        'photo': ?photo?.toJson(),
+        'suspended': ?suspended,
         'unread': unread,
         'waiting': ?waiting,
       };
 }
 
 class ListPeopleChatsResponse {
-  const ListPeopleChatsResponse({required this.chats, required this.requests, required this.unread});
+  const ListPeopleChatsResponse({required this.chats, required this.more, this.next, required this.requests, required this.unread});
 
   final List<PeopleChat> chats;
+  /// There are more chats after this page (200 a page).
+  final bool more;
+  /// With `more`, pass it as `before` for the page after.
+  final String? next;
   final int requests;
+  /// Unread messages in every chat of the list (archived or not, as asked), not
+  /// the page alone.
   final int unread;
 
   factory ListPeopleChatsResponse.fromJson(Map<String, dynamic> j) => ListPeopleChatsResponse(
         chats: (j['chats'] as List).map((e) => PeopleChat.fromJson(e as Map<String, dynamic>)).toList(),
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
         requests: (j['requests'] as num).toInt(),
         unread: (j['unread'] as num).toInt(),
       );
 
   Map<String, dynamic> toJson() => {
         'chats': chats.map((e) => e.toJson()).toList(),
+        'more': more,
+        'next': ?next,
         'requests': requests,
         'unread': unread,
       };
@@ -8672,7 +8704,7 @@ class ListPeopleChatsResponse {
 /// Taskiem, sealed under the person's key, readable by Taskiem's servers; not
 /// end-to-end encrypted.
 class PeopleChat {
-  const PeopleChat({required this.archived, required this.blocked, this.contact, required this.gone, required this.id, this.kept, required this.kind, required this.last, required this.lastAt, required this.lastMine, required this.muted, required this.name, this.person, required this.personId, this.phone, required this.request, required this.unread, required this.waiting});
+  const PeopleChat({required this.archived, required this.blocked, this.contact, required this.gone, required this.id, this.kept, required this.kind, required this.last, required this.lastAt, required this.lastMine, required this.muted, required this.name, this.person, required this.personId, this.phone, required this.request, this.suspended, required this.unread, required this.waiting});
 
   final bool archived;
   /// You blocked them.
@@ -8700,6 +8732,10 @@ class PeopleChat {
   final Object? phone;
   /// A stranger's first messages, waiting in your Requests.
   final bool request;
+  /// Their account is suspended: it can't get messages right now (sending
+  /// answers 409 "This account can't get messages right now."). Not deleted:
+  /// their name is shown, nothing else of them.
+  final bool? suspended;
   final int unread;
   /// Your first messages wait for them to accept (no read ticks until then).
   final bool waiting;
@@ -8721,6 +8757,7 @@ class PeopleChat {
         personId: j['person_id'] as String,
         phone: j['phone'],
         request: j['request'] as bool,
+        suspended: j['suspended'] == null ? null : j['suspended'] as bool,
         unread: (j['unread'] as num).toInt(),
         waiting: j['waiting'] as bool,
       );
@@ -8742,6 +8779,7 @@ class PeopleChat {
         'person_id': personId,
         'phone': ?phone,
         'request': request,
+        'suspended': ?suspended,
         'unread': unread,
         'waiting': waiting,
       };

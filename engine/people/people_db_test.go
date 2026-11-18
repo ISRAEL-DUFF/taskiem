@@ -372,6 +372,9 @@ func TestMatchContacts(t *testing.T) {
 	f.set(bola, people.SettingsIn{FindFromContacts: yes(false)})
 	f.add(kemi, tolu)
 	f.photo(kemi)
+	// Matching follows "find me by my number" too: Ada lets everyone find
+	// her; Kemi keeps the default (her contacts), and added Tolu.
+	f.set(ada, people.SettingsIn{FindByNumber: aud(people.Everyone)})
 	key, err := f.p.CurrentContactsKey()
 	if err != nil || len(key.Key) != 32 || key.ExpiresAt.Before(f.now) {
 		t.Fatalf("key: %+v %v", key, err)
@@ -443,17 +446,54 @@ func TestMatchContacts(t *testing.T) {
 	if _, err := f.p.MatchContacts(ctx, tolu, key2.ID, big); !errors.Is(err, people.ErrInvalid) {
 		t.Fatalf("too many: %v", err)
 	}
-	// The day's hashes: 5000.
+	// "Find me by my number": My contacts matches only people its owner
+	// added (Dayo did not add Tolu; Efe did); Nobody matches no one, even
+	// someone they added.
+	dayo := f.person("Dayo", "+2348031000045")
+	efe := f.person("Efe", "+2348031000046")
+	f.add(efe, tolu)
+	f.set(efe, people.SettingsIn{FindByNumber: aud(people.Nobody)})
+	two := []string{h(key2.Key, "+2348031000045"), h(key2.Key, "+2348031000046")}
+	if got, err := f.p.MatchContacts(ctx, tolu, key2.ID, two); err != nil || len(got) != 0 {
+		t.Fatalf("my contacts (not added), nobody (added): %+v %v", got, err)
+	}
+	f.set(efe, people.SettingsIn{FindByNumber: aud(people.Contacts)})
+	if got, err := f.p.MatchContacts(ctx, tolu, key2.ID, two); err != nil || len(got) != 1 || got[0].ID != efe {
+		t.Fatalf("my contacts, Efe added Tolu: %+v %v", got, err)
+	}
+	f.add(dayo, tolu)
+	if got, _ := f.p.MatchContacts(ctx, tolu, key2.ID, two[:1]); len(got) != 1 {
+		t.Fatalf("Dayo added Tolu: %+v", got)
+	}
+	// The day's hashes: 1000 in an account's first week, 5000 after.
+	age := func(id uuid.UUID, d time.Duration) {
+		if _, err := f.d.Admin.Exec(ctx, `UPDATE users SET created_at = $2 WHERE id = $1`, id, f.now.Add(-d)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	age(kemi, 24*time.Hour)
+	age(tolu, 30*24*time.Hour)
 	many := make([]string, people.MatchBatch)
 	for i := range many {
 		many[i] = h(key2.Key, "+23480310"+string(rune('0'+i/100))+string(rune('0'+i/10%10))+string(rune('0'+i%10))+"99")
 	}
-	var lastErr error
-	for i := 0; i < 12 && lastErr == nil; i++ {
-		_, lastErr = f.p.MatchContacts(ctx, tolu, key2.ID, many)
+	for i := 0; i < 2; i++ {
+		if _, err := f.p.MatchContacts(ctx, kemi, key2.ID, many); err != nil {
+			t.Fatalf("the first week's %d: %v", i, err)
+		}
 	}
-	if !errors.Is(lastErr, people.ErrLimit) {
-		t.Fatalf("the day's limit: %v", lastErr)
+	if _, err := f.p.MatchContacts(ctx, kemi, key2.ID, many[:1]); !errors.Is(err, people.ErrLimit) {
+		t.Fatalf("the first week's limit: %v", err)
+	}
+	var lastErr error
+	n := 0
+	for i := 0; i < 12 && lastErr == nil; i++ {
+		if _, lastErr = f.p.MatchContacts(ctx, tolu, key2.ID, many); lastErr == nil {
+			n++
+		}
+	}
+	if !errors.Is(lastErr, people.ErrLimit) || n < 8 {
+		t.Fatalf("the day's limit: %v after %d", lastErr, n)
 	}
 }
 
@@ -559,10 +599,17 @@ func TestPolicy(t *testing.T) {
 		t.Fatalf("no one: %+v", d)
 	}
 	f.set(ada, people.SettingsIn{Message: aud(people.Everyone)})
+	// A block does not change the decision (a blocked sender cannot tell):
+	// it is told apart only by Blocked, for the caller.
 	f.blocks[pair(tolu, ada)] = true
-	if d, _ = f.p.MayMessage(ctx, tolu, ada); d.Allowed || d.Refused != people.RefusedBlocked {
-		t.Fatalf("blocked: %+v", d)
+	if d, _ = f.p.MayMessage(ctx, tolu, ada); !d.Allowed || d.AsRequest || !d.Blocked {
+		t.Fatalf("blocked, Ada added Tolu: %+v", d)
 	}
+	f.set(ada, people.SettingsIn{Message: aud(people.Nobody)})
+	if d, _ = f.p.MayMessage(ctx, tolu, ada); d.Allowed || d.Refused != people.RefusedNobody || !d.Blocked {
+		t.Fatalf("blocked, Ada takes no new chats: %+v", d)
+	}
+	f.set(ada, people.SettingsIn{Message: aud(people.Everyone)})
 	delete(f.blocks, pair(tolu, ada))
 
 	// The number: hidden by default; shown, once chosen, to contacts and

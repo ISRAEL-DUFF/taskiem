@@ -21609,7 +21609,7 @@ paths:
       tags:
       - People
       summary: You's Chats, businesses and people together
-      description: 'You''s one Chats list (people-chatting §7, §17 Q6): the person''s chats with businesses and with people together, the latest first, each marked by `kind` (`business`: open `/v1/me/chats/{id}`; `person`: open `/v1/me/people/{id}`); archived ones with archived=1. Requests waiting are not listed, only counted (`requests`; `GET /v1/me/people/requests`). The clients use this list for the Chats tab; `GET /v1/me/chats` stays the business chats alone. A personal session, or a business session for its person; API keys are refused (403).'
+      description: 'You''s one Chats list (people-chatting §7, §17 Q6): the person''s chats with businesses and with people together, the latest first, each marked by `kind` (`business`: open `/v1/me/chats/{id}`; `person`: open `/v1/me/people/{id}`); archived ones with archived=1. 200 a page: `more` says there are more, and `next`, passed as `before`, asks for them. A people chat opened (`POST /v1/me/people`) is listed from its first message. Requests waiting are not listed, only counted (`requests`; `GET /v1/me/people/requests`). The clients use this list for the Chats tab; `GET /v1/me/chats` stays the business chats alone. A personal session, or a business session for its person; API keys are refused (403).'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -21620,6 +21620,11 @@ paths:
         schema:
           type: string
           enum: ['1']
+      - name: before
+        in: query
+        description: 'The page after another: that page''s `next`. Without it, the first page.'
+        schema:
+          type: string
       responses:
         '200':
           description: The chats
@@ -21628,7 +21633,7 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [chats, unread, requests]
+                required: [chats, unread, requests, more]
                 properties:
                   chats:
                     type: array
@@ -21636,8 +21641,15 @@ paths:
                       $ref: '#/components/schemas/ChatListItem'
                   unread:
                     type: integer
+                    description: Unread messages in every chat of the list (archived or not, as asked), not the page alone.
                   requests:
                     type: integer
+                  more:
+                    type: boolean
+                    description: There are more chats after this page (200 a page).
+                  next:
+                    type: string
+                    description: With `more`, pass it as `before` for the page after.
         default:
           $ref: '#/components/responses/Error'
   /v1/me/people:
@@ -21646,7 +21658,7 @@ paths:
       tags:
       - People
       summary: Your chats with people
-      description: 'The person''s own chats with people, the latest first (archived=1 the archived ones); requests are apart (`requests` counts them). Kept by Taskiem, sealed under the person''s own key, readable by Taskiem''s servers: not end-to-end encrypted.'
+      description: 'The person''s own chats with people, the latest first (archived=1 the archived ones), 200 a page (`more`, and `next` passed as `before`); requests are apart (`requests` counts them). A chat opened is listed from its first message. Kept by Taskiem, sealed under the person''s own key, readable by Taskiem''s servers: not end-to-end encrypted.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -21657,6 +21669,11 @@ paths:
         schema:
           type: string
           enum: ['1']
+      - name: before
+        in: query
+        description: 'The page after another: that page''s `next`. Without it, the first page.'
+        schema:
+          type: string
       responses:
         '200':
           description: The chats
@@ -21665,7 +21682,7 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [chats, unread, requests]
+                required: [chats, unread, requests, more]
                 properties:
                   chats:
                     type: array
@@ -21673,8 +21690,15 @@ paths:
                       $ref: '#/components/schemas/PeopleChat'
                   unread:
                     type: integer
+                    description: Unread messages in every chat of the list (archived or not, as asked), not the page alone.
                   requests:
                     type: integer
+                  more:
+                    type: boolean
+                    description: There are more chats after this page (200 a page).
+                  next:
+                    type: string
+                    description: With `more`, pass it as `before` for the page after.
         default:
           $ref: '#/components/responses/Error'
     post:
@@ -41098,12 +41122,18 @@ components:
         business_id:
           type: string
           format: uuid
+        photo:
+          $ref: '#/components/schemas/OrderPhoto'
+          description: 'A business chat: the business''s photo (its logo; sizes by width in `urls`), as Orders on You and one chat''s header show it. None without one, or while the business is not taking your messages.'
         person_id:
           type: string
           format: uuid
         gone:
           type: boolean
           description: The person deleted their account (shown as "Deleted account").
+        suspended:
+          type: boolean
+          description: 'The person''s account is suspended: it can''t get messages right now (sending answers 409). Not deleted: their name is shown, nothing else of them.'
         last:
           type: string
         last_mine:
@@ -41146,6 +41176,9 @@ components:
           description: The name you gave them in your contacts, else their own, or "Deleted account" once they deleted it (`gone`).
         gone:
           type: boolean
+        suspended:
+          type: boolean
+          description: 'Their account is suspended: it can''t get messages right now (sending answers 409 "This account can''t get messages right now."). Not deleted: their name is shown, nothing else of them.'
         last:
           type: string
         last_mine:

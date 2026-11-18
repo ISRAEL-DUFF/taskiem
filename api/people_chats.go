@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"sort"
@@ -109,6 +111,7 @@ func (s *Server) keys() *peoplechats.Keys {
 // The people chats' refusals, in plain words.
 var (
 	errPeopleGone       = customerSendErr{http.StatusConflict, "This account was deleted, so this chat takes no more messages."}
+	errPeopleSuspended  = customerSendErr{http.StatusConflict, "This account can't get messages right now."}
 	errPeopleYouBlocked = customerSendErr{http.StatusConflict, "You blocked this person. Unblock them to write to them."}
 	errPeopleNotTaking  = customerSendErr{http.StatusForbidden, "This person is not taking messages from people they don't know."}
 	errPeopleNoPerson   = customerSendErr{http.StatusNotFound, "No such person on Taskiem."}
@@ -125,6 +128,8 @@ type peopleCopy struct {
 	LastAt, CreatedAt     time.Time
 	Unread                int
 	Blocked               bool
+	PeerWroteAt           *time.Time
+	Empty                 bool
 	lastID                *uuid.UUID
 	lastKind, lastCard    *string
 	lastAttach            *string
@@ -136,7 +141,7 @@ const peopleCopyCols = `c.id, c.conversation_id, c.peer_id, c.started_by_me, c.r
 	c.last_message_at, c.created_at,
 	(SELECT count(*) FROM people_messages m WHERE m.person_id = c.person_id AND m.chat_id = c.id AND NOT m.mine AND m.read_at IS NULL AND m.deleted_at IS NULL),
 	EXISTS (SELECT 1 FROM people_blocks b WHERE b.person_id = c.person_id AND b.blocked_id = c.peer_id),
-	l.id, l.kind, l.card_type, l.attachment->>'kind', l.mine, l.deleted_at IS NOT NULL, l.sealed`
+	l.id, l.kind, l.card_type, l.attachment->>'kind', l.mine, l.deleted_at IS NOT NULL, l.sealed, c.peer_wrote_at, c.empty`
 
 const peopleCopyFrom = ` FROM people_chats c LEFT JOIN LATERAL (SELECT m.id, m.kind, m.card_type, m.attachment, m.mine, m.deleted_at, m.sealed FROM people_messages m
 	WHERE m.person_id = c.person_id AND m.chat_id = c.id ORDER BY m.created_at DESC, m.id DESC LIMIT 1) l ON true`
@@ -144,19 +149,32 @@ const peopleCopyFrom = ` FROM people_chats c LEFT JOIN LATERAL (SELECT m.id, m.k
 func scanPeopleCopy(r pgx.Row) (peopleCopy, error) {
 	var c peopleCopy
 	err := r.Scan(&c.ID, &c.Conversation, &c.Peer, &c.StartedByMe, &c.RequestAt, &c.WaitingAt, &c.AcceptedAt, &c.HiddenAt, &c.Muted, &c.Archived,
-		&c.LastAt, &c.CreatedAt, &c.Unread, &c.Blocked, &c.lastID, &c.lastKind, &c.lastCard, &c.lastAttach, &c.lastMine, &c.lastDeleted, &c.lastSealed)
+		&c.LastAt, &c.CreatedAt, &c.Unread, &c.Blocked, &c.lastID, &c.lastKind, &c.lastCard, &c.lastAttach, &c.lastMine, &c.lastDeleted, &c.lastSealed,
+		&c.PeerWroteAt, &c.Empty)
 	return c, err
 }
 
-// peopleCopyTx is one of the person's own copies by its id; forUpdate holds
-// it to the end of the transaction (messages sent at once are counted one
-// after the other).
+// peopleCopyTx is one of the person's own copies by its id. forUpdate is
+// for a writer: it locks the conversation (lockConversationTx), then holds
+// the copy to the end of the transaction (messages sent at once are
+// counted one after the other).
 func peopleCopyTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, idText string, forUpdate bool) (peopleCopy, error) {
 	id, err := uuid.Parse(idText)
 	if err != nil {
 		return peopleCopy{}, errDoorNone
 	}
 	if forUpdate {
+		var conv uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT conversation_id FROM people_chats WHERE person_id = $1 AND id = $2`, person, id).Scan(&conv)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return peopleCopy{}, errDoorNone
+		}
+		if err != nil {
+			return peopleCopy{}, err
+		}
+		if err := lockConversationTx(ctx, tx, conv); err != nil {
+			return peopleCopy{}, err
+		}
 		if _, err := tx.Exec(ctx, `SELECT 1 FROM people_chats WHERE person_id = $1 AND id = $2 FOR UPDATE`, person, id); err != nil {
 			return peopleCopy{}, err
 		}
@@ -168,15 +186,54 @@ func peopleCopyTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, idText strin
 	return c, err
 }
 
+// lockConversationTx takes the conversation's lock for the rest of the
+// transaction. Every writer that touches both copies of a conversation
+// (a message, accept, decline, read, a reaction, delete for everyone,
+// mark paid, block) takes it before locking or writing either copy, so two
+// people writing to each other at once wait for each other in one order
+// instead of each holding their own copy while waiting for the other's (a
+// deadlock).
+func lockConversationTx(ctx context.Context, tx pgx.Tx, conv uuid.UUID) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('people-conversation:' || $1::text, 0))`, conv)
+	return err
+}
+
+// lockSenderTx takes a lock on one sender's requests and screened messages
+// for the rest of the transaction, so that two first messages at once are
+// counted one after the other (the request allowance, RepeatHold). It is
+// taken after the conversation's lock, never before.
+func lockSenderTx(ctx context.Context, tx pgx.Tx, person uuid.UUID) error {
+	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('people-sender:' || $1::text, 0))`, person)
+	return err
+}
+
+// peerAway is the reach's refusal for an account that takes nothing now:
+// deleted (errPeopleGone) or suspended (errPeopleSuspended).
+func peerAway(err error) bool {
+	return errors.Is(err, errPeopleGone) || errors.Is(err, errPeopleSuspended)
+}
+
+// theyBlockedTx is whether peer blocked person; the reach must have put
+// peer in reach.
+func theyBlockedTx(ctx context.Context, tx pgx.Tx, peer, person uuid.UUID) (bool, error) {
+	var b bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM people_blocks WHERE person_id = $1 AND blocked_id = $2)`, peer, person).Scan(&b)
+	return b, err
+}
+
 // peopleReachTx puts the other person's copy of c's conversation in reach
-// and answers who they are; errPeopleGone when their account was deleted.
+// and answers who they are; errPeopleGone when their account was deleted,
+// errPeopleSuspended while it is suspended.
 func peopleReachTx(ctx context.Context, tx pgx.Tx, chat uuid.UUID) (uuid.UUID, error) {
 	var peer uuid.UUID
 	err := tx.QueryRow(ctx, `SELECT taskiem_people_reach($1)`, chat).Scan(&peer)
 	var pe *pgconn.PgError
 	if errors.As(err, &pe) && pe.Code == "P0002" {
-		if pe.Hint == "gone" {
+		switch pe.Hint {
+		case "gone":
 			return uuid.Nil, errPeopleGone
+		case "suspended":
+			return uuid.Nil, errPeopleSuspended
 		}
 		return uuid.Nil, errDoorNone
 	}
@@ -223,14 +280,17 @@ type peopleChat struct {
 	Kind     string    `json:"kind"`
 	PersonID uuid.UUID `json:"person_id"`
 	// Name is theirs, or "Deleted account" (Gone) once they deleted it.
-	Name     string    `json:"name"`
-	Gone     bool      `json:"gone"`
-	Last     string    `json:"last"`
-	LastMine bool      `json:"last_mine"`
-	LastAt   time.Time `json:"last_at"`
-	Unread   int       `json:"unread"`
-	Muted    bool      `json:"muted"`
-	Archived bool      `json:"archived"`
+	Name string `json:"name"`
+	Gone bool   `json:"gone"`
+	// Suspended: their account can't get messages right now (it was not
+	// deleted; its name is shown, and nothing else of them).
+	Suspended bool      `json:"suspended,omitempty"`
+	Last      string    `json:"last"`
+	LastMine  bool      `json:"last_mine"`
+	LastAt    time.Time `json:"last_at"`
+	Unread    int       `json:"unread"`
+	Muted     bool      `json:"muted"`
+	Archived  bool      `json:"archived"`
 	// Request: a stranger's first messages, waiting in your Requests until
 	// you accept them (Accept, Delete, Block and report). Waiting: your
 	// first messages wait for them to accept (no read ticks until then).
@@ -287,27 +347,34 @@ func previewOf(kind string, attach *string, v peopleSealed) string {
 	return v.Body
 }
 
+// peopleNames are the names of the people the person chats with, and
+// whose accounts were deleted (gone) or are suspended.
+type peopleNames struct {
+	name            map[uuid.UUID]string
+	gone, suspended map[uuid.UUID]bool
+}
+
 // peopleNamesTx is the names of the people the person chats with.
-func peopleNamesTx(ctx context.Context, tx pgx.Tx, ids []uuid.UUID) (map[uuid.UUID]string, map[uuid.UUID]bool, error) {
-	names, gone := map[uuid.UUID]string{}, map[uuid.UUID]bool{}
+func peopleNamesTx(ctx context.Context, tx pgx.Tx, ids []uuid.UUID) (peopleNames, error) {
+	out := peopleNames{name: map[uuid.UUID]string{}, gone: map[uuid.UUID]bool{}, suspended: map[uuid.UUID]bool{}}
 	if len(ids) == 0 {
-		return names, gone, nil
+		return out, nil
 	}
-	rows, err := tx.Query(ctx, `SELECT person_id, name, gone FROM taskiem_people_names($1)`, ids)
+	rows, err := tx.Query(ctx, `SELECT person_id, name, gone, suspended FROM taskiem_people_names($1)`, ids)
 	if err != nil {
-		return nil, nil, err
+		return out, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var id uuid.UUID
 		var n string
-		var g bool
-		if err := rows.Scan(&id, &n, &g); err != nil {
-			return nil, nil, err
+		var g, su bool
+		if err := rows.Scan(&id, &n, &g, &su); err != nil {
+			return out, err
 		}
-		names[id], gone[id] = n, g
+		out.name[id], out.gone[id], out.suspended[id] = n, g, su
 	}
-	return names, gone, rows.Err()
+	return out, rows.Err()
 }
 
 // peopleViewsTx turns copies into what the person's side shows.
@@ -326,7 +393,7 @@ func (s *Server) peopleViewsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID,
 			ids = append(ids, *c.Peer)
 		}
 	}
-	names, gone, err := peopleNamesTx(ctx, tx, ids)
+	names, err := peopleNamesTx(ctx, tx, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -345,16 +412,22 @@ func (s *Server) peopleViewsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID,
 			Request: c.RequestAt != nil, Waiting: c.WaitingAt != nil && c.AcceptedAt == nil, Blocked: c.Blocked}
 		if c.Peer != nil {
 			v.PersonID = *c.Peer
-			v.Name, v.Gone = names[*c.Peer], gone[*c.Peer]
+			v.Name, v.Gone, v.Suspended = names.name[*c.Peer], names.gone[*c.Peer], names.suspended[*c.Peer]
 		} else {
 			v.Gone = true
 		}
-		if card, ok := cards[v.PersonID]; ok && card.Deleted {
+		if card, ok := cards[v.PersonID]; ok && card.Deleted && !v.Suspended {
 			v.Gone = true
 		}
-		if v.Gone {
-			v.Name = peopleGoneName
-		} else {
+		switch {
+		case v.Gone:
+			v.Name, v.Suspended = peopleGoneName, false
+		case v.Suspended:
+			// Their name only: no card while the account is suspended.
+			if v.Name == "" {
+				v.Name = "Someone"
+			}
+		default:
 			if card, ok := cards[v.PersonID]; ok {
 				o := cardOut(card)
 				v.Person = &o
@@ -377,24 +450,71 @@ func (s *Server) peopleViewsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID,
 	return out, nil
 }
 
-// peopleListTx is the person's people chats: requests or not, archived or
-// not; never those deleted for them.
-func (s *Server) peopleListTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, requests, archived bool) ([]peopleChat, error) {
-	q := `SELECT ` + peopleCopyCols + peopleCopyFrom + ` WHERE c.person_id = $1 AND c.hidden_at IS NULL AND (c.request_at IS NOT NULL) = $2`
+// peopleListPage is how many chats a list answers at once (more: ask
+// again with ?before= the answer's next).
+var peopleListPage = 200
+
+// listCursor is where a page of a chats list ends: the last chat's time
+// and id, newest first ("{RFC 3339 time}_{id}", opaque to clients).
+type listCursor struct {
+	at time.Time
+	id uuid.UUID
+}
+
+func (c listCursor) String() string { return c.at.UTC().Format(time.RFC3339Nano) + "_" + c.id.String() }
+
+// parseCursor reads ?before= ("" for the first page).
+func parseCursor(s string) (*listCursor, error) {
+	if s == "" {
+		return nil, nil
+	}
+	at, id, ok := strings.Cut(s, "_")
+	t, err1 := time.Parse(time.RFC3339Nano, at)
+	u, err2 := uuid.Parse(id)
+	if !ok || err1 != nil || err2 != nil {
+		return nil, customerSendErr{http.StatusBadRequest, "before is the next of an earlier page"}
+	}
+	return &listCursor{t, u}, nil
+}
+
+// peopleListTx is a page of the person's people chats (limit of them, and
+// whether there are more): requests or not, archived or not; never those
+// deleted for them, nor one opened that no one has written in yet.
+func (s *Server) peopleListTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, requests, archived bool, before *listCursor, limit int) ([]peopleChat, bool, error) {
+	q := `SELECT ` + peopleCopyCols + peopleCopyFrom + ` WHERE c.person_id = $1 AND c.hidden_at IS NULL AND NOT c.empty AND (c.request_at IS NOT NULL) = $2`
 	args := []any{person, requests}
 	if !requests {
-		q += ` AND c.archived = $3`
 		args = append(args, archived)
+		q += ` AND c.archived = $3`
 	}
-	rows, err := tx.Query(ctx, q+` ORDER BY c.last_message_at DESC LIMIT 200`, args...)
+	if before != nil {
+		args = append(args, before.at, before.id)
+		q += fmt.Sprintf(` AND (c.last_message_at, c.id) < ($%d, $%d)`, len(args)-1, len(args))
+	}
+	rows, err := tx.Query(ctx, q+fmt.Sprintf(` ORDER BY c.last_message_at DESC, c.id DESC LIMIT %d`, limit+1), args...)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	copies, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (peopleCopy, error) { return scanPeopleCopy(r) })
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return s.peopleViewsTx(ctx, tx, person, copies)
+	more := len(copies) > limit
+	if more {
+		copies = copies[:limit]
+	}
+	out, err := s.peopleViewsTx(ctx, tx, person, copies)
+	return out, more, err
+}
+
+// peopleUnreadTx is how many of the others' messages the person has not
+// read in their people chats (archived or not), all of them, not a page.
+func peopleUnreadTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, archived bool) (int, error) {
+	var n int
+	err := tx.QueryRow(ctx, `SELECT count(*) FROM people_messages m JOIN people_chats c ON c.person_id = m.person_id AND c.id = m.chat_id
+		WHERE m.person_id = $1 AND NOT m.mine AND m.read_at IS NULL AND m.deleted_at IS NULL
+		  AND c.hidden_at IS NULL AND c.request_at IS NULL AND c.archived = $2`, person, archived).Scan(&n)
+	return n, err
 }
 
 // peopleOneTx is one of the person's chats as their side shows it.
@@ -410,18 +530,30 @@ func (s *Server) peopleOneTx(ctx context.Context, tx pgx.Tx, person, id uuid.UUI
 	return list[0], nil
 }
 
-// listPeopleChats is GET /v1/me/people: the person's chats with people,
-// the latest first (?archived=1 the archived ones); requests are apart.
+// listPeopleChats is GET /v1/me/people?archived=1&before=: the person's
+// chats with people, the latest first, 200 a page (more, and next to pass
+// as before for the page after); requests are apart. unread counts every
+// chat of the list, not the page alone.
 func (s *Server) listPeopleChats(w http.ResponseWriter, r *http.Request) {
 	person, err := personOf(r)
 	if err != nil {
 		s.personFail(w, r, err)
 		return
 	}
+	before, err := parseCursor(r.URL.Query().Get("before"))
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	archived := r.URL.Query().Get("archived") == "1"
 	var out []peopleChat
-	var requests int
+	var requests, unread int
+	more := false
 	err = db.InPersonTx(r.Context(), s.Store.Pool, person, func(tx pgx.Tx) error {
-		if out, err = s.peopleListTx(r.Context(), tx, person, false, r.URL.Query().Get("archived") == "1"); err != nil {
+		if out, more, err = s.peopleListTx(r.Context(), tx, person, false, archived, before, peopleListPage); err != nil {
+			return err
+		}
+		if unread, err = peopleUnreadTx(r.Context(), tx, person, archived); err != nil {
 			return err
 		}
 		return tx.QueryRow(r.Context(), `SELECT count(*) FROM people_chats WHERE person_id = $1 AND request_at IS NOT NULL AND hidden_at IS NULL`, person).Scan(&requests)
@@ -430,11 +562,12 @@ func (s *Server) listPeopleChats(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
-	unread := 0
-	for _, c := range out {
-		unread += c.Unread
+	body := map[string]any{"chats": out, "unread": unread, "requests": requests, "more": more}
+	if more {
+		last := out[len(out)-1]
+		body["next"] = listCursor{last.LastAt, last.ID}.String()
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"chats": out, "unread": unread, "requests": requests})
+	writeJSON(w, http.StatusOK, body)
 }
 
 // listPeopleRequests is GET /v1/me/people/requests: strangers' first
@@ -447,7 +580,7 @@ func (s *Server) listPeopleRequests(w http.ResponseWriter, r *http.Request) {
 	}
 	var out []peopleChat
 	err = db.InPersonTx(r.Context(), s.Store.Pool, person, func(tx pgx.Tx) error {
-		out, err = s.peopleListTx(r.Context(), tx, person, true, false)
+		out, _, err = s.peopleListTx(r.Context(), tx, person, true, false, nil, peopleListPage)
 		return err
 	})
 	if err != nil {
@@ -466,24 +599,30 @@ type chatItem struct {
 	ID         uuid.UUID  `json:"id"`
 	Name       string     `json:"name"`
 	BusinessID *uuid.UUID `json:"business_id,omitempty"`
-	PersonID   *uuid.UUID `json:"person_id,omitempty"`
-	Gone       bool       `json:"gone,omitempty"`
-	Last       string     `json:"last"`
-	LastMine   bool       `json:"last_mine"`
-	LastAt     time.Time  `json:"last_at"`
-	Unread     int        `json:"unread"`
-	Muted      bool       `json:"muted"`
-	Archived   bool       `json:"archived"`
-	Blocked    bool       `json:"blocked"`
-	Waiting    bool       `json:"waiting,omitempty"`
+	// Photo: a business chat's business's photo (its logo), as Orders on
+	// You shows it; none while the business is not taking your messages.
+	Photo     *orderPhoto `json:"photo,omitempty"`
+	PersonID  *uuid.UUID  `json:"person_id,omitempty"`
+	Gone      bool        `json:"gone,omitempty"`
+	Suspended bool        `json:"suspended,omitempty"`
+	Last      string      `json:"last"`
+	LastMine  bool        `json:"last_mine"`
+	LastAt    time.Time   `json:"last_at"`
+	Unread    int         `json:"unread"`
+	Muted     bool        `json:"muted"`
+	Archived  bool        `json:"archived"`
+	Blocked   bool        `json:"blocked"`
+	Waiting   bool        `json:"waiting,omitempty"`
 	// Person: a people chat's other person, as GET /v1/me/people shows
 	// them (photo, last seen and online by their settings).
 	Person *personCardOut `json:"person,omitempty"`
 }
 
-// listAllChats is GET /v1/me/conversations (?archived=1): You's Chats tab,
-// business chats and people chats together, the latest first, each marked
-// by kind; requests are counted (GET /v1/me/people/requests lists them).
+// listAllChats is GET /v1/me/conversations (?archived=1&before=): You's
+// Chats tab, business chats and people chats together, the latest first,
+// each marked by kind, 200 a page (more, and next to pass as before for
+// the page after); requests are counted (GET /v1/me/people/requests lists
+// them), and unread counts every chat of the list, not the page alone.
 // GET /v1/me/chats stays the business chats alone.
 func (s *Server) listAllChats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -492,12 +631,24 @@ func (s *Server) listAllChats(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
+	before, err := parseCursor(r.URL.Query().Get("before"))
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
 	archived := r.URL.Query().Get("archived") == "1"
+	limit := peopleListPage
 	items := []chatItem{}
-	var requests int
+	var requests, unread int
+	morePeople := false
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT `+personChatCols+` FROM person_conversations c WHERE c.person_id = $1 AND c.archived = $2
-			ORDER BY c.last_message_at DESC LIMIT 200`, person, archived)
+		q := `SELECT ` + personChatCols + ` FROM person_conversations c WHERE c.person_id = $1 AND c.archived = $2`
+		args := []any{person, archived}
+		if before != nil {
+			q += ` AND (c.last_message_at, c.id) < ($3, $4)`
+			args = append(args, before.at, before.id)
+		}
+		rows, err := tx.Query(ctx, q+fmt.Sprintf(` ORDER BY c.last_message_at DESC, c.id DESC LIMIT %d`, limit+1), args...)
 		if err != nil {
 			return err
 		}
@@ -508,35 +659,92 @@ func (s *Server) listAllChats(w http.ResponseWriter, r *http.Request) {
 		if err := namesTx(ctx, tx, biz); err != nil {
 			return err
 		}
-		for _, c := range biz {
-			b := c.Business
-			items = append(items, chatItem{Kind: "business", ID: c.ID, Name: c.Name, BusinessID: &b, Last: c.Last, LastMine: c.LastMine, LastAt: c.LastAt,
-				Unread: c.Unread, Muted: c.Muted, Archived: c.Archived, Blocked: c.Blocked})
-		}
-		people, err := s.peopleListTx(ctx, tx, person, false, archived)
+		photos, err := businessPhotosTx(ctx, tx, biz)
 		if err != nil {
 			return err
 		}
+		for _, c := range biz {
+			b := c.Business
+			it := chatItem{Kind: "business", ID: c.ID, Name: c.Name, BusinessID: &b, Last: c.Last, LastMine: c.LastMine, LastAt: c.LastAt,
+				Unread: c.Unread, Muted: c.Muted, Archived: c.Archived, Blocked: c.Blocked}
+			if !c.BlockedYou {
+				it.Photo = photos[b]
+			}
+			items = append(items, it)
+		}
+		people, peopleMore, err := s.peopleListTx(ctx, tx, person, false, archived, before, limit)
+		if err != nil {
+			return err
+		}
+		morePeople = peopleMore
 		for _, c := range people {
 			p := c.PersonID
-			items = append(items, chatItem{Kind: "person", ID: c.ID, Name: c.Name, PersonID: &p, Gone: c.Gone, Last: c.Last, LastMine: c.LastMine,
+			items = append(items, chatItem{Kind: "person", ID: c.ID, Name: c.Name, PersonID: &p, Gone: c.Gone, Suspended: c.Suspended, Last: c.Last, LastMine: c.LastMine,
 				LastAt: c.LastAt, Unread: c.Unread, Muted: c.Muted, Archived: c.Archived, Blocked: c.Blocked, Waiting: c.Waiting, Person: c.Person})
 		}
+		var bizUnread int
+		if err := tx.QueryRow(ctx, `SELECT count(*) FROM person_messages m JOIN person_conversations c ON c.person_id = m.person_id AND c.id = m.conversation_id
+			WHERE c.person_id = $1 AND c.archived = $2 AND NOT m.mine AND m.read_at IS NULL`, person, archived).Scan(&bizUnread); err != nil {
+			return err
+		}
+		peopleUnread, err := peopleUnreadTx(ctx, tx, person, archived)
+		if err != nil {
+			return err
+		}
+		unread = bizUnread + peopleUnread
 		return tx.QueryRow(ctx, `SELECT count(*) FROM people_chats WHERE person_id = $1 AND request_at IS NOT NULL AND hidden_at IS NULL`, person).Scan(&requests)
 	})
 	if err != nil {
 		s.personFail(w, r, err)
 		return
 	}
-	sort.SliceStable(items, func(i, j int) bool { return items[i].LastAt.After(items[j].LastAt) })
-	if len(items) > 200 {
-		items = items[:200]
+	// Newest first, the same order the cursor reads: time, then id.
+	sort.SliceStable(items, func(i, j int) bool {
+		if !items[i].LastAt.Equal(items[j].LastAt) {
+			return items[i].LastAt.After(items[j].LastAt)
+		}
+		return bytes.Compare(items[i].ID[:], items[j].ID[:]) > 0
+	})
+	// More: either list had more than a page, or the two together do.
+	more := morePeople || len(items) > limit
+	if len(items) > limit {
+		items = items[:limit]
 	}
-	unread := 0
-	for _, c := range items {
-		unread += c.Unread
+	body := map[string]any{"chats": items, "unread": unread, "requests": requests, "more": more}
+	if more {
+		last := items[len(items)-1]
+		body["next"] = listCursor{last.LastAt, last.ID}.String()
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"chats": items, "unread": unread, "requests": requests})
+	writeJSON(w, http.StatusOK, body)
+}
+
+// businessPhotosTx is the photo of each chat's business (its logo, by
+// taskiem_business_photo's rule), through taskiem_customer_business_photos.
+func businessPhotosTx(ctx context.Context, tx pgx.Tx, chats []personChat) (map[uuid.UUID]*orderPhoto, error) {
+	out := map[uuid.UUID]*orderPhoto{}
+	if len(chats) == 0 {
+		return out, nil
+	}
+	ids := make([]uuid.UUID, len(chats))
+	for i, c := range chats {
+		ids[i] = c.Business
+	}
+	rows, err := tx.Query(ctx, `SELECT tenant_id, photo FROM taskiem_customer_business_photos($1)`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id uuid.UUID
+		var urls map[string]string
+		if err := rows.Scan(&id, &urls); err != nil {
+			return nil, err
+		}
+		if len(urls) > 0 {
+			out[id] = &orderPhoto{URLs: urls}
+		}
+	}
+	return out, rows.Err()
 }
 
 // startPeopleChat is POST /v1/me/people {person_id | link_code}: opens the
@@ -608,7 +816,7 @@ func (s *Server) startPeopleChat(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return errPeopleNoPerson
 		}
-		allowed, _, err := s.chatPolicy().MayMessage(ctx, person, peer)
+		allowed, _, err := s.mayMessageTx(ctx, tx, person, peer)
 		if err != nil {
 			return err
 		}
@@ -631,7 +839,8 @@ func (s *Server) startPeopleChat(w http.ResponseWriter, r *http.Request) {
 			return customerSendErr{http.StatusTooManyRequests, "You have started many new chats today. Try again later."}
 		}
 		id = uuid.Must(uuid.NewV7())
-		if _, err := tx.Exec(ctx, `INSERT INTO people_chats (id, person_id, peer_id, conversation_id, started_by_me) VALUES ($1, $2, $3, taskiem_people_pair($2, $3), true)`,
+		// Empty until the first message: the lists leave it out.
+		if _, err := tx.Exec(ctx, `INSERT INTO people_chats (id, person_id, peer_id, conversation_id, started_by_me, empty) VALUES ($1, $2, $3, taskiem_people_pair($2, $3), true, true)`,
 			id, person, peer); err != nil {
 			return err
 		}
@@ -677,22 +886,27 @@ func (s *Server) getPeopleChat(w http.ResponseWriter, r *http.Request) {
 		if out.Gone {
 			return nil
 		}
-		contact, err := s.chatPolicy().IsContact(ctx, person, out.PersonID)
+		contact, err := s.isContactTx(ctx, tx, person, out.PersonID)
 		if err != nil {
 			return err
 		}
 		out.Contact = &contact
+		if out.Suspended {
+			return nil
+		}
 		// Their number, only when they chose to show it; never while
 		// either blocked the other.
-		shown, err := s.chatPolicy().NumberShownTo(ctx, out.PersonID, person)
+		shown, err := s.numberShownToTx(ctx, tx, out.PersonID, person)
 		if err != nil || !shown || out.Blocked {
 			return err
 		}
-		var theyBlocked bool
 		if _, err := peopleReachTx(ctx, tx, c.ID); err != nil {
+			if peerAway(err) {
+				return nil
+			}
 			return err
 		}
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM people_blocks WHERE person_id = $1 AND blocked_id = $2)`, out.PersonID, person).Scan(&theyBlocked); err != nil || theyBlocked {
+		if theyBlocked, err := theyBlockedTx(ctx, tx, out.PersonID, person); err != nil || theyBlocked {
 			return err
 		}
 		return tx.QueryRow(ctx, `SELECT taskiem_people_phone($1)`, out.PersonID).Scan(&out.Phone)
@@ -763,7 +977,7 @@ func (s *Server) deletePeopleChat(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
-	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
 		c, err := peopleCopyTx(ctx, tx, person, chi.URLParam(r, "id"), true)
 		if err != nil {
 			return err
@@ -794,7 +1008,7 @@ func acceptTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, c peopleCopy, ti
 		return err
 	}
 	peer, err := peopleReachTx(ctx, tx, c.ID)
-	if errors.Is(err, errPeopleGone) {
+	if peerAway(err) {
 		return nil
 	}
 	if err != nil {
@@ -839,7 +1053,7 @@ func (s *Server) acceptPeopleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	var out peopleChat
 	var peer *uuid.UUID
-	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
 		c, err := peopleCopyTx(ctx, tx, person, chi.URLParam(r, "id"), true)
 		if err != nil {
 			return err
@@ -847,7 +1061,7 @@ func (s *Server) acceptPeopleRequest(w http.ResponseWriter, r *http.Request) {
 		if c.RequestAt == nil {
 			return customerSendErr{http.StatusConflict, "This chat is not a request."}
 		}
-		ticks, err := s.readTicksWith(ctx, person, c.Peer)
+		ticks, err := s.readTicksTx(ctx, tx, person, c.Peer)
 		if err != nil {
 			return err
 		}
@@ -879,7 +1093,7 @@ func (s *Server) declinePeopleRequest(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
-	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
 		c, err := peopleCopyTx(ctx, tx, person, chi.URLParam(r, "id"), true)
 		if err != nil {
 			return err
@@ -1049,7 +1263,8 @@ func (s *Server) blockPerson(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	var reported, removed bool
-	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
+		reported, removed = false, false
 		c, err := peopleCopyTx(ctx, tx, person, chi.URLParam(r, "id"), true)
 		if err != nil {
 			return err
@@ -1147,10 +1362,10 @@ func (s *Server) listPeopleBlocked(w http.ResponseWriter, r *http.Request) {
 		for i, b := range out {
 			ids[i] = b.PersonID
 		}
-		names, gone, err := peopleNamesTx(ctx, tx, ids)
+		names, err := peopleNamesTx(ctx, tx, ids)
 		for i := range out {
-			out[i].Name = names[out[i].PersonID]
-			if gone[out[i].PersonID] {
+			out[i].Name = names.name[out[i].PersonID]
+			if names.gone[out[i].PersonID] {
 				out[i].Name = peopleGoneName
 			}
 		}

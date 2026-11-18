@@ -31,6 +31,9 @@ const (
 	// MatchHashesPerDay is how many hashes a person may send a day (an
 	// address book of a few thousand, checked once a day).
 	MatchHashesPerDay = 5000
+	// MatchHashesFirstWeek is MatchHashesPerDay in an account's first
+	// week: a new account cannot sweep thousands of numbers at once.
+	MatchHashesFirstWeek = 1000
 	// MatchBatchesPerDay is how many contact-matching requests a person
 	// may send a day.
 	MatchBatchesPerDay = 20
@@ -89,7 +92,7 @@ func (p *People) FindByNumber(ctx context.Context, viewer uuid.UUID, e164 string
 			answer = ErrNotFound
 			return nil
 		}
-		b, err := p.blocked(ctx, viewer, *id)
+		b, err := p.blockedTx(ctx, tx, viewer, *id)
 		if err != nil {
 			return err
 		}
@@ -252,7 +255,10 @@ type Match struct {
 
 // MatchContacts answers which of hashes (hex SHA-256 of the numbers in the
 // viewer's phone, made with the contacts key keyID) are people who let
-// themselves be found from contacts, each as viewer may see them. Nothing
+// themselves be found from contacts and whose "find me by my number" lets
+// viewer find them (Nobody: no one; My contacts: people they added), each
+// as viewer may see them. A matched number is a number found, so the one
+// setting that hides it from a typed lookup hides it here too. Nothing
 // of the request is kept: the hashes are compared in one query and
 // forgotten, and only how many were sent is counted. ErrOldKey for a key
 // no longer answered, ErrBatch, ErrLimit past the day's limits.
@@ -287,7 +293,15 @@ func (p *People) MatchContacts(ctx context.Context, viewer uuid.UUID, keyID stri
 		if err != nil {
 			return err
 		}
-		okH, err := p.countTx(ctx, tx, viewer, "contacts", len(raw), MatchHashesPerDay)
+		var created time.Time
+		if err := tx.QueryRow(ctx, `SELECT created_at FROM users WHERE id = $1`, viewer).Scan(&created); err != nil {
+			return err
+		}
+		perDay := MatchHashesPerDay
+		if p.now().Sub(created) < 7*24*time.Hour {
+			perDay = MatchHashesFirstWeek
+		}
+		okH, err := p.countTx(ctx, tx, viewer, "contacts", len(raw), perDay)
 		if err != nil {
 			return err
 		}

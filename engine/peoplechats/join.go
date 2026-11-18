@@ -42,8 +42,10 @@ func Between(ctx context.Context, tx pgx.Tx, others []uuid.UUID) (blocked, chatt
 
 // JoinPeople gives finding people (engine/people) what the people chats
 // know: whether a block stands between two people (Blocked, BlockedSet)
-// and whether they chat (Chatting, a chat no longer a request). Each is
-// answered in the scope of the person the request is for (a, or viewer).
+// and whether they chat (Chatting, ChattingTx: a chat no longer a
+// request). Each is answered in the scope of the person the request is
+// for (a, or viewer); BlockedSet and ChattingTx in the caller's
+// transaction, so a caller inside one opens no other connection.
 func JoinPeople(p *people.People) *people.People {
 	if p == nil || p.Pool == nil {
 		return p
@@ -66,6 +68,13 @@ func JoinPeople(p *people.People) *people.People {
 	p.Chatting = func(ctx context.Context, a, b uuid.UUID) (bool, error) {
 		_, chatting, err := one(ctx, a, b)
 		return chatting, err
+	}
+	p.ChattingTx = func(ctx context.Context, tx pgx.Tx, a, b uuid.UUID) (bool, error) {
+		if a == b {
+			return false, nil
+		}
+		_, cs, err := Between(ctx, tx, []uuid.UUID{b})
+		return cs[b], err
 	}
 	p.BlockedSet = func(ctx context.Context, tx pgx.Tx, _ uuid.UUID, others []uuid.UUID) (map[uuid.UUID]bool, error) {
 		out := map[uuid.UUID]bool{}

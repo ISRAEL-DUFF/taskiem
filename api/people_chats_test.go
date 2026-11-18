@@ -602,23 +602,36 @@ func TestPeopleForwards(t *testing.T) {
 	if fw["forwarded"] != true || fw["forwarded_many"] == true || fw["body"] != "Big news: free data today" {
 		t.Fatalf("a forward: %v", fw)
 	}
-	// Forwarded many times on its way: one chat at a time.
+	// The cap follows the mark: forwarded four times on its way, it is not
+	// shown forwarded many times and goes to several chats at once (its
+	// forwards are then marked); five times, it is shown so and goes to
+	// one chat at a time.
 	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE people_messages SET forwards = 4 WHERE id = $1`, fw["id"]); err != nil {
 		t.Fatal(err)
+	}
+	if m := messagesOf(t, ada, chats[1]); m[len(m)-1]["forwarded_many"] == true {
+		t.Fatalf("four times is not many: %v", m)
+	}
+	out = ada.must(200, "POST", "/v1/me/people/forward", map[string]any{"chat_id": chats[1], "message_id": fw["id"], "to": chats[3:5]})
+	if m := out["sent"].([]any)[0].(map[string]any)["message"].(map[string]any); m["forwarded_many"] != true || len(out["sent"].([]any)) != 2 {
+		t.Fatalf("marked forwarded many times: %v", out)
+	}
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE people_messages SET forwards = 5 WHERE id = $1`, fw["id"]); err != nil {
+		t.Fatal(err)
+	}
+	if m := messagesOf(t, ada, chats[1]); m[len(m)-1]["forwarded_many"] != true {
+		t.Fatalf("five times is many: %v", m)
 	}
 	if e := ada.must(429, "POST", "/v1/me/people/forward", map[string]any{"chat_id": chats[1], "message_id": fw["id"], "to": chats[3:5]}); e["forwarded_many"] != true {
 		t.Fatalf("many times: %v", e)
 	}
-	out = ada.must(200, "POST", "/v1/me/people/forward", map[string]any{"chat_id": chats[1], "message_id": fw["id"], "to": chats[3:4]})
-	if m := out["sent"].([]any)[0].(map[string]any)["message"].(map[string]any); m["forwarded_many"] != true {
-		t.Fatalf("marked forwarded many times: %v", m)
-	}
+	ada.must(200, "POST", "/v1/me/people/forward", map[string]any{"chat_id": chats[1], "message_id": fw["id"], "to": chats[3:4]})
 	// A photo forwarded is a copy of its own, sealed for each.
 	code, f := ada.postFile(t, "/v1/me/people/"+chats[0]+"/files", "p.png", pngPhoto(t, 90), nil)
 	if code != 201 {
 		t.Fatal(f)
 	}
-	out = ada.must(200, "POST", "/v1/me/people/forward", map[string]any{"chat_id": chats[0], "message_id": f["id"], "to": chats[5:6]})
+	out = ada.must(200, "POST", "/v1/me/people/forward", map[string]any{"chat_id": chats[0], "message_id": f["id"], "to": chats[3:4]})
 	if m := out["sent"].([]any)[0].(map[string]any)["message"].(map[string]any); m["attachment"] == nil || m["forwarded"] != true {
 		t.Fatalf("a photo forwarded: %v", m)
 	}

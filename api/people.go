@@ -22,8 +22,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/chatlinks"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/people"
 	"github.com/israel-duff/taskiem/engine/peoplechats"
 	"github.com/israel-duff/taskiem/engine/storefront"
@@ -485,7 +487,7 @@ func (s *Server) lookupPerson(w http.ResponseWriter, r *http.Request) {
 // contacts, and the honest limit of the method (§5.3, §17 Q4).
 const contactsWords = "Find friends from your contacts? Their numbers are checked without being sent to us in readable form: " +
 	"your phone scrambles each number with a key from Taskiem that changes every week, sends only the scrambled numbers, " +
-	"and Taskiem answers which of them are people who let themselves be found this way. Nothing from your contacts is kept. " +
+	"and Taskiem answers which of them are people whose settings let you find them this way. Nothing from your contacts is kept. " +
 	"Taskiem holds the key, so this protects your contacts if what is sent is seen by someone else, not from Taskiem itself."
 
 // contactsKey is GET /v1/me/contacts/key: the week's key the app hashes
@@ -493,7 +495,8 @@ const contactsWords = "Find friends from your contacts? Their numbers are checke
 // "taskiem-contacts:" and the E.164 number; 64 hex digits each), when to
 // fetch it again, how many hashes a request may carry, and the words.
 func (s *Server) contactsKey(w http.ResponseWriter, r *http.Request) {
-	if _, err := personOf(r); err != nil {
+	person, err := personOf(r)
+	if err != nil {
 		s.personFail(w, r, err)
 		return
 	}
@@ -502,10 +505,22 @@ func (s *Server) contactsKey(w http.ResponseWriter, r *http.Request) {
 		s.peopleFail(w, r, err)
 		return
 	}
+	// Fewer a day in an account's first week (people.MatchHashesFirstWeek).
+	perDay := people.MatchHashesPerDay
+	if err := db.InPersonTx(r.Context(), s.Store.Pool, person, func(tx pgx.Tx) error {
+		newWeek, err := personNewWeek(r.Context(), tx, person)
+		if newWeek {
+			perDay = people.MatchHashesFirstWeek
+		}
+		return err
+	}); err != nil {
+		s.personFail(w, r, err)
+		return
+	}
 	w.Header().Set("Cache-Control", "private, no-store")
 	writeJSON(w, http.StatusOK, map[string]any{"key_id": k.ID, "key": base64.StdEncoding.EncodeToString(k.Key), "expires_at": k.ExpiresAt,
 		"hash": "sha256(key || \"" + people.HashPrefix + "\" || E.164), hex", "max_batch": people.MatchBatch,
-		"max_per_day": people.MatchHashesPerDay, "words": contactsWords})
+		"max_per_day": perDay, "words": contactsWords})
 }
 
 // matchContacts is POST /v1/me/contacts/match ({key_id, hashes}): which

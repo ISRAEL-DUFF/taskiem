@@ -58,7 +58,7 @@ type peopleMessage struct {
 }
 
 const peopleMessageCols = `id, mine, kind, sealed, attachment, card_type, reply_to, forwards, delivered_at, read_at, starred_at IS NOT NULL,
-	COALESCE(my_reaction, ''), COALESCE(their_reaction, ''), deleted_at IS NOT NULL, screen IS NOT NULL, paid_at, paid_by_me, created_at`
+	COALESCE(my_reaction, ''), COALESCE(their_reaction, ''), deleted_at IS NOT NULL, COALESCE(screen, ''), paid_at, paid_by_me, created_at`
 
 // peopleRow is a message as kept, with its sealed value.
 type peopleRow struct {
@@ -70,12 +70,16 @@ type peopleRow struct {
 	delivered *time.Time
 	paidAt    *time.Time
 	paidByMe  *bool
+	// screen is the checks' mark on the other's message: "", warn, or
+	// transfer (a share card naming an account, from someone not added).
+	screen string
 }
 
 func scanPeopleRow(r pgx.Row) (peopleRow, error) {
 	var m peopleRow
 	err := r.Scan(&m.ID, &m.Mine, &m.Kind, &m.sealed, &m.attach, &m.cardType, &m.ReplyTo, &m.forwards, &m.delivered, &m.ReadAt, &m.Starred,
-		&m.MyReaction, &m.TheirReaction, &m.Deleted, &m.Warn, &m.paidAt, &m.paidByMe, &m.CreatedAt)
+		&m.MyReaction, &m.TheirReaction, &m.Deleted, &m.screen, &m.paidAt, &m.paidByMe, &m.CreatedAt)
+	m.Warn = m.screen != ""
 	return m, err
 }
 
@@ -119,7 +123,7 @@ func (m peopleRow) view(key []byte, owner uuid.UUID) (peopleMessage, peopleSeale
 		out.Card.PaidAt = m.paidAt
 		out.Card.PaidByMe = m.paidByMe
 	}
-	out.WarnTransfer = !out.Mine && out.Kind == "text" && warnTransfer(out.Body)
+	out.WarnTransfer = !out.Mine && ((out.Kind == "text" && warnTransfer(out.Body)) || m.screen == "transfer")
 	return out, v
 }
 
@@ -142,22 +146,63 @@ type peoplePush struct {
 	title, words string
 }
 
-// peopleSend writes the person's message to their copy and, unless the
-// other blocked them, to the other's copy, in one transaction; fresh is
+// screenText is what the checks on strangers' messages read of a draft:
+// its words, a share card's what and the account it names, and a place's
+// label (cards of products, businesses and orders are made by the server
+// from what they are, so carry no words of the sender's).
+func (d peopleDraft) screenText() string {
+	parts := []string{d.body}
+	if d.card != nil && d.card.Type == "split" {
+		parts = append(parts, d.card.What)
+		if a := d.card.PayTo; a != nil {
+			parts = append(parts, "Pay to "+a.Bank+" account "+a.AccountNumber+" "+a.AccountName)
+		}
+	}
+	if d.location != nil {
+		parts = append(parts, d.location.Label)
+	}
+	out := []string{}
+	for _, p := range parts {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+// asksToBePaid is a share card naming an account to pay.
+func (d peopleDraft) asksToBePaid() bool {
+	return d.card != nil && d.card.Type == "split" && d.card.PayTo != nil
+}
+
+// peopleSend writes the person's message to their copy and, unless it is
+// not to be delivered, to the other's copy, in one transaction; fresh is
 // false for a repeat of a client_id. A reply to a request accepts it.
+//
+// Nothing the sender is answered tells them they are blocked: the decision
+// (a request or not, refused by "who can message me", the limits) is made
+// as if there were no block, and a blocked message, like one into a
+// request whose recipient now takes no new chats, is kept on the sender's
+// side with one tick.
+//
+// The transaction locks the conversation first (lockConversationTx, in
+// peopleCopyTx), then, for a message the limits on requests or the checks
+// count, the sender (lockSenderTx); it reads every answer of finding
+// people in the same transaction, so it holds one connection.
 func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d peopleDraft) (peopleMessage, bool, error) {
 	var out peopleMessage
 	var again *peopleMessage
 	var owed *peoplePush
 	var acceptedFrom *uuid.UUID
+	var held error
 	keys := s.keys()
-	err := db.InPersonTx(ctx, s.Store.Pool, me, func(tx pgx.Tx) error {
-		acceptedFrom = nil
+	err := s.peopleTx(ctx, me, func(tx pgx.Tx) error {
+		out, again, owed, acceptedFrom, held = peopleMessage{}, nil, nil, nil, nil
 		c, err := peopleCopyTx(ctx, tx, me, chatID, true)
 		if err != nil {
 			return err
 		}
-		if again, err = s.peopleRepeatTx(ctx, tx, me, c.ID, d.clientID); err != nil || again != nil {
+		if again, err = s.peopleRepeatTx(ctx, tx, me, c, d.clientID); err != nil || again != nil {
 			return err
 		}
 		if c.Peer == nil {
@@ -191,20 +236,8 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 		if err != nil {
 			return err
 		}
-		// Writing back to a request accepts it.
-		if c.RequestAt != nil {
-			ticks, err := s.readTicksWith(ctx, me, &peer)
-			if err != nil {
-				return err
-			}
-			if err := acceptTx(ctx, tx, me, c, ticks); err != nil {
-				return err
-			}
-			c.RequestAt, c.HiddenAt = nil, nil
-			acceptedFrom = &peer
-		}
-		var theyBlocked bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM people_blocks WHERE person_id = $1 AND blocked_id = $2)`, peer, me).Scan(&theyBlocked); err != nil {
+		theyBlocked, err := theyBlockedTx(ctx, tx, peer, me)
+		if err != nil {
 			return err
 		}
 		var pc *peopleCopy
@@ -216,19 +249,30 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		var peerWrote bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM people_messages WHERE person_id = $1 AND chat_id = $2 AND NOT mine)`, me, c.ID).Scan(&peerWrote); err != nil {
-			return err
-		}
+		// Whether they have written to me is kept on my copy (a lasting
+		// mark: "delete for me" does not make a friend a stranger again).
+		peerWrote := c.PeerWroteAt != nil
+		deliver := !theyBlocked
 		asRequest, newRequest, accepted := false, false, false
 		switch {
 		case pc != nil && !pcRequest:
 		case pc != nil && pcRequest:
+			// Still waiting in their Requests: their "who can message me"
+			// may have changed meanwhile. Refused now, it stays on my side
+			// with one tick, as a blocked message does; a contact now, it
+			// stays a request until they accept it.
 			asRequest = true
+			allowed, _, err := s.mayMessageTx(ctx, tx, me, peer)
+			if err != nil {
+				return err
+			}
+			if !allowed {
+				deliver = false
+			}
 		case c.AcceptedAt != nil:
 			accepted = true
 		default:
-			allowed, req, err := s.chatPolicy().MayMessage(ctx, me, peer)
+			allowed, req, err := s.mayMessageTx(ctx, tx, me, peer)
 			if err != nil {
 				return err
 			}
@@ -236,6 +280,16 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 				return errPeopleNotTaking
 			}
 			asRequest, newRequest, accepted = req, req, !req
+		}
+		// The automated checks look at strangers' messages: requests, and a
+		// new chat until the other has written (§8.4); only the verdict is
+		// kept, in this transaction.
+		text := d.screenText()
+		screen := (asRequest || !peerWrote) && text != ""
+		if newRequest || screen {
+			if err := lockSenderTx(ctx, tx, me); err != nil {
+				return err
+			}
 		}
 		if newRequest {
 			// The sender's requests: waiting at once, and in a day (§8.2).
@@ -248,12 +302,9 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 				return customerSendErr{http.StatusTooManyRequests, "You have many messages waiting for people to accept them. Try again once some are answered."}
 			}
 		}
-		// The automated checks look at strangers' messages: requests, and a
-		// new chat until the other has written (§8.4); only the verdict is
-		// kept.
-		warn := false
-		if (asRequest || !peerWrote) && strings.TrimSpace(d.body) != "" {
-			v, err := s.chatPolicy().ScreenStranger(ctx, me, peer, d.body)
+		warn := ""
+		if screen {
+			v, err := s.screenTx(ctx, tx, me, peer, text)
 			if err != nil {
 				return err
 			}
@@ -263,10 +314,36 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 				if why == "" {
 					why = "This message was not sent: it looks like spam."
 				}
-				return customerSendErr{http.StatusForbidden, why}
+				// Nothing else is written yet: commit the verdict alone.
+				held = customerSendErr{http.StatusForbidden, why}
+				return nil
 			case peoplechats.Warn:
-				warn = true
+				warn = "warn"
 			}
+		}
+		// A share card naming an account, from someone the recipient has
+		// not added, always warns as a transfer does (§11 A), request or
+		// not.
+		if d.asksToBePaid() {
+			known, err := s.theyAddedTx(ctx, tx, me, peer)
+			if err != nil {
+				return err
+			}
+			if !known {
+				warn = "transfer"
+			}
+		}
+		// Writing back to a request accepts it.
+		if c.RequestAt != nil {
+			ticks, err := s.readTicksTx(ctx, tx, me, &peer)
+			if err != nil {
+				return err
+			}
+			if err := acceptTx(ctx, tx, me, c, ticks); err != nil {
+				return err
+			}
+			c.RequestAt, c.HiddenAt = nil, nil
+			acceptedFrom = &peer
 		}
 		var name string
 		if err := tx.QueryRow(ctx, `SELECT name FROM users WHERE id = $1`, me).Scan(&name); err != nil {
@@ -288,22 +365,25 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 		if err != nil {
 			return err
 		}
-		if err := insertPeopleMessage(ctx, tx, myKey, me, c.ID, c.Conversation, id, true, d, content, attach, cardType, false); err != nil {
+		if err := insertPeopleMessage(ctx, tx, myKey, me, c.ID, c.Conversation, id, true, d, content, attach, cardType, ""); err != nil {
 			return err
 		}
-		if newRequest && !theyBlocked {
+		// A new request is in the ledger whether or not it is delivered, so
+		// a blocked sender's allowance runs down as anyone's does.
+		if newRequest {
 			if _, err := tx.Exec(ctx, `SELECT taskiem_people_request_mark($1, 'waiting')`, peer); err != nil {
 				return err
 			}
 		}
-		if !theyBlocked {
+		if deliver {
 			if pc == nil {
 				pcID = uuid.Must(uuid.NewV7())
-				if _, err := tx.Exec(ctx, `INSERT INTO people_chats (id, person_id, peer_id, conversation_id, started_by_me, request_at, accepted_at)
-					VALUES ($1, $2, $3, $4, false, CASE WHEN $5 THEN now() END, CASE WHEN $6 THEN now() END)`, pcID, peer, me, c.Conversation, asRequest, accepted); err != nil {
+				if _, err := tx.Exec(ctx, `INSERT INTO people_chats (id, person_id, peer_id, conversation_id, started_by_me, request_at, accepted_at, peer_wrote_at)
+					VALUES ($1, $2, $3, $4, false, CASE WHEN $5 THEN now() END, CASE WHEN $6 THEN now() END, now())`, pcID, peer, me, c.Conversation, asRequest, accepted); err != nil {
 					return err
 				}
-			} else if _, err := tx.Exec(ctx, `UPDATE people_chats SET hidden_at = NULL, last_message_at = now() WHERE person_id = $1 AND id = $2`, peer, pcID); err != nil {
+			} else if _, err := tx.Exec(ctx, `UPDATE people_chats SET hidden_at = NULL, last_message_at = now(), empty = false, peer_wrote_at = COALESCE(peer_wrote_at, now())
+				WHERE person_id = $1 AND id = $2`, peer, pcID); err != nil {
 				return err
 			}
 			peerKey, err := keys.KeyTx(ctx, tx, peer, true)
@@ -321,7 +401,7 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 					words: previewOf(d.kind, attachKind(attach), content)}
 			}
 		}
-		if _, err := tx.Exec(ctx, `UPDATE people_chats SET last_message_at = now(), hidden_at = NULL,
+		if _, err := tx.Exec(ctx, `UPDATE people_chats SET last_message_at = now(), hidden_at = NULL, empty = false,
 			waiting_at = CASE WHEN $3 AND accepted_at IS NULL THEN COALESCE(waiting_at, now()) ELSE waiting_at END,
 			accepted_at = CASE WHEN $4 THEN COALESCE(accepted_at, now()) ELSE accepted_at END WHERE person_id = $1 AND id = $2`,
 			me, c.ID, asRequest, accepted); err != nil {
@@ -337,6 +417,9 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 	if again != nil {
 		return *again, false, nil
 	}
+	if err == nil && held != nil {
+		err = held
+	}
 	if err != nil {
 		if isUnique(err) && d.clientID != "" {
 			var m *peopleMessage
@@ -345,7 +428,7 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 				if err != nil {
 					return err
 				}
-				m, err = s.peopleRepeatTx(ctx, tx, me, c.ID, d.clientID)
+				m, err = s.peopleRepeatTx(ctx, tx, me, c, d.clientID)
 				return err
 			}); e == nil && m != nil {
 				return *m, false, nil
@@ -371,9 +454,10 @@ func attachKind(a map[string]any) *string {
 }
 
 // insertPeopleMessage writes one copy of a message (and its file), sealed
-// under that copy's owner's key.
+// under that copy's owner's key; screen is the checks' mark on the
+// other's copy ("", warn, or transfer).
 func insertPeopleMessage(ctx context.Context, tx pgx.Tx, key []byte, owner, chat, conv, id uuid.UUID, mine bool, d peopleDraft, content peopleSealed,
-	attach map[string]any, cardType *string, warn bool) error {
+	attach map[string]any, cardType *string, screen string) error {
 	sealed, err := sealFor(key, owner, messageRow(id), content)
 	if err != nil {
 		return err
@@ -382,14 +466,13 @@ func insertPeopleMessage(ctx context.Context, tx pgx.Tx, key []byte, owner, chat
 	if mine && d.clientID != "" {
 		clientID = &d.clientID
 	}
-	var screen *string
-	if warn {
-		w := "warn"
-		screen = &w
+	var mark *string
+	if screen != "" {
+		mark = &screen
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO people_messages (person_id, id, chat_id, conversation_id, mine, kind, sealed, attachment, card_type, reply_to, forwards, client_id, screen)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-		owner, id, chat, conv, mine, d.kind, sealed, attach, cardType, d.replyTo, d.forwards, clientID, screen); err != nil {
+		owner, id, chat, conv, mine, d.kind, sealed, attach, cardType, d.replyTo, d.forwards, clientID, mark); err != nil {
 		return err
 	}
 	if d.file == nil {
@@ -404,12 +487,13 @@ func insertPeopleMessage(ctx context.Context, tx pgx.Tx, key []byte, owner, chat
 	return err
 }
 
-// peopleRepeatTx is the person's message under clientID, if they sent one.
-func (s *Server) peopleRepeatTx(ctx context.Context, tx pgx.Tx, me, chat uuid.UUID, clientID string) (*peopleMessage, error) {
+// peopleRepeatTx is the person's message under clientID, if they sent one,
+// shown as their own messages are (read only while read ticks go).
+func (s *Server) peopleRepeatTx(ctx context.Context, tx pgx.Tx, me uuid.UUID, c peopleCopy, clientID string) (*peopleMessage, error) {
 	if clientID == "" {
 		return nil, nil
 	}
-	row, err := scanPeopleRow(tx.QueryRow(ctx, `SELECT `+peopleMessageCols+` FROM people_messages WHERE person_id = $1 AND chat_id = $2 AND client_id = $3`, me, chat, clientID))
+	row, err := scanPeopleRow(tx.QueryRow(ctx, `SELECT `+peopleMessageCols+` FROM people_messages WHERE person_id = $1 AND chat_id = $2 AND client_id = $3`, me, c.ID, clientID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -420,7 +504,12 @@ func (s *Server) peopleRepeatTx(ctx context.Context, tx pgx.Tx, me, chat uuid.UU
 	if err != nil {
 		return nil, err
 	}
+	ticks, err := s.readTicksTx(ctx, tx, me, c.Peer)
+	if err != nil {
+		return nil, err
+	}
 	m, _ := row.view(key, me)
+	m = hideRead(m, ticks)
 	return &m, nil
 }
 
@@ -653,7 +742,7 @@ func (s *Server) peopleMessages(w http.ResponseWriter, r *http.Request) {
 			if key, err = s.keys().KeyTx(ctx, tx, person, false); err != nil {
 				return err
 			}
-			if ticks, err = s.readTicksWith(ctx, person, c.Peer); err != nil {
+			if ticks, err = s.readTicksTx(ctx, tx, person, c.Peer); err != nil {
 				return err
 			}
 		}
@@ -680,8 +769,8 @@ func (s *Server) readPeopleChat(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
-	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		c, err := peopleCopyTx(ctx, tx, person, chi.URLParam(r, "id"), false)
+	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
+		c, err := peopleCopyTx(ctx, tx, person, chi.URLParam(r, "id"), true)
 		if err != nil {
 			return err
 		}
@@ -695,18 +784,17 @@ func (s *Server) readPeopleChat(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		peer, err := peopleReachTx(ctx, tx, c.ID)
-		if errors.Is(err, errPeopleGone) {
+		if peerAway(err) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		var theyBlocked bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM people_blocks WHERE person_id = $1 AND blocked_id = $2)`, peer, person).Scan(&theyBlocked); err != nil || theyBlocked {
+		if theyBlocked, err := theyBlockedTx(ctx, tx, peer, person); err != nil || theyBlocked {
 			return err
 		}
 		// Read ticks off on either side: the other is not told.
-		if ticks, err := s.readTicksWith(ctx, person, &peer); err != nil || !ticks {
+		if ticks, err := s.readTicksTx(ctx, tx, person, &peer); err != nil || !ticks {
 			return err
 		}
 		_, err = tx.Exec(ctx, `UPDATE people_messages SET read_at = COALESCE(read_at, now()) WHERE person_id = $1 AND conversation_id = $2 AND id = ANY ($3) AND mine`,
@@ -740,7 +828,7 @@ func reachIfDeliveredTx(ctx context.Context, tx pgx.Tx, c peopleCopy, m peopleRo
 		return uuid.Nil, false, nil
 	}
 	peer, err := peopleReachTx(ctx, tx, c.ID)
-	if errors.Is(err, errPeopleGone) {
+	if peerAway(err) {
 		return uuid.Nil, false, nil
 	}
 	return peer, err == nil, err
@@ -773,8 +861,8 @@ func (s *Server) markPeopleMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var out peopleMessage
-	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		c, err := peopleCopyTx(ctx, tx, person, chi.URLParam(r, "id"), false)
+	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
+		c, err := peopleCopyTx(ctx, tx, person, chi.URLParam(r, "id"), in.Reaction != nil)
 		if err != nil {
 			return err
 		}
@@ -796,7 +884,7 @@ func (s *Server) markPeopleMessage(w http.ResponseWriter, r *http.Request) {
 			}
 			var theyBlocked bool
 			if ok {
-				if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM people_blocks WHERE person_id = $1 AND blocked_id = $2)`, peer, person).Scan(&theyBlocked); err != nil {
+				if theyBlocked, err = theyBlockedTx(ctx, tx, peer, person); err != nil {
 					return err
 				}
 			}
@@ -815,7 +903,7 @@ func (s *Server) markPeopleMessage(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		ticks, err := s.readTicksWith(ctx, person, c.Peer)
+		ticks, err := s.readTicksTx(ctx, tx, person, c.Peer)
 		if err != nil {
 			return err
 		}
@@ -857,8 +945,8 @@ func (s *Server) deletePeopleMessage(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "for is me or everyone")
 		return
 	}
-	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		c, err := peopleCopyTx(ctx, tx, person, chi.URLParam(r, "id"), false)
+	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
+		c, err := peopleCopyTx(ctx, tx, person, chi.URLParam(r, "id"), everyone)
 		if err != nil {
 			return err
 		}
@@ -884,6 +972,10 @@ func (s *Server) deletePeopleMessage(w http.ResponseWriter, r *http.Request) {
 		}
 		peer, ok, err := reachIfDeliveredTx(ctx, tx, c, m)
 		if err != nil || !ok {
+			return err
+		}
+		// Nothing crosses their block of the person, as with reactions.
+		if theyBlocked, err := theyBlockedTx(ctx, tx, peer, person); err != nil || theyBlocked {
 			return err
 		}
 		var theirs bool
@@ -971,7 +1063,10 @@ func (s *Server) forwardPeopleMessage(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
-	many := d.forwards >= peopleForwardedMany
+	// The cap follows the mark the person sees: a message shown
+	// forwarded_many (forwarded five times or more on its way here) goes
+	// to one chat at a time.
+	many := d.forwards-1 >= peopleForwardedMany
 	if limit := map[bool]int{true: 1, false: peopleForwardAtOnce}[many]; len(in.To) > limit {
 		msg := "A message can be forwarded to at most 5 chats at once."
 		if many {

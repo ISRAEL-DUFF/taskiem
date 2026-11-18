@@ -142,22 +142,37 @@ func (p *People) ScreenStranger(ctx context.Context, from, to uuid.UUID, text st
 		return v, nil
 	}
 	err := db.InPersonTx(ctx, p.Pool, from, func(tx pgx.Tx) error {
-		var n int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM people_screen_verdicts WHERE from_person = $1 AND at > $2`,
-			from, p.now().Add(-24*time.Hour)).Scan(&n); err != nil {
-			return err
-		}
-		if n >= RepeatHold && v.Verdict == VerdictWarn {
-			v = Verdict{Verdict: VerdictHold, Reasons: append(v.Reasons, ReasonRepeat)}
-		}
-		var toID *uuid.UUID
-		if to != uuid.Nil {
-			toID = &to
-		}
-		_, err := tx.Exec(ctx, `INSERT INTO people_screen_verdicts (id, from_person, to_person, verdict, reasons, at) VALUES ($1, $2, $3, $4, $5, $6)`,
-			uuid.Must(uuid.NewV7()), from, toID, v.Verdict, v.Reasons, p.now())
+		var err error
+		v, err = p.ScreenStrangerTx(ctx, tx, from, to, text)
 		return err
 	})
+	return v, err
+}
+
+// ScreenStrangerTx is ScreenStranger in a transaction in from's scope:
+// the verdict is kept in tx, so a message that is not sent after all (tx
+// rolled back) leaves none and does not count towards RepeatHold. The
+// caller serialises one sender's messages (the people chats take a lock
+// per sender) so two at once are counted one after the other.
+func (p *People) ScreenStrangerTx(ctx context.Context, tx pgx.Tx, from, to uuid.UUID, text string) (Verdict, error) {
+	v := Screen(text)
+	if v.Verdict == VerdictOK {
+		return v, nil
+	}
+	var n int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM people_screen_verdicts WHERE from_person = $1 AND at > $2`,
+		from, p.now().Add(-24*time.Hour)).Scan(&n); err != nil {
+		return v, err
+	}
+	if n >= RepeatHold && v.Verdict == VerdictWarn {
+		v = Verdict{Verdict: VerdictHold, Reasons: append(v.Reasons, ReasonRepeat)}
+	}
+	var toID *uuid.UUID
+	if to != uuid.Nil {
+		toID = &to
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO people_screen_verdicts (id, from_person, to_person, verdict, reasons, at) VALUES ($1, $2, $3, $4, $5, $6)`,
+		uuid.Must(uuid.NewV7()), from, toID, v.Verdict, v.Reasons, p.now())
 	return v, err
 }
 
