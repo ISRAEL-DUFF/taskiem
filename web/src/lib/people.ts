@@ -174,7 +174,7 @@ export interface PayoutAccount {
 
 /** A card in a people chat (§10.1, §11 A). */
 export interface PeopleCard {
-  type: "product" | "business" | "order" | "delivery" | "split";
+  type: "product" | "business" | "order" | "delivery" | "split" | "basket";
   title: string;
   business_id?: string;
   business?: string;
@@ -190,6 +190,11 @@ export interface PeopleCard {
   paid?: boolean;
   paid_at?: string;
   paid_by_me?: boolean;
+  /** A shared basket (ordering together, 5b C): read live by its id. */
+  basket_id?: string;
+  /** A share sent from a basket: who it is for (in a group). */
+  for_id?: string;
+  for?: string;
 }
 
 /** What a card is made from, as sent (POST …/messages {card}). */
@@ -393,7 +398,7 @@ function nairaPlain(kobo: number): string {
 
 /** A card's line above its title. */
 export function cardKind(c: Pick<PeopleCard, "type">): string {
-  return { product: "Product", business: "Business", order: "Order", delivery: "Delivery", split: "Your share" }[c.type];
+  return { product: "Product", business: "Business", order: "Order", delivery: "Delivery", split: "Your share", basket: "Order together" }[c.type];
 }
 
 /** The code in a person's link, typed or pasted as a link or bare: "", when it is not one. */

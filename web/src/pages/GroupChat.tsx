@@ -577,7 +577,7 @@ export function GroupChatPage() {
       {g && sheet?.k === "card" && <CardSheet base={base} m={sheet.m} onClose={() => setSheet(undefined)} />}
       {g && sheet?.k === "info" && <ReadBySheet base={base} m={sheet.m} onClose={() => setSheet(undefined)} />}
       {g && sheet?.k === "reactions" && <ReactionsSheet base={base} m={sheet.m} onClose={() => setSheet(undefined)} />}
-      {g && sheet?.k === "share" && <ShareSheet onClose={() => setSheet(undefined)} onSend={(card) => sendOther({ card })} onSplit={() => setSheet({ k: "split" })} onPlace={() => setSheet({ k: "place" })} />}
+      {g && sheet?.k === "share" && <ShareSheet onClose={() => setSheet(undefined)} onSend={(card) => sendOther({ card })} onSplit={() => setSheet({ k: "split" })} onPlace={() => setSheet({ k: "place" })} together={g.can_post ? { group_id: id } : undefined} />}
       {g && sheet?.k === "place" && <PlaceSheet name={g.name} onClose={() => setSheet(undefined)} onSend={(location) => sendOther({ location })} />}
       {g && sheet?.k === "split" && <SplitSheet name={g.name} onClose={() => setSheet(undefined)} onSend={(card) => sendOther({ card })} />}
       {g && sheet?.k === "delete" && (
@@ -688,7 +688,7 @@ function GroupBubble({
                     </PopItem>
                   )}
                   {!card && m.body && <CopyItem text={m.body} />}
-                  {card?.type !== "split" && (
+                  {card?.type !== "split" && card?.type !== "basket" && (
                     <PopItem icon="forward" onClick={() => (close(), onSheet("forward"))}>
                       Forward
                     </PopItem>

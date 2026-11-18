@@ -66,6 +66,7 @@ const OWNER_FILES = [
   "pages/PeopleChat.tsx",
   "pages/People.tsx",
   "pages/GroupChat.tsx",
+  "pages/Basket.tsx",
   "pages/Groups.tsx",
   "pages/Transparency.tsx",
   "pages/CustomerChatSettings.tsx",

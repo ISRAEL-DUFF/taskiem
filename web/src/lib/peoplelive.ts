@@ -6,6 +6,7 @@
 
 import { mergePeople, type ChatListItem, type PeopleChat, type PeopleMessage } from "./people";
 import type { LiveGroup, LiveGroupInvite, LiveGroupMessage, LiveGroupReceipts } from "./groups";
+import type { LiveBasket } from "./baskets";
 
 // --- the live connection's events ---
 
@@ -41,6 +42,8 @@ export type PeopleLiveEvent =
   | { type: "group"; data: LiveGroup }
   | { type: "group_receipts"; data: LiveGroupReceipts }
   | { type: "group_invite"; data: LiveGroupInvite }
+  /** Ordering together (5b C): a shared basket changed, or its order moved. */
+  | { type: "basket"; data: LiveBasket }
   /** The connection opened (again): what was missed while it was down is read once. */
   | { type: "ready" };
 

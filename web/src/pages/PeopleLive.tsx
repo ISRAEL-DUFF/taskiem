@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { post } from "../api";
+import type { LiveBasket } from "../lib/baskets";
 import { typingByGroup, type LiveGroup, type LiveGroupInvite, type LiveGroupMessage, type LiveGroupReceipts, type LiveGroupTyping } from "../lib/groups";
 import { NO_PRESENCE, readySays, shownPresence, withPresence, type LiveChat, type LiveGone, type LiveMessage, type LivePresence, type PeopleLiveEvent, type PresenceMap } from "../lib/peoplelive";
 
@@ -164,6 +165,10 @@ export function PeopleLiveProvider({ on, children }: { on: boolean; children: Re
       es.addEventListener("group_invite", (ev) => {
         hear();
         emit({ type: "group_invite", data: data<LiveGroupInvite>(ev) });
+      });
+      es.addEventListener("basket", (ev) => {
+        hear();
+        emit({ type: "basket", data: data<LiveBasket>(ev) });
       });
       es.addEventListener("group_typing", (ev) => {
         hear();

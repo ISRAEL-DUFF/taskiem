@@ -350,7 +350,7 @@ export function ShopSheet({
   );
 }
 
-function ShopRow({
+export function ShopRow({
   it,
   open,
   qty,
