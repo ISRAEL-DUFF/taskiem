@@ -537,7 +537,7 @@ void main() {
   testWidgets('Requests: listed, opened, answered', (t) async {
     phone(t);
     final api = adaChat(c: peopleChat(request: true));
-    api.routes['GET /v1/me/people/requests'] = (_) => {'requests': [peopleChat(request: true, last: 'Hello, I got your number from Bisi')]};
+    api.routes['GET /v1/me/people/requests'] = (_) => {'more': false, 'requests': [peopleChat(request: true, last: 'Hello, I got your number from Bisi')]};
     final opened = <String>[];
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleRequestsScreen(auth: api.auth(), now: () => at, openChat: (id, {started}) async => opened.add(id))));
     await settle(t);
@@ -823,7 +823,7 @@ void main() {
     final api = adaChat(c: peopleChat(request: true));
     api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 1, 'more': false};
     api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
-    api.routes['GET /v1/me/people/requests'] = (_) => {'requests': [peopleChat(request: true)]};
+    api.routes['GET /v1/me/people/requests'] = (_) => {'more': false, 'requests': [peopleChat(request: true)]};
     final links = StreamController<Uri>();
     final inbox = LinkInbox(links: links.stream, first: () async => null);
     addTearDown(() {
