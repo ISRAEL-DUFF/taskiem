@@ -941,9 +941,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
       return;
     }
     final reply = _reply;
-    final words = _text.text;
     setState(() => _reply = null);
-    await d.send('', file: f, reply: reply, mentions: mentionedIn(words, _mentions));
+    await d.send('', file: f, reply: reply);
   }
 
   void _send(String text, PickedFile? file) {
