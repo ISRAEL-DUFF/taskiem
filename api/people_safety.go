@@ -157,11 +157,45 @@ func (s *Server) keepHeldTx(ctx context.Context, tx pgx.Tx, me uuid.UUID, peer, 
 	if mentions == nil {
 		mentions = []uuid.UUID{}
 	}
+	var clientID *string
+	if d.clientID != "" {
+		clientID = &d.clientID
+	}
 	_, err = tx.Exec(ctx, `INSERT INTO people_held (id, sender_id, recipient_id, chat_id, kind, reply_to, forwards, reasons, sealed, file_sealed, file_type,
-		file_size, box_key, kms_key, group_id, mentions) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
-		id, me, peer, chat, d.kind, d.replyTo, d.forwards, reasons, sealed, fileSealed, fileType, fileSize, box.Sealed, box.KMSKey, group, mentions)
+		file_size, box_key, kms_key, group_id, mentions, client_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
+		id, me, peer, chat, d.kind, d.replyTo, d.forwards, reasons, sealed, fileSealed, fileType, fileSize, box.Sealed, box.KMSKey, group, mentions, clientID)
 	return err
 }
+
+// heldSend is a send of the person's the checks held, found again by its
+// client_id: its held row and what moderators did with it.
+type heldSend struct {
+	id    uuid.UUID
+	state string
+}
+
+// heldAgainTx finds the person's held send with this client_id in a chat
+// (their copy) or a group, so a retry is answered as the first send was
+// (held: refused in the same words, with no new held row or verdict, and
+// nothing counted again; released: the message it became).
+func heldAgainTx(ctx context.Context, tx pgx.Tx, chat, group *uuid.UUID, clientID string) (*heldSend, error) {
+	if clientID == "" {
+		return nil, nil
+	}
+	var h heldSend
+	err := tx.QueryRow(ctx, `SELECT id, state FROM taskiem_people_held_again($1, $2, $3)`, chat, group, clientID).Scan(&h.id, &h.state)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &h, nil
+}
+
+// releasedClientID is the client_id a held message is sent with once a
+// moderator releases it.
+func releasedClientID(held uuid.UUID) string { return "held:" + held.String() }
 
 // reportMessage is one message of a report, as moderators read it.
 type reportMessage struct {

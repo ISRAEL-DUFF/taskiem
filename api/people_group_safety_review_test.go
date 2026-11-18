@@ -186,6 +186,71 @@ func TestGroupClosedRefusesChanges(t *testing.T) {
 	}
 }
 
+// A held send retried with the same client_id, one to one and in a
+// group, is refused again in the same words with no new held row and no
+// new verdict (so the repeat hold is not brought nearer); released, the
+// retry answers the message it became.
+func TestHeldSendRetried(t *testing.T) {
+	w := safetyWorld(t)
+	ada, adaID := w.many(t, "+2348031159901", "Ada Obi")
+	bola, bolaID := w.many(t, "+2348031159902", "Bola Ade")
+	_, chidiID := w.many(t, "+2348031159903", "Chidi Eze")
+	dayo, dayoID := w.many(t, "+2348031159904", "Dayo Bello")
+	for _, id := range []uuid.UUID{adaID, bolaID, chidiID, dayoID} {
+		w.older(t, id)
+	}
+	mod := newModerator(t, w, "mod@taskiem.test")
+	scam := "Congratulations you have won! Send me the code you received to claim your prize"
+	counts := func() (int, int) {
+		return w.adminCount(t, `SELECT count(*)::int FROM people_held WHERE sender_id = $1`, dayoID),
+			w.adminCount(t, `SELECT count(*)::int FROM people_screen_verdicts WHERE from_person = $1`, dayoID)
+	}
+
+	// One to one.
+	chat := chatWith(t, dayo, adaID)
+	first := dayo.must(403, "POST", "/v1/me/people/"+chat+"/messages", map[string]any{"text": scam, "client_id": "c-1"})
+	for i := 0; i < 3; i++ {
+		if e := dayo.must(403, "POST", "/v1/me/people/"+chat+"/messages", map[string]any{"text": scam, "client_id": "c-1"}); e["error"] != first["error"] {
+			t.Fatalf("the retry's words: %v", e)
+		}
+	}
+	if h, v := counts(); h != 1 || v != 1 {
+		t.Fatalf("one to one: %d held, %d verdicts", h, v)
+	}
+
+	// In a group.
+	adds(t, ada, bola)
+	adds(t, bola, ada)
+	adds(t, ada, dayo)
+	adds(t, dayo, ada)
+	gid, _ := newGroup(t, ada, "New group", bolaID, dayoID, chidiID)
+	for i := 0; i < 3; i++ {
+		if e := dayo.must(403, "POST", "/v1/me/groups/"+gid+"/messages", map[string]any{"text": scam, "client_id": "g-1"}); e["error"] != first["error"] {
+			t.Fatalf("the group retry's words: %v", e)
+		}
+	}
+	if h, v := counts(); h != 2 || v != 2 {
+		t.Fatalf("in a group: %d held, %d verdicts", h, v)
+	}
+
+	// Released: the retry answers the message it became, once.
+	var hid string
+	if err := w.env.DB.Admin.QueryRow(context.Background(), `SELECT id::text FROM people_held WHERE group_id = $1`, gid).Scan(&hid); err != nil {
+		t.Fatal(err)
+	}
+	rel := mod.write(200, "ops.people.held.release", hid, "/v1/ops/people/held/"+hid+"/release", map[string]any{"note": "A game"})
+	again := dayo.must(200, "POST", "/v1/me/groups/"+gid+"/messages", map[string]any{"text": scam, "client_id": "g-1"})
+	if again["id"] != rel["message_id"] {
+		t.Fatalf("the retry after the release: %v, released %v", again, rel)
+	}
+	if n := w.adminCount(t, `SELECT count(*)::int FROM group_messages WHERE group_id = $1 AND sender_id = $2`, gid, dayoID); n != 1 {
+		t.Fatalf("delivered %d times", n)
+	}
+	if h, v := counts(); h != 2 || v != 2 {
+		t.Fatalf("after the release: %d held, %d verdicts", h, v)
+	}
+}
+
 // reportedBy is the person's ReportedBy signal, as their own transaction
 // reads it.
 func reportedBy(t *testing.T, w *peopleWorld, id uuid.UUID) int {

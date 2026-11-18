@@ -213,6 +213,23 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 		if again, err = s.peopleRepeatTx(ctx, tx, me, c, d.clientID); err != nil || again != nil {
 			return err
 		}
+		// A send the checks held, retried: answered as it was, nothing
+		// written or counted again.
+		if !d.released {
+			h, err := heldAgainTx(ctx, tx, &c.ID, nil, d.clientID)
+			if err != nil {
+				return err
+			}
+			if h != nil {
+				if h.state == "released" {
+					if again, err = s.peopleRepeatTx(ctx, tx, me, c, releasedClientID(h.id)); err != nil || again != nil {
+						return err
+					}
+				}
+				held = customerSendErr{http.StatusForbidden, peopleHeldWords}
+				return nil
+			}
+		}
 		if c.Peer == nil {
 			return errPeopleGone
 		}

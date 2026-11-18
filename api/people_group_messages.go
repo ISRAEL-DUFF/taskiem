@@ -437,6 +437,30 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 			if !errors.Is(err, pgx.ErrNoRows) {
 				return err
 			}
+			// A send the checks held, retried: answered as it was, nothing
+			// written or counted again (released: the message it became).
+			if !d.released {
+				h, err := heldAgainTx(ctx, tx, nil, &g.ID, d.clientID)
+				if err != nil {
+					return err
+				}
+				if h != nil {
+					if h.state == "released" {
+						err := tx.QueryRow(ctx, `SELECT id FROM group_messages WHERE group_id = $1 AND sender_id = $2 AND client_id = $3`,
+							g.ID, me, releasedClientID(h.id)).Scan(&id)
+						if err == nil {
+							m, err := s.groupOneMessageTx(ctx, tx, me, g.ID, id)
+							again = &m
+							return err
+						}
+						if !errors.Is(err, pgx.ErrNoRows) {
+							return err
+						}
+					}
+					held = customerSendErr{http.StatusForbidden, peopleHeldWords}
+					return nil
+				}
+			}
 		}
 		st, err := standingTx(ctx, tx, me)
 		if err != nil {
