@@ -1268,6 +1268,12 @@ class TaskiemApi {
     return GroupMessagesResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// A group's media and files (`GET /v1/me/groups/{id}/media`)
+  Future<GroupMediaResponse> groupMedia({required String id, String? before}) async {
+    final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}/media', query: {'before': ?before});
+    return GroupMediaResponse.fromJson(j as Map<String, dynamic>);
+  }
+
   /// Send a message to a group (`POST /v1/me/groups/{id}/messages`)
   Future<GroupMessage> sendGroupMessage({required SendGroupMessageRequest body, required String id}) async {
     final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/messages', body: body.toJson());
@@ -11267,6 +11273,23 @@ class GroupMessagesResponse {
   final bool more;
 
   factory GroupMessagesResponse.fromJson(Map<String, dynamic> j) => GroupMessagesResponse(
+        messages: (j['messages'] as List).map((e) => GroupMessage.fromJson(e as Map<String, dynamic>)).toList(),
+        more: j['more'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'messages': messages.map((e) => e.toJson()).toList(),
+        'more': more,
+      };
+}
+
+class GroupMediaResponse {
+  const GroupMediaResponse({required this.messages, required this.more});
+
+  final List<GroupMessage> messages;
+  final bool more;
+
+  factory GroupMediaResponse.fromJson(Map<String, dynamic> j) => GroupMediaResponse(
         messages: (j['messages'] as List).map((e) => GroupMessage.fromJson(e as Map<String, dynamic>)).toList(),
         more: j['more'] as bool,
       );
