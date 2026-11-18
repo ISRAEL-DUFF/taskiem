@@ -995,6 +995,10 @@ for (const scheme of ["light", "dark"] as const)
         await expect(page.getByTestId(testid).first()).toBeVisible();
         await check(path);
       }
+      await page.goto("/ops/people/persons/p2");
+      await page.getByTestId("ops-lift-open").click();
+      await expect(page.getByLabel(/Why you are lifting/)).toBeVisible();
+      await check("lifting a decision");
       await page.goto("/ops/lawful");
       await page.getByRole("button", { name: "Record a request" }).click();
       await expect(page.getByTestId("ops-lawful-record")).toBeVisible();
