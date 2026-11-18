@@ -238,13 +238,15 @@ $$;
 CREATE FUNCTION taskiem_basket_order(p_basket uuid) RETURNS jsonb
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
 DECLARE
-  b people_baskets;
+  v_business uuid;
+  v_reference text;
+  v_placer uuid;
   out jsonb;
 BEGIN
   IF NOT taskiem_basket_reach(p_basket) THEN
     RETURN NULL;
   END IF;
-  SELECT * INTO b FROM people_baskets WHERE id = p_basket AND state = 'placed';
+  SELECT business_id, order_reference, placed_by INTO v_business, v_reference, v_placer FROM people_baskets WHERE id = p_basket AND state = 'placed';
   IF NOT FOUND THEN
     RETURN NULL;
   END IF;
@@ -257,7 +259,7 @@ BEGIN
            'shares', COALESCE((SELECT jsonb_object_agg(l.share_key::text, l.paid_at) FROM storefront_order_share_links l
                                 WHERE l.order_id = o.id AND l.paid_at IS NOT NULL), '{}'::jsonb))
     INTO out
-    FROM storefront_orders o WHERE o.tenant_id = b.business_id AND o.reference = b.order_reference AND o.person_id = b.placed_by;
+    FROM storefront_orders o WHERE o.tenant_id = v_business AND o.reference = v_reference AND o.person_id = v_placer;
   RETURN out;
 END
 $$;

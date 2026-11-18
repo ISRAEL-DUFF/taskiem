@@ -77,17 +77,17 @@ var (
 // --- the basket as kept ---
 
 type basketRow struct {
-	ID, Business               uuid.UUID
-	BusinessName               string
-	Group, Conversation        *uuid.UUID
-	Starter, Holder            uuid.UUID
-	State                      string
-	Fulfilment, Zone, Payment  *string
-	Reference                  *string
-	PlacedBy                   *uuid.UUID
-	PlacedKobo, DeliveryKobo   *int64
-	CreatedAt                  time.Time
-	ClosedAt, PlacedAt         *time.Time
+	ID, Business              uuid.UUID
+	BusinessName              string
+	Group, Conversation       *uuid.UUID
+	Starter, Holder           uuid.UUID
+	State                     string
+	Fulfilment, Zone, Payment *string
+	Reference                 *string
+	PlacedBy                  *uuid.UUID
+	PlacedKobo, DeliveryKobo  *int64
+	CreatedAt                 time.Time
+	ClosedAt, PlacedAt        *time.Time
 }
 
 const basketCols = `id, business_id, business_name, group_id, conversation_id, starter_id, holder_id, state, fulfilment, zone, payment,
