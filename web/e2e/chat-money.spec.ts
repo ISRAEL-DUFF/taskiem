@@ -197,12 +197,24 @@ for (const width of [390, 360]) {
     const cards = pane.getByTestId("ref-card");
     await expect(cards).toHaveCount(3);
     const inv = pane.getByRole("article", { name: "Invoice INV-0002" });
+    // Each a short row first: what it is, where it stands, how much.
     await expect(inv).toContainText("Tola's Kitchen");
     await expect(inv).toContainText("₦9,000");
     await expect(inv).toContainText("Overdue");
+    await expect(inv).not.toContainText("10 × Chairs");
+    await axeBoth(page, "the cards, folded");
+    for (const c of await cards.all()) expect((await c.boundingBox())?.height ?? 99).toBeLessThan(80);
+    // Pressed, it opens; pressed again, a row once more.
+    await inv.getByRole("button", { expanded: false }).click();
     await expect(inv).toContainText("10 × Chairs");
+    await inv.getByRole("button", { expanded: true }).click();
+    await expect(inv).not.toContainText("10 × Chairs");
+    await inv.getByRole("button", { expanded: false }).click();
     await expect(inv.getByRole("button", { name: /^Send a reminder/ })).toBeVisible();
+    // Each button on one line: none squeezed into two.
+    for (const b of await inv.locator(".tk-ref-foot .tk-btn").all()) expect((await b.boundingBox())?.height ?? 99).toBeLessThan(48);
     const bisi = pane.getByRole("article", { name: "Customer Bisi Okafor" });
+    await bisi.getByRole("button", { expanded: false }).click();
     await expect(bisi).toContainText("•••0555");
     await expect(bisi).toContainText("₦4,500");
     await expect(bisi).toContainText("AK-7QX4KD");

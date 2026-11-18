@@ -248,9 +248,13 @@ class TkTextBox extends StatefulWidget {
     this.phone = false,
     this.max,
     this.enabled = true,
+    this.prefix,
   });
   final TextEditingController controller;
   final int lines;
+
+  /// Quiet before the words ("₦"), as a money box is drawn.
+  final String? prefix;
 
   /// `min-height` and the words' size: 54 and 17, or 44 and 16 in a
   /// card's form (`.tk-deal-form .tk-field input`).
@@ -325,7 +329,7 @@ class _TkTextBoxState extends State<TkTextBox> {
           children: [
             Material(
               type: MaterialType.transparency,
-              child: TextField(
+              child: _Prefixed(prefix: widget.prefix, style: tkText(size: widget.size, weight: 600, lineHeight: 1.5, color: t.muted), child: TextField(
                 controller: widget.controller,
                 enabled: widget.enabled,
                 focusNode: _focus,
@@ -360,7 +364,7 @@ class _TkTextBoxState extends State<TkTextBox> {
                     color: t.muted.withValues(alpha: t.muted.a * 0.72),
                   ),
                 ),
-              ),
+              )),
             ),
             if (area)
               Positioned(
@@ -373,6 +377,19 @@ class _TkTextBoxState extends State<TkTextBox> {
       ),
     );
   }
+}
+
+/// A text box's field with its quiet prefix ("₦") before it, when it has one.
+class _Prefixed extends StatelessWidget {
+  const _Prefixed({required this.prefix, required this.style, required this.child});
+  final String? prefix;
+  final TextStyle style;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => prefix == null
+      ? child
+      : Row(children: [ExcludeSemantics(child: Text('${prefix!} ', style: style)), Expanded(child: child)]);
 }
 
 /// Chromium's resize grip: two short diagonal strokes.

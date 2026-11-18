@@ -480,6 +480,26 @@ Left different on purpose:
 - A customer's order keeps what changes it: − and +, the address, the
   fee and how they pay.
 
+## The school, as drawn
+
+A school's people get the school on the phone as it was drawn (drawn first, then built to the drawing, each screen compared at 340 px in light and dark). Nothing here is new on the server except the three chat additions at the end; every screen reads and sends what the web's Schools pages do (`docs/spec/schools.md`).
+
+- **Where it lives.** With schools on and `school.read`, **School** takes Orders' place in the bottom bar (Chats, Today, Money, School). The school's orders open from Today's Orders tile; anyone without `school.read` keeps Orders. A gate session (`gateOnly`) opens on the gate screen and nothing else.
+- **The School tab** (`lib/school/school_tab.dart`): the term on its eyebrow, the gate button; collected of expected with its bar, still owed and due by today; this week, owed, matched, cleared, how parents paid; owing by how late (each bucket opens Debtors on it), owing the most, the day's close (and the close page, each item with Fix it to where it is fixed), and Go to.
+- **Students** (`students_page.dart`): search, class pills, status chips, Import and Add. **One student**: what is still to pay with the term's invoice, Record cash, Remind, A promise, Receipts; their account number (Copy, Send to the family); the family, with the family page link sent (the page itself stays on the web); the term's fees, optional items and discounts; chasing (plans, promises, reminders); clearance; claims; class history. Names are masked unless the person may reveal (`pii.reveal`), and then revealed and audited, as on the web.
+- **Money at the desk** (`school_money.dart`): Record a payment (an Idempotency-Key; at or above the owner's amount it waits for a second person, said before posting); Payments and cash (All, Waiting, Posted, Declined), each waiting one the person may decide opening Approve; Receipts, each PDF handed to the phone.
+- **Chasing** (`school_chasing.dart`): Debtors by how late, with filters and classes; ticked families (up to 50) get the reminder their lateness calls for; promises (the next school days, or another day) and payment plans asked for (approved on the family's instalments, declined with a note). Debtors and Clearance share the server's CSV as a file.
+- **Clearance and the gate** (`school_clearance.dart`): the list by the rule with overrides (a reason and an end) and Withdraw; the gate finds a child by name and says CLEARED or SEE THE BURSAR in full colour, never an amount (an answer carrying one is not shown).
+- **Setup** (`school_setup.dart`): classes and terms (start a term, the current term's fees and invoices, promotion), a class's fees, invoicing a term (the plan, then confirmed with its hash), importing students from a CSV, account numbers, school settings (the owner's). The school's wallet is set up on the web only.
+
+### The school in the chats
+
+Three server additions, built with the screens:
+
+- **The briefing** (`GET /v1/chat-briefing`) has a `school` part for those who read the school, with schools on and a term current: the term's fees collected of expected, this week's, overdue, who owes, cleared of the term's students, what waits for this person as the second person (`school.approve`, never their own), the last close, and yesterday's money and what of it is not matched (from yesterday's close). The briefing is also for `school.manage`. On the phone the card says "Fees collected yesterday" (this week's before a close) and how much of the term's fees are in, with Still owed, Cleared, Waiting for you and Not matched, each opening its page.
+- **Cards** (`GET /v1/chat-alerts`): a school's requests waiting for a second person come as `school_approval` cards, for `school.approve`, the name masked, never the requester's own; Approve and Decline open the approve sheet and decide through `POST /v1/schools/approvals/{id}`.
+- **Tools.** The phone's tools panel starts with the school's: Students, Record a payment, Debtors, Clearance. On WhatsApp, Telegram and Slack, "tools" lists the school's pages on the web too (Students, Record a payment, Debtors, Clearance, Receipts), with schools on.
+
 ## Order
 
 1. Orders and Money, and the chat's motion. Done.
@@ -492,3 +512,4 @@ Left different on purpose:
 8. The settings pages: done ("Settings" above).
 9. Find a business, signing in and a forgotten password: done (above).
 10. Signing up, the sheets and the two chats: done (above).
+11. The school: the School tab, students, money at the desk, chasing, clearance and the gate, setup, and the school in the chats. **Done; waiting for the founder's word.**

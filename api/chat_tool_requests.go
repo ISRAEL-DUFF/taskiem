@@ -28,6 +28,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/ai"
+	"github.com/israel-duff/taskiem/engine/schools"
 	"github.com/israel-duff/taskiem/engine/stock"
 	"github.com/israel-duff/taskiem/engine/variants"
 )
@@ -54,6 +55,16 @@ var chatTools = []chatTool{
 	// The money a business is owed and has: its invoices, and the money log.
 	{"invoices", "Invoices", PermInvoiceRead},
 	{"money", "Money", PermInvoiceRead},
+}
+
+// schoolTools are a school's tools as the chat apps list them: the
+// school's pages on the web (the app's School tab has them too).
+var schoolTools = []struct{ key, title, perm, path string }{
+	{"students", "Students", PermSchoolRead, "/schools"},
+	{"payment", "Record a payment", PermSchoolManage, "/schools/payments"},
+	{"debtors", "Debtors", PermSchoolRead, "/schools/debtors"},
+	{"clearance", "Clearance", PermSchoolRead, "/schools/clearance"},
+	{"receipts", "Receipts", PermSchoolRead, "/schools/receipts"},
 }
 
 // toolRequest is a typed request: the tool, the row it is about (or a new
@@ -124,6 +135,27 @@ func (s *Server) waToolsCommand(ctx context.Context, c *chat, cmd string) (bool,
 			continue
 		}
 		lines = append(lines, fmt.Sprintf("• %s: %s", t.title, s.toolLink(t.key, nil)))
+	}
+	// A school's (with schools on): its pages on the web, for those who
+	// read the school.
+	if only == nil && c.p.Can(PermSchoolRead) {
+		var on bool
+		if err := db0(ctx, s, c.tenant.ID, func(tx pgx.Tx) error {
+			var err error
+			on, err = schools.Enabled(ctx, tx, c.tenant.ID)
+			return err
+		}); err != nil {
+			return false, err
+		}
+		for _, t := range schoolTools {
+			if !on || !c.p.Can(t.perm) {
+				continue
+			}
+			if want != "" && !strings.HasPrefix(t.key, want) && !strings.HasPrefix(strings.ToLower(t.title), want) {
+				continue
+			}
+			lines = append(lines, fmt.Sprintf("• %s: %s", t.title, strings.TrimRight(s.PublicURL, "/")+t.path))
+		}
 	}
 	// "/start" and the like are not tools: left to what reads them.
 	if len(lines) == 0 {
