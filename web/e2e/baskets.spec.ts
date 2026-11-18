@@ -44,7 +44,8 @@ test.afterAll(async () => {
   await new Promise<void>((resolve) => graph.close(() => resolve()));
 });
 
-const letters = () => String(Date.now()).replace(/\d/g, (d) => "abcdefghij".charAt(Number(d)));
+// Letters for the digits that spell no word: "abcdefghij" once spelled "efcc", a protected name.
+const letters = () => String(Date.now()).replace(/\d/g, (d) => "kmpqrtvwxz".charAt(Number(d)));
 
 function sql(text: string): string {
   const base = process.env.TASKIEM_TEST_DATABASE_URL;
