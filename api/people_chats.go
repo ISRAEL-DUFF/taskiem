@@ -416,7 +416,7 @@ func (s *Server) peopleViewsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID,
 		} else {
 			v.Gone = true
 		}
-		if card, ok := cards[v.PersonID]; ok && card.Deleted && !v.Suspended {
+		if card, ok := cards[v.PersonID]; ok && card.Deleted && !card.Suspended && !v.Suspended {
 			v.Gone = true
 		}
 		switch {
@@ -570,24 +570,37 @@ func (s *Server) listPeopleChats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, body)
 }
 
-// listPeopleRequests is GET /v1/me/people/requests: strangers' first
-// messages waiting for the person (Accept, Delete, Block and report).
+// listPeopleRequests is GET /v1/me/people/requests?before=: strangers'
+// first messages waiting for the person (Accept, Delete, Block and
+// report), the latest first, 200 a page (more, and next to pass as before
+// for the page after).
 func (s *Server) listPeopleRequests(w http.ResponseWriter, r *http.Request) {
 	person, err := personOf(r)
 	if err != nil {
 		s.personFail(w, r, err)
 		return
 	}
+	before, err := parseCursor(r.URL.Query().Get("before"))
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
 	var out []peopleChat
+	more := false
 	err = db.InPersonTx(r.Context(), s.Store.Pool, person, func(tx pgx.Tx) error {
-		out, _, err = s.peopleListTx(r.Context(), tx, person, true, false, nil, peopleListPage)
+		out, more, err = s.peopleListTx(r.Context(), tx, person, true, false, before, peopleListPage)
 		return err
 	})
 	if err != nil {
 		s.personFail(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"requests": out})
+	body := map[string]any{"requests": out, "more": more}
+	if more {
+		last := out[len(out)-1]
+		body["next"] = listCursor{last.LastAt, last.ID}.String()
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 // chatItem is one row of You's one Chats list (§7, §17 Q6): a business

@@ -266,8 +266,12 @@ func (p *People) SaveSettings(ctx context.Context, person uuid.UUID, in Settings
 // Card is what a viewer may see of a person, by that person's settings.
 type Card struct {
 	ID uuid.UUID `json:"id"`
-	// Deleted: the account was deleted (shown as "Deleted account").
+	// Deleted: the account can't be reached: deleted (shown as "Deleted
+	// account") or, with Suspended, suspended.
 	Deleted bool `json:"deleted"`
+	// Suspended: the account is not active but was not deleted (it can't
+	// get messages right now); it keeps its name and shows nothing else.
+	Suspended bool `json:"suspended"`
 	// Name is the person's own name; empty for a deleted account.
 	Name string `json:"name"`
 	// ContactName is the name the viewer gave them in their contacts.
@@ -298,7 +302,7 @@ func cardsTx(ctx context.Context, tx pgx.Tx, viewer uuid.UUID, owners []uuid.UUI
 	if len(owners) == 0 {
 		return out, nil
 	}
-	rows, err := tx.Query(ctx, `SELECT person_id, active, name, owner_has_viewer, viewer_has_owner, viewer_named, message,
+	rows, err := tx.Query(ctx, `SELECT person_id, active, deleted, name, owner_has_viewer, viewer_has_owner, viewer_named, message,
 		photo_at, last_seen_at, online, read_ticks, number FROM taskiem_people_cards($1, $2)`, viewer, owners)
 	if err != nil {
 		return nil, err
@@ -306,12 +310,13 @@ func cardsTx(ctx context.Context, tx pgx.Tx, viewer uuid.UUID, owners []uuid.UUI
 	defer rows.Close()
 	for rows.Next() {
 		var c Card
-		var active bool
-		if err := rows.Scan(&c.ID, &active, &c.Name, &c.TheyAddedYou, &c.InContacts, &c.ContactName, &c.Message,
+		var active, deleted bool
+		if err := rows.Scan(&c.ID, &active, &deleted, &c.Name, &c.TheyAddedYou, &c.InContacts, &c.ContactName, &c.Message,
 			&c.PhotoAt, &c.LastSeenAt, &c.Online, &c.ReadTicks, &c.number); err != nil {
 			return nil, err
 		}
 		c.Deleted = !active
+		c.Suspended = !active && !deleted
 		out[c.ID] = &c
 	}
 	return out, rows.Err()

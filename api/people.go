@@ -98,6 +98,9 @@ type personCardOut struct {
 	ID      uuid.UUID `json:"id"`
 	Name    string    `json:"name"`
 	Deleted bool      `json:"deleted"`
+	// Suspended: the account is suspended, not deleted: their name, and
+	// nothing else of them; it can't get messages right now.
+	Suspended bool `json:"suspended,omitempty"`
 	// ContactName is the name the viewer gave them; InContacts, the viewer
 	// added them; TheyAddedYou, they added the viewer.
 	ContactName  *string `json:"contact_name"`
@@ -122,7 +125,10 @@ const deletedName = "Deleted account"
 func cardOut(c people.Card) personCardOut {
 	out := personCardOut{ID: c.ID, Name: c.Name, Deleted: c.Deleted, ContactName: c.ContactName, InContacts: c.InContacts,
 		TheyAddedYou: c.TheyAddedYou, LastSeenAt: c.LastSeenAt, Online: c.Online, ReadTicks: c.ReadTicks}
-	if c.Deleted {
+	switch {
+	case c.Suspended:
+		out.Deleted, out.Suspended = false, true
+	case c.Deleted:
 		out.Name = deletedName
 	}
 	if c.PhotoAt != nil {

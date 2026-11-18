@@ -942,8 +942,8 @@ class TaskiemApi {
   }
 
   /// Message requests (`GET /v1/me/people/requests`)
-  Future<ListPeopleRequestsResponse> listPeopleRequests() async {
-    final j = await _t.send('GET', '/v1/me/people/requests');
+  Future<ListPeopleRequestsResponse> listPeopleRequests({String? before}) async {
+    final j = await _t.send('GET', '/v1/me/people/requests', query: {'before': ?before});
     return ListPeopleRequestsResponse.fromJson(j as Map<String, dynamic>);
   }
 
@@ -8149,7 +8149,7 @@ class MyContactsResponse {
 }
 
 class PersonContact {
-  const PersonContact({required this.addedAt, this.contactName, required this.deleted, required this.id, required this.inContacts, this.lastSeenAt, required this.name, this.online, this.photo, required this.readTicks, required this.source, required this.theyAddedYou});
+  const PersonContact({required this.addedAt, this.contactName, required this.deleted, required this.id, required this.inContacts, this.lastSeenAt, required this.name, this.online, this.photo, required this.readTicks, required this.source, this.suspended, required this.theyAddedYou});
 
   final DateTime addedAt;
   /// The name the viewer gave them in their contacts.
@@ -8170,6 +8170,9 @@ class PersonContact {
   /// Read ticks go between them (both have them on).
   final bool readTicks;
   final String source;
+  /// The account is suspended, not deleted (it can't get messages right now);
+  /// only their name is shown.
+  final bool? suspended;
   /// They added the viewer (so the viewer is among "my contacts" in their
   /// settings).
   final bool theyAddedYou;
@@ -8186,6 +8189,7 @@ class PersonContact {
         photo: j['photo'],
         readTicks: j['read_ticks'] as bool,
         source: j['source'] as String,
+        suspended: j['suspended'] == null ? null : j['suspended'] as bool,
         theyAddedYou: j['they_added_you'] as bool,
       );
 
@@ -8201,6 +8205,7 @@ class PersonContact {
         'photo': ?photo,
         'read_ticks': readTicks,
         'source': source,
+        'suspended': ?suspended,
         'they_added_you': theyAddedYou,
       };
 }
@@ -8329,7 +8334,7 @@ class MatchContactsResponseMatchesItem {
 
 /// A person as the viewer may see them, by that person's settings.
 class PersonCard {
-  const PersonCard({this.contactName, required this.deleted, required this.id, required this.inContacts, this.lastSeenAt, required this.name, this.online, this.photo, required this.readTicks, required this.theyAddedYou});
+  const PersonCard({this.contactName, required this.deleted, required this.id, required this.inContacts, this.lastSeenAt, required this.name, this.online, this.photo, required this.readTicks, this.suspended, required this.theyAddedYou});
 
   /// The name the viewer gave them in their contacts.
   final Object? contactName;
@@ -8348,6 +8353,9 @@ class PersonCard {
   final Object? photo;
   /// Read ticks go between them (both have them on).
   final bool readTicks;
+  /// The account is suspended, not deleted (it can't get messages right now);
+  /// only their name is shown.
+  final bool? suspended;
   /// They added the viewer (so the viewer is among "my contacts" in their
   /// settings).
   final bool theyAddedYou;
@@ -8362,6 +8370,7 @@ class PersonCard {
         online: j['online'],
         photo: j['photo'],
         readTicks: j['read_ticks'] as bool,
+        suspended: j['suspended'] == null ? null : j['suspended'] as bool,
         theyAddedYou: j['they_added_you'] as bool,
       );
 
@@ -8375,6 +8384,7 @@ class PersonCard {
         'online': ?online,
         'photo': ?photo,
         'read_ticks': readTicks,
+        'suspended': ?suspended,
         'they_added_you': theyAddedYou,
       };
 }
@@ -8485,7 +8495,7 @@ class PersonFoundInvite {
 }
 
 class PersonView {
-  const PersonView({this.contactName, required this.deleted, required this.id, required this.inContacts, this.lastSeenAt, required this.name, this.number, this.online, this.photo, required this.readTicks, required this.theyAddedYou});
+  const PersonView({this.contactName, required this.deleted, required this.id, required this.inContacts, this.lastSeenAt, required this.name, this.number, this.online, this.photo, required this.readTicks, this.suspended, required this.theyAddedYou});
 
   /// The name the viewer gave them in their contacts.
   final Object? contactName;
@@ -8507,6 +8517,9 @@ class PersonView {
   final Object? photo;
   /// Read ticks go between them (both have them on).
   final bool readTicks;
+  /// The account is suspended, not deleted (it can't get messages right now);
+  /// only their name is shown.
+  final bool? suspended;
   /// They added the viewer (so the viewer is among "my contacts" in their
   /// settings).
   final bool theyAddedYou;
@@ -8522,6 +8535,7 @@ class PersonView {
         online: j['online'],
         photo: j['photo'],
         readTicks: j['read_ticks'] as bool,
+        suspended: j['suspended'] == null ? null : j['suspended'] as bool,
         theyAddedYou: j['they_added_you'] as bool,
       );
 
@@ -8536,6 +8550,7 @@ class PersonView {
         'online': ?online,
         'photo': ?photo,
         'read_ticks': readTicks,
+        'suspended': ?suspended,
         'they_added_you': theyAddedYou,
       };
 }
@@ -8806,15 +8821,23 @@ class StartPeopleChatRequest {
 }
 
 class ListPeopleRequestsResponse {
-  const ListPeopleRequestsResponse({required this.requests});
+  const ListPeopleRequestsResponse({required this.more, this.next, required this.requests});
 
+  /// There are more requests after this page (200 a page).
+  final bool more;
+  /// With `more`, pass it as `before` for the page after.
+  final String? next;
   final List<PeopleChat> requests;
 
   factory ListPeopleRequestsResponse.fromJson(Map<String, dynamic> j) => ListPeopleRequestsResponse(
+        more: j['more'] as bool,
+        next: j['next'] == null ? null : j['next'] as String,
         requests: (j['requests'] as List).map((e) => PeopleChat.fromJson(e as Map<String, dynamic>)).toList(),
       );
 
   Map<String, dynamic> toJson() => {
+        'more': more,
+        'next': ?next,
         'requests': requests.map((e) => e.toJson()).toList(),
       };
 }

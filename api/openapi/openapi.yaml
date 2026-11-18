@@ -21747,11 +21747,17 @@ paths:
       tags:
       - People
       summary: Message requests
-      description: 'Strangers'' first messages waiting for the person: Accept (`…/accept`), Delete (`…/decline`) or Block and report (`…/block` with `report`). The sender is not told they were read until accepted.'
+      description: 'Strangers'' first messages waiting for the person: Accept (`…/accept`), Delete (`…/decline`) or Block and report (`…/block` with `report`). The sender is not told they were read until accepted. The latest first, 200 a page: `more` says there are more, and `next`, passed as `before`, asks for them.'
       security:
       - sessionCookie: []
       - sessionToken: []
       - apiKey: []
+      parameters:
+      - name: before
+        in: query
+        description: 'The page after another: that page''s `next`. Without it, the first page.'
+        schema:
+          type: string
       responses:
         '200':
           description: The requests
@@ -21760,12 +21766,18 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [requests]
+                required: [requests, more]
                 properties:
                   requests:
                     type: array
                     items:
                       $ref: '#/components/schemas/PeopleChat'
+                  more:
+                    type: boolean
+                    description: There are more requests after this page (200 a page).
+                  next:
+                    type: string
+                    description: With `more`, pass it as `before` for the page after.
         default:
           $ref: '#/components/responses/Error'
   /v1/me/people/blocked:
@@ -23827,7 +23839,7 @@ paths:
       tags:
       - You
       summary: Someone, as you may see them
-      description: 'A person by id as the caller may see them: their name ("Deleted account" for a deleted one), whether
+      description: 'A person by id as the caller may see them: their name ("Deleted account" for a deleted one; a suspended one keeps their name, marked `suspended`, and shows nothing else), whether
         each added the other, their photo, last seen and online where their settings allow (last seen hidden both
         ways), whether read ticks go between them, and their number only when they chose to show it and the caller
         is someone they chat with or added. 404 for no account.'
@@ -41671,6 +41683,9 @@ components:
           description: Their own name; "Deleted account" for a deleted one.
         deleted:
           type: boolean
+        suspended:
+          type: boolean
+          description: The account is suspended, not deleted (it can't get messages right now); only their name is shown.
         contact_name:
           type: [string, 'null']
           description: The name the viewer gave them in their contacts.
@@ -41708,6 +41723,9 @@ components:
           description: Their own name; "Deleted account" for a deleted one.
         deleted:
           type: boolean
+        suspended:
+          type: boolean
+          description: The account is suspended, not deleted (it can't get messages right now); only their name is shown.
         contact_name:
           type: [string, 'null']
           description: The name the viewer gave them in their contacts.
@@ -41748,6 +41766,9 @@ components:
           description: Their own name; "Deleted account" for a deleted one.
         deleted:
           type: boolean
+        suspended:
+          type: boolean
+          description: The account is suspended, not deleted (it can't get messages right now); only their name is shown.
         contact_name:
           type: [string, 'null']
           description: The name the viewer gave them in their contacts.
