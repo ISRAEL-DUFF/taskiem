@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, del, get, post, put } from "../api";
 import { useAuth } from "../auth";
 import { toast } from "../toast";
@@ -45,6 +45,8 @@ import { Copy } from "./Forms";
 import { MoreRows } from "./MoreRows";
 import { AccountFields } from "./PeopleChat";
 import { useSwitch } from "./Switch";
+import { GroupInvites } from "./Groups";
+import { GROUPS_ADD_CHOICES, GROUPS_ADD_HINT } from "../lib/groups";
 
 // Finding people and the settings of chats between people, on You
 // (docs/spec/people-chatting.md §5, §7, §8.1, §11): New chat (by number,
@@ -314,6 +316,7 @@ export function RequestsPage() {
         </Link>
       </p>
       <PageHeader title="Message requests" description="People you haven't chatted with. They are not told you read their message unless you accept." />
+      <GroupInvites />
       <section className="card person-chats" aria-label="Message requests">
         <ErrorBox error={list.error} />
         {!list.rows && !list.error && <Skeleton rows={2} label="Loading your requests…" />}
@@ -543,6 +546,15 @@ export function PeoplePrivacyPage() {
               ))}
             </fieldset>
           ))}
+          <fieldset className="pc-choice people-setting" data-testid="privacy-groups_add">
+            <legend>Who can add me to groups</legend>
+            <span className="hint">{GROUPS_ADD_HINT}</span>
+            {GROUPS_ADD_CHOICES.map((ch) => (
+              <label key={ch.value} className="switch-line">
+                <input type="radio" name="privacy-groups_add" checked={(p.groups_add ?? "contacts") === ch.value} disabled={act.busy} onChange={() => set({ groups_add: ch.value })} /> <span>{ch.words}</span>
+              </label>
+            ))}
+          </fieldset>
           {PRIVACY_SWITCHES.map((s) => (
             <label key={s.key} className="switch-line you-notify-line">
               <input type="checkbox" role="switch" checked={p[s.key]} disabled={act.busy} onChange={(e) => set({ [s.key]: e.target.checked })} data-testid={`privacy-${s.key}`} />{" "}
@@ -647,7 +659,7 @@ export function YouPeopleSettings() {
     { to: "/you/people/contacts", title: "Your contacts", sub: "People you added.", testid: "you-people-contacts" },
     { to: "/you/settings/blocked", title: "Blocked people", sub: "People who can't message you.", testid: "you-people-blocked" },
     { to: "/you/settings/payout", title: "Your bank account", sub: "For 'Your share' cards. Taskiem moves no money.", testid: "you-people-payout" },
-    { to: "/you/people/starred", title: "Starred messages", sub: "Messages you starred in your chats with people.", testid: "you-people-starred" },
+    { to: "/you/people/starred", title: "Starred messages", sub: "Messages you starred in your chats with people and groups.", testid: "you-people-starred" },
     { to: "/you/settings/standing", title: "Your standing", sub: "What Taskiem's moderators decided, and appeals.", testid: "you-people-standing" },
   ];
   return (
@@ -835,12 +847,16 @@ export function PersonLinkPage() {
 /** /you/people/* opened in a business's session (a tapped notification):
  * the chat is the person's own, on You. */
 export function PeopleOnYou() {
-  const { "*": rest = "" } = useParams();
-  const sw = useSwitch(`/you/people/${rest}`);
+  const loc = useLocation();
+  const sw = useSwitch(loc.pathname);
   return (
     <section className="card" data-testid="people-on-you">
       <h1>A chat of your own</h1>
-      <p>This chat is between you and another person, on your own side of Taskiem (You), not in this business.</p>
+      <p>
+        {loc.pathname.startsWith("/you/groups")
+          ? "This group is yours, on your own side of Taskiem (You), not in this business."
+          : "This chat is between you and another person, on your own side of Taskiem (You), not in this business."}
+      </p>
       <button type="button" className="primary" disabled={sw.busy} onClick={() => sw.go("you")} data-testid="people-open-on-you">
         Open it on You
       </button>

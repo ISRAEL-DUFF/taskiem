@@ -50,6 +50,7 @@ import { usePagedList } from "../lib/usePagedList";
 import { AT_FIND_WORDS, atFindState, chatWithPresence, typingWords, checkPlace, FIND_PAGES, type AtFind, mapURL, placeFigures, placeProblem, threadWithGone, threadWithLive, TypingGate, type Place } from "../lib/peoplelive";
 import { livePoll, usePeopleLive } from "./PeopleLive";
 import { useThread } from "../lib/useThread";
+import type { Group } from "../lib/groups";
 import type { PersonOrderDetail, PersonOrders } from "../lib/youorders";
 import { EmptyState, ErrorBox, fmtTime, Items, Modal, Row, Skeleton, useAction, useLoad } from "../ui";
 import { AppAttachmentView } from "./AppCards";
@@ -70,14 +71,14 @@ import { TellMe } from "./PersonChats";
 
 const POLL_MS = 4000;
 
-const REACTION_NAMES: Record<string, string> = { "👍": "thumbs up", "❤️": "heart", "😂": "laughing", "😮": "surprise", "😢": "sad", "🙏": "thanks" };
+export const REACTION_NAMES: Record<string, string> = { "👍": "thumbs up", "❤️": "heart", "😂": "laughing", "😮": "surprise", "😢": "sad", "🙏": "thanks" };
 
 const draftKey = (id: string) => `people:${id}`;
 
 let localN = 0;
 
 /** A photo as a data URL, for its preview while it is sent. */
-const asDataURL = (f: File) =>
+export const asDataURL = (f: File) =>
   new Promise<string | undefined>((done) => {
     if (!f.type.startsWith("image/")) return done(undefined);
     const r = new FileReader();
@@ -792,8 +793,8 @@ export function PeopleChatPage() {
           }}
         />
       )}
-      {c && sheet?.k === "forward" && <ForwardSheet chat={id} m={sheet.m} onClose={() => setSheet(undefined)} />}
-      {c && sheet?.k === "card" && <CardSheet chat={id} m={sheet.m} onClose={() => setSheet(undefined)} />}
+      {c && sheet?.k === "forward" && <ForwardSheet from={{ chat_id: id }} m={sheet.m} onClose={() => setSheet(undefined)} />}
+      {c && sheet?.k === "card" && <CardSheet base={base} m={sheet.m} onClose={() => setSheet(undefined)} />}
       {c && sheet?.k === "share" && <ShareSheet onClose={() => setSheet(undefined)} onSend={shareCard} onSplit={() => setSheet({ k: "split" })} onPlace={() => setSheet({ k: "place" })} />}
       {c && sheet?.k === "place" && <PlaceSheet name={c.name} onClose={() => setSheet(undefined)} onSend={sharePlace} />}
       {c && sheet?.k === "split" && <SplitSheet name={c.name} onClose={() => setSheet(undefined)} onSend={shareCard} />}
@@ -898,11 +899,30 @@ export function PeopleCardView({
 }
 
 /** Delete: for me, or for everyone within 24 hours of sending. */
-function DeleteAsk({ m, onClose, onDelete }: { m: PeopleMessage; onClose: () => void; onDelete: (forEveryone: boolean) => void }) {
+export function DeleteAsk({
+  m,
+  group = false,
+  onClose,
+  onDelete,
+}: {
+  m: Pick<PeopleMessage, "mine" | "deleted" | "local" | "created_at">;
+  /** In a group: everyone's phones, the others' copies. */
+  group?: boolean;
+  onClose: () => void;
+  onDelete: (forEveryone: boolean) => void;
+}) {
   const everyone = mayDeleteForEveryone(m);
   return (
     <Modal title="Delete this message?" onClose={onClose}>
-      <p>{everyone ? "Deleting it for everyone takes it from their phone too. A copy or a screenshot they made before stays." : "It goes from your chat. They keep their copy."}</p>
+      <p>
+        {everyone
+          ? group
+            ? "Deleting it for everyone takes it from everyone's phone in the group. A copy or a screenshot they made before stays."
+            : "Deleting it for everyone takes it from their phone too. A copy or a screenshot they made before stays."
+          : group
+            ? "It goes from your copy of the group. The others keep theirs."
+            : "It goes from your chat. They keep their copy."}
+      </p>
       <div className="row-actions">
         <button type="button" autoFocus onClick={onClose}>
           Cancel
@@ -1070,15 +1090,22 @@ export function PeopleReportSheet({
   );
 }
 
-/** Forward one message to up to five people chats (one for a message
- * forwarded many times). */
-function ForwardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; onClose: () => void }) {
-  const list = usePagedList<PeopleChatList, PeopleChat>("/v1/me/people", (r) => r.chats ?? [], (x) => x.id);
+/** Forward one message to up to five chats with people and groups (one
+ * for a message forwarded many times), from a people chat or a group
+ * (POST /v1/me/forward). */
+export function ForwardSheet({ from, m, onClose }: { from: { chat_id: string } | { group_id: string }; m: Pick<PeopleMessage, "id" | "forwarded_many">; onClose: () => void }) {
+  const people = usePagedList<PeopleChatList, PeopleChat>("/v1/me/people", (r) => r.chats ?? [], (x) => x.id);
+  const groups = usePagedList<{ groups: Group[]; more?: boolean; next?: string }, Group>("/v1/me/groups", (r) => r.groups ?? [], (x) => x.id);
   const [picked, setPicked] = useState<string[]>([]);
   const [failed, setFailed] = useState<string[]>([]);
   const act = useAction();
   const cap = forwardCap(m);
-  const chats = (list.rows ?? []).filter((x) => x.id !== chat && canSendTo(x));
+  const here = "chat_id" in from ? from.chat_id : from.group_id;
+  const targets = [
+    ...(people.rows ?? []).filter((x) => x.id !== here && canSendTo(x)).map((x) => ({ kind: "person" as const, id: x.id, name: x.name })),
+    ...(groups.rows ?? []).filter((g) => g.id !== here && g.can_post && !g.left).map((g) => ({ kind: "group" as const, id: g.id, name: g.name })),
+  ];
+  const nameOf = (id: string) => targets.find((x) => x.id === id)?.name ?? "A chat";
   return (
     <Sheet
       title="Forward to"
@@ -1093,13 +1120,19 @@ function ForwardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; on
           data-testid="people-forward-send"
           onClick={() =>
             void act.run(async () => {
-              const r = await post<{ sent: unknown[]; failed: { chat_id: string; error: string }[] }>("/v1/me/people/forward", { chat_id: chat, message_id: m.id, to: picked });
+              const to = targets.filter((x) => picked.includes(x.id));
+              const r = await post<{ sent: unknown[]; failed: { kind: string; id: string; error: string }[] }>("/v1/me/forward", {
+                ...from,
+                message_id: m.id,
+                to_chats: to.filter((x) => x.kind === "person").map((x) => x.id),
+                to_groups: to.filter((x) => x.kind === "group").map((x) => x.id),
+              });
               const said = forwardSaid(r.sent?.length ?? 0);
               if (said) toast(said);
               if (!r.failed?.length) return onClose();
               // Only the chats it did not reach stay picked, to try again.
-              setFailed(r.failed.map((f) => `${chats.find((x) => x.id === f.chat_id)?.name ?? "A chat"}: ${f.error}`));
-              setPicked(r.failed.map((f) => f.chat_id).filter((id) => picked.includes(id)));
+              setFailed(r.failed.map((f) => `${nameOf(f.id)}: ${f.error}`));
+              setPicked(r.failed.map((f) => f.id).filter((id) => picked.includes(id)));
             }, false)
           }
         >
@@ -1107,8 +1140,8 @@ function ForwardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; on
         </button>
       }
     >
-      {!list.rows && !list.error && <Skeleton rows={2} label="Loading your chats…" />}
-      <ErrorBox error={list.error ?? act.error} />
+      {(!people.rows || !groups.rows) && !people.error && !groups.error && <Skeleton rows={2} label="Loading your chats…" />}
+      <ErrorBox error={people.error ?? groups.error ?? act.error} />
       {failed.length > 0 && (
         <ul className="error" role="alert">
           {failed.map((f) => (
@@ -1116,13 +1149,13 @@ function ForwardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; on
           ))}
         </ul>
       )}
-      {list.rows && chats.length === 0 && !list.more && <p className="hint">No other chats with people yet.</p>}
+      {people.rows && groups.rows && targets.length === 0 && !people.more && !groups.more && <p className="hint">No other chats with people or groups yet.</p>}
       <fieldset className="pc-choice">
         <legend className="sr-only">Chats</legend>
-        {chats.map((x) => {
+        {targets.map((x) => {
           const on = picked.includes(x.id);
           return (
-            <label key={x.id} className="switch-line">
+            <label key={`${x.kind}:${x.id}`} className="switch-line">
               <input
                 type="checkbox"
                 checked={on}
@@ -1130,12 +1163,16 @@ function ForwardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; on
                 onChange={(e) => setPicked((cur) => (e.target.checked ? [...cur, x.id] : cur.filter((y) => y !== x.id)))}
                 data-testid="people-forward-pick"
               />{" "}
-              <span>{x.name}</span>
+              <span>
+                {x.name}
+                {x.kind === "group" && <span className="chat-kind"> · Group</span>}
+              </span>
             </label>
           );
         })}
       </fieldset>
-      <MoreRows more={list.more} busy={list.loadingMore} onMore={list.loadMore} count={list.rows?.length ?? 0} label="Show more chats" />
+      <MoreRows more={people.more} busy={people.loadingMore} onMore={people.loadMore} count={people.rows?.length ?? 0} label="Show more chats" />
+      <MoreRows more={groups.more} busy={groups.loadingMore} onMore={groups.loadMore} count={groups.rows?.length ?? 0} label="Show more groups" />
     </Sheet>
   );
 }
@@ -1145,8 +1182,8 @@ function ForwardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; on
  * their shop; a business's card and Chat with them; an order live only when
  * it is yours. Chat starts the person's own chat with the business, from a
  * shared card (§10.2). */
-function CardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; onClose: () => void }) {
-  const view = useLoad(() => get<OpenedCard>(`/v1/me/people/${encodeURIComponent(chat)}/messages/${encodeURIComponent(m.id)}/card`), [chat, m.id]);
+export function CardSheet({ base, m, onClose }: { base: string; m: Pick<PeopleMessage, "id" | "card">; onClose: () => void }) {
+  const view = useLoad(() => get<OpenedCard>(`${base}/messages/${encodeURIComponent(m.id)}/card`), [base, m.id]);
   const o = view.data;
   const card = o?.card ?? m.card;
   const blocked = view.error instanceof ApiError && view.error.status === 403;
@@ -1228,7 +1265,7 @@ function CardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; onClo
 
 /** Share into the chat: a business, a product, one of your orders, or
  * "Your share". */
-function ShareSheet({ onClose, onSend, onSplit, onPlace }: { onClose: () => void; onSend: (c: CardAsk) => Promise<boolean>; onSplit: () => void; onPlace: () => void }) {
+export function ShareSheet({ onClose, onSend, onSplit, onPlace }: { onClose: () => void; onSend: (c: CardAsk) => Promise<boolean>; onSplit: () => void; onPlace: () => void }) {
   const [step, setStep] = useState<"menu" | "business" | "product" | "order" | { items: string; business: string; name: string }>("menu");
   // One order picked: shared as it is, or its delivery once a rider has it.
   const [order, setOrder] = useState<{ business_id: string; reference: string; business: string }>();
@@ -1367,7 +1404,7 @@ function ShareSheet({ onClose, onSend, onSplit, onPlace }: { onClose: () => void
 
 /** "Your share": an amount, what for, and the account to pay to (yours
  * saved, or typed here). Taskiem moves no money. */
-function SplitSheet({ name, onClose, onSend }: { name: string; onClose: () => void; onSend: (c: CardAsk) => Promise<boolean> }) {
+export function SplitSheet({ name, onClose, onSend }: { name: string; onClose: () => void; onSend: (c: CardAsk) => Promise<boolean> }) {
   const saved = useLoad(() => get<{ account: PayoutAccount | null; words: string }>("/v1/me/payout-account"), []);
   const [amount, setAmount] = useState("");
   const [what, setWhat] = useState("");
@@ -1479,7 +1516,7 @@ export function PlaceView({ place }: { place: Place }) {
 /** Sending a place (§7): where the person is, found only when they ask
  * (the browser asks them then), shown before it is sent, with a name of
  * their own if they like. */
-function PlaceSheet({ name, onClose, onSend }: { name: string; onClose: () => void; onSend: (p: Place) => Promise<boolean> }) {
+export function PlaceSheet({ name, onClose, onSend }: { name: string; onClose: () => void; onSend: (p: Place) => Promise<boolean> }) {
   const [state, setState] = useState<{ k: "ask" } | { k: "finding" } | { k: "found"; lat: number; lng: number; accuracy?: number } | { k: "problem"; words: string }>({ k: "ask" });
   const [label, setLabel] = useState("");
   const act = useAction();

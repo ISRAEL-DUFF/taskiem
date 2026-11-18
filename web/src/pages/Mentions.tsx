@@ -44,6 +44,9 @@ export function useMentions(
   sources: {
     "@": Suggestion[];
     "#": Suggestion[];
+    /** What "@" offers, said to a screen reader ("Members to mention");
+     * linked businesses by default. */
+    atLabel?: string;
     services?: Suggestion[];
     /** The categories "@" offers, when not the items' own. */
     categories?: { name: string; count: number }[];
@@ -196,6 +199,7 @@ export function useMentions(
     setQ(null);
   };
   return {
+    atLabel: sources.atLabel,
     q,
     shown,
     enterPick,
@@ -487,7 +491,7 @@ function PlainList({ m }: { m: Mentions }) {
       className="mention-list"
       aria-label={
         mark === "@"
-          ? "Businesses to mention"
+          ? (m.atLabel ?? "Businesses to mention")
           : mark === "/"
             ? "Things to tag"
             : "Items to mention"

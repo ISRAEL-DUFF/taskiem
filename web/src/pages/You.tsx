@@ -13,6 +13,8 @@ import { Discover, DiscoverBusiness } from "./Discover";
 import { PersonChatList, PersonChatPage, StartChat } from "./PersonChats";
 import { BlockedPage, ContactsPage, PayoutPage, PeoplePrivacyPage, PersonLinkPage, RequestsPage, YouPeopleSettings } from "./People";
 import { PeopleChatPage } from "./PeopleChat";
+import { GroupChatPage } from "./GroupChat";
+import { GroupInfoPage, GroupLinkPage } from "./Groups";
 import { PeopleLiveProvider } from "./PeopleLive";
 import { PeopleSearchPage, PeopleStarredPage } from "./PeopleSearch";
 import { TermsBanner } from "./Signup";
@@ -38,7 +40,7 @@ export function YouApp() {
   if (!me) return null;
   const inBusiness = (me.businesses?.length ?? 0) > 0;
   // A conversation fills the window, as the chat does (§9).
-  const inChat = /^\/you\/chats\/(?!new\b)[^/]+/.test(loc.pathname) || inPeopleChat(loc.pathname);
+  const inChat = /^\/you\/chats\/(?!new\b)[^/]+/.test(loc.pathname) || inPeopleChat(loc.pathname) || inGroup(loc.pathname);
   return (
     <PeopleLiveProvider on={!!me.user}>
     <div className={`you-shell${inChat ? " you-chat" : ""}`}>
@@ -79,6 +81,10 @@ export function YouApp() {
           <Route path="/you/people/starred" element={<PeopleStarredPage />} />
           <Route path="/you/people/requests/:id" element={<PeopleChatRoute />} />
           <Route path="/you/people/:id" element={<PeopleChatRoute />} />
+          <Route path="/you/groups/invites" element={<Navigate to="/you/people/requests" replace />} />
+          <Route path="/you/groups/:id/info" element={<GroupInfoRoute />} />
+          <Route path="/you/groups/:id" element={<GroupChatRoute />} />
+          <Route path="/g/:code" element={<GroupLinkPage />} />
           <Route path="/you/settings/people" element={<PeoplePrivacyPage />} />
           <Route path="/you/settings/blocked" element={<BlockedPage />} />
           <Route path="/you/settings/payout" element={<PayoutPage />} />
@@ -102,6 +108,20 @@ function PersonChatRoute() {
 
 /** A chat with a person (or a request) fills the window, as a business's does. */
 export const inPeopleChat = (path: string) => /^\/you\/people\/(requests\/)?(?!requests$|contacts$|search$|starred$)[^/]+$/.test(path);
+
+/** A group fills the window too (not its info). */
+export const inGroup = (path: string) => /^\/you\/groups\/(?!invites$)[^/]+$/.test(path);
+
+/** A group, made afresh for each group. */
+function GroupChatRoute() {
+  const { id = "" } = useParams();
+  return <GroupChatPage key={id} />;
+}
+
+function GroupInfoRoute() {
+  const { id = "" } = useParams();
+  return <GroupInfoPage key={id} />;
+}
 
 /** A chat with a person, made afresh for each chat. */
 function PeopleChatRoute() {
