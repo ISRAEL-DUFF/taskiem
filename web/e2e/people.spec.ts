@@ -148,8 +148,16 @@ test("two people find each other by number, a request is accepted, and they chat
   await bola.page.getByTestId("you-people-privacy").click();
   await expect(bola.page.getByRole("heading", { name: "Privacy with people" })).toBeVisible();
   await expect(bola.page.getByTestId("privacy-find_by_number").getByLabel("My contacts")).toBeChecked();
-  await expect(bola.page.getByTestId("people-privacy-kept")).toContainText("kept by Taskiem");
-  await expect(bola.page.locator("body")).not.toContainText(/end-to-end|encrypt/i);
+  // The honest words, the app's: kept by Taskiem, its servers can open
+  // them, not end-to-end encrypted, checks on strangers' messages, never ads
+  // or AI, read only on a report or by law.
+  const kept = bola.page.getByTestId("people-privacy-kept");
+  await expect(kept).toContainText("kept by Taskiem");
+  await expect(kept).toContainText("Taskiem’s servers can open them: they are not end-to-end encrypted.");
+  await expect(kept).toContainText("Automated checks look for scams in messages from people you don’t know");
+  await expect(kept).toContainText("never used for ads or to train AI");
+  await expect(kept).toContainText("except a moderator when you report a chat, or when the law requires it");
+  expect(((await bola.page.locator("body").textContent()) ?? "").replace(/they are not end-to-end encrypted/g, "")).not.toMatch(/end-to-end|encrypt/i);
   await check(bola.page, "/you/settings/people", 360);
   const saved = bola.page.waitForResponse((r) => r.url().endsWith("/v1/me/privacy/people") && r.request().method() === "PUT");
   await bola.page.getByTestId("privacy-find_by_number").getByLabel("Everyone").check();
@@ -159,7 +167,9 @@ test("two people find each other by number, a request is accepted, and they chat
   await ada.page.goto("/you");
   await ada.page.getByTestId("people-new-chat-open").click();
   const sheet = ada.page.getByTestId("people-new-chat");
-  await expect(sheet.getByTestId("people-contacts-phone")).toHaveText("Finding friends from your phone's contacts works in the Taskiem app on your phone.");
+  await expect(sheet.getByTestId("people-contacts-phone")).toHaveText(
+    'Finding friends from your phone\'s contacts works in the Taskiem app on your phone, for people whose "Who can find me by my number" lets you find them.',
+  );
   // A number nobody has: Not on Taskiem yet, with Invite.
   await sheet.getByTestId("people-phone").fill("0809 999 0001");
   await sheet.getByTestId("people-find").click();
@@ -181,7 +191,9 @@ test("two people find each other by number, a request is accepted, and they chat
   await ada.page.getByLabel("Message Bola (school)").press("Enter");
   const first = ada.page.getByTestId("people-message").filter({ hasText: "Hello Bola, it's Ada" });
   await expect(first.getByTestId("people-ticks")).toHaveAttribute("data-ticks", /^(sent|delivered)$/);
-  await expect(ada.page.getByTestId("people-waiting")).toBeVisible();
+  // The chat is read again after the first send: the waiting line at once
+  // (well before the next look), and the head says nothing it shouldn't.
+  await expect(ada.page.getByTestId("people-waiting")).toBeVisible({ timeout: 2500 });
   await check(ada.page, "/you/people/{id}, waiting", 390);
 
   // Bola: one request waiting, at the top of the Chats.
@@ -195,6 +207,7 @@ test("two people find each other by number, a request is accepted, and they chat
   await expect(bola.page).toHaveURL(/\/you\/people\/requests\/[0-9a-f-]{36}$/);
   await expect(bola.page.getByTestId("people-message").filter({ hasText: "Hello Bola" })).toBeVisible();
   await expect(bola.page.getByTestId("request-bar")).toBeVisible();
+  await expect(bola.page.getByTestId("people-head-line")).toHaveText("Message request");
   await check(bola.page, "a request opened", 360);
   // Read while a request: Ada is not told.
   await ada.page.waitForTimeout(5000);
@@ -386,10 +399,20 @@ test("a product shared live, a business from Discover, and a 'Your share' card m
   sql(`UPDATE storefront_catalogue SET item = jsonb_set(item, '{price_kobo}', '500000') WHERE tenant_id = '${tenant}' AND row_id = '1'`);
   await card.getByTestId("people-card-open").click();
   const live = bola.page.getByTestId("people-card-sheet");
-  await expect(live.getByTestId("people-card-price")).toHaveText("₦5,000 now");
-  await expect(live.getByTestId("people-card-chat")).toBeVisible();
+  await expect(live.getByTestId("people-card-price")).toHaveText("₦5,000 now (it was ₦4,500 when shared)");
+  await expect(live.getByTestId("people-card-stock")).toHaveText("Available");
+  await expect(live.getByTestId("people-card-order")).toHaveText("Order from their shop");
+  await expect(live.getByTestId("people-card-order")).toHaveAttribute("href", new RegExp(`business=${tenant}&from=shared&tool=shop`));
   await check(bola.page, "a shared product opened", 360);
-  await live.getByRole("button", { name: /Close/ }).first().click();
+  // Order from their shop: Bola's own chat with the business, started from
+  // a shared card (from=shared), its shop open.
+  const started = bola.page.waitForRequest((r) => r.url().endsWith("/v1/me/chats") && r.method() === "POST");
+  const withAda = bola.page.url();
+  await live.getByTestId("people-card-order").click();
+  expect((await started).postDataJSON()).toEqual({ business_id: tenant, from: "shared" });
+  await expect(bola.page).toHaveURL(/\/you\/chats\/[0-9a-f-]{36}$/);
+  await expect(bola.page.getByTestId("shop-sheet")).toBeVisible();
+  await bola.page.goto(withAda);
 
   // A business shared from Discover: pick the chat, and it is sent.
   await ada.page.goto(`/you/discover/${tenant}`);
@@ -397,6 +420,12 @@ test("a product shared live, a business from Discover, and a 'Your share' card m
   await ada.page.getByTestId("share-to-person").getByTestId("share-to-row").filter({ hasText: "Bola" }).getByRole("button").click();
   await expect(ada.page).toHaveURL(new RegExp(`/you/people/${st.chat}$`));
   await expect(ada.page.getByTestId("people-card").filter({ hasText: name }).first()).toBeVisible();
+  // Opened, a business's card offers Chat with them, from a shared card.
+  await ada.page.locator("[data-testid=people-card][data-type=business]").filter({ hasText: name }).first().getByTestId("people-card-open").click();
+  const bizCard = ada.page.getByTestId("people-card-sheet");
+  await expect(bizCard.getByTestId("people-card-chat")).toHaveText("Chat with them");
+  await expect(bizCard.getByTestId("people-card-chat")).toHaveAttribute("href", new RegExp(`business=${tenant}&from=shared$`));
+  await bizCard.getByRole("button", { name: /Close/ }).first().click();
 
   // Ada's bank account for share cards, saved in Settings.
   await ada.page.goto("/you/settings/payout");
@@ -424,4 +453,99 @@ test("a product shared live, a business from Discover, and a 'Your share' card m
   await owed.getByTestId("split-paid").click();
   await expect(owed.getByText("Paid", { exact: true })).toBeVisible();
   await expect(ada.page.getByTestId("people-card").filter({ hasText: "Your share" }).getByText("Paid", { exact: true })).toBeVisible({ timeout: 20_000 });
+});
+
+test("a share asks what for, a refused card is not called sent, a stranger's share is warned, and a forward keeps what failed", async ({ browser }) => {
+  test.setTimeout(240_000);
+  const ada = st.ada as NonNullable<typeof st.ada>;
+  const eko = await person(browser, "Eko Bassey", 360);
+  await eko.page.goto(`/p/${st.adaLink}`);
+  await eko.page.getByTestId("people-found-message").click();
+  await expect(eko.page).toHaveURL(/\/you\/people\/[0-9a-f-]{36}$/);
+
+  // Your share: at least ₦1, and what it is for, before Send.
+  await eko.page.getByTestId("people-share-button").click();
+  await eko.page.getByTestId("share-split").click();
+  const split = eko.page.getByTestId("people-split-sheet");
+  const send = split.getByTestId("split-send");
+  await split.getByTestId("split-amount").fill("0.50");
+  await expect(split).toContainText("At least ₦1");
+  await expect(send).toBeDisabled();
+  await split.getByTestId("split-amount").fill("2,500");
+  await split.getByTestId("account-bank").fill("Opay");
+  await split.getByTestId("account-number").fill("8012345678");
+  await split.getByTestId("account-name").fill("Eko Bassey");
+  await expect(send).toBeDisabled();
+  await expect(split.getByLabel("What for")).toHaveAttribute("required", "");
+  await check(eko.page, "Your share, what for required", 360);
+  // A fee for a prize, to a stranger: held. Said in the chat, never "Sent".
+  await split.getByTestId("split-what").fill("Processing fee to claim your prize");
+  await expect(send).toBeEnabled();
+  await send.click();
+  await expect(eko.page.getByTestId("people-problem")).toContainText("not sent");
+  await expect(eko.page.getByTestId("people-split-sheet")).toHaveCount(0);
+  await expect(eko.page.locator(".toasts .toast-text").filter({ hasText: /^Sent$/ })).toHaveCount(0);
+  await expect(eko.page.getByTestId("people-card")).toHaveCount(0);
+  // A share for the cake goes, as a request, and the waiting line says so.
+  await eko.page.getByTestId("people-share-button").click();
+  await eko.page.getByTestId("share-split").click();
+  await split.getByTestId("split-amount").fill("2,500");
+  await split.getByTestId("account-bank").fill("Opay");
+  await split.getByTestId("account-number").fill("8012345678");
+  await split.getByTestId("account-name").fill("Eko Bassey");
+  await split.getByTestId("split-what").fill("the jollof");
+  await split.getByTestId("split-send").click();
+  await expect(eko.page.getByTestId("people-card").filter({ hasText: "Your share: ₦2,500 for the jollof" })).toBeVisible();
+  await expect(eko.page.locator(".toasts .toast-text").filter({ hasText: /^Sent$/ })).toHaveCount(1);
+  await expect(eko.page.getByTestId("people-waiting")).toBeVisible({ timeout: 2500 });
+
+  // Ada: the request's share card carries the people's transfer warning,
+  // Copy number, and no Mark as paid while it is a request.
+  await ada.page.goto("/you/people/requests");
+  await ada.page.getByTestId("people-request").filter({ hasText: "Eko Bassey" }).click();
+  const owed = ada.page.getByTestId("people-message").filter({ hasText: "the jollof" });
+  await expect(owed.getByTestId("people-transfer-warning")).toHaveText("Be careful with requests to send money to an account. Taskiem never asks you to. Only pay people you know.");
+  await expect(owed.getByTestId("split-copy")).toHaveText("Copy number");
+  await expect(owed.getByTestId("split-paid")).toHaveCount(0);
+  await check(ada.page, "a stranger's share card, warned", 390);
+  await ada.page.getByTestId("request-accept").click();
+  await expect(ada.page).toHaveURL(/\/you\/people\/[0-9a-f-]{36}$/);
+  const ekoChat = /\/you\/people\/([0-9a-f-]{36})$/.exec(ada.page.url())?.[1] ?? "";
+  // The info sheet: the honest words, with no lock.
+  await ada.page.getByRole("button", { name: "More about this chat" }).click();
+  await ada.page.getByTestId("people-info").click();
+  await expect(ada.page.getByTestId("people-kept")).toContainText("they are not end-to-end encrypted");
+  await ada.page.getByTestId("people-info-sheet").getByRole("button", { name: /Close/ }).first().click();
+
+  // Chidi's request accepted too, so Ada has two chats to forward to.
+  await ada.page.goto("/you/people/requests");
+  await ada.page.getByTestId("people-request").filter({ hasText: "Chidi Eze" }).click();
+  await ada.page.getByTestId("request-accept").click();
+  await expect(ada.page).toHaveURL(/\/you\/people\/[0-9a-f-]{36}$/);
+
+  // A forward to Chidi and Eko, Eko's failing: one forwarded, Eko alone
+  // still picked to try again.
+  await ada.page.goto(`/you/people/${st.chat}`);
+  await ada.page.getByLabel("Message Bola (school)").fill("Forward me along");
+  await ada.page.getByLabel("Message Bola (school)").press("Enter");
+  await expect(ada.page.getByTestId("people-message").filter({ hasText: "Forward me along" }).getByTestId("people-ticks")).toBeVisible();
+  await ada.page.route("**/v1/me/people/forward", async (route) => {
+    const res = await route.fetch();
+    const out = (await res.json()) as { sent: { chat_id?: string }[]; failed: { chat_id: string; error: string }[] };
+    out.sent = out.sent.slice(0, 1);
+    out.failed = [{ chat_id: ekoChat, error: "This account can't get messages right now." }];
+    await route.fulfill({ response: res, json: out });
+  });
+  await bubbleMenu(ada.page, "Forward me along", "Forward");
+  const fw = ada.page.getByTestId("people-forward-sheet");
+  const picks = fw.getByTestId("people-forward-pick");
+  await expect(picks.first()).toBeVisible();
+  await expect(picks).toHaveCount(2);
+  for (let i = 0; i < 2; i++) await picks.nth(i).check();
+  await fw.getByTestId("people-forward-send").click();
+  await expect(fw.getByRole("alert")).toContainText("Eko Bassey: This account can't get messages right now.");
+  await expect(ada.page.locator(".toasts .toast-text").filter({ hasText: /^Forwarded$/ })).toHaveCount(1);
+  await expect(fw.locator("label").filter({ hasText: "Eko Bassey" }).getByTestId("people-forward-pick")).toBeChecked();
+  await expect(fw.locator("input[data-testid=people-forward-pick]:checked")).toHaveCount(1);
+  await ada.page.unroute("**/v1/me/people/forward");
 });

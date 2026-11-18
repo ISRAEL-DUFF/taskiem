@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError, del, get, post, put } from "../api";
 import { useAuth } from "../auth";
+import { toast } from "../toast";
 import { Icon } from "../icons";
 import { KitField, Sheet } from "../kit";
 import { listTime } from "../lib/linkchat";
@@ -16,6 +17,7 @@ import {
   PRIVACY_ROWS,
   PRIVACY_SWITCHES,
   rowPreview,
+  sendProblem,
   shownName,
   startWords,
   type Audience,
@@ -23,18 +25,22 @@ import {
   type CardAsk,
   type PayoutAccount,
   type PeopleChat,
+  type PeopleChatList,
   type PeoplePrivacy,
   type PersonCard,
   type PersonContact,
   type PersonFound,
   type PersonLink,
   type PersonLinkCard,
+  type RequestList,
 } from "../lib/people";
+import { usePagedList } from "../lib/usePagedList";
 import { EmptyState, ErrorBox, fmtTime, Items, Modal, PageHeader, Row, Skeleton, useAction, useLoad } from "../ui";
 import { ChatAvatar } from "./ChatAvatar";
 import { ChatRow } from "./ChatRow";
 import { useConfirm } from "./ConfirmSheet";
 import { Copy } from "./Forms";
+import { MoreRows } from "./MoreRows";
 import { AccountFields } from "./PeopleChat";
 import { useSwitch } from "./Switch";
 
@@ -53,8 +59,10 @@ function useStartChat() {
     setProblem(undefined);
     setBusy(true);
     try {
+      // A chat just opened is in no list until its first message: it is
+      // opened from this answer, by its id.
       const c = await post<PeopleChat>("/v1/me/people", body);
-      nav(`/you/people/${encodeURIComponent(c.id)}`);
+      nav(`/you/people/${encodeURIComponent(c.id)}`, { state: { chat: c } });
     } catch (e) {
       setProblem(startWords(e));
     } finally {
@@ -281,8 +289,9 @@ export function NewChatSheet({ onClose }: { onClose: () => void }) {
 
 /** /you/people/requests: strangers' first messages, waiting. */
 export function RequestsPage() {
-  const list = useLoad(() => get<{ requests: PeopleChat[] }>("/v1/me/people/requests"), []);
-  const reqs = list.data?.requests ?? [];
+  // Read again every little while, as the Chats list is, a page at a time.
+  const list = usePagedList<RequestList, PeopleChat>("/v1/me/people/requests", (r) => r.requests ?? [], (c) => c.id, 8000);
+  const reqs = list.rows ?? [];
   return (
     <>
       <p className="crumbs">
@@ -293,8 +302,8 @@ export function RequestsPage() {
       <PageHeader title="Message requests" description="People you haven't chatted with. They are not told you read their message unless you accept." />
       <section className="card person-chats" aria-label="Message requests">
         <ErrorBox error={list.error} />
-        {!list.data && !list.error && <Skeleton rows={2} label="Loading your requests…" />}
-        {list.data && reqs.length === 0 && <EmptyState icon="inbox">No requests waiting.</EmptyState>}
+        {!list.rows && !list.error && <Skeleton rows={2} label="Loading your requests…" />}
+        {list.rows && reqs.length === 0 && <EmptyState icon="inbox">No requests waiting.</EmptyState>}
         {reqs.length > 0 && (
           <ul className="chat-rows" aria-label="Requests" data-testid="people-requests">
             {reqs.map((c) => (
@@ -312,6 +321,7 @@ export function RequestsPage() {
             ))}
           </ul>
         )}
+        <MoreRows more={list.more} busy={list.loadingMore} onMore={list.loadMore} label="Show more requests" testid="people-requests-more" />
       </section>
     </>
   );
@@ -534,7 +544,6 @@ export function PeoplePrivacyPage() {
       <section className="card" aria-labelledby="people-kept-h">
         <h2 id="people-kept-h">How your chats are kept</h2>
         <p data-testid="people-privacy-kept">{KEPT_WORDS}</p>
-        <p className="hint">They are never used for advertising.</p>
       </section>
     </>
   );
@@ -608,6 +617,7 @@ export function PayoutPage() {
 
 /** You's settings: the rows for chats with people. */
 export function YouPeopleSettings() {
+  const [link, setLink] = useState(false);
   const rows: { to: string; title: string; sub: string; testid: string }[] = [
     { to: "/you/settings/people", title: "Privacy with people", sub: "Who can find you, message you, and see when you were last here.", testid: "you-people-privacy" },
     { to: "/you/people/contacts", title: "Your contacts", sub: "People you added.", testid: "you-people-contacts" },
@@ -628,22 +638,65 @@ export function YouPeopleSettings() {
           </Link>
         </div>
       ))}
+      <div className="setting-line">
+        <div className="grow">
+          <strong>Your link and QR code</strong>
+          <div className="sub">Anyone with it can start a chat with you.</div>
+        </div>
+        <button type="button" className="button" aria-expanded={link} onClick={() => setLink(!link)} data-testid="you-people-link">
+          {link ? "Hide" : "Show"}
+          <span className="sr-only"> your link and QR code</span>
+        </button>
+      </div>
+      {link && <YourLink />}
     </section>
   );
 }
 
-/** Share a card (a business, an order) into a chat with a person, from
- * elsewhere on You: pick the chat, and it is sent. */
-export function ShareToPerson({ card, what, onClose }: { card: CardAsk; what: string; onClose: () => void }) {
-  const list = useLoad(() => get<{ chats: PeopleChat[] }>("/v1/me/people"), []);
+/** Share a card (a business, a product, an order) into a chat with a
+ * person, from elsewhere on You: pick what (when there is a choice, as an
+ * order or its delivery) and the chat, and it is sent. A refusal (held by
+ * the checks, not taken) is said here, in the server's words. */
+export function ShareToPerson({
+  card,
+  what,
+  options,
+  onClose,
+}: {
+  card: CardAsk;
+  what: string;
+  /** Another choice of what to send (an order, or its delivery). */
+  options?: { label: string; card: CardAsk }[];
+  onClose: () => void;
+}) {
+  const list = usePagedList<PeopleChatList, PeopleChat>("/v1/me/people", (r) => r.chats ?? [], (c) => c.id);
   const nav = useNavigate();
   const act = useAction();
-  const chats = (list.data?.chats ?? []).filter(canSendTo);
+  const [pick, setPick] = useState(0);
+  const [problem, setProblem] = useState<string>();
+  const choices = options && options.length > 1 ? options : undefined;
+  const sending = choices ? (choices[pick]?.card ?? card) : card;
+  const chats = (list.rows ?? []).filter(canSendTo);
   return (
     <Sheet title={`Share ${what}`} onClose={onClose} testid="share-to-person">
-      {!list.data && !list.error && <Skeleton rows={2} label="Loading your chats…" />}
+      {!list.rows && !list.error && <Skeleton rows={2} label="Loading your chats…" />}
       <ErrorBox error={list.error ?? act.error} />
-      {list.data && chats.length === 0 && <EmptyState icon="chat">Start a chat with someone first: New chat on your Chats.</EmptyState>}
+      {problem && (
+        <p className="error" role="alert" data-testid="share-to-problem">
+          {problem}
+        </p>
+      )}
+      {choices && (
+        <fieldset className="pc-choice" data-testid="share-to-what">
+          <legend>What to share</legend>
+          {choices.map((o, i) => (
+            <label key={o.label} className="switch-line">
+              <input type="radio" name="share-to-what" checked={pick === i} onChange={() => setPick(i)} /> <span>{o.label}</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
+      {list.rows && chats.length === 0 && !list.more && <EmptyState icon="chat">Start a chat with someone first: New chat on your Chats.</EmptyState>}
       <Items label="Your chats with people">
         {chats.map((c) => (
           <Row key={c.id} letter={c.name} image={photoOf(c.person)} title={c.name} testid="share-to-row">
@@ -651,18 +704,33 @@ export function ShareToPerson({ card, what, onClose }: { card: CardAsk; what: st
               type="button"
               className="small primary"
               disabled={act.busy}
-              onClick={() =>
-                void act.run(async () => {
-                  await post(`/v1/me/people/${encodeURIComponent(c.id)}/messages`, { card, client_id: `share-${Date.now()}` });
-                  nav(`/you/people/${encodeURIComponent(c.id)}`);
-                }, `Shared with ${c.name}`)
-              }
+              onClick={() => {
+                setProblem(undefined);
+                let refused = false;
+                void act
+                  .run(async () => {
+                    try {
+                      await post(`/v1/me/people/${encodeURIComponent(c.id)}/messages`, { card: sending, client_id: `share-${Date.now()}` });
+                    } catch (e) {
+                      const said = sendProblem(e);
+                      if (!said) throw e;
+                      refused = true;
+                      setProblem(said);
+                    }
+                  }, false)
+                  .then((ok) => {
+                    if (!ok || refused) return;
+                    toast(`Shared with ${c.name}`);
+                    nav(`/you/people/${encodeURIComponent(c.id)}`);
+                  });
+              }}
             >
               Send<span className="sr-only"> to {c.name}</span>
             </button>
           </Row>
         ))}
       </Items>
+      <MoreRows more={list.more} busy={list.loadingMore} onMore={list.loadMore} label="Show more chats" />
     </Sheet>
   );
 }

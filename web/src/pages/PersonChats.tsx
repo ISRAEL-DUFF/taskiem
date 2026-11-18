@@ -44,9 +44,11 @@ import { ChatRow } from "./ChatRow";
 import { ChatStream } from "./ChatStream";
 import { useConfirm } from "./ConfirmSheet";
 import { BookSheet, OrdersSheet, PayButton, ShopSheet, ToolsMenu, type PersonTool } from "./PersonTools";
-import { NewChatSheet } from "./People";
+import { NewChatSheet, ShareToPerson } from "./People";
 import { peopleDraft } from "./PeopleChat";
-import { photoOf as peoplePhoto, requestsWords, rowPath, rowPreview, type ChatList } from "../lib/people";
+import { photoOf as peoplePhoto, requestsWords, rowKey, rowPath, rowPreview, type ChatList, type ChatListItem } from "../lib/people";
+import { usePagedList } from "../lib/usePagedList";
+import { MoreRows } from "./MoreRows";
 
 // A person's chats with businesses, on their own side (You;
 // docs/spec/taskiem-for-everyone.md §7, §8.3, §9, §15): the list, a
@@ -109,19 +111,12 @@ function keepPhoto(business: string, url: string | undefined) {
 export function PersonChatList() {
   const [archived, setArchived] = useState(false);
   const [finding, setFinding] = useState(false);
-  // Each answer says which list it is, so a toggle never shows the other's
-  // rows while its own are on their way.
-  const list = useLoad(
-    () => get<ChatList>(`/v1/me/conversations${archived ? "?archived=1" : ""}`).then((r) => ({ ...r, archived })),
-    [archived],
-  );
-  const reload = list.reload;
-  useEffect(() => {
-    const t = setInterval(() => document.visibilityState === "visible" && reload(), POLL_MS * 2);
-    return () => clearInterval(t);
-  }, [reload]);
-  const data = list.data?.archived === archived ? list.data : undefined;
-  const chats = data?.chats ?? [];
+  // A page at a time (200 a page), the first read again every little
+  // while; each list (archived or not) is its own, so a toggle never shows
+  // the other's rows while its own are on their way.
+  const list = usePagedList<ChatList, ChatListItem>(`/v1/me/conversations${archived ? "?archived=1" : ""}`, (r) => r.chats ?? [], rowKey, POLL_MS * 2);
+  const data = list.head;
+  const chats = list.rows ?? [];
   const requests = data?.requests ?? 0;
   return (
     <section className="card person-chats" aria-labelledby="you-chats">
@@ -150,7 +145,7 @@ export function PersonChatList() {
         </Link>
       )}
       {!data && !list.error && <Skeleton rows={2} label="Loading your chats…" />}
-      {data && chats.length === 0 && (
+      {data && list.rows && chats.length === 0 && (
         <EmptyState icon="chat">
           {archived ? "No archived chats." : "Your chats with businesses and people will show here. Find a business in Discover, or start a New chat with someone."}
         </EmptyState>
@@ -165,18 +160,19 @@ export function PersonChatList() {
                 key={`${c.kind}:${c.id}`}
                 to={rowPath(c)}
                 letter={c.name}
-                logo={person ? peoplePhoto(c.person) : c.business_id ? photoOf(c.business_id) : undefined}
+                logo={person ? peoplePhoto(c.person) : (photoURL(c.photo) ?? (c.business_id ? photoOf(c.business_id) : undefined))}
                 title={
                   <>
                     {c.name}
-                    {person ? (
-                      <span className="sr-only"> (a person)</span>
-                    ) : (
-                      <span className="chat-kind" data-testid="chat-kind">
-                        Business
-                      </span>
-                    )}
+                    <span className="sr-only">{person ? " (a person)" : " (a business)"}</span>
                   </>
+                }
+                mark={
+                  person ? undefined : (
+                    <span className="chat-kind" data-testid="chat-kind" aria-hidden="true">
+                      Business
+                    </span>
+                  )
                 }
                 time={listTime(c.last_at)}
                 preview={
@@ -196,6 +192,7 @@ export function PersonChatList() {
           })}
         </ul>
       )}
+      <MoreRows more={list.more} busy={list.loadingMore} onMore={list.loadMore} label="Show more chats" testid="person-chats-more" />
       {finding && <NewChatSheet onClose={() => setFinding(false)} />}
     </section>
   );
@@ -217,7 +214,11 @@ export function StartChat() {
     const code = q.get("code");
     const business = q.get("business");
     const ref = q.get("ref");
-    const from = ref ? "order" : q.get("from") === "discover" ? "discover" : "shop";
+    // Where the chat starts from: an order, Discover, a card a friend shared
+    // (people-chatting §10.2: the business sees a new customer, not who
+    // shared it), else its shop.
+    const asked = q.get("from");
+    const from = ref ? "order" : asked === "discover" || asked === "shared" ? asked : "shop";
     const tool = q.get("tool");
     const body = code ? { code } : { business_id: business, from };
     if (!code && !business) {
@@ -298,6 +299,8 @@ export function PersonChatPage() {
     nav(`${loc.pathname}${loc.search}`, { replace: true, state: left });
   }, []);
   const [reporting, setReporting] = useState(false);
+  // Share the business, or one of its products, with someone (§10.1).
+  const [sharing, setSharing] = useState<{ item?: { id: string; name: string } }>();
   const [orders, setOrders] = useState<DoorOrder[]>();
   const act = useAction();
   const sure = useConfirm();
@@ -437,7 +440,7 @@ export function PersonChatPage() {
       void send(s.text, s.file);
     },
     enabled: !!c && !c.blocked && !c.blocked_you && !erased,
-    closes: [!!tool, reporting],
+    closes: [!!tool, reporting, !!sharing],
   });
 
   // The offers question is asked once: answered, or shown and passed over
@@ -544,6 +547,9 @@ export function PersonChatPage() {
                       {c.offers === "yes" ? stopOffersWords(c.name) : `Get offers from ${c.name}`}
                     </button>
                   )}
+                  <button type="button" role="menuitem" onClick={() => (close(), setSharing({}))} data-testid="person-share">
+                    Share {c.name} with someone
+                  </button>
                   <button type="button" role="menuitem" onClick={() => (close(), void block())} data-testid="person-block">
                     {c.blocked ? `Unblock ${c.name}` : `Block ${c.name}`}
                   </button>
@@ -725,6 +731,10 @@ export function PersonChatPage() {
           business={c.name}
           from={tool.from}
           startItem={tool.item}
+          onShare={(it) => {
+            setTool(undefined);
+            setSharing({ item: it });
+          }}
           onClose={() => setTool(undefined)}
           onPlaced={() => {
             void pull(false);
@@ -746,6 +756,13 @@ export function PersonChatPage() {
         />
       )}
       {c && (tool?.key === "orders" || tool?.key === "pay") && <OrdersSheet chat={id} business={c.name} from={tool.from} only={tool.key === "pay" ? "pay" : undefined} onClose={() => setTool(undefined)} />}
+      {c && sharing && (
+        <ShareToPerson
+          card={sharing.item ? { type: "product", business_id: c.business, item_id: sharing.item.id } : { type: "business", business_id: c.business }}
+          what={sharing.item ? sharing.item.name : c.name}
+          onClose={() => setSharing(undefined)}
+        />
+      )}
       {c && reporting && (
         <ReportSheet
           chat={id}
@@ -767,7 +784,7 @@ export function PersonChatPage() {
  * person's own device, so a business's answer is pushed here (and not
  * texted). Where the browser cannot take a push (an iPhone's browser not
  * on the Home Screen, or the server has no keys), they are texted. */
-function TellMe() {
+export function TellMe({ people = false }: { people?: boolean }) {
   const [state, setState] = useState<"look" | "ask" | "busy" | "on" | "text" | "denied" | "failed">("look");
   useEffect(() => {
     let live = true;
@@ -782,6 +799,9 @@ function TellMe() {
     };
   }, []);
   if (state === "look") return null;
+  // A person's answer is never texted: where this browser can't take a
+  // push, nothing is offered (people-chatting §7).
+  if (people && (state === "text" || state === "denied")) return null;
   return (
     <p className="pc-push-line" data-testid="tell-me-line" role="status">
       {state === "ask" || state === "busy" || state === "failed" ? (

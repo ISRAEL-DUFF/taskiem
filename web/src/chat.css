@@ -550,6 +550,7 @@ img.tk-live-tile { object-fit: cover; }
 .pc-tile:disabled { opacity: 0.55; cursor: not-allowed; }
 .pc-item { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
 .pc-item:last-child { border-bottom: 0; }
+.pc-item-share { align-self: flex-start; padding: 2px 0; font-size: 13px; }
 .pc-item-photo { flex: none; width: 52px; height: 52px; border-radius: 14px; object-fit: cover; }
 .pc-size { margin-top: 6px; max-width: 100%; }
 .pc-check { display: flex; flex-direction: column; gap: 12px; }
@@ -603,7 +604,8 @@ img.tk-live-tile { object-fit: cover; }
 
 /* Chats with people (docs/spec/people-chatting.md): the one list's marks and
    Requests, a request's bar, finding people, a person's link and QR code. */
-.chat-kind { margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--muted); }
+.chat-kind { flex: none; font-size: 12px; font-weight: 500; color: var(--muted); }
+.more-rows { display: flex; justify-content: center; padding: 8px 0; }
 .people-requests-entry { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin: 0 0 8px; border-radius: 12px; background: var(--tk-soft); color: var(--text); text-decoration: none; font-weight: 600; }
 .people-requests-entry .grow { flex: 1; min-width: 0; }
 .people-requests-entry svg { width: 20px; height: 20px; flex: none; }

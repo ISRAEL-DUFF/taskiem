@@ -14,6 +14,7 @@ export function ChatRow({
   letter,
   logo,
   title,
+  mark,
   time,
   preview,
   lead,
@@ -30,6 +31,8 @@ export function ChatRow({
   /** The logo's address, when the business has one. */
   logo?: string;
   title: ReactNode;
+  /** After the name, outside its ellipsis: a kind's mark ("Business"). */
+  mark?: ReactNode;
   time?: string;
   preview: ReactNode;
   /** Before the preview: the ticks of our own last message. */
@@ -61,6 +64,7 @@ export function ChatRow({
         <span className="chat-row-main">
           <span className="chat-row-top">
             <span className="title">{title}</span>
+            {mark}
             {time && (
               <span className={`chat-row-time${unread > 0 ? " unread" : ""}`}>
                 {time}

@@ -351,7 +351,19 @@ export function YouOrder() {
             </button>
           </div>
           {sharing && (
-            <ShareToPerson card={{ type: o.delivery ? "delivery" : "order", business_id: o.business_id, reference: o.reference }} what={`order ${o.reference}`} onClose={() => setSharing(false)} />
+            <ShareToPerson
+              card={{ type: "order", business_id: o.business_id, reference: o.reference }}
+              what={`order ${o.reference}`}
+              options={
+                o.delivery
+                  ? [
+                      { label: "The order", card: { type: "order", business_id: o.business_id, reference: o.reference } },
+                      { label: "Its delivery", card: { type: "delivery", business_id: o.business_id, reference: o.reference } },
+                    ]
+                  : undefined
+              }
+              onClose={() => setSharing(false)}
+            />
           )}
           {o.delivery && (
             <section className="card" aria-labelledby="you-order-delivery">

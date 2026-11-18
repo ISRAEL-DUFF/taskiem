@@ -816,6 +816,8 @@ for (const scheme of ["light", "dark"] as const)
         r.fulfill(json({ account: { bank: "GTBank", account_number: "0123456789", account_name: "Ada Obi" }, checked: false, words: "Taskiem does not check this account and moves no money." })),
       );
       await page.route("**/v1/people/lookup", (r) => r.fulfill(json({ found: true, person: card("p5", { name: "Chidi Eze", in_contacts: false }), add_token: "t" })));
+      // A people chat offers "Tell me when they answer" when the server has keys.
+      await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ public_key: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" })));
       await page.route("**/v1/me/link", (r) => r.fulfill(json({ code: "ab23cd45ef", url: "http://localhost/p/ab23cd45ef", created_at: now, words: "Chat with me", qr: "/brand/seal/mark-512.png" })));
 
       await page.goto("/you");

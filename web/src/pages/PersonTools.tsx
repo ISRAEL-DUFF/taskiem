@@ -70,6 +70,7 @@ export function ShopSheet({
   business,
   from,
   startItem,
+  onShare,
   onClose,
   onPlaced,
 }: {
@@ -78,6 +79,8 @@ export function ShopSheet({
   from?: DOMRect | null;
   /** A product card's item, put in the basket. */
   startItem?: string;
+  /** Share a product with someone (people chats, §10.1). */
+  onShare?: (it: { id: string; name: string }) => void;
   onClose: () => void;
   onPlaced: (o: DoorOrder) => void;
 }) {
@@ -217,6 +220,7 @@ export function ShopSheet({
                   qty={qty}
                   size={sizeOf[it.id] ?? ""}
                   setSize={(v) => setSizeOf((m) => ({ ...m, [it.id]: v }))}
+                  onShare={onShare}
                   change={(line, by) => {
                     key.current = "";
                     setLines((cur) => changeBasket(cur, line, by));
@@ -353,8 +357,10 @@ function ShopRow({
   size,
   setSize,
   change,
+  onShare,
 }: {
   it: ShopItem;
+  onShare?: (it: { id: string; name: string }) => void;
   open: boolean;
   qty: (id: string) => number;
   size: string;
@@ -380,6 +386,11 @@ function ShopRow({
         </span>
         {few && <span className="tk-row-warn">{few}</span>}
         {chosen && fewLeftWords(chosen.few_left) && <span className="tk-row-warn">{fewLeftWords(chosen.few_left)}</span>}
+        {onShare && (
+          <button type="button" className="link pc-item-share" onClick={() => onShare({ id: it.id, name: it.name })} data-testid="shop-item-share">
+            Share with someone<span className="sr-only"> {it.name}</span>
+          </button>
+        )}
         {sizes.length > 0 && (
           <select className="pc-size" aria-label={`Size and colour of ${it.name}`} value={size} onChange={(e) => setSize(e.target.value)}>
             <option value="">Choose size and colour</option>

@@ -10,6 +10,7 @@
 import { ApiError } from "../api";
 import { clock, dayLabel } from "./linkchat";
 import type { DeliveryProgress } from "./personchat";
+import type { OrderPhoto } from "./youorders";
 
 export type Audience = "everyone" | "contacts" | "nobody";
 
@@ -23,6 +24,8 @@ export interface PersonCard {
   id: string;
   name: string;
   deleted: boolean;
+  /** Suspended, not deleted: their name only, and no messages for now. */
+  suspended?: boolean;
   contact_name: string | null;
   in_contacts: boolean;
   they_added_you: boolean;
@@ -87,8 +90,11 @@ export interface ChatListItem {
   id: string;
   name: string;
   business_id?: string;
+  /** A business row: its logo, by width. */
+  photo?: OrderPhoto;
   person_id?: string;
   gone?: boolean;
+  suspended?: boolean;
   last: string;
   last_mine: boolean;
   last_at: string;
@@ -100,10 +106,30 @@ export interface ChatListItem {
   person?: PersonCard;
 }
 
-export interface ChatList {
+/** A page of a list: `more` says another follows, `next` (passed as
+ * `before`) asks for it. */
+export interface Paged {
+  more?: boolean;
+  next?: string;
+}
+
+export interface ChatList extends Paged {
   chats: ChatListItem[];
+  /** Unread in the whole list, not this page alone. */
   unread: number;
   requests: number;
+}
+
+/** GET /v1/me/people. */
+export interface PeopleChatList extends Paged {
+  chats: PeopleChat[];
+  unread: number;
+  requests: number;
+}
+
+/** GET /v1/me/people/requests. */
+export interface RequestList extends Paged {
+  requests: PeopleChat[];
 }
 
 /** A chat with a person, the person's own copy. */
@@ -113,6 +139,8 @@ export interface PeopleChat {
   person_id: string;
   name: string;
   gone: boolean;
+  /** Their account is suspended: it can't get messages right now. */
+  suspended?: boolean;
   last: string;
   last_mine: boolean;
   last_at: string;
@@ -221,10 +249,20 @@ export interface BlockedPerson {
 
 // --- words ---
 
-/** How people chats are kept, for a chat's info (§6.2, §6.3). Plain, and
- * never a word that suggests only the two people can read them. */
+/** How people chats are kept and who reads them, for a chat's info and the
+ * privacy page (§6.2, §6.3): the app's `peopleKeptWords`, word for word.
+ * Honest: kept by Taskiem and readable by its servers, so not end-to-end
+ * encrypted. Wording for legal review (§17 Q13). */
 export const KEPT_WORDS =
-  "Chats with people are kept by Taskiem, stored securely on its servers. No one at Taskiem reads them, except a moderator when a chat is reported to us, or when the law requires it.";
+  "Your chats with people are kept by Taskiem, sealed on its servers, so they show on every phone you sign in on. " +
+  "Taskiem’s servers can open them: they are not end-to-end encrypted. " +
+  "No one at Taskiem reads them, except a moderator when you report a chat, or when the law requires it. " +
+  "Automated checks look for scams in messages from people you don’t know. Your chats are never used for ads or to train AI.";
+
+/** Under a stranger's message or share card asking for a transfer to an
+ * account (§8.4): the app's `peopleTransferWarning`. Not the business
+ * chats' words, which are about pay links. */
+export const PEOPLE_TRANSFER_WARNING = "Be careful with requests to send money to an account. Taskiem never asks you to. Only pay people you know.";
 
 /** What the report sheet asks consent for (§8.3). */
 export const REPORT_CONSENT = "Send the last 20 messages of this chat to Taskiem's moderators, so they can see what happened.";
@@ -233,7 +271,7 @@ export const REPORT_CONSENT = "Send the last 20 messages of this chat to Taskiem
 export const SCAM_WARNING = "Be careful: this message looks like a scam. Never send a code, a PIN or money to someone you don't know.";
 
 /** Contacts on the web: matching works only from a phone (§5.3). */
-export const CONTACTS_ON_PHONE = "Finding friends from your phone's contacts works in the Taskiem app on your phone.";
+export const CONTACTS_ON_PHONE = "Finding friends from your phone's contacts works in the Taskiem app on your phone, for people whose \"Who can find me by my number\" lets you find them.";
 
 /** The name the viewer shows for someone: the name they gave them, else theirs. */
 export function shownName(p: { name: string; contact_name?: string | null; deleted?: boolean }): string {
@@ -267,9 +305,11 @@ export type TickState = "sending" | "sent" | "delivered" | "read";
 /** Our message's ticks: one while not delivered, two once it is, coloured
  * only when the answer says it was read (read ticks off on either side,
  * or a request not accepted yet, never say so). */
-export function tickState(m: Pick<PeopleMessage, "local" | "status">): TickState {
+export function tickState(m: Pick<PeopleMessage, "local" | "status">, readTicks = true): TickState {
   if (m.local) return "sending";
-  if (m.status === "read") return "read";
+  // Read ticks off between the two: never read, whatever came (the server
+  // hides it too; this is a backstop).
+  if (m.status === "read") return readTicks ? "read" : "delivered";
   if (m.status === "delivered") return "delivered";
   return "sent";
 }
@@ -298,8 +338,10 @@ export function rowPath(c: Pick<ChatListItem, "kind" | "id">): string {
 }
 
 /** A row's last line. */
-export function rowPreview(c: Pick<ChatListItem, "last" | "last_mine" | "blocked" | "waiting" | "gone">): string {
+export function rowPreview(c: Pick<ChatListItem, "last" | "last_mine" | "blocked" | "waiting" | "gone" | "suspended">): string {
+  if (c.gone) return "This account was deleted";
   if (c.blocked) return "You blocked them";
+  if (c.suspended) return "Can't get messages right now";
   if (!c.last) return c.waiting ? "Waiting for them to accept" : "No messages yet";
   return `${c.last_mine ? "You: " : ""}${c.last}`;
 }
@@ -415,7 +457,11 @@ export const PRIVACY_ROWS: PrivacyRow[] = [
 export const PRIVACY_SWITCHES: { key: "read_ticks" | "show_number" | "find_from_contacts"; label: string; hint: string }[] = [
   { key: "read_ticks", label: "Read ticks", hint: "Off: people don't see when you read their messages, and you don't see when they read yours." },
   { key: "show_number", label: "Show my number", hint: "To people you chat with or added. Off: they see your name only." },
-  { key: "find_from_contacts", label: "Find me from contacts", hint: "People who have your number in their phone's contacts can find you in the Taskiem app." },
+  {
+    key: "find_from_contacts",
+    label: "Find me from contacts",
+    hint: "People who have your number in their phone's contacts can find you in the Taskiem app, when \"Who can find me by my number\" lets them.",
+  },
 ];
 
 /** What a refused send says, in the sender's chat: the server's plain words
@@ -454,7 +500,86 @@ export function withLatestPeople(cur: PeopleMessage[], page: PeopleMessage[], mo
 }
 
 /** A chat's line in a share picker: the chats a card or a forward may go to
- * (requests waiting, blocked people and deleted accounts take nothing). */
-export function canSendTo(c: Pick<PeopleChat, "gone" | "blocked" | "request">): boolean {
-  return !c.gone && !c.blocked && !c.request;
+ * (requests waiting, blocked people, deleted and suspended accounts take
+ * nothing). */
+export function canSendTo(c: Pick<PeopleChat, "gone" | "blocked" | "request" | "suspended">): boolean {
+  return !c.gone && !c.blocked && !c.request && !c.suspended;
+}
+
+/** The line under a person's name in a chat's head: what the chat is first
+ * (a deleted account, a request, blocked, suspended), else online or last
+ * seen and their number, as both settings let. */
+export function headWords(c: Pick<PeopleChat, "gone" | "request" | "blocked" | "suspended" | "phone" | "person"> | undefined, now: Date = new Date()): string {
+  if (!c) return "";
+  if (c.gone) return "Deleted account";
+  if (c.request) return "Message request";
+  if (c.blocked) return "Blocked";
+  if (c.suspended) return "Can't get messages right now";
+  return [lastSeenWords(c.person, now), c.phone ? phoneWords(c.phone) : ""].filter(Boolean).join(" · ");
+}
+
+/** Why a chat takes no messages now, for the place of its composer; null
+ * when it takes them. */
+export function closedWords(c: Pick<PeopleChat, "gone" | "suspended"> | undefined): string | null {
+  if (!c) return null;
+  if (c.gone) return "This account was deleted, so this chat takes no more messages.";
+  if (c.suspended) return "This account can't get messages right now.";
+  return null;
+}
+
+/** A row's key across kinds. */
+export const rowKey = (c: { kind?: string; id: string }) => `${c.kind ?? "person"}:${c.id}`;
+
+/** The rows after the next page came: what was there, then the page's rows
+ * not already in it. */
+export function appendPage<T>(cur: T[], page: T[], key: (t: T) => string): T[] {
+  const seen = new Set(cur.map(key));
+  return [...cur, ...page.filter((t) => !seen.has(key(t)))];
+}
+
+/** The rows after the first page was read again (a poll): the first page in
+ * place of what it covers, and rows of later pages already read kept after
+ * it, unless the first page is now the whole list. */
+export function withFirstPage<T>(cur: T[], first: T[], key: (t: T) => string, more: boolean, laterRead: boolean): T[] {
+  if (!more || !laterRead) return first;
+  const seen = new Set(first.map(key));
+  return [...first, ...cur.filter((t) => !seen.has(key(t)))];
+}
+
+/** A list's address for the page after `next`. */
+export function pageURL(base: string, next?: string): string {
+  if (!next) return base;
+  return `${base}${base.includes("?") ? "&" : "?"}before=${encodeURIComponent(next)}`;
+}
+
+/** A "Your share" card's amount, typed: its kobo when it is at least ₦1
+ * (the server's floor), else undefined. */
+export const SPLIT_MIN_KOBO = 100;
+export function splitReady(kobo: number | undefined, what: string): boolean {
+  return kobo !== undefined && !Number.isNaN(kobo) && kobo >= SPLIT_MIN_KOBO && what.trim().length > 0;
+}
+
+/** A shared product opened live: its price now, and what it was when shared
+ * when that differs. */
+export function priceNowWords(now: number | undefined, shared: number | undefined, naira: (kobo: number) => string = nairaPlain): string {
+  if (now === undefined) return "";
+  return shared !== undefined && shared !== now ? `${naira(now)} now (it was ${naira(shared)} when shared)` : `${naira(now)} now`;
+}
+
+/** Whether it is still sold, and how many are left when few. */
+export function stockWords(p: { available: boolean; few_left?: number }): string {
+  if (!p.available) return "Not available right now";
+  return p.few_left !== undefined && p.few_left > 0 ? `Only ${p.few_left} left` : "Available";
+}
+
+/** Where a shared card's Chat goes: the person's own chat with the business,
+ * started from a shared card (§10.2), its shop open for Order. */
+export function sharedChatPath(business: string, tool?: "shop"): string {
+  return `/you/chats/new?business=${encodeURIComponent(business)}&from=shared${tool ? `&tool=${tool}` : ""}`;
+}
+
+/** The forward's answer, said: how many went, and what failed by chat. */
+export function forwardSaid(sent: number): string | false {
+  if (sent === 0) return false;
+  return sent === 1 ? "Forwarded" : `Forwarded to ${sent} chats`;
 }

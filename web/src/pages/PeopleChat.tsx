@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError, del, get, post, put, upload } from "../api";
 import { Icon } from "../icons";
+import { toast } from "../toast";
 import { KitField, Pill, Sheet } from "../kit";
 import { getDraft } from "../lib/drafts";
 import { naira, toKobo } from "../lib/invoices";
@@ -10,20 +11,28 @@ import {
   accountDigits,
   canSendTo,
   cardKind,
+  closedWords,
   forwardCap,
+  forwardSaid,
   forwardWords,
+  headWords,
   KEPT_WORDS,
   lastSeenWords,
   mayDeleteForEveryone,
   mergePeople,
   messageLine,
   peopleFileURL,
+  PEOPLE_TRANSFER_WARNING,
   phoneWords,
   photoOf,
+  priceNowWords,
   REPORT_CONSENT,
   SCAM_WARNING,
   sendProblem,
+  sharedChatPath,
+  splitReady,
   splitTitle,
+  stockWords,
   tickState,
   TICK_WORDS,
   withLatestPeople,
@@ -33,11 +42,13 @@ import {
   type PayoutAccount,
   type PeopleCard,
   type PeopleChat,
+  type PeopleChatList,
   type PeopleMessage,
 } from "../lib/people";
-import { clientFor, mayHaveArrived, REPORT_REASONS, TRANSFER_WARNING, type KeptSend, type ShopItem } from "../lib/personchat";
+import { clientFor, mayHaveArrived, REPORT_REASONS, type KeptSend, type ShopItem } from "../lib/personchat";
+import { usePagedList } from "../lib/usePagedList";
 import { useThread } from "../lib/useThread";
-import type { PersonOrders } from "../lib/youorders";
+import type { PersonOrderDetail, PersonOrders } from "../lib/youorders";
 import { EmptyState, ErrorBox, fmtTime, Items, Modal, Row, Skeleton, useAction, useLoad } from "../ui";
 import { AppAttachmentView } from "./AppCards";
 import { BubbleShell, CopyItem, PopItem } from "./BubbleShell";
@@ -46,6 +57,8 @@ import { BUSINESS_FILES, ComposerView, useComposer } from "./ChatComposer";
 import { ChatHead } from "./ChatHead";
 import { ChatStream } from "./ChatStream";
 import { useConfirm } from "./ConfirmSheet";
+import { MoreRows } from "./MoreRows";
+import { TellMe } from "./PersonChats";
 
 // A chat with a person on You (docs/spec/people-chatting.md §7, §8, §10.1,
 // §11): the messages with their ticks, replies, reactions, stars, forwards,
@@ -73,8 +86,8 @@ const asDataURL = (f: File) =>
 
 /** The ticks under a message of ours: one until it is delivered, two once
  * it is, coloured only when the answer says they read it. */
-export function PeopleTicks({ m }: { m: Pick<PeopleMessage, "local" | "status"> }) {
-  const t = tickState(m);
+export function PeopleTicks({ m, readTicks = true }: { m: Pick<PeopleMessage, "local" | "status">; readTicks?: boolean }) {
+  const t = tickState(m, readTicks);
   if (t === "sending")
     return (
       <span className="ticks pending" role="img" aria-label="Sending">
@@ -182,7 +195,10 @@ export function PeopleChatPage() {
         out = await upload<PeopleMessage>(`${base}/files`, form);
       } else out = await post<PeopleMessage>(`${base}/messages`, { text, client_id: client, reply_to: reply?.id });
       setMessages((cur) => mergePeople((cur ?? []).filter((m) => m.id !== mine.id), [out]));
-      if (c?.request) reloadChat();
+      setSendError(undefined);
+      // The first message to someone (a request now waiting for them), or
+      // an answer to a request: the chat says so at once, not at the next look.
+      if (c?.request || c?.waiting || !c?.last) reloadChat();
     } catch (e) {
       setMessages((cur) => cur?.filter((m) => m.id !== mine.id));
       if (text && !file) {
@@ -203,26 +219,32 @@ export function PeopleChatPage() {
       const out = await post<PeopleMessage>(`${base}/messages`, { card, client_id: `${Date.now()}-${++localN}` });
       setMessages((cur) => mergePeople(cur ?? [], [out]));
       thread.toBottom?.();
+      if (c?.waiting || !c?.last) reloadChat();
       return true;
     } catch (e) {
+      // Refused (held by the checks, not taken, too many): said above the
+      // composer, and not "Shared" or "Sent".
       const said = sendProblem(e);
-      if (said) setProblem(said);
-      else throw e;
-      return true;
+      if (!said) throw e;
+      setProblem(said);
+      reloadChat();
+      return false;
     }
   };
 
-  const closed = !c ? null : c.gone ? "This account was deleted, so this chat takes no more messages." : null;
+  const closed = closedWords(c);
   const composer = useComposer<PeopleMessage>({
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
     sources: { "@": [], "#": [] },
     replyLine: (m) => messageLine(m),
+    // What a send ran into goes once the words are changed.
+    onType: () => setSendError(undefined),
     onSend: (s) => {
       setSendError(undefined);
       void send(s.text, s.file, s.reply);
     },
-    enabled: !!c && !c.blocked && !c.gone && !c.request,
+    enabled: !!c && !c.blocked && !c.gone && !c.suspended && !c.request,
     closes: [!!sheet],
   });
 
@@ -291,8 +313,10 @@ export function PeopleChatPage() {
     }, paid ? "Marked as paid" : "Marked as not paid yet");
 
   const byID = new Map((messages ?? []).map((m) => [m.id, m]));
-  const seen = lastSeenWords(c?.person);
-  const sub = c?.gone ? "" : [seen, c?.phone ? phoneWords(c.phone) : ""].filter(Boolean).join(" · ");
+  const sub = headWords(c);
+  // Read ticks go between the two only while both have them on: the
+  // server hides reads otherwise, and the client does not show one either.
+  const readTicks = c?.person ? c.person.read_ticks : true;
 
   return (
     <section className="chat-pane person-pane" aria-label={`Chat with ${name}`} data-testid="people-pane" onKeyDown={composer.onPaneKeyDown} {...composer.dropProps}>
@@ -442,7 +466,7 @@ export function PeopleChatPage() {
                     <time dateTime={m.created_at} title={fmtTime(m.created_at)}>
                       {clock(m.created_at)}
                     </time>
-                    {m.mine && <PeopleTicks m={m} />}
+                    {m.mine && <PeopleTicks m={m} readTicks={readTicks} />}
                   </span>
                   {(m.my_reaction || m.their_reaction) && (
                     <span className="reactions" role="group" aria-label="Reactions" data-testid="people-reactions">
@@ -477,7 +501,8 @@ export function PeopleChatPage() {
                 <PeopleCardView
                   card={card}
                   onOpen={card.type !== "split" ? () => setSheet({ k: "card", m }) : undefined}
-                  onPaid={card.type === "split" && live && !c?.gone ? (paid) => void markPaid(m, paid) : undefined}
+                  mine={m.mine}
+                  onPaid={card.type === "split" && live && !c?.gone && !c?.request ? (paid) => void markPaid(m, paid) : undefined}
                   busy={act.busy}
                 />
               )}
@@ -497,7 +522,7 @@ export function PeopleChatPage() {
               {warnTransfer && (
                 <span className="pc-transfer-warn" role="note" data-testid="people-transfer-warning">
                   <Icon name="warn" />
-                  <span>{TRANSFER_WARNING}</span>
+                  <span>{PEOPLE_TRANSFER_WARNING}</span>
                 </span>
               )}
               {warnScam && !warnTransfer && (
@@ -510,6 +535,11 @@ export function PeopleChatPage() {
           );
         }}
       />
+      {c?.waiting && !c.request && !c.blocked && !c.gone && !c.suspended && (
+        <p className="pc-push-line" role="status" data-testid="people-waiting">
+          Your message waits for {c.name} to accept it.
+        </p>
+      )}
       {c?.request ? (
         <div className="people-request-bar" role="group" aria-label="Message request" data-testid="request-bar">
           <p>
@@ -554,11 +584,7 @@ export function PeopleChatPage() {
           />
         )
       )}
-      {c?.waiting && !c.request && (
-        <p className="pc-push-line" role="status" data-testid="people-waiting">
-          Your message waits for {c.name} to accept it.
-        </p>
-      )}
+      {c && !c.request && !c.blocked && !closed && <TellMe people />}
       {c && sheet?.k === "info" && <InfoSheet c={c} onClose={() => setSheet(undefined)} onChanged={reloadChat} />}
       {c && sheet?.k === "report" && (
         <PeopleReportSheet
@@ -598,7 +624,20 @@ export function PeopleChatPage() {
 
 /** A card in a people chat: a product, a business, an order or a delivery
  * (opened live), or a "Your share" card with Mark as paid. */
-export function PeopleCardView({ card, onOpen, onPaid, busy }: { card: PeopleCard; onOpen?: () => void; onPaid?: (paid: boolean) => void; busy?: boolean }) {
+export function PeopleCardView({
+  card,
+  mine = false,
+  onOpen,
+  onPaid,
+  busy,
+}: {
+  card: PeopleCard;
+  /** Ours: a share we asked for (no Copy number). */
+  mine?: boolean;
+  onOpen?: () => void;
+  onPaid?: (paid: boolean) => void;
+  busy?: boolean;
+}) {
   const split = card.type === "split";
   const title = split ? splitTitle(card, naira) : card.title;
   const line = split
@@ -625,8 +664,24 @@ export function PeopleCardView({ card, onOpen, onPaid, busy }: { card: PeopleCar
         )}
       </span>
       {split && <span className="tk-ref-sub people-split-note">Taskiem moves no money: pay with your bank app, then mark it paid.</span>}
-      {(onOpen || onPaid) && (
+      {(onOpen || onPaid || (split && !mine && card.pay_to)) && (
         <span className="tk-ref-foot">
+          {split && !mine && card.pay_to && (
+            <button
+              type="button"
+              className="tk-btn soft"
+              data-testid="split-copy"
+              onClick={() => {
+                const n = card.pay_to?.account_number ?? "";
+                void navigator.clipboard?.writeText(n).then(
+                  () => toast("Account number copied"),
+                  () => toast(`The account number is ${n}`),
+                );
+              }}
+            >
+              Copy number
+            </button>
+          )}
           {onOpen && (
             <button type="button" className="tk-btn primary" onClick={onOpen} data-testid="people-card-open">
               Open<span className="sr-only"> {title}</span>
@@ -685,6 +740,8 @@ function InfoSheet({ c, onClose, onChanged }: { c: PeopleChat; onClose: () => vo
         <h2>{c.name}</h2>
         {c.gone ? (
           <p className="hint">This person deleted their account.</p>
+        ) : c.suspended ? (
+          <p className="hint">This account can't get messages right now.</p>
         ) : (
           <>
             {lastSeenWords(p) && <p className="hint">{lastSeenWords(p)}</p>}
@@ -722,7 +779,7 @@ function InfoSheet({ c, onClose, onChanged }: { c: PeopleChat; onClose: () => vo
         )}
         <ErrorBox error={act.error} />
         <p className="hint people-kept" data-testid="people-kept">
-          <Icon name="lock" /> {KEPT_WORDS}
+          <Icon name="info" /> {KEPT_WORDS}
         </p>
       </div>
     </Sheet>
@@ -822,12 +879,12 @@ export function PeopleReportSheet({
 /** Forward one message to up to five people chats (one for a message
  * forwarded many times). */
 function ForwardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; onClose: () => void }) {
-  const list = useLoad(() => get<{ chats: PeopleChat[] }>("/v1/me/people"), []);
+  const list = usePagedList<PeopleChatList, PeopleChat>("/v1/me/people", (r) => r.chats ?? [], (x) => x.id);
   const [picked, setPicked] = useState<string[]>([]);
   const [failed, setFailed] = useState<string[]>([]);
   const act = useAction();
   const cap = forwardCap(m);
-  const chats = (list.data?.chats ?? []).filter((x) => x.id !== chat && canSendTo(x));
+  const chats = (list.rows ?? []).filter((x) => x.id !== chat && canSendTo(x));
   return (
     <Sheet
       title="Forward to"
@@ -843,16 +900,20 @@ function ForwardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; on
           onClick={() =>
             void act.run(async () => {
               const r = await post<{ sent: unknown[]; failed: { chat_id: string; error: string }[] }>("/v1/me/people/forward", { chat_id: chat, message_id: m.id, to: picked });
-              if (r.failed.length) setFailed(r.failed.map((f) => `${chats.find((x) => x.id === f.chat_id)?.name ?? "A chat"}: ${f.error}`));
-              else onClose();
-            }, picked.length === 1 ? "Forwarded" : `Forwarded to ${picked.length} chats`)
+              const said = forwardSaid(r.sent?.length ?? 0);
+              if (said) toast(said);
+              if (!r.failed?.length) return onClose();
+              // Only the chats it did not reach stay picked, to try again.
+              setFailed(r.failed.map((f) => `${chats.find((x) => x.id === f.chat_id)?.name ?? "A chat"}: ${f.error}`));
+              setPicked(r.failed.map((f) => f.chat_id).filter((id) => picked.includes(id)));
+            }, false)
           }
         >
           Forward
         </button>
       }
     >
-      {!list.data && !list.error && <Skeleton rows={2} label="Loading your chats…" />}
+      {!list.rows && !list.error && <Skeleton rows={2} label="Loading your chats…" />}
       <ErrorBox error={list.error ?? act.error} />
       {failed.length > 0 && (
         <ul className="error" role="alert">
@@ -861,7 +922,7 @@ function ForwardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; on
           ))}
         </ul>
       )}
-      {list.data && chats.length === 0 && <p className="hint">No other chats with people yet.</p>}
+      {list.rows && chats.length === 0 && !list.more && <p className="hint">No other chats with people yet.</p>}
       <fieldset className="pc-choice">
         <legend className="sr-only">Chats</legend>
         {chats.map((x) => {
@@ -880,32 +941,52 @@ function ForwardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; on
           );
         })}
       </fieldset>
+      <MoreRows more={list.more} busy={list.loadingMore} onMore={list.loadMore} label="Show more chats" />
     </Sheet>
   );
 }
 
-/** A shared card opened: read live, as the person opening it. */
+/** A shared card opened: read live, as the person opening it (§10.1): a
+ * product's price now (and what it was when shared), few left, Order from
+ * their shop; a business's card and Chat with them; an order live only when
+ * it is yours. Chat starts the person's own chat with the business, from a
+ * shared card (§10.2). */
 function CardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; onClose: () => void }) {
   const view = useLoad(() => get<OpenedCard>(`/v1/me/people/${encodeURIComponent(chat)}/messages/${encodeURIComponent(m.id)}/card`), [chat, m.id]);
   const o = view.data;
   const card = o?.card ?? m.card;
   const blocked = view.error instanceof ApiError && view.error.status === 403;
-  const shopPath = card?.business_id ? `/you/chats/new?business=${encodeURIComponent(card.business_id)}&from=shop` : undefined;
+  const biz = card?.business_id;
+  const p = o?.live.product;
   return (
     <Sheet title={card ? card.title : "Card"} onClose={onClose} testid="people-card-sheet">
       {!o && !view.error && <Skeleton rows={2} label="Loading what was shared…" />}
       {blocked ? <p role="status">This business is not taking chats from you, so it can't be opened.</p> : <ErrorBox error={view.error} />}
       {o && (
         <div className="pc-check" data-testid="people-card-live">
-          {o.live.product && (
-            <>
-              <p>
-                <strong>{o.live.product.name}</strong>
-              </p>
-              {o.live.product.price_kobo !== undefined && <p data-testid="people-card-price">{naira(o.live.product.price_kobo)} now</p>}
-              <p className="hint">{o.live.product.available ? "Available" : "Not available right now"}</p>
-            </>
-          )}
+          {o.card.type === "product" &&
+            (p ? (
+              <>
+                <p>
+                  <strong>{p.name}</strong>
+                </p>
+                {o.card.business && <p className="hint">From {[o.card.business, o.card.area].filter(Boolean).join(", ")}</p>}
+                {p.price_kobo !== undefined && <p data-testid="people-card-price">{priceNowWords(p.price_kobo, o.card.price_kobo, naira)}</p>}
+                <p className="hint" data-testid="people-card-stock">
+                  {stockWords(p)}
+                </p>
+                {p.description && <p className="hint">{p.description}</p>}
+              </>
+            ) : (
+              <>
+                <p>
+                  <strong>{o.card.title}</strong>
+                </p>
+                <p className="hint" data-testid="people-card-gone">
+                  They no longer sell this. What was shared is all there is to see.
+                </p>
+              </>
+            ))}
           {o.live.business && (
             <>
               <p>
@@ -915,6 +996,7 @@ function CardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; onClo
               <p className="hint">{[o.live.business.area, o.live.business.open_now === undefined ? "" : o.live.business.open_now ? "Open now" : "Closed now"].filter(Boolean).join(" · ")}</p>
             </>
           )}
+          {o.card.type === "business" && !o.live.business && <p className="hint">This business is not showing itself now.</p>}
           {o.live.order ? (
             <>
               <p>
@@ -929,14 +1011,19 @@ function CardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; onClo
             (o.card.type === "order" || o.card.type === "delivery") && (
               <p className="hint" data-testid="people-card-shared-only">
                 {o.card.reference ? `Order ${o.card.reference}` : "An order"}
-                {o.card.state ? ` · ${o.card.state}` : ""}. This is what was shared: only the person who ordered sees more.
+                {o.card.state ? ` · ${o.card.state} when shared` : ""}. This order is not yours, so only what was shared shows.
               </p>
             )
           )}
           {o.live.delivery && <p>{o.live.delivery.line}</p>}
-          {shopPath && (o.card.type === "product" || o.card.type === "business") && (o.live.business?.takes_chats ?? true) && (
-            <Link className="button primary" to={shopPath} data-testid="people-card-chat">
-              Chat with {o.card.business ?? o.live.business?.name ?? "them"}
+          {biz && o.card.type === "product" && (
+            <Link className="button primary" to={sharedChatPath(biz, "shop")} data-testid="people-card-order">
+              Order from their shop
+            </Link>
+          )}
+          {biz && o.card.type === "business" && (o.live.business?.takes_chats ?? true) && (
+            <Link className="button primary" to={sharedChatPath(biz)} data-testid="people-card-chat">
+              Chat with them
             </Link>
           )}
         </div>
@@ -949,18 +1036,35 @@ function CardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; onClo
  * "Your share". */
 function ShareSheet({ onClose, onSend, onSplit }: { onClose: () => void; onSend: (c: CardAsk) => Promise<boolean>; onSplit: () => void }) {
   const [step, setStep] = useState<"menu" | "business" | "product" | "order" | { items: string; business: string; name: string }>("menu");
+  // One order picked: shared as it is, or its delivery once a rider has it.
+  const [order, setOrder] = useState<{ business_id: string; reference: string; business: string }>();
   const act = useAction();
-  const go = (card: CardAsk) => void act.run(async () => (await onSend(card)) && onClose(), "Shared");
+  // "Shared" only when it went: a refusal is said in the chat instead.
+  const go = (card: CardAsk) =>
+    void act.run(async () => {
+      if (!(await onSend(card))) return onClose();
+      toast("Shared");
+      onClose();
+    }, false);
   const chats = useLoad(() => (step === "business" || step === "product" ? get<ChatList>("/v1/me/conversations") : Promise.resolve(undefined)), [step === "business" || step === "product"]);
   const orders = useLoad(() => (step === "order" ? get<PersonOrders>("/v1/me/orders?limit=30") : Promise.resolve(undefined)), [step === "order"]);
+  const detail = useLoad(
+    () => (order ? get<PersonOrderDetail>(`/v1/me/orders/${encodeURIComponent(order.business_id)}/${encodeURIComponent(order.reference)}`) : Promise.resolve(undefined)),
+    [order?.business_id, order?.reference],
+  );
   const items = useLoad(
     () => (typeof step === "object" ? get<{ items: ShopItem[] }>(`/v1/me/chats/${encodeURIComponent(step.items)}/shop`) : Promise.resolve(undefined)),
     [typeof step === "object" ? step.items : ""],
   );
   const businesses = (chats.data?.chats ?? []).filter((x) => x.kind === "business" && x.business_id);
   return (
-    <Sheet title={typeof step === "object" ? step.name : "Share"} onClose={onClose} onBack={step === "menu" ? undefined : () => setStep("menu")} testid="people-share-sheet">
-      <ErrorBox error={act.error ?? chats.error ?? orders.error ?? items.error} />
+    <Sheet
+      title={typeof step === "object" ? step.name : order ? `${order.business} · ${order.reference}` : "Share"}
+      onClose={onClose}
+      onBack={order ? () => setOrder(undefined) : step === "menu" ? undefined : () => setStep("menu")}
+      testid="people-share-sheet"
+    >
+      <ErrorBox error={act.error ?? chats.error ?? orders.error ?? items.error ?? detail.error} />
       {step === "menu" && (
         <Items label="What to share">
           <Row icon="store" title="A business" sub={<span className="sub">One you chat with</span>}>
@@ -1020,7 +1124,28 @@ function ShareSheet({ onClose, onSend, onSplit }: { onClose: () => void; onSend:
           </Items>
         </>
       )}
-      {step === "order" && (
+      {step === "order" && order && (
+        <>
+          {!detail.data && !detail.error && <Skeleton rows={1} label="Loading your order…" />}
+          {detail.data && (
+            <Items label="Share">
+              <Row icon="orders" title="The order" sub={<span className="sub">{detail.data.summary}</span>} testid="share-order-plain">
+                <button type="button" disabled={act.busy} onClick={() => go({ type: "order", business_id: order.business_id, reference: order.reference })}>
+                  Share<span className="sr-only"> the order {order.reference}</span>
+                </button>
+              </Row>
+              {detail.data.delivery && (
+                <Row icon="package" title="Its delivery" sub={<span className="sub">{detail.data.delivery.line}</span>} testid="share-order-delivery">
+                  <button type="button" disabled={act.busy} onClick={() => go({ type: "delivery", business_id: order.business_id, reference: order.reference })}>
+                    Share<span className="sr-only"> the delivery of {order.reference}</span>
+                  </button>
+                </Row>
+              )}
+            </Items>
+          )}
+        </>
+      )}
+      {step === "order" && !order && (
         <>
           {!orders.data && !orders.error && <Skeleton rows={2} label="Loading your orders…" />}
           {orders.data && orders.data.orders.filter((o) => !o.earlier).length === 0 && <EmptyState icon="orders">Your orders show here.</EmptyState>}
@@ -1029,11 +1154,8 @@ function ShareSheet({ onClose, onSend, onSplit }: { onClose: () => void; onSend:
               .filter((o) => !o.earlier)
               .map((o) => (
                 <Row key={`${o.business_id}/${o.reference}`} icon="orders" title={`${o.business} · ${o.reference}`} sub={<span className="sub">{o.summary}</span>} testid="share-order-row">
-                  <button type="button" disabled={act.busy} onClick={() => go({ type: "order", business_id: o.business_id, reference: o.reference })}>
-                    Share<span className="sr-only"> {o.reference}</span>
-                  </button>
-                  <button type="button" disabled={act.busy} onClick={() => go({ type: "delivery", business_id: o.business_id, reference: o.reference })}>
-                    Its delivery<span className="sr-only"> of {o.reference}</span>
+                  <button type="button" disabled={act.busy} onClick={() => setOrder({ business_id: o.business_id, reference: o.reference, business: o.business })}>
+                    Choose<span className="sr-only"> {o.reference}</span>
                   </button>
                 </Row>
               ))}
@@ -1056,7 +1178,9 @@ function SplitSheet({ name, onClose, onSend }: { name: string; onClose: () => vo
   const kobo = toKobo(amount);
   const typed = other || (saved.data && !saved.data.account);
   const okAccount = !typed || (acct.bank.trim() && acct.account_name.trim() && accountDigits(acct.account_number));
-  const ok = kobo !== undefined && !Number.isNaN(kobo) && kobo > 0 && !!okAccount;
+  // The server asks for both: at least ₦1, and what it is for.
+  const ok = splitReady(kobo, what) && !!okAccount;
+  const tooSmall = amount.trim() !== "" && kobo !== undefined && !Number.isNaN(kobo) && kobo < 100;
   return (
     <Sheet
       title="Your share"
@@ -1070,10 +1194,13 @@ function SplitSheet({ name, onClose, onSend }: { name: string; onClose: () => vo
           data-testid="split-send"
           onClick={() =>
             void act.run(async () => {
-              const card: CardAsk = { type: "split", amount_kobo: kobo, what: what.trim() || undefined };
+              const card: CardAsk = { type: "split", amount_kobo: kobo, what: what.trim() };
               if (typed) card.pay_to = { bank: acct.bank.trim(), account_name: acct.account_name.trim(), account_number: accountDigits(acct.account_number) };
-              if (await onSend(card)) onClose();
-            }, "Sent")
+              // Refused: said in the chat, and not "Sent".
+              const sent = await onSend(card);
+              if (sent) toast("Sent");
+              onClose();
+            }, false)
           }
         >
           Send to {name}
@@ -1082,11 +1209,11 @@ function SplitSheet({ name, onClose, onSend }: { name: string; onClose: () => vo
     >
       <div className="pc-check">
         <p className="hint">Taskiem moves no money. {name} pays you with their bank app, and either of you marks it paid.</p>
-        <KitField label="Amount (₦)">
-          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} data-testid="split-amount" />
+        <KitField label="Amount (₦)" error={tooSmall ? "At least ₦1" : undefined}>
+          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} aria-invalid={tooSmall} data-testid="split-amount" />
         </KitField>
-        <KitField label="What for" hint="Optional">
-          <input value={what} maxLength={120} onChange={(e) => setWhat(e.target.value)} data-testid="split-what" />
+        <KitField label="What for" hint="The cake, the taxi, the tickets…">
+          <input value={what} maxLength={120} required aria-required="true" onChange={(e) => setWhat(e.target.value)} data-testid="split-what" />
         </KitField>
         {!saved.data && !saved.error && <Skeleton rows={1} label="Loading your account…" />}
         <ErrorBox error={saved.error ?? act.error} />
