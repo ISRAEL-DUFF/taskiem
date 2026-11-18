@@ -4200,6 +4200,8 @@ class StartMyChatRequest {
 
   final String? businessId;
   final String? code;
+  /// Where the person came from; `shared`: a card shared with them in a chat
+  /// with a person (people-chatting §10.2).
   final String? from;
 
   factory StartMyChatRequest.fromJson(Map<String, dynamic> j) => StartMyChatRequest(

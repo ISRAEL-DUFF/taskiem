@@ -763,8 +763,14 @@ func TestPeopleCards(t *testing.T) {
 	// A delivery before a rider has it.
 	ada.must(409, "POST", "/v1/me/people/"+adaChat+"/messages", map[string]any{"card": map[string]any{"type": "delivery", "business_id": w.biz, "reference": ref}})
 
+	// Chat on a shared card starts Bola's own chat with the business
+	// (§10.2), from "shared"; the business sees a customer, not who
+	// shared it.
+	bola.must(400, "POST", "/v1/me/chats", map[string]any{"business_id": w.biz, "from": "elsewhere"})
+	if c := bola.must(201, "POST", "/v1/me/chats", map[string]any{"business_id": w.biz, "from": "shared"}); c["name"] != "Mama's Kitchen" {
+		t.Fatalf("a chat from a shared card: %v", c)
+	}
 	// A business that blocked Bola does not open for her.
-	bola.must(201, "POST", "/v1/me/chats", map[string]any{"business_id": w.biz, "from": "shop"})
 	for _, x := range w.owner.must(200, "GET", "/v1/customer-chats", nil)["chats"].([]any) {
 		if x.(map[string]any)["name"] == "Bola Ade" {
 			w.owner.must(204, "POST", "/v1/customer-chats/"+x.(map[string]any)["id"].(string)+"/block", nil)

@@ -20508,7 +20508,8 @@ paths:
                   maxLength: 40
                 from:
                   type: string
-                  enum: [link, shop, discover, order]
+                  enum: [link, shop, discover, order, shared]
+                  description: 'Where the person came from; `shared`: a card shared with them in a chat with a person (people-chatting §10.2).'
       responses:
         '201':
           description: Started

@@ -337,7 +337,8 @@ func (s *Server) startPersonChat(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		BusinessID *uuid.UUID `json:"business_id"`
 		Code       string     `json:"code"`
-		// From: where the person came from (link, shop, discover, order).
+		// From: where the person came from (link, shop, discover, order,
+		// or a card shared with them in a chat with a person: shared).
 		From string `json:"from"`
 	}
 	if err := decodeBody(r, &in); err != nil {
@@ -346,7 +347,7 @@ func (s *Server) startPersonChat(w http.ResponseWriter, r *http.Request) {
 	}
 	via := in.From
 	if via == "code" {
-		writeErr(w, http.StatusBadRequest, "from is link, shop, discover or order")
+		writeErr(w, http.StatusBadRequest, "from is link, shop, discover, order or shared")
 		return
 	}
 	var tenant uuid.UUID
@@ -376,9 +377,9 @@ func (s *Server) startPersonChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch via {
-	case "", "link", "shop", "discover", "order", "code":
+	case "", "link", "shop", "discover", "order", "shared", "code":
 	default:
-		writeErr(w, http.StatusBadRequest, "from is link, shop, discover or order")
+		writeErr(w, http.StatusBadRequest, "from is link, shop, discover, order or shared")
 		return
 	}
 	if !s.limiter("person-chat-start:"+person.String(), 6*time.Second, 10).Allow() {
