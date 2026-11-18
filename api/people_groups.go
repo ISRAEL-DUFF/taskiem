@@ -1036,7 +1036,7 @@ func (s *Server) groupPhoto(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
-	writePhoto(w, ctype, data, at, "private, max-age=86400")
+	writePhoto(w, r, ctype, data, at, "private, max-age=86400")
 }
 
 // putGroupPhoto is PUT /v1/me/groups/{id}/photo (a form with a file): the
@@ -2180,7 +2180,7 @@ func (s *Server) groupLinkPhoto(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writePhoto(w, ctype, data, time.Time{}, "public, max-age=300")
+	writePhoto(w, r, ctype, data, time.Time{}, "public, max-age=300")
 }
 
 // joinGroupByLink is POST /v1/me/group-links/{code}/join: the person joins
