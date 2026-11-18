@@ -159,7 +159,7 @@ Every change to a job, assignment, step, setting and stock with an agent is in t
 | Reference | `J-` and a number, per business, in order |
 | Type | One of `job_types`; brings the template's description, checklist and expected time when made |
 | Priority | Low, normal, high, urgent |
-| Customer | A customer of the business (a person on Taskiem, through the customer door, or a contact with a name and phone); or a name and phone typed for this job. Sealed and masked as personal data |
+| Customer | Name, phone and the place, kept on the job whether or not the customer is saved; and, when they are, a link to their row of the business's `customers` table (§6.1). Sealed and masked as personal data |
 | Place | An address, a landmark, and a map pin (latitude and longitude), as ISPOps' site latitude and longitude. The pin is what Arrived is measured from; without one, Arrived is not measured |
 | What to do | Description; the checklist (items, each with a note or photo it may require) |
 | When | When it is scheduled for: a visit window (from, to), or "as soon as possible"; expected time on site. An agent's assigned jobs are their schedule, earliest first |
@@ -171,6 +171,18 @@ Every change to a job, assignment, step, setting and stock with an agent is in t
 | Customer's confirmation and rating | §14 |
 | Came from | The office, a workflow, a schedule, a customer's booking, a complaint (the ISP area) |
 | Links | The customer's conversation; an order, invoice or ticket it belongs to |
+
+### 6.1 The business's own customer list
+
+A business keeps **its own list of its customers** in its `customers` table, a known table in its own project ([data tables](../data-tables.md)), which it can search, edit, export and use in workflows like any table. The list is the business's: **a customer is on it because the business chose to save them**, never because Taskiem copied someone in. However the business deals with a person (they chat with it in the app or on WhatsApp under PR #198, they ordered, they phoned the office), that stays as it is; saving them to the list is a separate act, which is always available:
+
+- **on the New job form**, **Save to my customers**, ticked by default, for a customer typed in (§15.1);
+- **in a customer's conversation**, **Save to my customers** in the conversation's menu, which fills a new row with the name and phone the business has for them, to be checked before saving;
+- **on the table's own page**, by adding a row, or by importing a file, as any table.
+
+A saved customer's row is what the New job search finds, and links their jobs: the row's page lists the customer's jobs, and a job's page links to the row. For Field work the table gains two columns, **address** and **location** (a map pin), so a saved customer's place comes with them; the earlier jobs' places are offered too. Changing the row changes nothing on jobs already made: each job keeps the name, phone and place it was made with.
+
+A job reaches a customer the same way whether they are saved or not: in their conversation with the business if they have one (PR #198), else by SMS ([updates](../updates.md)).
 
 **Job types and templates are lists**, kept as data tables in the business's project (`job_types`, `job_templates`), so an owner edits them like any table and the AI builder reads them. A template's checklist is one line per item ("Test signal | photo", "Customer shown how to use the router"). Recurring jobs are **not** a part of the record: a workflow on a schedule calls `jobs.create` (§8), as monthly invoices are made ([business areas §9](business-areas.md#9-a-service-business-as-the-test-an-isp-or-cloud-provider)).
 
@@ -328,7 +340,7 @@ With **Stock** on, Field work adds **where** stock is: in the store, or **with a
 
 ## 14. The customer's side
 
-A job's customer is a customer of the business: a person on Taskiem who chats with it (PR #198), or a contact by phone.
+A job's customer is whoever the job was made for: saved in the business's `customers` table or not (§6.1). If they chat with the business (PR #198), the job comes to their conversation; if not, by SMS.
 
 **In the customer's conversation, a job card**, the same kind as an order or delivery card:
 
@@ -360,7 +372,7 @@ ISPOps' **Create new job** page (`exact-hue-hearth`, `src/routes/_app.jobs.new.t
 
 | Part | ISPOps | Here |
 | --- | --- | --- |
-| Customer | Search existing customers by name, phone or email; picking one fills name and phone (not the address) and links the record ("rating will be sent after job completion"); or type name, phone and address | Search the business's customers (people chatting with it, and contacts) by name or phone; picking one fills name, phone **and** their saved addresses to choose from, with each address's pin. Or type a name, phone and address: the person is then saved as a contact of the business, so their next job finds them. Every customer gets the rating (by card or by SMS), linked or not |
+| Customer | Search existing customers by name, phone or email; picking one fills name and phone (not the address) and links the record ("rating will be sent after job completion"); or type name, phone and address | Search the business's **saved customers** (its `customers` table, §6.1) by name, phone or address; picking one fills name, phone, address and pin, and lists the places of their earlier jobs to choose from instead. Or type a name, phone and address, with **Save to my customers** below, **ticked by default**: left ticked, the job's customer becomes a row of the table; unticked, they are on this job only. A typed phone that is already a saved customer's offers that customer instead. Every customer gets the rating (by card or by SMS), saved or not |
 | Site | An optional map pin, by clicking a map or typing coordinates | The same, and a saved address brings its pin. Without a pin, Arrived is not measured, and the form says so |
 | Template | **Start from a template** fills type, priority and description, still editable; the checklist and time estimate are attached by the server, not shown | The same, and the checklist is shown, so the office can add an item for this job |
 | Details | Type, priority, one scheduled date and time, description ("internal notes") | Type, priority, **when**: a visit window (from, to) or a time, or "as soon as possible"; what to do (the agent sees it); a separate **note for the office** (the agent does not) |
@@ -406,7 +418,7 @@ Alerts, through [alerts](../alerts.md), to the people with `job.manage` (or the 
 | Permissions and roles | `job.read`, `job.manage`, `job.work`; built-in **Field agent** (field-only, like Gate); custom **Dispatcher** on turning on |
 | Records (module schema `fieldwork`) | `jobs`, `job_steps`, `job_assignments`, `job_notes`, `job_media`, `job_parts`; `stock_held` and new movement reasons in Stock's schema |
 | Engine state | `agent_reports` (location reports, partitioned by day, deleted after the trail setting); the per-business job counter |
-| Lists (the business's project) | `job_types`, `job_templates`, known tables in `templates/tables` |
+| Lists (the business's project) | `job_types`, `job_templates`, known tables in `templates/tables`; the `customers` known table gains `address` and `location` (§6.1) |
 | Kept copies | `jobs` in the business's project, for workflows, chat search and the builder |
 | Contracts | `wd/v1` trigger type `job`; signals `job.<step>`; connector `jobs@1` |
 | API | `/v1/jobs` (list, make, change, steps, assign, hold, cancel, close, notes, media, parts), `/v1/field/agents`, `/v1/field/map`, `/v1/field/reports`, `/v1/field/settings`; the field mode's own routes `/v1/me/field/...` (today, steps, reports batch, stock), the only routes the Field agent role reaches |

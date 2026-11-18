@@ -163,7 +163,7 @@ Jobs do not only come from customers' complaints and bookings: the office makes 
 
 1. Kemi phones Ada's office: she has moved, and wants internet installed at her new flat, 22 Bourdillon Road, tomorrow morning.
 2. Ngozi, on the web, opens **Field work > Jobs > New job**.
-3. **Customer.** She types "Kemi" in the search. Ada's customers include Kemi, because she has chatted with Ada; picking her fills her name and phone, and offers her saved addresses. The new flat is not among them, so Ngozi types "22 Bourdillon Road, Ikoyi" and drops the pin on the map. (Without a pin, the form says "Arrival won't be checked against the place".)
+3. **Customer.** She types "Kemi" in the search, which looks in Ada's own customer list, its `customers` table ([Field work §6.1](field-work.md#61-the-businesss-own-customer-list)). Kemi is on it: Ngozi saved her (**Save to my customers**) the first time Kemi chatted with Ada. Picking her fills her name, phone and the address on her row, her old flat. That is not where this job is, so Ngozi types "22 Bourdillon Road, Ikoyi" and drops the pin on the map. (Without a pin, the form says "Arrival won't be checked against the place".) The job keeps this place; Kemi's row keeps her old address until someone changes it.
 4. **Template.** **Start from a template**: "Home installation (radio)". Type **installation**, priority **normal** and the description fill in, still editable; the template's checklist shows below ("Mount the radio | photo", "Signal reading | note", "Router set up and customer connected", "Customer shown how to recharge in Taskiem"). Ngozi adds an item for this job: "Mount on the rear wall, as the customer asked".
 5. **When.** A visit window: Thursday, 9 to 12. **What to do** keeps the template's words; in **Note for the office** (the agent does not see it) she writes "New flat; referred by Chidi Okafor".
 6. **Assignment.** The panel lists every field agent with their state and suggestions ([Field work §9](field-work.md#9-assigning)): "Tunde: available, near the office, 1 km" and "Musa: assigned, 2 jobs Thursday, near J-1047, 2.4 km". Ngozi wants Musa, who installed in that estate before, and picks him. (ISPOps would not have shown Musa: its form lists only agents whose status is available.)
@@ -179,8 +179,8 @@ Jobs do not only come from customers' complaints and bookings: the office makes 
 **Part B: saved without assigning (Wednesday, 14:00)**
 
 12. Mr Okon emails Ada: Lekki Plaza's three rooftop radios are due their quarterly maintenance, any time on Friday between 10 and 2.
-13. Bola opens **New job**. **Customer:** "Lekki Plaza" is not found, so Bola types the name, Mr Okon's phone and the address, and drops the pin. **Template:** "Quarterly maintenance". **When:** Friday, 10 to 2. **What to do:** "Unit 1 of 3: north mast". He taps **Save without assigning**.
-14. **Recorded:** **J-1051**, state **new**, made by Bola; Lekki Plaza **saved as a contact** of Ada's, with that address and pin. **Fires:** `job` `created`; `job-tell-office` only. No agent and no customer is told: nobody is assigned yet.
+13. Bola opens **New job**. **Customer:** "Lekki Plaza" is not in Ada's customer list, so Bola types the name, Mr Okon's phone and the address, and drops the pin. **Save to my customers** is ticked, as it always starts, and he leaves it. **Template:** "Quarterly maintenance". **When:** Friday, 10 to 2. **What to do:** "Unit 1 of 3: north mast". He taps **Save without assigning**.
+14. **Recorded:** **J-1051**, state **new**, made by Bola; Lekki Plaza **a new row of Ada's `customers` table**, with Mr Okon's phone, the address and pin, linked to J-1051. **Fires:** `job` `created`; `job-tell-office` only. No agent and no customer is told: nobody is assigned yet.
 15. He makes **J-1052** and **J-1053** the same way. This time the search finds Lekki Plaza, with its address and pin.
 
 **Assigning in bulk (Thursday, 17:00)**
@@ -212,7 +212,8 @@ Jobs do not only come from customers' complaints and bookings: the office makes 
 | --- | --- | --- |
 | Ngozi makes the job in chat: `@Taskiem new job: installation for Kemi Adeyemi at 22 Bourdillon Road, Thursday morning, give it to Musa` | A draft job card asks her to check it (customer found, address, template, window, Musa), and **Make it** saves it as in step 9. A place without a pin is pointed out | — |
 | No field agent is free and Ngozi does not want to add to anyone's schedule | **Save without assigning**; the job waits under **New** on the board until someone is assigned, and **not started** fires if its window begins first | — |
-| The phone Bola types for a new customer is already one of Ada's customers | The form offers that customer instead ("This number is Kemi Adeyemi's: use her?") | Open point 2 |
+| The phone Bola types for a new customer is already on Ada's customer list | The form offers that customer instead ("This number is Kemi Adeyemi's: use her?") | [Field work §15.1](field-work.md#151-making-a-job-in-the-office) |
+| Bola unticks **Save to my customers** | Lekki Plaza is on J-1051 only; J-1052's search does not find it, and Bola types it again | — |
 | Mr Okon is a person on Taskiem who chats with Ada | The job card in his conversation, as Kemi gets, instead of SMS | Example 1 |
 
 ### How this differs from ISPOps
@@ -221,7 +222,7 @@ Jobs do not only come from customers' complaints and bookings: the office makes 
 | --- | --- | --- |
 | Only agents whose status is **available** can be picked, at creation and when assigning on the job's panel | Every field agent, with their state and suggestions; an agent holding jobs can be given more | ISPOps' own server allows it (multi-job assignment, migration 000013). Its form had not caught up |
 | Picking a customer fills name and phone, not the address | Name, phone and saved addresses with their pins | The address is what the agent needs |
-| A typed customer is not kept | Kept as a contact of the business | Their next job finds them |
+| A typed customer is not kept | **Save to my customers**, ticked by default, makes them a row of the business's own `customers` table | The business keeps its own list, and their next job finds them |
 | The rating email goes only to a linked customer with an email address | Every customer gets the rating, by card or by SMS | Most of Ada's customers have no email on record |
 | One field, "Description / internal notes", seen by the agent | **What to do** for the agent; **Note for the office** kept apart | Office notes about money or referrals are not the agent's business |
 | The template's checklist is attached unseen | Shown, and can have an item added | The office can say what this job needs |
@@ -230,18 +231,18 @@ Jobs do not only come from customers' complaints and bookings: the office makes 
 
 ### What it checks
 
-- Making a job in the office: customer search or typed contact, template, place, window, the two buttons ([Field work §15.1](field-work.md#151-making-a-job-in-the-office)).
+- Making a job in the office: the customer from the business's own list or typed and saved, template, place, window, the two buttons ([Field work §15.1](field-work.md#151-making-a-job-in-the-office)).
 - Assignment rules: new or assigned only, all or nothing in bulk, no reassigning after Start job ([§7](field-work.md#7-the-journey-of-a-job), [§9](field-work.md#9-assigning)).
 - Suggestions by state and last known place, including agents who already hold jobs ([§9](field-work.md#9-assigning)).
 - Who is told when: nobody but the office for an unassigned job; the agent and the customer on assignment, by card or SMS ([§8](field-work.md#8-each-step-is-a-trigger), [§14](field-work.md#14-the-customers-side)).
 
 ### Open points
 
-1. **Where a business's contacts live.** A typed customer is "saved as a contact". PR #198 makes customers people with a conversation. The `customers` known table also exists. Which one holds a contact who is not on Taskiem is to be settled with PR #198's owners.
-2. **Duplicate customers.** Offering an existing customer when a typed phone matches one is not yet in [§15.1](field-work.md#151-making-a-job-in-the-office).
+1. ~~Where a business's contacts live~~: settled 18 November 2026. A business keeps its own customer list in its `customers` table, and a customer is on it when the business saves them ([Field work §6.1](field-work.md#61-the-businesss-own-customer-list)).
+2. ~~Duplicate customers~~: settled. A typed phone already on the list offers that customer ([§15.1](field-work.md#151-making-a-job-in-the-office)).
 3. **Many messages from a bulk assignment.** Mr Okon gets one SMS per job. Grouping them ("3 visits on Friday") is a template choice, or a rule for the updates channel. Not yet decided.
 4. **ISPOps' availability windows.** In ISPOps a customer declares windows when they are in, and staff link one to an existing job, which emails a confirmation (`src/routes/_app.availability.tsx`). Here a customer gives their window when booking ([§14](field-work.md#14-the-customers-side)). For a job the office makes, nothing yet asks the customer "when are you in?" before assigning. A **Ask the customer for a time** action on the job, sending a card or SMS with choices, would cover it.
-5. **A typed address for a known customer.** Should it be added to their saved addresses? It is not done in step 3.
+5. ~~A typed address for a known customer~~: settled. The job keeps its own place; the customer's row keeps its address until the business changes it (step 3).
 
 ## 5. Examples still to write
 

@@ -50,7 +50,7 @@ The two choices that shape this plan are in decision [0070](../decisions/0070-fi
 | Word | Meaning |
 | --- | --- |
 | Provider | An internet service provider: the business. "ISP" in the code (`isp`) and in the area's name |
-| Subscriber | A provider's customer who pays for internet. On Taskiem, a person in a conversation with the provider (PR #198), or a row of the `subscribers` table for a provider not on PHP Radius |
+| Subscriber | A provider's customer who pays for internet. They may chat with the provider (PR #198); the provider keeps its own list of them in its `subscribers` table (§6.6) |
 | PHP Radius | The vendor-hosted billing and RADIUS product many providers use. "The vendor" is its maker |
 | Portal address | The provider's own address on PHP Radius (`https://portal.adanet.ng`), where its client API answers |
 | Linked | A subscriber whose Taskiem conversation is joined to their PHP Radius account (§5.3) |
@@ -172,13 +172,22 @@ A payment the gateway took but PHP Radius did not confirm (a timeout, PHP Radius
 
 A provider billing from the `subscribers` table gets **My internet** from the row whose phone matches the person's proved phone (plan, price, renews on), and **Pay** against its invoices in Money. Recharge and vouchers need PHP Radius.
 
+### 6.6 The provider's own list of subscribers
+
+A provider keeps its **own list of its subscribers** in its `subscribers` table, as any business keeps its customers in `customers` ([Field work §6.1](field-work.md#61-the-businesss-own-customer-list)): rows it chose to save, which it can search, edit, export and run templates over. Each row is a subscriber: name, phone, email, plan, monthly price, renews on, status, area, and `account_ref`, their account in the provider's billing system.
+
+- **Saving one.** **Save to my subscribers** in a subscriber's conversation; on the table's page, by hand or by importing a file (a provider's export from PHP Radius's dashboard, for example). Nothing is saved without the provider choosing it.
+- **With PHP Radius.** When a saved subscriber has linked in chat (§5.3), `account_ref` holds their PHP Radius username, and **Refresh from PHP Radius** on the row (or a template) fills plan, renews on and status from `account` with that subscriber's own token. A saved subscriber who never linked keeps what the provider typed.
+- **Why it matters for a PHP Radius provider.** PHP Radius cannot list a provider's subscribers to anyone outside its dashboard (§3). The table is how the provider has the list in Taskiem: what its templates can go over (§7), and what it searches, exports and keeps.
+- **A subscriber is also a customer.** Saving a subscriber offers to save them to `customers` too, so the New job search finds them for a technician's visit.
+
 ## 7. Workflows for providers
 
-PHP Radius's client API cannot list a provider's subscribers, so a provider's templates work over **linked subscribers**: the people who have linked in Taskiem. That set grows as subscribers use the app; it is never all of them, and the templates say so.
+PHP Radius's client API cannot list a provider's subscribers, so a provider's templates work over **linked subscribers** (the people who have linked in Taskiem) and over the provider's **own list**, its `subscribers` table (§6.6). Linked subscribers are never all of them, and the templates say so; the table is as complete as the provider keeps it.
 
 | Template | Trigger | What it does |
 | --- | --- | --- |
-| `isp-expiry-reminder` | `schedule` (daily) | For each linked subscriber, `account`; when the plan ends within the setting, a card "Your plan ends Friday" with **Recharge** |
+| `isp-expiry-reminder` | `schedule` (daily) | For each linked subscriber, `account`; when the plan ends within the setting, a card "Your plan ends Friday" with **Recharge**. Saved subscribers who are not linked are reminded from their row's renews on, by SMS |
 | `isp-recharged-receipt` | A recharge confirmed | The receipt in the conversation; tells the cashier role |
 | `isp-complaint-to-job` | A complaint opened | The fault repair job (the setting, as a template the provider can change) |
 | `isp-outage-notice` | `webhook` from monitoring, or **Send an outage notice** | A notice to linked subscribers, all or by PHP Radius zone (`zoneName`), and to the `subscribers` table's rows; replaces nothing, adds to `subscription-outage-notice` |
@@ -210,6 +219,7 @@ The sign-up question gains **"I run an internet service"**: kind `service`, with
 | --- | --- |
 | Area | `isp` in `engine/areas`, depending on `fieldwork` and `money`; door checks; settings in its module schema |
 | Connector | `connectors/phpradius` (manifest, Go actions, recorded fixtures from the vendor's examples with the tokens scrubbed) |
+| Lists (the provider's project) | The `subscribers` known table (§6.6), with **Save to my subscribers** and **Refresh from PHP Radius** |
 | Records (module schema `isp`) | `isp_links` (person, provider, PHP Radius username, sealed token, abilities, linked and last used), `isp_payments` (start, gateway reference, confirm, state, for parked payments) |
 | Chat | The provider's tools in the conversation and their cards; their words in chat |
 | Contracts | No new trigger type: recharges and complaints reach workflows as `capability_event`s of the area (`isp.recharged`, `isp.complaint`); to settle in I3 against how `invoice` was added |
@@ -250,7 +260,7 @@ I0 ─────────── I1 ─ I2 ─ I3 ─ I4 ─ I5 ─ I6
 - **The phone way in is the vendor's design, and Taskiem leans on it.** Anyone who can call `loginPhone` with a number gets that subscriber's token, from any client. Taskiem's own use is safe (proved phones only), but the provider should know how its portal behaves, and the vendor may change it. Ask the vendor: is `loginPhone` meant for third-party clients, and can a provider restrict it?
 - **The vendor's agreement.** Taskiem would be a client of PHP Radius used by many providers. Ask whether the vendor allows that, offers a partner key, or has a staging account; the demo host and its demo accounts are not used without the founder's go-ahead.
 - **Unknowns the collection does not answer:** how long a token lasts; whether a gateway reference confirmed twice is refused; rate limits; whether every provider's portal is on its own domain or under the vendor's; which currencies Nigerian providers' portals use (the examples show rupees and rand).
-- **Linked subscribers only.** Reminders and notices reach those who linked; a provider will want all. Only an admin API from the vendor (or the provider's own list in the `subscribers` table) answers that.
+- **Linked subscribers only.** Reminders and notices reach those who linked; a provider will want all. Only an admin API from the vendor, or the provider keeping its own list in the `subscribers` table (§6.6), answers that.
 - **The provider's gateway keys.** PHP Radius hands out the provider's public key, which is meant to be public. Taskiem never needs the provider's secret key; if the server-side check of a payment (§6.2 step 4) needs one, it becomes a Paystack or Flutterwave connection the provider makes, and the plan changes.
 - **Depends on PR #198** for subscribers being people with proved phones and conversations; I2 waits for it to merge.
 
