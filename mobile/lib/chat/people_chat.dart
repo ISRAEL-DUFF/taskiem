@@ -256,8 +256,17 @@ class PeopleChatData extends ChangeNotifier {
     switch (e) {
       case PeopleLiveMessage(:final message):
         // Ours sent from here is already shown with its clock: the
-        // server's copy takes its place when the send answers.
-        messages = _merge(messages ?? const [], [PeopleLine(message)]);
+        // server's copy takes its place when the send answers. A change to
+        // an old message not loaded (a reaction, a read, a star, a delete,
+        // or a reconnect's replay) is not merged: Load older pages from
+        // the oldest loaded, which would skip what lies between.
+        final cur = messages;
+        if (cur == null) {
+          _early.add(message);
+          return;
+        }
+        if (!_fits(cur, message, hasOlder)) return;
+        messages = _merge(cur, [PeopleLine(message)]);
         _changed();
         if (!message.mine && message.readAt == null && chat != null && seen()) {
           _readSoon?.cancel();
@@ -303,6 +312,21 @@ class PeopleChatData extends ChangeNotifier {
 
   DateTime? _typingAt;
 
+  /// Live messages heard before the first page was read: merged with it
+  /// when they fit.
+  final List<PeopleMessage> _early = [];
+
+  /// Whether a live [m] belongs in [cur]: already loaded, or not older
+  /// than the oldest loaded message from the server, or [more] says there
+  /// are no older pages (the loaded ones are the whole chat).
+  static bool _fits(List<PeopleLine> cur, PeopleMessage m, bool more) {
+    if (!more) return true;
+    if (cur.any((l) => l.id == m.id)) return true;
+    final oldest = cur.where((l) => !l.local).firstOrNull;
+    if (oldest == null) return false;
+    return !m.createdAt.isBefore(oldest.m.createdAt);
+  }
+
   Future<void> refresh() => Future.wait([_chat(), _pull(first: false)]);
 
   Future<void> _chat() async {
@@ -341,7 +365,16 @@ class PeopleChatData extends ChangeNotifier {
       final kept = (messages ?? const <PeopleLine>[]).where((m) => m.local || (out.more && from != null && m.m.createdAt.isBefore(from))).toList();
       if (!out.more) _olderLoaded = false;
       hasOlder = _olderLoaded ? _olderMore : out.more;
-      messages = _merge(kept, page);
+      var all = _merge(kept, page);
+      if (_early.isNotEmpty) {
+        final early = [for (final m in _early) if (_fits(all, m, hasOlder)) PeopleLine(m)];
+        _early.clear();
+        // The page read is the server's copy: what came live before it
+        // and is in it already is not put back.
+        early.removeWhere((l) => page.any((p) => p.id == l.id));
+        all = _merge(all, early);
+      }
+      messages = all;
       offline = false;
       error = null;
       _changed();
