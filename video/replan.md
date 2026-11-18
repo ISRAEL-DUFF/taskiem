@@ -14,6 +14,7 @@ log, and `web/e2e/demo/` (unchanged since the videos were recorded).
 | **Explore is never empty**: Featured, Trusted on Taskiem, Popular, category chips, Recently viewed, and "Across Nigeria" when no one is near | Built, web and app | Chat film scene 12 and how-tos 1 and 15 show the old Explore. They need refreshing |
 | **The app keeps what it loaded** (works offline like WhatsApp: chats, photos, voice notes, unsent messages sent when back online) | Built | New story: "no network, still works" |
 | **Notifications, links that open the app, passkeys, sign up in the app as on WhatsApp, app lock, mute a customer's chat** | Built (M4), but real push needs the Firebase project, not yet set up | New how-tos for sign-up, app lock, mute. Push on a real phone cannot be filmed yet |
+| **Schools in the phone app** (a School tab, students, desk payments, chasing, clearance and the gate, setup; school figures in the briefing; approval cards) | Built 18 Nov, "waiting for the founder's word" | The Schools series is phone-first (`series/schools/README.md`) |
 | **Updates: Status and Channels** (as WhatsApp's) | **Spec only**, no code yet | Do not film or mention |
 | **Made tools** (a workflow becomes a tool in the chat) | **Plan only**, "nothing here is decided" | Do not film or mention |
 | A large hardening wave: sealed private data, audit chain, exactly-once effects, stock and money races fixed, VM install kit | Built | Strong material for a trust film for regulated buyers (idea 4 in our first slate) |

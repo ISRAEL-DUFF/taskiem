@@ -5,7 +5,8 @@ to the next." Part of [the series plan](../README.md). Draft for approval,
 17 November 2026. Based on `docs/schools.md` (what the app does today).
 
 Same pattern as the other series (Episode 0, then one episode per chapter,
-recap and bridge lines, Next cards, 9:16 and 16:9, English and Pidgin). The
+recap and bridge lines, Next cards, 9:16 and 16:9, English and Pidgin). Unlike
+most series this one is **phone-first**: the School tab is in the phone app. The
 **spine is different**: a school is not a shop. It sells nothing at a counter;
 it enrols students, sets fees, invoices a term, collects money from families,
 chases the rest, and decides at the gate who is cleared. The ten chapters
@@ -30,23 +31,41 @@ None has a face or voice yet; each needs a bible entry and Flow references.
 
 ## 2. What is different about filming this series
 
-- **It is mostly web admin pages** (`web/src/pages/School*.tsx`), not the chat.
-  The phone app has no Schools pages today (only money and invoices). So
-  recordings are the **web app, laptop size first (16:9)**. The vertical cuts
-  need a plan: record at phone width (the web app is responsive, **check** the
-  Schools pages at 390 px) or crop and zoom on the laptop recording.
-- **The gate screen is built for a phone** (one screen, big ✓ CLEARED or
-  ⚠ SEE THE BURSAR), so that episode is naturally vertical.
+**Update, 18 November 2026:** main now has **Schools in the phone app** (built,
+"waiting for the founder's word" in `docs/spec/mobile-app-look.md`, "The school,
+as drawn"). My first draft said the phone app had no Schools pages; that is no
+longer true. So this series is **phone-first, vertical**, and the web admin
+pages are the second surface.
+
+- **On the phone:** when Schools is on, a **School** tab takes Orders' place in
+  the bottom bar (Chats, Today, Money, School). It has the term's fees collected
+  of expected, owing by how late, the day's close; Students (search, import,
+  add, one student's money and account number); Record a payment at the desk
+  (a large amount waits for a second person); Debtors and reminders, promises
+  and payment plans; Clearance and **the gate screen**; and Setup (classes and
+  terms, fees, invoicing a term, importing students).
+- **In the chat:** the morning briefing shows the school's figures; a cash
+  posting waiting for a second person arrives as an **Approve / Decline card**;
+  the tools panel starts with the school's tools. These parts can be filmed from
+  the chat.
+- **Still on the web only:** the school's wallet setup, and the **family page**
+  that parents open from an SMS link (so that episode shows a parent's phone
+  browser).
+- **Filming constraint:** the School tab and its pages are the phone app's own
+  design, not the web's. The recorder drives the web, so these screens need a
+  **screen recording of the real app** (an Android emulator or a phone), as in
+  `video/replan.md`, section 3. This environment has no Flutter or Android SDK.
+  Chat parts (briefing, approval card, tools) can still be recorded from the web.
+- **The demo world has no school.** It needs `seed-school.ts`: classes, a current
+  term, students and families, fees, invoices, payments, debtors, a gate user.
+  **Check:** a student's own account number needs an issuing connection (a bank
+  rail); the demo has none, so a stand-in is needed or we show the setup without
+  a live number.
+- **Personal data is sealed**: names, phones and dates of birth are masked unless
+  someone with permission shows them. Demo names are fictional; the safety
+  episode shows the masking on purpose.
 - **WhatsApp and SMS carry parts of the story**: fee reminders, the family page
   link, the owner's second-person approvals.
-- **The demo world has no school.** It needs `seed-school.ts`: a school with
-  classes, a current term, students and families, fees, some invoices, a few
-  payments and debtors, a gate user. **Check:** a student's own account number
-  needs an issuing connection (a bank rail); the demo has none, so a stand-in is
-  needed or we show the setup without a live number.
-- **Real personal data is sealed**: names, phones and dates of birth are masked
-  in the app unless someone with permission shows them. All demo names are
-  fictional; we show masking on purpose in the safety episode.
 
 ## 3. Episodes
 
@@ -115,7 +134,8 @@ None has a face or voice yet; each needs a bible entry and Flow references.
 - **Goal:** money arrives and lands on the right child.
 - **Shows:** a student's own account number (a transfer lands on that child by
   itself); cash and transfers posted at the desk; a posting over the
-  threshold waits for a second person (approved on WhatsApp or the web);
+  threshold waits for a second person, who gets an Approve / Decline card in
+  the Taskiem chat (or on WhatsApp);
   receipts with a QR code that checks as Valid.
 - **Hero feature:** a transfer lands on the right child with no one asked.
 - **Length:** 75 s / 2:00. **Check:** account numbers need the issuing connection.
@@ -141,14 +161,16 @@ None has a face or voice yet; each needs a bible entry and Flow references.
   letters, a tap, ✓ CLEARED or ⚠ SEE THE BURSAR, in large type; a class list for
   a teacher with no amounts.
 - **Hero feature:** the gate screen. Mallam Audu on one phone.
-- **Length:** 60 s / 1:45. Naturally vertical.
+- **Length:** 60 s / 1:45. Naturally vertical: the gate screen and Clearance
+  are phone screens.
 - **Recap:** "It is resumption morning."
 - **Bridge:** "At night, the day's money has to add up. Does it?"
 - **Next card:** Episode 9: Know your school.
 
 ### Episode 9: Know your school
 - **Goal:** read the overview and the daily close.
-- **Shows:** Overview; the daily close (money in on students, matched, not yet
+- **Shows:** the School tab (collected of expected, owing by how late) and the
+  Overview; the daily close (money in on students, matched, not yet
   matched, waiting for a second person, and "reconciles" or "does not
   reconcile"); the morning summary to the owner on WhatsApp.
 - **Hero feature:** a close that says reconciles, and lists what does not.
@@ -171,10 +193,12 @@ None has a face or voice yet; each needs a bible entry and Flow references.
 
 1. `seed-school.ts` (see section 2) and a decision on account numbers in the demo.
 2. The cast's bible entries and Flow references (five people).
-3. Recording scripts per episode in this folder, for the web at laptop size.
+3. Recording scripts for the chat parts (web), and screen recordings of the
+   real phone app for the School tab and its pages.
 4. English narration, then Pidgin and its review; names added to
    `characters/pronunciation.md` (Fashola, Ibe, Audu, Lawal, Danjuma, Ikorodu).
-5. A plan for the vertical cuts of web admin footage.
+5. A real phone or emulator build for the School screens, and a plan for the
+   few web-only parts (wallet setup, the parents' family page).
 
 ## 5. Where it goes in the order
 
