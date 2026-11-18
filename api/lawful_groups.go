@@ -9,7 +9,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/peoplechats"
 )
 
@@ -19,8 +18,10 @@ import (
 // of the dates asked as the person's own copy holds them (row-level
 // security keeps them to the person's own time in the group; never one
 // they deleted for themselves): their own (sent), or every one they could
-// see (seen); with one other person named (with_person_id), only theirs
-// and the person's. Photos and files only when the request asks for files.
+// see (seen); with one other person named (with_person_id), only the
+// groups both were in, only the times both were in each, and (seen) only
+// theirs and the person's. Photos and files only when the request asks
+// for files.
 
 type lawfulGroupMessage struct {
 	ID         uuid.UUID       `json:"id"`
@@ -43,13 +44,49 @@ type lawfulGroup struct {
 	Messages []lawfulGroupMessage `json:"messages"`
 }
 
-// lawfulGroupsExport reads the person's group messages within the
-// request's scope, in the person's own transaction; answers the groups
-// with messages, how many messages and how many files.
-func (s *Server) lawfulGroupsExport(ctx context.Context, person uuid.UUID, lr lawfulRequest) ([]lawfulGroup, int, int, error) {
+// lawfulGroupsTx reads the person's group messages within the request's
+// scope, in tx scoped to the person; answers the groups with messages,
+// how many messages and how many files. With one other person named
+// (with_person_id), only the groups both were in, and only messages of
+// the times both were in each (the other's times read in their own scope
+// for a moment, then the person's again): what the other was never there
+// for is not "between" them.
+func (s *Server) lawfulGroupsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, lr lawfulRequest) ([]lawfulGroup, int, int, error) {
 	var out []lawfulGroup
 	given, files := 0, 0
-	err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+	// The other person's times in each group: each time they were in it
+	// (what they see), and their latest time whole (what they deleted for
+	// themselves within it they were still there for).
+	var withTimes map[uuid.UUID]string
+	if lr.WithPersonID != nil {
+		withTimes = map[uuid.UUID]string{}
+		if err := personScopeTx(ctx, tx, *lr.WithPersonID); err != nil {
+			return nil, 0, 0, err
+		}
+		rows, err := tx.Query(ctx, `SELECT group_id, (visible + tstzmultirange(tstzrange(joined_at, left_at)))::text FROM group_members WHERE person_id = $1`,
+			*lr.WithPersonID)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		type span struct {
+			group uuid.UUID
+			times string
+		}
+		spans, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (span, error) {
+			var x span
+			return x, r.Scan(&x.group, &x.times)
+		})
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		for _, x := range spans {
+			withTimes[x.group] = x.times
+		}
+		if err := personScopeTx(ctx, tx, person); err != nil {
+			return nil, 0, 0, err
+		}
+	}
+	err := func() error {
 		rows, err := tx.Query(ctx, `SELECT g.id, g.sealed, m.left_sealed, m.left_at IS NULL FROM group_members m JOIN people_groups g ON g.id = m.group_id
 			WHERE m.person_id = $1 ORDER BY g.id`, person)
 		if err != nil {
@@ -68,6 +105,14 @@ func (s *Server) lawfulGroupsExport(ctx context.Context, person uuid.UUID, lr la
 			return err
 		}
 		for _, g := range refs {
+			var both *string
+			if withTimes != nil {
+				t, ok := withTimes[g.id]
+				if !ok {
+					continue
+				}
+				both = &t
+			}
 			key, err := s.keys().GroupKeyTx(ctx, tx, g.id)
 			if errors.Is(err, peoplechats.ErrNoKey) {
 				continue
@@ -80,7 +125,8 @@ func (s *Server) lawfulGroupsExport(ctx context.Context, person uuid.UUID, lr la
 				LEFT JOIN group_marks k ON k.group_id = x.group_id AND k.message_id = x.id AND k.person_id = $1
 				WHERE x.group_id = $2 AND x.kind <> 'event' AND k.hidden_at IS NULL AND x.created_at >= $3 AND x.created_at < $5
 				  AND CASE WHEN $6 = 'sent' THEN x.sender_id = $1 ELSE ($7::uuid IS NULL OR x.sender_id = $1 OR x.sender_id = $7) END
-				ORDER BY x.created_at, x.id`, person, g.id, lr.From, lr.Files, lr.To, lr.Groups, lr.WithPersonID)
+				  AND ($8::tstzmultirange IS NULL OR $8::tstzmultirange @> x.created_at)
+				ORDER BY x.created_at, x.id`, person, g.id, lr.From, lr.Files, lr.To, lr.Groups, lr.WithPersonID, both)
 			if err != nil {
 				return err
 			}
@@ -143,6 +189,6 @@ func (s *Server) lawfulGroupsExport(ctx context.Context, person uuid.UUID, lr la
 			out = append(out, lawfulGroup{GroupID: g.id, Name: openGroupInfo(key, g.id, info).Name, Messages: msgs})
 		}
 		return nil
-	})
+	}()
 	return out, given, files, err
 }

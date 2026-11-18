@@ -267,11 +267,12 @@ func (s *Server) groupMessagesTx(ctx context.Context, tx pgx.Tx, person, group u
 			// added, always warns as a transfer does (§11 A, as 5a's).
 			splitPay := v.Card != nil && v.Card.Type == "split" && v.Card.PayTo != nil && !known
 			v.WarnTransfer = (v.Kind == "text" && warnTransfer(v.Body)) || splitPay
-			// The checks' mark shows only to those who haven't added the
-			// sender (B1).
+			// The checks' mark (warn: a group never keeps 5a's "transfer",
+			// whose one recipient is known when it is sent; here splitPay
+			// decides it for each member as they read) shows only to those
+			// who haven't added the sender (B1).
 			if (m.screen != nil && !known) || splitPay {
 				v.Warn = true
-				v.WarnTransfer = v.WarnTransfer || (m.screen != nil && *m.screen == "transfer")
 			}
 		}
 		out = append(out, v)
@@ -436,6 +437,30 @@ func (s *Server) groupSend(ctx context.Context, me uuid.UUID, groupID string, d 
 			}
 			if !errors.Is(err, pgx.ErrNoRows) {
 				return err
+			}
+			// A send the checks held, retried: answered as it was, nothing
+			// written or counted again (released: the message it became).
+			if !d.released {
+				h, err := heldAgainTx(ctx, tx, nil, &g.ID, d.clientID)
+				if err != nil {
+					return err
+				}
+				if h != nil {
+					if h.state == "released" {
+						err := tx.QueryRow(ctx, `SELECT id FROM group_messages WHERE group_id = $1 AND sender_id = $2 AND client_id = $3`,
+							g.ID, me, releasedClientID(h.id)).Scan(&id)
+						if err == nil {
+							m, err := s.groupOneMessageTx(ctx, tx, me, g.ID, id)
+							again = &m
+							return err
+						}
+						if !errors.Is(err, pgx.ErrNoRows) {
+							return err
+						}
+					}
+					held = customerSendErr{http.StatusForbidden, peopleHeldWords}
+					return nil
+				}
 			}
 		}
 		st, err := standingTx(ctx, tx, me)
@@ -957,7 +982,9 @@ func (s *Server) markGroupMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	var out groupMessage
 	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
-		g, err := groupTx(ctx, tx, person, chi.URLParam(r, "id"), false)
+		// A reaction reaches every member: the group's row first, as every
+		// writer of the group takes it, so a closing is seen.
+		g, err := groupTx(ctx, tx, person, chi.URLParam(r, "id"), in.Reaction != nil)
 		if err != nil {
 			return err
 		}
@@ -967,6 +994,11 @@ func (s *Server) markGroupMessage(w http.ResponseWriter, r *http.Request) {
 		}
 		if m.kind == "event" {
 			return errDoorNone
+		}
+		if in.Reaction != nil {
+			if err := g.changeable(); err != nil {
+				return err
+			}
 		}
 		if in.Starred != nil {
 			if _, err := tx.Exec(ctx, `INSERT INTO group_marks (group_id, message_id, person_id, starred_at) VALUES ($1, $2, $3, CASE WHEN $4 THEN now() END)
@@ -1294,6 +1326,9 @@ func (s *Server) markGroupSplitPaid(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
+		if err := g.changeable(); err != nil {
+			return err
+		}
 		if m.cardType == nil || *m.cardType != "split" || m.deletedAt != nil {
 			return customerSendErr{http.StatusConflict, "Only a share card is marked paid."}
 		}
@@ -1340,7 +1375,8 @@ func (s *Server) typingGroup(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if !g.current() || (g.AdminsOnlyPost && g.Role != "admin") {
+		// No one types in a closed group: nothing is written, nothing shown.
+		if !g.current() || (g.AdminsOnlyPost && g.Role != "admin") || g.standing.ClosedAt != nil {
 			return nil
 		}
 		if !on {

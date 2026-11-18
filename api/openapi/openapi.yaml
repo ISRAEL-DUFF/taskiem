@@ -22682,7 +22682,7 @@ paths:
       tags:
       - People
       summary: Add people to a group
-      description: 'An admin adds people (§9). Each is `added` at once only when the admin has them as a contact and their "Who can add me to groups" lets the admin (A3); otherwise `invited`: an invite waits in their Requests. An add across a block either way is answered `invited` too, and they never see it (A8). `member`: in it already; `full`: 256 already; `unavailable`: no such active account. 429 when the invites to people who aren''t your contacts would pass your day''s (ten in your first week): nothing is done. 403 for a group Taskiem''s moderators closed.'
+      description: 'An admin adds people (§9). Each is `added` at once only when the admin has them as a contact and their "Who can add me to groups" lets the admin (A3); otherwise `invited`: an invite waits in their Requests. An add across a block either way is answered `invited` too, and they never see it (A8). `member`: in it already; `full`: 256 already; `unavailable`: no such active account. 429 when the invites to people who aren''t your contacts would pass your day''s (ten in your first week): nothing is done. 409 for a group Taskiem''s moderators closed.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -23610,7 +23610,7 @@ paths:
       tags:
       - People
       summary: Report a group, or one of its members, to Taskiem
-      description: 'Sends the group (or, with `person_id`, one of its members) and the last 20 messages of the group you could see (only within your own time in it, never one you deleted for yourself), with the photos and files in them (up to 50 MB, the newest first), to Taskiem''s moderators, only with `consent: true` (400 without). Someone who left can report what their copy holds. The report is sealed under a key of its own with the group''s name then, and kept after the group, the member or your account is deleted, until a year after a moderator reviewed it. 404 for a person who isn''t in the group; twelve reports in two hours, shared with your other reports (429).'
+      description: 'Sends the group (or, with `person_id`, one of its members) and the last 20 messages of the group you could see (only within your own time in it, never one you deleted for yourself), with the photos and files in them (up to 50 MB, the newest first), to Taskiem''s moderators, only with `consent: true` (400 without). Someone who left can report what their copy holds. The report is sealed under a key of its own with the group''s name then, and kept after the group, the member or your account is deleted, until a year after a moderator reviewed it. 404 for a person who isn''t in the group, or whose time in it never met yours (as an unknown id). A member''s report weighs in their limits only when your account is past its first week, you had been in the group a day or more, and they wrote within what you see; and then half. Twelve reports in two hours, shared with your other reports (429).'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -43510,7 +43510,7 @@ components:
       type: object
       additionalProperties: false
       required: [at, until, words, can_appeal]
-      description: 'Taskiem''s moderators closed the group (people-chatting §8.3): no one sends in it, joins it or changes it; it is deleted with all its messages on `until` (§14) unless its admins appeal and the decision is overturned. `words` say so in plain words. For admins, the closure to appeal (POST /v1/me/groups/{id}/appeal) with its reason and the appeal.'
+      description: 'Taskiem''s moderators closed the group (people-chatting §8.3): no one sends in it or joins it (403), nor changes it or reaches its members (409: its info, rules, photo and link, adding, removing and letting people in, invites, admins, reactions, a share marked paid; typing shows nothing); each member still reads, leaves, sets their own settings, deletes for themselves, deletes their own message for everyone, reports and blocks, and its admins appeal; it is deleted with all its messages on `until` (§14) unless its admins appeal and the decision is overturned. `words` say so in plain words. For admins, the closure to appeal (POST /v1/me/groups/{id}/appeal) with its reason and the appeal.'
       properties:
         at:
           type: string

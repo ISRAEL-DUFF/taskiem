@@ -164,13 +164,13 @@ export function PeopleReports() {
                   tone={r.status === "open" ? "warn" : "muted"}
                   testid="ops-people-report"
                   title={
-                    r.group_id && !r.reported_id
+                    r.group_id && !r.group_member
                       ? `A group: ${reportReasonLabel(r.reason)}`
                       : `${r.reported_name || "Deleted account"}: ${reportReasonLabel(r.reason)}`
                   }
                   side={fmtTime(r.created_at)}
                   sub={[
-                    r.group_id ? (r.reported_id ? "A member, from a group" : "The whole group") : r.from_request ? "From a message request" : "From a chat",
+                    r.group_id ? (r.group_member ? "A member, from a group" : "The whole group") : r.from_request ? "From a message request" : "From a chat",
                     `${r.files} ${r.files === 1 ? "file" : "files"} kept`,
                     `reported by ${r.reports_against} ${r.reports_against === 1 ? "person" : "people"}`,
                     r.detached ? "the reporter deleted their account" : "",
@@ -399,7 +399,7 @@ function PeopleReportOpened({ id, why, again }: { id: string; why: string; again
     <>
       <section className="card" data-testid="ops-people-report-head">
         <h2>
-          {r.group_id && !r.reported_id ? "A group" : r.reported_name || "Deleted account"}: {reportReasonLabel(r.reason)}
+          {r.group_id && !r.group_member ? "A group" : r.reported_name || "Deleted account"}: {reportReasonLabel(r.reason)}
         </h2>
         {data.group && (
           <p data-testid="ops-report-group">
@@ -998,7 +998,7 @@ function GroupOpened({ id, why, again }: { id: string; why: string; again: () =>
               to={`/ops/people/reports/${r.id}`}
               icon="inbox"
               tone={r.status === "open" ? "warn" : "muted"}
-              title={`${r.reported_id ? r.reported_name || "Deleted account" : "The group"}: ${reportReasonLabel(r.reason)}`}
+              title={`${r.group_member ? r.reported_name || "Deleted account" : "The group"}: ${reportReasonLabel(r.reason)}`}
               side={fmtTime(r.created_at)}
               sideSub={r.status === "open" ? "Open" : "Reviewed"}
             />

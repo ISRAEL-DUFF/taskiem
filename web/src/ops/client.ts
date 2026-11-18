@@ -270,8 +270,10 @@ export interface OpsPeopleReportRow {
   reviewed_by: string | null;
   reviewed_at: string | null;
   reports_against: number;
-  /** A report from inside a group: of the group (reported_id null) or of a member. */
+  /** A report from inside a group: of the group or of a member (group_member). */
   group_id: string | null;
+  /** A member's report, still one after their account goes (reported_id null then). */
+  group_member: boolean;
 }
 
 export interface OpsCustomerReportRow {
@@ -322,6 +324,7 @@ export interface OpsPeopleReport {
     reviewed_at: string | null;
     review_note: string | null;
     group_id: string | null;
+    group_member: boolean;
   };
   messages: OpsReportMessage[];
   files: { message_id: string; type: string; size: number }[];
@@ -471,7 +474,16 @@ export interface OpsGroup {
     deleted: boolean;
     suspended: boolean;
   }[];
-  reports: { id: string; reporter_id: string | null; reported_id: string | null; reported_name: string; reason: string; status: "open" | "reviewed"; created_at: string }[];
+  reports: {
+    id: string;
+    reporter_id: string | null;
+    reported_id: string | null;
+    reported_name: string;
+    reason: string;
+    status: "open" | "reviewed";
+    created_at: string;
+    group_member: boolean;
+  }[];
   actions: OpsGroupAction[];
 }
 
