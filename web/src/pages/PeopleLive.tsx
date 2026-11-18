@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { post } from "../api";
-import { withPresence, type LiveChat, type LiveGone, type LiveMessage, type LivePresence, type PeopleLiveEvent, type PresenceMap } from "../lib/peoplelive";
+import { NO_PRESENCE, readySays, shownPresence, withPresence, type LiveChat, type LiveGone, type LiveMessage, type LivePresence, type PeopleLiveEvent, type PresenceMap } from "../lib/peoplelive";
 
 // You's live connection (docs/spec/people-chatting.md, "As built: stage 5a
 // gaps, chat features (server)"): one EventSource to GET /v1/me/live for
@@ -39,13 +39,11 @@ interface PeopleLive {
 }
 
 const EMPTY = new Set<string>();
-const NO_PRESENCE: PresenceMap = new Map();
 const NONE: PeopleLive = { connected: false, typing: EMPTY, presence: NO_PRESENCE, subscribe: () => () => undefined };
 const Ctx = createContext<PeopleLive>(NONE);
 export const usePeopleLive = () => useContext(Ctx);
 
-/** How often the pages poll: slowly while the connection is open. */
-export const livePoll = (connected: boolean, fallbackMs: number) => (connected ? Math.max(fallbackMs, 60_000) : fallbackMs);
+export { livePoll } from "../lib/peoplelive";
 
 /** The person's side's live connection, for everything under it. */
 export function PeopleLiveProvider({ on, children }: { on: boolean; children: ReactNode }) {
@@ -66,6 +64,9 @@ export function PeopleLiveProvider({ on, children }: { on: boolean; children: Re
     let heard = Date.now();
     let stopped = false;
     let connection: string | undefined;
+    // What the connection's address said when it was opened: the browser's
+    // own reconnection reuses it, `?away=1` and all, so `ready` corrects it.
+    let openedAway = false;
     const emit = (e: PeopleLiveEvent) => subs.current.forEach((fn) => fn(e));
     const hear = () => {
       heard = Date.now();
@@ -96,11 +97,14 @@ export function PeopleLiveProvider({ on, children }: { on: boolean; children: Re
       connection = undefined;
       setConnected(false);
       setTyping(EMPTY);
+      // Who is online is known only while connected.
+      setPresence(NO_PRESENCE);
     };
     const open = () => {
       hear();
       // Opened while the tab is hidden: away from the start.
-      es = new EventSource(front() ? "/v1/me/live" : "/v1/me/live?away=1");
+      openedAway = !front();
+      es = new EventSource(openedAway ? "/v1/me/live?away=1" : "/v1/me/live");
       window.clearInterval(watch);
       watch = window.setInterval(() => {
         if (Date.now() - heard > timing().stallMs) {
@@ -112,8 +116,12 @@ export function PeopleLiveProvider({ on, children }: { on: boolean; children: Re
         hear();
         connection = data<{ connection: string }>(ev).connection;
         setConnected(true);
-        // The tab went to the back while the connection opened.
-        if (!front()) say(false);
+        // A new connection: what was told before of who is online is old.
+        setPresence(NO_PRESENCE);
+        // The tab went to the back, or came to the front, since the address
+        // was made (the browser's reconnection reuses it): said for this one.
+        const now = readySays(openedAway, front());
+        if (now !== null) say(now);
         emit({ type: "ready" });
       });
       es.addEventListener("ping", () => hear());
@@ -164,5 +172,7 @@ export function PeopleLiveProvider({ on, children }: { on: boolean; children: Re
     };
   }, [on]);
 
-  return <Ctx.Provider value={{ connected, typing, presence, subscribe }}>{children}</Ctx.Provider>;
+  // Presence is applied only while connected; the open chat's head is read
+  // again on `ready`.
+  return <Ctx.Provider value={{ connected, typing, presence: shownPresence(connected, presence), subscribe }}>{children}</Ctx.Provider>;
 }

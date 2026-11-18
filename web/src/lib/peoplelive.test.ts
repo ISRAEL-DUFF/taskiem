@@ -17,6 +17,14 @@ import {
   snippetParts,
   starredURL,
   threadWithGone,
+  chatsPoll,
+  hasBusinessRow,
+  NO_PRESENCE,
+  readySays,
+  shownPresence,
+  atFindState,
+  AT_FIND_WORDS,
+  typingWords,
   threadWithLive,
   TypingGate,
   withPresence,
@@ -56,6 +64,24 @@ const row = (kind: "person" | "business", id: string, at: string): ChatListItem 
   blocked: false,
 });
 
+describe("opening a chat at a message, and who is typing", () => {
+  it("says a message not found is gone only when every page was read, else further back", () => {
+    expect(atFindState(true, true)).toBeUndefined();
+    expect(atFindState(true, false)).toBeUndefined();
+    expect(atFindState(false, false)).toBe("gone");
+    expect(atFindState(false, true)).toBe("far");
+    expect(AT_FIND_WORDS.gone).toBe("That message is no longer in this chat.");
+    expect(AT_FIND_WORDS.far).not.toMatch(/no longer/);
+  });
+
+  it("says who is typing for a screen reader, and nothing when no one is", () => {
+    expect(typingWords([])).toBe("");
+    expect(typingWords(["Ada Obi"])).toBe("Ada Obi is typing");
+    expect(typingWords(["Ada Obi", "Bola Ade"])).toBe("Ada Obi and Bola Ade are typing");
+    expect(typingWords(["a", "b", "c"])).toBe("3 people are typing");
+  });
+});
+
 describe("the live connection's events", () => {
   it("adds a message to its open chat and changes one it has", () => {
     const cur = [msg("a", "2026-11-18T10:00:00Z"), msg("b", "2026-11-18T10:01:00Z")];
@@ -80,6 +106,56 @@ describe("the live connection's events", () => {
     // Other words: the copy on its way stays.
     const other = threadWithLive(cur, "c1", { chat_id: "c1", request: false, message: msg("srv2", "2026-11-18T10:00:04Z", { mine: true, body: "Something else" }) });
     expect(other?.map((m) => m.id)).toEqual(["a", "srv2", "local-1"]);
+  });
+
+  it("changes an old message only when it is read, and never drops it into the thread to page from", () => {
+    const cur = [msg("a", "2026-11-18T10:00:00Z"), msg("b", "2026-11-18T10:01:00Z")];
+    // A reaction on a message from months ago, not read: left out.
+    const old = msg("old", "2026-08-01T10:00:00Z", { their_reaction: "❤️" });
+    expect(threadWithLive(cur, "c1", { chat_id: "c1", request: false, message: old })).toBe(cur);
+    // The oldest read is changed in place.
+    const a = threadWithLive(cur, "c1", { chat_id: "c1", request: false, message: msg("a", "2026-11-18T10:00:00Z", { starred: true }) });
+    expect(a?.map((m) => m.id)).toEqual(["a", "b"]);
+    expect(a?.[0]?.starred).toBe(true);
+    // Between what was read: added.
+    expect(threadWithLive(cur, "c1", { chat_id: "c1", request: false, message: msg("ab", "2026-11-18T10:00:30Z") })?.map((m) => m.id)).toEqual(["a", "ab", "b"]);
+    // Only sends on their way read: nothing older to page from, so it is added.
+    const local = [msg("local-1", "2026-11-18T10:05:00Z", { mine: true, local: true })];
+    expect(threadWithLive(local, "c1", { chat_id: "c1", request: false, message: msg("x", "2026-11-18T09:00:00Z") })?.map((m) => m.id)).toEqual(["x", "local-1"]);
+    // An empty chat takes it.
+    expect(threadWithLive([], "c1", { chat_id: "c1", request: false, message: msg("x", "2026-11-18T09:00:00Z") })?.map((m) => m.id)).toEqual(["x"]);
+  });
+
+  it("reads the Chats list every 8 seconds while it has a business row, live or not", () => {
+    expect(hasBusinessRow([row("person", "c1", "2026-11-18T10:00:00Z"), row("business", "shop", "2026-11-18T10:05:00Z")])).toBe(true);
+    expect(hasBusinessRow([row("person", "c1", "2026-11-18T10:00:00Z")])).toBe(false);
+    expect(hasBusinessRow(undefined)).toBe(false);
+    expect(chatsPoll(true, true, 8000)).toBe(8000);
+    expect(chatsPoll(false, true, 8000)).toBe(8000);
+    // People chats only: the live connection tells; a slow look as a fallback.
+    expect(chatsPoll(true, false, 8000)).toBe(60_000);
+    expect(chatsPoll(false, false, 8000)).toBe(8000);
+  });
+
+  it("gives the pages presence only while connected", () => {
+    const p = withPresence(NO_PRESENCE, { people: [{ person_id: "p1", chat_id: "c1", online: true, last_seen_at: null }] });
+    expect(shownPresence(true, p)).toBe(p);
+    expect(shownPresence(false, p).size).toBe(0);
+    // A chat's head is then the server's own again.
+    const c = chat("c1", "2026-11-18T10:00:00Z", { person_id: "p1", person: { online: false, last_seen_at: "2026-11-18T09:00:00Z" } as PeopleChat["person"] });
+    expect(chatWithPresence(c, shownPresence(true, p))?.person?.online).toBe(true);
+    expect(chatWithPresence(c, shownPresence(false, p))?.person?.online).toBe(false);
+  });
+
+  it("says in front on a reconnection that reused ?away=1, and away on one opened in front", () => {
+    // Opened hidden (?away=1), the tab now seen: the browser's reconnection
+    // reused the address, so in front is said.
+    expect(readySays(true, true)).toBe(true);
+    // Opened in front, the tab hidden since: away is said.
+    expect(readySays(false, false)).toBe(false);
+    // The address already says it.
+    expect(readySays(true, false)).toBeNull();
+    expect(readySays(false, true)).toBeNull();
   });
 
   it("takes out a message deleted for the person elsewhere", () => {

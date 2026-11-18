@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { actorLabel } from "../lib/ops";
-import { LAWFUL_STATES, lagosDay } from "../lib/peoplesafety";
+import { accountIDProblem, isAccountID, LAWFUL_STATES, lagosDay } from "../lib/peoplesafety";
 import { ErrorBox, Field, Items, Item, fmtTime, useAction, useLoad } from "../ui";
 import { opsGet, withStepUp, type OpsLawfulRequest, type OpsMe } from "./client";
 
@@ -56,13 +56,25 @@ function RecordLawful({ onDone }: { onDone: () => void }) {
   const [f, setF] = useState({ authority: "", reference: "", legal_basis: "", person_id: "", with_person_id: "", from: "", to: "", received: "", files: false, scope_note: "" });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const act = useAction();
-  const ready = f.authority.trim() && f.reference.trim() && f.legal_basis.trim() && f.person_id.trim() && lagosDay(f.from) && lagosDay(f.to) && lagosDay(f.received);
+  // Account ids are checked here, before the passkey is asked for.
+  const personProblem = accountIDProblem(f.person_id);
+  const withProblem = accountIDProblem(f.with_person_id);
+  const ready =
+    f.authority.trim() &&
+    f.reference.trim() &&
+    f.legal_basis.trim() &&
+    isAccountID(f.person_id) &&
+    !withProblem &&
+    lagosDay(f.from) &&
+    lagosDay(f.to) &&
+    lagosDay(f.received);
   return (
     <form
       className="card"
       data-testid="ops-lawful-record"
       onSubmit={(e) => {
         e.preventDefault();
+        if (!ready) return;
         void act.run(async () => {
           const body: Record<string, unknown> = {
             authority: f.authority.trim(),
@@ -91,11 +103,31 @@ function RecordLawful({ onDone }: { onDone: () => void }) {
       <Field label="The law and the order it was made under">
         <input value={f.legal_basis} onChange={set("legal_basis")} maxLength={500} required />
       </Field>
-      <Field label="The person's account id" hint="From Reports or People safety; the request must name one account.">
-        <input value={f.person_id} onChange={set("person_id")} required />
+      <Field
+        label="The person's account id"
+        hint={
+          personProblem ? (
+            <span role="alert" data-testid="ops-lawful-person-problem">
+              {personProblem}
+            </span>
+          ) : (
+            "From Reports or People safety; the request must name one account."
+          )
+        }
+      >
+        <input value={f.person_id} onChange={set("person_id")} required aria-invalid={!!personProblem} />
       </Field>
-      <Field label="Only their chats with (an account id, if the request names one)">
-        <input value={f.with_person_id} onChange={set("with_person_id")} />
+      <Field
+        label="Only their chats with (an account id, if the request names one)"
+        hint={
+          withProblem && (
+            <span role="alert" data-testid="ops-lawful-with-problem">
+              {withProblem}
+            </span>
+          )
+        }
+      >
+        <input value={f.with_person_id} onChange={set("with_person_id")} aria-invalid={!!withProblem} />
       </Field>
       <Field label="Messages from (day)">
         <input type="date" value={f.from} onChange={set("from")} required />
@@ -121,6 +153,22 @@ function RecordLawful({ onDone }: { onDone: () => void }) {
   );
 }
 
+/** Hands the browser a file to save: the link is in the page while it is
+ * clicked (some browsers ignore one that is not), and its address is let go
+ * only after the download has started. */
+function saveFile(blob: Blob, name: string) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  window.setTimeout(() => {
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  }, 1000);
+}
+
 /** /ops/lawful/:id: one request and its steps. */
 export function LawfulRequest({ me }: { me: OpsMe }) {
   const { id = "" } = useParams();
@@ -143,11 +191,7 @@ export function LawfulRequest({ me }: { me: OpsMe }) {
     act.run(async () => {
       const out = await withStepUp<{ messages_given: number }>("ops.lawful.export", l.id, `/lawful-requests/${l.id}/export`, {});
       const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = `lawful-request-${l.id}.json`;
-      a.click();
-      URL.revokeObjectURL(a.href);
+      saveFile(blob, `lawful-request-${l.id}.json`);
       setExported(`Exported ${out.messages_given} messages. Send the file only to ${l.authority}, as the runbook says.`);
       reload();
     }, false);

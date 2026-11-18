@@ -139,7 +139,7 @@ export function PeopleSearchPage() {
                 ))}
               </Items>
             )}
-            <MoreRows more={found.more} busy={found.busy} onMore={found.loadMore} label="Show more found" testid="people-search-more" />
+            <MoreRows more={found.more} busy={found.busy} onMore={found.loadMore} count={found.rows?.length ?? 0} label="Show more found" testid="people-search-more" />
           </>
         )}
       </section>
@@ -169,7 +169,7 @@ export function PeopleStarredPage() {
             ))}
           </Items>
         )}
-        <MoreRows more={found.more} busy={found.busy} onMore={found.loadMore} label="Show more starred" testid="people-starred-more" />
+        <MoreRows more={found.more} busy={found.busy} onMore={found.loadMore} count={found.rows?.length ?? 0} label="Show more starred" testid="people-starred-more" />
       </section>
     </>
   );

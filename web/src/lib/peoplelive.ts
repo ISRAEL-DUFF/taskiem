@@ -40,10 +40,20 @@ export type PeopleLiveEvent =
 
 /** An open chat's messages after a `message` event for it. Our own message
  * told by the connection before its send was answered takes the place of
- * the copy on its way (same words, still local), so it shows once. */
+ * the copy on its way (same words, still local), so it shows once.
+ *
+ * A message already in the thread is changed in place; one not in it is
+ * added only when it is not older than the oldest message read. An older
+ * one (a reaction, star or delete on a message from months ago) is left
+ * out: put in, it would leave a gap that the thread's older pages are then
+ * read from, skipping everything between it and what was read. */
 export function threadWithLive(cur: PeopleMessage[] | undefined, chat: string, e: LiveMessage): PeopleMessage[] | undefined {
   if (!cur || e.chat_id !== chat) return cur;
   const m = e.message;
+  if (!cur.some((x) => x.id === m.id)) {
+    const oldest = cur.find((x) => !x.local);
+    if (oldest && Date.parse(m.created_at) < Date.parse(oldest.created_at)) return cur;
+  }
   let kept = cur;
   if (m.mine && !cur.some((x) => x.id === m.id)) {
     const twin = cur.find((x) => x.local && !x.attachment && x.body === m.body && m.kind === "text");
@@ -107,6 +117,37 @@ export function requestsWithGone(rows: PeopleChat[] | undefined, e: LiveGone): P
   return rows.filter((r) => r.id !== e.chat_id);
 }
 
+/** How often the pages poll: slowly while the live connection is open. */
+export const livePoll = (connected: boolean, fallbackMs: number) => (connected ? Math.max(fallbackMs, 60_000) : fallbackMs);
+
+/** The one Chats list has a chat with a business. */
+export const hasBusinessRow = (rows: readonly Pick<ChatListItem, "kind">[] | undefined) => !!rows?.some((r) => r.kind === "business");
+
+/** How often the one Chats list is read again: the live connection tells
+ * of people chats only, so while the list has a business row it is read as
+ * often as with no connection. */
+export function chatsPoll(connected: boolean, business: boolean, fallbackMs: number): number {
+  return business ? fallbackMs : livePoll(connected, fallbackMs);
+}
+
+/** Who is typing, for a screen reader's polite live region (the chat's
+ * head, the Chats list's rows): empty when no one is. */
+export function typingWords(names: readonly string[]): string {
+  if (names.length === 0) return "";
+  if (names.length === 1) return `${names[0]} is typing`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are typing`;
+  return `${names.length} people are typing`;
+}
+
+/** What a connection's `ready` says of the tab (POST /v1/me/presence
+ * {online}): the server starts a connection away when its address has
+ * `?away=1`, which the browser's own reconnection reuses however the tab is
+ * now. In front or away when that differs from the address; null when the
+ * address already says it. */
+export function readySays(openedAway: boolean, front: boolean): boolean | null {
+  return openedAway === !front ? null : front;
+}
+
 /** Who is online and when last seen, by person, after a `presence` event. */
 export type PresenceMap = ReadonlyMap<string, { online: boolean | null; last_seen_at: string | null }>;
 export function withPresence(cur: PresenceMap, e: LivePresence): PresenceMap {
@@ -115,6 +156,13 @@ export function withPresence(cur: PresenceMap, e: LivePresence): PresenceMap {
   for (const p of e.people) next.set(p.person_id, { online: p.online, last_seen_at: p.last_seen_at });
   return next;
 }
+
+/** No one's presence told. */
+export const NO_PRESENCE: PresenceMap = new Map();
+
+/** The presence the pages are given: only while the connection is open
+ * (one closed tells nothing, and a chat's head reads its own again). */
+export const shownPresence = (connected: boolean, presence: PresenceMap): PresenceMap => (connected ? presence : NO_PRESENCE);
 
 /** A chat with its person as the latest presence says. */
 export function chatWithPresence<C extends Pick<PeopleChat, "person_id" | "person">>(c: C | undefined, presence: PresenceMap): C | undefined {
@@ -248,6 +296,18 @@ function fold(s: string): string {
 /** How many older pages an open chat reads to find the message it was
  * opened at, at most. */
 export const FIND_PAGES = 20;
+
+/** A message opened at and not found: no longer in the chat (every page
+ * read), or further back than the pages read so far. */
+export type AtFind = "gone" | "far";
+export function atFindState(found: boolean, more: boolean): AtFind | undefined {
+  if (found) return undefined;
+  return more ? "far" : "gone";
+}
+export const AT_FIND_WORDS: Record<AtFind, string> = {
+  gone: "That message is no longer in this chat.",
+  far: "That message is further back in this chat than has been read so far.",
+};
 
 // --- sending a place ---
 

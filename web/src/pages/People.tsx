@@ -335,7 +335,7 @@ export function RequestsPage() {
             ))}
           </ul>
         )}
-        <MoreRows more={list.more} busy={list.loadingMore} onMore={list.loadMore} label="Show more requests" testid="people-requests-more" />
+        <MoreRows more={list.more} busy={list.loadingMore} onMore={list.loadMore} count={list.rows?.length ?? 0} label="Show more requests" testid="people-requests-more" />
       </section>
     </>
   );
@@ -756,7 +756,7 @@ export function ShareToPerson({
           </Row>
         ))}
       </Items>
-      <MoreRows more={list.more} busy={list.loadingMore} onMore={list.loadMore} label="Show more chats" />
+      <MoreRows more={list.more} busy={list.loadingMore} onMore={list.loadMore} count={list.rows?.length ?? 0} label="Show more chats" />
     </Sheet>
   );
 }

@@ -768,3 +768,145 @@ test("live: a message, typing and presence without a reload; search, starred, a 
   await efe.page.reload();
   await expect(efe.page.getByTestId("you-push-preview")).not.toBeChecked();
 });
+
+/** Hides or shows a page's tab, as the browser would tell it. */
+async function tab(page: Page, state: "hidden" | "visible") {
+  await page.evaluate((s) => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => s });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, state);
+}
+
+test("second review: read on return, typing said politely, presence after a reconnection, the Chats list's pace, opening at a message far back, more rows", async () => {
+  test.setTimeout(300_000);
+  const ada = st.ada as NonNullable<typeof st.ada>;
+  const bola = st.bola as NonNullable<typeof st.bola>;
+  const chats = await must<{ chats: { id: string; name: string; kind: string }[] }>(bola.page.request.get("/v1/me/conversations", { headers: H }), 200);
+  const bolaChat = chats.chats.find((c) => c.kind === "person" && c.name === "Ada Obi")?.id ?? "";
+  expect(bolaChat).toMatch(/^[0-9a-f-]{36}$/);
+
+  // Read on return: a message that came while Ada's tab was hidden is
+  // marked read as soon as she comes back, not at the next look.
+  await ada.page.goto(`/you/people/${st.chat}`);
+  await expect(ada.page.getByRole("heading", { name: "Bola (school)", level: 2 })).toBeVisible();
+  const reads: string[] = [];
+  ada.page.on("request", (r) => r.method() === "POST" && r.url().endsWith(`/v1/me/people/${st.chat}/read`) && reads.push(r.url()));
+  await tab(ada.page, "hidden");
+  await must(bola.page.request.post(`/v1/me/people/${bolaChat}/messages`, { headers: H, data: { text: "Are you back yet?", client_id: `back-${Date.now()}` } }), 201);
+  await expect(ada.page.getByTestId("people-message").filter({ hasText: "Are you back yet?" })).toBeVisible({ timeout: 10_000 });
+  await ada.page.waitForTimeout(500);
+  expect(reads).toEqual([]);
+  const read = ada.page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/v1/me/people/${st.chat}/read`), { timeout: 5_000 });
+  await tab(ada.page, "visible");
+  await read;
+
+  // Typing is said politely to a screen reader in the chat's head.
+  await bola.page.goto(`/you/people/${bolaChat}`);
+  await bola.page.waitForTimeout(3500);
+  await bola.page.getByLabel("Message Ada Obi").fill("Yes, I am");
+  const said = ada.page.getByTestId("people-typing-live");
+  await expect(said).toHaveAttribute("aria-live", "polite");
+  await expect(said).toHaveText("Bola (school) is typing", { timeout: 10_000 });
+  await bola.page.getByLabel("Message Ada Obi").fill("");
+  await expect(said).toHaveText("", { timeout: 10_000 });
+
+  // The Chats list has a business row: read every 8 seconds even while the
+  // live connection is open (it tells of people chats only).
+  await ada.page.goto("/you");
+  await expect(ada.page.getByTestId("person-chat").filter({ hasText: st.business ?? "" })).toBeVisible();
+  await ada.page.waitForTimeout(2_000);
+  let lists = 0;
+  const counted = (r: { url(): string; method(): string }) => void (r.method() === "GET" && /\/v1\/me\/conversations(\?|$)/.test(r.url()) && lists++);
+  ada.page.on("request", counted);
+  await ada.page.waitForTimeout(17_000);
+  ada.page.off("request", counted);
+  expect(lists).toBeGreaterThanOrEqual(2);
+
+  // Presence after the browser's own reconnection: opened while hidden
+  // (?away=1), the tab shown, the browser reconnects to the same address:
+  // the new connection is said in front at once (the stream stood in).
+  const p2 = await ada.page.context().newPage();
+  await p2.addInitScript(() => Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" }));
+  const lives: string[] = [];
+  await p2.route("**/v1/me/live*", (r) => {
+    lives.push(r.request().url());
+    return r.fulfill({ status: 200, contentType: "text/event-stream", body: `retry: 500\nevent: ready\ndata: {"connection":"conn-${lives.length}"}\n\n` });
+  });
+  const presence: { online: boolean; connection: string }[] = [];
+  await p2.route("**/v1/me/presence", (r) => (presence.push(r.request().postDataJSON()), r.fulfill({ status: 204 })));
+  await p2.goto("/you");
+  await expect.poll(() => lives.length).toBeGreaterThanOrEqual(1);
+  expect(lives[0]).toMatch(/\/v1\/me\/live\?away=1$/);
+  await tab(p2, "visible");
+  const before = lives.length;
+  await expect.poll(() => lives.length, { timeout: 10_000 }).toBeGreaterThan(before);
+  // Every connection after the tab was shown reused ?away=1; each is said in front.
+  expect(lives.slice(before).every((u) => u.endsWith("?away=1"))).toBe(true);
+  const later = `conn-${before + 1}`;
+  await expect.poll(() => presence.some((p) => p.connection === later && p.online === true), { timeout: 10_000 }).toBe(true);
+  await p2.close();
+
+  // Opening at a message: older pages read until it is in (stood in, slow,
+  // with no live connection so the chat looks every 4 seconds meanwhile):
+  // the look does not lose the jump. One further back than 20 pages says
+  // so, with Keep looking, rather than that it is gone.
+  const p3 = await ada.page.context().newPage();
+  await p3.setViewportSize({ width: 390, height: 800 });
+  await p3.route("**/v1/me/live*", (r) => r.abort());
+  const t0 = Date.parse("2026-10-01T12:00:00Z");
+  const page = (k: number) =>
+    Array.from({ length: 30 }, (_, i) => {
+      const n = k * 30 + (29 - i);
+      return { id: `m${k}-${29 - i}`, mine: false, kind: "text", body: `Old message ${k}.${29 - i}`, read_at: new Date(t0).toISOString(), created_at: new Date(t0 - n * 60_000).toISOString() };
+    });
+  await p3.route(`**/v1/me/people/${st.chat}/messages*`, async (r) => {
+    if (r.request().method() !== "GET") return r.continue();
+    const before = new URL(r.request().url()).searchParams.get("before");
+    const k = before ? Number(/^m(\d+)-/.exec(before)?.[1] ?? 0) + 1 : 0;
+    if (before && k <= 6) await new Promise((done) => setTimeout(done, 800));
+    return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ messages: page(k), more: true }) });
+  });
+  await p3.goto(`/you/people/${st.chat}?at=m6-10`);
+  const near = p3.locator('[data-msg="m6-10"]');
+  await expect(near).toHaveClass(/flash/, { timeout: 15_000 });
+  await expect(near).toBeInViewport();
+  await p3.goto(`/you/people/${st.chat}?at=m25-3`);
+  const missing = p3.getByTestId("people-at-missing");
+  await expect(missing).toHaveAttribute("data-state", "far", { timeout: 15_000 });
+  await expect(missing).toContainText("further back in this chat");
+  await expect(missing).not.toContainText("no longer");
+  await check(p3, "a message further back than was read", 390);
+  await p3.getByTestId("people-at-more").click();
+  const far = p3.locator('[data-msg="m25-3"]');
+  await expect(far).toHaveClass(/flash/, { timeout: 15_000 });
+  await expect(far).toBeInViewport();
+  await expect(missing).toHaveCount(0);
+  await p3.close();
+
+  // More rows: pages of three, the list's end still in view after each,
+  // read one after another without a scroll or a tap.
+  const p4 = await ada.page.context().newPage();
+  await p4.setViewportSize({ width: 390, height: 1400 });
+  await p4.route("**/v1/me/live*", (r) => r.abort());
+  await p4.route(/\/v1\/me\/conversations(\?|$)/, (r) => {
+    const before = new URL(r.request().url()).searchParams.get("before");
+    const k = before ? Number(before) + 1 : 0;
+    const rows = Array.from({ length: 3 }, (_, i) => ({
+      kind: "person",
+      id: `00000000-0000-4000-8000-0000000000${k}${i}`,
+      name: `Friend ${k * 3 + i + 1}`,
+      last: "hello",
+      last_mine: false,
+      last_at: new Date(t0 - (k * 3 + i) * 60_000).toISOString(),
+      unread: 0,
+      muted: false,
+      archived: false,
+      blocked: false,
+    }));
+    return r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ chats: rows, unread: 0, requests: 0, more: k < 3, next: k < 3 ? String(k) : undefined }) });
+  });
+  await p4.goto("/you");
+  await expect(p4.getByTestId("people-chat")).toHaveCount(12, { timeout: 10_000 });
+  await expect(p4.getByTestId("person-chats-more")).toHaveCount(0);
+  await p4.close();
+});
