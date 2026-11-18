@@ -1,7 +1,32 @@
 // Review fixes for groups on the web (docs/spec/people-chatting.md, "As
 // built: stage 5b, groups (web)", "Review fixes").
 import { describe, expect, it } from "vitest";
-import { shownFound, type FoundRow } from "./groups";
+import { mayDeleteGroupForEveryone, mentionedIn, shownFound, type FoundRow } from "./groups";
+
+describe("@ mentions with names two members share", () => {
+  const ms = [
+    { person_id: "a1", name: "Ada" },
+    { person_id: "a2", name: "Ada" },
+    { person_id: "b", name: "Bola" },
+  ];
+  it("names only the member picked, not every one of that name", () => {
+    expect(mentionedIn("Hi @Ada", ms, [{ id: "a2", name: "Ada" }])).toEqual(["a2"]);
+    expect(mentionedIn("Hi @Ada", ms)).toEqual([], "not picked: neither guessed");
+    expect(mentionedIn("Hi @Ada and @Bola", ms, [{ id: "a1", name: "Ada" }])).toEqual(["a1", "b"]);
+  });
+  it("whole words only", () => {
+    expect(mentionedIn("Hi @Adamu", ms, [{ id: "a1", name: "Ada" }])).toEqual([]);
+  });
+});
+
+describe("Delete for everyone in a group", () => {
+  const now = Date.parse("2026-11-17T12:00:00Z");
+  const m = { mine: true, created_at: "2026-11-17T11:00:00Z" };
+  it("only while a member", () => {
+    expect(mayDeleteGroupForEveryone({ left: false }, m, now)).toBe(true);
+    expect(mayDeleteGroupForEveryone({ left: true }, m, now)).toBe(false);
+  });
+});
 
 const row = (key: string, at: string): FoundRow => ({ key, path: "/", title: key, group: false, at, mine: false, line: "" });
 

@@ -7,7 +7,7 @@
 // Groups are kept by Taskiem, sealed at rest and readable by its servers.
 // No word here may say or suggest that they are end-to-end encrypted.
 
-import { mergePeople, type ChatListItem, type PeopleAttachment, type PeopleCard, type PersonCard, type PersonPhoto } from "./people";
+import { mayDeleteForEveryone, mergePeople, type ChatListItem, type PeopleAttachment, type PeopleCard, type PersonCard, type PersonPhoto } from "./people";
 
 // --- what the API answers ---
 
@@ -303,12 +303,25 @@ function mentionSpans(text: string, names: { key: string; name: string }[]): { a
   return out.sort((a, b) => a.at - b.at);
 }
 
-/** The members a message names with "@", as the send's `mentions`. */
-export function mentionedIn(text: string, members: Pick<GroupMember, "person_id" | "name">[]): string[] {
-  const ids = mentionSpans(
+/** The members a message names with "@", as the send's `mentions`: each
+ * "@Name" as a whole word. A name two members share names only the one
+ * picked with "@" (its id kept with the name), never all of them. */
+export function mentionedIn(text: string, members: Pick<GroupMember, "person_id" | "name">[], picks: { id: string; name: string }[] = []): string[] {
+  const byName = new Map<string, string[]>();
+  for (const m of members) {
+    const k = m.name.toLowerCase();
+    byName.set(k, [...(byName.get(k) ?? []), m.person_id]);
+  }
+  const ids: string[] = [];
+  const spans = mentionSpans(
     text,
-    members.map((m) => ({ key: m.person_id, name: m.name })),
-  ).map((s) => s.key);
+    [...byName.keys()].map((k) => ({ key: k, name: k })),
+  );
+  for (const s of spans) {
+    const all = byName.get(s.key) ?? [];
+    if (all.length === 1) ids.push(...all);
+    else ids.push(...picks.filter((p) => p.name.toLowerCase() === s.key && all.includes(p.id)).map((p) => p.id));
+  }
   return [...new Set(ids)];
 }
 
@@ -483,3 +496,9 @@ export function groupSearchURL(q: string, group?: string, before?: string): stri
 
 /** GET /v1/me/groups/starred's address. */
 export const groupStarredURL = (before?: string) => (before ? `/v1/me/groups/starred?before=${encodeURIComponent(before)}` : "/v1/me/groups/starred");
+
+/** Whether "Delete for everyone" is offered for a message of a group:
+ * only to a member now (not after leaving), for their own recent one. */
+export function mayDeleteGroupForEveryone(g: Pick<Group, "left">, m: Parameters<typeof mayDeleteForEveryone>[0], now: number = Date.now()): boolean {
+  return !g.left && mayDeleteForEveryone(m, now);
+}
