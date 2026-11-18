@@ -882,3 +882,154 @@ for (const scheme of ["light", "dark"] as const)
     expect(vs, describe("/p/{code}", vs)).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   });
+
+// People chats' safety (people-chatting "As built: stage 5a gaps, safety and
+// moderation"): the operator console's moderators' screens (reports of
+// people and businesses, a report opened with its photo, held messages and
+// verdicts, a person's standing, appeals, lawful requests), the person's
+// Your standing with an appeal, and the published count of lawful requests
+// signed out; the server's answers stood in for (ops-people.spec.ts goes
+// through them on the real server).
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`people safety screens pass axe and fit ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      const found: string[] = [];
+      const check = async (where: string) => {
+        const vs = await axe(page);
+        if (vs.length > 0) found.push(describe(where, vs));
+        expect(await page.evaluate(() => document.documentElement.scrollWidth), where).toBeLessThanOrEqual(width);
+      };
+      const json = (body: unknown, status = 200) => ({ status, contentType: "application/json", body: JSON.stringify(body) });
+      const now = new Date().toISOString();
+      const later = new Date(Date.now() + 7 * 864e5).toISOString();
+      const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+      const ops = (path: string, body: unknown) => page.route(`**/v1/ops${path}`, (r) => r.fulfill(json(body)));
+      await ops("/me", { operator: { id: "o1", email: "mod@taskiem.test", name: "Mod", auth_method: "passkey", expires_at: later }, reviewer: false });
+      await ops("/people/overview", {
+        open: { people_reports: 2, customer_reports: 1, held: 3, appeals: 1, lawful_requests: 1 },
+        storage: [
+          { table: "people_files", rows: 1200, bytes: 734003200 },
+          { table: "people_messages", rows: 98000, bytes: 52428800 },
+        ],
+        storage_words: "People chats take 750.0 MB on disk.",
+      });
+      const row = { id: "r1", reporter_id: "p1", detached: false, reported_id: "p2", reported_name: "Dayo Ola", reported_gone: false, reported_suspended: false, reason: "scam", note: "Wants money first", from_request: true, files: 1, sealed: true, status: "open", created_at: now, reviewed_by: null, reviewed_at: null, reports_against: 2 };
+      await page.route(/\/v1\/ops\/people\/reports\?/, (r) => r.fulfill(json({ reports: [row, { ...row, id: "r2", status: "reviewed", reviewed_by: "operator:ana@taskiem.test", reviewed_at: now, detached: true }] })));
+      await page.route(/\/v1\/ops\/customer-reports\?/, (r) =>
+        r.fulfill(json({ reports: [{ id: "cr1", reporter_id: "p1", detached: false, tenant_id: "t1", business: "Mama's Kitchen", reason: "abuse", note: "", messages: 4, status: "open", created_at: now, reviewed_by: null, reviewed_at: null }] })),
+      );
+      await page.route(/\/v1\/ops\/people\/reports\/r1\?why=/, (r) =>
+        r.fulfill(
+          json({
+            report: { id: "r1", reporter_id: "p1", reported_id: "p2", reported_name: "Dayo Ola", reason: "scam", note: "Wants money first", from_request: true, status: "open", created_at: now, reviewed_by: null, reviewed_at: null, review_note: null },
+            messages: [
+              { id: "m2", from_reporter: false, kind: "media", body: "Only 5000 naira", attachment: { kind: "photo", type: "image/png", size: 68, name: "dress.png" }, file: true, at: now },
+              { id: "m1", from_reporter: false, kind: "text", body: "Hello, send the code you got", at: now },
+            ],
+            files: [{ message_id: "m2", type: "image/png", size: 68 }],
+            sealed: true,
+          }),
+        ),
+      );
+      await page.route(/\/v1\/ops\/people\/reports\/r1\/files\/m2\?why=/, (r) => r.fulfill({ status: 200, contentType: "image/png", body: png }));
+      const held = { id: "h1", sender_id: "p2", sender_name: "Dayo Ola", recipient_id: "p1", recipient_name: "Ada Obi", kind: "text", reasons: ["code", "prize"], has_file: false, state: "held", created_at: now, decided_by: null, decided_at: null };
+      await page.route(/\/v1\/ops\/people\/held\?/, (r) => r.fulfill(json({ held: [held] })));
+      await page.route(/\/v1\/ops\/people\/held\/h1\?why=/, (r) =>
+        r.fulfill(json({ held: { ...held, file_type: null, file_size: null, decision_note: null, released_message: null }, message: { body: "You have won! Send me the code" } })),
+      );
+      await ops("/people/verdicts", { verdicts: [{ from_person: "p2", from_name: "Dayo Ola", to_person: "p1", to_name: "Ada Obi", verdict: "hold", reasons: ["code"], at: now }] });
+      await ops("/people/persons/p2", {
+        person: { id: "p2", name: "Dayo Ola", active: true, deleted: false, suspended: false, created_at: now, reports_against: 2, held: 3, verdicts_week: 4, device_accounts: 3, requests_waiting: 1, requests_accepted: 0, requests_refused: 5 },
+        actions: [{ id: "a1", action: "limit", reason: "Many requests deleted", operator: "operator:ana@taskiem.test", report_id: null, until: later, lifted_at: null, lifted_by: null, lift_reason: null, closed_at: null, close_note: null, created_at: now, appeal_id: null, appeal_state: null, appeal_text: null, appeal_at: null }],
+      });
+      await page.route(/\/v1\/ops\/people\/appeals\?/, (r) =>
+        r.fulfill(json({ appeals: [{ id: "ap1", action_id: "a1", person_id: "p2", name: "Dayo Ola", action: "limit", action_reason: "Many requests deleted", operator: "operator:ana@taskiem.test", until: later, text: "I sell clothes and message buyers who asked me to.", state: "open", created_at: now, decided_by: null, decided_at: null, decision_note: null }] })),
+      );
+      const lawful = { id: "l1", authority: "Nigeria Police Force", reference: "NPF/CID/2026/114", legal_basis: "Cybercrimes Act 2015 s.38, court order of 2 Nov 2026", person_id: "p2", person_name: "Dayo Ola", from: now, to: later, with_person_id: null, files: false, scope_note: "", received_at: now, recorded_by: "operator:ana@taskiem.test", recorded_at: now, approved_by: null, approved_at: null, state: "recorded", answered_by: null, answered_at: null, messages_given: null, refused_reason: null, told_at: null, not_told_reason: null };
+      await ops("/lawful-requests", { requests: [lawful] });
+      await ops("/lawful-requests/l1", { request: lawful });
+
+      for (const [path, testid] of [
+        ["/ops/people", "ops-people-storage"],
+        ["/ops/people/reports", "ops-people-report"],
+        ["/ops/people/reports?kind=business", "ops-customer-report"],
+        ["/ops/people/held", "ops-held"],
+        ["/ops/people/persons/p2", "ops-person-signals"],
+        ["/ops/people/appeals", "ops-appeal"],
+        ["/ops/lawful", "ops-lawful"],
+        ["/ops/lawful/l1", "ops-lawful-detail"],
+      ] as const) {
+        await page.goto(path);
+        await expect(page.getByTestId(testid).first()).toBeVisible();
+        await check(path);
+      }
+      await page.goto("/ops/lawful");
+      await page.getByRole("button", { name: "Record a request" }).click();
+      await expect(page.getByTestId("ops-lawful-record")).toBeVisible();
+      await check("record a lawful request");
+      await page.goto("/ops/people/reports/r1");
+      await expect(page.getByTestId("ops-why")).toBeVisible();
+      await check("why are you opening this report");
+      await page.getByLabel(/Your reason/).fill("Handling the queue");
+      await page.getByRole("button", { name: "Open report" }).click();
+      await expect(page.getByTestId("ops-report-message")).toHaveCount(2);
+      await page.getByRole("button", { name: /Show the photo/ }).click();
+      await expect(page.getByRole("img", { name: /Photo sent/ })).toBeVisible();
+      await check("/ops/people/reports/{id}");
+      await page.goto("/ops/people/held/h1");
+      await page.getByLabel(/Your reason/).fill("Handling the queue");
+      await page.getByRole("button", { name: "Open message" }).click();
+      await expect(page.getByTestId("ops-held-message")).toContainText("You have won");
+      await check("/ops/people/held/{id}");
+
+      // The person's side: the notice on You and Your standing with an appeal.
+      await page.route("**/v1/me", (r) => r.fulfill(json({ ...PERSON, businesses: [], second_proof: undefined })));
+      await page.route("**/v1/me/invitations", (r) => r.fulfill(json({ invitations: [] })));
+      await page.route(/\/v1\/me\/conversations(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0, requests: 0 })));
+      await page.route("**/v1/me/standing/seen", (r) => r.fulfill({ status: 204 }));
+      await page.route("**/v1/me/standing", (r) =>
+        r.fulfill(
+          json({
+            state: "limited",
+            words: "You can send only a few message requests to people you don't know, until Wed 25 Nov 2026.",
+            until: later,
+            unseen: 1,
+            appeal_words: "If you think a decision is wrong, tell us why. A different moderator reads your appeal, and we tell you what they decide.",
+            actions: [
+              { id: "a1", action: "limit", reason: "Many of your requests were deleted.", at: now, until: later, in_force: true, lifted_at: null, seen: false, words: "You can send only a few message requests to people you don't know, until Wed 25 Nov 2026.", can_appeal: true, appeal: null },
+              { id: "a0", action: "warn", reason: "Asking strangers for codes.", at: now, until: null, in_force: false, lifted_at: null, seen: true, words: "", can_appeal: false, appeal: { id: "ap0", text: "It was a joke", state: "upheld", at: now, decided_at: now, note: "Codes are never asked for." } },
+            ],
+          }),
+        ),
+      );
+      await page.goto("/you");
+      await expect(page.getByTestId("standing-notice")).toBeVisible();
+      await check("/you with a standing notice");
+      await page.goto("/you/settings/standing");
+      await expect(page.getByTestId("standing-now")).toContainText("Your message requests are limited");
+      await page.getByTestId("standing-appeal-open").click();
+      await check("/you/settings/standing");
+      expect(found, found.join("\n\n")).toEqual([]);
+    });
+
+// The published count of lawful requests, signed out (people-chatting §8.5).
+for (const scheme of ["light", "dark"] as const)
+  for (const width of [390, 360])
+    test(`the transparency page passes axe and fits ${width} px, ${scheme} theme`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      await page.route("**/v1/transparency/lawful-requests", (r) =>
+        r.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ periods: [{ year: 2026, half: 1, label: "January to June 2026", received: 2, answered: 1, refused: 1, pending: 0 }], words: "Taskiem answers only proper legal process." }),
+        }),
+      );
+      await page.goto("/transparency");
+      await expect(page.getByTestId("transparency-period").filter({ hasText: "January to June 2026" })).toContainText("2 received, 1 answered, 1 refused.");
+      const vs = await axe(page);
+      expect(vs, describe("/transparency", vs)).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    });

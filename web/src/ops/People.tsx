@@ -80,27 +80,17 @@ export function PeopleSafety() {
             <p>
               <strong className="figure">{bytesWords(total)}</strong> on disk for people chats. {data.storage_words}
             </p>
-            <table>
-              <caption className="sr-only">People chats' tables</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Table</th>
-                  <th scope="col">Rows</th>
-                  <th scope="col">On disk</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.storage.map((t) => (
-                  <tr key={t.table}>
-                    <td>
-                      <code>{t.table}</code>
-                    </td>
-                    <td>{t.rows.toLocaleString("en-NG")}</td>
-                    <td>{bytesWords(t.bytes)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <Items label="People chats' tables">
+              {data.storage.map((t) => (
+                <Row
+                  key={t.table}
+                  icon="archive"
+                  title={<code>{t.table}</code>}
+                  side={<span className="item-figure">{bytesWords(t.bytes)}</span>}
+                  sub={<span className="sub">{t.rows.toLocaleString("en-NG")} rows</span>}
+                />
+              ))}
+            </Items>
             <p className="hint">Prometheus has the same figures (taskiem_people_storage_bytes); over 100 GB, or 5 GB more in a day, opens a ticket.</p>
           </section>
         </>

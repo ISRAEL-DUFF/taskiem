@@ -5,7 +5,7 @@
 import { Link } from "react-router-dom";
 import { get } from "../api";
 import { periodWords, withCurrentHalf, type LawfulPeriod } from "../lib/peoplesafety";
-import { ErrorBox, Skeleton, useLoad } from "../ui";
+import { ErrorBox, Items, Row, Skeleton, useLoad } from "../ui";
 
 /** /transparency. */
 export function TransparencyPage() {
@@ -25,27 +25,11 @@ export function TransparencyPage() {
       <ErrorBox error={error} />
       {!data && !error && <Skeleton rows={2} label="Loading the figures…" />}
       {data && (
-        <table data-testid="transparency-periods">
-          <caption className="sr-only">Requests by half-year</caption>
-          <thead>
-            <tr>
-              <th scope="col">Half-year</th>
-              <th scope="col">Received</th>
-              <th scope="col">Answered</th>
-              <th scope="col">Refused</th>
-            </tr>
-          </thead>
-          <tbody>
-            {periods.map((p) => (
-              <tr key={`${p.year}-${p.half}`} title={periodWords(p)}>
-                <th scope="row">{p.label}</th>
-                <td>{p.received}</td>
-                <td>{p.answered}</td>
-                <td>{p.refused}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <Items label="Requests by half-year">
+          {periods.map((p) => (
+            <Row key={`${p.year}-${p.half}`} icon="policies" title={p.label} testid="transparency-period" attrs={{ "data-received": String(p.received) }} sub={<span className="sub">{periodWords(p)}</span>} />
+          ))}
+        </Items>
       )}
       <p className="hint">A request still being looked at is counted as received only. The figures are updated as requests come in.</p>
       <Link className="button" to="/login">

@@ -80,7 +80,7 @@ describe("lawful requests", () => {
     expect(out.map((x) => x.label)).toEqual(["July to December 2026", "January to June 2026"]);
     expect(withCurrentHalf([p], new Date("2026-03-01T00:00:00Z"))).toEqual([p]);
     // 31 December 23:30 UTC is already January in Lagos.
-    expect(withCurrentHalf([], new Date("2026-12-31T23:30:00Z"))[0].label).toBe("January to June 2027");
+    expect(withCurrentHalf([], new Date("2026-12-31T23:30:00Z"))[0]?.label).toBe("January to June 2027");
   });
   it("says a half-year's figures", () => {
     expect(periodWords({ year: 2026, half: 2, label: "", received: 0, answered: 0, refused: 0, pending: 0 })).toBe("No requests.");
