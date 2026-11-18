@@ -246,7 +246,7 @@ class PeopleChatData extends ChangeNotifier {
   /// Their card, with what the live connection said of them since.
   PersonCard? get person {
     final p = chat?.person;
-    return p == null ? null : withPresence(p, live?.presence[id]);
+    return p == null ? null : withPresence(p, live?.presenceOf(id));
   }
 
   void _liveChanged() => _changed();

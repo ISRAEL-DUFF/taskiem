@@ -13,6 +13,10 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:taskiem/api/transport.dart';
+import 'package:taskiem/chat/live.dart' show LiveTiming;
 import 'package:taskiem/chat/attachments.dart' show PickedFile;
 import 'package:taskiem/chat/composer.dart' show Pickers;
 import 'package:taskiem/chat/people_chat.dart';
@@ -30,6 +34,28 @@ Map<String, dynamic> msg(String id, {bool mine = false, String body = 'Hello', S
 };
 
 void hear(PeopleLive live, String event, Object data, {String? id}) => live.hearEvent((event: event, data: jsonEncode(data), id: id));
+
+/// A stand-in live connection: each open is a controller the test writes
+/// to.
+class Streams {
+  final opens = <StreamController<List<int>>>[];
+
+  http.Client client() => MockClient.streaming((req, _) async {
+    final c = StreamController<List<int>>();
+    opens.add(c);
+    return http.StreamedResponse(c.stream, 200, headers: {'content-type': 'text/event-stream'});
+  });
+
+  void raw(String text) => opens.last.add(utf8.encode(text));
+  void say(String event, Object data, {String? id}) => raw('event: $event\ndata: ${jsonEncode(data)}\n${id == null ? '' : 'id: $id\n'}\n');
+}
+
+/// A dropped connection's error.
+class SocketExceptionLike implements Exception {
+  const SocketExceptionLike();
+}
+
+Future<void> wait(int ms) => Future<void>.delayed(Duration(milliseconds: ms));
 
 /// The phone refusing the camera and photos (as image_picker throws when
 /// CAMERA is declared and the person says no), or with no camera.
@@ -182,6 +208,74 @@ void main() {
       expect(picked, 0);
       await t.tap(find.bySemanticsLabel('Dismiss'));
       await drain(t);
+    });
+  });
+
+  group('3. the live connection ended or dropped', () {
+    test('ended cleanly by the server (after 30 minutes): opened again at once; an error waits the server’s retry, doubled while errors go on', () async {
+      final s = Streams();
+      // The longest wait (timing.retry) is long: only the server's retry
+      // and the jitter can explain a quick reopen.
+      final live = PeopleLive(Transport(base: 'http://localhost', token: 't', client: s.client()), timing: const LiveTiming(retry: Duration(seconds: 30)));
+      live.start();
+      await pumpEventQueue();
+      s.raw('retry: 100\n\n');
+      s.say('ready', {'connection': 'c1'});
+      await pumpEventQueue();
+      expect(live.connected, isTrue);
+      await s.opens.last.close();
+      await wait(PeopleLive.jitter.inMilliseconds + 100);
+      expect(s.opens, hasLength(2), reason: 'a clean end reopens within the jitter, not after 30 s');
+
+      s.say('ready', {'connection': 'c2'});
+      await pumpEventQueue();
+      s.opens.last.addError(const SocketExceptionLike());
+      await wait(40);
+      expect(s.opens, hasLength(2), reason: 'an error waits the server’s retry (100 ms here)');
+      await wait(150);
+      expect(s.opens, hasLength(3));
+      s.opens.last.addError(const SocketExceptionLike());
+      await wait(150);
+      expect(s.opens, hasLength(3), reason: 'the second error in a row waits twice as long');
+      await wait(150);
+      expect(s.opens, hasLength(4));
+      live.stop();
+      live.dispose();
+    });
+
+    test('a connection that ends before it is ready is taken as an error (no loop)', () async {
+      final s = Streams();
+      final live = PeopleLive(Transport(base: 'http://localhost', token: 't', client: s.client()), timing: const LiveTiming(retry: Duration(seconds: 30)));
+      live.start();
+      await pumpEventQueue();
+      await s.opens.last.close();
+      await wait(PeopleLive.jitter.inMilliseconds + 100);
+      expect(s.opens, hasLength(1));
+      live.stop();
+      live.dispose();
+    });
+  });
+
+  group('4. presence from the connection', () {
+    test('forgotten when it closes, and used only while connected', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final api = adaChat();
+      final live = PeopleLive(api.auth().transport);
+      final d = PeopleChatData(api.auth(), 'pc1', follow: false, now: () => at, live: live);
+      d.seen = () => false;
+      await d.open();
+      expect(d.person?.online, isFalse);
+      hear(live, 'presence', {'people': [{'person_id': 'p1', 'chat_id': 'pc1', 'online': true, 'last_seen_at': null}]});
+      expect(live.presenceOf('pc1'), isNull, reason: 'not connected: not taken');
+      hear(live, 'ready', {'connection': 'c1'});
+      hear(live, 'presence', {'people': [{'person_id': 'p1', 'chat_id': 'pc1', 'online': true, 'last_seen_at': null}]});
+      expect(d.person?.online, isTrue);
+      live.stop();
+      expect(live.presence, isEmpty);
+      expect(live.presenceOf('pc1'), isNull);
+      expect(d.person?.online, isFalse, reason: 'the chat’s own read again, not a stale online');
+      d.dispose();
+      live.dispose();
     });
   });
 }

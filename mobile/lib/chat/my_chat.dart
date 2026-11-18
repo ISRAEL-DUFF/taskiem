@@ -319,7 +319,8 @@ class MyChatRows extends StatelessWidget {
 
   Widget _row(BuildContext context, ChatListItem c, TkTokens t, TkLook look) {
     final person = c.kind == 'person';
-    final online = person && (live?.presence.containsKey(c.id) == true ? live!.presence[c.id]!.online == true : c.person?.online == true);
+    final said = live?.presenceOf(c.id);
+    final online = person && (said != null ? said.online == true : c.person?.online == true);
     final typing = person && live?.typing.contains(c.id) == true && c.blocked != true && c.gone != true;
     final trust = c.kind == 'business' ? listTrustWords(c.verified) : '';
     final line = typing

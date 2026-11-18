@@ -15,6 +15,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' show Random, min;
 
 import 'package:flutter/foundation.dart';
 
@@ -71,11 +72,30 @@ PersonCard withPresence(PersonCard p, PeoplePresence? now) {
 
 /// The connection, followed while the app is in front.
 class PeopleLive extends ChangeNotifier {
-  PeopleLive(this.transport, {this.timing = const LiveTiming(), DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
+  /// [timing]'s retry is the longest wait between tries after errors (and
+  /// the first, until the server says its own `retry:`); [random] spreads
+  /// the reconnects after a clean end.
+  PeopleLive(this.transport, {this.timing = const LiveTiming(), DateTime Function()? clock, Random? random}) : _clock = clock ?? DateTime.now, _random = random ?? Random();
 
   final Transport transport;
   final LiveTiming timing;
   final DateTime Function() _clock;
+  final Random _random;
+
+  /// The longest spread of a reconnect after the server ended the
+  /// connection cleanly (it ends each after 30 minutes).
+  static const jitter = Duration(milliseconds: 500);
+
+  /// The server's `retry:` (2 seconds), once said.
+  Duration? _serverRetry;
+
+  /// Errors in a row: each waits twice the one before, up to [timing]'s
+  /// retry.
+  int _fails = 0;
+
+  /// The open connection said ready (a clean end of one that never did is
+  /// taken as an error, so nothing loops).
+  bool _wasReady = false;
 
   static final _of = Expando<PeopleLive>('people live');
 
@@ -147,12 +167,41 @@ class PeopleLive extends ChangeNotifier {
         unawaited(res.stream.listen(null).cancel());
         return;
       }
-      _sub = readSse(res.stream).listen(_on, onError: (Object _) => _dropped(gen), onDone: () => _dropped(gen), cancelOnError: true);
+      _wasReady = false;
+      _sub = readSse(res.stream, onRetry: (d) => _serverRetry = d).listen(_on, onError: (Object _) => _dropped(gen), onDone: () => _ended(gen), cancelOnError: true);
     } catch (e) {
       // Offline, too many open (429, Retry-After), or the session gone:
       // the screens poll as before, and it is tried again later.
       _dropped(gen, wait: _retryAfter(e));
     }
+  }
+
+  /// The server ended the connection cleanly (each lasts 30 minutes):
+  /// opened again at once, spread by a moment so not every phone comes
+  /// back together, and the person is not counted away in between.
+  void _ended(int gen) {
+    if (gen != _generation) return;
+    if (!_wasReady) return _dropped(gen);
+    _close();
+    if (!_running) return;
+    _fails = 0;
+    final spread = min(jitter.inMicroseconds, timing.retry.inMicroseconds);
+    _retry?.cancel();
+    _retry = Timer(Duration(microseconds: spread <= 0 ? 0 : _random.nextInt(spread + 1)), () {
+      if (_running) _open();
+    });
+  }
+
+  /// How long to wait after the [n]th error in a row: the server's retry
+  /// (or [timing]'s), doubled each time, never longer than [timing]'s.
+  Duration _backoff(int n) {
+    final cap = timing.retry;
+    final base = _serverRetry ?? cap;
+    var d = base;
+    for (var i = 1; i < n && d < cap; i++) {
+      d *= 2;
+    }
+    return d > cap ? cap : d;
   }
 
   static Duration? _retryAfter(Object e) {
@@ -164,8 +213,9 @@ class PeopleLive extends ChangeNotifier {
     if (gen != _generation) return;
     _close();
     if (_running) {
+      final after = _backoff(++_fails);
       _retry?.cancel();
-      _retry = Timer(wait != null && wait > timing.retry ? wait : timing.retry, () {
+      _retry = Timer(wait != null && wait > after ? wait : after, () {
         if (_running) _open();
       });
     }
@@ -176,12 +226,19 @@ class PeopleLive extends ChangeNotifier {
     _watch?.cancel();
     _sub?.cancel();
     _sub = null;
-    final was = connected || typing.isNotEmpty;
+    final was = connected || typing.isNotEmpty || presence.isNotEmpty;
     connected = false;
     connection = null;
     typing = const {};
+    // What it said of people's presence holds only while it is open: the
+    // chats' own reads say it again.
+    presence.clear();
     if (was) notifyListeners();
   }
+
+  /// What the open connection said of [chat]'s other person; null while
+  /// it is not connected.
+  PeoplePresence? presenceOf(String chat) => connected ? presence[chat] : null;
 
   /// One event, as the server sends it (a test may say one).
   @visibleForTesting
@@ -195,6 +252,8 @@ class PeopleLive extends ChangeNotifier {
       switch (e.event) {
         case 'ready':
           connected = true;
+          _wasReady = true;
+          _fails = 0;
           connection = json()['connection'] as String?;
           notifyListeners();
           final c = connection;
@@ -218,6 +277,7 @@ class PeopleLive extends ChangeNotifier {
             notifyListeners();
           }
         case 'presence':
+          if (!connected) break;
           for (final p in (json()['people'] as List).cast<Map<String, dynamic>>()) {
             final chat = p['chat_id'];
             if (chat is! String) continue;
