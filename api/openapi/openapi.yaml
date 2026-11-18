@@ -23494,6 +23494,545 @@ paths:
                           format: date-time
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/baskets:
+    post:
+      operationId: startBasket
+      tags:
+      - People
+      summary: Order together
+      description: '"Order together from {business}" (people-chatting §10.3, 5b C): posts a shared basket card (`card.type: basket`, `card.basket_id`) in a group you are in now, or a chat between two people that is no longer a request (C3), and answers the basket, open, held by you (C1). 409 when the business does not take orders in the app now (its words), or the chat is still a request; 403 where only admins post in the group.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [business_id]
+              properties:
+                business_id:
+                  type: string
+                  format: uuid
+                group_id:
+                  type: string
+                  format: uuid
+                chat_id:
+                  type: string
+                  format: uuid
+                  description: Your own people chat's id (one of group_id and chat_id).
+      responses:
+        '201':
+          description: The basket, and the card's message (a GroupMessage or a PeopleMessage)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [basket, message]
+                properties:
+                  basket:
+                    $ref: '#/components/schemas/Basket'
+                  message:
+                    type: object
+                    additionalProperties: true
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/baskets/{id}:
+    get:
+      operationId: getBasket
+      tags:
+      - People
+      summary: A shared basket
+      description: 'The basket as you see it now: who wants what (each line at the shop''s price now beside the price when added, sold out or gone from the shop, how few are left), the holder, pick-up or delivery and the area with its fee, the problems that stand in the way of placing it, and once placed the order as it moves (state, what was paid, its delivery) with each member''s share. Members of the group now, the two people of the chat, and once placed its placer and anyone with lines in it; 404 for anyone else.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The basket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Basket'
+        default:
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: putBasket
+      tags:
+      - People
+      summary: Pick-up or delivery
+      description: 'The holder chooses pick-up or delivery (`""` clears it) and the area it is delivered to, as the business offers them; checked again when it is placed. 403 for anyone else; 409 once placed or cancelled.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                fulfilment:
+                  type: string
+                  enum: [pickup, delivery, '']
+                zone:
+                  type: string
+                  maxLength: 120
+      responses:
+        '200':
+          description: The basket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Basket'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/baskets/{id}/shop:
+    get:
+      operationId: basketShop
+      tags:
+      - People
+      summary: The basket's shop
+      description: 'Through the basket door (audited in the business''s chain as `customer.basket`, without the group or the chat): the business''s shop as `GET /v1/me/chats/{id}/shop` shows it (products in their sizes and colours, prices, how few are left, pick-up, delivery and its areas, how it is paid), for adding your lines. 409 once placed or cancelled; 403 `blocked` when the business blocked you.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The shop
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [items, open, pickup, delivery, zones, payment]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ShopItem'
+                  open:
+                    type: boolean
+                  closed:
+                    type: string
+                  pickup:
+                    type: boolean
+                  delivery:
+                    type: boolean
+                  zones:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BasketZone'
+                  payment:
+                    type: string
+                    enum: [after_accept, at_order, on_delivery, none]
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/baskets/{id}/mine:
+    put:
+      operationId: putMyBasketLines
+      tags:
+      - People
+      summary: Your lines in the basket
+      description: 'All your own lines (an empty list takes yours out), while it is open: each an item, or one of a product''s sizes and colours (a product with sizes is named by one), 1 to 99 of it; 20 lines a person, 50 in a basket. Each is checked against the shop now: 422 for an item not in it, not available, or more than its stock with what the others want. 409 when closed (ask the holder to reopen it), placed or cancelled.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [lines]
+              properties:
+                lines:
+                  type: array
+                  maxItems: 20
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required: [item_id, quantity]
+                    properties:
+                      item_id:
+                        type: string
+                      quantity:
+                        type: integer
+                        minimum: 1
+                        maximum: 99
+      responses:
+        '200':
+          description: The basket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Basket'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/baskets/{id}/lines/{line}:
+    delete:
+      operationId: deleteBasketLine
+      tags:
+      - People
+      summary: Take a line out
+      description: 'One of your own lines while the basket is open; the holder takes out anyone''s until it is placed (an item sold out, say).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: line
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The basket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Basket'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/baskets/{id}/close:
+    post:
+      operationId: closeBasket
+      tags:
+      - People
+      summary: Close the basket
+      description: 'The holder closes it (C1): no one adds or changes lines until it is reopened or placed. The lines of people no longer in the group or the chat are taken out. 409 when it is empty.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The basket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Basket'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/baskets/{id}/reopen:
+    post:
+      operationId: reopenBasket
+      tags:
+      - People
+      summary: Reopen the basket
+      description: 'The holder opens a closed basket again, until it is placed (C1).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The basket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Basket'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/baskets/{id}/cancel:
+    post:
+      operationId: cancelBasket
+      tags:
+      - People
+      summary: Give up the basket
+      description: 'The holder cancels it before it is placed.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The basket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Basket'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/baskets/{id}/holder:
+    put:
+      operationId: handBasket
+      tags:
+      - People
+      summary: Hand the basket on
+      description: 'The holder hands closing and placing to another member of the group or the chat now (C1). When the holder is no longer in it (`holder_gone`), any member takes it themself.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [person_id]
+              properties:
+                person_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: The basket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Basket'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/baskets/{id}/place:
+    post:
+      operationId: placeBasket
+      tags:
+      - People
+      summary: Place the order
+      description: 'The holder places the closed basket through the door as their own order, from their own chat with the business (started now if they have none): the business sees one order from them, with a note of whose lines are whose by each person''s own name, and never the group or the chat (§10.3). `payment` (C2): `all` (you pay for everyone; then send share cards) or `each` (each pays their own share: their items and an equal part of the delivery), offered only when the business takes payment in the app by card (`shop.each_offered`): otherwise 409 `pay_all_only`. The shop is read again: 409 `basket_problems` with `problems` for an item gone, sold out or short, or no area chosen; 409 `changed` when `total_kobo` is not the total now (prices moved since you looked). Placing again after a failure places it once. 409 `phone_needed`, `orders_closed`; 422 `order_refused` with the door''s words.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [payment]
+              properties:
+                payment:
+                  type: string
+                  enum: [all, each]
+                address:
+                  type: string
+                  maxLength: 300
+                landmark:
+                  type: string
+                  maxLength: 300
+                address_id:
+                  type: string
+                  format: uuid
+                note:
+                  type: string
+                  maxLength: 500
+                total_kobo:
+                  type: integer
+                  format: int64
+                  description: The total you were shown; 0 or absent to skip the check.
+      responses:
+        '200':
+          description: Placed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [basket, order]
+                properties:
+                  basket:
+                    $ref: '#/components/schemas/Basket'
+                  order:
+                    type: object
+                    additionalProperties: true
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/baskets/{id}/pay:
+    get:
+      operationId: payBasketShare
+      tags:
+      - People
+      summary: Pay your share
+      description: '"Each pays their share" (C2): the pay link of your own share (its own checkout page, a part payment of the order), or, for the placer, of anyone''s who has not paid (`for`): the same page whoever pays it. "I''ll pay all": the order''s own link, for the placer only. 409 while it cannot be paid (before the business accepts an order paid after acceptance; paid; closed).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: for
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: The link
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [reference, url, amount_kobo, for]
+                properties:
+                  reference:
+                    type: string
+                  url:
+                    type: string
+                  amount_kobo:
+                    type: integer
+                    format: int64
+                  for:
+                    type: string
+                    format: uuid
+                  paid:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/baskets/{id}/share-cards:
+    post:
+      operationId: sendBasketShareCards
+      tags:
+      - People
+      summary: Send each a "Your share" card
+      description: '"I''ll pay all" placed: the placer sends each member a "Your share" card in one step (§11 A): their share, what it is for, and the account to pay to (`pay_to`, else your saved one), in the group (one card each, naming them: `card.for_id`, `card.for`) or the chat. Taskiem moves no money. A member sent one before is not sent another.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                pay_to:
+                  $ref: '#/components/schemas/PayoutAccount'
+      responses:
+        '200':
+          description: Sent
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [sent, failed, basket]
+                properties:
+                  sent:
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                  failed:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  basket:
+                    $ref: '#/components/schemas/Basket'
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/groups/{id}/messages/{message}/card:
     get:
       operationId: openGroupCard
@@ -25864,7 +26403,7 @@ paths:
       tags:
       - People
       summary: Your live connection
-      description: 'Server-sent events: what changes in your own people chats as it happens, so the app and the web need not poll every few seconds (keep polling as the fallback, and merge). `message`: a message of one of your chats, new or changed (delivered, read, a reaction, a star, deleted for everyone): `{chat_id, request, message: PeopleMessage}`; `request` is true for a message waiting in your Requests. `chat`: one of your chats changed (a new chat or request, its last message, accepted, muted, archived): `{id, hidden: false, chat: PeopleChat}`, or deleted for you: `{id, hidden: true}`. `gone`: a message deleted for you on another device, `{chat_id, id}`, or a request you deleted, `{chat_id, id: null}`. `typing`: the chats whose other person is typing now, `{typing: [chat ids]}` (sent when it changes). `presence`: the people you chat with whose online or last seen changed, as their settings and yours let you see them, `{people: [{person_id, chat_id, online, last_seen_at}]}` (all of them on connecting; both null when hidden). Message, chat and gone events have an id, the change''s time in microseconds: reconnecting with Last-Event-ID sends what was missed (at most an hour back); an event may come twice across a reconnection. A `ready` event comes first, `{connection}`, and a `ping` at least every ten seconds; the connection closes after half an hour and clients reconnect. Presence follows the connection: while one of your connections is in front you are online (last seen now); when the last closes, or says it is away (`POST /v1/me/presence {online: false, connection}`), you are away, last seen then. `away=1` opens one that starts away. Only your own copy is ever on it. Ten open per person (429 with Retry-After). Groups (stage 5b): `group_message`, a message of one of your groups that you see, new or changed (a reaction, deleted for everyone, a share marked paid, your own star elsewhere): `{group_id, message: GroupMessage}`; `group`, one of your groups changed (a new message, its info or settings, your own membership): `{id, hidden: false, group: Group}`, or deleted for you until a new message: `{id, hidden: true}`; `group_receipts`, the ticks of your own recent messages in a group moved: `{group_id, messages: [{id, status}]}`; `group_invite`, an invite waiting for you: `{group_id, invite: GroupInvite}`, or one that went (taken back by an admin, accepted or declined on another device, the group gone): `{group_id, invite: null}`; `group_typing`, who is typing in your groups now: `{groups: [{group_id, people: [ids]}]}` (sent when it changes). A group message deleted for you elsewhere, or a group whose copy you deleted, is `gone` with the group''s id as `chat_id`.'
+      description: 'Server-sent events: what changes in your own people chats as it happens, so the app and the web need not poll every few seconds (keep polling as the fallback, and merge). `message`: a message of one of your chats, new or changed (delivered, read, a reaction, a star, deleted for everyone): `{chat_id, request, message: PeopleMessage}`; `request` is true for a message waiting in your Requests. `chat`: one of your chats changed (a new chat or request, its last message, accepted, muted, archived): `{id, hidden: false, chat: PeopleChat}`, or deleted for you: `{id, hidden: true}`. `gone`: a message deleted for you on another device, `{chat_id, id}`, or a request you deleted, `{chat_id, id: null}`. `typing`: the chats whose other person is typing now, `{typing: [chat ids]}` (sent when it changes). `presence`: the people you chat with whose online or last seen changed, as their settings and yours let you see them, `{people: [{person_id, chat_id, online, last_seen_at}]}` (all of them on connecting; both null when hidden). Message, chat and gone events have an id, the change''s time in microseconds: reconnecting with Last-Event-ID sends what was missed (at most an hour back); an event may come twice across a reconnection. A `ready` event comes first, `{connection}`, and a `ping` at least every ten seconds; the connection closes after half an hour and clients reconnect. Presence follows the connection: while one of your connections is in front you are online (last seen now); when the last closes, or says it is away (`POST /v1/me/presence {online: false, connection}`), you are away, last seen then. `away=1` opens one that starts away. Only your own copy is ever on it. Ten open per person (429 with Retry-After). Groups (stage 5b): `group_message`, a message of one of your groups that you see, new or changed (a reaction, deleted for everyone, a share marked paid, your own star elsewhere): `{group_id, message: GroupMessage}`; `group`, one of your groups changed (a new message, its info or settings, your own membership): `{id, hidden: false, group: Group}`, or deleted for you until a new message: `{id, hidden: true}`; `group_receipts`, the ticks of your own recent messages in a group moved: `{group_id, messages: [{id, status}]}`; `group_invite`, an invite waiting for you: `{group_id, invite: GroupInvite}`, or one that went (taken back by an admin, accepted or declined on another device, the group gone): `{group_id, invite: null}`; `group_typing`, who is typing in your groups now: `{groups: [{group_id, people: [ids]}]}` (sent when it changes). A group message deleted for you elsewhere, or a group whose copy you deleted, is `gone` with the group''s id as `chat_id`. Ordering together (5b C): `basket`, a shared basket you reach changed (a line, its holder, closed, reopened, placed, a share card sent), or its placed order moved (its state, what was paid, its delivery; looked at every few seconds): `{basket: Basket}`.'
       security:
       - sessionCookie: []
       - sessionToken: []
@@ -43928,6 +44467,230 @@ components:
         consent:
           type: boolean
           description: The last 20 messages go to Taskiem's moderators only with it.
+    BasketZone:
+      type: object
+      additionalProperties: false
+      required: [name, fee_kobo]
+      properties:
+        name:
+          type: string
+        fee_kobo:
+          type: integer
+          format: int64
+    BasketLine:
+      type: object
+      additionalProperties: false
+      required: [id, item_id, name, quantity, price_kobo, added_price_kobo, price_changed, line_kobo, available]
+      description: One line of a member's in a shared basket.
+      properties:
+        id:
+          type: string
+          format: uuid
+        item_id:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: integer
+        price_kobo:
+          type: integer
+          format: int64
+          description: The shop's price now (as placed, once placed).
+        added_price_kobo:
+          type: integer
+          format: int64
+          description: The price when the line was added.
+        price_changed:
+          type: boolean
+        line_kobo:
+          type: integer
+          format: int64
+        available:
+          type: boolean
+          description: In the shop now and not sold out (always true once placed).
+        few_left:
+          type: integer
+          format: int64
+    BasketShare:
+      type: object
+      additionalProperties: false
+      required: [items_kobo, delivery_kobo, amount_kobo, paid, card_sent]
+      description: 'A member''s share once placed (C2): their items and an equal part of the delivery; paid by its own link ("each pays"), or a "Your share" card sent ("I''ll pay all").'
+      properties:
+        items_kobo:
+          type: integer
+          format: int64
+        delivery_kobo:
+          type: integer
+          format: int64
+        amount_kobo:
+          type: integer
+          format: int64
+        paid:
+          type: boolean
+        paid_at:
+          type: string
+          format: date-time
+        card_sent:
+          type: boolean
+    BasketPerson:
+      type: object
+      additionalProperties: false
+      required: [person_id, name, you, lines, items_kobo]
+      properties:
+        person_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: '"You", the name you gave them in contacts, else theirs; "Deleted account".'
+        you:
+          type: boolean
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/BasketLine'
+        items_kobo:
+          type: integer
+          format: int64
+        share:
+          $ref: '#/components/schemas/BasketShare'
+    BasketShop:
+      type: object
+      additionalProperties: false
+      required: [open, pickup, delivery, zones, payment, each_offered]
+      properties:
+        open:
+          type: boolean
+        closed:
+          type: string
+        pickup:
+          type: boolean
+        delivery:
+          type: boolean
+        zones:
+          type: array
+          items:
+            $ref: '#/components/schemas/BasketZone'
+        payment:
+          type: string
+          enum: [after_accept, at_order, on_delivery, none]
+        each_offered:
+          type: boolean
+          description: Each member may pay their own share (the business takes payment in the app by card).
+    BasketOrder:
+      type: object
+      additionalProperties: false
+      required: [reference, status, line, total_kobo, paid_kobo, left_kobo, payment_state, payable_now]
+      description: A placed basket's order as its members follow it; never the customer's details.
+      properties:
+        reference:
+          type: string
+        status:
+          type: string
+        line:
+          type: string
+          description: The state in words.
+        total_kobo:
+          type: integer
+          format: int64
+        paid_kobo:
+          type: integer
+          format: int64
+        left_kobo:
+          type: integer
+          format: int64
+        payment_state:
+          type: string
+          enum: [unpaid, part_paid, paid]
+        payable_now:
+          type: boolean
+        pay_by:
+          type: string
+          format: date-time
+        delivery:
+          $ref: '#/components/schemas/DeliveryProgress'
+    Basket:
+      type: object
+      additionalProperties: false
+      required: [id, business_id, business, where, state, starter_id, holder_id, holder, you_hold, holder_gone, people, items_kobo, delivery_kobo, total_kobo, problems, created_at]
+      description: 'A shared basket (people-chatting §10.3, 5b C): ordering together from one business in a group or a chat between two people.'
+      properties:
+        id:
+          type: string
+          format: uuid
+        business_id:
+          type: string
+          format: uuid
+        business:
+          type: string
+        where:
+          type: string
+          enum: [group, person]
+        group_id:
+          type: string
+          format: uuid
+        chat_id:
+          type: string
+          format: uuid
+          description: Your own copy's id, for a chat between two people.
+        state:
+          type: string
+          enum: [open, closed, placing, placed, cancelled]
+        starter_id:
+          type: string
+          format: uuid
+        holder_id:
+          type: string
+          format: uuid
+        holder:
+          type: string
+        you_hold:
+          type: boolean
+        holder_gone:
+          type: boolean
+          description: The holder is no longer in the group or the chat; any member may take it.
+        fulfilment:
+          type: string
+          enum: [pickup, delivery]
+        zone:
+          type: string
+        payment:
+          type: string
+          enum: [all, each]
+        shop:
+          $ref: '#/components/schemas/BasketShop'
+        people:
+          type: array
+          items:
+            $ref: '#/components/schemas/BasketPerson'
+        items_kobo:
+          type: integer
+          format: int64
+        delivery_kobo:
+          type: integer
+          format: int64
+        total_kobo:
+          type: integer
+          format: int64
+        problems:
+          type: array
+          items:
+            type: string
+        order:
+          $ref: '#/components/schemas/BasketOrder'
+        placed_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        closed_at:
+          type: string
+          format: date-time
+        placed_at:
+          type: string
+          format: date-time
     PeopleCard:
       type: object
       additionalProperties: false
@@ -43936,7 +44699,7 @@ components:
       properties:
         type:
           type: string
-          enum: [product, business, order, delivery, split]
+          enum: [product, business, order, delivery, split, basket]
         title:
           type: string
         business_id:
@@ -43971,6 +44734,16 @@ components:
           format: date-time
         paid_by_me:
           type: boolean
+        basket_id:
+          type: string
+          format: uuid
+          description: 'A shared basket (5b C): made by the server; GET /v1/me/baskets/{basket_id} reads it.'
+        for_id:
+          type: string
+          format: uuid
+          description: 'A share sent from a basket, in a group: who it is for.'
+        for:
+          type: string
     PeopleMessage:
       type: object
       additionalProperties: false

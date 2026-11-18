@@ -54,6 +54,7 @@ import type { Group } from "../lib/groups";
 import type { PersonOrderDetail, PersonOrders } from "../lib/youorders";
 import { EmptyState, ErrorBox, fmtTime, Items, Modal, Row, Skeleton, useAction, useLoad } from "../ui";
 import { AppAttachmentView } from "./AppCards";
+import { BasketCardBody } from "./Basket";
 import { BubbleShell, CopyItem, PopItem } from "./BubbleShell";
 import { ChatAvatar } from "./ChatAvatar";
 import { BUSINESS_FILES, ComposerView, useComposer } from "./ChatComposer";
@@ -637,7 +638,7 @@ export function PeopleChatPage() {
                             </PopItem>
                           )}
                           {!card && m.body && <CopyItem text={m.body} />}
-                          {card?.type !== "split" && !c?.request && (
+                          {card?.type !== "split" && card?.type !== "basket" && !c?.request && (
                             <PopItem icon="forward" onClick={() => (close(), setSheet({ k: "forward", m }))}>
                               Forward
                             </PopItem>
@@ -795,7 +796,7 @@ export function PeopleChatPage() {
       )}
       {c && sheet?.k === "forward" && <ForwardSheet from={{ chat_id: id }} m={sheet.m} onClose={() => setSheet(undefined)} />}
       {c && sheet?.k === "card" && <CardSheet base={base} m={sheet.m} onClose={() => setSheet(undefined)} />}
-      {c && sheet?.k === "share" && <ShareSheet onClose={() => setSheet(undefined)} onSend={shareCard} onSplit={() => setSheet({ k: "split" })} onPlace={() => setSheet({ k: "place" })} />}
+      {c && sheet?.k === "share" && <ShareSheet onClose={() => setSheet(undefined)} onSend={shareCard} onSplit={() => setSheet({ k: "split" })} onPlace={() => setSheet({ k: "place" })} together={!c.request && !c.waiting && !c.gone && !c.blocked ? { chat_id: id } : undefined} />}
       {c && sheet?.k === "place" && <PlaceSheet name={c.name} onClose={() => setSheet(undefined)} onSend={sharePlace} />}
       {c && sheet?.k === "split" && <SplitSheet name={c.name} onClose={() => setSheet(undefined)} onSend={shareCard} />}
       {c && sheet?.k === "delete" && (
@@ -835,12 +836,19 @@ export function PeopleCardView({
 }) {
   const split = card.type === "split";
   const title = split ? splitTitle(card, naira) : card.title;
+  if (card.type === "basket" && card.basket_id) {
+    return (
+      <article className="tk-ref app-card" aria-label={`Order together: ${card.title}`} data-testid="people-card" data-type="basket">
+        <BasketCardBody id={card.basket_id} title={card.title} />
+      </article>
+    );
+  }
   const line = split
     ? card.pay_to
       ? `Pay to ${card.pay_to.account_name}, ${card.pay_to.bank} ${card.pay_to.account_number}`
       : ""
     : [card.business && card.business !== card.title ? card.business : "", card.price_kobo !== undefined ? naira(card.price_kobo) : "", card.reference ?? "", card.area ?? ""].filter(Boolean).join(" · ");
-  const icon = { product: "tag", business: "store", order: "orders", delivery: "package", split: "split" }[card.type];
+  const icon = { product: "tag", business: "store", order: "orders", delivery: "package", split: "split", basket: "orders" }[card.type];
   return (
     <article className="tk-ref app-card" aria-label={`${cardKind(card)}: ${title}`} data-testid="people-card" data-type={card.type}>
       <span className="tk-ref-top">
@@ -1269,8 +1277,21 @@ export function CardSheet({ base, m, onClose }: { base: string; m: Pick<PeopleMe
 
 /** Share into the chat: a business, a product, one of your orders, or
  * "Your share". */
-export function ShareSheet({ onClose, onSend, onSplit, onPlace }: { onClose: () => void; onSend: (c: CardAsk) => Promise<boolean>; onSplit: () => void; onPlace: () => void }) {
-  const [step, setStep] = useState<"menu" | "business" | "product" | "order" | { items: string; business: string; name: string }>("menu");
+export function ShareSheet({
+  onClose,
+  onSend,
+  onSplit,
+  onPlace,
+  together,
+}: {
+  onClose: () => void;
+  onSend: (c: CardAsk) => Promise<boolean>;
+  onSplit: () => void;
+  onPlace: () => void;
+  /** Ordering together here (5b C): the group or the people chat. */
+  together?: { group_id?: string; chat_id?: string };
+}) {
+  const [step, setStep] = useState<"menu" | "business" | "product" | "order" | "together" | { items: string; business: string; name: string }>("menu");
   // One order picked: shared as it is, or its delivery once a rider has it.
   const [order, setOrder] = useState<{ business_id: string; reference: string; business: string }>();
   const act = useAction();
@@ -1281,7 +1302,14 @@ export function ShareSheet({ onClose, onSend, onSplit, onPlace }: { onClose: () 
       toast("Shared");
       onClose();
     }, false);
-  const chats = useLoad(() => (step === "business" || step === "product" ? get<ChatList>("/v1/me/conversations") : Promise.resolve(undefined)), [step === "business" || step === "product"]);
+  const picking = step === "business" || step === "product" || step === "together";
+  const chats = useLoad(() => (picking ? get<ChatList>("/v1/me/conversations") : Promise.resolve(undefined)), [picking]);
+  // "Order together from {business}": a shared basket card in this chat.
+  const startTogether = (business_id: string) =>
+    void act.run(async () => {
+      await post("/v1/me/baskets", { business_id, ...together });
+      onClose();
+    }, "Basket started: everyone can add what they want");
   const orders = useLoad(() => (step === "order" ? get<PersonOrders>("/v1/me/orders?limit=30") : Promise.resolve(undefined)), [step === "order"]);
   const detail = useLoad(
     () => (order ? get<PersonOrderDetail>(`/v1/me/orders/${encodeURIComponent(order.business_id)}/${encodeURIComponent(order.reference)}`) : Promise.resolve(undefined)),
@@ -1294,7 +1322,7 @@ export function ShareSheet({ onClose, onSend, onSplit, onPlace }: { onClose: () 
   const businesses = (chats.data?.chats ?? []).filter((x) => x.kind === "business" && x.business_id);
   return (
     <Sheet
-      title={typeof step === "object" ? step.name : order ? `${order.business} · ${order.reference}` : "Share"}
+      title={typeof step === "object" ? step.name : order ? `${order.business} · ${order.reference}` : step === "together" ? "Order together from…" : "Share"}
       onClose={onClose}
       onBack={order ? () => setOrder(undefined) : step === "menu" ? undefined : () => setStep("menu")}
       testid="people-share-sheet"
@@ -1317,6 +1345,13 @@ export function ShareSheet({ onClose, onSend, onSplit, onPlace }: { onClose: () 
               Choose
             </button>
           </Row>
+          {together && (
+            <Row icon="orders" title="Order together" sub={<span className="sub">A shared basket from one business: each adds their own</span>}>
+              <button type="button" onClick={() => setStep("together")} data-testid="share-together">
+                Choose a business
+              </button>
+            </Row>
+          )}
           <Row icon="split" title="Your share" sub={<span className="sub">Ask them to pay you back</span>}>
             <button type="button" onClick={onSplit} data-testid="share-split">
               Make one
@@ -1329,7 +1364,7 @@ export function ShareSheet({ onClose, onSend, onSplit, onPlace }: { onClose: () 
           </Row>
         </Items>
       )}
-      {(step === "business" || step === "product") && (
+      {picking && (
         <>
           {!chats.data && !chats.error && <Skeleton rows={2} label="Loading your businesses…" />}
           {chats.data && businesses.length === 0 && <EmptyState icon="store">Businesses you chat with show here.</EmptyState>}
@@ -1339,9 +1374,16 @@ export function ShareSheet({ onClose, onSend, onSplit, onPlace }: { onClose: () 
                 <button
                   type="button"
                   disabled={act.busy}
-                  onClick={() => (step === "business" ? go({ type: "business", business_id: b.business_id }) : setStep({ items: b.id, business: b.business_id ?? "", name: b.name }))}
+                  data-testid={step === "together" ? "together-business" : undefined}
+                  onClick={() =>
+                    step === "together"
+                      ? startTogether(b.business_id ?? "")
+                      : step === "business"
+                        ? go({ type: "business", business_id: b.business_id })
+                        : setStep({ items: b.id, business: b.business_id ?? "", name: b.name })
+                  }
                 >
-                  {step === "business" ? "Share" : "Their products"}
+                  {step === "together" ? "Order together" : step === "business" ? "Share" : "Their products"}
                   <span className="sr-only"> {b.name}</span>
                 </button>
               </Row>

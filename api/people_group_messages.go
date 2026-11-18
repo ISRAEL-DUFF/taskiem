@@ -1695,8 +1695,8 @@ func (s *Server) groupDraftOf(ctx context.Context, person, group, msg uuid.UUID)
 		if err != nil {
 			return err
 		}
-		if v.Card != nil && v.Card.Type == "split" {
-			return customerSendErr{http.StatusConflict, "A share card is not forwarded."}
+		if v.Card != nil && (v.Card.Type == "split" || v.Card.Type == "basket") {
+			return customerSendErr{http.StatusConflict, "A share card or a shared basket is not forwarded."}
 		}
 		d = peopleDraft{kind: m.kind, body: v.Body, card: v.Card, location: v.Location, forwards: m.forwards + 1}
 		if m.attach != nil {

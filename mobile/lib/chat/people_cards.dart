@@ -39,6 +39,7 @@ String peopleCardKind(PeopleCard c) => switch (c.type) {
   'order' => c.title.startsWith('Booking') ? 'Booking' : 'Order',
   'delivery' => 'Delivery',
   'split' => 'Your share',
+  'basket' => 'Order together',
   _ => 'Card',
 };
 
@@ -136,7 +137,7 @@ class PeopleCardView extends StatelessWidget {
               ],
             ),
           ],
-          if (!split && onOpen != null) ...[const SizedBox(height: 10), CardButton(label: c.type == 'business' ? 'See the business' : 'Open', primary: true, onTap: onOpen)],
+          if (!split && onOpen != null) ...[const SizedBox(height: 10), CardButton(label: switch (c.type) { 'business' => 'See the business', 'basket' => 'Open basket', _ => 'Open' }, primary: true, onTap: onOpen)],
         ],
       ),
     );
@@ -452,15 +453,19 @@ Future<void> shareWithPeople(BuildContext context, Auth auth, SendPeopleMessageR
 // --- what to share, from a people chat ---
 
 /// What the + of a people chat offers.
-enum PeopleShare { photo, file, place, business, product, order, delivery, split }
+enum PeopleShare { photo, file, place, business, product, order, delivery, split, together }
 
 /// The + by the box of a people chat: a photo or a file, a card of a
 /// business you chat with, one of its products, one of your orders or
 /// its delivery, or your share of something paid.
-Future<PeopleShare?> showPeopleShareMenu(BuildContext context) => showTkSheet<PeopleShare>(context, (_) => const _ShareMenu());
+///
+/// [together]: "Order together" is offered (a group one may post in, or
+/// a people chat no longer a request: 5b C).
+Future<PeopleShare?> showPeopleShareMenu(BuildContext context, {bool together = false}) => showTkSheet<PeopleShare>(context, (_) => _ShareMenu(together: together));
 
 class _ShareMenu extends StatelessWidget {
-  const _ShareMenu();
+  const _ShareMenu({this.together = false});
+  final bool together;
 
   @override
   Widget build(BuildContext context) {
@@ -494,7 +499,10 @@ class _ShareMenu extends StatelessWidget {
             const SizedBox(height: 14),
             TkSection(
               inset: 56,
-              children: [row(PeopleShare.split, 'b-money', look.lime, 'Your share', 'Ask them for their share of something you paid')],
+              children: [
+                if (together) row(PeopleShare.together, 'b-bag', look.orange, 'Order together', 'A shared basket from one business: each adds their own'),
+                row(PeopleShare.split, 'b-money', look.lime, 'Your share', 'Ask them for their share of something you paid'),
+              ],
             ),
           ],
         ),

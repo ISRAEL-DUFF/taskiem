@@ -45,6 +45,7 @@ import 'menu.dart';
 import 'my_chat.dart' show OpenMyChat, sayFailure;
 import 'groups.dart' show ChatsAndGroups, forwardWords, pickChatsAndGroups;
 import 'people.dart';
+import 'basket.dart';
 import 'people_cards.dart';
 import 'people_live.dart';
 import 'people_place.dart';
@@ -928,7 +929,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
   }
 
   Future<void> _tools() async {
-    final kind = await showPeopleShareMenu(context);
+    final kind = await showPeopleShareMenu(context, together: d.chat != null && !d.chat!.request && !d.chat!.waiting && !d.chat!.gone && !d.chat!.blocked);
     if (kind == null || !mounted) return;
     switch (kind) {
       case PeopleShare.photo:
@@ -958,6 +959,8 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
       case PeopleShare.business || PeopleShare.product || PeopleShare.order || PeopleShare.delivery:
         final card = await pickShareCard(context, d.auth, kind);
         if (card != null) await d.sendCard(card);
+      case PeopleShare.together:
+        await startBasket(context, d.auth, chatId: d.id);
     }
   }
 
@@ -1110,6 +1113,8 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                                     busy: _paying == m.id,
                                     onOpenCard: m.card == null || m.card!.type == 'split'
                                         ? null
+                                        : m.card!.type == 'basket'
+                                        ? (m.card!.basketId == null ? null : () => showBasket(context, d.auth, m.card!.basketId!))
                                         : () => showPeopleCard(context, auth: d.auth, chat: d.id, message: m.id, openBusiness: _openBusiness, openOrder: widget.openOrder),
                                     onPaid: m.card?.type == 'split' && canSend ? (p) => _paid(m, p) : null,
                                   ),

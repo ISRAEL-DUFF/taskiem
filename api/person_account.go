@@ -399,6 +399,12 @@ func (s *Server) deletePersonTx(ctx context.Context, tx pgx.Tx, person uuid.UUID
 		if _, err := tx.Exec(ctx, `SELECT taskiem_people_reports_detach($1, $2)`, person, s.reporterMark(person)); err != nil {
 			return err
 		}
+		// Their lines in baskets not placed go (5b C); a placed basket
+		// keeps them as the order's record, shown as "Deleted account".
+		if _, err := tx.Exec(ctx, `DELETE FROM people_basket_lines l USING people_baskets b
+			WHERE l.basket_id = b.id AND l.person_id = $1 AND b.state <> 'placed'`, person); err != nil {
+			return err
+		}
 		// Their groups (5b, §14, §17 Q17): they leave each (the last one
 		// out closes it), their marks go, their messages stay as from
 		// "Deleted account".

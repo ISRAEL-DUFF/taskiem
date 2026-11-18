@@ -387,10 +387,25 @@ func (s *Server) startPersonChat(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusTooManyRequests, "Too many tries. Wait a moment and try again.")
 		return
 	}
+	out, fresh, err := s.openBusinessChat(ctx, person, tenant, via, detail)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	code := http.StatusOK
+	if fresh {
+		code = http.StatusCreated
+	}
+	writeJSON(w, code, out)
+}
+
+// openBusinessChat finds the person's chat with a business, or starts it
+// (fresh) through the door, within their limits on new chats: the
+// handler's, and ordering together's when the placer has none yet.
+func (s *Server) openBusinessChat(ctx context.Context, person, tenant uuid.UUID, via string, detail map[string]any) (personChat, bool, error) {
 	var phone *string
 	if err := s.Store.Pool.QueryRow(ctx, `SELECT taskiem_auth_phone_of($1)`, person).Scan(&phone); err != nil {
-		s.fail(w, r, err)
-		return
+		return personChat{}, false, err
 	}
 	var out personChat
 	fresh := false
@@ -483,21 +498,13 @@ func (s *Server) startPersonChat(w http.ResponseWriter, r *http.Request) {
 		out.Notice = bname + " will see your name and phone number, for your orders and deliveries. Messages with businesses can be read by Taskiem to help with your orders."
 		return nil
 	}
-	err = db.InPersonTx(ctx, s.Store.Pool, person, start)
+	err := db.InPersonTx(ctx, s.Store.Pool, person, start)
 	if isUnique(err) {
 		// Started twice at once: the other start made it; answer it.
 		fresh = false
 		err = db.InPersonTx(ctx, s.Store.Pool, person, start)
 	}
-	if err != nil {
-		s.personFail(w, r, err)
-		return
-	}
-	code := http.StatusOK
-	if fresh {
-		code = http.StatusCreated
-	}
-	writeJSON(w, code, out)
+	return out, fresh, err
 }
 
 // getPersonChat is GET /v1/me/chats/{id}: one conversation, with the

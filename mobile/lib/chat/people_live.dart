@@ -175,6 +175,12 @@ class PeopleLive extends ChangeNotifier {
   final Map<String, PeoplePresence> presence = {};
 
   final _events = StreamController<PeopleLiveEvent>.broadcast();
+
+  final _baskets = StreamController<Basket>.broadcast();
+
+  /// Shared baskets that changed, or whose order moved (ordering
+  /// together, 5b C): the `basket` event.
+  Stream<Basket> get baskets => _baskets.stream;
   Stream<PeopleLiveEvent> get events => _events.stream;
 
   /// Told each time a connection is ready (Presence says it is in front).
@@ -345,6 +351,8 @@ class PeopleLive extends ChangeNotifier {
           _groupEvents.add(GroupLiveReceipts(d['group_id'] as String, {
             for (final m in (d['messages'] as List).cast<Map<String, dynamic>>()) m['id'] as String: m['status'] as String,
           }));
+        case 'basket':
+          _baskets.add(Basket.fromJson(json()['basket'] as Map<String, dynamic>));
         case 'group_invite':
           final d = json();
           final inv = d['invite'];
@@ -380,6 +388,7 @@ class PeopleLive extends ChangeNotifier {
     stop();
     _events.close();
     _groupEvents.close();
+    _baskets.close();
     super.dispose();
   }
 }
