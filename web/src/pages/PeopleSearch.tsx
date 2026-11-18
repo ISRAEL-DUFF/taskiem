@@ -4,7 +4,7 @@ import { get } from "../api";
 import { listTime } from "../lib/linkchat";
 import { messageLine } from "../lib/people";
 import { foundPath, foundWords, searchable, searchURL, snippetParts, starredURL, type FoundPage, type PeopleFound } from "../lib/peoplelive";
-import { groupFoundPath, groupPath, groupSearchURL, groupStarredURL, mergeFound, type FoundRow, type GroupFound } from "../lib/groups";
+import { groupFoundPath, groupPath, groupSearchURL, groupStarredURL, shownFound, type FoundRow, type GroupFound } from "../lib/groups";
 import { EmptyState, ErrorBox, Item, Items, PageHeader, Skeleton } from "../ui";
 import { MoreRows } from "./MoreRows";
 
@@ -87,7 +87,7 @@ function useFound(sources: Source[] | undefined, key: string) {
       )
       .finally(() => setBusy(false));
   };
-  const rows = cur ? cur.lists.reduce<FoundRow[]>((all, l) => mergeFound(all, l.rows), []) : undefined;
+  const rows = cur ? shownFound(cur.lists) : undefined;
   return { rows, more, busy, loadMore, error, loading: !!sources && !cur && !error };
 }
 

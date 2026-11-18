@@ -457,6 +457,22 @@ export function mergeFound(a: FoundRow[], b: FoundRow[]): FoundRow[] {
   return out;
 }
 
+/** The rows of several paged lists to show, merged newest first: only
+ * those no older than the oldest row read so far of any list that still
+ * has more. An older row could otherwise show above rows of another list
+ * not yet read (and Show more would put rows above ones already shown);
+ * the rest are held back until that list pages past them. */
+export function shownFound(lists: { rows: FoundRow[]; more: boolean }[]): FoundRow[] {
+  let frontier: number | undefined;
+  for (const l of lists) {
+    if (!l.more || l.rows.length === 0) continue;
+    const oldest = Math.min(...l.rows.map((r) => Date.parse(r.at)));
+    if (frontier === undefined || oldest > frontier) frontier = oldest;
+  }
+  const all = lists.reduce<FoundRow[]>((acc, l) => mergeFound(acc, l.rows), []);
+  return frontier === undefined ? all : all.filter((r) => Date.parse(r.at) >= (frontier as number));
+}
+
 /** GET /v1/me/groups/search's address. */
 export function groupSearchURL(q: string, group?: string, before?: string): string {
   const p = new URLSearchParams({ q: q.trim() });
