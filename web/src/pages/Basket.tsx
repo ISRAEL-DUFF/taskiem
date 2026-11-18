@@ -121,22 +121,28 @@ function BasketView({
     }, false);
   return (
     <div className="basket" data-testid="basket" data-state={b.state}>
-      <div className="hero basket-hero">
-        <span className="tk-kicker">{b.where === "group" ? "In this group" : "Between the two of you"}</span>
-        <strong className="basket-total" data-testid="basket-total">
+      <section className="hero" aria-label="The basket's total" data-testid="basket-hero">
+        <div className="hero-top">
+          <span className="hero-label">{b.where === "group" ? "In this group" : "Between the two of you"}</span>
+          <span className="hero-tag">{st.label}</span>
+        </div>
+        <div className="hero-amount" data-testid="basket-total">
           {naira(b.order?.total_kobo ?? b.total_kobo)}
-        </strong>
-        <span>
-          <Pill tone={st.tone}>{st.label}</Pill>
-        </span>
-        {holderWords(b) && <span className="hint" data-testid="basket-holder">{holderWords(b)}</span>}
-      </div>
+        </div>
+        {holderWords(b) && (
+          <p className="hero-sub" data-testid="basket-holder">
+            {holderWords(b)}
+          </p>
+        )}
+      </section>
       {b.problems.length > 0 && b.state !== "placed" && (
-        <ul className="notice" role="status" data-testid="basket-problems">
-          {b.problems.map((p) => (
-            <li key={p}>{p}</li>
-          ))}
-        </ul>
+        <div className="notice" role="status" data-testid="basket-problems">
+          <ul>
+            {b.problems.map((p) => (
+              <li key={p}>{p}</li>
+            ))}
+          </ul>
+        </div>
       )}
       {b.order && (
         <Items label="The order">
