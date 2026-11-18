@@ -84,6 +84,7 @@ func init() {
 	for _, r := range []string{
 		"GET /v1/me/groups/{id}/link", "POST /v1/me/groups/{id}/link", "DELETE /v1/me/groups/{id}/link", "GET /v1/me/groups/{id}/link/qr",
 		"GET /v1/group-links/{code}", "GET /v1/group-links/{code}/photo", "POST /v1/me/group-links/{code}/join",
+		"DELETE /v1/me/group-links/{code}/join",
 	} {
 		alwaysOn[r] = "a people group's invite link (people_groups.go, people-chatting 5b A4), not a business's links"
 	}
