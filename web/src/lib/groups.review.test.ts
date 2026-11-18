@@ -1,7 +1,20 @@
 // Review fixes for groups on the web (docs/spec/people-chatting.md, "As
 // built: stage 5b, groups (web)", "Review fixes").
 import { describe, expect, it } from "vitest";
-import { mayDeleteGroupForEveryone, mentionedIn, newGroupOpensAtOnce, shownFound, type FoundRow } from "./groups";
+import { ApiError } from "../api";
+import { inviteGone, invitesWithInvite, mayDeleteGroupForEveryone, mentionedIn, newGroupOpensAtOnce, shownFound, type FoundRow, type GroupInvite } from "./groups";
+
+describe("an invite that went", () => {
+  const inv = (id: string): GroupInvite => ({ group_id: id, name: id, invited_by: "p1", by: "Ada", at: "2026-11-17T09:00:00Z" }) as GroupInvite;
+  it("leaves Requests on its live event (invite null)", () => {
+    expect(invitesWithInvite([inv("g1"), inv("g2")], { group_id: "g1", invite: null })?.map((i) => i.group_id)).toEqual(["g2"]);
+  });
+  it("a 404 from Accept or Decline reads the invites again", () => {
+    expect(inviteGone(new ApiError(404, "gone"))).toBe(true);
+    expect(inviteGone(new ApiError(500, "no"))).toBe(false);
+    expect(inviteGone(new Error("x"))).toBe(false);
+  });
+});
 
 describe("@ mentions with names two members share", () => {
   const ms = [
@@ -11,7 +24,7 @@ describe("@ mentions with names two members share", () => {
   ];
   it("names only the member picked, not every one of that name", () => {
     expect(mentionedIn("Hi @Ada", ms, [{ id: "a2", name: "Ada" }])).toEqual(["a2"]);
-    expect(mentionedIn("Hi @Ada", ms)).toEqual([], "not picked: neither guessed");
+    expect(mentionedIn("Hi @Ada", ms), "not picked: neither guessed").toEqual([]);
     expect(mentionedIn("Hi @Ada and @Bola", ms, [{ id: "a1", name: "Ada" }])).toEqual(["a1", "b"]);
   });
   it("whole words only", () => {

@@ -188,7 +188,9 @@ export interface LiveGroupReceipts {
 }
 export interface LiveGroupInvite {
   group_id: string;
-  invite: GroupInvite;
+  /** null: the invite went (taken back by an admin, answered on another
+   * device, the group gone). */
+  invite: GroupInvite | null;
 }
 export interface LiveGroupTyping {
   groups: { group_id: string; people: string[] }[];
@@ -423,10 +425,19 @@ export function groupThreadWithReceipts(cur: GroupMessage[] | undefined, group: 
   return changed ? next : cur;
 }
 
-/** Invites after a `group_invite` event: the invite in its place, newest first. */
+/** Invites after a `group_invite` event: the invite in its place, newest
+ * first; one that went (invite null) taken out. */
 export function invitesWithInvite(rows: GroupInvite[] | undefined, e: LiveGroupInvite): GroupInvite[] | undefined {
   if (!rows) return rows;
-  return [...rows.filter((r) => r.group_id !== e.group_id), e.invite].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const rest = rows.filter((r) => r.group_id !== e.group_id);
+  if (!e.invite) return rest;
+  return [...rest, e.invite].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+}
+
+/** Whether an Accept or a Decline that failed means the invite is gone
+ * already (taken back, answered on another device): read them again. */
+export function inviteGone(e: unknown): boolean {
+  return typeof e === "object" && e !== null && (e as { status?: unknown }).status === 404;
 }
 
 /** Who is typing in each group, from a `group_typing` event. */
