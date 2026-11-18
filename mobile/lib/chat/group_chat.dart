@@ -46,6 +46,7 @@ import 'groups.dart';
 import 'menu.dart';
 import 'my_chat.dart' show OpenMyChat, sayFailure;
 import 'people.dart';
+import 'basket.dart';
 import 'people_cards.dart';
 import 'people_chat.dart' show PeopleBubble, PeopleLine, deleteForEveryoneNote, deleteForEveryoneWithin, sendFailure, typingBeat;
 import 'people_find.dart' show OpenPeopleChat;
@@ -901,7 +902,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
   }
 
   Future<void> _tools() async {
-    final kind = await showPeopleShareMenu(context);
+    final kind = await showPeopleShareMenu(context, together: d.group != null && d.group!.canPost && !d.group!.left);
     if (kind == null || !mounted) return;
     switch (kind) {
       case PeopleShare.photo:
@@ -931,6 +932,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
       case PeopleShare.business || PeopleShare.product || PeopleShare.order || PeopleShare.delivery:
         final card = await pickShareCard(context, d.auth, kind);
         if (card != null) await d.sendCard(card);
+      case PeopleShare.together:
+        await startBasket(context, d.auth, groupId: d.id);
     }
   }
 
@@ -1078,6 +1081,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
       spans: (words, style) => mentionSpans(words, style, names: names, mine: _myNames, ink: look.limeInk, mark: look.lime.withValues(alpha: 0.35)),
       onOpenCard: m.card == null || m.card!.type == 'split'
           ? null
+          : m.card!.type == 'basket'
+          ? (m.card!.basketId == null ? null : () => showBasket(context, d.auth, m.card!.basketId!))
           : () => showPeopleCard(
               context,
               auth: d.auth,
