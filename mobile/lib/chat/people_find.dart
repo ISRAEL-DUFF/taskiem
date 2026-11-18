@@ -30,6 +30,8 @@ import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'chats.dart' show ChatRow;
 import 'my_chat.dart' show sayFailure;
+import 'group_new.dart' show GroupJoinScreen, GroupInvitesSection, NewGroupScreen;
+import 'groups.dart';
 import 'people.dart';
 import 'people_contacts.dart';
 import 'people_live.dart';
@@ -165,7 +167,11 @@ class _FoundPersonState extends State<FoundPerson> {
 /// New chat: by a phone number, by a link, from your contacts; and your
 /// own link to share.
 class NewPeopleChatScreen extends StatefulWidget {
-  const NewPeopleChatScreen({super.key, required this.auth, required this.openChat, this.contacts = const DevicePhoneContacts(), this.scanner = const DeviceQrScanner(), this.onContactsChecked});
+  const NewPeopleChatScreen({super.key, required this.auth, required this.openChat, this.contacts = const DevicePhoneContacts(), this.scanner = const DeviceQrScanner(), this.onContactsChecked, this.openGroup});
+
+  /// Opens a group (one made here, or joined by its link); null: no New
+  /// group.
+  final OpenGroup? openGroup;
   final Auth auth;
   final OpenPeopleChat openChat;
   final PhoneContacts contacts;
@@ -214,6 +220,12 @@ class _NewPeopleChatScreenState extends State<NewPeopleChatScreen> {
   }
 
   Future<void> _byLink() async {
+    final group = groupCodeOf(_link.text);
+    if (group != null && widget.openGroup != null) {
+      setState(() => (_error = null, _found = null));
+      await tkPush<void>(context, GroupJoinScreen(auth: widget.auth, code: group, openGroup: widget.openGroup!));
+      return;
+    }
     final code = personCodeOf(_link.text);
     if (code == null) return setState(() => (_error = 'That doesn’t look like a person’s Taskiem link.', _found = null));
     setState(() => (_busy = true, _error = null, _found = null));
@@ -230,6 +242,11 @@ class _NewPeopleChatScreenState extends State<NewPeopleChatScreen> {
   Future<void> _scan() async {
     final code = await widget.scanner.scan(context);
     if (code == null || !mounted) return;
+    final group = groupLinkOf(code);
+    if (group != null) {
+      if (widget.openGroup != null) await tkPush<void>(context, GroupJoinScreen(auth: widget.auth, code: group, openGroup: widget.openGroup!));
+      return;
+    }
     await tkPush<void>(context, PersonLinkScreen(auth: widget.auth, code: code, openChat: widget.openChat));
   }
 
@@ -292,6 +309,14 @@ class _NewPeopleChatScreenState extends State<NewPeopleChatScreen> {
         TkSection(
           inset: 56,
           children: [
+            if (widget.openGroup != null)
+              TkListRow(
+                title: 'New group',
+                sub: 'Chat with up to $groupMost people at once',
+                icon: 'b-people',
+                square: look.lime,
+                onTap: () => tkPush<void>(context, NewGroupScreen(auth: widget.auth, openGroup: widget.openGroup!)),
+              ),
             TkListRow(
               title: 'From your contacts',
               sub: 'Only if you agree: see how it works first',
@@ -538,9 +563,13 @@ class _MyPersonLinkScreenState extends State<MyPersonLinkScreen> {
 /// have not added. Opening one tells the sender nothing; in it, Accept,
 /// Delete, or Block and report.
 class PeopleRequestsScreen extends StatefulWidget {
-  const PeopleRequestsScreen({super.key, required this.auth, required this.openChat, this.now = DateTime.now, this.live});
+  const PeopleRequestsScreen({super.key, required this.auth, required this.openChat, this.now = DateTime.now, this.live, this.openGroup});
   final Auth auth;
   final OpenPeopleChat openChat;
+
+  /// Opens a group (an invite accepted); with it, the invites to groups
+  /// show here too.
+  final OpenGroup? openGroup;
   final DateTime Function() now;
 
   /// You's live connection (by default the one You holds): a request new,
@@ -617,6 +646,7 @@ class _PeopleRequestsScreenState extends State<PeopleRequestsScreen> with Pollin
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Text('People you haven’t chatted with. They are not told you read their message unless you accept.', style: tkHint(t)),
         ),
+        if (widget.openGroup != null) GroupInvitesSection(auth: widget.auth, openGroup: widget.openGroup!, live: _live, now: widget.now),
         if (_error != null) TkErrorBox(_error!),
         if (list == null && _error == null) const TkLoading(label: 'Loading…'),
         if (list != null && list.isEmpty) const TkPanel(children: [TkEmpty(icon: 'chat', title: 'No requests', line: 'First messages from people you don’t know wait here.')]),

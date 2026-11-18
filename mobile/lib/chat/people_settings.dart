@@ -16,6 +16,7 @@ import '../kit/mobile.dart';
 import '../kit/modal.dart';
 import '../screens/settings_more.dart' show SettingsCard, SettingsNote, SettingsPage;
 import 'my_chat.dart' show sayFailure;
+import 'groups.dart' show pickOneOf;
 import 'people.dart';
 import 'people_standing.dart' show openTransparency;
 import 'words.dart';
@@ -32,6 +33,13 @@ String audienceWords(String a) => switch (a) {
 String messageWords(String a) => a == 'everyone' ? 'Everyone, as a request' : audienceWords(a);
 
 const _audiences = ['everyone', 'contacts', 'nobody'];
+
+/// "Who can add me to groups" (`groups_add`) in words.
+String groupsAddWords(String a) => switch (a) {
+  'everyone' => 'Everyone',
+  'nobody' => 'Nobody',
+  _ => 'My contacts',
+};
 
 /// The daily re-check's switch, in words.
 const checkContactsDaily = 'Check my contacts daily';
@@ -87,12 +95,12 @@ class _PeoplePrivacyPageState extends State<PeoplePrivacyPage> {
     }
   }
 
-  PeoplePrivacy _with({String? findByNumber, bool? findFromContacts, String? message, String? lastSeen, String? photo, bool? showNumber, bool? readTicks}) {
+  PeoplePrivacy _with({String? findByNumber, bool? findFromContacts, String? message, String? lastSeen, String? photo, bool? showNumber, bool? readTicks, String? groupsAdd}) {
     final p = _p!;
     return PeoplePrivacy(
       findByNumber: findByNumber ?? p.findByNumber,
       findFromContacts: findFromContacts ?? p.findFromContacts,
-      groupsAdd: p.groupsAdd,
+      groupsAdd: groupsAdd ?? p.groupsAdd,
       message: message ?? p.message,
       lastSeen: lastSeen ?? p.lastSeen,
       photo: photo ?? p.photo,
@@ -166,6 +174,20 @@ class _PeoplePrivacyPageState extends State<PeoplePrivacyPage> {
               choice('New chats', p.message == 'everyone' ? 'People you haven’t added wait in Requests' : (p.message == 'contacts' ? 'Only people you added' : 'No one can start a chat with you'), messageWords(p.message), () async {
                 final v = await _choose('Who can message you', p.message, message: true);
                 if (v != null && v != p.message) await _put(PutMyPeoplePrivacyRequest(message: v), _with(message: v));
+              }),
+            ],
+          ),
+          // Who can add me to groups (§9, A3): anyone else sends an invite.
+          SettingsCard(
+            title: 'Groups',
+            children: [
+              choice('Who can add me to groups', 'People you haven’t added send you an invite instead', groupsAddWords(p.groupsAdd), () async {
+                final v = await pickOneOf(context, title: 'Who can add you to groups', value: p.groupsAdd, note: 'Anyone else who tries sends you an invite, which waits in your Requests.', choices: const [
+                  ('contacts', 'My contacts', 'Only people you added'),
+                  ('everyone', 'Everyone', 'Anyone who has you as a contact'),
+                  ('nobody', 'Nobody', 'Everyone sends an invite'),
+                ]);
+                if (v != null && v != p.groupsAdd) await _put(PutMyPeoplePrivacyRequest(groupsAdd: v), _with(groupsAdd: v));
               }),
             ],
           ),

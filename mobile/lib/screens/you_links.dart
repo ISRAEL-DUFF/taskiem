@@ -11,6 +11,8 @@ import 'package:flutter/widgets.dart';
 import '../app/auth.dart';
 import '../app/route.dart';
 import '../chat/discover.dart' show DiscoverProfileScreen, DiscoverTab;
+import '../chat/group_chat.dart' show GroupChatData, GroupChatScreen;
+import '../chat/groups.dart' show OpenGroup;
 import '../chat/my_chat.dart';
 import '../chat/people_chat.dart' show PeopleChatData, PeopleChatScreen;
 import '../chat/people_find.dart' show OpenPeopleChat, PeopleRequestsScreen;
@@ -31,21 +33,30 @@ Future<void> openYouPage(
   YouRoute r, {
   required OpenMyChat open,
   OpenPeopleChat? openPerson,
+  OpenGroup? openGroup,
   void Function(int tab)? showTab,
   DateTime Function() now = DateTime.now,
 }) async {
   final person = openPerson ?? (id, {started}) => tkPush<void>(context, PeopleChatScreen(data: PeopleChatData(auth, id, now: now, started: started), openBusiness: open));
+  final group = openGroup ?? (id, {focus}) => tkPush<void>(context, GroupChatScreen(data: GroupChatData(auth, id, now: now, focus: focus), openBusiness: open, openPerson: person));
   switch (r.page) {
+    case YouPage.group:
+      showTab?.call(youTabChats);
+      await group(r.id);
+    case YouPage.groupInvites:
+      // Requests holds the invites to groups.
+      showTab?.call(youTabChats);
+      await tkPush<void>(context, PeopleRequestsScreen(auth: auth, openChat: person, openGroup: group, now: now));
     case YouPage.person:
       showTab?.call(youTabChats);
       await person(r.id);
     case YouPage.requests:
       showTab?.call(youTabChats);
-      await tkPush<void>(context, PeopleRequestsScreen(auth: auth, openChat: person, now: now));
+      await tkPush<void>(context, PeopleRequestsScreen(auth: auth, openChat: person, openGroup: group, now: now));
     case YouPage.request:
       // Requests, and the request over it: answered, Requests is there.
       showTab?.call(youTabChats);
-      unawaited(tkPush<void>(context, PeopleRequestsScreen(auth: auth, openChat: person, now: now)));
+      unawaited(tkPush<void>(context, PeopleRequestsScreen(auth: auth, openChat: person, openGroup: group, now: now)));
       await person(r.id);
     case YouPage.standing:
       showTab?.call(youTabChats);

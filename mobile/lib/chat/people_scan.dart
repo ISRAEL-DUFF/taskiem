@@ -12,13 +12,15 @@ import 'package:mobile_scanner/mobile_scanner.dart' as ms;
 import '../kit/kit.dart';
 import '../kit/mobile.dart';
 import '../theme/theme.dart';
+import 'groups.dart' show groupCodeOf;
 import 'people_find.dart' show personCodeOf;
 
 /// The phone's camera reading a QR code, behind one face.
 abstract class QrScanner {
   const QrScanner();
 
-  /// A person's link's code read from a QR code, or null when put away.
+  /// A person's link's code read from a QR code (or a group's link as
+  /// `/g/{code}`), or null when put away.
   Future<String?> scan(BuildContext context);
 }
 
@@ -33,6 +35,14 @@ class DeviceQrScanner extends QrScanner {
 
 /// What a scanned code says: a person's link's code, or null.
 String? scannedPersonCode(String? raw) => raw == null ? null : personCodeOf(raw.trim());
+
+/// What a scanned code opens: a person's link's code, or a group's link as
+/// `/g/{code}` (people-chatting §9); null when it is neither.
+String? scannedCode(String? raw) {
+  if (raw == null) return null;
+  final g = groupCodeOf(raw.trim());
+  return g != null ? '/g/$g' : scannedPersonCode(raw);
+}
 
 /// The words when the camera could not be used.
 String scanProblemWords(ms.MobileScannerErrorCode code) => switch (code) {
@@ -62,14 +72,14 @@ class _ScanScreenState extends State<_ScanScreen> {
   void _seen(ms.BarcodeCapture c) {
     if (_done) return;
     for (final b in c.barcodes) {
-      final code = scannedPersonCode(b.rawValue);
+      final code = scannedCode(b.rawValue);
       if (code != null) {
         _done = true;
         Navigator.of(context).pop(code);
         return;
       }
     }
-    if (c.barcodes.isNotEmpty && mounted) setState(() => _said = 'That QR code isn’t a person’s Taskiem link.');
+    if (c.barcodes.isNotEmpty && mounted) setState(() => _said = 'That QR code isn’t a Taskiem link to a person or a group.');
   }
 
   @override

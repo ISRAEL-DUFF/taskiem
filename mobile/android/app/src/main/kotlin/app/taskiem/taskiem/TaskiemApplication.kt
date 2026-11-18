@@ -35,6 +35,10 @@ class TaskiemApplication : Application() {
             // and a first message from someone new.
             "person" to "Chats with people",
             "request" to "Message requests",
+            // Groups (people-chatting §9, §13): a group's message (and a
+            // mention), and an invite to a group.
+            "group" to "Groups",
+            "group_invite" to "Invites to groups",
         )
 
         fun makeChannels(context: Context) {

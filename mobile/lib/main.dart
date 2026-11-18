@@ -42,6 +42,8 @@ import 'chat/profile_screen.dart';
 import 'chat/live.dart';
 import 'chat/taskiem.dart';
 import 'screens/chat_link.dart';
+import 'chat/group_chat.dart' show GroupChatData, GroupChatScreen;
+import 'chat/group_new.dart' show GroupJoinScreen;
 import 'chat/people_chat.dart' show PeopleChatData, PeopleChatScreen;
 import 'chat/people_find.dart' show PersonLinkScreen;
 import 'school/school_clearance.dart' show GateScreen;
@@ -551,6 +553,13 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
       unawaited(tkPush<void>(context, PersonLinkScreen(auth: _chats.auth, code: person, openChat: _openPerson)));
       return;
     }
+    // A group's link (people-chatting §9): the group, then Join, over the
+    // business.
+    final group = groupLinkCodeOf(path);
+    if (group != null) {
+      unawaited(tkPush<void>(context, GroupJoinScreen(auth: _chats.auth, code: group, openGroup: _openGroup)));
+      return;
+    }
     final route = routeOf(path);
     // A school's orders open over Today: School is in Orders' place.
     final overToday = _school && route.tab == tabOrders;
@@ -592,7 +601,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
         // The rest of the person's own side: pushed over the business.
         final you = youRouteOf(id);
         if (you == null) return;
-        unawaited(openYouPage(context, auth, you, open: _openMine, openPerson: _openPerson));
+        unawaited(openYouPage(context, auth, you, open: _openMine, openPerson: _openPerson, openGroup: _openGroup));
     }
   }
 
@@ -606,6 +615,10 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
   /// notifications of it show nothing while it is on the screen.
   Future<void> _openPerson(String chat, {PeopleChat? started}) =>
       tkPush<void>(context, PeopleChatScreen(data: PeopleChatData(_chats.auth, chat, started: started), notify: widget.notify, openBusiness: _openMine));
+
+  /// One of the person's own groups, over the business.
+  Future<void> _openGroup(String id, {String? focus}) =>
+      tkPush<void>(context, GroupChatScreen(data: GroupChatData(_chats.auth, id, focus: focus), notify: widget.notify, openBusiness: _openMine, openPerson: _openPerson));
 
   @override
   void dispose() {

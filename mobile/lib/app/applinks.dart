@@ -18,8 +18,11 @@ import 'config.dart';
 final _opens = RegExp(
   r'^/(chat|approvals|invoices/[^/]+|trade-orders/[^/]+|storefront/orders/[^/]+|bills/[^/]+|purchases/[^/]+'
   r'|you|you/chats|you/chats/[^/]+|you/orders|you/orders/[^/]+/[^/]+|you/discover|you/discover/[^/]+'
-  r'|you/people/[^/]+|you/people/requests/[^/]+)/?$',
+  r'|you/people/[^/]+|you/people/requests/[^/]+|you/groups/[^/]+)/?$',
 );
+
+/// The code of a group's link the app opens (`/g/{code}`), or null.
+String? groupLinkCodeOf(String page) => RegExp(r'^/g/([A-Za-z0-9]{4,40})$').firstMatch(page)?[1];
 
 /// The code of a person's link the app opens (`/p/{code}`), or null.
 String? personLinkOf(String page) => RegExp(r'^/p/([A-Za-z0-9]{4,40})$').firstMatch(page)?[1];
@@ -46,6 +49,10 @@ String? appPageOf(Uri uri, {String server = taskiemUrl}) {
   // (people-chatting §5.2): who it is, then a chat with them.
   final p = RegExp(r'^/p/([A-Za-z0-9]{4,40})/?$').firstMatch(uri.path);
   if (p != null) return '/p/${p[1]}';
+  // A group's invite link, or its QR code scanned with the phone's camera
+  // (people-chatting §9): the group's name, photo and count, then Join.
+  final g = RegExp(r'^/g/([A-Za-z0-9]{4,40})/?$').firstMatch(uri.path);
+  if (g != null) return '/g/${g[1]}';
   if (!_opens.hasMatch(uri.path)) return null;
   final with_ = uri.queryParameters['with'];
   if (uri.path == '/chat' && with_ != null) {

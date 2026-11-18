@@ -179,11 +179,11 @@ class _YouNotificationsPageState extends State<YouNotificationsPage> {
     }
   }
 
-  static YouNotifications _with(YouNotifications n, {bool? messages, bool? updates, bool? offers, bool? people, bool? requests}) => YouNotifications(
+  static YouNotifications _with(YouNotifications n, {bool? messages, bool? updates, bool? offers, bool? people, bool? requests, bool? groups}) => YouNotifications(
     messages: messages ?? n.messages,
     updates: updates ?? n.updates,
     offers: offers ?? n.offers,
-    groups: n.groups,
+    groups: groups ?? n.groups,
     people: people ?? n.people,
     requests: requests ?? n.requests,
   );
@@ -285,6 +285,15 @@ class _YouNotificationsPageState extends State<YouNotificationsPage> {
                 hint: 'When someone new writes to you first',
                 on: n.requests,
                 onChanged: _busy ? null : (v) => _set(PutMyNotificationsRequest(requests: v), _with(n, requests: v)),
+              ),
+              // Groups (people-chatting §9, §13): their messages; a mention
+              // still comes in a muted group unless turned off there (A7).
+              // Invites to groups come with message requests.
+              TkSwitchRow(
+                label: 'Groups',
+                hint: 'New messages in your groups. Invites come with message requests',
+                on: n.groups,
+                onChanged: _busy ? null : (v) => _set(PutMyNotificationsRequest(groups: v), _with(n, groups: v)),
               ),
             ],
           ),

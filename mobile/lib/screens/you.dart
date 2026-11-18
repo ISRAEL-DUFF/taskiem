@@ -35,6 +35,8 @@ import '../app/sound.dart' show chime;
 import '../theme/look.dart';
 import '../chat/addresses.dart' show SavedAddressesPage;
 import '../chat/discover.dart' show DiscoverTab;
+import '../chat/group_chat.dart' show GroupChatData, GroupChatScreen;
+import '../chat/group_new.dart' show GroupJoinScreen;
 import '../chat/my_chat.dart';
 import '../chat/your_orders.dart' show YourOrdersTab;
 import '../kit/icon.dart';
@@ -175,7 +177,7 @@ class _YouHomeState extends State<YouHome> with Polling {
     final you = link == null ? null : youRouteOf(link);
     if (you == null) return;
     Navigator.of(context).popUntil((r) => r.isFirst);
-    unawaited(openYouPage(context, widget.auth, you, open: _openId, openPerson: _openPerson, showTab: (i) => _tabs.currentState?.show(i), now: widget.now));
+    unawaited(openYouPage(context, widget.auth, you, open: _openId, openPerson: _openPerson, openGroup: _openGroup, showTab: (i) => _tabs.currentState?.show(i), now: widget.now));
   }
 
   /// Enough of a chat to open it by its id (the rest is read as it opens).
@@ -263,7 +265,30 @@ class _YouHomeState extends State<YouHome> with Polling {
   Future<void> _open(PersonChat c, {String? notice, String draft = ''}) => _openId(c.id, notice: notice, draft: draft);
 
   /// A row of the one list: a business's chat, or a person's.
-  Future<void> _openItem(ChatListItem c) => c.kind == 'person' ? _openPerson(c.id) : _openId(c.id);
+  Future<void> _openItem(ChatListItem c) => switch (c.kind) {
+    'person' => _openPerson(c.id),
+    'group' => _openGroup(c.id),
+    _ => _openId(c.id),
+  };
+
+  /// A group opened by its id ([focus]: at one of its messages); the list
+  /// read again after.
+  Future<void> _openGroup(String id, {String? focus}) async {
+    await tkPush<void>(
+      context,
+      GroupChatScreen(
+        data: GroupChatData(widget.auth, id, now: widget.now, focus: focus),
+        notify: widget.notify,
+        openBusiness: _openId,
+        openPerson: _openPerson,
+        openOrder: (business, reference) => tkPush<void>(context, YourOrderPage.of(auth: widget.auth, business: business, reference: reference, onOpenChat: _openId, now: widget.now)),
+      ),
+    );
+    await _chats.load();
+  }
+
+  /// A group opened at one of its messages (a search's hit, a starred one).
+  Future<void> _openGroupAt(String id, String message) => _openGroup(id, focus: message);
 
   /// A chat with a person opened by its id (or as just started); the list
   /// read again after.
@@ -316,7 +341,7 @@ class _YouHomeState extends State<YouHome> with Polling {
 
   /// New chat: finding people (people-chatting §5).
   Future<void> _newChat() async {
-    await tkPush<void>(context, NewPeopleChatScreen(auth: widget.auth, openChat: _openPerson, contacts: widget.contacts, onContactsChecked: _contactsChecked));
+    await tkPush<void>(context, NewPeopleChatScreen(auth: widget.auth, openChat: _openPerson, contacts: widget.contacts, onContactsChecked: _contactsChecked, openGroup: _openGroup));
     await _chats.load();
   }
 
@@ -333,6 +358,14 @@ class _YouHomeState extends State<YouHome> with Polling {
     final page = widget.links?.waiting == true ? widget.links!.take() : null;
     if (page == null || !mounted) return;
     // A person's link (people-chatting §5.2): who it is, then the chat.
+    // A group's link (people-chatting §9): the group, then Join.
+    final group = groupLinkCodeOf(page);
+    if (group != null) {
+      Navigator.of(context).popUntil((r) => r.isFirst);
+      await tkPush<void>(context, GroupJoinScreen(auth: widget.auth, code: group, openGroup: _openGroup));
+      await _chats.load();
+      return;
+    }
     final person = personLinkOf(page);
     if (person != null) {
       Navigator.of(context).popUntil((r) => r.isFirst);
@@ -365,7 +398,7 @@ class _YouHomeState extends State<YouHome> with Polling {
     final you = youRouteOf(page);
     if (you != null) {
       Navigator.of(context).popUntil((r) => r.isFirst);
-      await openYouPage(context, widget.auth, you, open: _openId, openPerson: _openPerson, showTab: (i) => _tabs.currentState?.show(i), now: widget.now);
+      await openYouPage(context, widget.auth, you, open: _openId, openPerson: _openPerson, openGroup: _openGroup, showTab: (i) => _tabs.currentState?.show(i), now: widget.now);
       return;
     }
     final token = Uri.parse(page).queryParameters['token'];
@@ -500,7 +533,7 @@ class _YouHomeState extends State<YouHome> with Polling {
             excludeSemantics: true,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => tkPush<void>(context, PeopleSearchScreen(auth: auth, openAt: _openPersonAt, now: widget.now)),
+              onTap: () => tkPush<void>(context, PeopleSearchScreen(auth: auth, openAt: _openPersonAt, openGroupAt: _openGroupAt, now: widget.now)),
               child: Container(
                 constraints: const BoxConstraints(minHeight: 44),
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -542,7 +575,7 @@ class _YouHomeState extends State<YouHome> with Polling {
             builder: (context, _) {
               final chats = _chats.chats;
               final archived = _chats.archived;
-              final requests = _chats.requests;
+              final requests = _chats.requests + _chats.invites;
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -563,13 +596,15 @@ class _YouHomeState extends State<YouHome> with Polling {
                       children: [
                         if (requests > 0)
                           TkListRow(
-                            title: 'Message requests',
-                            sub: 'From people you haven’t chatted with',
+                            title: _chats.requests == 0 ? 'Invites to groups' : 'Message requests',
+                            sub: _chats.invites == 0
+                                ? 'From people you haven’t chatted with'
+                                : (_chats.requests == 0 ? 'Groups you were invited to' : 'From people you haven’t chatted with, and groups'),
                             icon: 'b-people',
                             amount: '$requests',
-                            semanticsLabel: 'Message requests, $requests',
+                            semanticsLabel: '${_chats.requests == 0 ? 'Invites to groups' : 'Message requests'}, $requests',
                             onTap: () async {
-                              await tkPush<void>(context, PeopleRequestsScreen(auth: auth, openChat: _openPerson, now: widget.now));
+                              await tkPush<void>(context, PeopleRequestsScreen(auth: auth, openChat: _openPerson, openGroup: _openGroup, now: widget.now));
                               await _chats.load();
                             },
                           ),

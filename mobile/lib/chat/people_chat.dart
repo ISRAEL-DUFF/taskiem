@@ -43,6 +43,7 @@ import 'composer.dart';
 import 'door.dart' show doorFileMessage, doorFiles;
 import 'menu.dart';
 import 'my_chat.dart' show OpenMyChat, sayFailure;
+import 'groups.dart' show ChatsAndGroups, forwardWords, pickChatsAndGroups;
 import 'people.dart';
 import 'people_cards.dart';
 import 'people_live.dart';
@@ -617,6 +618,17 @@ class PeopleChatData extends ChangeNotifier {
     }
   }
 
+  /// Forwards [m] to people chats and groups together (`POST
+  /// /v1/me/forward`); the words of how it went.
+  Future<String> forwardAll(PeopleMessage m, ChatsAndGroups to) async {
+    try {
+      final r = await api.forwardMessage(body: ForwardMessageRequest(chatId: id, messageId: m.id, toChats: to.chats.isEmpty ? null : to.chats, toGroups: to.groups.isEmpty ? null : to.groups));
+      return forwardWords(r);
+    } on Object catch (e) {
+      return sayFailure(e);
+    }
+  }
+
   /// A share marked paid, or not yet: both sides see it.
   Future<void> markPaid(PeopleMessage m, bool paid) async {
     try {
@@ -985,9 +997,10 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
     if (m.forwardedMany == true) {
       showTkToast(context, 'This message has been forwarded many times. It can go to one chat at a time.');
     }
-    final to = await pickPeopleChats(context, d.auth, title: 'Forward to', what: peopleLine(m), max: m.forwardedMany == true ? 1 : 5, except: d.id);
-    if (to == null || to.isEmpty || !mounted) return;
-    final words = await d.forward(m, to);
+    final to = await pickChatsAndGroups(context, d.auth, title: 'Forward to', what: peopleLine(m), max: m.forwardedMany == true ? 1 : 5, exceptChat: d.id);
+    if (to == null || (to.chats.isEmpty && to.groups.isEmpty) || !mounted) return;
+    // To people chats alone as before; with a group, the one forward.
+    final words = to.groups.isEmpty ? await d.forward(m, to.chats) : await d.forwardAll(m, to);
     if (mounted) showTkToast(context, words, error: !words.startsWith('Forwarded'));
   }
 

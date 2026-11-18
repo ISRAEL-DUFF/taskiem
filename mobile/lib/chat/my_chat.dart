@@ -44,6 +44,7 @@ import 'composer.dart';
 import 'door.dart';
 import 'my_chat_tools.dart';
 import 'people.dart' show PersonFace;
+import 'groups.dart' show groupListLine;
 import 'people_cards.dart' show shareWithPeople;
 import 'people_live.dart';
 import 'thread.dart';
@@ -151,19 +152,24 @@ class MyChats extends ChangeNotifier {
   /// [live]: You's live connection; a people chat's change it tells reads
   /// the list again at once (a burst once).
   MyChats(this.auth, {this.live}) {
-    _events = live?.events.listen((_) {
-      _soon?.cancel();
-      _soon = Timer(const Duration(milliseconds: 400), () {
-        if (_disposed) return;
-        final when = whenSeen;
-        if (when == null) {
-          unawaited(load());
-        } else {
-          when(() => unawaited(load()));
-        }
-      });
+    _events = live?.events.listen((_) => _heard());
+    _groupEvents = live?.groupEvents.listen((_) => _heard());
+  }
+
+  void _heard() {
+    _soon?.cancel();
+    _soon = Timer(const Duration(milliseconds: 400), () {
+      if (_disposed) return;
+      final when = whenSeen;
+      if (when == null) {
+        unawaited(load());
+      } else {
+        when(() => unawaited(load()));
+      }
     });
   }
+
+  StreamSubscription<GroupLiveEvent>? _groupEvents;
 
   /// The screen showing the list (You): a change the connection tells is
   /// read at once while it is seen, else once when it is on top again
@@ -182,6 +188,9 @@ class MyChats extends ChangeNotifier {
 
   /// Message requests waiting (people-chatting §7).
   int requests = 0;
+
+  /// Invites to groups waiting (§9, A3), beside the requests.
+  int invites = 0;
   String? error;
   bool _disposed = false;
 
@@ -223,6 +232,7 @@ class MyChats extends ChangeNotifier {
         _open.first(r.chats, more: r.more, next: r.next);
         unread = r.unread;
         requests = r.requests;
+        invites = r.invites;
         error = null;
         try {
           final a = await auth.api.listAllMyChats(archived: '1');
@@ -270,6 +280,7 @@ class MyChats extends ChangeNotifier {
       if (!archivedOnes) {
         unread = r.unread;
         requests = r.requests;
+        invites = r.invites;
       }
       _show();
     } on Object {
@@ -283,6 +294,7 @@ class MyChats extends ChangeNotifier {
     _disposed = true;
     _soon?.cancel();
     _events?.cancel();
+    _groupEvents?.cancel();
     super.dispose();
   }
 }
@@ -329,6 +341,7 @@ class MyChatRows extends StatelessWidget {
   }
 
   Widget _row(BuildContext context, ChatListItem c, TkTokens t, TkLook look) {
+    if (c.kind == 'group') return _group(context, c, t, look);
     final person = c.kind == 'person';
     final said = live?.presenceOf(c.id);
     final online = person && (said != null ? said.online == true : c.person?.online == true);
@@ -376,6 +389,46 @@ class MyChatRows extends StatelessWidget {
               onTap: () => onOpen(c),
             ),
           );
+  }
+}
+
+extension on MyChatRows {
+  /// A group's row: its photo, "Group", who wrote last and what (or who is
+  /// typing), an @ when an unread message mentions you, its unread count.
+  Widget _group(BuildContext context, ChatListItem c, TkTokens t, TkLook look) {
+    final g = c.group;
+    final typing = live?.groupTyping[c.id] ?? const <String>[];
+    final mentioned = g?.mentioned == true && c.unread > 0;
+    final words = g == null ? myChatPreview(c) : groupListLine(g);
+    final line = typing.isNotEmpty && g?.left != true
+        ? Text(typing.length == 1 ? 'typing…' : '${typing.length} typing…', maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 14, weight: 600, color: look.limeInk))
+        : Text.rich(
+            TextSpan(
+              children: [
+                if (mentioned) TextSpan(text: '@ ', style: tkText(size: 14, weight: 700, color: look.limeInk)),
+                TextSpan(text: words),
+              ],
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: tkText(size: 14, color: t.muted),
+          );
+    return Semantics(
+      label: ['A group', if (mentioned) 'you were mentioned', if (typing.isNotEmpty) 'typing', if (g?.left == true) 'you are no longer in it'].join(', '),
+      container: true,
+      child: ChatRow(
+        key: ValueKey('row my ${c.id}'),
+        title: c.name,
+        letter: c.name,
+        avatar: transport == null ? null : PersonFace(name: c.name, transport: transport!, photo: g?.photo, size: 48),
+        marks: const [(label: 'Group', off: false)],
+        time: listTime(c.lastAt, now),
+        preview: line,
+        unread: c.unread,
+        muted: c.muted,
+        onTap: () => onOpen(c),
+      ),
+    );
   }
 }
 

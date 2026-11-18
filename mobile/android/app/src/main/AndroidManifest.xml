@@ -65,6 +65,8 @@
                 <data android:pathPrefix="/purchases/"/>
                 <!-- A person's link and its QR code (people-chatting §5.2). -->
                 <data android:pathPrefix="/p/"/>
+                <!-- A group's invite link and its QR code (people-chatting §9). -->
+                <data android:pathPrefix="/g/"/>
                 <!-- A password reset's link (lib/screens/forgot_password.dart). -->
                 <data android:path="/reset-password"/>
             </intent-filter>
