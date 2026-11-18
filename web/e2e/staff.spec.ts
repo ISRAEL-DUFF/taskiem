@@ -28,6 +28,10 @@ async function owner(page: Page) {
 }
 
 async function axeBoth(page: Page, where: string) {
+  // Checked as the page opens, at the top: a click further down scrolls a
+  // header's button under the sticky top bar, which axe counts as a
+  // target too small to tap.
+  await page.evaluate(() => window.scrollTo(0, 0));
   for (const scheme of ["light", "dark"] as const) {
     await page.evaluate((t) => {
       if (t === "dark") document.documentElement.dataset.theme = "dark";
