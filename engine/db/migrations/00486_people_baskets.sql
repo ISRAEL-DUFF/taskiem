@@ -23,6 +23,8 @@
 CREATE TABLE people_baskets (
   id               uuid PRIMARY KEY,
   business_id      uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  -- The business's name when the basket was started (its card's).
+  business_name    text NOT NULL CHECK (length(business_name) <= 200),
   -- Where it was started: a group, or a chat between two people (the
   -- pair's conversation id, which each person's own copy names).
   group_id         uuid REFERENCES people_groups(id) ON DELETE CASCADE,
@@ -120,6 +122,23 @@ $$;
 CREATE TRIGGER people_baskets_guard BEFORE UPDATE ON people_baskets
   FOR EACH ROW EXECUTE FUNCTION taskiem_basket_guard();
 
+-- A line stays its person's, in its basket, of its item (the holder sets
+-- the price it was placed at).
+-- +goose StatementBegin
+CREATE FUNCTION taskiem_basket_line_guard() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.basket_id IS DISTINCT FROM OLD.basket_id OR NEW.person_id IS DISTINCT FROM OLD.person_id OR NEW.item_id IS DISTINCT FROM OLD.item_id THEN
+    RAISE EXCEPTION 'a basket line''s person and item are kept' USING ERRCODE = '42501';
+  END IF;
+  NEW.updated_at := now();
+  RETURN NEW;
+END
+$$;
+-- +goose StatementEnd
+CREATE TRIGGER people_basket_lines_guard BEFORE UPDATE ON people_basket_lines
+  FOR EACH ROW EXECUTE FUNCTION taskiem_basket_line_guard();
+
 -- The business's side: a pay link for one share of an order (C2), paid
 -- by the member or by the placer for them. share_key is the basket
 -- share's key: the business sees parts of its order paid, never by whom.
@@ -156,8 +175,9 @@ ALTER TABLE group_messages DROP CONSTRAINT group_messages_card_type_check,
 
 -- Whether the person in scope (no business in scope) may see the basket:
 -- a member of its group now; one of its chat's two people, by their own
--- copy, while neither blocked the other; once placed, whoever placed it or
--- has lines in it.
+-- copy (a block made later leaves it shared, as A8 leaves group messages;
+-- a card sent across a block is never delivered, so its basket is never
+-- found); once placed, whoever placed it or has lines in it.
 -- +goose StatementBegin
 CREATE FUNCTION taskiem_basket_reach(p_basket uuid) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
@@ -166,9 +186,7 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp AS $$
       (b.group_id IS NOT NULL AND EXISTS (SELECT 1 FROM group_members m WHERE m.group_id = b.group_id
          AND m.person_id = taskiem_person_scope() AND m.left_at IS NULL))
       OR (b.conversation_id IS NOT NULL AND EXISTS (SELECT 1 FROM people_chats c WHERE c.conversation_id = b.conversation_id
-         AND c.person_id = taskiem_person_scope()
-         AND NOT EXISTS (SELECT 1 FROM people_blocks k WHERE (k.person_id = c.person_id AND k.blocked_id = c.peer_id)
-                                                          OR (k.person_id = c.peer_id AND k.blocked_id = c.person_id))))
+         AND c.person_id = taskiem_person_scope()))
       OR (b.state = 'placed' AND (b.placed_by = taskiem_person_scope()
          OR EXISTS (SELECT 1 FROM people_basket_lines l WHERE l.basket_id = b.id AND l.person_id = taskiem_person_scope())))))
 $$;
@@ -302,8 +320,10 @@ CREATE POLICY reach_read ON people_basket_lines FOR SELECT TO taskiem_app
 CREATE POLICY own_insert ON people_basket_lines FOR INSERT TO taskiem_app
   WITH CHECK (person_id = taskiem_person_scope() AND taskiem_basket_reach(basket_id));
 CREATE POLICY own_update ON people_basket_lines FOR UPDATE TO taskiem_app
-  USING (person_id = taskiem_person_scope() AND taskiem_basket_reach(basket_id))
-  WITH CHECK (person_id = taskiem_person_scope() AND taskiem_basket_reach(basket_id));
+  USING (taskiem_basket_reach(basket_id) AND (person_id = taskiem_person_scope()
+    OR EXISTS (SELECT 1 FROM people_baskets b WHERE b.id = people_basket_lines.basket_id AND b.holder_id = taskiem_person_scope())))
+  WITH CHECK (taskiem_basket_reach(basket_id) AND (person_id = taskiem_person_scope()
+    OR EXISTS (SELECT 1 FROM people_baskets b WHERE b.id = people_basket_lines.basket_id AND b.holder_id = taskiem_person_scope())));
 CREATE POLICY own_or_holder_delete ON people_basket_lines FOR DELETE TO taskiem_app
   USING (taskiem_basket_reach(basket_id) AND (person_id = taskiem_person_scope()
     OR EXISTS (SELECT 1 FROM people_baskets b WHERE b.id = people_basket_lines.basket_id AND b.holder_id = taskiem_person_scope())));
@@ -331,6 +351,7 @@ END $$;
 -- +goose StatementEnd
 REVOKE EXECUTE ON FUNCTION taskiem_basket_touch() FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION taskiem_basket_guard() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION taskiem_basket_line_guard() FROM PUBLIC;
 
 -- +goose Down
 -- +goose StatementBegin
@@ -347,6 +368,7 @@ DROP FUNCTION taskiem_basket_order(uuid);
 DROP FUNCTION taskiem_basket_enter(uuid, text);
 DROP FUNCTION taskiem_basket_reach(uuid);
 DROP FUNCTION taskiem_basket_guard();
+DROP FUNCTION taskiem_basket_line_guard();
 DROP FUNCTION taskiem_basket_touch();
 DROP TABLE storefront_order_share_links;
 DELETE FROM people_messages WHERE card_type = 'basket';

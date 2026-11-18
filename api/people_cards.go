@@ -73,6 +73,13 @@ type peopleCard struct {
 	Paid     bool       `json:"paid,omitempty"`
 	PaidAt   *time.Time `json:"paid_at,omitempty"`
 	PaidByMe *bool      `json:"paid_by_me,omitempty"`
+	// A shared basket of ordering together (5b C): made by the server
+	// when someone starts one; opening it reads the basket live.
+	BasketID *uuid.UUID `json:"basket_id,omitempty"`
+	// A share sent from a basket (5b C2, "I'll pay all"): who it is for,
+	// as the sender named them (in a group, one card per member).
+	ForID *uuid.UUID `json:"for_id,omitempty"`
+	For   string     `json:"for,omitempty"`
 }
 
 // cardRequest is a card to share.
@@ -271,6 +278,8 @@ type liveCard struct {
 	Order *personOrder `json:"order,omitempty"`
 	// Its rider's progress now.
 	Delivery *deliveryProgress `json:"delivery,omitempty"`
+	// A basket as it is now, for someone who reaches it.
+	Basket *basketOut `json:"basket,omitempty"`
 }
 
 // openPeopleCard is GET /v1/me/people/{id}/messages/{message}/card: the
@@ -348,6 +357,14 @@ func (s *Server) answerCard(w http.ResponseWriter, r *http.Request, person uuid.
 			live.Business = &b
 			return err
 		})
+	case "basket":
+		if card.BasketID != nil {
+			var b basketOut
+			b, err = s.basketView(ctx, person, *card.BasketID)
+			if err == nil {
+				live.Basket = &b
+			}
+		}
 	case "order", "delivery":
 		err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 			o, err := s.orderOfTx(ctx, tx, person, *card.BusinessID, card.Reference)

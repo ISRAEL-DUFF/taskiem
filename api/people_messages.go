@@ -1152,8 +1152,8 @@ func (s *Server) peopleDraftOf(ctx context.Context, person, chat, msg uuid.UUID)
 		}
 		_, v := m.view(key, person)
 		d = peopleDraft{kind: m.Kind, body: v.Body, card: v.Card, location: v.Location, forwards: m.forwards + 1}
-		if v.Card != nil && v.Card.Type == "split" {
-			return customerSendErr{http.StatusConflict, "A share card is between the two of you: it is not forwarded."}
+		if v.Card != nil && (v.Card.Type == "split" || v.Card.Type == "basket") {
+			return customerSendErr{http.StatusConflict, "A share card or a shared basket is between the people in it: it is not forwarded."}
 		}
 		if m.attach != nil {
 			var sealed []byte

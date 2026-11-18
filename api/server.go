@@ -506,6 +506,7 @@ func (s *Server) Handler() http.Handler {
 			s.peopleRoutes(r)                   // finding people, contacts, the person's link, privacy towards people (people.go)
 			s.peopleChatRoutes(r)               // chats between people (people_chats.go)
 			s.groupRoutes(r)                    // groups of people (people_groups.go)
+			s.basketRoutes(r)                   // ordering together (people_baskets.go)
 			s.peopleSafetyRoutes(r)             // the person's standing and appeals (people_safety.go)
 			r.Get("/me/devices", s.listDevices) // Your phones (devices.go)
 			r.Delete("/me/devices/{id}", s.removeDevice)

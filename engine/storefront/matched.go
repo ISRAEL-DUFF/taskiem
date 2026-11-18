@@ -327,6 +327,13 @@ func paystackConnection(connection string) (string, bool) {
 	return name, ok && c == "paystack"
 }
 
+// PaysByCard is whether a form's connection takes card payments through
+// Taskiem's pay links (so an order's shares can each have one).
+func PaysByCard(connection string) bool {
+	_, card := paystackConnection(connection)
+	return card
+}
+
 // Matchables lists the tenant's orders that can still be paid, newest
 // first, with the customer opened: what matching suggests among.
 func (o *Orders) Matchables(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, limit int) ([]Order, error) {

@@ -250,6 +250,7 @@ func (s *Server) peopleLive(w http.ResponseWriter, r *http.Request) {
 	}
 	msgs, chats, gone := &liveWindow{since}, &liveWindow{since}, &liveWindow{since}
 	groups := newGroupLive(since)
+	baskets := newBasketLive(since)
 
 	rc := http.NewResponseController(w)
 	h := w.Header()
@@ -293,6 +294,7 @@ func (s *Server) peopleLive(w http.ResponseWriter, r *http.Request) {
 			beatAt = time.Now()
 		}
 		var out []liveEvent
+		var basketIDs []uuid.UUID
 		more := false
 		err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 			out = nil
@@ -475,6 +477,14 @@ func (s *Server) peopleLive(w http.ResponseWriter, r *http.Request) {
 				more = true
 			}
 
+			// The person's shared baskets (people_baskets_live.go).
+			bids, bmore, err := baskets.idsTx(ctx, tx)
+			if err != nil {
+				return err
+			}
+			basketIDs = bids
+			more = more || bmore
+
 			// The person's groups (people_group_live.go).
 			gev, gnow, gmore, err := s.liveGroupsTx(ctx, tx, person, groups)
 			if err != nil {
@@ -559,6 +569,7 @@ func (s *Server) peopleLive(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
+		out = append(out, s.basketEvents(ctx, person, baskets, basketIDs)...)
 		// Changes in the order they were made (typing and presence last).
 		k := 0
 		for k < len(out) && out[k].id > 0 {

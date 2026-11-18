@@ -81,6 +81,7 @@ type theirShop struct {
 	Zones    []storefront.Zone `json:"zones"`
 	Payment  string            `json:"payment"`
 	action   *uuid.UUID
+	card     bool // paid by card through Taskiem's pay links
 	slug     string
 	sf       uuid.UUID
 	all      []storefront.Item
@@ -139,6 +140,7 @@ func theirShopTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, name string) 
 		_ = json.Unmarshal(raw, &opts)
 		shop.action, shop.Open, shop.Payment = &id, true, payment
 		shop.Pickup, shop.Delivery = opts.Pickup, opts.Delivery
+		shop.card = storefront.PaysByCard(opts.Connection)
 		if opts.Delivery && opts.Zones != nil {
 			shop.Zones = opts.Zones
 		}
