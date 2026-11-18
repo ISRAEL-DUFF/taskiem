@@ -93,7 +93,7 @@ func TestSettingsDefaultsAndChanges(t *testing.T) {
 	if err != nil || s != people.Defaults() {
 		t.Fatalf("defaults: %+v %v", s, err)
 	}
-	want := people.Settings{FindByNumber: people.Contacts, FindFromContacts: true, Message: people.Everyone, LastSeen: people.Contacts, ReadTicks: true, Photo: people.Contacts, ShowNumber: false}
+	want := people.Settings{FindByNumber: people.Contacts, FindFromContacts: true, Message: people.Everyone, LastSeen: people.Contacts, ReadTicks: true, Photo: people.Contacts, ShowNumber: false, GroupsAdd: people.Contacts}
 	if s != want {
 		t.Fatalf("the founder's defaults: %+v", s)
 	}
@@ -107,6 +107,12 @@ func TestSettingsDefaultsAndChanges(t *testing.T) {
 	}
 	if got, _ := f.p.SettingsOf(ctx, tolu); got != s {
 		t.Fatalf("read back: %+v", got)
+	}
+	if s, _ := f.p.SaveSettings(ctx, tolu, people.SettingsIn{GroupsAdd: aud(people.Nobody)}); s.GroupsAdd != people.Nobody || s.Message != people.Nobody {
+		t.Fatalf("who can add me to groups: %+v", s)
+	}
+	if _, err := f.p.SaveSettings(ctx, tolu, people.SettingsIn{GroupsAdd: aud("friends")}); !errors.Is(err, people.ErrInvalid) {
+		t.Fatalf("a bad groups audience: %v", err)
 	}
 	if _, err := f.p.SaveSettings(ctx, tolu, people.SettingsIn{Photo: aud("friends")}); !errors.Is(err, people.ErrInvalid) {
 		t.Fatalf("a bad audience: %v", err)
