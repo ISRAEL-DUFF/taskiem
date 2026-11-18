@@ -620,3 +620,35 @@ tests:
     values: 1073741824x600
   interval: 5m
   name: groups' storage counts with people chats'
+- alert_rule_test:
+  - alertname: TaskiemPeopleStorageLarge
+    eval_time: 10h
+    exp_alerts: []
+  - alertname: TaskiemPeopleStorageLarge
+    eval_time: 39h
+    exp_alerts: []
+  - alertname: TaskiemPeopleStorageLarge
+    eval_time: 49h
+    exp_alerts:
+    - exp_annotations:
+        description: 'People chats and groups are kept until the people delete them
+          (decision 0069), so their tables only grow; a group keeps one copy of its
+          messages and files (5b). Together they take over 150 GiB on disk, or grew
+          by over 8 GiB in a day: plan the database''s disk, and whether photos and
+          files leave Postgres for object storage.'
+        runbook_url: https://github.com/israel-duff/taskiem/blob/main/docs/reliability.md#runbook-taskiempeoplestoragelarge
+        summary: People chats and groups take over 150 GiB, or grew over 8 GiB in
+          a day
+      exp_labels:
+        severity: ticket
+  input_series:
+  - series: taskiem_people_storage_bytes{table="people_files",instance="a"}
+    values: 85899345920x480 162134446080x120
+  - series: taskiem_people_storage_bytes{table="people_files",instance="b"}
+    values: 85899345920x480 162134446080x120
+  - series: taskiem_people_storage_bytes{table="group_files",instance="a"}
+    values: 1073741824+26214400x600
+  - series: taskiem_people_storage_bytes{table="group_files",instance="b"}
+    values: 1073741824+26214400x600
+  interval: 5m
+  name: two pods report the same tables, counted once
