@@ -31,8 +31,10 @@ import 'people.dart';
 import 'people_contacts.dart';
 import 'words.dart';
 
-/// Opens a chat with a person by its id (over You).
-typedef OpenPeopleChat = Future<void> Function(String chatId);
+/// Opens a chat with a person by its id (over You); [started] is the chat
+/// as `POST /v1/me/people` answered it, when just started: a chat with no
+/// message yet is in no list, so it opens from that.
+typedef OpenPeopleChat = Future<void> Function(String chatId, {PeopleChat? started});
 
 /// The person's chat with someone found ([person], or by their link's
 /// [linkCode]): the one they have, else started (`POST /v1/me/people`),
@@ -40,7 +42,7 @@ typedef OpenPeopleChat = Future<void> Function(String chatId);
 Future<void> chatWithPerson(BuildContext context, Auth auth, OpenPeopleChat open, {String? person, String? linkCode}) async {
   try {
     final c = await auth.api.startPeopleChat(body: StartPeopleChatRequest(personId: person, linkCode: linkCode));
-    await open(c.id);
+    await open(c.id, started: c);
   } on Object catch (e) {
     if (context.mounted) showTkToast(context, sayFailure(e), error: true);
   }
@@ -84,9 +86,12 @@ class _FoundPersonState extends State<FoundPerson> {
     final p = widget.found.person!;
     final token = widget.found.addToken;
     if (token == null) return;
+    // Their name in your contacts, as the web asks: empty for their own.
+    final name = await askContactName(context, initial: '', theirs: p.name);
+    if (name == null || !mounted) return;
     setState(() => _busy = true);
     try {
-      await widget.auth.api.addContact(body: AddContactRequest(personId: p.id, addToken: token, from: widget.from));
+      await widget.auth.api.addContact(body: AddContactRequest(personId: p.id, addToken: token, from: widget.from, name: name.isEmpty ? null : name));
       if (!mounted) return;
       setState(() => _added = true);
       showTkToast(context, 'Added to your contacts');
@@ -351,9 +356,9 @@ class _PersonLinkScreenState extends State<PersonLinkScreen> {
             from: 'link',
             onChat: () async {
               final nav = Navigator.of(context);
-              await chatWithPerson(context, widget.auth, (id) async {
+              await chatWithPerson(context, widget.auth, (id, {started}) async {
                 await nav.maybePop();
-                await widget.openChat(id);
+                await widget.openChat(id, started: started);
               }, linkCode: widget.code);
             },
           ),

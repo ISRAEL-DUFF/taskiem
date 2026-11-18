@@ -588,7 +588,7 @@ Branch `stage5a-app`, on 68001463 (the two server streams joined): the Flutter a
 - A deleted account's chat reads "Deleted account" and has no box.
 - The ⋯ menu: About, Mute, Archive, Block or Unblock, Report, Delete this chat.
 
-**Requests** (`/you/people/requests`): listed with the first message, and opened without the read call, so the sender is told nothing.
+**Requests** (`/you/people/requests`): listed with the first message, and marked read when opened (`/read`, as any chat), so an opened request is no longer unread; the server tells the sender nothing of it until it is accepted (`TestPeopleReadTicksEverywhere`).
 - **Accept**: the box appears; the sender sees reads from then.
 - **Delete**: asked first; the sender is not told.
 - **Block and report**: a reason, an optional note, consent to send the last 20 messages with their photos and files, and Block ticked.
@@ -600,7 +600,7 @@ Branch `stage5a-app`, on 68001463 (the two server streams joined): the Flutter a
 - **From the phone's contacts**, only after the person agrees:
   - The explainer says what is sent and kept, and the method's limit: Taskiem holds the key and numbers are few enough to try them all, so it protects against others seeing what is sent, not against Taskiem.
   - Only after **Agree** is the phone asked (`READ_CONTACTS`, `NSContactsUsageDescription`) and the contacts read.
-  - Each number is put in E.164 (`toE164`, Nigeria by default), each once. With `GET /v1/me/contacts/key`, each is hashed as `SHA-256(key ‖ "taskiem-contacts:" ‖ E.164)` in hex (`contactHash`) and sent in batches of the key's `max_batch` (`POST /v1/me/contacts/match`); on 409 it is asked again once with the new key.
+  - Each number is put in E.164 (`contactE164`, Nigeria by default; see the review fixes below), each once. With `GET /v1/me/contacts/key`, each is hashed as `SHA-256(key ‖ "taskiem-contacts:" ‖ E.164)` in hex (`contactHash`) and sent in batches of the key's `max_batch` (`POST /v1/me/contacts/match`), no more than its `max_per_day`; on 409 only the batches not yet answered are sent again, with the new key; on 429 the matches found so far are kept and shown.
   - Nothing is stored: not the numbers, the hashes or the answer.
   - Found people show by the name the phone has, with Add (`from: contacts`, that name) and Chat.
   - A fixed vector checks the hash against the server's: `engine/people/hash_test.go` (`TestContactHashVector`) and `mobile/test/people_test.dart` hold the same key, number and 64 digits.
@@ -656,6 +656,27 @@ Branch `stage5a-app`, on 68001463 (the two server streams joined): the Flutter a
 - Contacts are matched when the person opens From your contacts, not re-checked daily by themselves.
 - No scanner in the app: the phone's camera opens a person's QR code as a link.
 - Discover's profile has no Share yet.
+
+### App review fixes
+
+Branch `stage5a-fix-app`, on 304d2445 (the server's review fixes): the app's findings of the stage 5a review, each with a test in `mobile/test/people_review_test.dart` (and one in `home_open_test.dart`). Where this list differs from the sections above, it holds.
+
+- **Nothing read while put away or covered.** An Android app's timers run in the background, so a chat's 4-second read went on after Presence said offline (the server's "here" made the person online again) and marked arriving messages read. `PeopleChatScreen`, `MyChatScreen` and You's list now read again through the `Polling` mixin (`kit/polling.dart`): only while the app is in front and the screen is on top, and once at once when the app comes back. `PeopleChatData` and `MyChatData` no longer run timers of their own (`poll()`, called by the screen), and call `/read` only while their `seen` says the app is in front and the chat is on top (`appInFront`, now in `polling.dart`).
+- **Older messages stay.** Once the last older page was read, the next read of the latest page dropped them (both in people chats and in chats with businesses). "Older loaded" is now kept apart from "the server has more": older messages read stay across reads of the latest page while the server has more before it, and Load older shows by what the last older page said.
+- **Numbers as the phone keeps them.** Contacts are matched through `contactE164` (`app/phone.dart`), for matching only: Unicode format characters (`\p{Cf}`, such as U+202A and U+202C round a number) are dropped, and `234` or `2340` then 10 digits starting 7, 8 or 9 is read as +234; else as `toE164`, which is unchanged for typed numbers.
+- **Business logos** in You's Chats and Archived, from `ChatListItem.photo` (`BusinessFace`, as Orders shows them).
+- **An opened request is marked read** (`/read` as for any chat; the server passes nothing on to the sender of a request). The Requests line above says so.
+- **Contacts matching retries.** On 409 only the batches not yet answered are sent again with the new key (at most twice); on 429 after some batches, the matches found are kept and shown with "Checked N of your M numbers…"; no more numbers than `max_per_day` are sent (1000 in an account's first week), and the rest is said the same way.
+- **The person's card.** Block there, when it removes the chat, closes the card and then the chat (it closed only the card before); a blocked person's card has **Unblock**.
+- **A business session.** A person's chat opened over a business (`/you/people/…`, a person's link) gets the business home's opener for a shared card's Chat and this phone's notifications (`_openMine`, `_openPerson` in `main.dart`).
+- **Retry-safe sends.** A photo or file, a card, and Share with someone (which sent no `client_id`) are sent again with the client id they first went with when no answer came (offline, cut off, 5xx), as words are; a refused send takes a new one.
+- **Small.** "Blocked today", "Blocked yesterday", "Blocked on Tue 14 Oct" (`blockedDay`); You's notification question is "Get a notification when a business or a person messages you?"; online is said to a screen reader (the dot's "Online", and a row's "Chat with a person, online"); the forward and share picker lists archived chats too (and no suspended account); Add to contacts by number or link asks for their name in your contacts, as the web does; the contacts explainer says that the person and the name you give when you tap Add are kept (Add asks it, the phone's name filled in), and that only people whose settings let you find them are answered. Head buttons and `TkSmallButton` keep their look and answer a finger in 48 by 48 (`TapArea`).
+- **The server's changes adopted.**
+  - `GET /v1/me/conversations` (You's Chats and Archived) and `GET /v1/me/people` (the picker) are read a page at a time: `ChatPages` keeps the first page read again with the later pages read by `before` the last `next`; **Show more chats** (`TkLoadMore`, `kit/load_more.dart`) reads the next as the list is scrolled near its end; `unread` is the whole list's. Archived's count has a + while there are more.
+  - `suspended` on `ChatListItem` and `PeopleChat`: the head and the person's card say "This account can't get messages right now.", the row says so, the chat says it can be read but not written to, and there is no box (nor reply, nor Mark as paid); a send's 409 is the server's words.
+  - A chat just started (`POST /v1/me/people`) opens from that answer (`OpenPeopleChat`'s `started`, `PeopleChatData(started:)`), since it is in no list until its first message.
+  - A share card with `warn` (from someone not in the recipient's contacts) carries the transfer warning, as `warn_transfer` does.
+  - Privacy with people: "From their contacts" says it works as far as "By my number" lets them.
 
 ## As built: stage 5a, web
 

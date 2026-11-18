@@ -10,6 +10,7 @@ import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
 import '../api/transport.dart';
+import '../app/session.dart' show uuid4;
 import '../kit/api_image.dart';
 import '../kit/icon.dart';
 import '../kit/kit.dart' show TkButton, tkHint;
@@ -31,6 +32,14 @@ const peopleKeptWords =
 
 /// The answer of a chat that is not a person's (a deleted account).
 const deletedAccount = 'Deleted account';
+
+/// A suspended account (not a deleted one): its name shows, nothing is
+/// sent to it (the server's 409 says the same).
+const suspendedWords = 'This account can’t get messages right now.';
+
+/// A new client id for a send (`client_id`): kept with the send while
+/// it has no answer, so the same sent again is kept once.
+String newClientId(DateTime at, int n) => '${at.millisecondsSinceEpoch}-$n-${uuid4().substring(0, 8)}';
 
 String _str(Object? v) => v is String ? v : '';
 
@@ -95,10 +104,14 @@ class PersonFace extends StatelessWidget {
         Positioned(
           right: 0,
           bottom: 0,
-          child: Container(
-            width: size / 4,
-            height: size / 4,
-            decoration: BoxDecoration(color: look.lime, shape: BoxShape.circle, border: Border.all(color: look.card, width: 2)),
+          // Said to a screen reader too, not only drawn.
+          child: Semantics(
+            label: 'Online',
+            child: Container(
+              width: size / 4,
+              height: size / 4,
+              decoration: BoxDecoration(color: look.lime, shape: BoxShape.circle, border: Border.all(color: look.card, width: 2)),
+            ),
           ),
         ),
       ],

@@ -51,6 +51,24 @@ String? toE164(String typed) {
   return RegExp(r'^\+[1-9]\d{7,14}$').hasMatch(s) ? s : null;
 }
 
+/// Format characters a phone's address book may keep in a number (the
+/// left-to-right marks round it, U+202A to U+202E, U+200E, U+2066…; the
+/// Unicode category Cf).
+final _format = RegExp(r'\p{Cf}', unicode: true);
+
+/// A number from the phone's contacts as `+<country><number>`, for matching
+/// only (people-chatting §5.3): format characters dropped, and a Nigerian
+/// number kept without its + (234 and 10 digits, or 234, 0 and 10 digits)
+/// read as one; else as [toE164] reads it. A number typed by the person
+/// goes through [toE164] alone.
+String? contactE164(String saved) {
+  final s = saved.replaceAll(_format, '').trim();
+  final bare = s.replaceAll(_ignored, '');
+  final m = RegExp(r'^2340?([789]\d{9})$').firstMatch(bare);
+  if (m != null) return '+$homeCountry${m[1]}';
+  return toE164(s);
+}
+
 /// A number to read back: Nigerian numbers grouped as +234 803 123 4567.
 String showPhone(String e164) {
   final m = RegExp(r'^\+234(\d{3})(\d{3})(\d{4})$').firstMatch(e164);

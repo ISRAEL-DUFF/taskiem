@@ -120,7 +120,7 @@ class _PeoplePrivacyPageState extends State<PeoplePrivacyPage> {
               }),
               TkSwitchRow(
                 label: 'From their contacts',
-                hint: 'People with your number in their phone can find you',
+                hint: 'People with your number in their phone can find you, as far as By my number lets them',
                 on: p.findFromContacts,
                 onChanged: _busy ? null : (v) => _put(PutMyPeoplePrivacyRequest(findFromContacts: v), _with(findFromContacts: v)),
               ),
@@ -165,6 +165,13 @@ class _PeoplePrivacyPageState extends State<PeoplePrivacyPage> {
       ],
     );
   }
+}
+
+/// The day someone was blocked, after "Blocked": today, yesterday, or
+/// its date as written (Tue 14 Oct, not tue 14 oct).
+String blockedDay(DateTime at, DateTime now) {
+  final d = dayWords(at, now);
+  return d == 'Today' || d == 'Yesterday' ? d.toLowerCase() : 'on $d';
 }
 
 /// People you blocked (§8.1): they cannot message you or see your last
@@ -231,7 +238,7 @@ class _BlockedPeopleScreenState extends State<BlockedPeopleScreen> {
               for (final p in list)
                 TkListRow(
                   title: p.name,
-                  sub: 'Blocked ${dayWords(p.at, now).toLowerCase()}',
+                  sub: 'Blocked ${blockedDay(p.at, now)}',
                   letters: p.name,
                   trailing: TkSmallButton(label: 'Unblock', semantics: 'Unblock ${p.name}', onPressed: () => _unblock(p)),
                 ),

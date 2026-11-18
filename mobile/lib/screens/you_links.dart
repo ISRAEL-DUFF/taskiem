@@ -33,7 +33,7 @@ Future<void> openYouPage(
   void Function(int tab)? showTab,
   DateTime Function() now = DateTime.now,
 }) async {
-  final person = openPerson ?? (id) => tkPush<void>(context, PeopleChatScreen(data: PeopleChatData(auth, id, now: now), openBusiness: open));
+  final person = openPerson ?? (id, {started}) => tkPush<void>(context, PeopleChatScreen(data: PeopleChatData(auth, id, now: now, started: started), openBusiness: open));
   switch (r.page) {
     case YouPage.person:
       showTab?.call(youTabChats);

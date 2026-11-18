@@ -546,15 +546,7 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
     // own chat with them, over the business.
     final person = personLinkOf(path);
     if (person != null) {
-      final auth = _chats.auth;
-      unawaited(tkPush<void>(
-        context,
-        PersonLinkScreen(
-          auth: auth,
-          code: person,
-          openChat: (id) => tkPush<void>(context, PeopleChatScreen(data: PeopleChatData(auth, id), notify: widget.notify)),
-        ),
-      ));
+      unawaited(tkPush<void>(context, PersonLinkScreen(auth: _chats.auth, code: person, openChat: _openPerson)));
       return;
     }
     final route = routeOf(path);
@@ -592,11 +584,20 @@ class _HomeState extends State<_Home> with WidgetsBindingObserver {
         // The rest of the person's own side: pushed over the business.
         final you = youRouteOf(id);
         if (you == null) return;
-        Future<void> open(String chat, {String? notice, String draft = '', String? tool}) =>
-            tkPush<void>(context, MyChatScreen(data: MyChatData(auth, chat, notice: notice), draft: draft, notify: widget.notify, tool: tool));
-        unawaited(openYouPage(context, auth, you, open: open));
+        unawaited(openYouPage(context, auth, you, open: _openMine, openPerson: _openPerson));
     }
   }
+
+  /// The person's own chat with a business, over the business (a business
+  /// session is its person too).
+  Future<void> _openMine(String chat, {String? notice, String draft = '', String? tool}) =>
+      tkPush<void>(context, MyChatScreen(data: MyChatData(_chats.auth, chat, notice: notice), draft: draft, notify: widget.notify, tool: tool));
+
+  /// The person's own chat with a person, over the business: a shared
+  /// card's Chat opens their chat with that business, and this phone's
+  /// notifications of it show nothing while it is on the screen.
+  Future<void> _openPerson(String chat, {PeopleChat? started}) =>
+      tkPush<void>(context, PeopleChatScreen(data: PeopleChatData(_chats.auth, chat, started: started), notify: widget.notify, openBusiness: _openMine));
 
   @override
   void dispose() {

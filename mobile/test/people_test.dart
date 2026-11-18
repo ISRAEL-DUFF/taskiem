@@ -240,9 +240,9 @@ void main() {
       (name: 'Bisi', numbers: ['08031234568', 'not a number']),
       (name: 'Chidi', numbers: ['07012345678']),
     ]);
-    expect(found.single.person.name, 'Ada Obi');
-    expect(found.single.phoneName, 'Ada');
-    expect(found.single.addToken, 'tok-ada');
+    expect(found.found.single.person.name, 'Ada Obi');
+    expect(found.found.single.phoneName, 'Ada');
+    expect(found.found.single.addToken, 'tok-ada');
     expect(keys, 2, reason: 'the key changed: fetched again');
     final sent = [for (final r in api.sent('POST', '/v1/me/contacts/match').where((r) => api.body(r)['key_id'] == 'k2')) ...(api.body(r)['hashes'] as List)];
     expect(sent, hasLength(3), reason: 'three numbers, each once, in batches of two');
@@ -287,14 +287,14 @@ void main() {
     phone(t);
     final api = adaChat();
     api.routes['GET /v1/me/conversations'] = (r) => r.url.queryParameters['archived'] == '1'
-        ? {'chats': <Object>[], 'unread': 0, 'requests': 2}
+        ? {'chats': <Object>[], 'unread': 0, 'requests': 2, 'more': false}
         : {
             'chats': [
               {...peopleChat(unread: 1), 'kind': 'person'},
               {'kind': 'business', 'id': 'c1', 'name': 'Mama’s Kitchen', 'business_id': 'b1', 'last': 'Your order is ready', 'last_mine': false, 'last_at': '2026-11-17T08:00:00Z', 'unread': 0, 'muted': false, 'archived': false, 'blocked': false},
             ],
             'unread': 1,
-            'requests': 2,
+            'requests': 2, 'more': false,
           };
     api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), now: () => at, presence: false)));
@@ -400,7 +400,7 @@ void main() {
     api.routes['GET /v1/me/people'] = (_) => {
       'chats': [for (var i = 0; i < 7; i++) peopleChat(id: 'f$i', name: 'Friend $i')],
       'unread': 0,
-      'requests': 0,
+      'requests': 0, 'more': false,
     };
     api.routes['POST /v1/me/people/forward'] = (r) => {'sent': [for (final id in api.body(r)['to'] as List) {'chat_id': id, 'message': thread()[2]}], 'failed': <Object>[]};
     final d = await openPeople(t, api);
@@ -429,14 +429,16 @@ void main() {
     await drain(t);
   });
 
-  testWidgets('a request: opened without telling the sender; Accept', (t) async {
+  testWidgets('a request: opened and marked read (the sender is told nothing); Accept', (t) async {
     phone(t);
     final api = adaChat(c: peopleChat(request: true), messages: [thread()[1]..remove('reply_to')]);
     api.routes['POST /v1/me/people/pc1/accept'] = (_) => peopleChat();
     await openPeople(t, api);
     expect(find.text('Message request'), findsOneWidget);
     expect(find.textContaining('not told you read this'), findsOneWidget);
-    expect(api.sent('POST', '/v1/me/people/pc1/read'), isEmpty, reason: 'a request is read without telling the sender');
+    // Marked read as any chat: the server tells the sender nothing of a
+    // request until it is accepted (TestPeopleReadTicksEverywhere).
+    expect(api.sent('POST', '/v1/me/people/pc1/read'), hasLength(1), reason: 'an opened request is no longer unread');
     expect(find.bySemanticsLabel('Message Ada Obi'), findsNothing, reason: 'no box until accepted');
     await press(t, find.text('Accept'));
     expect(api.sent('POST', '/v1/me/people/pc1/accept'), hasLength(1));
@@ -537,7 +539,7 @@ void main() {
     final api = adaChat(c: peopleChat(request: true));
     api.routes['GET /v1/me/people/requests'] = (_) => {'requests': [peopleChat(request: true, last: 'Hello, I got your number from Bisi')]};
     final opened = <String>[];
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleRequestsScreen(auth: api.auth(), now: () => at, openChat: (id) async => opened.add(id))));
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleRequestsScreen(auth: api.auth(), now: () => at, openChat: (id, {started}) async => opened.add(id))));
     await settle(t);
     expect(find.text('Hello, I got your number from Bisi'), findsOneWidget);
     await press(t, find.text('Ada Obi'));
@@ -554,13 +556,19 @@ void main() {
     api.routes['POST /v1/me/people'] = (_) => answer(peopleChat(), 201);
     api.routes['POST /v1/me/contacts'] = (_) => answer({...card(), 'source': 'number', 'added_at': '2026-11-17T10:00:00Z'}, 201);
     final opened = <String>[];
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: NewPeopleChatScreen(auth: api.auth(), openChat: (id) async => opened.add(id), contacts: FakeContacts(const []))));
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: NewPeopleChatScreen(auth: api.auth(), openChat: (id, {started}) async => opened.add(id), contacts: FakeContacts(const []))));
     await settle(t);
     await typeIn(t, find.byKey(const ValueKey('find-phone')), '0803 123 4567');
     await press(t, find.text('Find'));
     expect(find.text('Ada Obi'), findsOneWidget);
     await press(t, find.text('Add to contacts'));
-    expect(api.body(api.sent('POST', '/v1/me/contacts').single), {'person_id': 'p1', 'add_token': 'tok', 'from': 'number'});
+    // Their name in your contacts is asked first, as the web does.
+    expect(find.text('Their name in your contacts'), findsOneWidget);
+    expect(api.sent('POST', '/v1/me/contacts'), isEmpty);
+    await t.enterText(find.byType(EditableText).last, 'Ada from church');
+    await t.pump();
+    await press(t, find.text('Save'));
+    expect(api.body(api.sent('POST', '/v1/me/contacts').single), {'person_id': 'p1', 'add_token': 'tok', 'from': 'number', 'name': 'Ada from church'});
     await press(t, find.text('Chat'));
     expect(api.body(api.sent('POST', '/v1/me/people').single), {'person_id': 'p1'});
     expect(opened, ['pc1']);
@@ -579,14 +587,14 @@ void main() {
     api.routes['GET /v1/people/links/old0000'] = (_) => answer({'error': 'gone', 'gone': true}, 410);
     api.routes['POST /v1/me/people'] = (_) => answer(peopleChat(), 201);
     final opened = <String>[];
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PersonLinkScreen(auth: api.auth(), code: 'k7m2q9x4pz', openChat: (id) async => opened.add(id))));
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PersonLinkScreen(auth: api.auth(), code: 'k7m2q9x4pz', openChat: (id, {started}) async => opened.add(id))));
     await settle(t);
     expect(find.text('Ada Obi'), findsOneWidget);
     await press(t, find.text('Chat'));
     expect(api.body(api.sent('POST', '/v1/me/people').single), {'link_code': 'k7m2q9x4pz'});
     expect(opened, ['pc1']);
 
-    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PersonLinkScreen(key: const ValueKey('old'), auth: api.auth(), code: 'old0000', openChat: (id) async {})));
+    await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PersonLinkScreen(key: const ValueKey('old'), auth: api.auth(), code: 'old0000', openChat: (id, {started}) async {})));
     await settle(t);
     expect(find.text('This link no longer works. Ask them for their new link.'), findsOneWidget);
     await drain(t);
@@ -628,6 +636,7 @@ void main() {
     await settle(t);
     expect(find.text(contactsAskTitle), findsOneWidget);
     expect(find.textContaining('not from Taskiem itself'), findsOneWidget, reason: 'the limit said honestly');
+    expect(find.textContaining('the name you give them are kept'), findsOneWidget, reason: 'the explainer says what Add keeps');
     expect(contacts.asked, isFalse);
     expect(contacts.read_, isFalse);
     expect(api.calls, isEmpty, reason: 'nothing is sent before the person agrees');
@@ -638,6 +647,9 @@ void main() {
     expect(find.text('Ada (school)'), findsOneWidget);
     expect(find.text('On Taskiem as Ada Obi'), findsOneWidget);
     await press(t, find.text('Add'));
+    // The name kept is the one given: the phone's, unless changed.
+    expect(find.text('Their name in your contacts'), findsOneWidget);
+    await press(t, find.text('Save'));
     expect(api.body(api.sent('POST', '/v1/me/contacts').single), {'person_id': 'p1', 'add_token': 'tok', 'from': 'contacts', 'name': 'Ada (school)'});
     await press(t, find.text('Chat'));
     expect(chats, ['p1']);
@@ -809,7 +821,7 @@ void main() {
   testWidgets('a link to a person’s chat, and to a request, opens it from You (as a push’s does)', (t) async {
     phone(t);
     final api = adaChat(c: peopleChat(request: true));
-    api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 1};
+    api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 1, 'more': false};
     api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
     api.routes['GET /v1/me/people/requests'] = (_) => {'requests': [peopleChat(request: true)]};
     final links = StreamController<Uri>();
@@ -839,7 +851,7 @@ void main() {
     phone(t);
     final api = Api();
     api.routes['POST /v1/me/presence'] = (_) => answer({}, 204);
-    api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0};
+    api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'more': false};
     api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), now: () => at)));
     await settle(t);
