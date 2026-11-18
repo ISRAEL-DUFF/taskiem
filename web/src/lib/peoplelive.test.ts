@@ -82,6 +82,24 @@ describe("the live connection's events", () => {
     expect(other?.map((m) => m.id)).toEqual(["a", "srv2", "local-1"]);
   });
 
+  it("changes an old message only when it is read, and never drops it into the thread to page from", () => {
+    const cur = [msg("a", "2026-11-18T10:00:00Z"), msg("b", "2026-11-18T10:01:00Z")];
+    // A reaction on a message from months ago, not read: left out.
+    const old = msg("old", "2026-08-01T10:00:00Z", { their_reaction: "❤️" });
+    expect(threadWithLive(cur, "c1", { chat_id: "c1", request: false, message: old })).toBe(cur);
+    // The oldest read is changed in place.
+    const a = threadWithLive(cur, "c1", { chat_id: "c1", request: false, message: msg("a", "2026-11-18T10:00:00Z", { starred: true }) });
+    expect(a?.map((m) => m.id)).toEqual(["a", "b"]);
+    expect(a?.[0]?.starred).toBe(true);
+    // Between what was read: added.
+    expect(threadWithLive(cur, "c1", { chat_id: "c1", request: false, message: msg("ab", "2026-11-18T10:00:30Z") })?.map((m) => m.id)).toEqual(["a", "ab", "b"]);
+    // Only sends on their way read: nothing older to page from, so it is added.
+    const local = [msg("local-1", "2026-11-18T10:05:00Z", { mine: true, local: true })];
+    expect(threadWithLive(local, "c1", { chat_id: "c1", request: false, message: msg("x", "2026-11-18T09:00:00Z") })?.map((m) => m.id)).toEqual(["x", "local-1"]);
+    // An empty chat takes it.
+    expect(threadWithLive([], "c1", { chat_id: "c1", request: false, message: msg("x", "2026-11-18T09:00:00Z") })?.map((m) => m.id)).toEqual(["x"]);
+  });
+
   it("takes out a message deleted for the person elsewhere", () => {
     const cur = [msg("a", "2026-11-18T10:00:00Z"), msg("b", "2026-11-18T10:01:00Z")];
     expect(threadWithGone(cur, "c1", { chat_id: "c1", id: "a" })?.map((m) => m.id)).toEqual(["b"]);

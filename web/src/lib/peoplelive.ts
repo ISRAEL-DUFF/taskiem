@@ -40,10 +40,20 @@ export type PeopleLiveEvent =
 
 /** An open chat's messages after a `message` event for it. Our own message
  * told by the connection before its send was answered takes the place of
- * the copy on its way (same words, still local), so it shows once. */
+ * the copy on its way (same words, still local), so it shows once.
+ *
+ * A message already in the thread is changed in place; one not in it is
+ * added only when it is not older than the oldest message read. An older
+ * one (a reaction, star or delete on a message from months ago) is left
+ * out: put in, it would leave a gap that the thread's older pages are then
+ * read from, skipping everything between it and what was read. */
 export function threadWithLive(cur: PeopleMessage[] | undefined, chat: string, e: LiveMessage): PeopleMessage[] | undefined {
   if (!cur || e.chat_id !== chat) return cur;
   const m = e.message;
+  if (!cur.some((x) => x.id === m.id)) {
+    const oldest = cur.find((x) => !x.local);
+    if (oldest && Date.parse(m.created_at) < Date.parse(oldest.created_at)) return cur;
+  }
   let kept = cur;
   if (m.mine && !cur.some((x) => x.id === m.id)) {
     const twin = cur.find((x) => x.local && !x.attachment && x.body === m.body && m.kind === "text");
