@@ -106,6 +106,7 @@ func (s *Server) groupRoutes(r chi.Router) {
 	r.Post("/me/groups/{id}/joins/{person}/approve", s.approveGroupJoin)
 	r.Post("/me/groups/{id}/joins/{person}/decline", s.declineGroupJoin)
 	r.Get("/me/groups/{id}/messages", s.groupMessages)
+	r.Get("/me/groups/{id}/media", s.groupMedia)
 	r.Post("/me/groups/{id}/messages", s.sendGroupMessage)
 	r.Post("/me/groups/{id}/files", s.sendGroupFile)
 	r.Get("/me/groups/{id}/files/{message}", s.groupFile)
@@ -131,7 +132,7 @@ func (s *Server) groupPublicRoutes(r chi.Router) {
 // (personalAllowed).
 var groupPersonRoutes = regexp.MustCompile(`^((GET|POST) /v1/me/groups|GET /v1/me/groups/(invites|search|starred)|POST /v1/me/groups/invites/[^/]+/(accept|decline)|` +
 	`POST /v1/me/forward|(POST|DELETE) /v1/me/group-links/[^/]+/join|(GET|PUT|DELETE) /v1/me/groups/[^/]+|PUT /v1/me/groups/[^/]+/me|POST /v1/me/groups/[^/]+/(leave|read|typing|messages|files|members|link|report|appeal)|` +
-	`(GET|PUT|DELETE) /v1/me/groups/[^/]+/photo|GET /v1/me/groups/[^/]+/(members|link|link/qr|joins|messages|files/[^/]+)|(PUT|DELETE) /v1/me/groups/[^/]+/members/[^/]+|` +
+	`(GET|PUT|DELETE) /v1/me/groups/[^/]+/photo|GET /v1/me/groups/[^/]+/(members|link|link/qr|joins|messages|media|files/[^/]+)|(PUT|DELETE) /v1/me/groups/[^/]+/members/[^/]+|` +
 	`POST /v1/me/groups/[^/]+/members/[^/]+/block|DELETE /v1/me/groups/[^/]+/(invites/[^/]+|link)|POST /v1/me/groups/[^/]+/joins/[^/]+/(approve|decline)|` +
 	`(PUT|DELETE) /v1/me/groups/[^/]+/messages/[^/]+|GET /v1/me/groups/[^/]+/messages/[^/]+/(info|reactions|card)|POST /v1/me/groups/[^/]+/messages/[^/]+/paid)$`)
 
@@ -490,7 +491,7 @@ func (s *Server) groupViewsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, 
 // groupListCols reads, beside groupRowCols, the person's last visible
 // message, the members now, unread and mentioned, for the person ($1).
 var groupListCols = groupRowCols + `,
-	(SELECT count(*)::int FROM group_members x WHERE x.group_id = g.id AND x.left_at IS NULL) AS members,
+	taskiem_group_count(g.id) AS members, -- one membership check, not one per member's row (00490)
 	(SELECT count(*)::int FROM group_messages u WHERE u.group_id = g.id AND u.created_at > m.read_upto AND u.sender_id IS DISTINCT FROM $1
 	   AND u.kind <> 'event' AND u.deleted_at IS NULL AND m.visible @> u.created_at
 	   AND NOT EXISTS (SELECT 1 FROM group_marks k WHERE k.group_id = u.group_id AND k.message_id = u.id AND k.person_id = $1 AND k.hidden_at IS NOT NULL)) AS unread,

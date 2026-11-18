@@ -33,7 +33,7 @@ Status key: ☐ to build; ◐ built on the server ("As built: stage 5b, groups (
 - ● **Read state:** sent and delivered ticks, and "Read by …" per message for the sender (?A6).
 - ● **Mentions:** @name in a group, with a push to the person mentioned even when the group is muted (?A7).
 - ● **The Chats list:** groups sit in the one list with business and people chats, marked as groups, with paging, unread counts, mute and archive.
-- ● **Group info screen:** members, admins, the invite link, media, mute, leave and report. (All built but media, which has no server list yet; photos and files show in the chat itself.)
+- ● **Group info screen:** members, admins, the invite link, media, mute, leave and report. (Media: `GET /v1/me/groups/{id}/media`, "As built: stage 5b leftovers".)
 - ● **Push:** a new kind for group messages, with the preview setting honoured (§13).
 - ● **Blocking inside a group:** what blocking someone means inside a group they share with you (?A8).
 - ● **Businesses don't join people groups** (§9). A group can share a business's card and order from it (§10).
@@ -56,7 +56,7 @@ Status key: ☐ to build; ◐ built on the server ("As built: stage 5b, groups (
 - ◐ **Scam checks:** automated checks look at messages from people who aren't contacts in new or small groups (?B1).
 - ◐ **Lawful requests:** exports can cover a person's group messages within the scope asked (0069 point 11).
 - ◐ **Storage watching** includes groups (0069 consequences).
-- ☐ **Load test before 5b ships** (§13): many connections, group fan-out, storage growth.
+- ● **Load test before 5b ships** (§13): many connections, group fan-out, storage growth. (Server only: `tools/loadtest -mode people`. Results, fixes and limits are in "As built: stage 5b, load test".)
 
 ## C. Ordering together (§10.3, §11 C, §17 Q8)
 
@@ -74,11 +74,11 @@ Status key: ☐ to build; ◐ built on the server ("As built: stage 5b, groups (
 
 ## D. Carried over from 5a, now for groups
 
-- ● **Share cards** (business, product, order, delivery, your share) can be sent into a group (§10.1).
+- ● **Share cards** (business, product, order, delivery, your share) can be sent into a group (§10.1), from inside the group and from "Share with someone" on Discover, a business's chat and shop, and an order (only groups you may post in; "As built: stage 5b leftovers").
 - ☐ **The live connection** carries group events (● built on the server, the web and the app). Business chats on You move onto it too, replacing polling (not yet).
 - ● **Search's index** covers group messages, keyed per person, for messages they can see. (Built keyed per group, from the group's own key, read only within each member's own time in the group: one copy of tokens per member would be 256 rows a word; see "As built".)
 - ● **Deleting an account** removes the person from groups and keeps their messages as "Deleted account".
-- ☐ **The privacy notice drafts** in `docs/legal/` gain a groups and ordering-together paragraph for the lawyer.
+- ● **The privacy notice drafts** in `docs/legal/` gain a groups and ordering-together paragraph for the lawyer (`privacy-notice-people-chats-draft.md`, "Groups, and ordering together").
 
 ## Settled by the founder (18 November 2026)
 

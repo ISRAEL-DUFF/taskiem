@@ -4,7 +4,7 @@
 
 ## Chats with other people
 
-You can chat with other people on Taskiem: one to one now, and in groups later.
+You can chat with other people on Taskiem: one to one, and in groups.
 
 ### What we keep, and who can read it
 
@@ -43,12 +43,31 @@ Nigerian law can require us to give data, including the words of chats between p
 | What | Kept until |
 | --- | --- |
 | Your copy of a chat, with its photos and files | You delete the chat or your account |
+| A group's messages, photos and files (one copy) | The last member leaves; your own view of it goes when you delete the group or your account |
 | The other person's copy | They delete it or their account; deleting yours does not delete theirs |
 | A report and what was sent with it | A year after a moderator reviews it |
 | A message the checks held | 90 days after it was held or decided |
 | The checks' decisions (not the words) | 90 days, or until the sender deletes their account |
 | Moderators' decisions and appeals | While the account exists **[counsel]** |
 | Records of who opened what | **[counsel: as audit records]** |
+
+### Groups, and ordering together
+
+**[Engineering note: stage 5b. What the product does is in [people chatting](../spec/people-chatting.md), "As built: stage 5b" sections, and [the 5b checklist](../spec/people-chatting-5b.md).]**
+
+- **What we keep.** A group's messages, photos and files are kept **once for the whole group** on our servers, sealed (encrypted) under a key of that group's own, so they show on every phone and computer each member signs in on. **Our servers can open them. Groups are not end-to-end encrypted.**
+- **Who sees what.** Members see each other's names and photos as each person's own settings allow (a member's contact name for someone, if they saved one). **Phone numbers are hidden** in groups, unless a member chose to show theirs, and never to someone they blocked. If your account is deleted, your messages stay in the group, shown as from "Deleted account". Admins see who is invited and who is waiting to join; anyone with the group's invite link sees its name, photo and member count before joining.
+- **History from joining.** You see a group's messages only from when you joined, never what was said before. If you leave or are removed, **you keep your copy up to then** (until you delete it), and see nothing new. Deleting the group on your phone deletes your copy, not the other members'. When the last member leaves, the group and its messages are deleted.
+- **Reports.** If you report a group or one of its members, the **last 20 messages you can see**, with their photos and files and who sent each, go to our moderators, **only if you agree** when you report. The group's name, description and members at that moment go with it. Reports are kept as for chats with people (above).
+- **Scam checks in groups.** In a group less than a week old, or from someone who joined by the group's link in the last day, our automated checks look at a message for known scams, for the members who have not added the sender as a contact. As in chats with people, **they keep only their decision** (allowed, warned or held) and its reasons, not the words. A held message reaches no one and is kept for up to 90 days for a moderator. **[counsel: lawful basis, as for the checks above.]**
+- **Moderators** can turn a group's invite link off or close a group; its admins are told why and can appeal.
+- **Requests from the authorities** may cover groups, under the process above: only messages from the person's own time in each group, and never what they deleted for themselves. **[counsel: whether a request about one member may reach other members' messages in the same group.]**
+
+**Ordering together.** In a chat or a group, people can fill one shared basket from one business, each adding their own items; one person (the placer) places it.
+
+- **What the business sees:** **one order, from the placer**, with the names of whose items are whose (each person's own name on Taskiem, never a nickname someone saved) and the placer's note. **The business never sees the group, its members as a group, or the chat**, and is never told who paid which share.
+- **Paying:** either the placer pays all and asks each person for their share with a "Your share" card (Taskiem never checks or moves that money), or each pays the business for their own share through the business's pay link. Taskiem does not move money between people.
+- **What we keep:** the basket, who added what, each person's share and whether it was paid, for as long as the order is kept. **[counsel: retention of a shared basket, as for orders.]**
 
 ### Security
 

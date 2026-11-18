@@ -912,6 +912,59 @@ func (s *Server) groupMessages(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"messages": out, "more": more})
 }
 
+// groupMedia is GET /v1/me/groups/{id}/media?before=: the group's photos,
+// videos, voice notes and files as the person sees them (the group info's
+// "Media and files"), newest first, 50 a page, 50 before ?before: as
+// reading its messages, only their own time(s) in it, never one deleted
+// for them or for everyone. Reading it marks nothing.
+func (s *Server) groupMedia(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	person, err := personOf(r)
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	out := []groupMessage{}
+	more := false
+	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		g, err := groupTx(ctx, tx, person, chi.URLParam(r, "id"), false)
+		if err != nil {
+			return err
+		}
+		q := groupMsgSelect + ` AND x.kind = 'media' AND x.attachment IS NOT NULL AND x.deleted_at IS NULL`
+		args := []any{person, g.ID}
+		if b, err := uuid.Parse(r.URL.Query().Get("before")); err == nil {
+			q += ` AND (x.created_at, x.id) < (SELECT created_at, id FROM group_messages WHERE group_id = $2 AND id = $3)`
+			args = append(args, b)
+		}
+		rows, err := tx.Query(ctx, q+` ORDER BY x.created_at DESC, x.id DESC LIMIT 51`, args...)
+		if err != nil {
+			return err
+		}
+		list, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (groupMsgRow, error) { return scanGroupMsg(r) })
+		if err != nil {
+			return err
+		}
+		if len(list) > 50 {
+			more, list = true, list[:50]
+		}
+		if len(list) == 0 {
+			return nil
+		}
+		key, err := s.keys().GroupKeyTx(ctx, tx, g.ID)
+		if err != nil {
+			return err
+		}
+		out, err = s.groupMessagesTx(ctx, tx, person, g.ID, key, list)
+		return err
+	})
+	if err != nil {
+		s.personFail(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"messages": out, "more": more})
+}
+
 // readGroup is POST /v1/me/groups/{id}/read: the person read the group up
 // to its latest message they see. Shown to senders as "Read by" only while
 // the person's read ticks are on (A6).

@@ -305,8 +305,15 @@ func (s *Server) liveGroupsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, 
 		// member's read or delivered marks, or time in the group, moved
 		// (A6): marks_at, not changed_at, so another member's mute,
 		// archive or mentions wakes no one.
-		rrows, err := tx.Query(ctx, `SELECT group_id, max(marks_at) FROM group_members WHERE group_id = ANY ($1) AND person_id <> $2 AND marks_at > $3
-			GROUP BY group_id ORDER BY max(marks_at) LIMIT `+strconv.Itoa(liveBatch), current, person, gl.receipts.since)
+		// Per group, the newest mark only (the load test, "As built: stage
+		// 5b, load test"): max() over the index (group_id, marks_at)
+		// read backwards stops at the first row row-level security lets
+		// through, where a GROUP BY over the window checked every member
+		// whose marks moved in it (a whole busy group, each second, for
+		// each of its members' connections).
+		rrows, err := tx.Query(ctx, `SELECT g.id, x.at FROM unnest($1::uuid[]) AS g(id),
+			LATERAL (SELECT max(m.marks_at) AS at FROM group_members m WHERE m.group_id = g.id AND m.person_id <> $2 AND m.marks_at > $3) x
+			WHERE x.at IS NOT NULL ORDER BY x.at, g.id LIMIT `+strconv.Itoa(liveBatch), current, person, gl.receipts.since)
 		if err != nil {
 			return nil, nil, false, err
 		}

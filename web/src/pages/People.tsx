@@ -46,7 +46,7 @@ import { MoreRows } from "./MoreRows";
 import { AccountFields } from "./PeopleChat";
 import { useSwitch } from "./Switch";
 import { GroupInvites } from "./Groups";
-import { GROUPS_ADD_CHOICES, GROUPS_ADD_HINT } from "../lib/groups";
+import { canShareInto, GROUPS_ADD_CHOICES, GROUPS_ADD_HINT, groupPath, membersWords, type Group } from "../lib/groups";
 
 // Finding people and the settings of chats between people, on You
 // (docs/spec/people-chatting.md §5, §7, §8.1, §11): New chat (by number,
@@ -692,9 +692,12 @@ export function YouPeopleSettings() {
 }
 
 /** Share a card (a business, a product, an order) into a chat with a
- * person, from elsewhere on You: pick what (when there is a choice, as an
- * order or its delivery) and the chat, and it is sent. A refusal (held by
- * the checks, not taken) is said here, in the server's words. */
+ * person or a group, from elsewhere on You: pick what (when there is a
+ * choice, as an order or its delivery) and the chat, and it is sent. Only
+ * groups you may post in now (not one you left or were removed from, one
+ * Taskiem closed, or one where only admins post and you aren't one). A
+ * refusal (held by the checks, not taken) is said here, in the server's
+ * words. */
 export function ShareToPerson({
   card,
   what,
@@ -708,6 +711,7 @@ export function ShareToPerson({
   onClose: () => void;
 }) {
   const list = usePagedList<PeopleChatList, PeopleChat>("/v1/me/people", (r) => r.chats ?? [], (c) => c.id);
+  const groupList = usePagedList<{ groups: Group[]; more?: boolean; next?: string }, Group>("/v1/me/groups", (r) => r.groups ?? [], (g) => g.id);
   const nav = useNavigate();
   const act = useAction();
   const [pick, setPick] = useState(0);
@@ -715,10 +719,32 @@ export function ShareToPerson({
   const choices = options && options.length > 1 ? options : undefined;
   const sending = choices ? (choices[pick]?.card ?? card) : card;
   const chats = (list.rows ?? []).filter(canSendTo);
+  const groups = (groupList.rows ?? []).filter(canShareInto);
+  const send = (path: string, name: string, to: string) => {
+    setProblem(undefined);
+    let refused = false;
+    void act
+      .run(async () => {
+        try {
+          await post(path, { card: sending, client_id: `share-${Date.now()}` });
+        } catch (e) {
+          const said = sendProblem(e);
+          if (!said) throw e;
+          refused = true;
+          setProblem(said);
+        }
+      }, false)
+      .then((ok) => {
+        if (!ok || refused) return;
+        toast(`Shared with ${name}`);
+        nav(to);
+      });
+  };
+  const loaded = !!list.rows && !!groupList.rows;
   return (
     <Sheet title={`Share ${what}`} onClose={onClose} testid="share-to-person">
-      {!list.rows && !list.error && <Skeleton rows={2} label="Loading your chats…" />}
-      <ErrorBox error={list.error ?? act.error} />
+      {!loaded && !list.error && !groupList.error && <Skeleton rows={2} label="Loading your chats…" />}
+      <ErrorBox error={list.error ?? groupList.error ?? act.error} />
       {problem && (
         <p className="error" role="alert" data-testid="share-to-problem">
           {problem}
@@ -734,7 +760,9 @@ export function ShareToPerson({
           ))}
         </fieldset>
       )}
-      {list.rows && chats.length === 0 && !list.more && <EmptyState icon="chat">Start a chat with someone first: New chat on your Chats.</EmptyState>}
+      {loaded && chats.length === 0 && groups.length === 0 && !list.more && !groupList.more && (
+        <EmptyState icon="chat">Start a chat with someone first: New chat on your Chats.</EmptyState>
+      )}
       <Items label="Your chats with people">
         {chats.map((c) => (
           <Row key={c.id} letter={c.name} image={photoOf(c.person)} title={c.name} testid="share-to-row">
@@ -742,26 +770,7 @@ export function ShareToPerson({
               type="button"
               className="small primary"
               disabled={act.busy}
-              onClick={() => {
-                setProblem(undefined);
-                let refused = false;
-                void act
-                  .run(async () => {
-                    try {
-                      await post(`/v1/me/people/${encodeURIComponent(c.id)}/messages`, { card: sending, client_id: `share-${Date.now()}` });
-                    } catch (e) {
-                      const said = sendProblem(e);
-                      if (!said) throw e;
-                      refused = true;
-                      setProblem(said);
-                    }
-                  }, false)
-                  .then((ok) => {
-                    if (!ok || refused) return;
-                    toast(`Shared with ${c.name}`);
-                    nav(`/you/people/${encodeURIComponent(c.id)}`);
-                  });
-              }}
+              onClick={() => send(`/v1/me/people/${encodeURIComponent(c.id)}/messages`, c.name, `/you/people/${encodeURIComponent(c.id)}`)}
             >
               Send<span className="sr-only"> to {c.name}</span>
             </button>
@@ -769,6 +778,21 @@ export function ShareToPerson({
         ))}
       </Items>
       <MoreRows more={list.more} busy={list.loadingMore} onMore={list.loadMore} count={list.rows?.length ?? 0} label="Show more chats" />
+      {groups.length > 0 && (
+        <>
+          <h3 className="share-to-groups">Groups</h3>
+          <Items label="Your groups">
+            {groups.map((g) => (
+              <Row key={g.id} letter={g.name} image={g.photo?.url} title={g.name} sub={membersWords(g.members)} testid="share-to-group">
+                <button type="button" className="small primary" disabled={act.busy} onClick={() => send(`/v1/me/groups/${encodeURIComponent(g.id)}/messages`, g.name, groupPath(g.id))}>
+                  Send<span className="sr-only"> to {g.name}</span>
+                </button>
+              </Row>
+            ))}
+          </Items>
+        </>
+      )}
+      <MoreRows more={groupList.more} busy={groupList.loadingMore} onMore={groupList.loadMore} count={groupList.rows?.length ?? 0} label="Show more groups" />
     </Sheet>
   );
 }

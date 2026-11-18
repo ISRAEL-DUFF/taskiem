@@ -394,6 +394,17 @@ class GroupChatData extends ChangeNotifier {
     }
   }
 
+  /// A page of the group's media and files, newest first (as you see the
+  /// group: your own time in it, none deleted for you or for everyone),
+  /// older than [before]; null when it can't be read now.
+  Future<GroupMediaResponse?> media({String? before}) async {
+    try {
+      return await api.groupMedia(id: id, before: before);
+    } on Object {
+      return null;
+    }
+  }
+
   Future<void> _pull({required bool first}) async {
     if (missing) return;
     if (_pulling && !first) return;
@@ -899,7 +910,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> with Polling {
     if (open != null) return open(id, notice: notice, draft: draft, tool: tool);
   }
 
-  Future<void> _info() => tkPush<void>(context, GroupInfoScreen(data: d, onClosed: _closeGroup, openPerson: widget.openPerson));
+  Future<void> _info() => tkPush<void>(context, GroupInfoScreen(data: d, onClosed: _closeGroup, openPerson: widget.openPerson, onJump: _jumpFromInfo));
+
+  /// To a message from the group's info (its media): back to the chat, at it.
+  void _jumpFromInfo(String message) {
+    final here = ModalRoute.of(context);
+    if (here != null) Navigator.of(context).popUntil((r) => r == here);
+    unawaited(d.jump(message));
+  }
 
   Future<void> _search() => tkPush<void>(context, PeopleSearchScreen(auth: d.auth, group: d.id, chatName: d.name, now: d.now, onPick: (m) => unawaited(d.jump(m))));
 

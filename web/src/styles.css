@@ -2281,6 +2281,9 @@ img.chat-avatar { object-fit: cover; background: var(--tint); }
 .info-media-all .chat-photo img { width: 100%; height: 96px; object-fit: cover; border-radius: 6px; }
 .info-media-all .chat-voice { width: 100%; }
 .info-media-all .chat-file { margin: 0; flex-wrap: wrap; }
+.card.group-media { padding: 0 0 4px; overflow: hidden; }
+.group-media .info-media-all .chat-file .hint { font-size: 12px; }
+.group-media-more { margin: 0 16px 12px; }
 .info-list { overflow-y: auto; flex: 1; min-height: 0; }
 .info-list ul { list-style: none; margin: 0; padding: 0; }
 .info-starred { display: flex; flex-direction: column; gap: 2px; padding: 10px 16px; color: var(--text); border-bottom: 1px solid var(--border); }

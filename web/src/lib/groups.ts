@@ -255,6 +255,13 @@ export function groupHeadWords(g: Pick<Group, "members" | "left" | "left_how" | 
 }
 
 /** Why the composer is not there, in its place; null when the person may post. */
+/** A group a card may be shared into from outside it (5b): one you may
+ * post in now: still in it, not closed by Taskiem, and not admins-only
+ * unless you are one (the server's can_post). */
+export function canShareInto(g: Pick<Group, "can_post" | "left" | "closed">): boolean {
+  return g.can_post && !g.left && !g.closed;
+}
+
 export function noPostWords(g: Pick<Group, "can_post" | "left" | "left_how" | "closed" | "admins_only_post" | "role"> | undefined): string | null {
   if (!g || g.can_post) return null;
   if (g.closed) return g.closed.words;

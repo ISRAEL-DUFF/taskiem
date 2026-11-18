@@ -4,11 +4,12 @@ import { ApiError, del, get, post, put, upload } from "../api";
 import { useAuth } from "../auth";
 import { Icon } from "../icons";
 import { KitField, Sheet } from "../kit";
-import { listTime } from "../lib/linkchat";
+import { attachmentLabel, fileSize, listTime } from "../lib/linkchat";
 import {
   addedWords,
   GROUP_KEPT_WORDS,
   GROUP_REPORT_CONSENT,
+  groupFileURL,
   groupPath,
   inviteGone,
   invitesWithInvite,
@@ -22,6 +23,7 @@ import {
   type GroupLink,
   type GroupLinkPreview,
   type GroupMember,
+  type GroupMessage,
   type GroupMembers,
   type GroupPending,
   type JoinState,
@@ -556,6 +558,8 @@ export function GroupInfoPage() {
             </section>
           )}
 
+          <GroupMedia id={id} base={base} />
+
           {admin && <AdminSettings g={g} busy={act.busy} set={setGroup} />}
           {admin && <LinkCard g={g} base={base} onWaiting={reloadMembers} />}
 
@@ -593,6 +597,91 @@ export function GroupInfoPage() {
       )}
       {sure.node}
     </>
+  );
+}
+
+/** The group's photos, videos, voice notes and files, newest first, as
+ * you see the group (your own time in it, none deleted for you or for
+ * everyone): the latest four photos, or every one open. Each opens at its
+ * place in the chat. */
+function GroupMedia({ id, base }: { id: string; base: string }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<GroupMessage[]>();
+  const [more, setMore] = useState(false);
+  const [error, setError] = useState<unknown>();
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setItems(undefined);
+    get<{ messages: GroupMessage[]; more: boolean }>(`${base}/media`).then(
+      (r) => live && (setItems(r.messages), setMore(r.more)),
+      (e: unknown) => live && setError(e),
+    );
+    return () => {
+      live = false;
+    };
+  }, [base]);
+  const loadMore = () => {
+    const last = items?.[items.length - 1];
+    if (!last || loading) return;
+    setLoading(true);
+    get<{ messages: GroupMessage[]; more: boolean }>(`${base}/media?before=${encodeURIComponent(last.id)}`)
+      .then(
+        (r) => (setItems((cur) => [...(cur ?? []), ...r.messages]), setMore(r.more)),
+        (e: unknown) => setError(e),
+      )
+      .finally(() => setLoading(false));
+  };
+  if (error) return <ErrorBox error={error} />;
+  if (!items || items.length === 0) return null;
+  const at = (m: GroupMessage) => `${groupPath(id)}?at=${encodeURIComponent(m.id)}`;
+  const who = (m: GroupMessage) => (m.mine ? "you" : m.sender);
+  const shown = open ? items : items.filter((m) => m.attachment?.kind === "photo").slice(0, 4);
+  const item = (m: GroupMessage) => {
+    const a = m.attachment;
+    if (!a) return null;
+    if (a.kind === "photo")
+      return (
+        <Link to={at(m)} className="chat-photo" data-testid="group-media-item">
+          <img src={groupFileURL(id, m.id)} alt={`Photo from ${who(m)}, ${listTime(m.created_at)}`} loading="lazy" />
+        </Link>
+      );
+    const video = a.type.startsWith("video/");
+    return (
+      <Link to={at(m)} className="chat-file" data-testid="group-media-item">
+        <Icon name={a.kind === "voice" ? "mic" : "file"} />
+        <span className="name">
+          {a.kind === "voice" ? `Voice note from ${who(m)}` : video ? `Video: ${attachmentLabel(a)}` : attachmentLabel(a)}
+        </span>
+        <span className="hint">
+          {fileSize(a.size)} · {listTime(m.created_at)}
+        </span>
+      </Link>
+    );
+  };
+  return (
+    <section className="card info-media group-media" aria-label="Media and files" data-testid="group-media">
+      <button type="button" className="info-row" aria-expanded={open} onClick={() => setOpen(!open)} data-testid="group-media-open">
+        <Icon name="image" />
+        <span className="info-row-main">
+          <span className="info-row-label">Media and files</span>
+        </span>
+        <span className="info-count">{more ? `${items.length}+` : items.length}</span>
+        <Icon name="chevron" className={open ? "turned" : undefined} />
+      </button>
+      {shown.length > 0 && (
+        <ul className={open ? "info-media-all" : "info-thumbs"}>
+          {shown.map((m) => (
+            <li key={m.id}>{item(m)}</li>
+          ))}
+        </ul>
+      )}
+      {open && more && (
+        <button type="button" className="small group-media-more" disabled={loading} onClick={loadMore} data-testid="group-media-more">
+          Show older
+        </button>
+      )}
+    </section>
   );
 }
 

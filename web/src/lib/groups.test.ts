@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addedWords,
+  canShareInto,
   GROUP_KEPT_WORDS,
   GROUP_REPORT_CONSENT,
   groupAsRow,
@@ -192,5 +193,14 @@ describe("search and starred with people chats", () => {
   it("merges by time, each once", () => {
     const row = (key: string, at: string): FoundRow => ({ key, path: "/", title: key, group: false, at, mine: false, line: "" });
     expect(mergeFound([row("a", "2026-11-18T09:00:00Z"), row("b", "2026-11-18T07:00:00Z")], [row("c", "2026-11-18T08:00:00Z"), row("a", "2026-11-18T09:00:00Z")]).map((r) => r.key)).toEqual(["a", "c", "b"]);
+  });
+});
+
+describe("canShareInto", () => {
+  it("offers only groups you may post in now", () => {
+    expect(canShareInto({ can_post: true, left: false })).toBe(true);
+    expect(canShareInto({ can_post: false, left: false })).toBe(false);
+    expect(canShareInto({ can_post: true, left: true })).toBe(false);
+    expect(canShareInto({ can_post: true, left: false, closed: { at: "2026-11-18T09:00:00Z", until: null, words: "Closed", can_appeal: false } })).toBe(false);
   });
 });

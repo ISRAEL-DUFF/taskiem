@@ -23089,6 +23089,47 @@ paths:
           description: Turned away
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/groups/{id}/media:
+    get:
+      operationId: groupMedia
+      tags:
+      - People
+      summary: A group's media and files
+      description: 'The photos, videos, voice notes and files of the group (the group info''s "Media and files"), the newest first, 50 a page: `before` a message for the page after it. As reading the group''s messages: only from your own time(s) in it, never one deleted for you or for everyone. Each opens in the chat by its id (`at`). Reading it marks nothing.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: before
+        in: query
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Media and files
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [messages, more]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GroupMessage'
+                  more:
+                    type: boolean
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/groups/{id}/messages:
     get:
       operationId: groupMessages

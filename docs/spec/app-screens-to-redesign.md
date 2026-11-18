@@ -117,7 +117,9 @@ Built in the app's own look from the start (no `TkButton`, web modal, `TkRadio` 
 | New group | `chat/group_new.dart` `NewGroupScreen` | New chat › New group | Photo, name, description, people, Make the group | [fine] |
 | People to add | `chat/groups.dart` `pickGroupPeople` | New group, Group info › Add people | Contacts and chats with a search and app ticks | [fine] |
 | Add answers | `chat/groups.dart` `showGroupAdded` | After adding | Each person's answer in the server's words | [fine] |
-| Forward to chats and groups | `chat/groups.dart` `pickChatsAndGroups` | Forward in a group or a people chat | People chats and groups with app ticks | [fine] (5a's `_PeoplePicker` stays for Share with) |
+| Forward to chats and groups | `chat/groups.dart` `pickChatsAndGroups` | Forward in a group or a people chat; Share with someone (Discover, a business's chat and shop, an order) | People chats and groups with app ticks | [fine] (5a's `_PeoplePicker` is no longer reached from the app) |
+| Media and files (on Group info) | `chat/group_media.dart` `GroupMediaSection` | Group info | The latest four as square tiles, See all | [fine] (stage 5b leftovers) |
+| Media and files | `chat/group_media.dart` `GroupMediaScreen` | Group info › Media and files › See all | Photos three to a row, videos, voice notes and files as rows, Show older; each opens in the chat | [fine] (stage 5b leftovers) |
 | Join a group | `chat/group_new.dart` `GroupJoinScreen` | A `/g/{code}` link, a scanned QR, New chat's link box | Photo, name, count, Join, waiting, take back | [fine] |
 | Invites to groups | `chat/group_new.dart` `GroupInvitesSection` | Requests | Accept, Decline | [fine]; sits in 5a's Requests screen ([off] above) |
 | Choices, confirms and actions | `chat/groups.dart` `pickOneOf`, `askSure`, `pickAction` | Settings, delete, leave, member actions | App-look sheets in place of the web's modals | [fine]; 5a screens could move onto them |
