@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
 import '../app/auth.dart';
+import '../app/prefs.dart' show Prefs;
 import '../kit/forms.dart' show TkFormRow, TkSwitchRow;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty, TkLoading;
@@ -32,10 +33,19 @@ String messageWords(String a) => a == 'everyone' ? 'Everyone, as a request' : au
 
 const _audiences = ['everyone', 'contacts', 'nobody'];
 
+/// The daily re-check's switch, in words.
+const checkContactsDaily = 'Check my contacts daily';
+const checkContactsDailyOn = 'Once a day when you open Taskiem, it checks which of your phone’s contacts are on Taskiem. Only the day is kept';
+const checkContactsDailyOff = 'Off. It comes on when you check From your contacts in New chat';
+
 /// Privacy with people (§5.4).
 class PeoplePrivacyPage extends StatefulWidget {
-  const PeoplePrivacyPage({super.key, required this.auth});
+  const PeoplePrivacyPage({super.key, required this.auth, this.prefs});
   final Auth auth;
+
+  /// What this phone keeps: Check my contacts daily is on while the day of
+  /// the last check is kept (§5.3).
+  final Prefs? prefs;
 
   @override
   State<PeoplePrivacyPage> createState() => _PeoplePrivacyPageState();
@@ -127,6 +137,28 @@ class _PeoplePrivacyPageState extends State<PeoplePrivacyPage> {
               ),
             ],
           ),
+          // The daily re-check of the phone's contacts (§5.3): on once the
+          // person agreed and their contacts were checked; off, the day is
+          // forgotten and nothing is checked by itself. Turned on again only
+          // by checking From your contacts (the explainer first).
+          if (widget.prefs case final prefs?)
+            SettingsCard(
+              title: 'Your phone’s contacts',
+              children: [
+                ListenableBuilder(
+                  listenable: prefs,
+                  builder: (context, _) {
+                    final on = prefs.contactsChecked != null;
+                    return TkSwitchRow(
+                      label: checkContactsDaily,
+                      hint: on ? checkContactsDailyOn : checkContactsDailyOff,
+                      on: on,
+                      onChanged: on ? (_) => prefs.setContactsChecked(null) : null,
+                    );
+                  },
+                ),
+              ],
+            ),
           SettingsCard(
             title: 'Who can message you',
             children: [

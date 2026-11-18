@@ -471,7 +471,7 @@ class _YouHomeState extends State<YouHome> with Polling {
           TkHeadButton(icon: 'b-plus', label: 'New chat', onTap: _newChat),
           const SizedBox(width: 6),
           if (businesses.isNotEmpty) ...[TkHeadButton(icon: 'loop', label: 'Switch', onTap: () => showSwitcher(context, auth)), const SizedBox(width: 6)],
-          TkHeadButton(icon: 'settings', label: 'Settings', onTap: () => tkPush<void>(context, YouSettingsScreen(auth: auth, notify: widget.notify, onOpenChat: _openId, onOpenPerson: _openPerson, now: widget.now))),
+          TkHeadButton(icon: 'settings', label: 'Settings', onTap: () => tkPush<void>(context, YouSettingsScreen(auth: auth, notify: widget.notify, onOpenChat: _openId, onOpenPerson: _openPerson, now: widget.now, prefs: widget.prefs))),
         ],
         children: [
           if (_invitations.isNotEmpty)
@@ -661,8 +661,11 @@ class _InvitationRow extends StatelessWidget {
 /// their phone with Change number, saved addresses, notifications, privacy,
 /// signing out and deleting the account.
 class YouSettingsScreen extends StatelessWidget {
-  const YouSettingsScreen({super.key, required this.auth, this.notify, this.onOpenChat, this.onOpenPerson, this.pickers = const Pickers(), this.now = DateTime.now});
+  const YouSettingsScreen({super.key, required this.auth, this.notify, this.onOpenChat, this.onOpenPerson, this.pickers = const Pickers(), this.now = DateTime.now, this.prefs});
   final Auth auth;
+
+  /// What this phone keeps (the daily contacts re-check's day).
+  final Prefs? prefs;
 
   /// Opens a chat with a person (Your contacts' Chat); else it is pushed.
   final OpenPeopleChat? onOpenPerson;
@@ -770,7 +773,7 @@ class YouSettingsScreen extends StatelessWidget {
                   sub: 'Who can find you, message you and see your last seen',
                   icon: 'b-shield',
                   square: look.teal,
-                  onTap: () => tkPush<void>(context, PeoplePrivacyPage(auth: auth)),
+                  onTap: () => tkPush<void>(context, PeoplePrivacyPage(auth: auth, prefs: prefs)),
                 ),
                 TkListRow(
                   title: 'Your contacts',

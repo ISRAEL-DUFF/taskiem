@@ -17,6 +17,10 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:taskiem/api/transport.dart';
 import 'package:taskiem/chat/live.dart' show LiveTiming;
+import 'package:taskiem/app/prefs.dart';
+import 'package:taskiem/app/session.dart' show MemoryKeyStore;
+import 'package:taskiem/chat/people_contacts.dart';
+import 'package:taskiem/chat/people_settings.dart';
 import 'package:taskiem/chat/attachments.dart' show PickedFile;
 import 'package:taskiem/chat/composer.dart' show Pickers;
 import 'package:taskiem/chat/people_chat.dart';
@@ -48,6 +52,13 @@ class Streams {
 
   void raw(String text) => opens.last.add(utf8.encode(text));
   void say(String event, Object data, {String? id}) => raw('event: $event\ndata: ${jsonEncode(data)}\n${id == null ? '' : 'id: $id\n'}\n');
+}
+
+/// The phone's contacts, allowed without asking.
+class AllowedContacts extends FakeContacts {
+  AllowedContacts(super.list);
+  @override
+  Future<bool> allowed() async => true;
 }
 
 /// A dropped connection's error.
@@ -276,6 +287,73 @@ void main() {
       expect(d.person?.online, isFalse, reason: 'the chat’s own read again, not a stale online');
       d.dispose();
       live.dispose();
+    });
+  });
+
+  group('5. the daily re-check goes round the numbers', () {
+    test('more numbers than the day allows: each day starts further round them, and over the days all are checked', () {
+      final all = ['+2348030000005', '+2348030000001', '+2348030000004', '+2348030000002', '+2348030000003'];
+      expect(dayShare(all, 0, '2026-11-18'), all);
+      expect(dayShare(all, 9, '2026-11-18'), all);
+      expect(dayShare(all, 2, null), all.take(2), reason: 'without a day, as the phone has them');
+      final seen = <String>{};
+      final days = ['2026-11-18', '2026-11-19', '2026-11-20'];
+      final shares = [for (final d in days) dayShare(all, 2, d)];
+      for (final share in shares) {
+        expect(share, hasLength(2));
+        seen.addAll(share);
+      }
+      expect(shares[0], isNot(shares[1]));
+      expect(seen, all.toSet(), reason: 'three days of two go round all five');
+      expect(dayShare(all, 2, '2026-11-18'), shares[0], reason: 'the same day, the same share');
+    });
+
+    test('recheckContacts sends a different share on the next day; only the day is kept', () async {
+      final api = Api();
+      api.routes['GET /v1/me/contacts/key'] = (_) => {'key_id': 'k1', 'key': vectorKey, 'expires_at': '2026-11-20T00:00:00Z', 'hash': 'sha256', 'max_batch': 500, 'max_per_day': 1, 'words': ''};
+      api.routes['POST /v1/me/contacts/match'] = (_) => {'matches': <Object>[]};
+      final c = AllowedContacts([(name: 'Ada', numbers: ['0803 123 4567']), (name: 'Bayo', numbers: ['0805 765 4321'])]);
+      final kept = <String>[];
+      await recheckContacts(api: api.auth().api, contacts: c, checked: '2026-11-16', now: DateTime.utc(2026, 11, 17, 10), remember: (d) async => kept.add(d));
+      await recheckContacts(api: api.auth().api, contacts: c, checked: '2026-11-17', now: DateTime.utc(2026, 11, 18, 10), remember: (d) async => kept.add(d));
+      final sent = [for (final r in api.sent('POST', '/v1/me/contacts/match')) (api.body(r)['hashes'] as List).single];
+      expect(sent, hasLength(2));
+      expect(sent[0], isNot(sent[1]), reason: 'not the same first number every day');
+      expect(kept, ['2026-11-17', '2026-11-18']);
+    });
+  });
+
+  group('6. Check my contacts daily', () {
+    Api privacy() {
+      final api = Api();
+      api.routes['GET /v1/me/privacy/people'] = (_) => {'find_by_number': 'contacts', 'find_from_contacts': true, 'message': 'everyone', 'last_seen': 'contacts', 'read_ticks': true, 'photo': 'contacts', 'show_number': false};
+      return api;
+    }
+
+    testWidgets('on while the day is kept; turned off, the day is forgotten and nothing is checked by itself', (t) async {
+      phone(t);
+      final keys = MemoryKeyStore();
+      await keys.write('contacts-checked', '2026-11-16');
+      final prefs = Prefs(keys);
+      await prefs.load();
+      final api = privacy();
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeoplePrivacyPage(auth: api.auth(), prefs: prefs)));
+      await settle(t);
+      expect(find.text(checkContactsDaily), findsOneWidget);
+      expect(find.text(checkContactsDailyOn), findsOneWidget);
+      await press(t, find.bySemanticsLabel(checkContactsDaily).last);
+      expect(prefs.contactsChecked, isNull);
+      expect(await keys.read('contacts-checked'), isNull);
+      expect(find.text(checkContactsDailyOff), findsOneWidget);
+      expect(api.sent('PUT', '/v1/me/privacy/people'), isEmpty, reason: 'this phone’s, not the server’s');
+      final c = AllowedContacts([(name: 'Ada', numbers: ['0803 123 4567'])]);
+      expect(await recheckContacts(api: api.auth().api, contacts: c, checked: prefs.contactsChecked, now: at, remember: prefs.setContactsChecked), isNull);
+      expect(c.read_, isFalse);
+      await drain(t);
+    });
+
+    test('the explainer says how to turn it off', () {
+      expect(contactsAskWords.join(' '), contains('Check my contacts daily in Privacy with people'));
     });
   });
 }

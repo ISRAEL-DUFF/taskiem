@@ -107,9 +107,11 @@ class Prefs extends ChangeNotifier {
     }
   }
 
-  /// The contacts checked today ([day]: `2026-11-18`).
-  Future<void> setContactsChecked(String day) async {
+  /// The contacts checked today ([day]: `2026-11-18`); null: not checked
+  /// again by themselves (Check my contacts daily turned off).
+  Future<void> setContactsChecked(String? day) async {
     contactsChecked = day;
+    notifyListeners();
     try {
       await keys.write('contacts-checked', day);
     } on Object {

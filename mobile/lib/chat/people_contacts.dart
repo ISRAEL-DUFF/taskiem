@@ -101,7 +101,12 @@ typedef ContactsMatched = ({List<ContactMatch> found, bool stopped, int checked,
 /// in batches, no more than the day's `max_per_day`. When the key changes
 /// meanwhile (409), only the batches not yet answered are sent again, with
 /// the new key; at the day's limit (429), what was found so far is kept.
-Future<ContactsMatched> matchPhoneContacts(TaskiemApi api, List<PhoneContact> contacts) async {
+///
+/// [day] (the daily re-check's, `2026-11-18`): with more numbers than the
+/// day allows, each day starts further round them (sorted, so the order
+/// holds from day to day), so that over the days all are checked, not the
+/// same first ones each time. Nothing but the day is needed or kept.
+Future<ContactsMatched> matchPhoneContacts(TaskiemApi api, List<PhoneContact> contacts, {String? day}) async {
   // Each number once, in E.164, with the first name it has in the phone.
   final names = <String, String>{};
   for (final c in contacts) {
@@ -114,7 +119,7 @@ Future<ContactsMatched> matchPhoneContacts(TaskiemApi api, List<PhoneContact> co
   if (names.isEmpty) return (found: out, stopped: false, checked: 0, total: 0);
   var k = await api.contactsKey();
   // No more than the day allows (1000 in an account's first week).
-  final numbers = names.keys.take(k.maxPerDay > 0 ? k.maxPerDay : names.length).toList();
+  final numbers = dayShare(names.keys.toList(), k.maxPerDay, day);
   var done = 0;
   for (var changes = 0; done < numbers.length;) {
     final key = base64.decode(k.key);
@@ -142,6 +147,19 @@ Future<ContactsMatched> matchPhoneContacts(TaskiemApi api, List<PhoneContact> co
   return (found: out, stopped: numbers.length < names.length, checked: done, total: names.length);
 }
 
+/// The numbers checked on [day]: all of [all] when the day allows them
+/// ([perDay] 0 or more than there are); else [perDay] of them, starting
+/// [perDay] further round the sorted numbers each day, so the days go
+/// round them all. Without a day, the first [perDay] as the phone has them.
+List<String> dayShare(List<String> all, int perDay, String? day) {
+  if (perDay <= 0 || perDay >= all.length) return all;
+  if (day == null) return all.take(perDay).toList();
+  final sorted = [...all]..sort();
+  final n = DateTime.parse('${day}T00:00:00Z').difference(DateTime.utc(1970)).inDays;
+  final start = (n * perDay) % sorted.length;
+  return [for (var i = 0; i < perDay; i++) sorted[(start + i) % sorted.length]];
+}
+
 /// The explainer, said before the phone is asked (§5.3): what is sent, what
 /// is kept, and the method's limit.
 const contactsAskTitle = 'Find friends from your contacts?';
@@ -149,7 +167,7 @@ const contactsAskWords = [
   'Taskiem can check which of the people in your phone’s contacts are on Taskiem, so you can chat with them.',
   'Their numbers are not sent to us in readable form. Each number is scrambled on this phone with a key from Taskiem (a keyed hash), and only the scrambled numbers are sent. Taskiem answers which are people whose settings let you find them this way, then forgets what was sent. Nothing of your contacts is kept, on this phone or by Taskiem.',
   'The honest limit: Taskiem holds the key, and phone numbers are few enough to try them all. So this protects your contacts if what is sent is seen by someone else, but not from Taskiem itself.',
-  'Once you agree, Taskiem checks again by itself at most once a day when you open it, while your phone still allows it, and keeps only the day it last checked. Turn it off by not allowing Contacts for Taskiem in your phone’s settings.',
+  'Once you agree, Taskiem checks again by itself at most once a day when you open it, while your phone still allows it, and keeps only the day it last checked. Turn it off with Check my contacts daily in Privacy with people, or by not allowing Contacts for Taskiem in your phone’s settings.',
   'Only people who allow it can be found, and you can stop at any time.',
   'When you tap Add, that person and the name you give them are kept in your contacts on Taskiem, which only you see.',
 ];
@@ -175,7 +193,7 @@ Future<List<ContactMatch>?> recheckContacts({
   final today = contactsDay(now);
   if (checked == null || checked == today) return null;
   if (!await contacts.allowed()) return null;
-  final r = await matchPhoneContacts(api, await contacts.read());
+  final r = await matchPhoneContacts(api, await contacts.read(), day: today);
   await remember(today);
   return [for (final m in r.found) if (!m.person.inContacts) m];
 }
