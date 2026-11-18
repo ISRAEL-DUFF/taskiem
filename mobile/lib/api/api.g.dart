@@ -1155,6 +1155,11 @@ class TaskiemApi {
     return JoinGroupByLinkResponse.fromJson(j as Map<String, dynamic>);
   }
 
+  /// Take back a request to join (`DELETE /v1/me/group-links/{code}/join`)
+  Future<void> withdrawGroupJoin({required String code}) async {
+    await _t.send('DELETE', '/v1/me/group-links/${Uri.encodeComponent(code)}/join');
+  }
+
   /// One group (`GET /v1/me/groups/{id}`)
   Future<Group> getGroup({required String id}) async {
     final j = await _t.send('GET', '/v1/me/groups/${Uri.encodeComponent(id)}');

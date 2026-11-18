@@ -261,6 +261,7 @@ searchGroups
 starredGroups
 forwardMessage
 joinGroupByLink
+withdrawGroupJoin
 getGroup
 putGroup
 deleteGroupForMe
