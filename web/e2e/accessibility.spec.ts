@@ -946,7 +946,7 @@ for (const scheme of ["light", "dark"] as const)
         storage_words: "People chats take 750.0 MB on disk.",
       });
       const row = { id: "r1", reporter_id: "p1", detached: false, reported_id: "p2", reported_name: "Dayo Ola", reported_gone: false, reported_suspended: false, reason: "scam", note: "Wants money first", from_request: true, files: 1, sealed: true, status: "open", created_at: now, reviewed_by: null, reviewed_at: null, reports_against: 2 };
-      await page.route(/\/v1\/ops\/people\/reports\?/, (r) => r.fulfill(json({ reports: [row, { ...row, id: "r2", status: "reviewed", reviewed_by: "operator:ana@taskiem.test", reviewed_at: now, detached: true }] })));
+      await page.route(/\/v1\/ops\/people\/reports\?/, (r) => r.fulfill(json({ reports: [row, { ...row, id: "r2", status: "reviewed", reviewed_by: "operator:ana@taskiem.test", reviewed_at: now, detached: true }, { ...row, id: "r3", reported_id: null, reported_name: "", from_request: false, group_id: "g1" }] })));
       await page.route(/\/v1\/ops\/customer-reports\?/, (r) =>
         r.fulfill(json({ reports: [{ id: "cr1", reporter_id: "p1", detached: false, tenant_id: "t1", business: "Mama's Kitchen", reason: "abuse", note: "", messages: 4, status: "open", created_at: now, reviewed_by: null, reviewed_at: null }] })),
       );
@@ -1017,6 +1017,27 @@ for (const scheme of ["light", "dark"] as const)
       await page.getByRole("button", { name: "Open message" }).click();
       await expect(page.getByTestId("ops-held-message")).toContainText("You have won");
       await check("/ops/people/held/{id}");
+      // A group's page (5b): opened saying why; members, reports, decisions, and its actions.
+      await page.route(/\/v1\/ops\/people\/groups\/g1\?why=/, (r) =>
+        r.fulfill(
+          json({
+            group: { id: "g1", created_at: now, created_by: "p2", creator_name: "Dayo Ola", members: 41, admins: 2, link_on: false, last_message_at: now, closed_at: now, close_until: later, link_stopped_at: now, reports: 3, held: 1 },
+            gone: false,
+            members: [
+              { person_id: "p2", name: "Dayo Ola", role: "admin", how: "created", joined_at: now, left_at: null, left_how: null, deleted: false, suspended: false },
+              { person_id: "p1", name: "Ada Obi", role: "member", how: "link", joined_at: now, left_at: now, left_how: "left", deleted: false, suspended: false },
+            ],
+            reports: [{ id: "r3", reporter_id: "p1", reported_id: null, reported_name: "", reason: "scam", status: "open", created_at: now }],
+            actions: [{ id: "ga1", action: "group_close", reason: "Selling fake prizes", operator: "operator:ana@taskiem.test", report_id: "r3", until: later, lifted_at: null, lifted_by: null, lift_reason: null, closed_at: null, close_note: null, created_at: now, appeal_id: "ap2", appeal_state: "open", appeal_text: "We are real", appeal_at: now }],
+          }),
+        ),
+      );
+      await page.goto("/ops/people/groups/g1");
+      await page.getByLabel(/Your reason/).fill("Handling the queue");
+      await page.getByRole("button", { name: "Open group" }).click();
+      await expect(page.getByTestId("ops-group")).toContainText("Closed");
+      await expect(page.getByTestId("ops-group-member")).toHaveCount(2);
+      await check("/ops/people/groups/{id}");
 
       // The person's side: the notice on You and Your standing with an appeal.
       await page.route("**/v1/me", (r) => r.fulfill(json({ ...PERSON, businesses: [], second_proof: undefined })));

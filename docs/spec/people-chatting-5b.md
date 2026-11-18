@@ -4,7 +4,7 @@ Date: 18 November 2026 · Plan: [People chatting with people](people-chatting.md
 
 Every sentence of the plan that applies to stage 5b, as a checklist, so nothing is left out and nothing is called "left on purpose" without the founder agreeing. Each line ships on Android, iPhone and the web together, with server tests, web end-to-end tests and app tests. App screens are built to the app's own look ([mobile-app-look.md](mobile-app-look.md)), never the web's.
 
-Status key: ☐ to build; ◐ built on the server ("As built: stage 5b, groups (server)" in [the plan](people-chatting.md)), the web and the app to come. Questions marked (?…) are settled at the end.
+Status key: ☐ to build; ◐ built on the server ("As built: stage 5b, groups (server)" and "As built: stage 5b, group safety (server)" in [the plan](people-chatting.md)), the web and the app to come. Questions marked (?…) are settled at the end.
 
 ## A. Groups (§9, §13, §17 Q7, Q16, Q17)
 
@@ -40,22 +40,22 @@ Status key: ☐ to build; ◐ built on the server ("As built: stage 5b, groups (
 
 ## B. Safety in groups (§8.2, §8.3, §8.4)
 
-- ☐ **Limits:**
+- ◐ **Limits:**
   - on creating groups;
   - on adding people who aren't contacts;
-  - on invite-link joins per hour (◐ built: 60 a group, 10 a person);
+  - on invite-link joins per hour (60 a group; a person's by their account's age and signals);
   - lower for accounts in their first week (§8.2).
 - ◐ **Forward caps and marks** apply to groups (§8.2).
-- ☐ **Report a group or a member,** with consent; the last 20 messages go to moderators with their files (§8.3).
-- ☐ **Moderators** see group reports. A moderator can:
+- ◐ **Report a group or a member,** with consent; the last 20 messages go to moderators with their files (§8.3).
+- ◐ **Moderators** see group reports. A moderator can:
   - remove a group's invite link;
   - close a group;
   - act on members, as for people.
 
   Every access is logged (0069 point 3).
-- ☐ **Scam checks:** automated checks look at messages from people who aren't contacts in new or small groups (?B1).
-- ☐ **Lawful requests:** exports can cover a person's group messages within the scope asked (0069 point 11).
-- ☐ **Storage watching** includes groups (0069 consequences).
+- ◐ **Scam checks:** automated checks look at messages from people who aren't contacts in new or small groups (?B1).
+- ◐ **Lawful requests:** exports can cover a person's group messages within the scope asked (0069 point 11).
+- ◐ **Storage watching** includes groups (0069 consequences).
 - ☐ **Load test before 5b ships** (§13): many connections, group fan-out, storage growth.
 
 ## C. Ordering together (§10.3, §11 C, §17 Q8)

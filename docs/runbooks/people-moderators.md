@@ -48,6 +48,17 @@ A person's standing page shows their signals: how many people reported them, hel
 
 Every action records your reason, your name and the time, and the person is told in plain words: a notification on their devices and a notice on You opening **Your standing**, where they read the decision and can appeal it once. Write the reason to them, plainly and without quoting the reporter: "You sent several people messages asking for their bank codes." **Lift** ends a limit, suspension or closure early; they are told.
 
+## Groups
+
+People report a group, or one of its members, from inside the group (stage 5b). The report carries the last 20 messages the reporter could see (never from before they joined, nor anything they deleted for themselves), who sent each, the photos and files in them, and the group's name as it was then. It is listed among reports of people ("The whole group", or "A member, from a group") and opened the same way.
+
+- **The group's page** ("The group: its members and actions" on the report) shows when it was made and by whom, its members and admins, its link, its reports and what moderators decided; never its name or messages. Who is in a group is a person's data: opening the page asks why and is recorded.
+- **Act on a member** as on anyone: their page has warn, limit, suspend and close.
+- **Turn off its invite link** when the group is used to pull strangers in (scam rooms, spam): joining by the link stops at once, its admins can't make a new one until you lift it, and the members are told in the group.
+- **Close the group** for a group that exists for fraud, abuse or illegal content: no one can send, join or change it; the members are told in the group, its admins get a notification and can appeal once; it is deleted with all its messages 30 days later unless the appeal is open or overturned, or you lift it. Reports keep their own copies.
+
+The checks also look at messages in groups younger than a week, or from someone who joined by its link in the last day, for the members who haven't added the sender: a held one reaches no one in the group and comes to **Held messages** ("to a group"); releasing it sends it to the group then, as the sender wrote it.
+
 ## Appeals
 
 An appeal is answered by a moderator other than the one who decided (the console refuses the one who decided). Read the decision, its reason and the report it came from, then:
@@ -66,4 +77,4 @@ Your note is sent to the person: say what you looked at and why, in a sentence o
 
 ## Storage
 
-People safety shows the people chats' tables and their size; Prometheus has `taskiem_people_storage_bytes` and `taskiem_people_storage_rows`, and `TaskiemPeopleStorageLarge` opens a ticket ([reliability](../reliability.md#runbook-taskiempeoplestoragelarge)).
+People safety shows the people chats' and groups' tables and their size; Prometheus has `taskiem_people_storage_bytes` and `taskiem_people_storage_rows`, and `TaskiemPeopleStorageLarge` opens a ticket ([reliability](../reliability.md#runbook-taskiempeoplestoragelarge)).
