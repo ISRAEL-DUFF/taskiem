@@ -132,7 +132,8 @@ Turning it off hides it and refuses its routes, steps, chat words and app screen
 | Customer's confirmation to end a job | Off | End job needs the customer's OK in the app, in their chat, or a code they read out (§14) |
 | Late after | 30 minutes past the window | When a job not yet arrived is late (§16) |
 | No time chosen after | 4 hours | When a customer asked for a time and has not answered is an alert (§14.1) |
-| Too long on site after | The template's expected time, plus half | When a job on site is flagged (§16) |
+| Too long on site after | The template's expected time, plus half; 3 hours when the job has no expected time (ISPOps' overtime threshold) | When a job on site is flagged (§16) |
+| Messages to customers not on Taskiem | SMS | SMS, or email for customers with an email address (ISPOps sent email by default); the business's SMS sender is its Taskiem messages setting, not a key typed here as ISPOps' Termii fields were |
 | Location every | 30 seconds when moving, 5 minutes when still | How often the phone reports during a job (§10) |
 | Keep trails for | 90 days | Then deleted; steps keep their own place (§18) |
 
@@ -310,7 +311,7 @@ The field mode is the Taskiem app (PR #198), not a second app. A field agent sig
 | **Job** | Reference (copy), customer's name and phone (Call), the place with a small map (Directions opens the phone's maps), the window, what to do, the checklist, notes, photos (camera), parts used (from My stock), the steps and their times; Could not finish; the customer's confirmation when asked for |
 | **My stock** | What they carry (§13) |
 | **History** | Their jobs done, with the office's notes and the customers' ratings |
-| **Me** | Their week: jobs done, time on jobs, rating; the location permission and battery saving advice |
+| **Me** | Their week: jobs done, time on jobs, rating; **Waiting to send**: what is queued on the phone and why, with **Send now** (ISPOps' sync diagnostics); the location permission and battery saving advice |
 
 - **Notifications** by push (Firebase, as the app's chat): a job assigned, changed, held, cancelled; a note from the office; a reminder ten minutes before a window when the job is not started. A push opens the job.
 - **Chat with the office** is the business's team conversation, not a new thing; a job's page has **Message the office about J-1042**, which opens it with the job's card.
@@ -340,7 +341,9 @@ With **Stock** on, Field work adds **where** stock is: in the store, or **with a
 | `lost` | Office, with a reason | Musa's down |
 
 - The catalogue table's count stays **the store's** count, as today; what agents hold is a record of its own (`stock_held`), shown on the item ("12 in store, 5 with agents") and on each agent's page, and copied to a kept table for workflows.
-- Movements follow Stock's rules: one change each, under an idempotency key, never below zero.
+- Movements follow Stock's rules: one change each, under an idempotency key, never below zero. The store's own movements stay Stock's: goods **received**, **adjustments** with a reason, counts.
+- **Items** are Stock's catalogue items, with what ISPOps kept on each: a code (SKU), a category, the unit (pieces, metres), the unit cost and the reorder level. A job's parts are costed from the unit cost, and reports show parts cost per job and per agent.
+- **Equipment with a serial number** (a router, a radio: ISPOps' `serialized` items): parts used ask for the serial number of each one fitted, recorded on the job and the movement, so the business can find which router went to which customer. ISPOps had the flag but never asked for the number.
 - Low-stock alerts can watch an agent's holding ("Musa has 1 router left").
 - With Stock off, parts used are free text on the job, counted in reports by name, and nothing is issued or returned.
 
@@ -353,7 +356,7 @@ A job's customer is whoever the job was made for: saved in the business's `custo
 - what (the job type, in the business's words), the window, who is coming (name and photo, never their number);
 - the state as it moves: assigned, **on the way** (with a live map while on the way, unless the business turned location off: the agent's place, refreshed, and nothing after Arrived), arrived, done;
 - **Confirm the work is done**, when the business asks for it: a tap in the card, or, for a customer without the app, a 4-digit code on the card or in their SMS, read out to the agent;
-- **Rate the visit** (1 to 5 stars and words) after End job; the rating goes on the job and the agent's record.
+- **Rate the visit** (1 to 5 stars and words, as Taskiem rates deliveries; ISPOps used 1 to 4) after End job; the rating goes on the job and the agent's record.
 
 ### 14.1 Choosing a time
 
@@ -381,7 +384,7 @@ This replaces ISPOps' availability windows (customers declaring when they are in
 | **Map** | §10 |
 | **Jobs** | Filters (state, type, priority, agent, day, customer), search by reference, customer, phone or address; jobs past their time marked; tick new or assigned jobs and **Assign to agent** for many at once (all or nothing); **New job** ([§15.1](#151-making-a-job-in-the-office)); a job's page with its history, map and trail, steps and their times, checklist, photos, notes, parts, rating, and the office's actions: assign or reassign (new, assigned or on hold), **Ask for a time** (§14.1), hold, resume, cancel with a reason, close (done only), add a note |
 | **Agents** | Each field agent (ISPOps' workforce page): state, their schedule, history, jobs done, time on jobs (travel and on site), average time on site, rating and reviews; stock with them; bank details when a pay list is used |
-| **Reports** | Jobs by type, state and agent over a period; time to arrive, time on site; late and not finished; ratings. CSV, as ISPOps' reports |
+| **Reports** | As ISPOps' reports and dashboard, over a period, per team and per agent, each with CSV: jobs made, done, late and not finished; by type and state; **response time** (assigned to Arrived, ISPOps' measure), travel time and time on site, with each agent's averages and their last 7 days against their usual; jobs per day; top performers; ratings; parts used and their cost. An agent's report lists each job with its times and the places of its steps. **The steps log**: every Start job, Arrived and End job with its phone and server times, place and accuracy, filtered and exported to CSV (ISPOps' clock events page) |
 | **Settings** | §4; job types and templates open their tables |
 
 ### 15.1 Making a job in the office
@@ -451,7 +454,8 @@ Alerts, through [alerts](../alerts.md), to the people with `job.manage` (or the 
 ## 17. Hours, jobs and pay
 
 - **Time on jobs** is travel (Start job to Arrived) and on site (Arrived to End job), as ISPOps' duration from clock-in to clock-out; **jobs** are jobs ended; both per agent per day, in reports and in a kept table for workflows. There is no time on duty: Taskiem does not keep timesheets (§24).
-- Pay stays out of the record. Templates send them where pay is worked out: `payrolla-record-payroll` with hours (Payrolla is connected already, as ISPOps used it), or a pay list (`pay-a-list`) for a per-job fee. ISPOps' embedded payroll screen is not carried over (§20).
+- Pay stays out of the record. Templates send them where pay is worked out: `payrolla-record-payroll` with jobs and time on jobs, or a pay list (`pay-a-list`) for a per-job fee.
+- **The staff list in Payrolla.** ISPOps pushed its staff (field agents and office staff, names and roles, never pay) into the business's Payrolla company as employees are added, changed and removed, and opened Payrolla's own screen inside its dashboard. Taskiem's Payrolla connector reads employees but cannot push them ([Payrolla](../integrations/payrolla.md)). Field work needs `payrolla@1` to gain a **sync employee** action under Payrolla's sync scope, and a template that runs it when a member with a Field work role is added, changed or removed; Payrolla's own screens open by its links (`get_approval_link`, `create_payslip_link`) rather than inside Taskiem. To be agreed with Payrolla (F8).
 - A field agent's bank account for pay is theirs as a member, as riders' are kept, if a pay list is used.
 
 ## 18. Privacy and safety
@@ -536,7 +540,39 @@ The implementation details to port are in four private repositories (read them f
 | Push to the app (§11) | app `lib/core/notifications/fcm_service.dart` |
 | Payroll through Payrolla (§17) | backend `internal/service/payroll` |
 
-**Known faults not to carry over** (found when ISPOps was read, 18 November 2026): the app's offline queue is never filled (`SyncDao.enqueue` has no caller), so clocking fails offline; the weak-GPS check in `clock_in_sheet.dart` compares accuracy with a colour's hash; a failed Depart is swallowed silently; the app handles one job at a time and ignores `on_hold` and `closed`; location is sent only while the app is open (no foreground service or background permission on Android, no background mode on iPhone) and dropped when offline; a report can carry a last-known fix up to 120 seconds old, stored as if taken then.
+**Known faults not to carry over** (found when ISPOps was read, 18 November 2026): the app's offline queue is never filled (`SyncDao.enqueue` has no caller), so clocking fails offline; the weak-GPS check in `clock_in_sheet.dart` compares accuracy with a colour's hash; a failed Depart is swallowed silently; the app handles one job at a time and ignores `on_hold` and `closed`; location is sent only while the app is open (no foreground service or background permission on Android, no background mode on iPhone) and dropped when offline; a report can carry a last-known fix up to 120 seconds old, stored as if taken then; the overdue check ignores its own threshold setting (`ListOverdue` compares the scheduled time only); the overtime notification exists but nothing sends it; a rating is asked only of a customer linked to a record with an email address.
+
+### 20.2 Checked against ISPOps' code
+
+On 18 November 2026 every table, route, setting and screen of the four repositories was read against this plan. What was found missing here has been added in its own section; what is left behind is left on purpose:
+
+| ISPOps has | Here | Where |
+| --- | --- | --- |
+| Inventory items with SKU, category, unit, unit cost, reorder level, and a "serialized" flag; stock received, adjusted, issued, consumed, returned | Stock's catalogue and movements, agents as holders, parts costed, serial numbers asked for on parts fitted | §13 |
+| Dashboard figures (today's jobs made, done, overdue, average time, agents; each agent's assigned, done, average and usual per day) and reports (response time, top performers, by type, jobs per day, per-job clock places), with CSV | Reports and the board's figures, with CSV | §15 |
+| The clock events page and its CSV | The steps log | §15 |
+| Overdue and overtime thresholds | Late after; too long on site, falling back to 3 hours | §4, §16 |
+| The completion-photo rule | A photo is needed to end a job | §4 |
+| Customers told by email or SMS (an org setting, email by default) | SMS, or email for customers who have one | §4 |
+| Ratings 1 to 4 stars by an emailed link | 1 to 5, by card or SMS, for every customer | §14 |
+| The field app's sync diagnostics | **Waiting to send**, with **Send now** | §11 |
+| Staff pushed to Payrolla, and Payrolla's screen inside the dashboard | A sync employee action and template, and Payrolla's links | §17 |
+| Job schedules with health (failures counted, a schedule paused after repeated failures, the last error) and **Run due now** | Schedules are workflows (§8), whose runs, failures and alerts are Taskiem's own | §8 |
+| Customers' availability windows linked to jobs | Ask for a time | §14.1 |
+| Notifications list with unread count; device registration; FCM | Taskiem's notifications, alert cards and push | §11, §15.2 |
+| Attachments on jobs (photos), with upload confirmation | Job photos in the business's storage | §6 |
+
+| Left behind on purpose | Why |
+| --- | --- |
+| Organisations, platform admins and their pages, the platform settings page | Businesses and Taskiem Ops |
+| Login by organisation slug and email, password reset by code, refresh tokens, **session idle timeout** setting | Taskiem's sign-in and sessions (phone, passkeys, the business's own rules) |
+| The customer app's OTP sign-in, push and its own chat (WebSocket, typing) | PR #198 |
+| Staff answering customers from a **Telegram supergroup**, a topic per customer | The business's conversations in Taskiem's web chat and app; a business wanting Telegram uses Taskiem's Telegram support for its own bot |
+| The iswallet business wallet, KYC, virtual account and payouts (off in ISPOps) | Taskiem Money |
+| Attachments on inventory items and on invoices | Stock's item photos; Money's invoices |
+| Termii API key and sender typed into settings | The business's Taskiem messages settings |
+| The `offline` agent status | Never set by anything in ISPOps; whether an agent can mark themselves not available is an open question (§23) |
+| Mock data and mock mode | Development only |
 
 ## 21. Milestones
 
@@ -550,7 +586,7 @@ The implementation details to port are in four private repositories (read them f
 | F5 | The `job` trigger, signals, `jobs@1`, the templates, the AI builder | M |
 | F6 | The customer's side: the job card, the live map, confirmation, rating, Book a visit, the public page and updates | M |
 | F7 | Stock with agents | M |
-| F8 | Watching for trouble: alerts; Reports and CSV; hours and jobs to pay templates | M |
+| F8 | Watching for trouble: alerts; Reports, the steps log and CSV; parts costs; jobs and time on jobs to pay templates; the Payrolla staff sync, with Payrolla | M |
 | F9 | The office's tools in chat (§15.2): the tiles and sheets, alert cards, job cards and diary lines, the briefing's part, the customer conversation's actions; `@Taskiem` words for dispatchers; the guide; the business's starting set when it turns Field work on | M |
 
 F0 to F4 are the minimum for the first business to stop using ISPOps; F5 and F6 make it Taskiem's rather than a copy of ISPOps.
