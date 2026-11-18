@@ -79,9 +79,9 @@ func (j peopleJoin) NumberShownToTx(ctx context.Context, tx pgx.Tx, owner, viewe
 func verdictOf(v people.Verdict) peoplechats.Verdict {
 	switch v.Verdict {
 	case people.VerdictHold:
-		return peoplechats.Verdict{Action: peoplechats.Refuse, Reason: peopleHeldWords}
+		return peoplechats.Verdict{Action: peoplechats.Refuse, Reason: peopleHeldWords, Reasons: v.Reasons}
 	case people.VerdictWarn:
-		return peoplechats.Verdict{Action: peoplechats.Warn}
+		return peoplechats.Verdict{Action: peoplechats.Warn, Reasons: v.Reasons}
 	}
 	return peoplechats.Verdict{Action: peoplechats.Allow}
 }

@@ -15423,6 +15423,52 @@ paths:
                 $ref: '#/components/schemas/Session'
         default:
           $ref: '#/components/responses/Error'
+  /v1/transparency/lawful-requests:
+    get:
+      operationId: getLawfulRequestCounts
+      tags:
+      - You
+      summary: How many lawful requests Taskiem received
+      description: 'For anyone, signed in or not (decision 0069 point 11, people-chatting §8.5): requests for people''s data from
+        authorities, by the half-year they were received in (Lagos time), newest first: how many were received, answered
+        (with exactly what was asked), refused, and still being looked at. Numbers only.'
+      security: []
+      responses:
+        '200':
+          description: The counts
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [periods, words]
+                properties:
+                  periods:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required: [year, half, label, received, answered, refused, pending]
+                      properties:
+                        year:
+                          type: integer
+                        half:
+                          type: integer
+                          enum: [1, 2]
+                        label:
+                          type: string
+                        received:
+                          type: integer
+                        answered:
+                          type: integer
+                        refused:
+                          type: integer
+                        pending:
+                          type: integer
+                  words:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/person-links/{code}:
     get:
       operationId: getPersonLinkCard
@@ -22117,7 +22163,7 @@ paths:
       tags:
       - People
       summary: Report a person or chat to Taskiem
-      description: 'Sends the person and the chat''s last 20 messages, from the server''s copy (yours), with what photos and files they had, to Taskiem''s moderators, only with `consent: true` (400 without). Twelve reports in two hours, shared with reports of businesses (429).'
+      description: 'Sends the person and the chat''s last 20 messages, from the server''s copy (yours), with the photos and files in them (up to 50 MB, the newest first), to Taskiem''s moderators, only with `consent: true` (400 without). The report is sealed under a key of its own and kept after the chat or either account is deleted, until a year after a moderator reviewed it. Twelve reports in two hours, shared with reports of businesses (429).'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -22153,6 +22199,96 @@ paths:
                     type: boolean
                   said:
                     type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/standing:
+    get:
+      operationId: getMyStanding
+      tags:
+      - People
+      summary: Your standing with Taskiem's moderators
+      description: 'What Taskiem''s moderators decided about your account in people chats (people-chatting §8.3), newest first, with
+        your appeals. `state` is the strongest decision in force: `ok`, `warned` (a warning in the last 30 days), `limited`
+        (fewer message requests until `until`), `suspended` (you can''t message people, nor they you, until `until` or until
+        lifted; you can still read your chats) or `closing` (the account is closed on `until` unless an appeal overturns it).
+        `words` say it in plain words; `unseen` counts decisions you have not seen (POST /v1/me/standing/seen). A decision with
+        `can_appeal` can be appealed once (POST /v1/me/standing/appeals).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '200':
+          description: Your standing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonStanding'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/standing/appeals:
+    post:
+      operationId: appealMyStanding
+      tags:
+      - People
+      summary: Appeal a moderator's decision
+      description: 'Appeals one decision once, saying why it is wrong (up to 2,000 characters; 400 without). A different moderator
+        decides; you are told on your devices and in GET /v1/me/standing. 404 for a decision that is not yours; 409 for one
+        already appealed or no longer in force. Five an hour (429).'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action_id, text]
+              properties:
+                action_id:
+                  type: string
+                  format: uuid
+                text:
+                  type: string
+                  maxLength: 2000
+      responses:
+        '201':
+          description: Appealed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [appeal, said]
+                properties:
+                  appeal:
+                    $ref: '#/components/schemas/StandingAppeal'
+                  said:
+                    type: string
+        '409':
+          $ref: '#/components/responses/Error'
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/standing/seen:
+    post:
+      operationId: seenMyStanding
+      tags:
+      - People
+      summary: Mark the moderators' notices seen
+      description: You has shown the person the moderators' decisions; `unseen` is 0 after.
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      responses:
+        '204':
+          description: Seen
         default:
           $ref: '#/components/responses/Error'
   /v1/me/people/{id}/read:
@@ -22230,7 +22366,7 @@ paths:
       tags:
       - People
       summary: Write to a person
-      description: 'A text, a place (`location`) or a card (`card`: a product, a business, one of your orders or its delivery, or a share), kept in both copies, each sealed under its owner''s key. A first message to someone who does not know you waits in their Requests (limits per sender: waiting at once and a day, fewer in an account''s first week and for senders whose requests are often deleted or blocked: 429). A stranger''s messages are looked at by the automated safety checks, which keep only their verdict (403 when refused). Writing back to a request accepts it. While they blocked you it stays on your side with one tick (`status: sent`). 409 when you blocked them, or their account was deleted; 429 past 20 messages a minute in a chat (10 in the first week). A repeat of a `client_id` answers the first (200).'
+      description: 'A text, a place (`location`) or a card (`card`: a product, a business, one of your orders or its delivery, or a share), kept in both copies, each sealed under its owner''s key. A first message to someone who does not know you waits in their Requests (limits per sender: waiting at once and a day, growing with the account''s age (a week, 30 days, 90 days) and accepted requests, fewer for senders whose requests are often deleted or blocked, who several people reported, on a device several new accounts use, or whom moderators limited: 429). A stranger''s messages are looked at by the automated safety checks, which keep only their verdict (403 when refused: the message is not delivered, and is kept sealed for Taskiem''s moderators, who may release it later as you wrote it). 403 while Taskiem''s moderators suspended your account (GET /v1/me/standing). Writing back to a request accepts it. While they blocked you it stays on your side with one tick (`status: sent`). 409 when you blocked them, or their account was deleted; 429 past 20 messages a minute in a chat (10 in the first week). A repeat of a `client_id` answers the first (200).'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -41322,6 +41458,80 @@ components:
           description: Always false, since Taskiem does not check the account.
         words:
           type: string
+    PersonStanding:
+      type: object
+      additionalProperties: false
+      required: [state, words, until, actions, unseen, appeal_words]
+      properties:
+        state:
+          type: string
+          enum: [ok, warned, limited, suspended, closing]
+        words:
+          type: string
+        until:
+          type: [string, 'null']
+          format: date-time
+        unseen:
+          type: integer
+        appeal_words:
+          type: string
+        actions:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, action, reason, at, until, in_force, lifted_at, seen, words, can_appeal, appeal]
+            properties:
+              id:
+                type: string
+                format: uuid
+              action:
+                type: string
+                enum: [warn, limit, suspend, close]
+              reason:
+                type: string
+              at:
+                type: string
+                format: date-time
+              until:
+                type: [string, 'null']
+                format: date-time
+              in_force:
+                type: boolean
+              lifted_at:
+                type: [string, 'null']
+                format: date-time
+              seen:
+                type: boolean
+              words:
+                type: string
+              can_appeal:
+                type: boolean
+              appeal:
+                oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/StandingAppeal'
+    StandingAppeal:
+      type: object
+      additionalProperties: false
+      required: [id, text, state, at, decided_at, note]
+      properties:
+        id:
+          type: string
+          format: uuid
+        text:
+          type: string
+        state:
+          type: string
+          enum: [open, upheld, overturned]
+        at:
+          type: string
+          format: date-time
+        decided_at:
+          type: [string, 'null']
+          format: date-time
+        note:
+          type: [string, 'null']
     PeopleReport:
       type: object
       additionalProperties: false

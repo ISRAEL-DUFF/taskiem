@@ -44,6 +44,9 @@ type Verdict struct {
 	// Reason is said to the sender when the message is refused; plain
 	// words, never the message's own.
 	Reason string
+	// Reasons are the checks' names for what they found (kept with a held
+	// message for moderators).
+	Reasons []string
 }
 
 // Action is what is done with a screened message.

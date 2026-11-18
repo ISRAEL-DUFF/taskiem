@@ -240,3 +240,7 @@ openPeopleCard
 getPayoutAccount
 putPayoutAccount
 deletePayoutAccount
+getMyStanding
+appealMyStanding
+seenMyStanding
+getLawfulRequestCounts

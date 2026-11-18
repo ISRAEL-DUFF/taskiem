@@ -174,6 +174,12 @@ var Alerts = []Alert{
 		Expr:        `sum(increase(taskiem_form_limit_trips_total[15m])) > 0`,
 	},
 	{
+		Name: "TaskiemPeopleStorageLarge", Severity: "ticket", For: "1h",
+		Summary:     "People chats take over 100 GiB, or grew over 5 GiB in a day",
+		Description: "People chats are kept until the people delete them (decision 0069), so their tables only grow. Together they take over 100 GiB on disk, or grew by over 5 GiB in a day: plan the database's disk, and whether photos and files leave Postgres for object storage.",
+		Expr:        `sum(taskiem_people_storage_bytes) > 107374182400 or (sum(taskiem_people_storage_bytes) - sum(taskiem_people_storage_bytes offset 1d)) > 5368709120`,
+	},
+	{
 		Name: "TaskiemTargetDown", Severity: "ticket", For: "10m",
 		Summary:     "A Taskiem pod's metrics cannot be scraped",
 		Description: "Prometheus cannot scrape a Taskiem pod. If it serves traffic, the API and ingest SLIs miss its requests.",

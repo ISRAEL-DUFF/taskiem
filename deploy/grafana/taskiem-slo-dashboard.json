@@ -1169,6 +1169,82 @@
       ],
       "title": "Runs purged and failed",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 68
+      },
+      "id": 36,
+      "panels": [],
+      "title": "People chats' storage",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Bytes of the people chats' tables, with indexes and TOAST (decision 0069: kept until the people delete them). Over 100 GiB, or over 5 GiB more in a day, opens a ticket.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 69
+      },
+      "id": 37,
+      "targets": [
+        {
+          "expr": "max by (table) (taskiem_people_storage_bytes)",
+          "legendFormat": "{{table}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(max by (table) (taskiem_people_storage_bytes))",
+          "legendFormat": "all",
+          "refId": "B"
+        }
+      ],
+      "title": "People chats on disk",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Rows of the people chats' tables (Postgres's estimate).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 69
+      },
+      "id": 38,
+      "targets": [
+        {
+          "expr": "max by (table) (taskiem_people_storage_rows)",
+          "legendFormat": "{{table}}",
+          "refId": "A"
+        }
+      ],
+      "title": "People chats' rows",
+      "type": "timeseries"
     }
   ],
   "refresh": "1m",

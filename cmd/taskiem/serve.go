@@ -1375,7 +1375,7 @@ func serve(ctx context.Context, args []string) error {
 		}
 		srv.SiteProver = &embedsites.Prover{LookupTXT: api.LookupTXT, Guard: &egress.Guard{Logger: log}}
 		e.linkOps.Set(srv)
-		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders, srv.RunForms, srv.RunInvoices, srv.RunCustomerChats, srv.RunDiscover)
+		tasks = append(tasks, httpTask("api", cfg.Listen, srv.Handler(), log), srv.RunGitSyncs, srv.RunWhatsApp, srv.RunUSSD, srv.RunStorefronts, srv.RunStorefrontOrders, srv.RunForms, srv.RunInvoices, srv.RunCustomerChats, srv.RunDiscover, srv.RunSafety)
 		if e.wa != nil {
 			// Template statuses from Meta, at start and hourly (docs/whatsapp.md#templates).
 			tasks = append(tasks, func(ctx context.Context) error { e.wa.RunTemplatePolls(ctx, time.Hour); return nil })
@@ -1573,6 +1573,7 @@ func serve(ctx context.Context, args []string) error {
 	}
 	_ = prometheus.Register(telemetry.QueueCollector{Pool: e.pool}) // already registered when serve runs twice in one process (tests)
 	_ = prometheus.Register(telemetry.PoolCollector{Pool: e.pool})
+	_ = prometheus.Register(telemetry.PeopleStorageCollector{Pool: e.pool})
 	// Every role serves metrics and a liveness check (/healthz) here, so
 	// roles without the API can be probed too.
 	metrics := http.NewServeMux()

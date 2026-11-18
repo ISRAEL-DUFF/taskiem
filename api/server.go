@@ -437,9 +437,10 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/auth/sso/saml/acs", s.samlACSHandler)
 		r.Get("/auth/sso/saml/{id}/metadata", s.samlMetadata)
 		r.Get("/signup", s.signupOptions)
-		r.Get("/app/config", s.appConfig)              // the phone app's config (app_config.go)
-		r.Get("/chat-links/{code}", s.getChatLinkCard) // a business's card for its chat link (customer_links.go)
-		s.peoplePublicRoutes(r)                        // a person's card at their link (people.go)
+		r.Get("/app/config", s.appConfig)                      // the phone app's config (app_config.go)
+		r.Get("/chat-links/{code}", s.getChatLinkCard)         // a business's card for its chat link (customer_links.go)
+		s.peoplePublicRoutes(r)                                // a person's card at their link (people.go)
+		r.Get("/transparency/lawful-requests", s.lawfulCounts) // the published count of lawful requests (lawful.go)
 		if s.AllowSignup {
 			r.Post("/signup", s.signup) // self-serve signup (onboarding.go)
 		}
@@ -496,6 +497,7 @@ func (s *Server) Handler() http.Handler {
 			s.personAccountRoutes(r)            // deleting the account, photo, pushes, privacy (person_account.go)
 			s.peopleRoutes(r)                   // finding people, contacts, the person's link, privacy towards people (people.go)
 			s.peopleChatRoutes(r)               // chats between people (people_chats.go)
+			s.peopleSafetyRoutes(r)             // the person's standing and appeals (people_safety.go)
 			r.Get("/me/devices", s.listDevices) // Your phones (devices.go)
 			r.Delete("/me/devices/{id}", s.removeDevice)
 			r.Get("/me/passkeys", s.listPasskeys)
