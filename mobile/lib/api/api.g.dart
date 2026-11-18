@@ -1324,6 +1324,18 @@ class TaskiemApi {
     final j = await _t.send('GET', '/v1/group-links/${Uri.encodeComponent(code)}');
     return GroupLinkPreviewResponse.fromJson(j as Map<String, dynamic>);
   }
+
+  /// Report a group, or one of its members, to Taskiem (`POST /v1/me/groups/{id}/report`)
+  Future<ReportGroupResponse> reportGroup({required ReportGroupRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/report', body: body.toJson());
+    return ReportGroupResponse.fromJson(j as Map<String, dynamic>);
+  }
+
+  /// Appeal the closing of a group you run (`POST /v1/me/groups/{id}/appeal`)
+  Future<AppealGroupResponse> appealGroup({required AppealGroupRequest body, required String id}) async {
+    final j = await _t.send('POST', '/v1/me/groups/${Uri.encodeComponent(id)}/appeal', body: body.toJson());
+    return AppealGroupResponse.fromJson(j as Map<String, dynamic>);
+  }
 }
 
 class AppConfig {
@@ -11416,5 +11428,81 @@ class GroupLinkPreviewResponse {
         'members': members,
         'name': name,
         'photo': ?photo,
+      };
+}
+
+class ReportGroupRequest {
+  const ReportGroupRequest({required this.consent, this.note, this.personId, required this.reason});
+
+  /// The last 20 messages go to Taskiem's moderators only with it.
+  final bool consent;
+  final String? note;
+  /// A member to report (or someone who was one); without it, the group.
+  final String? personId;
+  final String reason;
+
+  factory ReportGroupRequest.fromJson(Map<String, dynamic> j) => ReportGroupRequest(
+        consent: j['consent'] as bool,
+        note: j['note'] == null ? null : j['note'] as String,
+        personId: j['person_id'] == null ? null : j['person_id'] as String,
+        reason: j['reason'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'consent': consent,
+        'note': ?note,
+        'person_id': ?personId,
+        'reason': reason,
+      };
+}
+
+class ReportGroupResponse {
+  const ReportGroupResponse({required this.id, required this.messagesSent, required this.said});
+
+  final String id;
+  final bool messagesSent;
+  final String said;
+
+  factory ReportGroupResponse.fromJson(Map<String, dynamic> j) => ReportGroupResponse(
+        id: j['id'] as String,
+        messagesSent: j['messages_sent'] as bool,
+        said: j['said'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'messages_sent': messagesSent,
+        'said': said,
+      };
+}
+
+class AppealGroupRequest {
+  const AppealGroupRequest({required this.text});
+
+  final String text;
+
+  factory AppealGroupRequest.fromJson(Map<String, dynamic> j) => AppealGroupRequest(
+        text: j['text'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+      };
+}
+
+class AppealGroupResponse {
+  const AppealGroupResponse({required this.appeal, required this.said});
+
+  final StandingAppeal appeal;
+  final String said;
+
+  factory AppealGroupResponse.fromJson(Map<String, dynamic> j) => AppealGroupResponse(
+        appeal: StandingAppeal.fromJson(j['appeal'] as Map<String, dynamic>),
+        said: j['said'] as String,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'appeal': appeal.toJson(),
+        'said': said,
       };
 }

@@ -291,3 +291,5 @@ markGroupSplitPaid
 readGroup
 typingGroup
 groupLinkPreview
+reportGroup
+appealGroup
