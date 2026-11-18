@@ -9,7 +9,7 @@
 
 import { ApiError } from "../api";
 import { clock, dayLabel } from "./linkchat";
-import type { DeliveryProgress } from "./personchat";
+import type { BusinessTrust, DeliveryProgress } from "./personchat";
 import type { OrderPhoto } from "./youorders";
 
 export type Audience = "everyone" | "contacts" | "nobody";
@@ -92,6 +92,9 @@ export interface ChatListItem {
   business_id?: string;
   /** A business row: its logo, by width. */
   photo?: OrderPhoto;
+  /** A business row: what it has proved, as its chat's head says it
+   * (none while it is not taking the person's messages). */
+  verified?: BusinessTrust;
   person_id?: string;
   gone?: boolean;
   suspended?: boolean;
