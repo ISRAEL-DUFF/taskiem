@@ -623,6 +623,7 @@ export function YouPeopleSettings() {
     { to: "/you/people/contacts", title: "Your contacts", sub: "People you added.", testid: "you-people-contacts" },
     { to: "/you/settings/blocked", title: "Blocked people", sub: "People who can't message you.", testid: "you-people-blocked" },
     { to: "/you/settings/payout", title: "Your bank account", sub: "For 'Your share' cards. Taskiem moves no money.", testid: "you-people-payout" },
+    { to: "/you/settings/standing", title: "Your standing", sub: "What Taskiem's moderators decided, and appeals.", testid: "you-people-standing" },
   ];
   return (
     <section className="card" aria-labelledby="you-people">

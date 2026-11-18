@@ -1,3 +1,4 @@
+import { KEPT_WORDS } from "../lib/people";
 import { useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ApiError, del, get, post, put, putForm, type ProofWays } from "../api";
@@ -224,6 +225,15 @@ export function YouPrivacyPage() {
                 Open the business's chat above and ask it there. If it does not answer, use Report in the chat. Deleting your account does not erase what businesses keep.
               </p>
             )}
+          </section>
+          <section className="card" aria-labelledby="privacy-people" data-testid="privacy-people-chats">
+            <h2 id="privacy-people">Chats with people</h2>
+            <p>{KEPT_WORDS}</p>
+            <p className="hint">
+              <Link to="/transparency" data-testid="privacy-transparency">
+                How many requests from the authorities Taskiem received
+              </Link>
+            </p>
           </section>
         </>
       )}

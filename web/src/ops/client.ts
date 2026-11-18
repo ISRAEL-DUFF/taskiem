@@ -243,3 +243,209 @@ export interface OpsReport {
   reporters_on_site: number;
   agent_code: string | null;
 }
+
+// --- people chats' safety (api/ops_people.go, api/lawful.go) ---
+
+export interface PeopleOverview {
+  open: { people_reports: number; customer_reports: number; held: number; appeals: number; lawful_requests: number };
+  storage: { table: string; rows: number; bytes: number }[];
+  storage_words: string;
+}
+
+export interface OpsPeopleReportRow {
+  id: string;
+  reporter_id: string | null;
+  detached: boolean;
+  reported_id: string | null;
+  reported_name: string;
+  reported_gone: boolean;
+  reported_suspended: boolean;
+  reason: string;
+  note: string;
+  from_request: boolean;
+  files: number;
+  sealed: boolean;
+  status: "open" | "reviewed";
+  created_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  reports_against: number;
+}
+
+export interface OpsCustomerReportRow {
+  id: string;
+  reporter_id: string | null;
+  detached: boolean;
+  tenant_id: string;
+  business: string;
+  reason: string;
+  note: string;
+  messages: number;
+  status: "open" | "reviewed";
+  created_at: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+}
+
+/** One message a report keeps, opened. */
+export interface OpsReportMessage {
+  id?: string;
+  from_reporter: boolean;
+  kind: string;
+  body: string;
+  card?: Record<string, unknown>;
+  location?: { lat: number; lng: number; label?: string };
+  attachment?: { kind?: string; type?: string; size?: number; name?: string };
+  deleted?: boolean;
+  file?: boolean;
+  file_left_out?: boolean;
+  at: string;
+}
+
+export interface OpsPeopleReport {
+  report: {
+    id: string;
+    reporter_id: string | null;
+    reported_id: string | null;
+    reported_name: string;
+    reason: string;
+    note: string;
+    from_request: boolean;
+    status: "open" | "reviewed";
+    created_at: string;
+    reviewed_by: string | null;
+    reviewed_at: string | null;
+    review_note: string | null;
+  };
+  messages: OpsReportMessage[];
+  files: { message_id: string; type: string; size: number }[];
+  sealed: boolean;
+}
+
+export interface OpsCustomerReport {
+  report: {
+    id: string;
+    reporter_id: string | null;
+    tenant_id: string;
+    business: string;
+    reason: string;
+    note: string;
+    messages: { from_customer: boolean; kind: string; body: string; offer?: boolean; at: string }[] | null;
+    status: "open" | "reviewed";
+    created_at: string;
+    reviewed_by: string | null;
+    reviewed_at: string | null;
+    review_note: string | null;
+  };
+}
+
+export interface OpsHeldRow {
+  id: string;
+  sender_id: string | null;
+  sender_name: string;
+  recipient_id: string | null;
+  recipient_name: string;
+  kind: string;
+  reasons: string[];
+  has_file: boolean;
+  state: "held" | "released" | "confirmed";
+  created_at: string;
+  decided_by: string | null;
+  decided_at: string | null;
+}
+
+export interface OpsHeld {
+  held: OpsHeldRow & { file_type: string | null; file_size: number | null; decision_note: string | null; released_message: string | null };
+  message: { body?: string; card?: Record<string, unknown>; location?: { lat: number; lng: number; label?: string }; name?: string };
+}
+
+export interface OpsVerdict {
+  from_person: string;
+  from_name: string;
+  to_person: string | null;
+  to_name: string;
+  verdict: string;
+  reasons: string[];
+  at: string;
+}
+
+export interface OpsPersonAction {
+  id: string;
+  action: "warn" | "limit" | "suspend" | "close";
+  reason: string;
+  operator: string;
+  report_id: string | null;
+  until: string | null;
+  lifted_at: string | null;
+  lifted_by: string | null;
+  lift_reason: string | null;
+  closed_at: string | null;
+  close_note: string | null;
+  created_at: string;
+  appeal_id: string | null;
+  appeal_state: string | null;
+  appeal_text: string | null;
+  appeal_at: string | null;
+}
+
+export interface OpsPerson {
+  person: {
+    id: string;
+    name: string;
+    active: boolean;
+    deleted: boolean;
+    suspended: boolean;
+    created_at: string;
+    reports_against: number;
+    held: number;
+    verdicts_week: number;
+    device_accounts: number;
+    requests_waiting: number;
+    requests_accepted: number;
+    requests_refused: number;
+  };
+  actions: OpsPersonAction[];
+}
+
+export interface OpsAppeal {
+  id: string;
+  action_id: string;
+  person_id: string;
+  name: string;
+  action: "warn" | "limit" | "suspend" | "close";
+  action_reason: string;
+  operator: string;
+  until: string | null;
+  text: string;
+  state: "open" | "upheld" | "overturned";
+  created_at: string;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
+}
+
+export interface OpsLawfulRequest {
+  id: string;
+  authority: string;
+  reference: string;
+  legal_basis: string;
+  person_id: string | null;
+  person_name: string;
+  from: string;
+  to: string;
+  with_person_id: string | null;
+  files: boolean;
+  scope_note: string;
+  received_at: string;
+  recorded_by: string;
+  recorded_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  state: "recorded" | "approved" | "answered" | "refused";
+  answered_by: string | null;
+  answered_at: string | null;
+  messages_given: number | null;
+  refused_reason: string | null;
+  told_at: string | null;
+  not_told_reason: string | null;
+}

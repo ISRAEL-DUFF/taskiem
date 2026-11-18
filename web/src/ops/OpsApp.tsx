@@ -12,6 +12,8 @@ import { opsEnrol, opsGet, opsPasskeySignIn, opsPost, type OpsMe } from "./clien
 import { Queue, Submission } from "./Review";
 import { Agents } from "./Agents";
 import { Featured } from "./Featured";
+import { Appeals, CustomerReport, HeldMessage, HeldQueue, PeopleReport, PeopleReports, PeopleSafety, PersonStanding } from "./People";
+import { LawfulRequest, LawfulRequests } from "./Lawful";
 import { Reports, StorefrontReview, StorefrontReviews } from "./Trust";
 import { Audit, Publishers, Reviewers, Status, Tenant, Tenants } from "./Pages";
 import { Toaster } from "../toast";
@@ -142,6 +144,8 @@ function SignedIn({ me, onSignOut }: { me: OpsMe; onSignOut: () => void }) {
     ["/ops/tenants", "Tenants", "dashboard"],
     ["/ops/storefront-reviews", "Storefront reviews", "approvals"],
     ["/ops/reports", "Reports", "inbox"],
+    ["/ops/people", "People safety", "lock"],
+    ["/ops/lawful", "Lawful requests", "policies"],
     ["/ops/agents", "Field agents", "storefront"],
     ["/ops/featured", "Featured in Explore", "catalogue"],
     ["/ops/audit", "Platform audit", "audit"],
@@ -199,6 +203,16 @@ function SignedIn({ me, onSignOut }: { me: OpsMe; onSignOut: () => void }) {
           <Route path="/ops/storefront-reviews" element={<StorefrontReviews />} />
           <Route path="/ops/storefront-reviews/:id" element={<StorefrontReview />} />
           <Route path="/ops/reports" element={<Reports />} />
+          <Route path="/ops/people" element={<PeopleSafety />} />
+          <Route path="/ops/people/reports" element={<PeopleReports />} />
+          <Route path="/ops/people/reports/:id" element={<PeopleReport />} />
+          <Route path="/ops/customer-reports/:id" element={<CustomerReport />} />
+          <Route path="/ops/people/held" element={<HeldQueue />} />
+          <Route path="/ops/people/held/:id" element={<HeldMessage />} />
+          <Route path="/ops/people/persons/:id" element={<PersonStanding />} />
+          <Route path="/ops/people/appeals" element={<Appeals />} />
+          <Route path="/ops/lawful" element={<LawfulRequests />} />
+          <Route path="/ops/lawful/:id" element={<LawfulRequest me={me} />} />
           <Route path="/ops/agents" element={<Agents />} />
           <Route path="/ops/featured" element={<Featured />} />
           <Route path="/ops/audit" element={<Audit />} />
