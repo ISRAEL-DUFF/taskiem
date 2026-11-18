@@ -395,7 +395,10 @@ func TestCustomerDoor(t *testing.T) {
 	tolu.must(400, "POST", "/v1/me/chats/"+id+"/report", map[string]any{"reason": "spam", "consent": false})
 	tolu.must(201, "POST", "/v1/me/chats/"+id+"/report", map[string]any{"reason": "spam", "note": "Too many offers", "consent": true})
 	var sent int
-	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT jsonb_array_length(messages) FROM customer_reports WHERE person_id = $1`, toluID).Scan(&sent); err != nil || sent == 0 || sent > 20 {
+	// Sealed under the report's own key where the server has a key service
+	// (00481), counted in message_count; plain otherwise.
+	if err := w.env.DB.Admin.QueryRow(ctx, `SELECT COALESCE(message_count, jsonb_array_length(messages)) FROM customer_reports WHERE person_id = $1`,
+		toluID).Scan(&sent); err != nil || sent == 0 || sent > 20 {
 		t.Fatalf("the report's messages: %d %v", sent, err)
 	}
 
