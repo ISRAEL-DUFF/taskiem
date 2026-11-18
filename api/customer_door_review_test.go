@@ -92,7 +92,7 @@ func TestCustomerDoorReachChainRefused(t *testing.T) {
 		}
 		var typing bool
 		if err := tx.QueryRow(ctx, `SELECT taskiem_customer_typing_of($1, $2, 'person')`, w.biz, toluID).Scan(&typing); err != nil || typing {
-			return fmt.Errorf("Ada read Tolu typing: %v %v", typing, err)
+			return fmt.Errorf("Ada read Tolu typing: %v %w", typing, err)
 		}
 		return nil
 	}); err != nil {

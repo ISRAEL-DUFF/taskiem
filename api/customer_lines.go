@@ -348,7 +348,7 @@ func (s *Server) customerThreadsTx(ctx context.Context, tx pgx.Tx, tenant uuid.U
 
 // --- joining the lines ---
 
-// customerLinkLock serializes joining lines in one business, so two joins
+// customerLinkLock serialises joining lines in one business, so two joins
 // at once never pair one thread twice.
 func customerLinkLock(ctx context.Context, tx pgx.Tx, tenant uuid.UUID) error {
 	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('customer-link:' || $1::text, 0))`, tenant)

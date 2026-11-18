@@ -1,11 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -299,21 +299,21 @@ func (s *Server) opsPeopleReportFile(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeOpsFile(w, ctype, data)
+	writeOpsFile(w, r, ctype, data)
 }
 
 // writeOpsFile answers a person's file to an operator: never cached,
-// never sniffed, downloaded unless it is a photo.
-func writeOpsFile(w http.ResponseWriter, ctype string, data []byte) {
+// never sniffed, downloaded unless it is a photo. http.ServeContent sets
+// its length.
+func writeOpsFile(w http.ResponseWriter, r *http.Request, ctype string, data []byte) {
 	w.Header().Set("Content-Type", ctype)
-	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
 	if !strings.HasPrefix(ctype, "image/") {
 		w.Header().Set("Content-Disposition", "attachment")
 	}
-	_, _ = w.Write(data)
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
 }
 
 type opsCustomerReportRow struct {
@@ -606,7 +606,7 @@ func (s *Server) opsPeopleHeldFile(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	writeOpsFile(w, *h.FileType, data)
+	writeOpsFile(w, r, *h.FileType, data)
 }
 
 // opsDecideHeld is POST /v1/ops/people/held/{id}/{release|confirm}

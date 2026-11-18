@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"errors"
-	"github.com/israel-duff/taskiem/engine/db"
 	"net/http"
 	"slices"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/israel-duff/taskiem/engine/areas"
+	"github.com/israel-duff/taskiem/engine/db"
 	"github.com/israel-duff/taskiem/engine/schools"
 )
 

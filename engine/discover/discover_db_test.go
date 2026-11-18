@@ -360,6 +360,7 @@ func TestSearchAtScale(t *testing.T) {
 		SELECT tenant_id, false, 'test' FROM discover_index WHERE abs(hashtext(tenant_id::text)) % 10 = 0`); err != nil {
 		t.Fatal(err)
 	}
+	//nolint:misspell // ANALYZE is the SQL keyword
 	if _, err := d.Admin.Exec(ctx, `ANALYZE discover_index`); err != nil {
 		t.Fatal(err)
 	}

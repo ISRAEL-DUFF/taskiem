@@ -288,7 +288,7 @@ func (s *Server) putDiscoverSettings(w http.ResponseWriter, r *http.Request) {
 		out, err = discover.SaveTx(r.Context(), tx, p.TenantID, in, p.ActorType()+":"+p.Actor(), s.previewDomain())
 		switch {
 		case errors.Is(err, discover.ErrWorkspace):
-			return fmt.Errorf("%w: A workflows workspace is not listed in Discover. Turn on an area of a business first.", errConflict)
+			return err
 		case errors.Is(err, discover.ErrInvalid):
 			return fmt.Errorf("%w: %s", errBadRequest, strings.TrimPrefix(err.Error(), "discover: invalid: "))
 		case err != nil:
@@ -297,6 +297,10 @@ func (s *Server) putDiscoverSettings(w http.ResponseWriter, r *http.Request) {
 		return auditTx(r, tx, "discover.settings", "discover", map[string]any{"listed": out.Listed, "chosen": out.Chosen, "category": out.Category,
 			"area": out.Area, "own_hours": out.Hours != nil, "location": out.Location != nil, "shown": out.Shown})
 	})
+	if errors.Is(err, discover.ErrWorkspace) {
+		writeErr(w, http.StatusConflict, "A workflows workspace is not listed in Discover. Turn on an area of a business first.")
+		return
+	}
 	if errors.Is(err, errConflict) {
 		writeErr(w, http.StatusConflict, strings.TrimPrefix(err.Error(), "conflict: "))
 		return

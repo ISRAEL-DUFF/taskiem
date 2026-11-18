@@ -212,7 +212,7 @@ func (s *Server) readTicksTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, p
 }
 
 // peopleTx runs fn in the person's own transaction, again (up to three
-// times in all) when the database broke a deadlock or a serialization
+// times in all) when the database broke a deadlock or a serialisation
 // conflict: the people chats lock a conversation before either copy
 // (lockConversationTx), so neither should happen, and this is the
 // backstop. fn must start from nothing each time.
@@ -226,7 +226,7 @@ func (s *Server) peopleTx(ctx context.Context, person uuid.UUID, fn func(tx pgx.
 	return err
 }
 
-// retryable is a deadlock (40P01) or a serialization failure (40001).
+// retryable is a deadlock (40P01) or a serialisation failure (40001).
 func retryable(err error) bool {
 	var pe *pgconn.PgError
 	return errors.As(err, &pe) && (pe.Code == "40P01" || pe.Code == "40001")

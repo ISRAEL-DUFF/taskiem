@@ -29,9 +29,9 @@ func (c *CodeSender) SendCode(ctx context.Context, number, text string) error {
 	}
 	to, err := NormalisePhone(number, countries)
 	if err != nil {
-		return fmt.Errorf("%w: %v", ErrNoRoute, err)
+		return fmt.Errorf("%w: %w", ErrNoRoute, err)
 	}
-	var last error = ErrNotSent
+	last := ErrNotSent
 	for _, p := range c.Providers {
 		_, err := p.Send(ctx, to, text)
 		if err == nil {

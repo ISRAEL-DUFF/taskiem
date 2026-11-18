@@ -353,7 +353,7 @@ func TestSavedAddresses(t *testing.T) {
 	if err := db.InTenantTx(ctx, w.env.DB.App, []uuid.UUID{w.biz}, func(tx pgx.Tx) error {
 		var n int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM person_addresses`).Scan(&n); err != nil || n != 0 {
-			return fmt.Errorf("the business read %d saved addresses (%v)", n, err)
+			return fmt.Errorf("the business read %d saved addresses (%w)", n, err)
 		}
 		return nil
 	}); err != nil {
@@ -365,7 +365,7 @@ func TestSavedAddresses(t *testing.T) {
 		}
 		var n int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM person_addresses`).Scan(&n); err != nil || n != 0 {
-			return fmt.Errorf("saved addresses through the door: %d (%v)", n, err)
+			return fmt.Errorf("saved addresses through the door: %d (%w)", n, err)
 		}
 		return nil
 	}); err != nil {

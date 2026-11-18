@@ -237,6 +237,7 @@ func TestPeopleLive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer func() { _ = resp.Body.Close() }()
 	again := make(chan streamEvent, 200)
 	go readStream(resp.Body, again)
 	if ev := next(again, "message", 5*time.Second, func(e streamEvent) bool { return eventMessage(e)["id"] == missed["id"] }); ev == nil {

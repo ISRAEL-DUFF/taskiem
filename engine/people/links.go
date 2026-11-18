@@ -57,7 +57,8 @@ func (p *People) codeOf(nonce []byte) string {
 	k := p.derive("link code")
 	a := chatlinks.Alphabet
 	out := make([]byte, 0, chatlinks.Length)
-	limit := byte(256 - 256%len(a))
+	// A constant: a byte too small for it would not compile.
+	const limit = byte(256 - 256%len(chatlinks.Alphabet))
 	for block := uint32(0); len(out) < chatlinks.Length; block++ {
 		m := hmac.New(sha256.New, k)
 		m.Write(nonce)
