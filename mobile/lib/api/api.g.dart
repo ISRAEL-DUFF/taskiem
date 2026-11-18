@@ -9378,10 +9378,15 @@ class Group {
 }
 
 /// Taskiem's moderators closed the group (people-chatting §8.3): no one sends
-/// in it, joins it or changes it; it is deleted with all its messages on
-/// `until` (§14) unless its admins appeal and the decision is overturned.
-/// `words` say so in plain words. For admins, the closure to appeal (POST
-/// /v1/me/groups/{id}/appeal) with its reason and the appeal.
+/// in it or joins it (403), nor changes it or reaches its members (409: its
+/// info, rules, photo and link, adding, removing and letting people in,
+/// invites, admins, reactions, a share marked paid; typing shows nothing); each
+/// member still reads, leaves, sets their own settings, deletes for themselves,
+/// deletes their own message for everyone, reports and blocks, and its admins
+/// appeal; it is deleted with all its messages on `until` (§14) unless its
+/// admins appeal and the decision is overturned. `words` say so in plain words.
+/// For admins, the closure to appeal (POST /v1/me/groups/{id}/appeal) with its
+/// reason and the appeal.
 class GroupClosed {
   const GroupClosed({this.actionId, this.appeal, required this.at, required this.canAppeal, this.reason, this.until, required this.words});
 
