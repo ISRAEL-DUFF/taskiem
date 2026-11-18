@@ -48,7 +48,7 @@ import { NewChatSheet, ShareToPerson } from "./People";
 import { peopleDraft } from "./PeopleChat";
 import { photoOf as peoplePhoto, requestsWords, rowKey, rowPath, rowPreview, type ChatList, type ChatListItem } from "../lib/people";
 import { usePagedList } from "../lib/usePagedList";
-import { chatsPoll, hasBusinessRow, rowsWithChat } from "../lib/peoplelive";
+import { chatsPoll, hasBusinessRow, rowsWithChat, typingWords } from "../lib/peoplelive";
 import { usePeopleLive } from "./PeopleLive";
 import { MoreRows } from "./MoreRows";
 
@@ -185,6 +185,10 @@ export function PersonChatList() {
           {archived ? "No archived chats." : "Your chats with businesses and people will show here. Find a business in Discover, or start a New chat with someone."}
         </EmptyState>
       )}
+      {/* Who is typing, said politely to a screen reader (the rows say "typing…"). */}
+      <p className="sr-only" aria-live="polite" data-testid="people-typing-live">
+        {typingWords(chats.filter((c) => c.kind === "person" && live.typing.has(c.id)).map((c) => c.name))}
+      </p>
       {chats.length > 0 && (
         <ul className="chat-rows" aria-label={archived ? "Archived chats" : "Your chats"} data-testid="person-chats">
           {chats.map((c) => {
@@ -232,7 +236,7 @@ export function PersonChatList() {
           })}
         </ul>
       )}
-      <MoreRows more={list.more} busy={list.loadingMore} onMore={list.loadMore} label="Show more chats" testid="person-chats-more" />
+      <MoreRows more={list.more} busy={list.loadingMore} onMore={list.loadMore} count={list.rows?.length ?? 0} label="Show more chats" testid="person-chats-more" />
       {finding && <NewChatSheet onClose={() => setFinding(false)} />}
     </section>
   );

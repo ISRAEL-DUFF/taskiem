@@ -20,6 +20,9 @@ import {
   chatsPoll,
   hasBusinessRow,
   readySays,
+  atFindState,
+  AT_FIND_WORDS,
+  typingWords,
   threadWithLive,
   TypingGate,
   withPresence,
@@ -57,6 +60,24 @@ const row = (kind: "person" | "business", id: string, at: string): ChatListItem 
   muted: false,
   archived: false,
   blocked: false,
+});
+
+describe("opening a chat at a message, and who is typing", () => {
+  it("says a message not found is gone only when every page was read, else further back", () => {
+    expect(atFindState(true, true)).toBeUndefined();
+    expect(atFindState(true, false)).toBeUndefined();
+    expect(atFindState(false, false)).toBe("gone");
+    expect(atFindState(false, true)).toBe("far");
+    expect(AT_FIND_WORDS.gone).toBe("That message is no longer in this chat.");
+    expect(AT_FIND_WORDS.far).not.toMatch(/no longer/);
+  });
+
+  it("says who is typing for a screen reader, and nothing when no one is", () => {
+    expect(typingWords([])).toBe("");
+    expect(typingWords(["Ada Obi"])).toBe("Ada Obi is typing");
+    expect(typingWords(["Ada Obi", "Bola Ade"])).toBe("Ada Obi and Bola Ade are typing");
+    expect(typingWords(["a", "b", "c"])).toBe("3 people are typing");
+  });
 });
 
 describe("the live connection's events", () => {

@@ -47,7 +47,7 @@ import {
 } from "../lib/people";
 import { clientFor, mayHaveArrived, REPORT_REASONS, type KeptSend, type ShopItem } from "../lib/personchat";
 import { usePagedList } from "../lib/usePagedList";
-import { chatWithPresence, checkPlace, FIND_PAGES, mapURL, placeFigures, placeProblem, threadWithGone, threadWithLive, TypingGate, type Place } from "../lib/peoplelive";
+import { AT_FIND_WORDS, atFindState, chatWithPresence, typingWords, checkPlace, FIND_PAGES, type AtFind, mapURL, placeFigures, placeProblem, threadWithGone, threadWithLive, TypingGate, type Place } from "../lib/peoplelive";
 import { livePoll, usePeopleLive } from "./PeopleLive";
 import { useThread } from "../lib/useThread";
 import type { PersonOrderDetail, PersonOrders } from "../lib/youorders";
@@ -116,7 +116,9 @@ export function PeopleChatPage() {
   const live = usePeopleLive();
   // Online and last seen as the live connection last told.
   const c = chatWithPresence(chat.data, live.presence);
-  const [notFound, setNotFound] = useState(false);
+  // The message opened at, not found: no longer in the chat, or further back than was read.
+  const [atMissing, setAtMissing] = useState<AtFind>();
+  const [looking, setLooking] = useState(false);
   const [messages, setMessages] = useState<PeopleMessage[]>();
   const [hasOlder, setHasOlder] = useState(false);
   const [pollError, setPollError] = useState<unknown>();
@@ -133,44 +135,86 @@ export function PeopleChatPage() {
   const act = useAction();
   const sure = useConfirm();
   const loadingOlder = useRef(false);
+  // The chat's first reading (and Keep looking) runs: polls wait.
+  const loadingFirst = useRef(false);
   const loadOlderRef = useRef<() => void>(() => undefined);
   const olderCb = useCallback(() => loadOlderRef.current(), []);
   const thread = useThread({ items: messages, isMine: (m) => m.mine, hasOlder, loadOlder: olderCb });
 
+  /** Older pages read from `all` until `find` is in, at most FIND_PAGES. */
+  const findOlder = useCallback(
+    async (all: PeopleMessage[], more: boolean, find: string) => {
+      for (let i = 0; i < FIND_PAGES && more && !all.some((m) => m.id === find); i++) {
+        const oldest = all.find((m) => !m.local);
+        if (!oldest) break;
+        const older = await get<{ messages: PeopleMessage[]; more: boolean }>(`${base}/messages?before=${encodeURIComponent(oldest.id)}`);
+        all = mergePeople(all, older.messages);
+        more = older.more;
+      }
+      return { all, more };
+    },
+    [base],
+  );
   const pull = useCallback(
     async (first: boolean, find?: string) => {
+      // While the chat's first reading runs (reading older pages for a
+      // message opened at), a poll or reconnection waits: it would put the
+      // latest page in place of what is being read, and lose the jump.
+      if (!first && loadingFirst.current) return;
       const out = await get<{ messages: PeopleMessage[]; more: boolean }>(`${base}/messages`);
       if (first && find && !out.messages.some((m) => m.id === find)) {
         // The message opened at is further up: older pages, until it is in.
-        let all = out.messages;
-        let more = out.more;
-        for (let i = 0; i < FIND_PAGES && more && !all.some((m) => m.id === find); i++) {
-          const oldest = all[0];
-          if (!oldest) break;
-          const older = await get<{ messages: PeopleMessage[]; more: boolean }>(`${base}/messages?before=${encodeURIComponent(oldest.id)}`);
-          all = mergePeople(all, older.messages);
-          more = older.more;
-        }
-        setNotFound(!all.some((m) => m.id === find));
+        const { all, more } = await findOlder(out.messages, out.more, find);
+        setAtMissing(atFindState(all.some((m) => m.id === find), more));
         setMessages(all);
         setHasOlder(more);
       } else {
         setMessages((cur) => (first ? out.messages : withLatestPeople(cur ?? [], out.messages, out.more)));
         if (first) setHasOlder(out.more);
-        if (first && find) setNotFound(false);
+        if (first && find) setAtMissing(undefined);
       }
       setPollError(undefined);
       // Read marks: a request's reading tells the sender nothing (§7).
       if (document.visibilityState === "visible" && out.messages.some((m) => !m.mine && !m.read_at)) await post(`${base}/read`).catch(() => undefined);
     },
-    [base],
+    [base, findOlder],
   );
   const reloadChat = chat.reload;
+  const firstRun = useRef(0);
   useEffect(() => {
     setMessages(undefined);
+    setAtMissing(undefined);
     thread.reset(at);
-    pull(true, at).catch(setPollError);
+    const run = ++firstRun.current;
+    loadingFirst.current = true;
+    pull(true, at)
+      .catch(setPollError)
+      .finally(() => {
+        if (firstRun.current === run) loadingFirst.current = false;
+      });
   }, [base, pull, at]);
+  /** The message opened at is further back than was read: more pages. */
+  const keepLooking = () => {
+    if (!at || !messages || loadingFirst.current) return;
+    const run = firstRun.current;
+    loadingFirst.current = true;
+    setLooking(true);
+    findOlder(messages, hasOlder, at)
+      .then(({ all, more }) => {
+        if (firstRun.current !== run) return;
+        const found = all.some((m) => m.id === at);
+        setAtMissing(atFindState(found, more));
+        if (found) thread.reset(at);
+        else thread.keepPlace();
+        setMessages((cur) => mergePeople(cur ?? [], all));
+        setHasOlder(more);
+      })
+      .catch(setPollError)
+      .finally(() => {
+        if (firstRun.current === run) loadingFirst.current = false;
+        setLooking(false);
+      });
+  };
   // Polling: as before while the live connection is not open, slowly while it is.
   const connected = live.connected;
   useEffect(() => {
@@ -181,6 +225,15 @@ export function PeopleChatPage() {
     }, livePoll(connected, POLL_MS));
     return () => clearInterval(t);
   }, [pull, reloadChat, connected]);
+  // Back to the tab: what came while it was hidden is read now (the read
+  // mark goes with it), not at the next look, a minute away while live.
+  useEffect(() => {
+    const seen = () => {
+      if (document.visibilityState === "visible") pull(false).catch(setPollError);
+    };
+    document.addEventListener("visibilitychange", seen);
+    return () => document.removeEventListener("visibilitychange", seen);
+  }, [pull]);
   // What the live connection tells: messages of this chat in place at once
   // (theirs read while the tab is seen), the chat's own changes, messages
   // deleted elsewhere, and, after a reconnection, what was missed.
@@ -231,7 +284,7 @@ export function PeopleChatPage() {
   }, [base]);
   loadOlderRef.current = () => {
     const oldest = messages?.find((m) => !m.local);
-    if (!oldest || loadingOlder.current) return;
+    if (!oldest || loadingOlder.current || loadingFirst.current) return;
     loadingOlder.current = true;
     get<{ messages: PeopleMessage[]; more: boolean }>(`${base}/messages?before=${encodeURIComponent(oldest.id)}`)
       .then((out) => {
@@ -423,6 +476,10 @@ export function PeopleChatPage() {
   return (
     <section className="chat-pane person-pane" aria-label={`Chat with ${name}`} data-testid="people-pane" onKeyDown={composer.onPaneKeyDown} {...composer.dropProps}>
       <h1 className="sr-only">{c ? `Chat with ${c.name}` : "Chat"}</h1>
+      {/* "typing…" in the head, said politely to a screen reader. */}
+      <p className="sr-only" aria-live="polite" data-testid="people-typing-live">
+        {typingWords(theyType ? [name] : [])}
+      </p>
       <ChatHead
         onBack={() => nav(c?.request ? "/you/people/requests" : "/you")}
         menuLabel="More about this chat"
@@ -506,9 +563,17 @@ export function PeopleChatPage() {
         </div>
       )}
       <ErrorBox error={sendError ?? act.error ?? pollError ?? chat.error} />
-      {at && notFound && (
-        <p className="notice" role="status" data-testid="people-at-missing">
-          That message is no longer in this chat.
+      {at && atMissing && (
+        <p className="notice" role="status" data-testid="people-at-missing" data-state={atMissing}>
+          <span className="grow">{AT_FIND_WORDS[atMissing]}</span>
+          {atMissing === "far" && (
+            <>
+              {" "}
+              <button type="button" className="small" onClick={keepLooking} disabled={looking} data-testid="people-at-more">
+                {looking ? "Looking…" : "Keep looking"}
+              </button>
+            </>
+          )}
         </p>
       )}
       <ChatStream
@@ -1070,7 +1135,7 @@ function ForwardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; on
           );
         })}
       </fieldset>
-      <MoreRows more={list.more} busy={list.loadingMore} onMore={list.loadMore} label="Show more chats" />
+      <MoreRows more={list.more} busy={list.loadingMore} onMore={list.loadMore} count={list.rows?.length ?? 0} label="Show more chats" />
     </Sheet>
   );
 }

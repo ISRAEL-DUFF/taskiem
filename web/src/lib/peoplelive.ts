@@ -130,6 +130,15 @@ export function chatsPoll(connected: boolean, business: boolean, fallbackMs: num
   return business ? fallbackMs : livePoll(connected, fallbackMs);
 }
 
+/** Who is typing, for a screen reader's polite live region (the chat's
+ * head, the Chats list's rows): empty when no one is. */
+export function typingWords(names: readonly string[]): string {
+  if (names.length === 0) return "";
+  if (names.length === 1) return `${names[0]} is typing`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are typing`;
+  return `${names.length} people are typing`;
+}
+
 /** What a connection's `ready` says of the tab (POST /v1/me/presence
  * {online}): the server starts a connection away when its address has
  * `?away=1`, which the browser's own reconnection reuses however the tab is
@@ -280,6 +289,18 @@ function fold(s: string): string {
 /** How many older pages an open chat reads to find the message it was
  * opened at, at most. */
 export const FIND_PAGES = 20;
+
+/** A message opened at and not found: no longer in the chat (every page
+ * read), or further back than the pages read so far. */
+export type AtFind = "gone" | "far";
+export function atFindState(found: boolean, more: boolean): AtFind | undefined {
+  if (found) return undefined;
+  return more ? "far" : "gone";
+}
+export const AT_FIND_WORDS: Record<AtFind, string> = {
+  gone: "That message is no longer in this chat.",
+  far: "That message is further back in this chat than has been read so far.",
+};
 
 // --- sending a place ---
 
