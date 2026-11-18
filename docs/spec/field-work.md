@@ -349,10 +349,25 @@ A job's customer is a customer of the business: a person on Taskiem who chats wi
 | --- | --- |
 | **Board** | Today: new, assigned, on the way, on site, done, late, not finished; each agent's state; drag a job to an agent |
 | **Map** | §10 |
-| **Jobs** | Filters (state, type, agent, day, customer), search by reference or customer; **New job** (from a template, a customer and a place, with a map to drop the pin); a job's page with its timeline, map and trail, checklist, photos, notes, parts, rating, and the office's actions |
+| **Jobs** | Filters (state, type, priority, agent, day, customer), search by reference, customer, phone or address; jobs past their time marked; tick new or assigned jobs and **Assign to agent** for many at once (all or nothing); **New job** ([§15.1](#151-making-a-job-in-the-office)); a job's page with its history, map and trail, steps and their times, checklist, photos, notes, parts, rating, and the office's actions: assign or reassign (new or assigned only), hold, resume, cancel with a reason, close (done only), add a note |
 | **Agents** | Each field agent (ISPOps' workforce page): state, their schedule, history, jobs done, time on jobs (travel and on site), average time on site, rating and reviews; stock with them; bank details when a pay list is used |
 | **Reports** | Jobs by type, state and agent over a period; time to arrive, time on site; late and not finished; ratings. CSV, as ISPOps' reports |
 | **Settings** | §4; job types and templates open their tables |
+
+### 15.1 Making a job in the office
+
+ISPOps' **Create new job** page (`exact-hue-hearth`, `src/routes/_app.jobs.new.tsx`), with what changes. Anyone with `job.manage` uses it (in ISPOps: super admin, admin, customer care).
+
+| Part | ISPOps | Here |
+| --- | --- | --- |
+| Customer | Search existing customers by name, phone or email; picking one fills name and phone (not the address) and links the record ("rating will be sent after job completion"); or type name, phone and address | Search the business's customers (people chatting with it, and contacts) by name or phone; picking one fills name, phone **and** their saved addresses to choose from, with each address's pin. Or type a name, phone and address: the person is then saved as a contact of the business, so their next job finds them. Every customer gets the rating (by card or by SMS), linked or not |
+| Site | An optional map pin, by clicking a map or typing coordinates | The same, and a saved address brings its pin. Without a pin, Arrived is not measured, and the form says so |
+| Template | **Start from a template** fills type, priority and description, still editable; the checklist and time estimate are attached by the server, not shown | The same, and the checklist is shown, so the office can add an item for this job |
+| Details | Type, priority, one scheduled date and time, description ("internal notes") | Type, priority, **when**: a visit window (from, to) or a time, or "as soon as possible"; what to do (the agent sees it); a separate **note for the office** (the agent does not) |
+| Assignment | A list of agents whose status is available, and only them | Every field agent with their state and suggestions as in §9: available first, then by jobs held that day, nearest by last known place. Assigning someone already holding jobs adds this to their schedule |
+| Buttons | **Create & Assign** (needs an agent) or **Save as Draft** | **Create and assign** or **Save without assigning** (the job is **new**). Both tell the office (`job-tell-office`); assigning tells the agent and the customer (§8) |
+
+After saving, the office lands on the job's page, not the list, so a new job's reference and card can be read out or sent to the customer at once.
 
 **In chat**, `@Taskiem` gains the dispatcher's words, in every language the chat has: "new job: installation for Ada Obi at 12 Allen Avenue tomorrow morning", "assign J-1042 to Musa", "where is Musa", "jobs today", "what's late". Each answers with job cards, and changes need a yes, as other chat changes do.
 
