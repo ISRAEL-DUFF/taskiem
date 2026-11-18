@@ -92,7 +92,15 @@ function StandingCard({ a, onDone }: { a: StandingAction; onDone: () => void }) 
 
 /** The notice on You when moderators decided something the person has not seen. */
 export function StandingNotice() {
-  const view = useLoad(() => get<Standing>("/v1/me/standing").catch(() => undefined), []);
+  // Quietly: a notice that cannot be read is not shown, and never signs
+  // the person out (the API client does on a 401).
+  const view = useLoad(
+    () =>
+      fetch("/v1/me/standing", { credentials: "same-origin" })
+        .then((r) => (r.ok ? (r.json() as Promise<Standing>) : undefined))
+        .catch(() => undefined),
+    [],
+  );
   const s = view.data;
   if (!s || s.unseen === 0) return null;
   return (
