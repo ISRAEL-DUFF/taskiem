@@ -4,7 +4,7 @@ Date: 18 November 2026 · Plan: [People chatting with people](people-chatting.md
 
 Every sentence of the plan that applies to stage 5b, as a checklist, so nothing is left out and nothing is called "left on purpose" without the founder agreeing. Each line ships on Android, iPhone and the web together, with server tests, web end-to-end tests and app tests. App screens are built to the app's own look ([mobile-app-look.md](mobile-app-look.md)), never the web's.
 
-Status key: ☐ to build · ? needs the founder's answer first (see the end).
+Status key: ☐ to build. Questions marked (?…) are settled at the end.
 
 ## A. Groups (§9, §13, §17 Q7, Q16, Q17)
 
@@ -80,22 +80,18 @@ Status key: ☐ to build · ? needs the founder's answer first (see the end).
 - ☐ **Deleting an account** removes the person from groups and keeps their messages as "Deleted account".
 - ☐ **The privacy notice drafts** in `docs/legal/` gain a groups and ordering-together paragraph for the lawyer.
 
-## Questions for the founder (the plan leaves these open)
+## Settled by the founder (18 November 2026)
 
-Each has a recommendation; a "yes" to the recommendation is enough.
-
-- **A2 Who edits a group's name, photo and description?** Recommended: admins only by default, with a switch to let everyone.
-- **A3 "Who can add me to groups"?** Recommended: default "My contacts", where only people I've added can add me. Others send an invite that waits in Requests, like a stranger's first message.
-- **A4 Joining by invite link:** join at once, or wait for an admin? Recommended: join at once by default; admins can switch on "Approve new members".
-- **A5 After you leave or are removed,** do you keep what you saw? Recommended: yes, your copy up to that moment stays until you delete it; you see nothing new.
-- **A6 Read state in groups.** Recommended: the sender can see "Read by" per message, but only members with read ticks on are listed.
-- **A7 Mentions.** Recommended: @mentions in 5b, reaching you even when the group is muted (you can turn that off).
-- **A8 Blocking someone who's in a group with you.** Recommended: you still see their group messages (hiding them breaks the conversation), but they can't message you one-to-one, can't add you to groups, and don't see your last seen or photo.
-- **B1 Scam checks in groups.** Recommended: check messages from members who aren't your contacts, in groups younger than 7 days or with someone who joined by link in the last day; keep only the verdict, as for 5a.
-- **C1 Closing the basket.** Recommended: the person who started it closes it and places the order; they can hand that to another member. A closed basket can be reopened until the order is placed.
-- **C2 Each paying their share.** Storefront orders already take part payments: each payment counts towards the total, and a checkout page can be made for an amount (`docs/spec/fronts.md` §5.4; `engine/storefront` `CountPayment`, `pay_step_kobo`). Recommended:
-  - each member gets their own checkout for their lines plus an equal part of delivery;
-  - the order moves on when its parts reach the total (or the business's deposit);
-  - the placer can pay what's left for anyone who hasn't paid, then send them a "Your share" card;
-  - where a business takes no online payment, it's "the placer pays all, then share cards".
-- **C3 Ordering together one-to-one.** Recommended: yes, the same basket works in a chat between two people.
+| # | Question | Answer |
+| --- | --- | --- |
+| A2 | Who edits a group's name, photo and description | Admins only by default, with a switch to let every member |
+| A3 | Who can add me to groups | Default "My contacts": only people I've added can add me; anyone else sends an invite that waits in Requests. I can change it to Everyone or Nobody |
+| A4 | Joining by invite link | At once by default; admins can switch on "Approve new members" |
+| A5 | After leaving or being removed | Your copy up to that moment stays until you delete it; you see nothing new and can't write |
+| A6 | Read state in groups | The sender sees "Read by", listing only members with read ticks on; the ticks turn read when all of those have read it |
+| A7 | Mentions | @mentions in 5b; a mention pushes even in a muted group, and that can be turned off per group |
+| A8 | Blocking someone in a shared group | You still see their group messages; they can't message you one-to-one, can't add you to groups, and don't see your last seen or photo |
+| B1 | Scam checks in groups | Messages from members who aren't your contacts, in groups younger than 7 days or from someone who joined by link in the last day; only the verdict is kept |
+| C1 | Closing the basket | The starter closes it and places the order, and can hand that to another member; a closed basket can be reopened until the order is placed |
+| C2 | Paying | The placer chooses when placing: "I'll pay all" (then "Your share" cards), or "Each pays their share" (each member's own checkout for their items plus an equal part of delivery, the placer able to pay what's left for anyone who hasn't). A business that takes no online payment: the placer pays all |
+| C3 | Ordering together one-to-one | Yes, the same basket works in a chat between two people |
