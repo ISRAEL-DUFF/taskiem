@@ -270,7 +270,7 @@ void main() {
 
     await press(t, find.bySemanticsLabel('Take chats in the Taskiem app').last);
     expect(api.body(api.sent('PUT', '/v1/customers/chat-settings').single), {'takes_chats': false});
-    await press(t, find.text('Chat with us, in Taskiem'));
+    await press(t, find.text('In Taskiem'));
     expect(api.body(api.sent('PUT', '/v1/customers/chat-settings').last), {'storefront_button': 'taskiem'});
 
     await t.enterText(find.descendant(of: find.ancestor(of: find.text('Your words'), matching: find.byType(TkKitField)), matching: find.byType(EditableText)), 'Closed for prayers. Back at 2pm.');

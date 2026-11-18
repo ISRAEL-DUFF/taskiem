@@ -31,6 +31,7 @@ import '../app/session.dart' show uuid4;
 import '../kit/icon.dart';
 import '../kit/keyboard.dart';
 import '../kit/kit.dart';
+import '../kit/mobile.dart' show TkChips;
 import '../kit/modal.dart';
 import '../kit/tap_area.dart';
 import '../theme/look.dart';
@@ -1000,8 +1001,6 @@ class _LineChooser extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
-    final look = TkLook.of(context);
-    final dark = TkTheme.of(context).mode == TkMode.dark;
     // The server's order (the app, then WhatsApp), as the web's pills.
     final shown = lines;
     final shut = [for (final l in shown) if (lineShut(l) != null) l];
@@ -1010,61 +1009,14 @@ class _LineChooser extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // The web's label; on its own line, as the web's on a phone.
-          ExcludeSemantics(
-            child: Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 4),
-              child: Text('Your reply goes', style: tkText(size: 13, weight: 600, color: t.muted)),
-            ),
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: Semantics(
-                  container: true,
-                  label: 'Your reply goes',
-                  explicitChildNodes: true,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(color: dark ? const Color(0x1AFFFFFF) : const Color(0x0F000000), borderRadius: BorderRadius.circular(12)),
-                    child: Row(
-                      children: [
-                        for (final l in shown)
-                          Expanded(
-                            child: TapArea(
-                              child: Semantics(
-                                button: true,
-                                selected: l.line == on,
-                                enabled: lineShut(l) == null,
-                                label: l.line == 'whatsapp' ? 'On WhatsApp' : 'In the app',
-                                hint: lineShut(l),
-                                excludeSemantics: true,
-                                onTap: lineShut(l) == null ? () => onPick(l.line) : null,
-                                child: TkPress(
-                                  onTap: lineShut(l) == null ? () => onPick(l.line) : null,
-                                  child: Container(
-                                    constraints: const BoxConstraints(minHeight: 34),
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      color: l.line == on ? (dark ? const Color(0xFF3A3B3A) : look.card) : const Color(0x00000000),
-                                      borderRadius: BorderRadius.circular(10),
-                                      boxShadow: l.line == on && !dark ? const [BoxShadow(color: Color(0x1F000000), blurRadius: 3, offset: Offset(0, 1))] : null,
-                                    ),
-                                    child: Text(
-                                      l.line == 'whatsapp' ? 'On WhatsApp' : 'In the app',
-                                      style: tkText(size: 13, weight: 600, color: lineShut(l) == null ? t.text : t.muted),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
+          // The app's own switch (TkChips), a stopped line quiet with why.
+          TkChips<String>(
+            label: 'Your reply goes',
+            padding: EdgeInsets.zero,
+            chips: [for (final l in shown) (l.line, l.line == 'whatsapp' ? 'On WhatsApp' : 'In the app')],
+            on: on,
+            off: {for (final l in shown) if (lineShut(l) != null) l.line: lineShut(l)!},
+            onPick: onPick,
           ),
           for (final l in shut)
             Padding(

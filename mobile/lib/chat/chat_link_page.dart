@@ -182,7 +182,7 @@ class _ChatLinkPageState extends State<ChatLinkPage> {
                   Center(
                     child: Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: const Color(0xFFFFFFFF), borderRadius: BorderRadius.circular(16)),
+                      decoration: BoxDecoration(color: t.qrGround, borderRadius: BorderRadius.circular(16)),
                       child: Semantics(image: true, label: 'QR code of your chat link, to print', child: Image.memory(_qr!, width: 180, height: 180, excludeFromSemantics: true)),
                     ),
                   ),
@@ -242,12 +242,24 @@ class _ChatLinkPageState extends State<ChatLinkPage> {
               ),
               const SizedBox(height: 8),
               Text('Your shop’s chat button', style: tkText(size: 15, weight: 600, color: t.text)),
-              for (final (k, words) in const [('both', 'Chat with us and Chat on WhatsApp'), ('taskiem', 'Chat with us, in Taskiem'), ('whatsapp', 'Chat on WhatsApp')])
-                TkChoiceRow(
-                  control: TkRadio(checked: s.storefrontButton == k),
-                  label: Text(words, style: tkText(size: 14, color: t.text)),
-                  onTap: can && s.storefrontButton != k ? () => _settings(PutChatSettingsRequest(storefrontButton: k)) : null,
-                ),
+              // As the spec draws it: the app's switch of three.
+              TkChips<String>(
+                label: 'Your shop’s chat button',
+                padding: EdgeInsets.zero,
+                chips: const [('both', 'Both'), ('taskiem', 'In Taskiem'), ('whatsapp', 'WhatsApp')],
+                on: s.storefrontButton,
+                onPick: (k) {
+                  if (can && s.storefrontButton != k) _settings(PutChatSettingsRequest(storefrontButton: k));
+                },
+              ),
+              Text(
+                switch (s.storefrontButton) {
+                  'taskiem' => 'Chat with us, in Taskiem.',
+                  'whatsapp' => 'Chat on WhatsApp.',
+                  _ => 'Chat with us, and Chat on WhatsApp.',
+                },
+                style: tkHint(t),
+              ),
             ],
           ),
         if (r != null)

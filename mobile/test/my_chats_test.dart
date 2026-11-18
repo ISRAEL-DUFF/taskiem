@@ -643,7 +643,7 @@ void main() {
     await press(t, find.text('Pay'));
     expect(opened, [Uri.parse('https://app.taskiem.com/i/xyz')]);
 
-    await press(t, find.text('Your orders with them'));
+    await press(t, find.text('View delivery'));
     expect(find.textContaining('On its way to you', findRichText: true), findsWidgets);
     expect(find.text('On its way'), findsNWidgets(2), reason: 'the rider\'s step as its status, on the card and the row');
     await press(t, find.bySemanticsLabel('Close').last);

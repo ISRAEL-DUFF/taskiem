@@ -275,7 +275,11 @@ class TkHeadButton extends StatelessWidget {
 
 /// Chips across, scrolling sideways: one on (a period, a filter).
 class TkChips<T> extends StatelessWidget {
-  const TkChips({super.key, required this.chips, required this.on, required this.onPick, this.label = 'Show', this.padding = const EdgeInsets.fromLTRB(16, 4, 16, 10)});
+  const TkChips({super.key, required this.chips, required this.on, required this.onPick, this.label = 'Show', this.padding = const EdgeInsets.fromLTRB(16, 4, 16, 10), this.off = const {}});
+
+  /// Choices that cannot be picked now, with why (a line a customer
+  /// stopped): drawn quiet, said as not enabled with the reason as a hint.
+  final Map<T, String> off;
 
   /// Round the switch: the page's edge; none inside a card.
   final EdgeInsets padding;
@@ -317,11 +321,13 @@ class TkChips<T> extends StatelessWidget {
                         child: Semantics(
                           button: true,
                           selected: v == on,
+                          enabled: !off.containsKey(v),
                           label: words,
+                          hint: off[v],
                           excludeSemantics: true,
-                          onTap: () => onPick(v),
+                          onTap: off.containsKey(v) ? null : () => onPick(v),
                           child: TkPress(
-                            onTap: () => onPick(v),
+                            onTap: off.containsKey(v) ? null : () => onPick(v),
                             scale: 0.95,
                             child: AnimatedContainer(
                               duration: _still(context) ? Duration.zero : const Duration(milliseconds: 200),
@@ -334,7 +340,7 @@ class TkChips<T> extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(10),
                                 boxShadow: v == on && !dark ? const [BoxShadow(color: Color(0x1F000000), blurRadius: 3, offset: Offset(0, 1))] : null,
                               ),
-                              child: Text(words, style: tkText(size: 13, weight: 600, color: t.text)),
+                              child: Text(words, style: tkText(size: 13, weight: 600, color: off.containsKey(v) ? t.muted : t.text)),
                             ),
                           ),
                         ),

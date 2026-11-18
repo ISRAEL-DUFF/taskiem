@@ -26,7 +26,8 @@ import '../kit/modal.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'book_sheet.dart' show lagosTime, whenLabel;
-import 'cards.dart' show CardButton, CardPill;
+import 'cards.dart' show CardPill;
+import '../kit/load_more.dart';
 import 'door.dart';
 import 'my_chat.dart';
 import 'people_cards.dart' show shareWithPeople;
@@ -308,7 +309,8 @@ class _YourOrdersTabState extends State<YourOrdersTab> {
                 ),
             ],
           ),
-        if (_next != null) TkButton(label: _more ? 'Loading…' : 'Show older orders', minHeight: 44, enabled: !_more, onPressed: _older),
+        // Older pages as the list nears its end (the app's TkLoadMore).
+        if (_next != null) TkLoadMore(label: 'Show older orders', onMore: _older),
       ],
     );
   }
@@ -456,22 +458,27 @@ class _YourOrderPageState extends State<YourOrderPage> with WidgetsBindingObserv
                   ),
                 ],
                 const SizedBox(height: 14),
-                if (o.pay && !earlier) ...[
-                  CardButton(label: 'Pay ${naira(o.dueKobo)}', primary: true, onTap: _pay),
-                  const SizedBox(height: 8),
-                ],
-                CardButton(
-                  label: 'Chat about this',
-                  primary: earlier,
-                  onTap: () => chatAboutOrder(context, widget.auth, widget.onOpenChat, business: widget.business, chat: o.chatId, reference: widget.reference),
-                ),
+                // As a top card's (TkButtonRow): Pay first when there is
+                // something to pay, then Chat; sharing a link under them.
+                TkButtonRow([
+                  if (o.pay && !earlier) TkSmallButton(label: 'Pay ${naira(o.dueKobo)}', primary: true, onPressed: _pay),
+                  TkSmallButton(
+                    label: 'Chat about this',
+                    primary: earlier || !o.pay,
+                    icon: 'b-chat',
+                    onPressed: () => chatAboutOrder(context, widget.auth, widget.onOpenChat, business: widget.business, chat: o.chatId, reference: widget.reference),
+                  ),
+                ]),
                 // Shared into a chat with a person (people-chatting §10.1):
                 // they see it live only if it is theirs too.
                 if (!earlier) ...[
-                  const SizedBox(height: 8),
-                  CardButton(
-                    label: 'Share with someone',
-                    onTap: () => shareWithPeople(context, widget.auth, SendPeopleMessageRequestCard(type: 'order', businessId: widget.business, reference: widget.reference), what: '$word ${widget.reference}'),
+                  const SizedBox(height: 6),
+                  Center(
+                    child: TkLink(
+                      label: 'Share with someone',
+                      bold: true,
+                      onTap: () => shareWithPeople(context, widget.auth, SendPeopleMessageRequestCard(type: 'order', businessId: widget.business, reference: widget.reference), what: '$word ${widget.reference}'),
+                    ),
                   ),
                 ],
               ],
@@ -494,10 +501,11 @@ class _YourOrderPageState extends State<YourOrderPage> with WidgetsBindingObserv
                     // A rider has it: how far they have got, shared into a
                     // chat with a person (people-chatting §10.1).
                     const SizedBox(height: 12),
-                    CardButton(
+                    TkSmallButton(
                       label: 'Share the delivery',
+                      icon: 'b-share',
                       semantics: 'Share the delivery of $word ${widget.reference} with someone',
-                      onTap: () => shareWithPeople(context, widget.auth, SendPeopleMessageRequestCard(type: 'delivery', businessId: widget.business, reference: widget.reference), what: 'The delivery of $word ${widget.reference}'),
+                      onPressed: () => shareWithPeople(context, widget.auth, SendPeopleMessageRequestCard(type: 'delivery', businessId: widget.business, reference: widget.reference), what: 'The delivery of $word ${widget.reference}'),
                     ),
                   ],
                 ),

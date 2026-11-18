@@ -153,7 +153,8 @@ void main() {
     expect(find.text('Tunde Kicks'), findsOneWidget);
     expect(find.textContaining('We found an order'), findsNothing);
 
-    await press(t, find.text('Show older orders'));
+    // The older page comes by itself as the list's end is near (TkLoadMore).
+    await settle(t);
     expect(api.sent('GET', '/v1/me/orders').last.url.queryParameters['before'], 'cur-2');
     expect(find.text('Bola Stores'), findsOneWidget);
     expect(find.text('Show older orders'), findsNothing, reason: 'the last page');
@@ -221,22 +222,25 @@ void main() {
     await press(t, find.text('Discover').first);
     expect(api.body(api.sent('POST', '/v1/discover/search').first), <String, dynamic>{});
     expect(find.text('Mama’s Kitchen'), findsOneWidget);
-    expect(find.text('Food and drinks · Yaba\nOpen now, closes at 18:00'), findsOneWidget, reason: 'the hours line under the category and area');
-    expect(find.text('Open now'), findsOneWidget);
+    expect(find.text('Food and drinks · Yaba\nOpen now, closes at 18:00'), findsWidgets, reason: 'the hours line under the category and area');
+    expect(find.text('Open now'), findsWidgets, reason: 'Mama’s Kitchen, and the next page’s Zainab Cakes');
     expect(find.text('Closed now'), findsOneWidget);
     expect(find.bySemanticsLabel('Chat with Bola Stores'), findsNothing, reason: 'not taking chats');
 
-    await press(t, find.text('Show more businesses'));
+    // The next page comes by itself as the list's end is near (TkLoadMore).
+    await settle(t);
     expect(api.body(api.sent('POST', '/v1/discover/search').last), {'offset': 2}, reason: 'after the results given');
     expect(find.text('Zainab Cakes'), findsOneWidget);
 
     await press(t, find.text('Beauty and personal care'));
-    expect(api.body(api.sent('POST', '/v1/discover/search').last), {'category': 'beauty'});
+    // Each search's first page (its next page may follow by itself).
+    Map<String, dynamic> firstPage() => api.body(api.sent('POST', '/v1/discover/search').lastWhere((r) => api.body(r)['offset'] == null));
+    expect(firstPage(), {'category': 'beauty'});
 
     await typeIn(t, find.bySemanticsLabel('Search by name or what you want'), 'rice');
     await settle(t);
     await settle(t);
-    expect(api.body(api.sent('POST', '/v1/discover/search').last), {'q': 'rice', 'category': 'beauty'});
+    expect(firstPage(), {'q': 'rice', 'category': 'beauty'});
 
     fast = true;
     await typeIn(t, find.bySemanticsLabel('Area (Yaba, Lekki…)'), 'Yaba');
@@ -412,8 +416,9 @@ void main() {
 
     await openChat(t, api);
     await toCheck();
-    expect(find.text('Home · 12 Herbert Macaulay Way, Yaba'), findsOneWidget);
-    await press(t, find.text('Work · 12 Herbert Macaulay Way, Yaba'));
+    expect(find.text('Home'), findsOneWidget, reason: 'a saved address as a row: its name, the address under it');
+    expect(find.text('12 Herbert Macaulay Way, Yaba'), findsWidgets);
+    await press(t, find.text('Work'));
     await press(t, find.textContaining('Place order'));
     expect(api.body(api.sent('POST', '/v1/me/chats/c1/orders').last), {
       'lines': [

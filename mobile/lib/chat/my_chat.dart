@@ -41,6 +41,7 @@ import 'book_sheet.dart' show showBookSheet;
 import 'cards.dart' show CardButton;
 import 'chats.dart' show ChatRow;
 import 'composer.dart';
+import 'discover.dart' show DiscoverProfileScreen;
 import 'door.dart';
 import 'my_chat_tools.dart';
 import 'people.dart' show PersonFace;
@@ -877,7 +878,8 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
     'invoice' when (c.url ?? '').isNotEmpty => ((c.totalKobo ?? 0) > 0 && c.status != 'paid' ? 'Pay' : 'See the invoice', () => _openUrl(c.url!, 'The invoice didn’t open. Try again.')),
     'booking' => ('Book', () => showBookSheet(context, auth: d.auth, link: '', business: d.name, customer: d.base, service: c.serviceId, onBooked: (_) => d.refresh())),
     'product' => ('See in their shop', () => showShopSheet(context, d)),
-    'order' || 'delivery' => ('Your orders with them', () => showMyOrdersSheet(context, d)),
+    'order' => ('View order', () => showMyOrdersSheet(context, d)),
+    'delivery' => ('View delivery', () => showMyOrdersSheet(context, d)),
     _ => null,
   };
 
@@ -915,6 +917,20 @@ class _MyChatScreenState extends State<MyChatScreen> with Polling {
                       child: ChatHeadBar(
                         onBack: widget.onBack,
                         onMore: c == null ? null : _menu,
+                        // As a people chat's head opens their info: the
+                        // business's profile (its photos, hours, shop).
+                        onAvatar: c == null
+                            ? null
+                            : () => tkPush<void>(
+                                  context,
+                                  DiscoverProfileScreen(
+                                    auth: d.auth,
+                                    business: c.business,
+                                    name: name,
+                                    // Its Chat is this chat: back to it.
+                                    onOpenChat: (id, {notice, draft = '', tool}) async => Navigator.of(context).maybePop(),
+                                  ),
+                                ),
                         avatar: BusinessFace(name: name, urls: c?.photo?.urls, size: 40, letterSize: 15),
                         title: name,
                         typing: c?.typing == true,
@@ -1165,7 +1181,7 @@ class _Note extends StatelessWidget {
 
 /// Report (§15): why, a note, and consent to send the last 20 messages to
 /// Taskiem's moderators.
-Future<void> showReportSheet(BuildContext context, MyChatData d) => showTkSheet<void>(context, (_) => _ReportSheet(d: d));
+Future<void> showReportSheet(BuildContext context, MyChatData d) => showTkSheet<void>(context, (_) => TkAppLook(child: _ReportSheet(d: d)));
 
 class _ReportSheet extends StatefulWidget {
   const _ReportSheet({required this.d});
@@ -1214,28 +1230,32 @@ class _ReportSheetState extends State<_ReportSheet> {
         footer: TkCta(label: 'Done', onTap: () => Navigator.of(context).maybePop()),
       );
     }
-    return TkSheet(
+    // As the group's report (group_info.dart): a form sheet, the reason
+    // and the consent as rows with the app's ticks.
+    return TkFormSheet(
       title: 'Report $name',
-      footer: TkCta(label: _busy ? 'Sending…' : 'Send report', danger: true, onTap: _busy ? null : _send),
-      body: TkFormBody(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final (k, words) in _reasons)
-                TkChoiceRow(control: TkRadio(checked: _reason == k), label: Text(words, style: tkText(size: 15, color: t.text)), onTap: () => setState(() => _reason = k)),
-            ],
-          ),
-          TkKitField(label: 'What happened', hint: 'Optional', child: TkTextBox(controller: _note, lines: 3, max: 1000)),
-          TkChoiceRow(
-            radio: false,
-            control: TkCheckbox(checked: _consent),
-            label: Text('Send the last 20 messages of this chat to Taskiem’s moderators', style: tkText(size: 14, color: t.text)),
-            onTap: () => setState(() => _consent = !_consent),
-          ),
-          if (_error != null) TkErrorBox(_error!),
-        ],
-      ),
+      crumb: 'Taskiem’s moderators read it',
+      action: _busy ? 'Sending…' : 'Send report',
+      onAction: _busy ? null : _send,
+      children: [
+        TkFormGroup(
+          title: 'Why',
+          children: [
+            for (final (k, words) in _reasons)
+              Semantics(selected: _reason == k, child: TkListRow(title: words, leading: TkCheckbox(checked: _reason == k), onTap: () => setState(() => _reason = k))),
+          ],
+        ),
+        TkFormGroup(children: [TkKitField(label: 'What happened', hint: 'Optional', child: TkTextBox(controller: _note, lines: 3, max: 1000))]),
+        TkFormGroup(
+          children: [
+            Semantics(
+              checked: _consent,
+              child: TkListRow(title: 'Send the last 20 messages of this chat to Taskiem’s moderators', titleLines: 3, leading: TkCheckbox(checked: _consent), onTap: () => setState(() => _consent = !_consent)),
+            ),
+          ],
+        ),
+        if (_error != null) TkErrorBox(_error!),
+      ],
     );
   }
 }

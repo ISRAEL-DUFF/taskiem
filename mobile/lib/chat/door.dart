@@ -12,13 +12,12 @@ import 'package:flutter/widgets.dart';
 
 import '../api/api.g.dart';
 import '../kit/icon.dart';
-import '../kit/list.dart' show TkPill;
 import '../kit/look.dart' show tkTabular;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'attachments.dart';
 import 'bookings_page.dart' show orderStatus;
-import 'cards.dart' show CardButton, CardPill, CardProgress, cardDecoration;
+import 'cards.dart' show CardButton, CardPill, CardProgress, CardViewRow, cardDecoration;
 import 'chats.dart' show ChatAvatar;
 import 'thread.dart';
 import 'words.dart';
@@ -60,8 +59,9 @@ String cardStatus(CustomerCard c) => switch (c.type) {
 /// A state's pill tone, for either side.
 CardTone doorTone(String s) => switch (s) {
   'completed' || 'paid' || 'delivered' => CardTone.lime,
-  'declined' || 'cancelled' || 'expired' || 'refunded' || 'no_show' || 'void' => CardTone.plain,
-  'refund_due' || 'overdue' => CardTone.danger,
+  // As the app's order states: what did not go ahead in red.
+  'declined' || 'cancelled' || 'no_show' || 'refund_due' || 'overdue' => CardTone.danger,
+  'expired' || 'refunded' || 'void' => CardTone.plain,
   _ => CardTone.warn,
 };
 
@@ -161,7 +161,11 @@ class DoorCard extends StatelessWidget {
             const SizedBox(height: 8),
             CardProgress(steps: deliverySteps, step: deliveryStep(d)),
           ],
-          if (action != null && onAction != null) ...[
+          // An order's or a delivery's way to it is the app's card foot
+          // (View order ›, under a hairline); any other a button.
+          if (action != null && onAction != null && (c.type == 'order' || c.type == 'delivery'))
+            CardViewRow(label: action!, semantics: '$action ${c.reference ?? ''}'.trim(), onTap: onAction)
+          else if (action != null && onAction != null) ...[
             const SizedBox(height: 10),
             CardButton(label: action!, primary: c.type == 'pay' || c.type == 'invoice' || c.type == 'booking', onTap: onAction),
           ],
@@ -178,7 +182,7 @@ class OfferMark extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const Padding(
     padding: EdgeInsets.only(bottom: 4),
-    child: TkPill('Offer', tone: CardTone.warn, small: true),
+    child: Align(alignment: Alignment.centerLeft, child: CardPill('Offer', CardTone.warn)),
   );
 }
 

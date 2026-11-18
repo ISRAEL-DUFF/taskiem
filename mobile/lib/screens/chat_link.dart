@@ -243,7 +243,20 @@ class _ChatLinkScreenState extends State<ChatLinkScreen> {
             ),
           ),
         if (_error != null) TkErrorBox(_error!),
-        if (_needsPhone) CardButton(label: 'Add your phone', onTap: () => tkPush<void>(context, ChangeNumberScreen(auth: widget.auth))),
+        // A row of the app's on the page, not a card's button on the ground.
+        if (_needsPhone)
+          TkSection(
+            inset: 56,
+            children: [
+              TkListRow(
+                title: 'Add your phone',
+                sub: 'Businesses reach you on it',
+                icon: 'b-phone',
+                square: TkLook.of(context).teal,
+                onTap: () => tkPush<void>(context, ChangeNumberScreen(auth: widget.auth)),
+              ),
+            ],
+          ),
       ],
     );
   }

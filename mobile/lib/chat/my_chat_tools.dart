@@ -18,12 +18,15 @@ import '../kit/forms.dart' show CloseSoon;
 import '../kit/kit.dart';
 import '../kit/list.dart';
 import '../kit/look.dart' show tkTabular;
-import '../kit/mobile.dart' show TkFormGroup, TkListRow, TkPanel, TkSection;
+import '../kit/mobile.dart' show TkChips, TkFormGroup, TkListRow, TkPanel, TkSection;
 import '../kit/modal.dart';
 import '../kit/sheet.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
+import 'cards.dart' show CardPill;
+import 'give_task.dart' show TkPillChoice;
+import '../kit/icon.dart';
 import 'book_sheet.dart' show showBookSheet, whenLabel;
 import 'chats.dart' show ChatAvatar;
 import 'door.dart';
@@ -303,7 +306,7 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
     if (s.items.isEmpty) return ListView(children: [TkEmpty(icon: 'b-box', title: '${d.name} has nothing in their shop yet', line: 'Ask them in the chat.')]);
     Widget stepper(_Thing x) {
       final n = _bag[x.id] ?? 0;
-      if (!x.available) return const TkPill('Sold out', small: true);
+      if (!x.available) return const CardPill('Sold out', CardTone.danger);
       if (!s.open) return const SizedBox.shrink();
       return QtyStepper(
         name: x.name,
@@ -386,7 +389,18 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
 
   Widget _checkoutBody(TkTokens t, MyChatShopResponse s) {
     final th = _things;
-    Widget choice(bool on, String words, VoidCallback onTap) => TkChoiceRow(control: TkRadio(checked: on), label: Text(words, style: tkText(size: 15, color: t.text)), onTap: onTap);
+    // The app's own: a row ticked when chosen (as Start something's).
+    Widget choice(bool on, String words, VoidCallback onTap, {String icon = 'b-check'}) => Semantics(
+          selected: on,
+          child: TkListRow(
+            title: words,
+            icon: icon,
+            square: TkLook.of(context).teal,
+            chevron: false,
+            trailing: on ? TkIcon('b-check', size: 20, stroke: 2.4, color: TkLook.of(context).limeInk) : const SizedBox(width: 20),
+            onTap: onTap,
+          ),
+        );
     return TkFormBody(
       children: [
         TkFormGroup(children: [
@@ -395,12 +409,21 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
             if (_fee > 0) ('Delivery', naira(_fee)),
           ]),
         ]),
-        if (s.pickup || s.delivery)
+        // How you get it: the app's switch when both are offered.
+        if (s.pickup && s.delivery)
+          TkChips<String>(
+            label: 'How you get it',
+            padding: EdgeInsets.zero,
+            chips: const [('pickup', 'I’ll pick it up'), ('delivery', 'Deliver it to me')],
+            on: _fulfilment,
+            onPick: (v) => setState(() => _fulfilment = v),
+          )
+        else if (s.pickup || s.delivery)
           TkFormGroup(
             title: 'How you get it',
             children: [
-              if (s.pickup) choice(_fulfilment == 'pickup', 'I’ll pick it up', () => setState(() => _fulfilment = 'pickup')),
-              if (s.delivery) choice(_fulfilment == 'delivery', 'Deliver it to me', () => setState(() => _fulfilment = 'delivery')),
+              if (s.pickup) choice(_fulfilment == 'pickup', 'I’ll pick it up', () => setState(() => _fulfilment = 'pickup'), icon: 'b-bag'),
+              if (s.delivery) choice(_fulfilment == 'delivery', 'Deliver it to me', () => setState(() => _fulfilment = 'delivery'), icon: 'b-truck'),
             ],
           )
         else
@@ -409,7 +432,12 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
           TkFormGroup(
             title: 'Deliver to',
             children: [
-              for (final z in s.zones) choice(_zone == z.name, '${z.name} · ${naira(z.feeKobo)}', () => setState(() => _zone = z.name)),
+              // The areas as the app's chips, each with its fee.
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [for (final z in s.zones) TkPillChoice(label: '${z.name} · ${naira(z.feeKobo)}', on: _zone == z.name, onTap: () => setState(() => _zone = z.name))],
+              ),
             ],
           ),
         if (_fulfilment == 'delivery')
@@ -418,12 +446,19 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
             children: [
               // A saved address (§13), or one typed here.
               for (final a in _saved)
-                TkChoiceRow(
-                  control: TkRadio(checked: _addressId == a.id),
-                  label: Text('${a.label} · ${addressLine(a)}', style: tkText(size: 15, color: t.text)),
-                  onTap: () => _choose(a.id),
+                Semantics(
+                  selected: _addressId == a.id,
+                  child: TkListRow(
+                    title: a.label,
+                    sub: addressLine(a),
+                    icon: 'b-pin',
+                    square: TkLook.of(context).orange,
+                    chevron: false,
+                    trailing: _addressId == a.id ? TkIcon('b-check', size: 20, stroke: 2.4, color: TkLook.of(context).limeInk) : const SizedBox(width: 20),
+                    onTap: () => _choose(a.id),
+                  ),
                 ),
-              if (_saved.isNotEmpty) choice(_addressId == null, 'Another address', () => _choose(null)),
+              if (_saved.isNotEmpty) choice(_addressId == null, 'Another address', () => _choose(null), icon: 'b-plus'),
               if (_addressId == null) ...[
                 // A saved address is at most 200 letters: so is one typed
                 // to be saved.
@@ -431,12 +466,7 @@ class _ShopSheetState extends State<ShopSheet> with CloseSoon {
                 TkKitField(label: 'Landmark', hint: 'Optional: what the rider looks for', child: TkTextBox(controller: _landmark, max: 200)),
                 // Hidden at the most a person keeps.
                 if (_canSave)
-                  TkChoiceRow(
-                    radio: false,
-                    control: TkCheckbox(checked: _saveIt),
-                    label: Text('Save this address', style: tkText(size: 15, color: t.text)),
-                    onTap: () => setState(() => _saveIt = !_saveIt),
-                  ),
+                  Semantics(checked: _saveIt, child: TkListRow(title: 'Save this address', leading: TkCheckbox(checked: _saveIt), onTap: () => setState(() => _saveIt = !_saveIt))),
                 if (_saveIt && _canSave) TkKitField(label: 'Name it', hint: 'Home, unless you name it', child: TkTextBox(controller: _saveAs, max: 40)),
               ],
             ],

@@ -15,7 +15,9 @@ import '../api/api.g.dart';
 import '../app/auth.dart';
 import '../kit/forms.dart' show TkSwitch, TkSwitchRow;
 import '../kit/kit.dart';
-import '../kit/list.dart' show TkLoading, TkPill;
+import '../kit/list.dart' show TkLoading;
+import 'cards.dart' show CardPill;
+import 'groups.dart' show pickOneOf;
 import '../kit/look.dart';
 import '../kit/mobile.dart';
 import '../kit/modal.dart';
@@ -125,12 +127,13 @@ class _DiscoverSettingsPageState extends State<DiscoverSettingsPage> {
 
   Future<void> _category() async {
     final s = _s!;
-    final pick = await showTkModalChoices(
+    // The app's own sheet of choices (groups.dart pickOneOf).
+    final pick = await pickOneOf(
       context,
       title: 'Your category in Discover',
       value: s.category ?? '',
       // "From my profile": no category of its own ("" clears it).
-      choices: [('', 'From my profile'), for (final e in exploreCategoryNames.entries) (e.key, e.value)],
+      choices: [('', 'From my profile', 'The category on your Explore profile'), for (final e in exploreCategoryNames.entries) (e.key, e.value, '')],
     );
     if (pick != null && pick != (s.category ?? '') && mounted) await _put(PutDiscoverSettingsRequest(category: pick));
   }
@@ -147,7 +150,6 @@ class _DiscoverSettingsPageState extends State<DiscoverSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
     final s = _s;
     return SettingsPage(
@@ -179,10 +181,10 @@ class _DiscoverSettingsPageState extends State<DiscoverSettingsPage> {
             ],
           ),
           if (s.listed && (s.missingLine ?? '').isNotEmpty)
-            _Note(words: s.missingLine!, colour: look.orangeInk, icon: 'b-alert'),
+            _Note(words: s.missingLine!, colour: look.orange, icon: 'b-alert'),
           if (discoverHiddenWords(s.hidden) != null)
-            _Note(words: [discoverHiddenWords(s.hidden)!, if ((s.removedNote ?? '').isNotEmpty) '“${s.removedNote}”'].join(' '), colour: look.redInk, icon: 'b-x-ring'),
-          if (discoverChatOffWords(s.chatOff) != null) _Note(words: discoverChatOffWords(s.chatOff)!, colour: t.muted, icon: 'b-chat'),
+            _Note(words: [discoverHiddenWords(s.hidden)!, if ((s.removedNote ?? '').isNotEmpty) '“${s.removedNote}”'].join(' '), colour: look.red, icon: 'b-x-ring'),
+          if (discoverChatOffWords(s.chatOff) != null) _Note(words: discoverChatOffWords(s.chatOff)!, colour: look.blue, icon: 'b-chat'),
           if (s.workspace != true)
             TkSection(
               title: 'Your listing',
@@ -249,21 +251,22 @@ class _Note extends StatelessWidget {
   final Color colour;
   final String icon;
 
+  // As the app's callout (TkCallout): tinted in its colour, its tile, the
+  // words (all of them: a callout cuts at two lines).
   @override
   Widget build(BuildContext context) => Semantics(
     liveRegion: true,
-    child: TkPanel(
-      padding: const EdgeInsets.all(14),
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ExcludeSemantics(child: TkSquare(icon, color: colour, size: 30)),
-            const SizedBox(width: 12),
-            Expanded(child: Text(words, style: tkText(size: 14, lineHeight: 1.4, color: TkTheme.tokens(context).text))),
-          ],
-        ),
-      ],
+    child: Container(
+      padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
+      decoration: BoxDecoration(color: colour.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TkSquare(icon, color: colour),
+          const SizedBox(width: 10),
+          Expanded(child: Text(words, style: tkText(size: 13.5, lineHeight: 1.4, color: TkTheme.tokens(context).text))),
+        ],
+      ),
     ),
   );
 }
@@ -307,10 +310,10 @@ class _Preview extends StatelessWidget {
             spacing: 6,
             runSpacing: 6,
             children: [
-              if (l.canChat) const TkPill('Chat', tone: CardTone.lime, small: true),
-              if (l.hasShop) const TkPill('Their shop', small: true),
-              if (l.hasBook) const TkPill('Book', small: true),
-              if (l.photos.isNotEmpty) TkPill(l.photos.length == 1 ? '1 photo' : '${l.photos.length} photos', small: true),
+              if (l.canChat) const CardPill('Chat', CardTone.lime),
+              if (l.hasShop) const CardPill('Their shop', CardTone.plain),
+              if (l.hasBook) const CardPill('Book', CardTone.plain),
+              if (l.photos.isNotEmpty) CardPill(l.photos.length == 1 ? '1 photo' : '${l.photos.length} photos', CardTone.plain),
             ],
           ),
           const SizedBox(height: 8),

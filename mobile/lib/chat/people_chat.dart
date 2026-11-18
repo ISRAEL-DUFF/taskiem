@@ -1590,7 +1590,7 @@ typedef PeopleReportAnswer = ({PeopleReport report, bool block});
 /// messages of this chat to Taskiem's moderators; with [block], they are
 /// blocked too (Block and report).
 Future<PeopleReportAnswer?> showPeopleReport(BuildContext context, {required String name, bool block = true}) =>
-    showTkSheet<PeopleReportAnswer>(context, (_) => _ReportSheet(name: name, block: block));
+    showTkSheet<PeopleReportAnswer>(context, (_) => TkAppLook(child: _ReportSheet(name: name, block: block)));
 
 class _ReportSheet extends StatefulWidget {
   const _ReportSheet({required this.name, required this.block});
@@ -1624,35 +1624,32 @@ class _ReportSheetState extends State<_ReportSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    return TkSheet(
+    // As the group's report (group_info.dart): a form sheet, each choice a
+    // row with the app's tick.
+    Widget tick(String words, bool on, VoidCallback onTap, {bool checkbox = true}) => Semantics(
+          checked: checkbox ? on : null,
+          selected: checkbox ? null : on,
+          child: TkListRow(title: words, titleLines: 3, leading: TkCheckbox(checked: on), onTap: onTap),
+        );
+    return TkFormSheet(
       title: widget.block ? 'Block and report ${widget.name}' : 'Report ${widget.name}',
-      footer: TkCta(label: _block ? 'Block and report' : 'Send report', danger: true, onTap: _send),
-      body: TkFormBody(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final (k, words) in peopleReportReasons)
-                TkChoiceRow(control: TkRadio(checked: _reason == k), label: Text(words, style: tkText(size: 15, color: t.text)), onTap: () => setState(() => _reason = k)),
-            ],
-          ),
-          TkKitField(label: 'What happened', hint: 'Optional', child: TkTextBox(controller: _note, lines: 3, max: 1000)),
-          TkChoiceRow(
-            radio: false,
-            control: TkCheckbox(checked: _consent),
-            label: Text('Send the last 20 messages of this chat, with their photos and files, to Taskiem’s moderators', style: tkText(size: 14, color: t.text)),
-            onTap: () => setState(() => _consent = !_consent),
-          ),
-          TkChoiceRow(
-            radio: false,
-            control: TkCheckbox(checked: _block),
-            label: Text('Block ${widget.name} too', style: tkText(size: 14, color: t.text)),
-            onTap: () => setState(() => _block = !_block),
-          ),
-          if (_error != null) TkErrorBox(_error!),
-        ],
-      ),
+      crumb: 'Taskiem’s moderators read it',
+      action: _block ? 'Block and report' : 'Send report',
+      onAction: _send,
+      children: [
+        TkFormGroup(
+          title: 'Why',
+          children: [for (final (k, words) in peopleReportReasons) tick(words, _reason == k, () => setState(() => _reason = k), checkbox: false)],
+        ),
+        TkFormGroup(children: [TkKitField(label: 'What happened', hint: 'Optional', child: TkTextBox(controller: _note, lines: 3, max: 1000))]),
+        TkFormGroup(
+          children: [
+            tick('Send the last 20 messages of this chat, with their photos and files, to Taskiem’s moderators', _consent, () => setState(() => _consent = !_consent)),
+            tick('Block ${widget.name} too', _block, () => setState(() => _block = !_block)),
+          ],
+        ),
+        if (_error != null) TkErrorBox(_error!),
+      ],
     );
   }
 }

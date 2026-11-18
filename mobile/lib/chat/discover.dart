@@ -29,7 +29,8 @@ import '../screens/chat_link.dart' show hoursLines;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
-import 'cards.dart' show CardButton, CardPill;
+import 'cards.dart' show CardPill;
+import '../kit/load_more.dart';
 import 'door.dart' show BusinessFace, photoUrl;
 import 'my_chat.dart';
 import 'people_cards.dart' show shareWithPeople;
@@ -242,12 +243,9 @@ class _DiscoverTabState extends State<DiscoverTab> {
           TkSearchBox(controller: _q, hint: 'Search by name or what you want', margin: const EdgeInsets.fromLTRB(16, 4, 16, 8)),
           TkSearchBox(controller: _area, hint: 'Area (Yaba, Lekki…)', margin: const EdgeInsets.fromLTRB(16, 0, 16, 8)),
           if (_categories.isNotEmpty)
-            TkChipRow(
-              label: 'Categories',
+            Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              chips: [for (final c in _categories) (label: c.name, tag: c.key)],
-              on: _category,
-              onPick: _pick,
+              child: _CategoryChips(chips: [for (final c in _categories) (c.key, c.name)], on: _category, onPick: _pick),
             ),
         ],
       ),
@@ -274,7 +272,8 @@ class _DiscoverTabState extends State<DiscoverTab> {
                 ),
             ],
           ),
-        if (results != null && _more) TkButton(label: _loadingMore ? 'Loading…' : 'Show more businesses', minHeight: 44, enabled: !_loadingMore, onPressed: _next),
+        // The next page as the list nears its end (the app's TkLoadMore).
+        if (results != null && _more) TkLoadMore(label: 'Show more businesses', onMore: _next),
         if (results != null) Text('Businesses choose to be found here.', textAlign: TextAlign.center, style: tkHint(t)),
       ],
     );
@@ -384,9 +383,30 @@ class _DiscoverProfileScreenState extends State<DiscoverProfileScreen> {
                 Center(child: CardPill(openNowWords(p.openNow), p.openNow ? CardTone.lime : CardTone.plain)),
                 if (p.line.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(p.line, textAlign: TextAlign.center, style: tkText(size: 13, color: t.muted))),
                 const SizedBox(height: 16),
-                if (canChat)
-                  CardButton(label: _busy ? 'Opening the chat…' : 'Chat', semantics: 'Chat with ${p.name}', primary: true, busy: _busy, onTap: () => _chat())
-                else ...[
+                // As a top card's (TkButtonRow): Chat, Their shop, Book side
+                // by side; sharing a link under them.
+                if (canChat) ...[
+                  TkButtonRow([
+                    TkSmallButton(label: _busy ? 'Opening…' : 'Chat', semantics: 'Chat with ${p.name}', primary: true, icon: 'b-chat', onPressed: _busy ? null : () => _chat()),
+                    if (p.hasShop) TkSmallButton(label: 'Their shop', icon: 'b-store', onPressed: _busy ? null : () => _chat(tool: 'shop')),
+                    if (p.hasBook) TkSmallButton(label: 'Book', icon: 'b-calendar', onPressed: _busy ? null : () => _chat(tool: 'book')),
+                  ]),
+                  const SizedBox(height: 6),
+                  // Shared into a chat with a person (people-chatting §10.1):
+                  // their card, opened live; Chat starts their own chat.
+                  Center(
+                    child: Semantics(
+                      label: 'Share ${p.name} with someone',
+                      button: true,
+                      excludeSemantics: true,
+                      child: TkLink(
+                        label: 'Share with someone',
+                        bold: true,
+                        onTap: () => shareWithPeople(context, widget.auth, SendPeopleMessageRequestCard(type: 'business', businessId: widget.business), what: p.name),
+                      ),
+                    ),
+                  ),
+                ] else ...[
                   Semantics(
                     liveRegion: true,
                     child: Text(
@@ -397,28 +417,8 @@ class _DiscoverProfileScreenState extends State<DiscoverProfileScreen> {
                   ),
                   if ((p.shop ?? '').isNotEmpty) ...[
                     const SizedBox(height: 10),
-                    CardButton(label: 'Visit their page', onTap: () => _visit(p.shop!)),
+                    TkButtonRow([TkSmallButton(label: 'Visit their page', onPressed: () => _visit(p.shop!))]),
                   ],
-                ],
-                if (canChat && (p.hasShop || p.hasBook)) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      if (p.hasShop) Expanded(child: CardButton(label: 'Their shop', onTap: _busy ? null : () => _chat(tool: 'shop'))),
-                      if (p.hasShop && p.hasBook) const SizedBox(width: 8),
-                      if (p.hasBook) Expanded(child: CardButton(label: 'Book', onTap: _busy ? null : () => _chat(tool: 'book'))),
-                    ],
-                  ),
-                ],
-                // Shared into a chat with a person (people-chatting §10.1):
-                // their card, opened live; Chat starts their own chat.
-                if (canChat) ...[
-                  const SizedBox(height: 8),
-                  CardButton(
-                    label: 'Share with someone',
-                    semantics: 'Share ${p.name} with someone',
-                    onTap: () => shareWithPeople(context, widget.auth, SendPeopleMessageRequestCard(type: 'business', businessId: widget.business), what: p.name),
-                  ),
                 ],
               ],
             ),
@@ -586,6 +586,59 @@ class _DiscoverReportSheetState extends State<DiscoverReportSheet> {
             ),
             TkFormGroup(children: [TkKitField(label: 'What happened', hint: 'Optional', child: TkTextBox(controller: _note, lines: 3, max: 500))]),
             if (_error != null) TkErrorBox(_error!),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The categories as Explore draws them (explore.dart's chips): filled,
+/// rounded, in a row that scrolls; the one chosen dark, tapped again it
+/// goes back to all.
+class _CategoryChips extends StatelessWidget {
+  const _CategoryChips({required this.chips, required this.on, required this.onPick});
+  final List<(String, String)> chips;
+  final String? on;
+  final ValueChanged<String?> onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = TkTheme.tokens(context);
+    final dark = TkTheme.of(context).mode == TkMode.dark;
+    return Semantics(
+      container: true,
+      label: 'Categories',
+      explicitChildNodes: true,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        child: Row(
+          children: [
+            for (final (i, (key, name)) in chips.indexed) ...[
+              if (i > 0) const SizedBox(width: 8),
+              Semantics(
+                button: true,
+                selected: key == on,
+                label: name,
+                excludeSemantics: true,
+                onTap: () => onPick(key == on ? null : key),
+                child: TkPress(
+                  onTap: () => onPick(key == on ? null : key),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    constraints: const BoxConstraints(minHeight: 32),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: key == on ? (dark ? t.brandDark : t.text) : (dark ? const Color(0xFF1A1B1A) : t.panel),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(name, maxLines: 1, style: tkText(size: 13, weight: 600, color: key == on ? (dark ? t.brandDarkText : t.bg) : t.text)),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
