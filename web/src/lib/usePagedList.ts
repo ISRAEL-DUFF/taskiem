@@ -20,6 +20,8 @@ export function usePagedList<R extends Paged, T>(
   loadingMore: boolean;
   loadMore: () => void;
   reload: () => void;
+  /** Changes the rows read so far in place (a live event), until the next read. */
+  patch: (fn: (rows: T[]) => T[] | undefined) => void;
 } {
   const [st, setSt] = useState<{ base: string; head: R; rows: T[]; next?: string; more: boolean; laterRead: boolean }>();
   const [error, setError] = useState<unknown>();
@@ -75,5 +77,15 @@ export function usePagedList<R extends Paged, T>(
       });
   }, [base, cur?.more, cur?.next]);
 
-  return { rows: cur?.rows, head: cur?.head, error, more: !!cur?.more, loadingMore, loadMore, reload };
+  const patch = useCallback(
+    (fn: (rows: T[]) => T[] | undefined) =>
+      setSt((s) => {
+        if (!s || s.base !== base) return s;
+        const rows = fn(s.rows);
+        return rows && rows !== s.rows ? { ...s, rows } : s;
+      }),
+    [base],
+  );
+
+  return { rows: cur?.rows, head: cur?.head, error, more: !!cur?.more, loadingMore, loadMore, reload, patch };
 }

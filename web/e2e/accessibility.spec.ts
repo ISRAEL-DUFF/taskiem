@@ -395,6 +395,8 @@ for (const scheme of ["light", "dark"] as const)
       await page.route("**/v1/me/storefront-orders?*", (r) => r.fulfill(json({ orders: [], waiting: false, waiting_count: 0 })));
       // No saved addresses yet (Settings).
       await page.route("**/v1/me/notifications", (r) => r.fulfill(json({ messages: true, updates: true, offers: true })));
+      // No push keys here: this browser's notifications are not offered.
+      await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ error: "not found" }, 404)));
       await page.route("**/v1/me/addresses", (r) => r.fulfill(json({ addresses: [] })));
       await page.route("**/v1/me/invitations", (r) =>
         r.fulfill(json({ invitations: [{ tenant_id: "0192e2e0-0000-7000-8000-00000000b003", tenant: "Bola Stores", roles: ["staff"], invited_at: new Date().toISOString() }] })),
@@ -522,6 +524,8 @@ for (const scheme of ["light", "dark"] as const)
       );
       // You's settings read which pushes the person gets.
       await page.route("**/v1/me/notifications", (r) => r.fulfill(json({ messages: true, updates: true, offers: true })));
+      // No push keys here: this browser's notifications are not offered.
+      await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ error: "not found" }, 404)));
       await page.route("**/v1/me/addresses", (r) =>
         r.fulfill(json({ addresses: [{ id: "a1", label: "Home", line: "12 Allen Avenue", area: "Ikeja", landmark: "By the blue gate", phone: "+2348031234567", default: true, created_at: now, updated_at: now }] })),
       );
@@ -594,6 +598,8 @@ for (const scheme of ["light", "dark"] as const)
       await page.route(/\/v1\/me\/chats(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0 })));
       await page.route(/\/v1\/me\/conversations(\?|$)/, (r) => r.fulfill(json({ chats: [], unread: 0, requests: 0 })));
       await page.route("**/v1/me/notifications", (r) => r.fulfill(json({ messages: true, updates: true, offers: false })));
+      // The server has push keys: this browser's notifications are offered.
+      await page.route("**/v1/me/push/key", (r) => r.fulfill(json({ public_key: "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U" })));
       await page.route("**/v1/me/privacy", (r) =>
         r.fulfill(
           json({
@@ -611,6 +617,7 @@ for (const scheme of ["light", "dark"] as const)
       await page.goto("/you/settings");
       await expect(page.getByTestId("you-photo").getByText("Only you see it.")).toBeVisible();
       await expect(page.getByTestId("you-notify-offers")).not.toBeChecked();
+      await expect(page.getByTestId("you-push-on")).toHaveText("Notify me on this browser");
       await check("/you/settings with a photo and notifications");
       await page.goto("/you/settings/privacy");
       await expect(page.getByTestId("privacy-business")).toHaveCount(2);
@@ -772,7 +779,7 @@ for (const scheme of ["light", "dark"] as const)
           json({
             chats: [
               { kind: "person", id: "c1", name: "Kemi (school)", person_id: "p1", last: "See you", last_mine: false, last_at: now, unread: 2, muted: false, archived: false, blocked: false, person: kemi },
-              { kind: "business", id: "b1c", name: "Mama's Kitchen", business_id: "b1", last: "Your rice is ready", last_mine: false, last_at: now, unread: 0, muted: true, archived: false, blocked: false },
+              { kind: "business", id: "b1c", name: "Mama's Kitchen", business_id: "b1", last: "Your rice is ready", last_mine: false, last_at: now, unread: 0, muted: true, archived: false, blocked: false, verified: { phone: true, business: true, payments: false, months: 3 } },
             ],
             unread: 2,
             requests: 1,
@@ -795,6 +802,7 @@ for (const scheme of ["light", "dark"] as const)
               { id: "m6", mine: false, kind: "card", body: "", card: { type: "product", title: "Jollof rice", business: "Mama's Kitchen", business_id: "b1", item_id: "1", price_kobo: 450_000 }, read_at: now, created_at: now },
               { id: "m7", mine: true, kind: "card", body: "", card: { type: "split", title: "Your share", amount_kobo: 300_000, what: "the cake", pay_to: { bank: "GTBank", account_number: "0123456789", account_name: "Ada Obi" }, paid: false }, status: "read", read_at: now, created_at: now },
               { id: "m8", mine: false, kind: "text", body: "This message was deleted", deleted: true, read_at: now, created_at: now },
+              { id: "m9", mine: false, kind: "location", body: "", location: { lat: 6.5095, lng: 3.3711, label: "The gate on Herbert Macaulay" }, read_at: now, created_at: now },
             ],
             more: false,
           }),
@@ -804,6 +812,9 @@ for (const scheme of ["light", "dark"] as const)
         r.fulfill(json({ messages: [{ id: "q1", mine: false, kind: "text", body: "Hello, we met at the market", warn: true, read_at: null, created_at: now }], more: false })),
       );
       await page.route("**/v1/me/people/requests", (r) => r.fulfill(json({ requests: [req] })));
+      const saturday = { id: "m1", mine: false, kind: "text", body: "Are you coming on Saturday?", read_at: now, created_at: now, starred: true };
+      await page.route(/\/v1\/me\/people\/search\?/, (r) => r.fulfill(json({ results: [{ chat_id: "c1", chat, message: saturday, snippet: "Are you coming on Saturday?" }], more: true, next: "x" })));
+      await page.route(/\/v1\/me\/people\/starred(\?|$)/, (r) => r.fulfill(json({ starred: [{ chat_id: "c1", chat, message: saturday, starred_at: now }], more: false })));
       await page.route(/\/v1\/me\/people(\?|$)/, (r) => r.fulfill(json({ chats: [chat], unread: 0, requests: 1 })));
       await page.route("**/v1/me/people/blocked", (r) => r.fulfill(json({ people: [{ person_id: "p3", name: "Dayo Ola", chat_id: "c3", at: now }] })));
       await page.route("**/v1/me/contacts", (r) =>
@@ -823,6 +834,7 @@ for (const scheme of ["light", "dark"] as const)
       await page.goto("/you");
       await expect(page.getByTestId("people-requests-entry")).toBeVisible();
       await expect(page.getByTestId("people-chat")).toBeVisible();
+      await expect(page.getByTestId("chat-row-trust")).toHaveText("Phone checked · Business checked · Trading 3 months");
       await check("/you with people and businesses");
       await page.getByTestId("people-new-chat-open").click();
       await page.getByTestId("people-phone").fill("0803 000 1111");
@@ -838,7 +850,18 @@ for (const scheme of ["light", "dark"] as const)
       await expect(page.getByTestId("people-transfer-warning")).toBeVisible();
       await expect(page.getByTestId("people-head-line")).toHaveText("online · +234 803 123 4567");
       await expect(page.getByTestId("people-ticks").first()).toBeVisible();
+      await expect(page.getByTestId("people-place")).toContainText("The gate on Herbert Macaulay");
       await check("/you/people/{id}");
+      // Sending a place: found, seen before it is sent.
+      await page.context().grantPermissions(["geolocation"]);
+      await page.context().setGeolocation({ latitude: 6.5095, longitude: 3.3711 });
+      await page.getByTestId("people-share-button").click();
+      await page.getByTestId("share-place").click();
+      await check("send a place, asked");
+      await page.getByTestId("place-find").click();
+      await expect(page.getByTestId("place-preview")).toBeVisible();
+      await check("send a place, seen");
+      await page.getByTestId("people-place-sheet").getByRole("button", { name: /Close/ }).first().click();
       await page.getByRole("button", { name: "More about this chat" }).click();
       await page.getByTestId("people-info").click();
       await expect(page.getByTestId("people-kept")).toContainText("kept by Taskiem");
@@ -855,7 +878,14 @@ for (const scheme of ["light", "dark"] as const)
       await expect(page.getByTestId("people-report-sheet")).toBeVisible();
       await check("block and report");
 
+      await page.goto("/you/people/search?q=saturday");
+      await expect(page.getByTestId("people-found")).toBeVisible();
+      await check("/you/people/search");
+      await page.goto("/you/people/search?chat=c1&name=Kemi");
+      await expect(page.getByRole("heading", { name: "Search in your chat with Kemi" })).toBeVisible();
+      await check("/you/people/search in a chat");
       for (const [path, testid] of [
+        ["/you/people/starred", "people-starred-row"],
         ["/you/people/contacts", "people-contact"],
         ["/you/settings/people", "people-privacy"],
         ["/you/settings/blocked", "people-blocked"],

@@ -73,8 +73,15 @@ async function check(page: Page, where: string, width: number) {
 
 let n = 0;
 /** A person signed in by phone on their own side, on a phone of `width`. */
-async function person(browser: Browser, name: string, width: number): Promise<{ page: Page; e164: string; typed: string }> {
-  const ctx = await browser.newContext({ viewport: { width, height: 800 } });
+async function person(
+  browser: Browser,
+  name: string,
+  width: number,
+  opts: Parameters<Browser["newContext"]>[0] = {},
+  scripts: (() => void)[] = [],
+): Promise<{ page: Page; e164: string; typed: string }> {
+  const ctx = await browser.newContext({ viewport: { width, height: 800 }, ...opts });
+  for (const sc of scripts) await ctx.addInitScript(sc);
   const page = await ctx.newPage();
   const rest = (String(Date.now()).slice(-6) + String(++n % 10) + String(Math.floor(Math.random() * 10))).slice(-8);
   const e164 = `+23470${rest}`;
@@ -134,7 +141,7 @@ async function shop(req: APIRequestContext, name: string) {
 }
 
 /** Shared between the tests, in order. */
-const st: { ada?: Awaited<ReturnType<typeof person>>; bola?: Awaited<ReturnType<typeof person>>; chat?: string; adaLink?: string } = {};
+const st: { ada?: Awaited<ReturnType<typeof person>>; bola?: Awaited<ReturnType<typeof person>>; chat?: string; adaLink?: string; business?: string } = {};
 
 test("two people find each other by number, a request is accepted, and they chat with ticks", async ({ browser }) => {
   test.setTimeout(240_000);
@@ -375,6 +382,7 @@ test("a product shared live, a business from Discover, and a 'Your share' card m
   const biz = await (await browser.newContext()).newPage();
   const name = `Iya Pp Kitchen ${letters()}`;
   const tenant = await shop(biz.request, name);
+  st.business = name;
 
   // Ada chats with the business (from Discover), so its shop is hers to share.
   // (Discover's index takes the business in a moment after its profile.)
@@ -548,4 +556,215 @@ test("a share asks what for, a refused card is not called sent, a stranger's sha
   await expect(fw.locator("label").filter({ hasText: "Eko Bassey" }).getByTestId("people-forward-pick")).toBeChecked();
   await expect(fw.locator("input[data-testid=people-forward-pick]:checked")).toHaveCount(1);
   await ada.page.unroute("**/v1/me/people/forward");
+});
+
+/** The browser's push, standing in (as chat-push.spec.ts): one subscription kept in this browser's storage. */
+const PUSH_STAND_IN = () => {
+  const KEY = "e2e-push-sub";
+  const b64 = (bytes: number[]) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const read = () => {
+    try {
+      return JSON.parse(localStorage.getItem(KEY) ?? "null") as { endpoint: string; keys: { p256dh: string; auth: string } } | null;
+    } catch {
+      return null;
+    }
+  };
+  const wrap = (j: { endpoint: string; keys: { p256dh: string; auth: string } }) => ({
+    endpoint: j.endpoint,
+    expirationTime: null,
+    options: {},
+    toJSON: () => j,
+    unsubscribe: async () => {
+      localStorage.removeItem(KEY);
+      return true;
+    },
+  });
+  PushManager.prototype.getSubscription = async () => {
+    const j = read();
+    return j ? (wrap(j) as unknown as PushSubscription) : null;
+  };
+  PushManager.prototype.subscribe = async () => {
+    let j = read();
+    if (!j) {
+      j = {
+        endpoint: `https://fcm.googleapis.com/fcm/send/e2e-${Math.random().toString(36).slice(2)}`,
+        keys: { p256dh: b64([4, ...Array.from({ length: 64 }, (_, i) => (i * 7 + 3) % 256)]), auth: b64(Array.from({ length: 16 }, (_, i) => i + 1)) },
+      };
+      localStorage.setItem(KEY, JSON.stringify(j));
+    }
+    return wrap(j) as unknown as PushSubscription;
+  };
+};
+const NOTIFY_GRANTED = () => {
+  Object.defineProperty(Notification, "permission", { get: () => "granted", configurable: true });
+  Notification.requestPermission = async () => "granted";
+};
+
+test("live: a message, typing and presence without a reload; search, starred, a place, the trust line and the push preview", async ({ browser }) => {
+  test.setTimeout(300_000);
+  const ada = st.ada as NonNullable<typeof st.ada>;
+  const bola = st.bola as NonNullable<typeof st.bola>;
+
+  // Bola's Chats list, then nothing read again but by the live connection.
+  await bola.page.goto("/you");
+  const adaRow = bola.page.getByTestId("people-chat").filter({ hasText: "Ada Obi" });
+  await expect(adaRow).toBeVisible();
+  await bola.page.route("**/v1/me/conversations*", (r) => r.abort());
+  await ada.page.goto(`/you/people/${st.chat}`);
+  const box = ada.page.getByLabel("Message Bola (school)");
+  // Typing: shown on Bola's row while Ada types.
+  // The server passes typing on at most every 3 seconds per chat: the
+  // last test's words are well behind.
+  await ada.page.waitForTimeout(3500);
+  await box.fill("Bring the zobo");
+  await expect(adaRow.getByTestId("people-row-typing")).toHaveText("typing…", { timeout: 10_000 });
+  await check(bola.page, "/you with someone typing", 360);
+  await box.fill("");
+  await expect(adaRow.getByTestId("people-row-typing")).toHaveCount(0, { timeout: 10_000 });
+  // A message: the row's last line changes without a reload.
+  await box.fill("Bring the zobo drink to the party tomorrow");
+  await box.press("Enter");
+  await expect(adaRow).toContainText("Bring the zobo drink", { timeout: 10_000 });
+  await bola.page.unroute("**/v1/me/conversations*");
+
+  // In the chat: the head says typing…, and the message comes live (the
+  // chat's own reading is stopped once it is open).
+  await adaRow.click();
+  await expect(bola.page.getByTestId("people-message").filter({ hasText: "zobo drink" })).toBeVisible();
+  await bola.page.route("**/v1/me/people/*/messages", (r) => (r.request().method() === "GET" ? r.abort() : r.continue()));
+  await ada.page.waitForTimeout(3500);
+  await box.fill("And the puff");
+  await expect(bola.page.getByTestId("people-typing")).toHaveText("typing…", { timeout: 10_000 });
+  await check(bola.page, "a chat with someone typing", 360);
+  await box.press("Enter");
+  await expect(bola.page.getByTestId("people-message").filter({ hasText: "And the puff" })).toBeVisible({ timeout: 10_000 });
+  await expect(bola.page.getByTestId("people-typing")).toHaveCount(0, { timeout: 10_000 });
+  await bola.page.unroute("**/v1/me/people/*/messages");
+
+  // Presence: the tab going to the back says this connection is away, and
+  // coming back that it is in front.
+  const away = bola.page.waitForRequest((r) => r.url().endsWith("/v1/me/presence") && r.method() === "POST" && r.postDataJSON()?.online === false);
+  await bola.page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  expect((await away).postDataJSON()).toMatchObject({ online: false, connection: expect.stringMatching(/^[0-9a-f-]{36}$/) });
+  const back = bola.page.waitForRequest((r) => r.url().endsWith("/v1/me/presence") && r.method() === "POST" && r.postDataJSON()?.online === true);
+  await bola.page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  expect((await back).postDataJSON()).toMatchObject({ online: true });
+
+  // Search: a word's start finds Ada's message; it opens the chat at it.
+  await bola.page.goto("/you");
+  await bola.page.getByTestId("people-search-open").click();
+  await expect(bola.page).toHaveURL(/\/you\/people\/search/);
+  await bola.page.getByTestId("people-search-q").fill("zob");
+  const hit = bola.page.getByTestId("people-found").filter({ hasText: "Ada Obi" });
+  await expect(hit).toHaveCount(1);
+  await expect(hit.locator("strong")).toHaveText("zobo");
+  await expect(bola.page.getByTestId("people-search-count")).toHaveText("1 message found");
+  await check(bola.page, "/you/people/search", 360);
+  await bola.page.getByTestId("people-search-q").fill("nothingsaidlikethis");
+  await expect(bola.page.getByTestId("people-search-count")).toHaveText("No messages found.");
+  await bola.page.getByTestId("people-search-q").fill("zobo drink");
+  await hit.click();
+  await expect(bola.page).toHaveURL(/\/you\/people\/[0-9a-f-]{36}\?at=/);
+  const atZobo = bola.page.getByTestId("people-message").filter({ hasText: "zobo drink" });
+  await expect(atZobo).toHaveClass(/flash/);
+  await expect(atZobo).toBeInViewport();
+
+  // Starred: Bola stars it; the starred list opens the chat at it.
+  await bubbleMenu(bola.page, "zobo drink", "Star");
+  await expect(atZobo.getByRole("img", { name: "Starred" })).toBeVisible();
+  await bola.page.goto("/you/settings");
+  await bola.page.getByTestId("you-people-starred").click();
+  await expect(bola.page).toHaveURL(/\/you\/people\/starred$/);
+  const starred = bola.page.getByTestId("people-starred-row");
+  await expect(starred).toHaveCount(1);
+  await expect(starred).toContainText("Bring the zobo drink");
+  await check(bola.page, "/you/people/starred", 360);
+  await starred.click();
+  await expect(bola.page).toHaveURL(/\?at=/);
+  await expect(bola.page.getByTestId("people-message").filter({ hasText: "zobo drink" })).toHaveClass(/flash/);
+
+  // A place: Bola's browser lets Taskiem see where they are (at a fixed
+  // place); asked for only on Bola's tap, seen before it is sent, with a name.
+  // (Ada has sent all a new account may in a minute: Bola sends it.)
+  await bola.page.context().grantPermissions(["geolocation"]);
+  await bola.page.context().setGeolocation({ latitude: 6.5095, longitude: 3.3711 });
+  await bola.page.getByTestId("people-share-button").click();
+  await bola.page.getByTestId("share-place").click();
+  const place = bola.page.getByTestId("people-place-sheet");
+  await expect(place.getByTestId("place-preview")).toHaveCount(0);
+  await place.getByTestId("place-find").click();
+  await expect(place.getByTestId("place-preview")).toContainText("6.50950, 3.37110");
+  await expect(place.getByTestId("place-map")).toHaveAttribute("href", /mlat=6\.5095&mlon=3\.3711/);
+  await place.getByTestId("place-label").fill("The gate on Herbert Macaulay");
+  await check(bola.page, "send a place", 360);
+  const placed = bola.page.waitForResponse((r) => /\/v1\/me\/people\/[^/]+\/messages$/.test(r.url()) && r.request().method() === "POST");
+  await place.getByTestId("place-send").click();
+  const placedRes = await placed;
+  expect(placedRes.status(), await placedRes.text()).toBe(201);
+  expect(placedRes.request().postDataJSON()).toMatchObject({ location: { lat: 6.5095, lng: 3.3711, label: "The gate on Herbert Macaulay" } });
+  await expect(bola.page.getByTestId("people-place").filter({ hasText: "The gate on Herbert Macaulay" })).toBeVisible();
+  const sentPlace = ada.page.getByTestId("people-place").filter({ hasText: "The gate on Herbert Macaulay" });
+  await expect(sentPlace).toBeVisible({ timeout: 10_000 });
+  await expect(sentPlace).toHaveAttribute("href", /openstreetmap\.org\/\?mlat=6\.5095&mlon=3\.3711/);
+  await check(ada.page, "a place in a chat", 390);
+  // Ada's browser does not let Taskiem see where she is: said plainly.
+  await ada.page.context().clearPermissions();
+  await ada.page.getByTestId("people-share-button").click();
+  await ada.page.getByTestId("share-place").click();
+  await ada.page.getByTestId("people-place-sheet").getByTestId("place-find").click();
+  await expect(ada.page.getByTestId("place-problem")).toContainText("this browser blocked it");
+  await check(ada.page, "a place refused", 390);
+  await ada.page.getByTestId("people-place-sheet").getByRole("button", { name: /Close/ }).first().click();
+
+  // A suspended sender's refusal points to Your standing (the server's words, stood in).
+  await bola.page.route("**/v1/me/people/*/messages", (r) =>
+    r.request().method() === "POST"
+      ? r.fulfill({
+          status: 403,
+          json: { error: "Taskiem's moderators have stopped your account from messaging people for now. See Your standing in Settings to find out why and to appeal." },
+        })
+      : r.continue(),
+  );
+  await bola.page.getByLabel("Message Ada Obi").fill("Are you there?");
+  await bola.page.getByLabel("Message Ada Obi").press("Enter");
+  await expect(bola.page.getByTestId("people-problem")).toContainText("stopped your account");
+  await expect(bola.page.getByTestId("people-problem-standing")).toHaveAttribute("href", "/you/settings/standing");
+  await bola.page.unroute("**/v1/me/people/*/messages");
+
+  // The one Chats list: a business row carries its trust line, as its chat's head.
+  await ada.page.goto("/you");
+  const bizRow = ada.page.getByTestId("person-chat").filter({ hasText: st.business ?? "" });
+  await expect(bizRow.getByTestId("chat-row-trust")).toHaveText("Phone checked · Business checked · New on Taskiem");
+  await check(ada.page, "/you with a business's trust line", 390);
+
+  // The privacy page links Your standing and the published counts.
+  await ada.page.goto("/you/settings/privacy");
+  await expect(ada.page.getByTestId("privacy-standing")).toHaveAttribute("href", "/you/settings/standing");
+  await expect(ada.page.getByTestId("privacy-transparency")).toHaveAttribute("href", "/transparency");
+
+  // This browser's notifications: on, then the words hidden in them.
+  const efe = await person(browser, "Efe Ojo", 390, { permissions: ["notifications"], serviceWorkers: "allow" }, [PUSH_STAND_IN, NOTIFY_GRANTED]);
+  await efe.page.goto("/you/settings");
+  const mine = efe.page.getByTestId("you-browser-push");
+  await mine.getByTestId("you-push-on").click();
+  const preview = mine.getByTestId("you-push-preview");
+  await expect(preview).toBeChecked();
+  await expect(mine.getByTestId("you-push-preview-words")).toContainText("who wrote and the start of the message");
+  await check(efe.page, "/you/settings with this browser's notifications", 390);
+  const patched = efe.page.waitForResponse((r) => /\/v1\/me\/push\/[0-9a-f-]{36}\?side=you$/.test(r.url()) && r.request().method() === "PATCH");
+  await preview.click();
+  expect((await patched).status()).toBe(200);
+  await expect(preview).not.toBeChecked();
+  await expect(mine.getByTestId("you-push-preview-words")).toContainText("Someone wrote to you");
+  const devices = (await (await efe.page.request.get("/v1/me/push?side=you", { headers: H })).json()) as { devices: { preview: boolean }[] };
+  expect(devices.devices.map((d) => d.preview)).toEqual([false]);
+  // Read again: the switch stays off.
+  await efe.page.reload();
+  await expect(efe.page.getByTestId("you-push-preview")).not.toBeChecked();
 });

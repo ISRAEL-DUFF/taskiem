@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError, del, get, post, put, upload } from "../api";
 import { Icon } from "../icons";
 import { toast } from "../toast";
@@ -47,6 +47,8 @@ import {
 } from "../lib/people";
 import { clientFor, mayHaveArrived, REPORT_REASONS, type KeptSend, type ShopItem } from "../lib/personchat";
 import { usePagedList } from "../lib/usePagedList";
+import { chatWithPresence, checkPlace, FIND_PAGES, mapURL, placeFigures, placeProblem, threadWithGone, threadWithLive, TypingGate, type Place } from "../lib/peoplelive";
+import { livePoll, usePeopleLive } from "./PeopleLive";
 import { useThread } from "../lib/useThread";
 import type { PersonOrderDetail, PersonOrders } from "../lib/youorders";
 import { EmptyState, ErrorBox, fmtTime, Items, Modal, Row, Skeleton, useAction, useLoad } from "../ui";
@@ -105,9 +107,16 @@ export function PeopleTicks({ m, readTicks = true }: { m: Pick<PeopleMessage, "l
 export function PeopleChatPage() {
   const { id = "" } = useParams();
   const nav = useNavigate();
+  const loc = useLocation();
+  // Opened at a message (a search's or the starred list's): the thread is
+  // placed there, reading older pages until it is in.
+  const at = new URLSearchParams(loc.search).get("at") ?? undefined;
   const base = `/v1/me/people/${encodeURIComponent(id)}`;
   const chat = useLoad(() => get<PeopleChat>(base), [base]);
-  const c = chat.data;
+  const live = usePeopleLive();
+  // Online and last seen as the live connection last told.
+  const c = chatWithPresence(chat.data, live.presence);
+  const [notFound, setNotFound] = useState(false);
   const [messages, setMessages] = useState<PeopleMessage[]>();
   const [hasOlder, setHasOlder] = useState(false);
   const [pollError, setPollError] = useState<unknown>();
@@ -115,7 +124,7 @@ export function PeopleChatPage() {
   const [sendError, setSendError] = useState<unknown>();
   const kept = useRef<KeptSend | undefined>(undefined);
   const [sheet, setSheet] = useState<
-    | { k: "info" | "report" | "share" | "split"; blockToo?: boolean }
+    | { k: "info" | "report" | "share" | "split" | "place"; blockToo?: boolean }
     | { k: "forward"; m: PeopleMessage }
     | { k: "card"; m: PeopleMessage }
     | { k: "delete"; m: PeopleMessage }
@@ -129,10 +138,27 @@ export function PeopleChatPage() {
   const thread = useThread({ items: messages, isMine: (m) => m.mine, hasOlder, loadOlder: olderCb });
 
   const pull = useCallback(
-    async (first: boolean) => {
+    async (first: boolean, find?: string) => {
       const out = await get<{ messages: PeopleMessage[]; more: boolean }>(`${base}/messages`);
-      setMessages((cur) => (first ? out.messages : withLatestPeople(cur ?? [], out.messages, out.more)));
-      if (first) setHasOlder(out.more);
+      if (first && find && !out.messages.some((m) => m.id === find)) {
+        // The message opened at is further up: older pages, until it is in.
+        let all = out.messages;
+        let more = out.more;
+        for (let i = 0; i < FIND_PAGES && more && !all.some((m) => m.id === find); i++) {
+          const oldest = all[0];
+          if (!oldest) break;
+          const older = await get<{ messages: PeopleMessage[]; more: boolean }>(`${base}/messages?before=${encodeURIComponent(oldest.id)}`);
+          all = mergePeople(all, older.messages);
+          more = older.more;
+        }
+        setNotFound(!all.some((m) => m.id === find));
+        setMessages(all);
+        setHasOlder(more);
+      } else {
+        setMessages((cur) => (first ? out.messages : withLatestPeople(cur ?? [], out.messages, out.more)));
+        if (first) setHasOlder(out.more);
+        if (first && find) setNotFound(false);
+      }
       setPollError(undefined);
       // Read marks: a request's reading tells the sender nothing (§7).
       if (document.visibilityState === "visible" && out.messages.some((m) => !m.mine && !m.read_at)) await post(`${base}/read`).catch(() => undefined);
@@ -142,15 +168,67 @@ export function PeopleChatPage() {
   const reloadChat = chat.reload;
   useEffect(() => {
     setMessages(undefined);
-    thread.reset();
-    pull(true).catch(setPollError);
+    thread.reset(at);
+    pull(true, at).catch(setPollError);
+  }, [base, pull, at]);
+  // Polling: as before while the live connection is not open, slowly while it is.
+  const connected = live.connected;
+  useEffect(() => {
     const t = setInterval(() => {
       if (document.visibilityState !== "visible") return;
       pull(false).catch(setPollError);
       reloadChat();
-    }, POLL_MS);
+    }, livePoll(connected, POLL_MS));
     return () => clearInterval(t);
-  }, [base, pull]);
+  }, [pull, reloadChat, connected]);
+  // What the live connection tells: messages of this chat in place at once
+  // (theirs read while the tab is seen), the chat's own changes, messages
+  // deleted elsewhere, and, after a reconnection, what was missed.
+  const readSoon = useRef<number>(undefined);
+  const chatSoon = useRef<number>(undefined);
+  useEffect(
+    () =>
+      live.subscribe((e) => {
+        if (e.type === "message" && e.data.chat_id === id) {
+          setMessages((cur) => threadWithLive(cur, id, e.data));
+          if (!e.data.message.mine && !e.data.message.read_at && document.visibilityState === "visible") {
+            window.clearTimeout(readSoon.current);
+            readSoon.current = window.setTimeout(() => void post(`${base}/read`).catch(() => undefined), 300);
+          }
+        } else if (e.type === "gone" && e.data.chat_id === id) {
+          if (e.data.id) setMessages((cur) => threadWithGone(cur, id, e.data));
+          else nav("/you/people/requests", { replace: true });
+        } else if (e.type === "chat" && e.data.id === id) {
+          window.clearTimeout(chatSoon.current);
+          chatSoon.current = window.setTimeout(reloadChat, 200);
+        } else if (e.type === "ready") {
+          pull(false).catch(setPollError);
+          reloadChat();
+        }
+      }),
+    [live.subscribe, id, base, pull, reloadChat, nav],
+  );
+  useEffect(
+    () => () => {
+      window.clearTimeout(readSoon.current);
+      window.clearTimeout(chatSoon.current);
+    },
+    [],
+  );
+  // Typing: said while the words change (at most every 3 seconds), stopped
+  // when the box empties or the chat is left.
+  const gate = useRef(new TypingGate());
+  const typed = (v: string) => {
+    if (!c || c.request || c.waiting || c.blocked || c.gone || c.suspended) return;
+    const say = gate.current.change(v, Date.now());
+    if (say !== null) void post(`${base}/typing`, { typing: say }).catch(() => undefined);
+  };
+  useEffect(() => {
+    const g = gate.current;
+    return () => {
+      if (g.leave()) void post(`${base}/typing`, { typing: false }).catch(() => undefined);
+    };
+  }, [base]);
   loadOlderRef.current = () => {
     const oldest = messages?.find((m) => !m.local);
     if (!oldest || loadingOlder.current) return;
@@ -167,6 +245,7 @@ export function PeopleChatPage() {
 
   const send = async (text: string, file?: File, reply?: PeopleMessage) => {
     setProblem(undefined);
+    gate.current.sent();
     const client = file ? `${Date.now()}-${++localN}` : clientFor(kept.current, text, () => `${Date.now()}-${++localN}`);
     kept.current = undefined;
     const preview = file ? await asDataURL(file) : undefined;
@@ -232,14 +311,36 @@ export function PeopleChatPage() {
     }
   };
 
+  /** A place (§7): sent as it was seen in the preview, with its name. */
+  const sharePlace = async (place: Place) => {
+    setProblem(undefined);
+    try {
+      const out = await post<PeopleMessage>(`${base}/messages`, { location: place, client_id: `${Date.now()}-${++localN}` });
+      setMessages((cur) => mergePeople(cur ?? [], [out]));
+      thread.toBottom?.();
+      if (c?.waiting || !c?.last) reloadChat();
+      return true;
+    } catch (e) {
+      const said = sendProblem(e);
+      if (!said) throw e;
+      setProblem(said);
+      reloadChat();
+      return false;
+    }
+  };
+
   const closed = closedWords(c);
   const composer = useComposer<PeopleMessage>({
     draftKey: draftKey(id),
     rules: BUSINESS_FILES,
     sources: { "@": [], "#": [] },
     replyLine: (m) => messageLine(m),
-    // What a send ran into goes once the words are changed.
-    onType: () => setSendError(undefined),
+    // What a send ran into goes once the words are changed; the other
+    // person is told we are typing.
+    onType: (v) => {
+      setSendError(undefined);
+      typed(v);
+    },
     onSend: (s) => {
       setSendError(undefined);
       void send(s.text, s.file, s.reply);
@@ -313,6 +414,7 @@ export function PeopleChatPage() {
     }, paid ? "Marked as paid" : "Marked as not paid yet");
 
   const byID = new Map((messages ?? []).map((m) => [m.id, m]));
+  const theyType = !!c && !c.request && live.typing.has(id);
   const sub = headWords(c);
   // Read ticks go between the two only while both have them on: the
   // server hides reads otherwise, and the client does not show one either.
@@ -326,13 +428,29 @@ export function PeopleChatPage() {
         menuLabel="More about this chat"
         avatar={<ChatAvatar name={name} logo={photoOf(c?.person)} />}
         title={c?.name ?? "Chat"}
-        subtitle={sub ? <span data-testid="people-head-line">{sub}</span> : undefined}
+        subtitle={
+          theyType ? (
+            <span className="typing" data-testid="people-typing">
+              typing…
+            </span>
+          ) : sub ? (
+            <span data-testid="people-head-line">{sub}</span>
+          ) : undefined
+        }
         items={
           c
             ? (close) => (
                 <>
                   <button type="button" role="menuitem" onClick={() => (close(), setSheet({ k: "info" }))} data-testid="people-info">
                     Contact info
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => (close(), nav(`/you/people/search?chat=${encodeURIComponent(id)}&name=${encodeURIComponent(c.name)}`))}
+                    data-testid="people-search-chat"
+                  >
+                    Search in this chat
                   </button>
                   {!c.request && (
                     <>
@@ -371,13 +489,28 @@ export function PeopleChatPage() {
       />
       {problem && (
         <div className="notice pc-notice" role="alert" data-testid="people-problem">
-          <span className="grow">{problem}</span>
+          <span className="grow">
+            {problem}
+            {/Your standing/.test(problem) && (
+              <>
+                {" "}
+                <Link to="/you/settings/standing" data-testid="people-problem-standing">
+                  Open Your standing
+                </Link>
+              </>
+            )}
+          </span>
           <button type="button" className="small" onClick={() => setProblem(undefined)}>
             OK
           </button>
         </div>
       )}
       <ErrorBox error={sendError ?? act.error ?? pollError ?? chat.error} />
+      {at && notFound && (
+        <p className="notice" role="status" data-testid="people-at-missing">
+          That message is no longer in this chat.
+        </p>
+      )}
       <ChatStream
         items={messages}
         thread={thread}
@@ -402,7 +535,7 @@ export function PeopleChatPage() {
               mine={m.mine}
               first={first}
               testid="people-message"
-              className={`${card ? "card-bubble" : ""}${m.my_reaction || m.their_reaction ? " has-reactions" : ""}`.trim()}
+              className={`${card ? "card-bubble" : ""}${m.my_reaction || m.their_reaction ? " has-reactions" : ""}${thread.flashId === m.id ? " flash" : ""}`.trim()}
               what={what}
               onReply={live && composer.o.enabled !== false && !c?.request ? () => composer.setReply(m) : undefined}
               quickReact={live && !c?.request}
@@ -507,12 +640,7 @@ export function PeopleChatPage() {
                 />
               )}
               {m.attachment && !m.deleted && <AppAttachmentView a={m.attachment} src={m.local ? undefined : peopleFileURL(id, m.id)} preview={m.localPreview} who={name} mine={m.mine} />}
-              {m.location && !m.deleted && (
-                <a className="chat-file" href={`https://www.openstreetmap.org/?mlat=${m.location.lat}&mlon=${m.location.lng}#map=17/${m.location.lat}/${m.location.lng}`} target="_blank" rel="noopener noreferrer">
-                  <Icon name="pin" />
-                  <span className="name">{m.location.label || "A place"}</span>
-                </a>
-              )}
+              {m.location && !m.deleted && <PlaceView place={m.location} />}
               {caption && (
                 <span className="text">
                   {caption}
@@ -601,7 +729,8 @@ export function PeopleChatPage() {
       )}
       {c && sheet?.k === "forward" && <ForwardSheet chat={id} m={sheet.m} onClose={() => setSheet(undefined)} />}
       {c && sheet?.k === "card" && <CardSheet chat={id} m={sheet.m} onClose={() => setSheet(undefined)} />}
-      {c && sheet?.k === "share" && <ShareSheet onClose={() => setSheet(undefined)} onSend={shareCard} onSplit={() => setSheet({ k: "split" })} />}
+      {c && sheet?.k === "share" && <ShareSheet onClose={() => setSheet(undefined)} onSend={shareCard} onSplit={() => setSheet({ k: "split" })} onPlace={() => setSheet({ k: "place" })} />}
+      {c && sheet?.k === "place" && <PlaceSheet name={c.name} onClose={() => setSheet(undefined)} onSend={sharePlace} />}
       {c && sheet?.k === "split" && <SplitSheet name={c.name} onClose={() => setSheet(undefined)} onSend={shareCard} />}
       {c && sheet?.k === "delete" && (
         <DeleteAsk
@@ -1034,7 +1163,7 @@ function CardSheet({ chat, m, onClose }: { chat: string; m: PeopleMessage; onClo
 
 /** Share into the chat: a business, a product, one of your orders, or
  * "Your share". */
-function ShareSheet({ onClose, onSend, onSplit }: { onClose: () => void; onSend: (c: CardAsk) => Promise<boolean>; onSplit: () => void }) {
+function ShareSheet({ onClose, onSend, onSplit, onPlace }: { onClose: () => void; onSend: (c: CardAsk) => Promise<boolean>; onSplit: () => void; onPlace: () => void }) {
   const [step, setStep] = useState<"menu" | "business" | "product" | "order" | { items: string; business: string; name: string }>("menu");
   // One order picked: shared as it is, or its delivery once a rider has it.
   const [order, setOrder] = useState<{ business_id: string; reference: string; business: string }>();
@@ -1085,6 +1214,11 @@ function ShareSheet({ onClose, onSend, onSplit }: { onClose: () => void; onSend:
           <Row icon="split" title="Your share" sub={<span className="sub">Ask them to pay you back</span>}>
             <button type="button" onClick={onSplit} data-testid="share-split">
               Make one
+            </button>
+          </Row>
+          <Row icon="place" title="A place" sub={<span className="sub">Where you are now, to meet or to find you</span>}>
+            <button type="button" onClick={onPlace} data-testid="share-place">
+              Choose
             </button>
           </Row>
         </Items>
@@ -1261,3 +1395,115 @@ export function AccountFields({ value, onChange }: { value: PayoutAccount; onCha
 
 /** A draft kept for a people chat, for the list's rows. */
 export const peopleDraft = (id: string) => getDraft(draftKey(id));
+
+/** A place in a message: its name, the figures, and a link to a map. */
+export function PlaceView({ place }: { place: Place }) {
+  const name = place.label || "A place";
+  return (
+    <a className="chat-file people-place" href={mapURL(place)} target="_blank" rel="noopener noreferrer" data-testid="people-place">
+      <Icon name="place" />
+      <span className="people-place-words">
+        <span className="name">{name}</span>
+        <span className="people-place-sub">See it on a map</span>
+      </span>
+      <span className="sr-only"> (opens a map in a new tab)</span>
+    </a>
+  );
+}
+
+/** Sending a place (§7): where the person is, found only when they ask
+ * (the browser asks them then), shown before it is sent, with a name of
+ * their own if they like. */
+function PlaceSheet({ name, onClose, onSend }: { name: string; onClose: () => void; onSend: (p: Place) => Promise<boolean> }) {
+  const [state, setState] = useState<{ k: "ask" } | { k: "finding" } | { k: "found"; lat: number; lng: number; accuracy?: number } | { k: "problem"; words: string }>({ k: "ask" });
+  const [label, setLabel] = useState("");
+  const act = useAction();
+  const find = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setState({ k: "problem", words: placeProblem(0) });
+      return;
+    }
+    setState({ k: "finding" });
+    navigator.geolocation.getCurrentPosition(
+      (p) => setState({ k: "found", lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
+      (e) => setState({ k: "problem", words: placeProblem(e.code) }),
+      { enableHighAccuracy: true, timeout: 20_000, maximumAge: 60_000 },
+    );
+  };
+  const checked = state.k === "found" ? checkPlace(state.lat, state.lng, label) : undefined;
+  return (
+    <Sheet
+      title="Send a place"
+      onClose={onClose}
+      testid="people-place-sheet"
+      footer={
+        state.k === "found" ? (
+          <button
+            type="button"
+            className="tk-cta"
+            disabled={!checked?.ok || act.busy}
+            data-testid="place-send"
+            onClick={() =>
+              void act.run(async () => {
+                if (!checked?.ok) return;
+                const went = await onSend(checked.place);
+                if (went) toast("Place sent");
+                onClose();
+              }, false)
+            }
+          >
+            {act.busy ? "Sending…" : `Send to ${name}`}
+          </button>
+        ) : undefined
+      }
+    >
+      <div className="pc-check">
+        {state.k === "ask" && (
+          <>
+            <p>Send {name} where you are now. Your browser asks you first; nothing is shared until you press Send.</p>
+            <button type="button" className="primary" onClick={find} data-testid="place-find">
+              <Icon name="place" /> Use where I am now
+            </button>
+          </>
+        )}
+        {state.k === "finding" && <Skeleton rows={1} label="Finding where you are…" />}
+        {state.k === "problem" && (
+          <>
+            <p className="error" role="alert" data-testid="place-problem">
+              {state.words}
+            </p>
+            <button type="button" onClick={find} data-testid="place-again">
+              Try again
+            </button>
+          </>
+        )}
+        {state.k === "found" && (
+          <>
+            <div className="people-place-preview" data-testid="place-preview">
+              <Icon name="place" />
+              <span className="people-place-words">
+                <span className="name">{label.trim() || "Where you are now"}</span>
+                <span className="people-place-sub">
+                  {placeFigures(state)}
+                  {state.accuracy !== undefined && state.accuracy > 0 ? `, to about ${Math.round(state.accuracy)} m` : ""}
+                </span>
+              </span>
+              <a href={mapURL(state)} target="_blank" rel="noopener noreferrer" data-testid="place-map">
+                Check it on a map<span className="sr-only"> (opens in a new tab)</span>
+              </a>
+            </div>
+            <KitField label="Name it (optional)" hint="For example: the shop's gate, or Mama Put on Herbert Macaulay.">
+              <input value={label} maxLength={200} onChange={(e) => setLabel(e.target.value)} data-testid="place-label" />
+            </KitField>
+            {checked && !checked.ok && (
+              <p className="error" role="alert">
+                {checked.words}
+              </p>
+            )}
+          </>
+        )}
+        <ErrorBox error={act.error} />
+      </div>
+    </Sheet>
+  );
+}

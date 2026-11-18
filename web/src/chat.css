@@ -623,6 +623,7 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 
 /* Chats with people (docs/spec/people-chatting.md): the one list's marks and
    Requests, a request's bar, finding people, a person's link and QR code. */
+.chat-row-trust { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .chat-kind { flex: none; font-size: 12px; font-weight: 500; color: var(--muted); }
 .more-rows { display: flex; justify-content: center; padding: 8px 0; }
 .people-requests-entry { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin: 0 0 8px; border-radius: 12px; background: var(--tk-soft); color: var(--text); text-decoration: none; font-weight: 600; }
@@ -650,3 +651,18 @@ button.tk-ref-top:active, .tk-ref-row:active { transform: none; }
 .people-kept svg { width: 14px; height: 14px; vertical-align: -2px; }
 .people-setting { padding: 10px 0; border-bottom: 1px solid var(--border); }
 .people-setting:last-of-type { border-bottom: 0; }
+
+/* People chats, stage 5a gaps: search, starred, places, this browser's notifications. */
+.people-list-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+.people-list-tools svg { width: 16px; height: 16px; vertical-align: -3px; }
+.people-search-form input { width: 100%; }
+.bubble .people-place .people-place-words, .people-place-preview .people-place-words { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.bubble .people-place .name { overflow-wrap: anywhere; }
+.people-place-sub { font-size: 12px; color: var(--muted); }
+.bubble .people-place .people-place-sub { text-decoration: underline; }
+.people-place-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 12px; border-radius: 12px; background: var(--panel-2); }
+.people-place-preview > svg { width: 22px; height: 22px; flex: none; color: var(--accent); }
+.people-place-preview .name { font-weight: 600; overflow-wrap: anywhere; }
+.people-place-preview a { flex-basis: 100%; }
+.you-browser-push { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.you-browser-push h3 { margin: 0 0 4px; }

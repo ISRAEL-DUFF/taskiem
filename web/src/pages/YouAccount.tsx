@@ -1,10 +1,11 @@
 import { KEPT_WORDS } from "../lib/people";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ApiError, del, get, post, put, putForm, type ProofWays } from "../api";
 import { useAuth } from "../auth";
 import { dateLabel } from "../lib/invoices";
 import { showPhone } from "../lib/phone";
+import { browserEnv, enableYouPush, findYouDevice, previewWords, pushSupport, serverKey, setYouPreview, type PushDevice } from "../lib/push";
 import {
   accountDeletedPath,
   deleteBlocked,
@@ -138,7 +139,93 @@ export function YouNotificationsCard() {
           </label>
         ))}
       {n && <p className="hint">{NOTIFY_OFF_WORDS}</p>}
+      <YouBrowserPush />
     </section>
+  );
+}
+
+/**
+ * This browser as one of the person's own devices (people-chatting §6.2):
+ * notifications on it, and whether they show what a message says
+ * (PUT /v1/me/push `preview`, PATCH /v1/me/push/{id}). Offered only where
+ * the browser and the server can push.
+ */
+export function YouBrowserPush() {
+  const [st, setSt] = useState<{ k: "look" | "none" | "off" | "busy" | "denied" | "failed" } | { k: "on"; device: PushDevice }>({ k: "look" });
+  const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState<string>();
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      if (pushSupport(browserEnv()) !== "yes" || !(await serverKey())) return live && setSt({ k: "none" });
+      const device = await findYouDevice();
+      if (live) setSt(device ? { k: "on", device } : { k: "off" });
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (st.k === "look" || st.k === "none") return null;
+  const turnOn = () => {
+    setSt({ k: "busy" });
+    void enableYouPush(true).then(async (r) => {
+      if (!r.ok) return setSt({ k: r.why === "denied" ? "denied" : "failed" });
+      const device = await findYouDevice();
+      setSt(device ? { k: "on", device } : { k: "failed" });
+    });
+  };
+  const preview = (on: boolean) => {
+    if (st.k !== "on") return;
+    const was = st.device;
+    setProblem(undefined);
+    setSaving(true);
+    setSt({ k: "on", device: { ...was, preview: on } });
+    setYouPreview(was.id, on)
+      .then(
+        (d) => setSt({ k: "on", device: d ?? { ...was, preview: on } }),
+        () => {
+          setSt({ k: "on", device: was });
+          setProblem("That did not save. Check your connection and try again.");
+        },
+      )
+      .finally(() => setSaving(false));
+  };
+  return (
+    <div className="you-browser-push" data-testid="you-browser-push">
+      <h3>On this browser</h3>
+      {st.k === "on" ? (
+        <>
+          <p className="hint">Notifications come to this browser when Taskiem is closed.</p>
+          <label className="switch-line you-notify-line">
+            <input type="checkbox" role="switch" checked={st.device.preview} disabled={saving} onChange={(e) => preview(e.target.checked)} data-testid="you-push-preview" />{" "}
+            <span>
+              Show what the message says
+              <span className="hint block" data-testid="you-push-preview-words">
+                {previewWords(st.device.preview)}
+              </span>
+            </span>
+          </label>
+          {problem && (
+            <p className="error" role="alert">
+              {problem}
+            </p>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="hint">
+            {st.k === "denied"
+              ? "Notifications are blocked in this browser. Allow them for Taskiem in your browser's settings, then try again."
+              : st.k === "failed"
+                ? "That did not work. Try again."
+                : "Get a notification here when someone writes to you, even with Taskiem closed."}
+          </p>
+          <button type="button" disabled={st.k === "busy"} onClick={turnOn} data-testid="you-push-on">
+            {st.k === "busy" ? "Turning on…" : "Notify me on this browser"}
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -232,6 +319,16 @@ export function YouPrivacyPage() {
             <p className="hint">
               <Link to="/transparency" data-testid="privacy-transparency">
                 How many requests from the authorities Taskiem received
+              </Link>
+            </p>
+            <p className="hint">
+              <Link to="/you/settings/standing" data-testid="privacy-standing">
+                Your standing: what Taskiem's moderators decided about you, and how to appeal
+              </Link>
+            </p>
+            <p className="hint">
+              <Link to="/you/settings/people" data-testid="privacy-people-settings">
+                Who can find you, message you, and see when you were last here
               </Link>
             </p>
           </section>

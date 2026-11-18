@@ -35,6 +35,8 @@ import {
   type RequestList,
 } from "../lib/people";
 import { usePagedList } from "../lib/usePagedList";
+import { requestsWithChat, requestsWithGone } from "../lib/peoplelive";
+import { livePoll, usePeopleLive } from "./PeopleLive";
 import { EmptyState, ErrorBox, fmtTime, Items, Modal, PageHeader, Row, Skeleton, useAction, useLoad } from "../ui";
 import { ChatAvatar } from "./ChatAvatar";
 import { ChatRow } from "./ChatRow";
@@ -289,8 +291,20 @@ export function NewChatSheet({ onClose }: { onClose: () => void }) {
 
 /** /you/people/requests: strangers' first messages, waiting. */
 export function RequestsPage() {
-  // Read again every little while, as the Chats list is, a page at a time.
-  const list = usePagedList<RequestList, PeopleChat>("/v1/me/people/requests", (r) => r.requests ?? [], (c) => c.id, 8000);
+  // Read again every little while, as the Chats list is, a page at a time
+  // (slowly while the live connection tells what changes).
+  const live = usePeopleLive();
+  const list = usePagedList<RequestList, PeopleChat>("/v1/me/people/requests", (r) => r.requests ?? [], (c) => c.id, livePoll(live.connected, 8000));
+  const { patch, reload } = list;
+  useEffect(
+    () =>
+      live.subscribe((e) => {
+        if (e.type === "chat") patch((rows) => requestsWithChat(rows, e.data));
+        else if (e.type === "gone") patch((rows) => requestsWithGone(rows, e.data));
+        else if (e.type === "ready") reload();
+      }),
+    [live.subscribe, patch, reload],
+  );
   const reqs = list.rows ?? [];
   return (
     <>
@@ -544,6 +558,16 @@ export function PeoplePrivacyPage() {
       <section className="card" aria-labelledby="people-kept-h">
         <h2 id="people-kept-h">How your chats are kept</h2>
         <p data-testid="people-privacy-kept">{KEPT_WORDS}</p>
+        <p className="hint">
+          <Link to="/transparency" data-testid="people-privacy-transparency">
+            How many requests from the authorities Taskiem received
+          </Link>
+        </p>
+        <p className="hint">
+          <Link to="/you/settings/standing" data-testid="people-privacy-standing">
+            Your standing: what Taskiem's moderators decided about you, and how to appeal
+          </Link>
+        </p>
       </section>
     </>
   );
@@ -623,6 +647,7 @@ export function YouPeopleSettings() {
     { to: "/you/people/contacts", title: "Your contacts", sub: "People you added.", testid: "you-people-contacts" },
     { to: "/you/settings/blocked", title: "Blocked people", sub: "People who can't message you.", testid: "you-people-blocked" },
     { to: "/you/settings/payout", title: "Your bank account", sub: "For 'Your share' cards. Taskiem moves no money.", testid: "you-people-payout" },
+    { to: "/you/people/starred", title: "Starred messages", sub: "Messages you starred in your chats with people.", testid: "you-people-starred" },
     { to: "/you/settings/standing", title: "Your standing", sub: "What Taskiem's moderators decided, and appeals.", testid: "you-people-standing" },
   ];
   return (

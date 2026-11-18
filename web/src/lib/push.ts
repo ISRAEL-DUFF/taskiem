@@ -1,4 +1,4 @@
-import { del, get, put } from "../api";
+import { del, get, patch, put } from "../api";
 
 // Chat push on this device (docs/spec/chat-push.md §6): the service worker,
 // the browser's own subscription, and telling the server about it. Every
@@ -266,7 +266,7 @@ export function youPushOn(): boolean {
  * the session is in (`?side=you`), taking only the kind `you`. While it is,
  * a business's answer is pushed here and not texted.
  */
-export async function enableYouPush(): Promise<
+export async function enableYouPush(preview?: boolean): Promise<
   { ok: true } | { ok: false; why: PushWhy }
 > {
   if (pushSupport(browserEnv()) !== "yes")
@@ -292,6 +292,7 @@ export async function enableYouPush(): Promise<
       keys: json.keys,
       label: deviceLabel(navigator.userAgent),
       kinds: ["you"],
+      ...(preview === undefined ? {} : { preview }),
     });
     try {
       localStorage.setItem(YOU_KEY, view.added ?? "on");
@@ -302,6 +303,49 @@ export async function enableYouPush(): Promise<
   } catch {
     return { ok: false, why: "failed" };
   }
+}
+
+/**
+ * This browser as the person's own device (You), with its preview choice:
+ * found by the server from its address (never added here), or undefined
+ * when this browser is not one of theirs.
+ */
+export async function findYouDevice(): Promise<PushDevice | undefined> {
+  const sub = await thisSubscription();
+  if (!sub) return undefined;
+  const json = sub.toJSON();
+  try {
+    const view = await put<PushView>("/v1/me/push?side=you", {
+      endpoint: json.endpoint,
+      keys: json.keys,
+      known: true,
+    });
+    const id = view.added;
+    if (!id) return undefined;
+    try {
+      localStorage.setItem(YOU_KEY, id);
+    } catch {
+      // Not kept: found again next time.
+    }
+    return view.devices.find((d) => d.id === id);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether this browser, as the person's own device, shows what a message
+ * says (PATCH /v1/me/push/{id} {preview}); the device as it now is. */
+export async function setYouPreview(id: string, preview: boolean): Promise<PushDevice | undefined> {
+  const view = await patch<PushView>(`/v1/me/push/${encodeURIComponent(id)}?side=you`, { preview });
+  return view.devices.find((d) => d.id === id);
+}
+
+/** What a notification of a message says, by the preview choice (the
+ * server's words when it is off). */
+export function previewWords(preview: boolean): string {
+  return preview
+    ? "On: a notification shows who wrote and the start of the message."
+    : "Off: a notification says only \u201cSomeone wrote to you\u201d, with no name or words.";
 }
 
 /**

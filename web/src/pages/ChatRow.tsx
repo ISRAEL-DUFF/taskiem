@@ -24,6 +24,7 @@ export function ChatRow({
   selected = false,
   typing = false,
   accent = false,
+  trust,
   testid,
 }: {
   to: string;
@@ -44,6 +45,8 @@ export function ChatRow({
   typing?: boolean;
   /** The avatar in the brand's tint (Taskiem's own conversation). */
   accent?: boolean;
+  /** Under the preview: what a business has proved (its trust line). */
+  trust?: string;
   testid?: string;
 }) {
   return (
@@ -99,6 +102,11 @@ export function ChatRow({
               )}
             </span>
           </span>
+          {trust && (
+            <span className="chat-row-trust" data-testid="chat-row-trust" title={trust}>
+              {trust}
+            </span>
+          )}
         </span>
       </Link>
     </li>
