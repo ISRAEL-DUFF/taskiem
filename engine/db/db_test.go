@@ -468,6 +468,34 @@ func TestDispatchRoleCannotReadPayloads(t *testing.T) {
 		"SELECT lease_id FROM tenant_code_leases",
 		"SELECT binding FROM secret_legacy_bindings",
 		"SELECT languages FROM tenant_channel_settings",
+		// The safety tables (people-chatting, second review): only
+		// taskiem_safety, which no login is a member of, reads or changes
+		// reports' words and evidence, appeals, actions' reasons, held
+		// messages and lawful requests.
+		"SELECT messages FROM customer_reports",
+		"SELECT note FROM customer_reports",
+		"SELECT sealed FROM customer_reports",
+		"SELECT messages FROM people_reports",
+		"SELECT note FROM people_reports",
+		"SELECT sealed FROM people_reports",
+		"SELECT box_key FROM people_reports",
+		"SELECT sealed FROM people_report_files",
+		"SELECT text FROM people_appeals",
+		"SELECT reason FROM people_moderation",
+		"SELECT sealed FROM people_held",
+		"SELECT file_sealed FROM people_held",
+		"SELECT box_key FROM people_held",
+		"SELECT authority FROM lawful_requests",
+		"UPDATE people_reports SET status = 'reviewed'",
+		"UPDATE customer_reports SET status = 'reviewed'",
+		"UPDATE people_appeals SET state = 'upheld'",
+		"UPDATE people_moderation SET lifted_by = 'x'",
+		"UPDATE people_held SET state = 'released'",
+		"DELETE FROM people_reports",
+		"DELETE FROM customer_reports",
+		"DELETE FROM people_report_files",
+		"DELETE FROM people_held",
+		"INSERT INTO people_moderation (id, person_id, action, reason, operator) VALUES (gen_random_uuid(), gen_random_uuid(), 'warn', 'x', 'x')",
 	} {
 		_, err := d.Dispatch.Exec(ctx, q)
 		if sqlState(err) != "42501" {
@@ -479,6 +507,18 @@ func TestDispatchRoleCannotReadPayloads(t *testing.T) {
 	var member bool
 	if err := d.Admin.QueryRow(ctx, `SELECT pg_has_role('taskiem_app', 'taskiem_dispatch', 'MEMBER')`).Scan(&member); err != nil || member {
 		t.Errorf("taskiem_app is a member of taskiem_dispatch (err=%v)", err)
+	}
+	// Nor is either a member of taskiem_safety, and no login is: the
+	// safety tables are reached only through its definers.
+	for _, role := range []string{"taskiem_app", "taskiem_dispatch", "taskiem_public"} {
+		if err := d.Admin.QueryRow(ctx, `SELECT pg_has_role($1, 'taskiem_safety', 'MEMBER')`, role).Scan(&member); err != nil || member {
+			t.Errorf("%s is a member of taskiem_safety (err=%v)", role, err)
+		}
+	}
+	var logins int
+	if err := d.Admin.QueryRow(ctx, `SELECT count(*) FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member
+		WHERE m.roleid = 'taskiem_safety'::regrole AND r.rolcanlogin AND NOT r.rolsuper`).Scan(&logins); err != nil || logins != 0 {
+		t.Errorf("%d logins are members of taskiem_safety (err=%v)", logins, err)
 	}
 }
 
