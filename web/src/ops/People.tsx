@@ -13,6 +13,7 @@ import { actorLabel } from "../lib/ops";
 import {
   ACTION_LABELS,
   actionHelp,
+  actionName,
   actionIsGrave,
   actionOperation,
   bytesWords,
@@ -240,7 +241,7 @@ function LiftAction({ a, onDone }: { a: { id: string; action: ModerationAction }
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const lift = useAction();
-  const name = ACTION_LABELS[a.action];
+  const name = actionName(a.action);
   if (!open)
     return (
       <button className="small" onClick={() => setOpen(true)} data-testid="ops-lift-open">

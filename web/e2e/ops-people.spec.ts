@@ -156,7 +156,7 @@ test("a moderator handles a report: opened with a reason, reviewed, the person w
   await mod2.goto(`${base}/ops/people/persons/${dayo}`);
   await mod2.getByRole("combobox", { name: /^Action/ }).selectOption("limit");
   await mod2.getByLabel(/Reason \(they are told it/).fill("Many of your requests were deleted.");
-  await mod2.getByRole("button", { name: "Limit with passkey" }).click();
+  await mod2.getByRole("button", { name: "Limit requests with passkey" }).click();
   const limit = mod2.getByTestId("ops-person-action").filter({ hasText: "Many of your requests were deleted." });
   await limit.getByTestId("ops-lift-open").click();
   const liftNow = limit.getByRole("button", { name: /Lift with passkey/ });
