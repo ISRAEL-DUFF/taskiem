@@ -10042,12 +10042,11 @@ class GetLawfulRequestCountsResponse {
 }
 
 class GetLawfulRequestCountsResponsePeriodsItem {
-  const GetLawfulRequestCountsResponsePeriodsItem({required this.answered, required this.half, required this.label, required this.pending, required this.received, required this.refused, required this.year});
+  const GetLawfulRequestCountsResponsePeriodsItem({required this.answered, required this.half, required this.label, required this.received, required this.refused, required this.year});
 
   final int answered;
   final int half;
   final String label;
-  final int pending;
   final int received;
   final int refused;
   final int year;
@@ -10056,7 +10055,6 @@ class GetLawfulRequestCountsResponsePeriodsItem {
         answered: (j['answered'] as num).toInt(),
         half: (j['half'] as num).toInt(),
         label: j['label'] as String,
-        pending: (j['pending'] as num).toInt(),
         received: (j['received'] as num).toInt(),
         refused: (j['refused'] as num).toInt(),
         year: (j['year'] as num).toInt(),
@@ -10066,7 +10064,6 @@ class GetLawfulRequestCountsResponsePeriodsItem {
         'answered': answered,
         'half': half,
         'label': label,
-        'pending': pending,
         'received': received,
         'refused': refused,
         'year': year,

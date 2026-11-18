@@ -53,8 +53,10 @@ type standing struct {
 // transaction.
 func standingTx(ctx context.Context, tx pgx.Tx, person uuid.UUID) (standing, error) {
 	var st standing
-	rows, err := tx.Query(ctx, `SELECT action FROM people_moderation WHERE person_id = $1 AND lifted_at IS NULL AND closed_at IS NULL
-		AND action IN ('limit', 'suspend', 'close') AND (action = 'close' OR until IS NULL OR until > now())`, person)
+	// A closure is in force until the account is deleted (one whose
+	// deletion failed stays so until it is carried out).
+	rows, err := tx.Query(ctx, `SELECT action FROM people_moderation WHERE person_id = $1 AND lifted_at IS NULL
+		AND action IN ('limit', 'suspend', 'close') AND (action = 'close' OR (closed_at IS NULL AND (until IS NULL OR until > now())))`, person)
 	if err != nil {
 		return st, err
 	}
@@ -73,6 +75,22 @@ func standingTx(ctx context.Context, tx pgx.Tx, person uuid.UUID) (standing, err
 		}
 	}
 	return st, nil
+}
+
+// notSuspendedTx refuses a person whom Taskiem's moderators stopped from
+// messaging people (a suspension or a closure in force), or whose account
+// is not active, with the words that send them to Your standing: for
+// what reaches the other's copy of a chat (a reaction, marking a share
+// paid, accepting a request).
+func notSuspendedTx(ctx context.Context, tx pgx.Tx, person uuid.UUID) error {
+	st, err := standingTx(ctx, tx, person)
+	if err != nil {
+		return err
+	}
+	if st.Suspended {
+		return errPeopleYouSuspended
+	}
+	return nil
 }
 
 // senderSignalsTx gathers what the sender's request allowance weighs.
@@ -250,9 +268,13 @@ func (s *Server) reportTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, c pe
 	if err != nil {
 		return uuid.Nil, err
 	}
-	if _, err = tx.Exec(ctx, `INSERT INTO people_reports (id, person_id, reported_id, reason, note, consent, messages, from_request, sealed, box_key, kms_key, files)
-		VALUES ($1, $2, $3, $4, $5, true, '[]', $6, $7, $8, $9, $10)`,
-		id, person, c.Peer, in.Reason, in.Note, c.RequestAt != nil, sealed, box.Sealed, box.KMSKey, len(out)); err != nil {
+	// The reporter's keyed mark (one person counts once, even after they
+	// delete their account) and whether the reported person ever wrote to
+	// them (a report of someone who never did weighs nothing on their
+	// allowance: taskiem_people_sender_signals).
+	if _, err = tx.Exec(ctx, `INSERT INTO people_reports (id, person_id, reported_id, reason, note, consent, messages, from_request, sealed, box_key, kms_key, files,
+		reporter_mark, peer_wrote) VALUES ($1, $2, $3, $4, $5, true, '[]', $6, $7, $8, $9, $10, $11, $12)`,
+		id, person, c.Peer, in.Reason, in.Note, c.RequestAt != nil, sealed, box.Sealed, box.KMSKey, len(out), s.reporterMark(person), c.PeerWroteAt != nil); err != nil {
 		return uuid.Nil, err
 	}
 	for _, f := range out {
@@ -325,8 +347,8 @@ func (s *Server) myStanding(w http.ResponseWriter, r *http.Request) {
 	}
 	var acts []standingAction
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT m.id, m.action, m.reason, m.created_at, m.until, m.lifted_at, m.closed_at IS NULL AND m.lifted_at IS NULL
-			AND (m.action IN ('warn', 'close') OR m.until IS NULL OR m.until > now()), m.seen_at IS NOT NULL,
+		rows, err := tx.Query(ctx, `SELECT m.id, m.action, m.reason, m.created_at, m.until, m.lifted_at, m.lifted_at IS NULL
+			AND (m.action = 'close' OR (m.closed_at IS NULL AND (m.action = 'warn' OR m.until IS NULL OR m.until > now()))), m.seen_at IS NOT NULL,
 			a.id, a.text, a.state, a.created_at, a.decided_at, a.decision_note
 			FROM people_moderation m LEFT JOIN people_appeals a ON a.action_id = m.id
 			WHERE m.person_id = $1 ORDER BY m.created_at DESC LIMIT 50`, person)
@@ -351,7 +373,8 @@ func (s *Server) myStanding(w http.ResponseWriter, r *http.Request) {
 				a.InForce = false
 			}
 			a.Words = moderationWords(a.Action, a.Until)
-			a.CanAppeal = a.Appeal == nil && a.LiftedAt == nil && (a.InForce || a.Action == peoplesafety.ActionWarn)
+			a.CanAppeal = a.Appeal == nil && a.LiftedAt == nil && (a.InForce || a.Action == peoplesafety.ActionWarn) &&
+				!(a.Action == peoplesafety.ActionClose && a.Until != nil && !a.Until.After(time.Now()))
 			return a, nil
 		})
 		return err
@@ -418,12 +441,25 @@ func (s *Server) appealStanding(w http.ResponseWriter, r *http.Request) {
 	}
 	var out standingAppeal
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		var lifted, closed *time.Time
-		if err := tx.QueryRow(ctx, `SELECT lifted_at, closed_at FROM people_moderation WHERE id = $1 AND person_id = $2`, in.ActionID, person).Scan(&lifted, &closed); err != nil {
+		// The decision's lock (as the closure's carrying out and the
+		// moderators' lift take it), so an appeal made as the closing day
+		// comes either holds the closure or is refused.
+		var action string
+		var lifted, closed, until *time.Time
+		if err := tx.QueryRow(ctx, `SELECT action, until, lifted_at, closed_at FROM people_moderation WHERE id = $1 AND person_id = $2 FOR UPDATE`,
+			in.ActionID, person).Scan(&action, &until, &lifted, &closed); err != nil {
 			return err
 		}
 		if lifted != nil || closed != nil {
 			return customerSendErr{http.StatusConflict, "This decision is no longer in force, so there is nothing to appeal."}
+		}
+		if until != nil && !until.After(time.Now()) {
+			if action == peoplesafety.ActionClose {
+				return customerSendErr{http.StatusConflict, "The time to appeal the closing of your account has ended."}
+			}
+			if action != peoplesafety.ActionWarn {
+				return customerSendErr{http.StatusConflict, "This decision is no longer in force, so there is nothing to appeal."}
+			}
 		}
 		out = standingAppeal{ID: uuid.Must(uuid.NewV7()), Text: in.Text, State: "open"}
 		if err := tx.QueryRow(ctx, `INSERT INTO people_appeals (id, action_id, person_id, text) VALUES ($1, $2, $3, $4) RETURNING created_at`,
@@ -546,33 +582,85 @@ func (s *Server) SafetyTick(ctx context.Context) error {
 		errs = append(errs, err)
 	}
 	for _, d := range due {
-		note := "closed"
-		if _, err := s.deletePerson(ctx, d[1], "closed_by_moderators", ""); err != nil {
-			note = "not closed: " + err.Error()
-			if errors.Is(err, errDoorNone) {
-				note = "not closed: the account was already deleted"
-			}
-		}
-		if err := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{ops.PlatformChain}, func(tx pgx.Tx) error {
-			if _, err := tx.Exec(ctx, `SELECT taskiem_people_closure_done($1, $2)`, d[0], note); err != nil {
-				return err
-			}
-			return ops.AuditTx(ctx, tx, "taskiem:safety", "people.account.close", d[1].String(), map[string]any{"action": d[0], "outcome": note})
-		}); err != nil {
+		if err := s.closeAccount(ctx, d[0], d[1]); err != nil {
 			errs = append(errs, err)
 		}
+	}
+	if err := s.sweepPeople(ctx); err != nil {
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
 }
 
-// sealOldReports seals reports kept plain before 00480 under keys of
-// their own.
+// closeAccount carries out one closure that came due, all in one
+// transaction: the closure is locked and checked still due
+// (taskiem_people_closure_due: a lift, an appeal or its decision made
+// meanwhile wins), the account deleted as the person would delete it, and
+// the closure recorded done, audited people.account.close. If the
+// deletion fails nothing of it is kept: the closure stays in force (the
+// person stays unable to message anyone), the failure is audited
+// people.account.close.failed, and the next tick tries again.
+func (s *Server) closeAccount(ctx context.Context, action, person uuid.UUID) error {
+	err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+		var deleted *time.Time
+		if err := tx.QueryRow(ctx, `SELECT deleted_at FROM users WHERE id = $1 FOR UPDATE`, person).Scan(&deleted); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `SELECT set_config('app.tenant_scope', $1, true)`, db.Scope(ops.PlatformChain)); err != nil {
+			return err
+		}
+		var due bool
+		if err := tx.QueryRow(ctx, `SELECT taskiem_people_closure_due($1)`, action).Scan(&due); err != nil || !due {
+			return err
+		}
+		note := "closed"
+		if deleted != nil {
+			note = "the account was already deleted"
+		} else if _, err := s.deletePersonTx(ctx, tx, person, "closed_by_moderators", ""); err != nil {
+			return err
+		}
+		// deletePersonTx keeps the platform chain in scope.
+		if _, err := tx.Exec(ctx, `SELECT taskiem_people_closure_done($1, $2)`, action, note); err != nil {
+			return err
+		}
+		return ops.AuditTx(ctx, tx, "taskiem:safety", "people.account.close", person.String(), map[string]any{"action": action, "outcome": note})
+	})
+	if err == nil {
+		return nil
+	}
+	if aerr := db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{ops.PlatformChain}, func(tx pgx.Tx) error {
+		return ops.AuditTx(ctx, tx, "taskiem:safety", "people.account.close.failed", person.String(), map[string]any{"action": action, "error": err.Error()})
+	}); aerr != nil {
+		return errors.Join(err, aerr)
+	}
+	return fmt.Errorf("people safety: closing an account: %w", err)
+}
+
+// sweepPeople prunes what the people chats keep a short while, for
+// everyone: gone records past their hour, typing marks past their time
+// and live connections that ended without saying so.
+func (s *Server) sweepPeople(ctx context.Context) error {
+	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{ops.PlatformChain}, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `SELECT * FROM taskiem_people_sweep(make_interval(secs => $1))`, liveStale.Seconds())
+		return err
+	})
+}
+
+// sealOldReports seals reports kept plain (people's before 00480,
+// businesses' before 00481) under keys of their own.
 func (s *Server) sealOldReports(ctx context.Context) error {
 	if s.Vault == nil {
 		return nil
 	}
+	return errors.Join(s.sealReports(ctx, "taskiem_ops_people_reports_unsealed", "taskiem_ops_people_report_seal", peoplesafety.ReportPurpose),
+		s.sealReports(ctx, "taskiem_ops_customer_reports_unsealed", "taskiem_ops_customer_report_seal", peoplesafety.CustomerReportPurpose))
+}
+
+// sealReports seals one kind's plain reports, 100 a tick: list names the
+// definer answering them, seal the one keeping each sealed.
+func (s *Server) sealReports(ctx context.Context, list, seal string, purpose func(uuid.UUID) string) error {
 	return db.InTenantTx(ctx, s.Store.Pool, []uuid.UUID{ops.PlatformChain}, func(tx pgx.Tx) error {
-		rows, err := tx.Query(ctx, `SELECT id, messages FROM taskiem_ops_people_reports_unsealed(100)`)
+		rows, err := tx.Query(ctx, `SELECT id, messages FROM `+list+`(100)`)
 		if err != nil {
 			return err
 		}
@@ -588,7 +676,7 @@ func (s *Server) sealOldReports(ctx context.Context) error {
 			return err
 		}
 		for _, p := range list {
-			box, err := peoplesafety.NewBox(ctx, s.Vault, peoplesafety.ReportPurpose(p.id), p.id)
+			box, err := peoplesafety.NewBox(ctx, s.Vault, purpose(p.id), p.id)
 			if err != nil {
 				return err
 			}
@@ -596,7 +684,7 @@ func (s *Server) sealOldReports(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			if _, err := tx.Exec(ctx, `SELECT taskiem_ops_people_report_seal($1, $2, $3, $4)`, p.id, sealed, box.Sealed, box.KMSKey); err != nil {
+			if _, err := tx.Exec(ctx, `SELECT `+seal+`($1, $2, $3, $4)`, p.id, sealed, box.Sealed, box.KMSKey); err != nil {
 				return err
 			}
 		}

@@ -15431,7 +15431,8 @@ paths:
       summary: How many lawful requests Taskiem received
       description: 'For anyone, signed in or not (decision 0069 point 11, people-chatting §8.5): requests for people''s data from
         authorities, by the half-year they were received in (Lagos time), newest first: how many were received, answered
-        (with exactly what was asked), refused, and still being looked at. Numbers only.'
+        (with exactly what was asked) and refused. Only half-years that have ended are shown (the current one once it ends),
+        so the count never moves when one request comes in. Numbers only.'
       security: []
       responses:
         '200':
@@ -15448,7 +15449,7 @@ paths:
                     items:
                       type: object
                       additionalProperties: false
-                      required: [year, half, label, received, answered, refused, pending]
+                      required: [year, half, label, received, answered, refused]
                       properties:
                         year:
                           type: integer
@@ -15462,8 +15463,6 @@ paths:
                         answered:
                           type: integer
                         refused:
-                          type: integer
-                        pending:
                           type: integer
                   words:
                     type: string

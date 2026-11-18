@@ -393,6 +393,10 @@ func (s *Server) markSplitPaid(w http.ResponseWriter, r *http.Request) {
 		if m.cardType == nil || *m.cardType != "split" || m.Deleted {
 			return customerSendErr{http.StatusConflict, "Only a share card is marked paid."}
 		}
+		// Both copies show it: not from a suspended person.
+		if err := notSuspendedTx(ctx, tx, person); err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `UPDATE people_messages SET paid_at = CASE WHEN $3 THEN now() END, paid_by_me = CASE WHEN $3 THEN true END
 			WHERE person_id = $1 AND id = $2`, person, m.ID, in.Paid); err != nil {
 			return err

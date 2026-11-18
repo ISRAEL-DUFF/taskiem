@@ -817,8 +817,10 @@ func (s *Server) readPeopleChat(w http.ResponseWriter, r *http.Request) {
 		if err != nil || len(ids) == 0 || c.RequestAt != nil || c.Blocked || c.Peer == nil {
 			return err
 		}
+		// The other away (deleted, suspended) or the person suspended: read
+		// on their own copy only.
 		peer, err := peopleReachTx(ctx, tx, c.ID)
-		if peerAway(err) {
+		if reachQuiet(err) {
 			return nil
 		}
 		if err != nil {
@@ -856,13 +858,14 @@ func ownMessageTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, c peopleCopy
 }
 
 // reachIfDeliveredTx puts the other's copy in reach when the message
-// reached it (and they did not delete their account): ok says so.
+// reached it and they take changes now (not deleted, not suspended): ok
+// says so. Otherwise only the person's own copy changes.
 func reachIfDeliveredTx(ctx context.Context, tx pgx.Tx, c peopleCopy, m peopleRow) (uuid.UUID, bool, error) {
 	if c.Peer == nil || (m.Mine && m.delivered == nil) {
 		return uuid.Nil, false, nil
 	}
 	peer, err := peopleReachTx(ctx, tx, c.ID)
-	if peerAway(err) {
+	if reachQuiet(err) {
 		return uuid.Nil, false, nil
 	}
 	return peer, err == nil, err
@@ -906,6 +909,13 @@ func (s *Server) markPeopleMessage(w http.ResponseWriter, r *http.Request) {
 		}
 		if m.Deleted && in.Reaction != nil {
 			return customerSendErr{http.StatusConflict, "This message was deleted."}
+		}
+		// A reaction shows on the other's copy: not from a suspended person
+		// (a star is their own).
+		if in.Reaction != nil {
+			if err := notSuspendedTx(ctx, tx, person); err != nil {
+				return err
+			}
 		}
 		if _, err := tx.Exec(ctx, `UPDATE people_messages SET starred_at = CASE WHEN $3::boolean IS NULL THEN starred_at WHEN $3 THEN COALESCE(starred_at, now()) END,
 			my_reaction = CASE WHEN $4::text IS NULL THEN my_reaction ELSE NULLIF($4, '') END WHERE person_id = $1 AND id = $2`, person, m.ID, in.Starred, in.Reaction); err != nil {
@@ -952,16 +962,18 @@ func (s *Server) markPeopleMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// forgetMessageTx empties one copy of a message deleted for everyone.
+// forgetMessageTx empties one copy of a message deleted for everyone. The
+// message is emptied first: that waits for a search backfill holding it
+// (searchReady), so its tokens, written by then, are removed after.
 func forgetMessageTx(ctx context.Context, tx pgx.Tx, owner, id uuid.UUID) error {
+	if _, err := tx.Exec(ctx, `UPDATE people_messages SET deleted_at = now(), sealed = NULL, attachment = NULL, my_reaction = NULL, their_reaction = NULL,
+		starred_at = NULL WHERE person_id = $1 AND id = $2`, owner, id); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `DELETE FROM people_files WHERE person_id = $1 AND message_id = $2`, owner, id); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM people_search WHERE person_id = $1 AND message_id = $2`, owner, id); err != nil {
-		return err
-	}
-	_, err := tx.Exec(ctx, `UPDATE people_messages SET deleted_at = now(), sealed = NULL, attachment = NULL, my_reaction = NULL, their_reaction = NULL,
-		starred_at = NULL WHERE person_id = $1 AND id = $2`, owner, id)
+	_, err := tx.Exec(ctx, `DELETE FROM people_search WHERE person_id = $1 AND message_id = $2`, owner, id)
 	return err
 }
 
@@ -1009,7 +1021,13 @@ func (s *Server) deletePeopleMessage(w http.ResponseWriter, r *http.Request) {
 		if err := forgetMessageTx(ctx, tx, person, m.ID); err != nil {
 			return err
 		}
-		peer, ok, err := reachIfDeliveredTx(ctx, tx, c, m)
+		// A suspension (theirs or the person's) stops messaging, not
+		// forgetting: the message leaves a suspended account's copy too. A
+		// deleted account has no copy.
+		if c.Peer == nil || m.delivered == nil {
+			return nil
+		}
+		peer, ok, err := peopleForgetReachTx(ctx, tx, c.ID)
 		if err != nil || !ok {
 			return err
 		}

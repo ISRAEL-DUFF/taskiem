@@ -26,9 +26,11 @@ package api
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"hash"
 	"io"
 	"net/http"
 	"strconv"
@@ -307,6 +309,33 @@ func (s *Server) deletePerson(ctx context.Context, person uuid.UUID, how, ip str
 		if status != "active" {
 			return errDoorNone
 		}
+		var err error
+		told, err = s.deletePersonTx(ctx, tx, person, how, ip)
+		return err
+	})
+	return told, err
+}
+
+// reporterMark is the server's keyed mark of a reporter, kept on their
+// reports past their account so that one person counts once among those
+// who reported someone (taskiem_people_sender_signals); it names no one
+// without the server's key.
+func (s *Server) reporterMark(person uuid.UUID) []byte {
+	var m hash.Hash
+	if s.PhoneIndex.Ready() {
+		m = hmac.New(sha256.New, s.PhoneIndex.Key)
+	} else {
+		m = sha256.New()
+	}
+	m.Write([]byte("taskiem people reporter:" + person.String()))
+	return m.Sum(nil)
+}
+
+// deletePersonTx deletes the person's account in tx, whose users row the
+// caller locked, and answers how many businesses were told.
+func (s *Server) deletePersonTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, how, ip string) (int, error) {
+	told := 0
+	err := func() error {
 		rows, err := tx.Query(ctx, `SELECT DISTINCT tenant_id FROM person_conversations WHERE person_id = $1`, person)
 		if err != nil {
 			return err
@@ -367,7 +396,7 @@ func (s *Server) deletePerson(ctx context.Context, person uuid.UUID, how, ip str
 		}
 		// Their reports stay for moderators, detached from them; held
 		// messages of theirs no one decided go (people_safety.go).
-		if _, err := tx.Exec(ctx, `SELECT taskiem_people_reports_detach($1)`, person); err != nil {
+		if _, err := tx.Exec(ctx, `SELECT taskiem_people_reports_detach($1, $2)`, person, s.reporterMark(person)); err != nil {
 			return err
 		}
 		// The person's own side.
@@ -407,7 +436,7 @@ func (s *Server) deletePerson(ctx context.Context, person uuid.UUID, how, ip str
 		_, err = tx.Exec(ctx, `SELECT taskiem_audit_append($1, 'person', $2, 'account.delete', $2, jsonb_build_object('how', $3::text, 'businesses_told', $4::int, 'index_rows', $5::bigint, 'ip', $6::text, 'contacts_left', $7::bigint))`,
 			ops.PlatformChain, person.String(), how, told, removed, ip, left)
 		return err
-	})
+	}()
 	return told, err
 }
 

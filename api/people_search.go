@@ -82,22 +82,43 @@ func goneTx(ctx context.Context, tx pgx.Tx, person, chat, id uuid.UUID) error {
 }
 
 // searchReady indexes the person's messages kept before the index was
-// (once, on their first search), a batch a transaction.
+// (once, on their first search), a batch a transaction. Each batch keeps
+// how far it got (people_search_ready.through_at, through_id), so a
+// backfill cut short (the request ended, the server stopped) goes on from
+// there; done_at is set once all are indexed. The batch's messages are
+// held (FOR SHARE) until it commits, so a delete for me or for everyone
+// meanwhile waits for it and then removes what it indexed, and one done
+// before is not indexed at all.
 func (s *Server) searchReady(ctx context.Context, person uuid.UUID) error {
 	var ready bool
+	after, afterID := time.Time{}, uuid.Nil
 	if err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-		return tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM people_search_ready WHERE person_id = $1)`, person).Scan(&ready)
+		var done *time.Time
+		var through *time.Time
+		var throughID *uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT done_at, through_at, through_id FROM people_search_ready WHERE person_id = $1`, person).Scan(&done, &through, &throughID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		ready = done != nil
+		if through != nil && throughID != nil {
+			after, afterID = *through, *throughID
+		}
+		return nil
 	}); err != nil || ready {
 		return err
 	}
-	after, afterID := time.Time{}, uuid.Nil
 	for {
 		done := false
 		err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 			key, err := s.keys().KeyTx(ctx, tx, person, false)
 			if errors.Is(err, peoplechats.ErrNoKey) {
 				done = true
-				_, err := tx.Exec(ctx, `INSERT INTO people_search_ready (person_id) VALUES ($1) ON CONFLICT DO NOTHING`, person)
+				_, err := tx.Exec(ctx, `INSERT INTO people_search_ready (person_id, done_at) VALUES ($1, now())
+					ON CONFLICT (person_id) DO UPDATE SET done_at = COALESCE(people_search_ready.done_at, now())`, person)
 				return err
 			}
 			if err != nil {
@@ -105,7 +126,7 @@ func (s *Server) searchReady(ctx context.Context, person uuid.UUID) error {
 			}
 			rows, err := tx.Query(ctx, `SELECT id, conversation_id, sealed, created_at FROM people_messages
 				WHERE person_id = $1 AND sealed IS NOT NULL AND deleted_at IS NULL AND (created_at, id) > ($2, $3)
-				ORDER BY created_at, id LIMIT $4`, person, after, afterID, peopleSearchBackfill)
+				ORDER BY created_at, id LIMIT $4 FOR SHARE`, person, after, afterID, peopleSearchBackfill)
 			if err != nil {
 				return err
 			}
@@ -130,15 +151,23 @@ func (s *Server) searchReady(ctx context.Context, person uuid.UUID) error {
 					return err
 				}
 			}
+			at, id := after, afterID
 			if len(list) > 0 {
-				after, afterID = list[len(list)-1].at, list[len(list)-1].id
+				at, id = list[len(list)-1].at, list[len(list)-1].id
 			}
+			var doneAt *time.Time
 			if len(list) < peopleSearchBackfill {
 				done = true
-				_, err := tx.Exec(ctx, `INSERT INTO people_search_ready (person_id) VALUES ($1) ON CONFLICT DO NOTHING`, person)
-				return err
+				now := time.Now()
+				doneAt = &now
 			}
-			return nil
+			_, err = tx.Exec(ctx, `INSERT INTO people_search_ready (person_id, done_at, through_at, through_id) VALUES ($1, $2, $3, $4)
+				ON CONFLICT (person_id) DO UPDATE SET done_at = COALESCE(people_search_ready.done_at, EXCLUDED.done_at),
+				through_at = EXCLUDED.through_at, through_id = EXCLUDED.through_id`, person, doneAt, at, id)
+			if err == nil {
+				after, afterID = at, id
+			}
+			return err
 		})
 		if err != nil || done {
 			return err
@@ -459,8 +488,10 @@ func (s *Server) typingPeople(w http.ResponseWriter, r *http.Request) {
 		if c.Peer == nil || c.RequestAt != nil || c.AcceptedAt == nil || c.HiddenAt != nil || c.Blocked {
 			return nil
 		}
+		// Nothing from or to a suspended or deleted account, with the same
+		// 204.
 		peer, err := peopleReachTx(ctx, tx, c.ID)
-		if peerAway(err) {
+		if reachQuiet(err) {
 			return nil
 		}
 		if err != nil {
