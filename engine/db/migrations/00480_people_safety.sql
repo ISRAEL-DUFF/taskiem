@@ -615,7 +615,8 @@ $$;
 -- +goose StatementEnd
 
 -- Upholds an appeal (the action stays), or overturns it (the action is
--- lifted). Answers the person.
+-- lifted), by a moderator other than the one who decided. Answers the
+-- person.
 -- +goose StatementBegin
 CREATE FUNCTION taskiem_ops_people_appeal_decide(p_id uuid, p_state text, p_by text, p_note text) RETURNS uuid
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
@@ -626,6 +627,10 @@ BEGIN
   PERFORM taskiem_moderator_check();
   IF p_state NOT IN ('upheld', 'overturned') OR COALESCE(p_by, '') = '' THEN
     RAISE EXCEPTION 'upheld or overturned, by a moderator' USING ERRCODE = '22023';
+  END IF;
+  -- The person is told a different moderator reads their appeal.
+  IF EXISTS (SELECT 1 FROM people_appeals a JOIN people_moderation m ON m.id = a.action_id WHERE a.id = p_id AND m.operator = p_by) THEN
+    RAISE EXCEPTION 'a different moderator answers an appeal: not the one who decided' USING ERRCODE = '42501';
   END IF;
   UPDATE people_appeals SET state = p_state, decided_by = p_by, decided_at = now(), decision_note = NULLIF(btrim(p_note), '')
    WHERE id = p_id AND state = 'open' RETURNING person_id, action_id INTO v_person, v_action;

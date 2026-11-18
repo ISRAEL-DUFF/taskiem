@@ -123,16 +123,23 @@ test("a moderator handles a report: opened with a reason, reviewed, the person w
   expect(sql(`SELECT count(*) FROM people_moderation WHERE person_id = '${dayo}' AND operator = 'operator:mod1@taskiem.test' AND report_id = '${report}'`)).toBe("2");
   expect(sql(`SELECT count(*) FROM audit_log WHERE action IN ('ops.people.warn', 'ops.people.suspend') AND target = '${dayo}'`)).toBe("2");
 
-  // Dayo appeals (as his own API would write it); the moderator overturns it.
+  // Dayo appeals (as his own API would write it); the other moderator overturns it.
   const suspension = sql(`SELECT id FROM people_moderation WHERE person_id = '${dayo}' AND action = 'suspend'`);
   sql(`INSERT INTO people_appeals (id, action_id, person_id, text) VALUES (gen_random_uuid(), '${suspension}', '${dayo}', 'I was told the code was mine.')`);
   await page.goto(`${base}/ops/people/appeals`);
   const appeal = page.getByTestId("ops-appeal").filter({ hasText: `Dayo Ola ${stamp}` });
   await expect(appeal).toContainText("I was told the code was mine.");
   await check(page, "/ops/people/appeals");
-  await appeal.getByLabel(/Your answer/).fill("We looked again: lifted.");
+  // Not by the moderator who suspended him: by the other one.
+  await appeal.getByLabel(/Your answer/).fill("My own decision");
   await appeal.getByRole("button", { name: "Overturn with passkey" }).click();
-  await expect(page.getByTestId("ops-appeal").filter({ hasText: `Dayo Ola ${stamp}` })).toHaveCount(0);
+  await expect(appeal.getByRole("alert")).toContainText("a different moderator answers an appeal");
+  const mod2 = await moderator(browser, "mod2");
+  await mod2.goto(`${base}/ops/people/appeals`);
+  const theirs = mod2.getByTestId("ops-appeal").filter({ hasText: `Dayo Ola ${stamp}` });
+  await theirs.getByLabel(/Your answer/).fill("We looked again: lifted.");
+  await theirs.getByRole("button", { name: "Overturn with passkey" }).click();
+  await expect(mod2.getByTestId("ops-appeal").filter({ hasText: `Dayo Ola ${stamp}` })).toHaveCount(0);
   expect(sql(`SELECT suspended::text || ' ' || active::text FROM person_profiles WHERE person_id = '${dayo}'`)).toBe("false true");
   expect(sql(`SELECT state FROM people_appeals WHERE action_id = '${suspension}'`)).toBe("overturned");
 });

@@ -487,6 +487,8 @@ func TestPeopleModeration(t *testing.T) {
 		t.Fatalf("appeals: %v", appeals)
 	}
 	apID := ap["appeal"].(map[string]any)["id"].(string)
+	// The moderator who suspended Bola does not answer the appeal.
+	mod.write(403, "ops.people.appeal.overturn", apID, "/v1/ops/people/appeals/"+apID+"/overturn", map[string]any{"note": "My own decision"})
 	second.write(422, "ops.people.appeal.overturn", apID, "/v1/ops/people/appeals/"+apID+"/overturn", nil)
 	second.write(200, "ops.people.appeal.overturn", apID, "/v1/ops/people/appeals/"+apID+"/overturn", map[string]any{"note": "We read the chat again: jokes."})
 	send(t, ada, adaChat, "Welcome back")
