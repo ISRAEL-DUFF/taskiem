@@ -1399,6 +1399,16 @@ Kind `group` links to `/you/groups/{id}` and kind `group_invite` to `/you/groups
 - Typing names come from the members read when the group opened (and again after an event); someone who joined since shows as "Someone" until then.
 - Ordering together (C) and the privacy notice's paragraph (D).
 
+### Review fixes
+
+Branch `stage5b-groups-fix`, on 8af21b41 (tested in `mobile/test/groups_review_test.dart`):
+
+- **Search and starred, Show more** (`FoundMerge`, `people_search.dart`): only rows no older than the oldest row read so far of a source (people chats, groups) that still has more are shown; the rest are held back until that source pages past them, and the whole list is kept newest first, so Show more never puts rows out of time order.
+- **@ mentions**: each pick keeps the member's id with the name picked (`PickedMention`), so two members of one name are both kept; a name counts only as a whole word ("@Ada" is not in "@Adamu"). A send that fails gives back its words and its picks.
+- **A copy cleared on another device** (`group` with `hidden: true`) empties the messages, not the group, unless it was left or closed; a `group` event with the group again (a new message) reads it afresh.
+- **Report this group** stays for a former member (the server allows it), in the chat's menu and Group info.
+- **Invites gone**: a `group_invite` event with `invite: null` takes the invite out of Requests at once; a 404 from Accept or Decline reads the invites again. The server sends that event (migration `00485_group_invites_gone.sql`: `group_invites_gone`, kept an hour, written by a definer trigger on `group_invites`) when an invite is taken back, accepted or declined on another device, or its group is gone; tested in `api/people_groups_invite_gone_test.go`.
+
 ## As built: stage 5b, groups (web)
 
 Branch `stage5b-groups-web`, on b2cebca0 (stage 5a, groups slice 1 with its review fixes, group safety): the web's screens for people groups, on You, using the calls of "As built: stage 5b, groups (server)" (and its Review fixes) and "…, group safety (server)" as they are. No server change was needed. Groups are said to be kept by Taskiem and readable by its servers, never end-to-end encrypted (`GROUP_KEPT_WORDS`, tested).
@@ -1445,3 +1455,13 @@ Branch `stage5b-groups-web`, on b2cebca0 (stage 5a, groups slice 1 with its revi
 - Ordering together (C) and the privacy notice's paragraph (D); the load test (B).
 - Business chats on You still poll.
 - Sender photos come from the members list, so someone who left shows by name and letter only; someone who left reads no members, so their copy shows senders without photos.
+
+### Review fixes
+
+Branch `stage5b-groups-fix`, on 8af21b41 (tested in `web/src/lib/groups.review.test.ts`):
+
+- **Search and starred, Show more** (`shownFound`): only rows no older than the oldest row read so far of a list that still has more are shown, the rest held back until it pages past them, so a page read never adds a row above ones already shown.
+- **@ mentions**: the composer passes the members picked with "@" (`picks`, their id with the name); a name two members share names only the one picked (`mentionedIn`), never every member of that name; whole words only, as before.
+- **Delete for everyone** is offered only to a member now (`mayDeleteGroupForEveryone`), never after leaving.
+- **New group**: a photo that could not be saved keeps the sheet open to say so (`newGroupOpensAtOnce`), even when nobody's add needed saying.
+- **Invites gone**: a `group_invite` event with `invite: null` (the server's, see the app's Review fixes) takes the invite out (`invitesWithInvite`); a 404 from Accept or Decline reads the invites again (`inviteGone`).
