@@ -496,6 +496,45 @@ void main() {
       await drain(t);
     });
 
+    testWidgets('media and files: the latest on the info, every one behind See all, each opening in the chat', (t) async {
+      phone(t, 2400);
+      final api = groupApi();
+      final pages = <String?>[];
+      api.routes['GET /v1/me/groups/g1/media'] = (r) {
+        final before = r.url.queryParameters['before'];
+        pages.add(before);
+        if (before != null) {
+          return {'messages': [{...gm('m9', kind: 'media', body: '', at: '2026-11-10T10:00:00Z'), 'attachment': {'kind': 'file', 'name': 'old.pdf', 'size': 2048, 'type': 'application/pdf'}}], 'more': false};
+        }
+        return {
+          'messages': [
+            {...gm('m3', kind: 'media', body: '', mine: true), 'attachment': {'kind': 'voice', 'size': 4096, 'type': 'audio/ogg'}},
+            {...gm('m2', kind: 'media', body: 'Minutes'), 'attachment': {'kind': 'file', 'name': 'minutes.pdf', 'size': 20480, 'type': 'application/pdf'}},
+            {...gm('m1', kind: 'media', body: ''), 'attachment': {'kind': 'file', 'name': 'clip.mp4', 'size': 900000, 'type': 'video/mp4'}},
+          ],
+          'more': true,
+        };
+      };
+      final d = GroupChatData(api.auth(), 'g1', follow: false, now: () => at);
+      await t.runAsync(d.open);
+      final jumped = <String>[];
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: GroupInfoScreen(data: d, onJump: jumped.add)));
+      await settle(t);
+      expect(find.text('Media and files'), findsOneWidget);
+      await press(t, find.bySemanticsLabel('minutes.pdf from Ada Obi, open in the chat'));
+      expect(jumped, ['m2']);
+      await press(t, find.bySemanticsLabel('See all media and files'));
+      expect(find.text('Videos, voice notes and files'), findsOneWidget);
+      expect(find.text('Video'), findsOneWidget);
+      expect(find.text('Voice note'), findsOneWidget);
+      await press(t, find.text('Show older'));
+      expect(pages, [null, 'm1']);
+      expect(find.text('old.pdf'), findsOneWidget);
+      await press(t, find.text('Video'));
+      expect(jumped, ['m2', 'm1']);
+      await drain(t);
+    });
+
     testWidgets('add people: each answer in the server’s words', (t) async {
       phone(t, 2400);
       final api = groupApi();

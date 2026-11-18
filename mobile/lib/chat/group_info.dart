@@ -34,6 +34,7 @@ import 'approve.dart' show TkTextBox;
 import 'attachments.dart' show PickedFile;
 import 'composer.dart' show Pickers;
 import 'group_chat.dart';
+import 'group_media.dart';
 import 'groups.dart';
 import 'my_chat.dart' show sayFailure;
 import 'people.dart';
@@ -44,7 +45,7 @@ import 'words.dart';
 
 /// The group's info.
 class GroupInfoScreen extends StatefulWidget {
-  const GroupInfoScreen({super.key, required this.data, this.onClosed, this.openPerson, this.pickers = const Pickers()});
+  const GroupInfoScreen({super.key, required this.data, this.onClosed, this.openPerson, this.onJump, this.pickers = const Pickers()});
   final GroupChatData data;
 
   /// The group is gone for you (left as the last one, deleted): the
@@ -53,6 +54,10 @@ class GroupInfoScreen extends StatefulWidget {
 
   /// Opens a one-to-one chat (a member's Message).
   final OpenPeopleChat? openPerson;
+
+  /// Back to the chat, at one of its messages (an item of its media);
+  /// without it, the info closes and the group goes to the message.
+  final ValueChanged<String>? onJump;
   final Pickers pickers;
 
   @override
@@ -66,6 +71,17 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   void initState() {
     super.initState();
     unawaited(d.readMembers());
+  }
+
+  void _jump(String message) {
+    final to = widget.onJump;
+    if (to != null) return to(message);
+    // Back past this info (and the media list over it) to the chat.
+    final nav = Navigator.of(context);
+    final info = ModalRoute.of(context);
+    if (info != null) nav.popUntil((r) => r == info);
+    unawaited(nav.maybePop());
+    unawaited(d.jump(message));
   }
 
   void _say(bool ok, String done) {
@@ -236,6 +252,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                     ),
                 ],
               ),
+            GroupMediaSection(data: d, onJump: _jump),
             if (!g.left)
               TkSection(
                 title: 'Notifications',
