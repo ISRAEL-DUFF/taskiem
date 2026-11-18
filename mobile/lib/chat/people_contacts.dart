@@ -25,7 +25,11 @@ import '../app/phone.dart' show contactE164;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty, TkLoading;
 import '../kit/mobile.dart';
+import '../kit/look.dart';
 import '../kit/modal.dart';
+import '../kit/sheet.dart' show TkCta;
+import '../theme/look.dart';
+import 'groups.dart' show askSure, pickAction;
 import '../theme/theme.dart';
 import 'my_chat.dart' show sayFailure;
 import 'people.dart';
@@ -269,23 +273,19 @@ class _ContactsMatchScreenState extends State<ContactsMatchScreen> {
       title: 'From your contacts',
       children: switch (_step) {
         _Step.ask => [
-          TkPanel(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Semantics(header: true, child: Text(contactsAskTitle, style: tkDisplay(size: 20, color: t.text))),
-                  const SizedBox(height: 10),
-                  for (final w in contactsAskWords) Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(w, style: tkText(size: 14.5, lineHeight: 1.45, color: t.text))),
-                  const SizedBox(height: 4),
-                  TkButton(label: 'Agree and check my contacts', primary: true, minHeight: 44, onPressed: _agree),
-                  const SizedBox(height: 8),
-                  TkButton(label: 'Not now', minHeight: 44, onPressed: () => Navigator.of(context).maybePop()),
-                ],
-              ),
-            ],
+          // The ask on a top card; the app's main button, Not now a link.
+          TkTopCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Semantics(header: true, child: Text(contactsAskTitle, style: tkDisplay(size: 20, color: t.text))),
+                const SizedBox(height: 10),
+                for (final w in contactsAskWords) Padding(padding: const EdgeInsets.only(bottom: 10), child: Text(w, style: tkText(size: 14, lineHeight: 1.45, color: t.text))),
+              ],
+            ),
           ),
+          TkCta(label: 'Agree and check my contacts', onTap: _agree),
+          Center(child: TkLink(label: 'Not now', bold: true, onTap: () => Navigator.of(context).maybePop())),
           if (_error != null) TkErrorBox(_error!),
         ],
         _Step.checking => [const TkLoading(label: 'Checking your contacts…')],
@@ -294,17 +294,15 @@ class _ContactsMatchScreenState extends State<ContactsMatchScreen> {
         ],
         _Step.found => [
           if (_stopped != null)
-            TkPanel(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    'Checked ${_stopped!.checked} of your ${_stopped!.total} numbers: that is as many as can be checked in a day. Try again tomorrow for the rest.',
-                    style: tkText(size: 14, color: t.text),
-                  ),
-                ),
-              ],
+            Semantics(
+              liveRegion: true,
+              child: TkCallout(
+                leading: TkSquare('b-clock', color: TkLook.of(context).orange),
+                title: 'Checked ${_stopped!.checked} of your ${_stopped!.total} numbers',
+                sub: 'That is as many as can be checked in a day. Try again tomorrow for the rest.',
+                subLines: 3,
+                color: TkLook.of(context).orange,
+              ),
             ),
           if (_found.isEmpty)
             const TkPanel(children: [TkEmpty(icon: 'b-people', title: 'No one found yet', line: 'None of your contacts can be found on Taskiem now. Share your link to invite them.')])
@@ -382,7 +380,7 @@ class _PeopleContactsScreenState extends State<PeopleContactsScreen> {
   }
 
   Future<void> _remove(PersonContact c) async {
-    final yes = await showTkConfirm(
+    final yes = await askSure(
       context,
       title: 'Remove ${_shown(c)} from your contacts?',
       body: 'Your chat with them stays. They are not told.',
@@ -402,10 +400,11 @@ class _PeopleContactsScreenState extends State<PeopleContactsScreen> {
   static String _shown(PersonContact c) => c.contactName is String && (c.contactName as String).isNotEmpty ? c.contactName as String : c.name;
 
   Future<void> _open(PersonContact c) async {
-    final what = await showTkModalChoices(
+    // The app's sheet of actions (groups.dart pickAction).
+    final what = await pickAction(
       context,
       title: _shown(c),
-      choices: [if (!c.deleted) ('chat', 'Chat'), ('rename', 'Rename'), ('remove', 'Remove from contacts')],
+      actions: [if (!c.deleted) ('chat', 'Chat', 'b-chat', false), ('rename', 'Rename', 'b-note', false), ('remove', 'Remove from contacts', 'b-x', true)],
     );
     if (!mounted) return;
     switch (what) {

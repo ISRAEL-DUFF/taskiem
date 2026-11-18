@@ -88,7 +88,6 @@ class _ScanScreenState extends State<_ScanScreen> {
     return TkScreen(
       title: 'Scan their QR code',
       children: [
-        Text('Point the camera at the QR code on their phone or in what they shared.', style: tkHint(t)),
         ClipRRect(
           borderRadius: BorderRadius.circular(20),
           child: AspectRatio(
@@ -103,8 +102,10 @@ class _ScanScreenState extends State<_ScanScreen> {
             ),
           ),
         ),
+        // What to do, quiet under the camera; the other way a link.
+        Text('Point the camera at the QR code on their phone or in what they shared.', textAlign: TextAlign.center, style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
         if (_said != null) Semantics(liveRegion: true, child: TkErrorBox(_said!)),
-        TkButton(label: 'Type or paste their link instead', minHeight: 44, onPressed: () => Navigator.of(context).maybePop()),
+        Center(child: TkLink(label: 'Type or paste their link instead', bold: true, onTap: () => Navigator.of(context).maybePop())),
       ],
     );
   }

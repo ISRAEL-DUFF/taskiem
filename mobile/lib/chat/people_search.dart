@@ -16,12 +16,11 @@ import '../api/api.g.dart';
 import '../api/transport.dart';
 import '../app/auth.dart';
 import '../kit/kit.dart';
-import '../kit/list.dart' show TkEmpty, TkLoading;
+import '../kit/list.dart' show TkEmpty, TkLoading, TkSearchBox;
 import '../kit/load_more.dart';
 import '../kit/mobile.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
-import 'approve.dart' show TkTextBox;
 import 'chats.dart' show ChatRow;
 import 'my_chat.dart' show sayFailure;
 import 'groups.dart' show groupLine;
@@ -382,7 +381,8 @@ class _PeopleSearchScreenState extends State<PeopleSearchScreen> {
             Semantics(
               label: widget.group != null ? 'Search the group ${widget.chatName ?? ''}' : (one ? 'Search your chat with ${widget.chatName ?? 'them'}' : 'Search your chats with people and groups'),
               textField: true,
-              child: TkTextBox(key: const ValueKey('people-search'), controller: _q, hint: 'Words, a file’s name, a place…', max: 200),
+              // The app's search box, on a card (main's Chats).
+              child: TkSearchBox(key: const ValueKey('people-search'), controller: _q, hint: 'Words, a file’s name, a place…', fill: look.card, margin: EdgeInsets.zero),
             ),
             if (!one && q.isEmpty)
               TkSection(
@@ -412,7 +412,7 @@ class _PeopleSearchScreenState extends State<PeopleSearchScreen> {
             if (found != null && _list.more) TkLoadMore(label: 'Show more', onMore: _list.loadMore),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text('Search runs on Taskiem’s servers, over your own copy of your chats. Nothing you search for is kept.', style: tkHint(t)),
+              child: Text('Search runs on Taskiem’s servers, over your own copy of your chats. Nothing you search for is kept.', style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
             ),
           ],
         );

@@ -153,8 +153,7 @@ void main() {
     expect(find.text('Tunde Kicks'), findsOneWidget);
     expect(find.textContaining('We found an order'), findsNothing);
 
-    // The older page comes by itself as the list's end is near (TkLoadMore).
-    await settle(t);
+    await press(t, find.text('Show older orders'));
     expect(api.sent('GET', '/v1/me/orders').last.url.queryParameters['before'], 'cur-2');
     expect(find.text('Bola Stores'), findsOneWidget);
     expect(find.text('Show older orders'), findsNothing, reason: 'the last page');
@@ -222,25 +221,22 @@ void main() {
     await press(t, find.text('Discover').first);
     expect(api.body(api.sent('POST', '/v1/discover/search').first), <String, dynamic>{});
     expect(find.text('Mama’s Kitchen'), findsOneWidget);
-    expect(find.text('Food and drinks · Yaba\nOpen now, closes at 18:00'), findsWidgets, reason: 'the hours line under the category and area');
-    expect(find.text('Open now'), findsWidgets, reason: 'Mama’s Kitchen, and the next page’s Zainab Cakes');
+    expect(find.text('Food and drinks · Yaba\nOpen now, closes at 18:00'), findsOneWidget, reason: 'the hours line under the category and area');
+    expect(find.text('Open now'), findsOneWidget);
     expect(find.text('Closed now'), findsOneWidget);
     expect(find.bySemanticsLabel('Chat with Bola Stores'), findsNothing, reason: 'not taking chats');
 
-    // The next page comes by itself as the list's end is near (TkLoadMore).
-    await settle(t);
+    await press(t, find.text('Show more businesses'));
     expect(api.body(api.sent('POST', '/v1/discover/search').last), {'offset': 2}, reason: 'after the results given');
     expect(find.text('Zainab Cakes'), findsOneWidget);
 
     await press(t, find.text('Beauty and personal care'));
-    // Each search's first page (its next page may follow by itself).
-    Map<String, dynamic> firstPage() => api.body(api.sent('POST', '/v1/discover/search').lastWhere((r) => api.body(r)['offset'] == null));
-    expect(firstPage(), {'category': 'beauty'});
+    expect(api.body(api.sent('POST', '/v1/discover/search').last), {'category': 'beauty'});
 
     await typeIn(t, find.bySemanticsLabel('Search by name or what you want'), 'rice');
     await settle(t);
     await settle(t);
-    expect(firstPage(), {'q': 'rice', 'category': 'beauty'});
+    expect(api.body(api.sent('POST', '/v1/discover/search').last), {'q': 'rice', 'category': 'beauty'});
 
     fast = true;
     await typeIn(t, find.bySemanticsLabel('Area (Yaba, Lekki…)'), 'Yaba');

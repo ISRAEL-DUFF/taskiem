@@ -27,7 +27,6 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'book_sheet.dart' show lagosTime, whenLabel;
 import 'cards.dart' show CardPill;
-import '../kit/load_more.dart';
 import 'door.dart';
 import 'my_chat.dart';
 import 'people_cards.dart' show shareWithPeople;
@@ -309,8 +308,13 @@ class _YourOrdersTabState extends State<YourOrdersTab> {
                 ),
             ],
           ),
-        // Older pages as the list nears its end (the app's TkLoadMore).
-        if (_next != null) TkLoadMore(label: 'Show older orders', onMore: _older),
+        // Older pages on a tap, drawn as the app's own (TkLoadMore's small
+        // button).
+        if (_next != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Center(child: TkSmallButton(label: _more ? 'Loading…' : 'Show older orders', onPressed: _more ? null : _older)),
+          ),
       ],
     );
   }

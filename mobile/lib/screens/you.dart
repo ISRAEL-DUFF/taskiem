@@ -595,6 +595,7 @@ class _YouHomeState extends State<YouHome> with Polling {
                 leading: TkSquare('b-lock', color: TkLook.of(context).orange),
                 title: 'Your businesses are locked',
                 sub: 'You signed in on a new device, so your businesses are locked until you prove it\'s you.',
+                subLines: 3,
                 color: TkLook.of(context).orange,
                 button: 'Prove it\'s you',
                 onPressed: _prove,

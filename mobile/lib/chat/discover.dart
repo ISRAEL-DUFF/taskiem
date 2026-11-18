@@ -30,7 +30,6 @@ import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
 import 'cards.dart' show CardPill;
-import '../kit/load_more.dart';
 import 'door.dart' show BusinessFace, photoUrl;
 import 'my_chat.dart';
 import 'people_cards.dart' show shareWithPeople;
@@ -272,8 +271,13 @@ class _DiscoverTabState extends State<DiscoverTab> {
                 ),
             ],
           ),
-        // The next page as the list nears its end (the app's TkLoadMore).
-        if (results != null && _more) TkLoadMore(label: 'Show more businesses', onMore: _next),
+        // The next page on a tap (its races handled in _next), drawn as the
+        // app's own (TkLoadMore's small button).
+        if (results != null && _more)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Center(child: TkSmallButton(label: _loadingMore ? 'Loading…' : 'Show more businesses', onPressed: _loadingMore ? null : _next)),
+          ),
         if (results != null) Text('Businesses choose to be found here.', textAlign: TextAlign.center, style: tkHint(t)),
       ],
     );

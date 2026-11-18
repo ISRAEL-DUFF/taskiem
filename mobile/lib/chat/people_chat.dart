@@ -43,7 +43,8 @@ import 'composer.dart';
 import 'door.dart' show doorFileMessage, doorFiles;
 import 'menu.dart';
 import 'my_chat.dart' show OpenMyChat, sayFailure;
-import 'groups.dart' show ChatsAndGroups, forwardWords, pickChatsAndGroups;
+import 'group_chat.dart' show GroupReactionChips;
+import 'groups.dart' show ChatsAndGroups, askSure, forwardWords, pickAction, pickChatsAndGroups;
 import 'people.dart';
 import 'basket.dart';
 import 'people_cards.dart';
@@ -831,7 +832,6 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
       at: at,
       items: [
         ('About ${c.name}', _info),
-        ('Search this chat', _search),
         if (!c.request) (c.muted ? 'Unmute notifications' : 'Mute notifications', () async => _say(await d.put(muted: !c.muted), c.muted ? 'Notifications on for ${c.name}' : 'Muted')),
         if (!c.request)
           (
@@ -881,7 +881,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
       }
       return;
     }
-    final yes = await showTkConfirm(
+    final yes = await askSure(
       context,
       title: 'Block $name?',
       body: 'They can no longer message you or see your last seen and photo. They are not told. You can unblock them at any time.',
@@ -896,7 +896,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
   }
 
   Future<void> _deleteChat() async {
-    final yes = await showTkConfirm(
+    final yes = await askSure(
       context,
       title: 'Delete this chat?',
       body: 'It goes from your chats, on every phone you use. ${d.name} keeps their copy.',
@@ -915,7 +915,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
   }
 
   Future<void> _decline() async {
-    final yes = await showTkConfirm(
+    final yes = await askSure(
       context,
       title: 'Delete this request?',
       body: '${d.name} is not told. If they write again, it comes as a new request.',
@@ -1009,13 +1009,14 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
 
   Future<void> _delete(PeopleMessage m) async {
     final everyone = d.canDeleteForEveryone(m);
-    final choice = await showTkModalChoices(
+    // The app's sheet of actions (groups.dart pickAction), red as deleting.
+    final choice = await pickAction(
       context,
       title: 'Delete this message?',
       // §7: delete for everyone removes their copy, not what they did with
       // it before.
       note: everyone ? deleteForEveryoneNote : null,
-      choices: [('me', 'Delete for me'), if (everyone) ('everyone', 'Delete for everyone')],
+      actions: [('me', 'Delete for me', 'b-x', true), if (everyone) ('everyone', 'Delete for everyone', 'b-x-ring', true)],
     );
     if (choice == null || !mounted) return;
     final ok = await d.delete(m, everyone: choice == 'everyone');
@@ -1061,6 +1062,8 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                         onBack: widget.onBack,
                         onMore: c == null ? null : _menu,
                         onAvatar: c == null ? null : _info,
+                        // As a group's head: Search as its own round button.
+                        actions: [ChatHeadBar.iconButton('Search this chat', TkIcon('b-search', size: 18, stroke: 2.2, color: t.text), c == null ? null : _search)],
                         avatar: PersonFace(name: name, transport: d.auth.transport, photo: c?.person?.photo, size: 40, letterSize: 15),
                         title: name,
                         typing: d.typingNow && !d.offline,
@@ -1117,6 +1120,7 @@ class _PeopleChatScreenState extends State<PeopleChatScreen> with Polling {
                                         ? (m.card!.basketId == null ? null : () => showBasket(context, d.auth, m.card!.basketId!))
                                         : () => showPeopleCard(context, auth: d.auth, chat: d.id, message: m.id, openBusiness: _openBusiness, openOrder: widget.openOrder),
                                     onPaid: m.card?.type == 'split' && canSend ? (p) => _paid(m, p) : null,
+                                    onReact: canSend && m.deleted != true ? (e) => d.react(m, e) : null,
                                   ),
                                 ),
                               );
@@ -1198,6 +1202,7 @@ class PeopleBubble extends StatelessWidget {
     this.readTicks = true,
     this.onOpenCard,
     this.onPaid,
+    this.onReact,
     this.busy = false,
     this.head,
     this.quoteName,
@@ -1224,6 +1229,9 @@ class PeopleBubble extends StatelessWidget {
   final bool readTicks;
   final VoidCallback? onOpenCard;
   final ValueChanged<bool>? onPaid;
+
+  /// A reaction chip tapped: the same as theirs, or yours taken back.
+  final ValueChanged<String>? onReact;
   final bool busy;
 
   @override
@@ -1334,16 +1342,17 @@ class PeopleBubble extends StatelessWidget {
       crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         shown,
+        // As main's chats (and a group's): each emoji with how many, yours
+        // tinted, the chips just under the bubble.
         if (reactions.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 2, left: 8, right: 8),
-            child: Semantics(
-              label: 'Reactions: ${reactions.map((e) => reactionNames[e] ?? e).join(', ')}',
-              excludeSemantics: true,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(999)),
-                child: Text(reactions.join(' '), style: tkText(size: 13)),
+          Transform.translate(
+            offset: const Offset(0, -6),
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8, right: 8),
+              child: GroupReactionChips(
+                list: [for (final e in {...reactions}) GroupMessageReactionsItem(reaction: e, count: reactions.where((x) => x == e).length)],
+                mine: m.myReaction,
+                onReact: onReact,
               ),
             ),
           ),
@@ -1554,15 +1563,8 @@ class _PersonInfoScreenState extends State<PersonInfoScreen> {
                     TkListRow(title: 'Not in your contacts', sub: p.theyAddedYou ? 'They have you in theirs' : 'Accepting a chat adds them', icon: 'b-people', square: look.teal),
                 ],
               ),
-            TkSection(
-              title: 'Where this chat is kept',
-              children: [
-                TkPanel(
-                  padding: const EdgeInsets.all(16),
-                  children: [Text(peopleKeptWords, style: tkText(size: 14, lineHeight: 1.45, color: t.text))],
-                ),
-              ],
-            ),
+            // As Group info says it: a quiet note under the sections.
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(peopleKeptWords, style: tkText(size: 13, lineHeight: 1.4, color: t.muted))),
             if (c != null && !c.gone)
               TkSection(
                 inset: 56,

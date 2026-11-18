@@ -601,7 +601,7 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
         if (_blocked != null)
           Semantics(
             liveRegion: true,
-            child: TkCallout(leading: TkSquare('b-alert', color: look.orange), title: 'Not yet', sub: _blocked!, color: look.orange),
+            child: TkCallout(leading: TkSquare('b-alert', color: look.orange), title: 'Not yet', sub: _blocked!, subLines: 8, color: look.orange),
           )
         else ...[
           SettingsCard(

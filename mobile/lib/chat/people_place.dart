@@ -18,6 +18,8 @@ import '../app/lock.dart' show stepOut;
 import '../kit/icon.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkLoading;
+import '../kit/look.dart' show TkCallout, TkSquare;
+import '../kit/mobile.dart' show TkFormGroup;
 import '../kit/sheet.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
@@ -131,7 +133,7 @@ String placeWords(double lat, double lng) => '${lat.toStringAsFixed(5)}, ${lng.t
 
 /// A place to send: the phone asked now, the place shown, a name if wanted;
 /// null when put away or not found.
-Future<PeopleLocation?> pickPlace(BuildContext context, PlaceFinder finder) => showTkSheet<PeopleLocation>(context, (_) => _PlaceSheet(finder: finder));
+Future<PeopleLocation?> pickPlace(BuildContext context, PlaceFinder finder) => showTkSheet<PeopleLocation>(context, (_) => TkAppLook(child: _PlaceSheet(finder: finder)));
 
 class _PlaceSheet extends StatefulWidget {
   const _PlaceSheet({required this.finder});
@@ -193,9 +195,20 @@ class _PlaceSheetState extends State<_PlaceSheet> {
         children: [
           if (_busy) const TkLoading(label: 'Finding where you are…'),
           if (problem != null) ...[
-            Semantics(liveRegion: true, child: Text(placeProblemWords(problem), style: tkText(size: 15, lineHeight: 1.45, color: t.text))),
-            if (problem == PlaceProblem.off || problem == PlaceProblem.refusedForever)
-              TkButton(label: 'Open your phone’s settings', minHeight: 44, onPressed: () => widget.finder.openSettings(problem)),
+            // A callout of the app's, its button the phone's settings.
+            Semantics(
+              liveRegion: true,
+              child: TkCallout(
+                leading: TkSquare('b-pin', color: look.orange),
+                title: 'Where you are is not known',
+                sub: placeProblemWords(problem),
+                subLines: 4,
+                color: look.orange,
+                button: problem == PlaceProblem.off || problem == PlaceProblem.refusedForever ? 'Settings' : null,
+                semantics: 'Open your phone’s settings',
+                onPressed: problem == PlaceProblem.off || problem == PlaceProblem.refusedForever ? () => widget.finder.openSettings(problem) : null,
+              ),
+            ),
           ],
           if (at != null) ...[
             Semantics(
@@ -223,8 +236,8 @@ class _PlaceSheetState extends State<_PlaceSheet> {
                 ),
               ),
             ),
-            TkButton(label: 'See it on the map', minHeight: 44, onPressed: () => openPlace(_place!)),
-            TkKitField(label: 'A name for it', hint: 'Optional: “Our gate”, “Mama’s shop”', child: TkTextBox(key: const ValueKey('place-label'), controller: _label, max: 200)),
+            Center(child: TkLink(label: 'See it on the map', bold: true, onTap: () => openPlace(_place!))),
+            TkFormGroup(children: [TkKitField(label: 'A name for it', hint: 'Optional: “Our gate”, “Mama’s shop”', child: TkTextBox(key: const ValueKey('place-label'), controller: _label, max: 200, size: 15, height: 46))]),
             Text('It is sent once, as it is now. Taskiem doesn’t follow where you go.', style: tkHint(t)),
           ],
         ],

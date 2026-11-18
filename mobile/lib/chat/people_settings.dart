@@ -109,11 +109,13 @@ class _PeoplePrivacyPageState extends State<PeoplePrivacyPage> {
     );
   }
 
-  Future<String?> _choose(String title, String value, {bool message = false}) => showTkModalChoices(
+  // The app's sheet of choices (groups.dart pickOneOf), as "Who can add
+  // you to groups" is chosen.
+  Future<String?> _choose(String title, String value, {bool message = false}) => pickOneOf(
     context,
     title: title,
     value: value,
-    choices: [for (final a in _audiences) (a, message ? messageWords(a) : audienceWords(a))],
+    choices: [for (final a in _audiences) (a, message ? messageWords(a) : audienceWords(a), '')],
   );
 
   @override

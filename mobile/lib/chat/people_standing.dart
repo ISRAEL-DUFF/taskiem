@@ -19,14 +19,15 @@ import '../app/links.dart' show openInBrowser;
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkLoading;
 import '../kit/mobile.dart';
+import '../kit/look.dart';
 import '../kit/modal.dart';
+import '../kit/page.dart';
 import '../kit/sheet.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
-import 'cards.dart' show CardButton;
 import 'my_chat.dart' show sayFailure;
-import 'words.dart' show dayWords, clock;
+import 'words.dart' show CardTone, dayWords, clock;
 
 /// The address of the published count of lawful requests.
 final transparencyUrl = Uri.parse('$taskiemUrl/transparency');
@@ -140,71 +141,51 @@ class _YourStandingScreenState extends State<YourStandingScreen> {
     final look = TkLook.of(context);
     final s = _s;
     final now = widget.now();
-    return TkScreen(
+    // A large-title page: where you stand on a top card, each decision a
+    // row with its state (its whole story a tap away), the authorities'
+    // requests a row.
+    return TkPageScreen(
       title: 'Your standing',
+      titleSize: 30,
+      backLabel: 'Back to Settings',
       onRefresh: _load,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Text('What Taskiem’s moderators decided about how you message people, and how to appeal.', style: tkHint(t)),
-        ),
         if (_error != null) TkErrorBox(_error!),
         if (s == null && _error == null) const TkLoading(label: 'Loading your standing…'),
         if (s != null)
-          TkPanel(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Semantics(header: true, child: Text(standingTitle(s.state), style: tkDisplay(size: 19, color: s.state == 'ok' ? t.text : look.redInk))),
-                  const SizedBox(height: 6),
-                  Text(s.words, style: tkText(size: 15, lineHeight: 1.45, color: t.text)),
-                ],
-              ),
-            ],
+          TkTopCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TkEyebrow('How you message people', color: s.state == 'ok' ? look.limeInk : look.redInk),
+                const SizedBox(height: 6),
+                Semantics(header: true, child: Text(standingTitle(s.state), style: tkDisplay(size: 22, letterSpacing: -0.5, color: s.state == 'ok' ? t.text : look.redInk))),
+                const SizedBox(height: 6),
+                Text(s.words, style: tkText(size: 14, lineHeight: 1.45, color: t.text)),
+              ],
+            ),
           ),
-        if (s != null && s.actions.isNotEmpty)
+        if (s != null && s.actions.isNotEmpty) ...[
           TkSection(
             title: 'Decisions',
+            inset: 56,
             children: [
-              Padding(padding: const EdgeInsets.fromLTRB(4, 0, 4, 8), child: Text(s.appealWords, style: tkHint(t))),
               for (final a in s.actions)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Semantics(
-                    container: true,
-                    label: '${actionName(a.action)}, ${_when(a.at, now)}',
-                    child: TkPanel(
-                      key: ValueKey('standing ${a.id}'),
-                      padding: const EdgeInsets.all(16),
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Text(actionName(a.action), style: tkText(size: 16, weight: 700, color: t.text)),
-                            Text(_when(a.at, now), style: tkHint(t)),
-                            const SizedBox(height: 6),
-                            Text('Why: ${a.reason}', style: tkText(size: 14.5, lineHeight: 1.4, color: t.text)),
-                            const SizedBox(height: 4),
-                            Text(a.inForce ? a.words : (a.liftedAt != null ? 'Lifted ${_when(a.liftedAt, now)}.' : 'No longer in force.'), style: tkText(size: 14, lineHeight: 1.4, color: t.muted)),
-                            if (a.appeal is Map)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 6),
-                                child: Text(appealWords(StandingAppeal.fromJson((a.appeal as Map).cast<String, dynamic>())), style: tkText(size: 14, lineHeight: 1.4, color: t.text)),
-                              ),
-                            if (a.canAppeal) ...[
-                              const SizedBox(height: 10),
-                              CardButton(label: 'Appeal', semantics: 'Appeal the ${actionName(a.action).toLowerCase()}', onTap: () => _appeal(a)),
-                            ],
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
+                TkListRow(
+                  key: ValueKey('standing ${a.id}'),
+                  title: actionName(a.action),
+                  sub: '${_when(a.at, now)} · ${a.reason}',
+                  icon: 'b-shield',
+                  square: a.inForce ? look.red : look.teal,
+                  status: a.inForce ? 'In force' : 'Lifted',
+                  statusTone: a.inForce ? CardTone.danger : CardTone.plain,
+                  semanticsLabel: '${actionName(a.action)}, ${_when(a.at, now)}, ${a.inForce ? 'in force' : 'lifted'}${a.canAppeal ? '. Open it to appeal' : ''}',
+                  onTap: () => _decision(a),
                 ),
             ],
           ),
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: Text(s.appealWords, style: tkText(size: 13, lineHeight: 1.4, color: t.muted))),
+        ],
         if (s != null)
           TkSection(
             inset: 56,
@@ -218,8 +199,45 @@ class _YourStandingScreenState extends State<YourStandingScreen> {
               ),
             ],
           ),
+        // What the page is, quiet under it.
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text('What Taskiem’s moderators decided about how you message people, and how to appeal.', style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
+        ),
       ],
     );
+  }
+
+  /// One decision in full: when, why, what it means now, the appeal; and
+  /// Appeal while it can be.
+  Future<void> _decision(PersonStandingActionsItem a) async {
+    final now = widget.now();
+    final appeal = await showTkSheet<bool>(
+      context,
+      (c) => TkAppLook(
+        child: TkSheet(
+          title: actionName(a.action),
+          crumb: _when(a.at, now),
+          bareFooter: a.canAppeal,
+          footer: a.canAppeal ? TkCta(label: 'Appeal', onTap: () => Navigator.of(c).pop(true)) : null,
+          body: TkFormBody(
+            children: [
+              TkFormGroup(
+                children: [
+                  TkLines([
+                    ('Why', a.reason),
+                    ('Now', a.inForce ? 'In force' : (a.liftedAt != null ? 'Lifted ${_when(a.liftedAt, now)}' : 'No longer in force')),
+                  ]),
+                ],
+              ),
+              if (a.inForce) Text(a.words, style: tkText(size: 14, lineHeight: 1.45, color: TkTheme.tokens(c).text)),
+              if (a.appeal is Map) Text(appealWords(StandingAppeal.fromJson((a.appeal as Map).cast<String, dynamic>())), style: tkText(size: 14, lineHeight: 1.45, color: TkTheme.tokens(c).muted)),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (appeal == true && mounted) await _appeal(a);
   }
 }
 
@@ -256,21 +274,26 @@ class _AppealSheetState extends State<_AppealSheet> {
     }
   }
 
+  // The app's form sheet, as a closed group's appeal.
   @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    return TkSheet(
-      title: 'Appeal the ${actionName(widget.action.action).toLowerCase()}',
-      footer: TkCta(label: _busy ? 'Sending…' : 'Send the appeal', onTap: _busy ? null : _send),
-      body: TkFormBody(
+  Widget build(BuildContext context) => TkFormSheet(
+    title: 'Appeal the ${actionName(widget.action.action).toLowerCase()}',
+    crumb: 'A moderator who didn’t decide reads it',
+    action: _busy ? 'Sending…' : 'Send the appeal',
+    onAction: _busy ? null : _send,
+    children: [
+      TkFormGroup(
         children: [
-          Text('A moderator other than the one who decided reads it. You can appeal each decision once.', style: tkHint(t)),
-          TkKitField(label: 'Why you think this decision is wrong', child: TkTextBox(key: const ValueKey('appeal-text'), controller: _text, lines: 5, max: 2000)),
-          if (_error != null) Semantics(liveRegion: true, child: TkErrorBox(_error!)),
+          TkKitField(
+            label: 'Why you think this decision is wrong',
+            hint: 'You can appeal each decision once.',
+            child: TkTextBox(key: const ValueKey('appeal-text'), controller: _text, lines: 5, max: 2000),
+          ),
         ],
       ),
-    );
-  }
+      if (_error != null) Semantics(liveRegion: true, child: TkErrorBox(_error!)),
+    ],
+  );
 }
 
 /// The notice on You while moderators decided something the person has not
@@ -282,30 +305,20 @@ class StandingNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
     final s = standing;
     final title = s.state == 'ok' ? 'Taskiem’s moderators changed a decision about your account' : standingTitle(s.state);
+    // The app's callout, red, with Read as its button.
     return Semantics(
       liveRegion: true,
-      button: true,
-      label: '$title. Read what Taskiem’s moderators decided',
-      excludeSemantics: true,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onOpen,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(color: t.tkDangerBg, borderRadius: BorderRadius.circular(16)),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(title, style: tkText(size: 15, weight: 700, color: t.tkDangerInk)),
-              const SizedBox(height: 2),
-              Text('Read what Taskiem’s moderators decided', style: tkText(size: 14, weight: 600, color: look.on)),
-            ],
-          ),
-        ),
+      child: TkCallout(
+        leading: TkSquare('b-shield', color: look.red),
+        title: title,
+        sub: 'Read what Taskiem’s moderators decided',
+        color: look.red,
+        button: 'Read',
+        semantics: 'Read what Taskiem’s moderators decided',
+        onPressed: onOpen,
       ),
     );
   }

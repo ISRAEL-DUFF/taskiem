@@ -182,6 +182,7 @@ class _SecondProofState extends State<SecondProof> with WidgetsBindingObserver {
                 leading: TkSquare('b-mail', color: look.teal),
                 title: 'We sent a link to $sent',
                 sub: 'Open it on this phone within 15 minutes, then come back here and say so.',
+                subLines: 3,
                 color: look.teal,
               ),
             ),
@@ -216,6 +217,7 @@ class _SecondProofState extends State<SecondProof> with WidgetsBindingObserver {
                 leading: TkSquare('b-alert', color: look.orange),
                 title: 'No other way yet',
                 sub: 'Your account has no other way to prove it\'s you yet. Add an email or a passkey from a device you have used before.',
+                subLines: 4,
                 color: look.orange,
               ),
           ];

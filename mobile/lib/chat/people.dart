@@ -13,8 +13,8 @@ import '../api/transport.dart';
 import '../app/session.dart' show uuid4;
 import '../kit/api_image.dart';
 import '../kit/icon.dart';
-import '../kit/kit.dart' show TkButton, tkHint;
-import '../kit/modal.dart' show showTkModal;
+import '../kit/mobile.dart' show TkFormGroup, TkFormSheet;
+import '../kit/sheet.dart' show TkKitField, showTkSheet;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'approve.dart' show TkTextBox;
@@ -184,7 +184,7 @@ const peopleReportReasons = [('spam', 'Spam'), ('scam', 'A scam or fraud'), ('ab
 /// The name you give someone in your contacts (only you see it): asked in
 /// a modal; empty for their own name; null when put away.
 Future<String?> askContactName(BuildContext context, {required String initial, required String theirs}) =>
-    showTkModal<String>(context, title: 'Their name in your contacts', builder: (_) => _NameForm(initial: initial, theirs: theirs));
+    showTkSheet<String>(context, (_) => _NameForm(initial: initial, theirs: theirs));
 
 class _NameForm extends StatefulWidget {
   const _NameForm({required this.initial, required this.theirs});
@@ -204,16 +204,18 @@ class _NameFormState extends State<_NameForm> {
     super.dispose();
   }
 
+  // A form sheet of the app's (as Saved addresses'): the name in a form
+  // group, Save and Cancel at its foot.
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) => TkFormSheet(
+    title: 'Their name in your contacts',
+    crumb: 'Only you see it',
+    action: 'Save',
+    onAction: () => Navigator.of(context).pop(_box.text.trim()),
+    second: 'Cancel',
+    onSecond: () => Navigator.of(context).pop(),
     children: [
-      TkTextBox(controller: _box, hint: widget.theirs, max: 80),
-      const SizedBox(height: 6),
-      Text('Only you see it. Leave it empty for their own name.', style: tkHint(TkTheme.tokens(context))),
-      const SizedBox(height: 12),
-      TkButton(label: 'Save', primary: true, minHeight: 44, onPressed: () => Navigator.of(context).pop(_box.text.trim())),
+      TkFormGroup(children: [TkKitField(label: 'Name', hint: 'Leave it empty for their own name.', child: TkTextBox(controller: _box, hint: widget.theirs, max: 80, size: 15, height: 46))]),
     ],
   );
 }

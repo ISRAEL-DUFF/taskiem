@@ -446,8 +446,8 @@ void main() {
       final d = PeopleChatData(api.auth(), 'pc1', follow: false, now: () => at);
       await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleChatScreen(data: d)));
       await settle(t);
-      await press(t, find.bySemanticsLabel('More about this conversation'));
-      await press(t, find.text('Search this chat'));
+      // Search is the head's own round button (as a group's).
+      await press(t, find.bySemanticsLabel('Search this chat'));
       await typeIn(t, find.byKey(const ValueKey('people-search')), 'see you');
       await t.pump(const Duration(milliseconds: 500));
       await settle(t);
@@ -494,7 +494,7 @@ void main() {
       finder.problem = PlaceProblem.refusedForever;
       await press(t, find.text('Try again'));
       expect(find.text(placeProblemWords(PlaceProblem.refusedForever)), findsOneWidget);
-      await press(t, find.text('Open your phone’s settings'));
+      await press(t, find.bySemanticsLabel('Open your phone’s settings'));
       expect(finder.settings, [PlaceProblem.refusedForever]);
       finder.problem = null;
       await press(t, find.text('Try again'));
@@ -686,10 +686,14 @@ void main() {
       await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YourStandingScreen(auth: api.auth(), now: () => at)));
       await settle(t);
       expect(find.text('Your account can’t message people for now'), findsOneWidget);
-      expect(find.text('Why: Many people reported scam messages from you.'), findsOneWidget);
-      expect(find.text('A moderator looked at your appeal and kept the decision. They said: The messages were spam.'), findsOneWidget);
+      // Each decision a row (why under it); its whole story a tap away.
+      expect(find.textContaining('Many people reported scam messages from you.'), findsOneWidget);
       expect(api.sent('POST', '/v1/me/standing/seen'), hasLength(1), reason: 'opened: seen');
-      await press(t, find.bySemanticsLabel('Appeal the suspension'));
+      await press(t, find.bySemanticsLabel(RegExp(r'^Warning, ')));
+      expect(find.text('A moderator looked at your appeal and kept the decision. They said: The messages were spam.'), findsOneWidget);
+      await press(t, find.bySemanticsLabel('Close').last);
+      await press(t, find.bySemanticsLabel(RegExp(r'^Suspension, .*Open it to appeal')));
+      await press(t, find.text('Appeal'));
       await press(t, find.text('Send the appeal'));
       expect(find.text('Write why you think this decision is wrong.'), findsOneWidget);
       expect(api.sent('POST', '/v1/me/standing/appeals'), isEmpty);
@@ -699,8 +703,10 @@ void main() {
       await press(t, find.text('Send the appeal'));
       expect(api.body(api.sent('POST', '/v1/me/standing/appeals').last), {'action_id': 'a2', 'text': 'Those were my own family.'});
       expect(find.text('Your appeal was sent. A moderator will read it.'), findsOneWidget);
+      await press(t, find.bySemanticsLabel(RegExp(r'^Suspension, ')));
       expect(find.text('You appealed. A moderator will read it and we will tell you what they decide.'), findsOneWidget);
-      expect(find.bySemanticsLabel('Appeal the suspension'), findsNothing, reason: 'once');
+      expect(find.text('Appeal'), findsNothing, reason: 'once');
+      await press(t, find.bySemanticsLabel('Close').last);
 
       final opened = <Uri>[];
       final was = openInBrowser;
@@ -727,9 +733,9 @@ void main() {
       api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
       await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), now: () => at, presence: false)));
       await settle(t);
-      expect(find.bySemanticsLabel('Your account can’t message people for now. Read what Taskiem’s moderators decided'), findsOneWidget);
-      await press(t, find.text('Read what Taskiem’s moderators decided'));
-      expect(find.text('Why: Many people reported scam messages from you.'), findsOneWidget);
+      expect(find.text('Your account can’t message people for now'), findsOneWidget, reason: 'the notice, a callout on You');
+      await press(t, find.bySemanticsLabel('Read what Taskiem’s moderators decided').last);
+      expect(find.textContaining('Many people reported scam messages from you.'), findsOneWidget);
       t.state<NavigatorState>(find.byType(Navigator)).pop();
       await settle(t);
       expect(find.text('Read what Taskiem’s moderators decided'), findsNothing);
@@ -761,7 +767,7 @@ void main() {
       await press(t, find.bySemanticsLabel('Send'));
       expect(find.textContaining('See Your standing in Settings'), findsWidgets);
       await press(t, find.text('Your standing'));
-      expect(find.text('Why: Many people reported scam messages from you.'), findsOneWidget);
+      expect(find.textContaining('Many people reported scam messages from you.'), findsOneWidget);
       await drain(t);
     });
 

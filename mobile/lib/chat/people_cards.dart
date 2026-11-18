@@ -20,6 +20,7 @@ import '../kit/list.dart' show TkEmpty, TkLoading;
 import '../kit/load_more.dart';
 import '../kit/mobile.dart';
 import '../kit/modal.dart';
+import '../kit/page.dart';
 import '../kit/sheet.dart';
 import '../theme/look.dart';
 import '../theme/theme.dart';
@@ -862,34 +863,32 @@ class _PayoutAccountPageState extends State<PayoutAccountPage> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final a = _a;
-    return TkScreen(
+    // A large-title page: the account in a form group, the app's main
+    // button, removing it a red row.
+    return TkPageScreen(
       title: 'Your bank account',
+      titleSize: 30,
+      backLabel: 'Back to Settings',
       children: [
+        Text(
+          (a?.words ?? '').isNotEmpty ? a!.words : 'Friends pay your share to this account, by their own bank app. Taskiem moves no money and does not check it.',
+          style: tkText(size: 13.5, lineHeight: 1.4, color: t.muted),
+        ),
         if (a == null && _error == null) const TkLoading(label: 'Loading…'),
-        TkPanel(
-          padding: const EdgeInsets.all(16),
+        TkFormGroup(
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  (a?.words ?? '').isNotEmpty ? a!.words : 'Friends pay your share to this account, by their own bank app. Taskiem moves no money and does not check it.',
-                  style: tkHint(t),
-                ),
-                const SizedBox(height: 12),
-                TkKitField(label: 'Bank', child: TkTextBox(controller: _bank, hint: 'GTBank')),
-                const SizedBox(height: 12),
-                TkKitField(label: 'Account number', child: TkTextBox(controller: _number, digits: 10)),
-                const SizedBox(height: 12),
-                TkKitField(label: 'Name on the account', child: TkTextBox(controller: _name)),
-                const SizedBox(height: 14),
-                TkButton(label: _busy ? 'Saving…' : 'Save', primary: true, minHeight: 44, enabled: !_busy, onPressed: _save),
-                if (a?.account is Map) ...[const SizedBox(height: 8), TkButton(label: 'Remove it', minHeight: 44, enabled: !_busy, onPressed: _remove)],
-              ],
-            ),
+            TkKitField(label: 'Bank', child: TkTextBox(controller: _bank, hint: 'GTBank', size: 15, height: 46)),
+            TkKitField(label: 'Account number', child: TkTextBox(controller: _number, digits: 10, size: 15, height: 46)),
+            TkKitField(label: 'Name on the account', child: TkTextBox(controller: _name, size: 15, height: 46)),
           ],
         ),
         if (_error != null) TkErrorBox(_error!),
+        TkCta(label: _busy ? 'Saving…' : 'Save', onTap: _busy ? null : _save),
+        if (a?.account is Map)
+          TkSection(
+            inset: 56,
+            children: [TkListRow(title: 'Remove it', icon: 'b-x', square: TkLook.of(context).red, onTap: _busy ? null : _remove)],
+          ),
       ],
     );
   }

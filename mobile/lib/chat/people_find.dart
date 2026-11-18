@@ -21,7 +21,9 @@ import '../app/phone.dart' show notAPhone, toE164;
 import '../kit/api_image.dart';
 import '../kit/kit.dart';
 import '../kit/list.dart' show TkEmpty, TkLoading;
+import '../kit/look.dart';
 import '../kit/mobile.dart';
+import '../kit/page.dart';
 import '../kit/modal.dart';
 import '../kit/polling.dart';
 import '../kit/sheet.dart' show TkKitField;
@@ -123,43 +125,39 @@ class _FoundPersonState extends State<FoundPerson> {
     final t = TkTheme.tokens(context);
     final p = widget.found.person!;
     if (widget.found.self == true) {
-      return TkPanel(padding: const EdgeInsets.all(16), children: [Text('That’s you.', style: tkText(size: 15, color: t.text))]);
+      return TkCallout(leading: TkSquare('b-person', color: TkLook.of(context).teal), title: 'That’s you', sub: 'Share your link so people can chat with you.', color: TkLook.of(context).teal);
     }
     final seen = lastSeenWords(p, DateTime.now());
-    return TkPanel(
+    // As a top card: their face, their name in the app's display type, then
+    // Chat and Add to contacts side by side.
+    return Container(
       padding: const EdgeInsets.all(16),
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                PersonFace(name: p.name, transport: widget.auth.transport, photo: p.photo, size: 52),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(p.contactName is String && (p.contactName as String).isNotEmpty ? p.contactName as String : p.name, style: tkText(size: 17, weight: 700, color: t.text)),
-                      Text(p.inContacts || _added ? 'In your contacts' : (seen ?? 'On Taskiem'), style: tkHint(t)),
-                    ],
-                  ),
+      decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(22)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              PersonFace(name: p.name, transport: widget.auth.transport, photo: p.photo, size: 52),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(p.contactName is String && (p.contactName as String).isNotEmpty ? p.contactName as String : p.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkDisplay(size: 19, letterSpacing: -0.3, color: t.text)),
+                    Text(p.inContacts || _added ? 'In your contacts' : (seen ?? 'On Taskiem'), style: tkText(size: 13, color: t.muted)),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: TkButton(label: 'Chat', primary: true, minHeight: 44, onPressed: widget.onChat)),
-                if (!p.inContacts && !_added && widget.found.addToken != null) ...[
-                  const SizedBox(width: 8),
-                  Expanded(child: TkButton(label: 'Add to contacts', minHeight: 44, enabled: !_busy, onPressed: _add)),
-                ],
-              ],
-            ),
-          ],
-        ),
-      ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TkButtonRow([
+            TkSmallButton(label: 'Chat', primary: true, icon: 'b-chat', onPressed: widget.onChat),
+            if (!p.inContacts && !_added && widget.found.addToken != null) TkSmallButton(label: 'Add to contacts', onPressed: _busy ? null : _add),
+          ]),
+        ],
+      ),
     );
   }
 }
@@ -265,47 +263,15 @@ class _NewPeopleChatScreenState extends State<NewPeopleChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
     final look = TkLook.of(context);
     final f = _found;
-    return TkScreen(
+    // A large-title page: the ways in as rows, then a number or a link each
+    // in a form group with the app's buttons.
+    return TkPageScreen(
       title: 'New chat',
+      titleSize: 30,
+      backLabel: 'Back to Chats',
       children: [
-        TkSection(
-          title: 'By phone number',
-          children: [
-            TkPanel(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TkKitField(label: 'Their number', hint: 'A Nigerian number can start with 0.', child: TkTextBox(key: const ValueKey('find-phone'), controller: _phone, phone: true)),
-                    const SizedBox(height: 10),
-                    TkButton(label: _busy ? 'Looking…' : 'Find', primary: true, minHeight: 44, enabled: !_busy, onPressed: _byNumber),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-        if (_error != null) TkErrorBox(_error!),
-        if (f != null && f.found && f.person != null) FoundPerson(auth: widget.auth, found: f, from: _foundFrom, onChat: () => _chat(f.person!.id)),
-        if (f != null && !f.found)
-          TkPanel(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('Not on Taskiem yet', style: tkText(size: 17, weight: 700, color: t.text)),
-                  const SizedBox(height: 4),
-                  Text('Invite them with your link. It goes from your phone, as your own message: Taskiem sends nothing.', style: tkHint(t)),
-                  if (f.invite != null) ...[const SizedBox(height: 10), TkButton(label: 'Invite', primary: true, minHeight: 44, onPressed: () => _invite(f.invite!))],
-                ],
-              ),
-            ],
-          ),
         TkSection(
           inset: 56,
           children: [
@@ -313,7 +279,7 @@ class _NewPeopleChatScreenState extends State<NewPeopleChatScreen> {
               TkListRow(
                 title: 'New group',
                 sub: 'Chat with up to $groupMost people at once',
-                icon: 'b-people',
+                icon: 'b-group',
                 square: look.lime,
                 onTap: () => tkPush<void>(context, NewGroupScreen(auth: widget.auth, openGroup: widget.openGroup!)),
               ),
@@ -327,10 +293,11 @@ class _NewPeopleChatScreenState extends State<NewPeopleChatScreen> {
             TkListRow(
               title: 'Your contacts',
               sub: 'People you added',
-              icon: 'b-people',
+              icon: 'b-person',
               square: look.blue,
               onTap: () => tkPush<void>(context, PeopleContactsScreen(auth: widget.auth, onChat: _chat)),
             ),
+            TkListRow(title: 'Scan their QR code', sub: 'With your phone’s camera', icon: 'b-camera', square: look.orange, onTap: _busy ? null : _scan),
             TkListRow(
               title: 'Your link and QR code',
               sub: 'Share it, so people can chat with you without your number',
@@ -340,30 +307,33 @@ class _NewPeopleChatScreenState extends State<NewPeopleChatScreen> {
             ),
           ],
         ),
-        TkSection(
+        TkFormGroup(
+          title: 'By phone number',
+          children: [
+            TkKitField(label: 'Their number', hint: 'A Nigerian number can start with 0.', child: TkTextBox(key: const ValueKey('find-phone'), controller: _phone, phone: true, size: 15, height: 46)),
+            TkButtonRow([TkSmallButton(label: _busy ? 'Looking…' : 'Find', primary: true, icon: 'b-search', onPressed: _busy ? null : _byNumber)]),
+          ],
+        ),
+        if (_error != null) TkErrorBox(_error!),
+        if (f != null && f.found && f.person != null) FoundPerson(auth: widget.auth, found: f, from: _foundFrom, onChat: () => _chat(f.person!.id)),
+        if (f != null && !f.found)
+          TkCallout(
+            leading: TkSquare('b-send', color: look.blue),
+            title: 'Not on Taskiem yet',
+            sub: 'Invite them with your link. It goes from your phone, as your own message: Taskiem sends nothing.',
+            subLines: 4,
+            color: look.blue,
+            button: f.invite == null ? null : 'Invite',
+            onPressed: f.invite == null ? null : () => _invite(f.invite!),
+          ),
+        TkFormGroup(
           title: 'By their link',
           children: [
-            TkPanel(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TkButton(label: 'Scan their QR code', primary: true, minHeight: 44, enabled: !_busy, onPressed: _scan),
-                    const SizedBox(height: 12),
-                    TkKitField(label: 'Or their link', hint: 'Type or paste a link someone shared.', child: TkTextBox(key: const ValueKey('find-link'), controller: _link)),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(child: TkButton(label: 'Paste', minHeight: 44, enabled: !_busy, onPressed: _paste)),
-                        const SizedBox(width: 8),
-                        Expanded(child: TkButton(label: 'Open the link', minHeight: 44, enabled: !_busy, onPressed: _byLink)),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
-            ),
+            TkKitField(label: 'Their link', hint: 'Type or paste a link someone shared.', child: TkTextBox(key: const ValueKey('find-link'), controller: _link, size: 15, height: 46)),
+            TkButtonRow([
+              TkSmallButton(label: 'Paste', onPressed: _busy ? null : _paste),
+              TkSmallButton(label: 'Open the link', primary: true, onPressed: _busy ? null : _byLink),
+            ]),
           ],
         ),
       ],
@@ -500,58 +470,56 @@ class _MyPersonLinkScreenState extends State<MyPersonLinkScreen> {
   Widget build(BuildContext context) {
     final t = TkTheme.tokens(context);
     final l = _link;
+    final look = TkLook.of(context);
+    // As a group's invite link: a top card with the QR on its own ground,
+    // Share and Copy side by side; Replace as a row.
     return TkScreen(
       title: 'Your link',
       children: [
         if (_error != null) TkErrorBox(_error!),
         if (l == null && _error == null) const TkLoading(label: 'Loading…'),
-        if (l != null)
-          TkPanel(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(l.words.isEmpty ? 'People who open your link or scan your QR code can chat with you, without your number.' : l.words, style: tkText(size: 14.5, lineHeight: 1.45, color: t.text)),
-                  const SizedBox(height: 14),
-                  Center(
-                    child: Semantics(
-                      label: 'Your QR code',
-                      image: true,
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: const Color(0xFFFFFFFF), borderRadius: BorderRadius.circular(16)),
-                        child: ApiImage(key: ValueKey(l.code), transport: widget.auth.transport, path: '${l.qr}${l.qr.contains('?') ? '&' : '?'}format=png', width: 200, height: 200),
-                      ),
+        if (l != null) ...[
+          TkTopCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(l.words.isEmpty ? 'People who open your link or scan your QR code can chat with you, without your number.' : l.words, style: tkText(size: 14, lineHeight: 1.45, color: t.text)),
+                const SizedBox(height: 14),
+                Center(
+                  child: Semantics(
+                    label: 'Your QR code',
+                    image: true,
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: t.qrGround, borderRadius: BorderRadius.circular(16)),
+                      child: ApiImage(key: ValueKey(l.code), transport: widget.auth.transport, path: '${l.qr}${l.qr.contains('?') ? '&' : '?'}format=png', width: 200, height: 200),
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text('Scanned with a phone’s camera, it opens a chat with you.', textAlign: TextAlign.center, style: tkHint(t)),
-                  const SizedBox(height: 12),
-                  Text(l.url, textAlign: TextAlign.center, style: tkText(size: 15, weight: 600, color: t.text)),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(child: TkButton(label: 'Share', primary: true, minHeight: 44, onPressed: () => stepOut(() => SharePlus.instance.share(ShareParams(text: l.url))))),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TkButton(
-                          label: 'Copy',
-                          minHeight: 44,
-                          onPressed: () async {
-                            await Clipboard.setData(ClipboardData(text: l.url));
-                            if (context.mounted) showTkToast(context, 'Link copied');
-                          },
-                        ),
-                      ),
-                    ],
+                ),
+                const SizedBox(height: 6),
+                Text('Scanned with a phone’s camera, it opens a chat with you.', textAlign: TextAlign.center, style: tkHint(t)),
+                const SizedBox(height: 12),
+                Text(l.url, textAlign: TextAlign.center, style: tkText(size: 13.5, weight: 600, color: t.text)),
+                const SizedBox(height: 12),
+                TkButtonRow([
+                  TkSmallButton(label: 'Share', icon: 'b-share', primary: true, onPressed: () => stepOut(() => SharePlus.instance.share(ShareParams(text: l.url)))),
+                  TkSmallButton(
+                    label: 'Copy',
+                    icon: 'b-copy',
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: l.url));
+                      if (context.mounted) showTkToast(context, 'Link copied');
+                    },
                   ),
-                  const SizedBox(height: 8),
-                  TkButton(label: _busy ? 'Replacing…' : 'Replace the link', minHeight: 44, enabled: !_busy, onPressed: _replace),
-                ],
-              ),
-            ],
+                ]),
+              ],
+            ),
           ),
+          TkSection(
+            inset: 56,
+            children: [TkListRow(title: _busy ? 'Replacing…' : 'Replace the link', sub: 'The old one stops working', icon: 'loop', square: look.orange, onTap: _busy ? null : _replace)],
+          ),
+        ],
       ],
     );
   }
@@ -642,10 +610,6 @@ class _PeopleRequestsScreenState extends State<PeopleRequestsScreen> with Pollin
       title: 'Message requests',
       onRefresh: _load,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Text('People you haven’t chatted with. They are not told you read their message unless you accept.', style: tkHint(t)),
-        ),
         if (widget.openGroup != null) GroupInvitesSection(auth: widget.auth, openGroup: widget.openGroup!, live: _live, now: widget.now),
         if (_error != null) TkErrorBox(_error!),
         if (list == null && _error == null) const TkLoading(label: 'Loading…'),
@@ -667,6 +631,12 @@ class _PeopleRequestsScreenState extends State<PeopleRequestsScreen> with Pollin
                 ),
             ],
           ),
+        // A quiet note under the list (main's pages), not a paragraph under
+        // the title.
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text('People you haven’t chatted with. They are not told you read their message unless you accept.', style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
+        ),
       ],
     );
   }
