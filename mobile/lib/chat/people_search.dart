@@ -47,40 +47,88 @@ class AnyFound {
   DateTime get at => person?.starredAt ?? group?.starredAt ?? person?.message.createdAt ?? group!.message.createdAt;
 }
 
-/// The cursors of a merged list (people chats', groups'), as one.
-String? _joinNext(String? people, String? groups) => people == null && groups == null ? null : '${people ?? ''}|${groups ?? ''}';
-(String?, String?) _splitNext(String next) {
-  final i = next.indexOf('|');
-  String? or(String s) => s.isEmpty ? null : s;
-  return i < 0 ? (or(next), null) : (or(next.substring(0, i)), or(next.substring(i + 1)));
-}
+/// One source's page of found messages.
+typedef SourcePage<T> = ({List<T> found, bool more, String? next});
 
 /// People chats' pages and groups' pages read together and merged by
 /// time (the newest first); a server without groups (404) gives none of
 /// groups.
-Future<FoundPage> mergedPage(
-  String? before, {
-  required Future<({List<PeopleFound> found, bool more, String? next})> Function(String? before) people,
-  required Future<({List<GroupFound> found, bool more, String? next})> Function(String? before) groups,
-}) async {
-  final (p, g) = before == null ? (null, null) : _splitNext(before);
-  final readPeople = before == null || p != null;
-  final readGroups = before == null || g != null;
-  Future<({List<GroupFound> found, bool more, String? next})> groupsOrNone() async {
+///
+/// Only rows no older than the oldest row read so far of any source that
+/// still has more are given: an older row of one source could otherwise
+/// be shown above rows of another source not yet read (Show more would
+/// put rows out of time order). The rest are held back until that source
+/// has paged past them.
+class FoundMerge {
+  FoundMerge({required this.people, required this.groups});
+
+  final Future<SourcePage<PeopleFound>> Function(String? before) people;
+  final Future<SourcePage<GroupFound>> Function(String? before) groups;
+
+  int _round = 0;
+  List<AnyFound> _held = [];
+  String? _pNext, _gNext;
+  bool _pMore = false, _gMore = false;
+  DateTime? _pOldest, _gOldest;
+
+  Future<SourcePage<GroupFound>> _groupsOrNone(String? before) async {
     try {
-      return await groups(g);
+      return await groups(before);
     } on ApiError catch (e) {
       if (e.status == 404) return (found: const <GroupFound>[], more: false, next: null);
       rethrow;
     }
   }
 
-  final pr = readPeople ? await people(p) : null;
-  final gr = readGroups ? await groupsOrNone() : null;
-  final found = [...?pr?.found.map(AnyFound.person), ...?gr?.found.map(AnyFound.group)]..sort((a, b) => b.at.compareTo(a.at));
-  final pNext = pr != null && pr.more ? pr.next : null;
-  final gNext = gr != null && gr.more ? gr.next : null;
-  return (found: found, more: pNext != null || gNext != null, next: _joinNext(pNext, gNext));
+  /// The first page ([before] null), else the page after the last.
+  Future<FoundPage> read(String? before) async {
+    final round = before == null ? ++_round : _round;
+    final first = before == null;
+    final readPeople = first || (_pMore && _pNext != null);
+    final readGroups = first || (_gMore && _gNext != null);
+    final pr = readPeople ? await people(first ? null : _pNext) : null;
+    final gr = readGroups ? await _groupsOrNone(first ? null : _gNext) : null;
+    if (round != _round) return (found: const <AnyFound>[], more: false, next: null);
+    if (first) {
+      _held = [];
+      _pOldest = _gOldest = null;
+      _pMore = _gMore = false;
+      _pNext = _gNext = null;
+    }
+    final pool = [..._held];
+    if (pr != null) {
+      final rows = pr.found.map(AnyFound.person).toList();
+      pool.addAll(rows);
+      for (final r in rows) {
+        if (_pOldest == null || r.at.isBefore(_pOldest!)) _pOldest = r.at;
+      }
+      _pMore = pr.more && pr.next != null;
+      _pNext = _pMore ? pr.next : null;
+    }
+    if (gr != null) {
+      final rows = gr.found.map(AnyFound.group).toList();
+      pool.addAll(rows);
+      for (final r in rows) {
+        if (_gOldest == null || r.at.isBefore(_gOldest!)) _gOldest = r.at;
+      }
+      _gMore = gr.more && gr.next != null;
+      _gNext = _gMore ? gr.next : null;
+    }
+    // The frontier: the newest of the oldest rows of the sources with more.
+    DateTime? frontier;
+    for (final (more, oldest) in [(_pMore, _pOldest), (_gMore, _gOldest)]) {
+      if (more && oldest != null && (frontier == null || oldest.isAfter(frontier))) frontier = oldest;
+    }
+    final shown = <AnyFound>[];
+    final held = <AnyFound>[];
+    for (final f in pool) {
+      (frontier == null || !f.at.isBefore(frontier) ? shown : held).add(f);
+    }
+    _held = held;
+    shown.sort((a, b) => b.at.compareTo(a.at));
+    final more = _pMore || _gMore || _held.isNotEmpty;
+    return (found: shown, more: more, next: more ? 'more' : null);
+  }
 }
 
 /// Whether [q] can be searched: a word of two letters or more (the server
@@ -141,7 +189,8 @@ class FoundList extends ChangeNotifier {
     try {
       final p = await read(next);
       if (round != _round || _disposed) return;
-      found = [...?found, ...p.found.where((f) => !(found ?? const []).any((g) => g.messageId == f.messageId))];
+      // Kept in time order (the newest first) as a whole.
+      found = [...?found, ...p.found.where((f) => !(found ?? const []).any((g) => g.messageId == f.messageId))]..sort((a, b) => b.at.compareTo(a.at));
       more = p.more;
       _next = p.next;
     } on Object catch (e) {
@@ -263,18 +312,18 @@ class _PeopleSearchScreenState extends State<PeopleSearchScreen> {
       final r = await widget.auth.api.searchPeople(q: _searched, chat: widget.chat, before: before);
       return (found: r.results.map(AnyFound.person).toList(), more: r.more, next: r.next);
     }
-    return mergedPage(
-      before,
-      people: (b) async {
-        final r = await widget.auth.api.searchPeople(q: _searched, before: b);
-        return (found: r.results, more: r.more, next: r.next);
-      },
-      groups: (b) async {
-        final r = await widget.auth.api.searchGroups(q: _searched, before: b);
-        return (found: r.results, more: r.more, next: r.next);
-      },
-    );
+    return _merge.read(before);
   });
+  late final _merge = FoundMerge(
+    people: (b) async {
+      final r = await widget.auth.api.searchPeople(q: _searched, before: b);
+      return (found: r.results, more: r.more, next: r.next);
+    },
+    groups: (b) async {
+      final r = await widget.auth.api.searchGroups(q: _searched, before: b);
+      return (found: r.results, more: r.more, next: r.next);
+    },
+  );
   Timer? _soon;
   String _searched = '';
 
@@ -389,8 +438,7 @@ class PeopleStarredScreen extends StatefulWidget {
 
 class _PeopleStarredScreenState extends State<PeopleStarredScreen> {
   late final FoundList _list = FoundList(
-    (before) => mergedPage(
-      before,
+    FoundMerge(
       people: (b) async {
         final r = await widget.auth.api.starredPeople(before: b);
         return (found: r.starred, more: r.more, next: r.next);
@@ -399,7 +447,7 @@ class _PeopleStarredScreenState extends State<PeopleStarredScreen> {
         final r = await widget.auth.api.starredGroups(before: b);
         return (found: r.starred, more: r.more, next: r.next);
       },
-    ),
+    ).read,
   );
 
   @override

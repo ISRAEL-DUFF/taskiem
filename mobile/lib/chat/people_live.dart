@@ -98,12 +98,13 @@ class GroupLiveReceipts extends GroupLiveEvent {
   final Map<String, String> statuses;
 }
 
-/// An invite to a group waits for them.
+/// An invite to a group waits for them; or, [invite] null, one went
+/// (taken back by an admin, answered on another device, the group gone).
 class GroupLiveInvite extends GroupLiveEvent {
   const GroupLiveInvite(this.groupId, this.invite);
   @override
   final String groupId;
-  final GroupInvite invite;
+  final GroupInvite? invite;
 }
 
 /// Someone's online or last seen, as both settings let it be seen (both
@@ -346,7 +347,8 @@ class PeopleLive extends ChangeNotifier {
           }));
         case 'group_invite':
           final d = json();
-          _groupEvents.add(GroupLiveInvite(d['group_id'] as String, GroupInvite.fromJson(d['invite'] as Map<String, dynamic>)));
+          final inv = d['invite'];
+          _groupEvents.add(GroupLiveInvite(d['group_id'] as String, inv == null ? null : GroupInvite.fromJson(inv as Map<String, dynamic>)));
         case 'group_typing':
           final now = <String, List<String>>{
             for (final g in (json()['groups'] as List).cast<Map<String, dynamic>>())

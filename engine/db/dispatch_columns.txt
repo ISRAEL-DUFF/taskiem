@@ -1681,3 +1681,5 @@ person_notify.person_id
 person_notify.groups
 group_ledger.person_id
 group_ledger.at
+group_invites_gone.person_id
+group_invites_gone.at

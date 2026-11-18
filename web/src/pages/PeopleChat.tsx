@@ -902,16 +902,20 @@ export function PeopleCardView({
 export function DeleteAsk({
   m,
   group = false,
+  mayEveryone,
   onClose,
   onDelete,
 }: {
   m: Pick<PeopleMessage, "mine" | "deleted" | "local" | "created_at">;
   /** In a group: everyone's phones, the others' copies. */
   group?: boolean;
+  /** Whether "Delete for everyone" is offered, when the chat decides
+   * (a group: only while a member); else by the message alone. */
+  mayEveryone?: boolean;
   onClose: () => void;
   onDelete: (forEveryone: boolean) => void;
 }) {
-  const everyone = mayDeleteForEveryone(m);
+  const everyone = mayEveryone ?? mayDeleteForEveryone(m);
   return (
     <Modal title="Delete this message?" onClose={onClose}>
       <p>

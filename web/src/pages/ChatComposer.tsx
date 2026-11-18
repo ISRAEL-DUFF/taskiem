@@ -101,6 +101,8 @@ export type Sending<R> = {
   file?: File;
   reply?: R;
   mentions?: ReturnType<Mentions["refs"]>;
+  /** People picked with "@" (a group's members), their id with the name. */
+  picks?: { id: string; name: string }[];
   /** A voice note held and let go: it goes at once, and the box is left. */
   held: boolean;
 };
@@ -244,6 +246,7 @@ export function useComposer<R>(o: ComposerOptions<R>) {
       file: f,
       reply,
       mentions: f ? undefined : mentions.refs(),
+      picks: mentions.pickedPeople(),
       held: !!held,
     };
     if (!held) {
