@@ -7,6 +7,7 @@ import {
 } from "react";
 import { get } from "../api";
 import { Link } from "react-router-dom";
+import { flushSync } from "react-dom";
 import { Icon, TaskiemMark } from "../icons";
 import { usePresence } from "../kit";
 import { initialsOf } from "./ChatAvatar";
@@ -147,14 +148,16 @@ export function useMentions(
       Math.max(caret, q.start + 1 + q.query.length),
       s.name,
     );
-    setText(next.text);
-    if (s.kind !== "taskiem")
-      setPicked((cur) => [...cur, s]);
-    setQ(null);
-    requestAnimationFrame(() => {
-      el?.focus();
-      el?.setSelectionRange(next.caret, next.caret);
+    // The words and the caret move together, at once: a caret put back a
+    // frame later would land the next key typed at the end of the box.
+    flushSync(() => {
+      setText(next.text);
+      if (s.kind !== "taskiem")
+        setPicked((cur) => [...cur, s]);
+      setQ(null);
     });
+    el?.focus();
+    el?.setSelectionRange(next.caret, next.caret);
   };
   /** Keys in the text box: true when a suggestion took them. */
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): boolean => {
