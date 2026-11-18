@@ -60,6 +60,52 @@ class PeopleLiveGone extends PeopleLiveEvent {
   final String? id;
 }
 
+/// What the connection tells of the person's groups (people-chatting §9,
+/// "As built: stage 5b, groups (server)", the live connection).
+sealed class GroupLiveEvent {
+  const GroupLiveEvent();
+
+  /// The group it is about.
+  String get groupId;
+}
+
+/// A message of one of their groups, new or changed (a reaction, deleted
+/// for everyone, a share marked paid, their own star on another device).
+class GroupLiveMessage extends GroupLiveEvent {
+  const GroupLiveMessage(this.groupId, this.message);
+  @override
+  final String groupId;
+  final GroupMessage message;
+}
+
+/// A group changed ([group]), or deleted for them until a new message
+/// ([hidden]).
+class GroupLiveGroup extends GroupLiveEvent {
+  const GroupLiveGroup(this.groupId, {this.group, this.hidden = false});
+  @override
+  final String groupId;
+  final Group? group;
+  final bool hidden;
+}
+
+/// The ticks of their own latest messages in a group moved.
+class GroupLiveReceipts extends GroupLiveEvent {
+  const GroupLiveReceipts(this.groupId, this.statuses);
+  @override
+  final String groupId;
+
+  /// Message id to its status (sent, delivered, read).
+  final Map<String, String> statuses;
+}
+
+/// An invite to a group waits for them.
+class GroupLiveInvite extends GroupLiveEvent {
+  const GroupLiveInvite(this.groupId, this.invite);
+  @override
+  final String groupId;
+  final GroupInvite invite;
+}
+
 /// Someone's online or last seen, as both settings let it be seen (both
 /// null when hidden).
 typedef PeoplePresence = ({bool? online, String? lastSeenAt});
@@ -114,6 +160,15 @@ class PeopleLive extends ChangeNotifier {
 
   /// The chats whose other person is typing now.
   Set<String> typing = const {};
+
+  /// Who is typing in each of their groups now (never themselves), by
+  /// group id.
+  Map<String, List<String>> groupTyping = const {};
+
+  final _groupEvents = StreamController<GroupLiveEvent>.broadcast();
+
+  /// What it tells of their groups.
+  Stream<GroupLiveEvent> get groupEvents => _groupEvents.stream;
 
   /// What the connection said of each chat's other person, by chat id.
   final Map<String, PeoplePresence> presence = {};
@@ -226,10 +281,11 @@ class PeopleLive extends ChangeNotifier {
     _watch?.cancel();
     _sub?.cancel();
     _sub = null;
-    final was = connected || typing.isNotEmpty || presence.isNotEmpty;
+    final was = connected || typing.isNotEmpty || presence.isNotEmpty || groupTyping.isNotEmpty;
     connected = false;
     connection = null;
     typing = const {};
+    groupTyping = const {};
     // What it said of people's presence holds only while it is open: the
     // chats' own reads say it again.
     presence.clear();
@@ -276,6 +332,30 @@ class PeopleLive extends ChangeNotifier {
             typing = list.isEmpty ? const {} : list;
             notifyListeners();
           }
+        case 'group_message':
+          final d = json();
+          _groupEvents.add(GroupLiveMessage(d['group_id'] as String, GroupMessage.fromJson(d['message'] as Map<String, dynamic>)));
+        case 'group':
+          final d = json();
+          final hidden = d['hidden'] == true;
+          _groupEvents.add(GroupLiveGroup(d['id'] as String, hidden: hidden, group: hidden || d['group'] == null ? null : Group.fromJson(d['group'] as Map<String, dynamic>)));
+        case 'group_receipts':
+          final d = json();
+          _groupEvents.add(GroupLiveReceipts(d['group_id'] as String, {
+            for (final m in (d['messages'] as List).cast<Map<String, dynamic>>()) m['id'] as String: m['status'] as String,
+          }));
+        case 'group_invite':
+          final d = json();
+          _groupEvents.add(GroupLiveInvite(d['group_id'] as String, GroupInvite.fromJson(d['invite'] as Map<String, dynamic>)));
+        case 'group_typing':
+          final now = <String, List<String>>{
+            for (final g in (json()['groups'] as List).cast<Map<String, dynamic>>())
+              if ((g['people'] as List).isNotEmpty) g['group_id'] as String: (g['people'] as List).cast<String>(),
+          };
+          if (!_sameTyping(now, groupTyping)) {
+            groupTyping = now.isEmpty ? const {} : now;
+            notifyListeners();
+          }
         case 'presence':
           if (!connected) break;
           for (final p in (json()['people'] as List).cast<Map<String, dynamic>>()) {
@@ -290,10 +370,14 @@ class PeopleLive extends ChangeNotifier {
     }
   }
 
+  static bool _sameTyping(Map<String, List<String>> a, Map<String, List<String>> b) =>
+      a.length == b.length && a.entries.every((e) => setEquals(e.value.toSet(), b[e.key]?.toSet()));
+
   @override
   void dispose() {
     stop();
     _events.close();
+    _groupEvents.close();
     super.dispose();
   }
 }
