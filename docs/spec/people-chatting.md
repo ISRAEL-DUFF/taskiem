@@ -1563,3 +1563,25 @@ Branch `stage5b-together`, on 8af21b41 (`stage5`: groups on the server, the web 
 - Shares are equal parts of the delivery only (no splitting by weight or by hand), as C2 says.
 - A basket of a chat whose two people both deleted their copies stays, reached by no one, until the accounts go.
 - Live: each watcher's view of a changed open basket reads its shop through the basket door, so a busy group's basket writes an audit entry per watcher per change.
+
+## As built: stage 5b leftovers
+
+Branch `stage5b-leftovers`, on 040cbc19 (stage 5b with ordering together): three lines of [the 5b checklist](people-chatting-5b.md) left over, on the server, the web and the app. No migration. Where this section differs from those above, it holds.
+
+### A group's media and files (A, Group info)
+
+- **Server:** `GET /v1/me/groups/{id}/media?before=` (`groupMedia` in `api/people_group_messages.go`; OpenAPI `groupMedia`): the group's photos, voice notes and files (a video is a file whose `attachment.type` is `video/…`) as `GroupMessage`s, **newest first**, 50 a page, `before` a message for the page after it, `{messages, more}`. It reads as `GET …/messages` does, in the person's own transaction, so row-level security keeps it to their own time(s) in the group (from joining, up to leaving or removal); never one deleted for them (`group_marks.hidden_at`) or for everyone (`deleted_at`); only `kind = media` with an attachment. Reading it marks nothing delivered. 404 for someone never in the group; on the personal-only list. Test `TestGroupsMedia` (`api/people_group_media_test.go`): newest first, no texts; deleted for everyone and for me; a later joiner from joining; someone who left up to then; an outsider 404; two pages.
+- **Web** (`Groups.tsx` `GroupMedia`): on Group info, "Media and files" as business chats' contact info has it (`.info-media`): closed, the latest four photos; open, every photo, voice note and file (a video named so), with Show older. Each item is a link to the chat at that message (`?at=`), where it opens.
+- **App** (`lib/chat/group_media.dart`, in the app's own look): on Group info, a `TkSection` "Media and files" with the latest four as square tiles (a photo cropped, else its icon and what it is) and See all; behind it `GroupMediaScreen`: Photos three to a row, then "Videos, voice notes and files" as `TkListRow`s (who, size, when), Show older, pull to refresh. Tapping one closes the info and jumps the chat to it (`GroupChatData.jump`; `GroupInfoScreen.onJump`). `GroupChatData.media` reads a page. Test: `groups_test.dart` "media and files".
+- **One-to-one people chats** have no media list on their info (web `PeopleChat.tsx` `InfoSheet`, app `PersonInfoScreen`), so there was none to match; business chats' contact info has one ("Media and files", from the messages loaded), which the web's group list follows in look.
+
+### "Share with someone" into groups (D)
+
+The share sheets reached from outside a chat (Discover's profile, a business's chat menu and its shop, an order and its delivery) now offer groups beside people chats; the server already takes cards into groups (`POST /v1/me/groups/{id}/messages` with `card`). **Only groups you may post in now** are offered: not one you left or were removed from, one Taskiem closed, or one where only admins post and you aren't one (the server's `can_post`, which also refuses the send).
+
+- **Web** (`People.tsx` `ShareToPerson`): a "Groups" list under the people chats (`GET /v1/me/groups`, paged, filtered by `canShareInto` in `lib/groups.ts`, tested); Send posts the card and opens the group.
+- **App** (`people_cards.dart` `shareWithPeople`): picks from `pickChatsAndGroups` (the forward picker: the one Chats list, archived too) and sends each card to the people chats and groups picked, with a client id kept per chat or group for a send without an answer. Tests: `people_share_gaps_test.dart` (a group shared into; admins-only, left and closed ones not offered), `people_review_test.dart`.
+
+### Privacy notice (D)
+
+`docs/legal/privacy-notice-people-chats-draft.md` gains "Groups, and ordering together" for counsel: one copy per group sealed under the group's key and readable by Taskiem's servers (not end-to-end encrypted); names and photos per each one's settings, numbers hidden; history from joining; leaving keeps your copy; reports send the last 20 messages with consent; scam checks keep only the verdict; lawful requests; and for ordering together, what the business sees (one order from the placer naming whose lines are whose, never the group). The retention table gains a group's one copy.
