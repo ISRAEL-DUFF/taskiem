@@ -499,7 +499,7 @@ a.list-row:hover { background: var(--panel-2); text-decoration: none; }
 .topbar, .nav .nav-close, .tabbar { display: none; }
 
 @media (max-width: 860px) {
-  .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
   .nav:not(.drawer) { flex-direction: row; flex-wrap: wrap; position: static; height: auto; gap: 2px; }
   .nav:not(.drawer) .brand { width: 100%; padding-bottom: 8px; }
   .nav:not(.drawer) .section, .nav:not(.drawer) .spacer, .nav:not(.drawer) .who { display: none; }
