@@ -4,9 +4,76 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+// A lawful export naming one other person (with_person_id) gives only the
+// groups both were in, and only messages of the times both were in each,
+// for sent and seen alike; the export and its record are one transaction.
+func TestLawfulGroupExportWithPerson(t *testing.T) {
+	w := safetyWorld(t)
+	ada, adaID := w.many(t, "+2348031159601", "Ada Obi")
+	bola, bolaID := w.many(t, "+2348031159602", "Bola Ade")
+	chidi, chidiID := w.many(t, "+2348031159603", "Chidi Eze")
+	for _, id := range []uuid.UUID{adaID, bolaID, chidiID} {
+		w.older(t, id)
+	}
+	mod := newModerator(t, w, "mod@taskiem.test")
+	second := newModerator(t, w, "second@taskiem.test")
+	adds(t, ada, bola)
+	adds(t, bola, ada)
+	adds(t, ada, chidi)
+	adds(t, chidi, ada)
+	shared, _ := newGroup(t, ada, "With Chidi", bolaID, chidiID)
+	other, _ := newGroup(t, ada, "Without Chidi", bolaID)
+	gsend(t, bola, shared, "Bola to both")
+	gsend(t, chidi, shared, "Chidi to both")
+	gsend(t, bola, other, "Bola's secret")
+	gsend(t, ada, other, "Ada's secret")
+	chidi.must(200, "POST", "/v1/me/groups/"+shared+"/leave", nil)
+	gsend(t, bola, shared, "Bola after Chidi left")
+
+	export := func(groups string, with *uuid.UUID) map[string]any {
+		t.Helper()
+		body := map[string]any{"authority": "Police", "reference": "REF-" + groups, "legal_basis": "X", "person_id": bolaID,
+			"from": time.Now().Add(-time.Hour), "to": time.Now().Add(time.Hour), "files": false, "received_at": time.Now(), "groups": groups}
+		if with != nil {
+			body["with_person_id"] = with
+		}
+		id := mod.write(201, "ops.lawful.record", bolaID.String(), "/v1/ops/lawful-requests", body)["request"].(map[string]any)["id"].(string)
+		second.write(200, "ops.lawful.approve", id, "/v1/ops/lawful-requests/"+id+"/approve", nil)
+		return mod.write(200, "ops.lawful.export", id, "/v1/ops/lawful-requests/"+id+"/export", nil)
+	}
+	got := func(out map[string]any) string {
+		var b []string
+		for _, g := range out["groups"].([]any) {
+			for _, m := range g.(map[string]any)["messages"].([]any) {
+				b = append(b, g.(map[string]any)["name"].(string)+": "+m.(map[string]any)["body"].(string))
+			}
+		}
+		return strings.Join(b, " | ")
+	}
+	if b := got(export("seen", &chidiID)); b != "With Chidi: Bola to both | With Chidi: Chidi to both" {
+		t.Fatalf("seen with Chidi: %s", b)
+	}
+	if b := got(export("sent", &chidiID)); b != "With Chidi: Bola to both" {
+		t.Fatalf("sent with Chidi: %s", b)
+	}
+	// Without anyone named, every group of Bola's, as before.
+	if b := got(export("sent", nil)); b != "With Chidi: Bola to both | With Chidi: Bola after Chidi left | Without Chidi: Bola's secret" {
+		t.Fatalf("sent: %s", b)
+	}
+	// Recorded with what was given, and the request answered with it.
+	a := platformAudits(t, w, "ops.lawful.export")
+	if len(a) != 3 || a[0].Detail["messages"] != float64(2) || a[2].Detail["messages"] != float64(3) {
+		t.Fatalf("the records: %v", a)
+	}
+	if n := w.adminCount(t, `SELECT count(*)::int FROM lawful_requests WHERE state = 'answered' AND messages_given = 3 AND scope_groups = 'sent' AND scope_with IS NULL`); n != 1 {
+		t.Fatalf("answered: %d", n)
+	}
+}
 
 // The review's fixes to safety in groups ("As built: stage 5b, group
 // safety (server)", Review fixes).
