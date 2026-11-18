@@ -137,7 +137,8 @@ test("unsaved edits outlive Back and a sign-out, and are offered back", async ({
   await editJson("again");
   await page.context().clearCookies();
   await page.getByRole("button", { name: "Save draft" }).click();
-  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+  // Signed out, the phone way in.
+  await expect(page.getByRole("heading", { name: "Welcome to Taskiem" })).toBeVisible();
   await signIn(page);
   await page.goto(`/workflows/${id}`);
   await offer.getByRole("button", { name: "Bring them back" }).click();

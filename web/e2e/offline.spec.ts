@@ -64,7 +64,7 @@ test("offline, a page of the app says so in plain words, and opens again once ba
     .poll(() => page.evaluate(() => (window as unknown as { marked?: boolean }).marked ?? false).catch(() => "loading"))
     .toBe(false);
   await expect(page.getByRole("heading", { name: "You’re offline" })).toBeVisible();
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\?with=email$/);
   await context.setOffline(false);
   await expect(page.locator("#root")).not.toBeEmpty();
 });

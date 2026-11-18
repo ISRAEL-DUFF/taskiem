@@ -45,7 +45,7 @@ test("pending invitations are listed and withdrawn; an invitee with no organisat
   // Carol's invitation is gone: with no organisation she signs in to her
   // own side (You), with nothing waiting (taskiem-for-everyone §17).
   await signIn(page, carol);
-  await expect(page.getByText("Chats with businesses will show here.")).toBeVisible();
+  await expect(page.getByText("Your chats with businesses and people will show here.")).toBeVisible();
   await expect(page.getByTestId("my-invitations")).toHaveCount(0);
   await page.request.post("/v1/auth/logout", { headers: H });
   await page.context().clearCookies();
@@ -54,7 +54,7 @@ test("pending invitations are listed and withdrawn; an invitee with no organisat
   await signIn(page, bob);
   const mine = page.getByTestId("my-invitations");
   // On their own side (You), the invitations waiting at the top.
-  await expect(page.getByText("Chats with businesses will show here.")).toBeVisible();
+  await expect(page.getByText("Your chats with businesses and people will show here.")).toBeVisible();
   await expect(mine.getByTestId("my-invitation").filter({ hasText: "E2E" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Main" })).toHaveCount(0);
   expect((await page.request.get("/v1/workflows")).status()).toBe(403);
