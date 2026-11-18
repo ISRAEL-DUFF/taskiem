@@ -414,6 +414,7 @@ func (s *Server) deletePersonTx(ctx context.Context, tx pgx.Tx, person uuid.UUID
 			`DELETE FROM people_search WHERE person_id = $1`,
 			`DELETE FROM people_search_ready WHERE person_id = $1`,
 			`DELETE FROM people_gone WHERE person_id = $1`,
+			`DELETE FROM group_invites_gone WHERE person_id = $1`,
 			`DELETE FROM people_typing WHERE person_id = $1`,
 			`DELETE FROM person_live WHERE person_id = $1`,
 			`DELETE FROM people_files WHERE person_id = $1`,
