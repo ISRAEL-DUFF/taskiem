@@ -54,7 +54,11 @@ func (p *People) linkHash(code string) []byte {
 
 // codeOf spells the code a nonce makes, as chatlinks does.
 func (p *People) codeOf(nonce []byte) string {
-	k := p.derive("link code")
+	return spell(p.derive("link code"), nonce)
+}
+
+// spell spells a code from a nonce under key k, in chatlinks' alphabet.
+func spell(k, nonce []byte) string {
 	a := chatlinks.Alphabet
 	out := make([]byte, 0, chatlinks.Length)
 	limit := byte(256 - 256%len(a))
@@ -212,4 +216,25 @@ func (p *People) PublicCardOf(ctx context.Context, code string) (PublicCard, err
 		return PublicCard{}, ErrLinkReplaced
 	}
 	return out, nil
+}
+
+// A group's invite link (5b A4) is made as a person's link is, with keys
+// of its own, so a code is a group's or a person's, never both:
+// https://<host>/g/{code}.
+
+// GroupLinkHash is the keyed hash a group link's code is kept as.
+func (p *People) GroupLinkHash(code string) []byte {
+	m := hmac.New(sha256.New, p.derive("group link hash"))
+	m.Write([]byte(chatlinks.Clean(code)))
+	return m.Sum(nil)
+}
+
+// GroupLinkCode spells a group link's code from its nonce.
+func (p *People) GroupLinkCode(nonce []byte) string {
+	return spell(p.derive("group link code"), nonce)
+}
+
+// GroupLinkURL is a group code's link.
+func (p *People) GroupLinkURL(code string) string {
+	return strings.TrimSuffix(p.Base, "/") + "/g/" + code
 }

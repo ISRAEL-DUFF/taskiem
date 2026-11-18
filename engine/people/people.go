@@ -177,13 +177,17 @@ type Settings struct {
 	ReadTicks bool `json:"read_ticks"`
 	// Photo: who sees my profile photo.
 	Photo Audience `json:"photo"`
-	// ShowNumber: show my number to people I chat with.
+	// ShowNumber: show my number to people I chat with (and in groups).
 	ShowNumber bool `json:"show_number"`
+	// GroupsAdd: who can add me to groups (5b A3): contacts (the default,
+	// only people I added), everyone, or nobody. Anyone else's add becomes
+	// an invite that waits in my Requests.
+	GroupsAdd Audience `json:"groups_add"`
 }
 
 // Defaults are the settings of a person who changed none (§5.4, §17).
 func Defaults() Settings {
-	return Settings{FindByNumber: Contacts, FindFromContacts: true, Message: Everyone, LastSeen: Contacts, ReadTicks: true, Photo: Contacts, ShowNumber: false}
+	return Settings{FindByNumber: Contacts, FindFromContacts: true, Message: Everyone, LastSeen: Contacts, ReadTicks: true, Photo: Contacts, ShowNumber: false, GroupsAdd: Contacts}
 }
 
 // SettingsIn changes some settings; nil leaves one as it is.
@@ -195,13 +199,14 @@ type SettingsIn struct {
 	ReadTicks        *bool     `json:"read_ticks"`
 	Photo            *Audience `json:"photo"`
 	ShowNumber       *bool     `json:"show_number"`
+	GroupsAdd        *Audience `json:"groups_add"`
 }
 
 // SettingsTx is the person's settings; tx is in their own scope.
 func SettingsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID) (Settings, error) {
 	s := Defaults()
-	err := tx.QueryRow(ctx, `SELECT find_by_number, find_from_contacts, message, last_seen, read_ticks, photo, show_number
-		FROM person_privacy WHERE person_id = $1`, person).Scan(&s.FindByNumber, &s.FindFromContacts, &s.Message, &s.LastSeen, &s.ReadTicks, &s.Photo, &s.ShowNumber)
+	err := tx.QueryRow(ctx, `SELECT find_by_number, find_from_contacts, message, last_seen, read_ticks, photo, show_number, groups_add
+		FROM person_privacy WHERE person_id = $1`, person).Scan(&s.FindByNumber, &s.FindFromContacts, &s.Message, &s.LastSeen, &s.ReadTicks, &s.Photo, &s.ShowNumber, &s.GroupsAdd)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Defaults(), nil
 	}
@@ -222,7 +227,7 @@ func (p *People) SettingsOf(ctx context.Context, person uuid.UUID) (Settings, er
 // SaveSettings changes the person's settings and answers them all;
 // ErrInvalid for an audience that is not one.
 func (p *People) SaveSettings(ctx context.Context, person uuid.UUID, in SettingsIn) (Settings, error) {
-	for _, a := range []*Audience{in.FindByNumber, in.Message, in.LastSeen, in.Photo} {
+	for _, a := range []*Audience{in.FindByNumber, in.Message, in.LastSeen, in.Photo, in.GroupsAdd} {
 		if a != nil && !a.valid() {
 			return Settings{}, ErrInvalid
 		}
@@ -250,12 +255,13 @@ func (p *People) SaveSettings(ctx context.Context, person uuid.UUID, in Settings
 		setB(&s.ReadTicks, in.ReadTicks)
 		set(&s.Photo, in.Photo)
 		setB(&s.ShowNumber, in.ShowNumber)
-		_, err = tx.Exec(ctx, `INSERT INTO person_privacy (person_id, find_by_number, find_from_contacts, message, last_seen, read_ticks, photo, show_number, updated_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+		set(&s.GroupsAdd, in.GroupsAdd)
+		_, err = tx.Exec(ctx, `INSERT INTO person_privacy (person_id, find_by_number, find_from_contacts, message, last_seen, read_ticks, photo, show_number, groups_add, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
 			ON CONFLICT (person_id) DO UPDATE SET find_by_number = EXCLUDED.find_by_number, find_from_contacts = EXCLUDED.find_from_contacts,
 			  message = EXCLUDED.message, last_seen = EXCLUDED.last_seen, read_ticks = EXCLUDED.read_ticks, photo = EXCLUDED.photo,
-			  show_number = EXCLUDED.show_number, updated_at = now()`,
-			person, s.FindByNumber, s.FindFromContacts, s.Message, s.LastSeen, s.ReadTicks, s.Photo, s.ShowNumber)
+			  show_number = EXCLUDED.show_number, groups_add = EXCLUDED.groups_add, updated_at = now()`,
+			person, s.FindByNumber, s.FindFromContacts, s.Message, s.LastSeen, s.ReadTicks, s.Photo, s.ShowNumber, s.GroupsAdd)
 		return err
 	})
 	return s, err

@@ -164,11 +164,15 @@ var YouKinds = []string{KindYou}
 const (
 	KindPerson  = "person"
 	KindRequest = "request"
+	// A group's message, and an invite to a group waiting in Requests
+	// (stage 5b).
+	KindGroup       = "group"
+	KindGroupInvite = "group_invite"
 )
 
 // youSide is whether a push kind is one of a person's own side.
 func youSide(kind string) bool {
-	return kind == KindYou || kind == KindPerson || kind == KindRequest
+	return kind == KindYou || kind == KindPerson || kind == KindRequest || kind == KindGroup || kind == KindGroupInvite
 }
 
 // KindsFor are the kinds a device may take: a business's (tenant set) or
@@ -536,7 +540,7 @@ type Target struct {
 
 // Takes reports whether the device takes this kind of push.
 func (t Target) Takes(kind string) bool {
-	if kind == KindPerson || kind == KindRequest {
+	if kind == KindPerson || kind == KindRequest || kind == KindGroup || kind == KindGroupInvite {
 		kind = KindYou
 	}
 	for _, k := range t.Kinds {
@@ -707,6 +711,11 @@ func (p Payload) For(t Target) Payload {
 			p.Title, p.Body = "Taskiem", "Someone wrote to you"
 		case KindRequest:
 			p.Title, p.Body = "Taskiem", "You have a new message request"
+		case KindGroup:
+			// Which groups a person is in is theirs too.
+			p.Title, p.Body = "Taskiem", "New message in a group"
+		case KindGroupInvite:
+			p.Title, p.Body = "Taskiem", "You were invited to a group"
 		default:
 			p.Title, p.Body = "Taskiem", "Something needs you"
 		}
