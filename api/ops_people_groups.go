@@ -51,6 +51,9 @@ type opsGroupReport struct {
 	Reason       string     `json:"reason"`
 	Status       string     `json:"status"`
 	CreatedAt    time.Time  `json:"created_at"`
+	// GroupMember: a report of one member (reported_id null once their
+	// account is deleted), not of the whole group.
+	GroupMember bool `json:"group_member"`
 }
 
 // opsPeopleGroup is GET /v1/ops/people/groups/{id}?why=: a group for

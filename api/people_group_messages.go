@@ -957,7 +957,9 @@ func (s *Server) markGroupMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	var out groupMessage
 	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
-		g, err := groupTx(ctx, tx, person, chi.URLParam(r, "id"), false)
+		// A reaction reaches every member: the group's row first, as every
+		// writer of the group takes it, so a closing is seen.
+		g, err := groupTx(ctx, tx, person, chi.URLParam(r, "id"), in.Reaction != nil)
 		if err != nil {
 			return err
 		}
@@ -967,6 +969,11 @@ func (s *Server) markGroupMessage(w http.ResponseWriter, r *http.Request) {
 		}
 		if m.kind == "event" {
 			return errDoorNone
+		}
+		if in.Reaction != nil {
+			if err := g.changeable(); err != nil {
+				return err
+			}
 		}
 		if in.Starred != nil {
 			if _, err := tx.Exec(ctx, `INSERT INTO group_marks (group_id, message_id, person_id, starred_at) VALUES ($1, $2, $3, CASE WHEN $4 THEN now() END)
@@ -1294,6 +1301,9 @@ func (s *Server) markGroupSplitPaid(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
+		if err := g.changeable(); err != nil {
+			return err
+		}
 		if m.cardType == nil || *m.cardType != "split" || m.deletedAt != nil {
 			return customerSendErr{http.StatusConflict, "Only a share card is marked paid."}
 		}
@@ -1340,7 +1350,8 @@ func (s *Server) typingGroup(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if !g.current() || (g.AdminsOnlyPost && g.Role != "admin") {
+		// No one types in a closed group: nothing is written, nothing shown.
+		if !g.current() || (g.AdminsOnlyPost && g.Role != "admin") || g.standing.ClosedAt != nil {
 			return nil
 		}
 		if !on {

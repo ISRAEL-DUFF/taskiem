@@ -321,8 +321,8 @@ func TestGroupModeration(t *testing.T) {
 	if e := bola.must(403, "POST", "/v1/me/groups/"+gid+"/messages", map[string]any{"text": "Still here?"}); !strings.Contains(e["error"].(string), "closed this group") {
 		t.Fatalf("a message: %v", e)
 	}
-	ada.must(403, "PUT", "/v1/me/groups/"+gid, map[string]any{"name": "Renamed"})
-	ada.must(403, "POST", "/v1/me/groups/"+gid+"/link", nil)
+	ada.must(409, "PUT", "/v1/me/groups/"+gid, map[string]any{"name": "Renamed"})
+	ada.must(409, "POST", "/v1/me/groups/"+gid+"/link", nil)
 	msgs := gmessages(t, bola, gid)
 	last := msgs[len(msgs)-1]
 	if last["sender"] != "Taskiem" || !strings.Contains(last["body"].(string), "closed this group") || !strings.Contains(last["body"].(string), "will be deleted on") {

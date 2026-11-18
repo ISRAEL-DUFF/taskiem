@@ -30,8 +30,11 @@ import (
 
 // The refusals, in plain words.
 var (
-	errGroupClosed = customerSendErr{http.StatusForbidden,
-		"Taskiem's moderators closed this group, so no one can send messages in it or join it. Its admins can appeal from the group's info."}
+	errGroupClosed = customerSendErr{http.StatusForbidden, groupClosedRefused}
+	// errGroupClosedChange: anything else that changes a closed group or
+	// reaches its members (its info, rules, photo, link, people, admins,
+	// reactions, a share marked paid), in the same words.
+	errGroupClosedChange = customerSendErr{http.StatusConflict, groupClosedRefused}
 	errGroupLinkStopped = customerSendErr{http.StatusForbidden,
 		"Taskiem's moderators turned off this group's invite link, so a new one can't be made for now."}
 	errGroupMakeHour = customerSendErr{http.StatusTooManyRequests, "You have made several groups in the last hour. Try again later."}
@@ -49,11 +52,29 @@ type groupStanding struct {
 	CloseAction                         *uuid.UUID
 }
 
-// open refuses what writes to a group its moderators closed: a message, a
-// reaction, adding people, its info, its link, letting people in.
+// groupClosedRefused is what a closed group's members are told when
+// they try to write in it.
+const groupClosedRefused = "Taskiem's moderators closed this group, so no one can send messages in it or join it. Its admins can appeal from the group's info."
+
+// open refuses a message to a group its moderators closed (403).
 func (g groupRow) open() error {
 	if g.standing.ClosedAt != nil {
 		return errGroupClosed
+	}
+	return nil
+}
+
+// changeable refuses every other write that changes a group its
+// moderators closed or reaches its members (409): its info, rules and
+// photo, its link, adding, removing and letting people in, invites, who
+// is an admin, reactions, a share marked paid. Still open to each member:
+// leaving, their own settings (mute, archive, mentions), deleting for
+// themselves, deleting their own message for everyone, reading,
+// reporting, blocking a member (their own block, nothing in the group)
+// and, for admins, the appeal.
+func (g groupRow) changeable() error {
+	if g.standing.ClosedAt != nil {
+		return errGroupClosedChange
 	}
 	return nil
 }

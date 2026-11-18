@@ -829,7 +829,7 @@ func (s *Server) putGroup(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if err := g.open(); err != nil {
+		if err := g.changeable(); err != nil {
 			return err
 		}
 		if settings && !g.admin() {
@@ -1127,7 +1127,7 @@ func (s *Server) putGroupPhoto(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if err := g.open(); err != nil {
+		if err := g.changeable(); err != nil {
 			return err
 		}
 		if g.AdminsOnlyEdit && !g.admin() {
@@ -1178,7 +1178,7 @@ func (s *Server) deleteGroupPhoto(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if err := g.open(); err != nil {
+		if err := g.changeable(); err != nil {
 			return err
 		}
 		if g.AdminsOnlyEdit && !g.admin() {
@@ -1368,7 +1368,7 @@ func (s *Server) addPeopleTx(ctx context.Context, tx pgx.Tx, admin uuid.UUID, g 
 	if !g.admin() {
 		return nil, nil, errGroupNotAdmin
 	}
-	if err := g.open(); err != nil {
+	if err := g.changeable(); err != nil {
 		return nil, nil, err
 	}
 	if err := notSuspendedTx(ctx, tx, admin); err != nil {
@@ -1619,6 +1619,9 @@ func (s *Server) setGroupAdmin(w http.ResponseWriter, r *http.Request) {
 		if !g.admin() {
 			return errGroupNotAdmin
 		}
+		if err := g.changeable(); err != nil {
+			return err
+		}
 		var role string
 		if err := tx.QueryRow(ctx, `SELECT role FROM group_members WHERE group_id = $1 AND person_id = $2 AND left_at IS NULL`, g.ID, target).Scan(&role); err != nil {
 			return err
@@ -1674,6 +1677,9 @@ func (s *Server) removeGroupMember(w http.ResponseWriter, r *http.Request) {
 		}
 		if !g.admin() {
 			return errGroupNotAdmin
+		}
+		if err := g.changeable(); err != nil {
+			return err
 		}
 		var one int
 		if err := tx.QueryRow(ctx, `SELECT 1 FROM group_members WHERE group_id = $1 AND person_id = $2 AND left_at IS NULL`, g.ID, target).Scan(&one); err != nil {
@@ -1951,6 +1957,9 @@ func (s *Server) cancelGroupInvite(w http.ResponseWriter, r *http.Request) {
 		if !g.admin() {
 			return errGroupNotAdmin
 		}
+		if err := g.changeable(); err != nil {
+			return err
+		}
 		tag, err := tx.Exec(ctx, `DELETE FROM group_invites WHERE group_id = $1 AND person_id = $2`, g.ID, target)
 		if err == nil && tag.RowsAffected() == 0 {
 			return errDoorNone
@@ -2096,7 +2105,7 @@ func (s *Server) newGroupLink(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if err := g.open(); err != nil {
+		if err := g.changeable(); err != nil {
 			return err
 		}
 		if g.standing.LinkStoppedAt != nil {
@@ -2150,6 +2159,9 @@ func (s *Server) groupLinkOff(w http.ResponseWriter, r *http.Request) {
 	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
 		g, err := adminGroupTx(ctx, tx, person, chi.URLParam(r, "id"), true)
 		if err != nil {
+			return err
+		}
+		if err := g.changeable(); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `UPDATE group_links SET replaced_at = now() WHERE group_id = $1 AND replaced_at IS NULL`, g.ID)
@@ -2513,7 +2525,7 @@ func (s *Server) approveGroupJoin(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if err := g.open(); err != nil {
+		if err := g.changeable(); err != nil {
 			return err
 		}
 		// The request, if it is newer than the person's latest joining or
@@ -2595,6 +2607,9 @@ func (s *Server) declineGroupJoin(w http.ResponseWriter, r *http.Request) {
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 		g, err := adminGroupTx(ctx, tx, person, chi.URLParam(r, "id"), false)
 		if err != nil {
+			return err
+		}
+		if err := g.changeable(); err != nil {
 			return err
 		}
 		tag, err := tx.Exec(ctx, `DELETE FROM group_join_requests WHERE group_id = $1 AND person_id = $2`, g.ID, target)

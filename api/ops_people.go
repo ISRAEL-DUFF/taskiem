@@ -147,9 +147,11 @@ type opsPeopleReportRow struct {
 	ReviewedBy        *string    `json:"reviewed_by"`
 	ReviewedAt        *time.Time `json:"reviewed_at"`
 	ReportsAgainst    int64      `json:"reports_against"`
-	// GroupID: a report of a group (reported_id null) or of a member of
-	// it, from inside the group.
-	GroupID *uuid.UUID `json:"group_id"`
+	// GroupID: a report of a group or of a member of it (GroupMember),
+	// from inside the group. A member's report stays one after their
+	// account is deleted (reported_id null then).
+	GroupID     *uuid.UUID `json:"group_id"`
+	GroupMember bool       `json:"group_member"`
 }
 
 func (s *Server) opsPeopleReports(w http.ResponseWriter, r *http.Request) {
@@ -197,6 +199,7 @@ func (s *Server) opsPeopleReport(w http.ResponseWriter, r *http.Request) {
 		ReviewedAt   *time.Time `json:"reviewed_at"`
 		ReviewNote   *string    `json:"review_note"`
 		GroupID      *uuid.UUID `json:"group_id"`
+		GroupMember  bool       `json:"group_member"`
 	}
 	var plain, groupSealed []byte
 	var sealed []byte
@@ -209,9 +212,9 @@ func (s *Server) opsPeopleReport(w http.ResponseWriter, r *http.Request) {
 	var files []file
 	err := s.opsTx(r, func(tx pgx.Tx, _ func(uuid.UUID) error) error {
 		err := tx.QueryRow(ctx, `SELECT id, reporter_id, reported_id, reported_name, reason, note, from_request, messages, sealed, box_key, kms_key, status,
-			created_at, reviewed_by, reviewed_at, review_note, group_id, group_sealed FROM taskiem_ops_people_report($1)`, id).Scan(&rep.ID, &rep.ReporterID,
+			created_at, reviewed_by, reviewed_at, review_note, group_id, group_sealed, group_member FROM taskiem_ops_people_report($1)`, id).Scan(&rep.ID, &rep.ReporterID,
 			&rep.ReportedID, &rep.ReportedName, &rep.Reason, &rep.Note, &rep.FromRequest, &plain, &sealed, &boxKey, &kmsKey, &rep.Status, &rep.CreatedAt,
-			&rep.ReviewedBy, &rep.ReviewedAt, &rep.ReviewNote, &rep.GroupID, &groupSealed)
+			&rep.ReviewedBy, &rep.ReviewedAt, &rep.ReviewNote, &rep.GroupID, &groupSealed, &rep.GroupMember)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return errOpsNotFound
 		}
