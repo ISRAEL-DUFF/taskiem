@@ -8696,15 +8696,19 @@ class PersonLink {
 }
 
 class MyPresenceRequest {
-  const MyPresenceRequest({required this.online});
+  const MyPresenceRequest({this.connection, required this.online});
 
+  /// One of your open live connections (GET /v1/me/live)
+  final Object? connection;
   final bool online;
 
   factory MyPresenceRequest.fromJson(Map<String, dynamic> j) => MyPresenceRequest(
+        connection: j['connection'],
         online: j['online'] as bool,
       );
 
   Map<String, dynamic> toJson() => {
+        'connection': ?connection,
         'online': online,
       };
 }
@@ -8895,7 +8899,7 @@ class ListAllMyChatsResponse {
 /// `/v1/me/chats/{id}`) or a people chat (`kind: person`, open
 /// `/v1/me/people/{id}`).
 class ChatListItem {
-  const ChatListItem({required this.archived, required this.blocked, this.businessId, this.gone, required this.id, required this.kind, required this.last, required this.lastAt, required this.lastMine, required this.muted, required this.name, this.person, this.personId, this.photo, this.suspended, required this.unread, this.waiting});
+  const ChatListItem({required this.archived, required this.blocked, this.businessId, this.gone, required this.id, required this.kind, required this.last, required this.lastAt, required this.lastMine, required this.muted, required this.name, this.person, this.personId, this.photo, this.suspended, required this.unread, this.verified, this.waiting});
 
   final bool archived;
   /// You blocked them.
@@ -8923,6 +8927,11 @@ class ChatListItem {
   /// them.
   final bool? suspended;
   final int unread;
+  /// A business chat: its trust line, what the business has proved, the same as
+  /// the business chat's header (`GET /v1/me/chats/{id}`'s `verified`): its
+  /// phone, a check of the business, a payment provider connected, and whole
+  /// months on Taskiem. None while the business is not taking your messages.
+  final ChatListItemVerified? verified;
   /// Your first messages wait for them to accept.
   final bool? waiting;
 
@@ -8943,6 +8952,7 @@ class ChatListItem {
         photo: j['photo'] == null ? null : OrderPhoto.fromJson(j['photo'] as Map<String, dynamic>),
         suspended: j['suspended'] == null ? null : j['suspended'] as bool,
         unread: (j['unread'] as num).toInt(),
+        verified: j['verified'] == null ? null : ChatListItemVerified.fromJson(j['verified'] as Map<String, dynamic>),
         waiting: j['waiting'] == null ? null : j['waiting'] as bool,
       );
 
@@ -8963,7 +8973,35 @@ class ChatListItem {
         'photo': ?photo?.toJson(),
         'suspended': ?suspended,
         'unread': unread,
+        'verified': ?verified?.toJson(),
         'waiting': ?waiting,
+      };
+}
+
+/// A business chat: its trust line, what the business has proved, the same as
+/// the business chat's header (`GET /v1/me/chats/{id}`'s `verified`): its
+/// phone, a check of the business, a payment provider connected, and whole
+/// months on Taskiem. None while the business is not taking your messages.
+class ChatListItemVerified {
+  const ChatListItemVerified({required this.business, required this.months, required this.payments, required this.phone});
+
+  final bool business;
+  final int months;
+  final bool payments;
+  final bool phone;
+
+  factory ChatListItemVerified.fromJson(Map<String, dynamic> j) => ChatListItemVerified(
+        business: j['business'] as bool,
+        months: (j['months'] as num).toInt(),
+        payments: j['payments'] as bool,
+        phone: j['phone'] as bool,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'business': business,
+        'months': months,
+        'payments': payments,
+        'phone': phone,
       };
 }
 

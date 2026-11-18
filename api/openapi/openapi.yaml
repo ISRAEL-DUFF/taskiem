@@ -21821,6 +21821,92 @@ paths:
                           format: date-time
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/people/search:
+    get:
+      operationId: searchPeople
+      tags:
+      - People
+      summary: Search your people chats
+      description: 'Your own copies of your people chats searched on the server (people-chatting §6.2), the newest first, 30 at a time (`more`, and `next` to pass as `before` for the page after). A message is found when each word of `q` begins one of its words (case and accents aside: "osun" finds "Ọ̀ṣun"), in its words or caption, a file''s name, a card''s title, business or what for (a share), or a place''s label. Never another person''s copy, a chat you deleted, or a message deleted for you or for everyone. The index holds no words: only keyed hashes of words'' beginnings, under a key of your own; messages kept before it are indexed on your first search. 400 when `q` has no word of two letters or more; 429 when searching very fast.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          maxLength: 200
+      - name: chat
+        in: query
+        description: Only this chat of yours
+        schema:
+          type: string
+          format: uuid
+      - name: before
+        in: query
+        description: The `next` of the page before
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The messages found
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [results, more]
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PeopleFound'
+                  more:
+                    type: boolean
+                  next:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/starred:
+    get:
+      operationId: starredPeople
+      tags:
+      - People
+      summary: Your starred messages across your people chats
+      description: 'The messages you starred in your people chats, the most recently starred first, 50 at a time (`more`, and `next` to pass as `before` for the page after), each with its chat. Not those of a chat you deleted. One chat''s alone: `GET /v1/me/people/{id}/messages?starred=1`.'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: before
+        in: query
+        description: The `next` of the page before
+        schema:
+          type: string
+      responses:
+        '200':
+          description: The starred messages
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [starred, more]
+                properties:
+                  starred:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PeopleFound'
+                  more:
+                    type: boolean
+                  next:
+                    type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/people/forward:
     post:
       operationId: forwardPeopleMessage
@@ -22174,6 +22260,40 @@ paths:
         schema:
           type: string
           format: uuid
+      responses:
+        '204':
+          description: Done
+        default:
+          $ref: '#/components/responses/Error'
+  /v1/me/people/{id}/typing:
+    post:
+      operationId: typingPeople
+      tags:
+      - People
+      summary: Say you are typing, or stopped
+      description: 'You are typing in this chat (`typing: true`, or no body), or stopped (`typing: false`). The other person''s live connection (`GET /v1/me/live`) shows it for about 6 seconds, or until you stop or send. Passed on at most every 3 seconds (call it as you type; more often changes nothing), and only within an accepted chat: never while either copy is a request, never to or from someone blocked either way, never to a deleted or suspended account. Always 204, so nothing tells you whether it was passed on; 404 for a chat that is not yours.'
+      security:
+      - sessionCookie: []
+        csrfHeader: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                typing:
+                  type: boolean
       responses:
         '204':
           description: Done
@@ -23726,6 +23846,38 @@ paths:
                 format: binary
         default:
           $ref: '#/components/responses/Error'
+  /v1/me/live:
+    get:
+      operationId: peopleLive
+      tags:
+      - People
+      summary: Your live connection
+      description: 'Server-sent events: what changes in your own people chats as it happens, so the app and the web need not poll every few seconds (keep polling as the fallback, and merge). `message`: a message of one of your chats, new or changed (delivered, read, a reaction, a star, deleted for everyone): `{chat_id, request, message: PeopleMessage}`; `request` is true for a message waiting in your Requests. `chat`: one of your chats changed (a new chat or request, its last message, accepted, muted, archived): `{id, hidden: false, chat: PeopleChat}`, or deleted for you: `{id, hidden: true}`. `gone`: a message deleted for you on another device, `{chat_id, id}`, or a request you deleted, `{chat_id, id: null}`. `typing`: the chats whose other person is typing now, `{typing: [chat ids]}` (sent when it changes). `presence`: the people you chat with whose online or last seen changed, as their settings and yours let you see them, `{people: [{person_id, chat_id, online, last_seen_at}]}` (all of them on connecting; both null when hidden). Message, chat and gone events have an id, the change''s time in microseconds: reconnecting with Last-Event-ID sends what was missed (at most an hour back); an event may come twice across a reconnection. A `ready` event comes first, `{connection}`, and a `ping` at least every ten seconds; the connection closes after half an hour and clients reconnect. Presence follows the connection: while one of your connections is in front you are online (last seen now); when the last closes, or says it is away (`POST /v1/me/presence {online: false, connection}`), you are away, last seen then. `away=1` opens one that starts away. Only your own copy is ever on it. Ten open per person (429 with Retry-After).'
+      security:
+      - sessionCookie: []
+      - sessionToken: []
+      - apiKey: []
+      parameters:
+      - name: Last-Event-ID
+        in: header
+        schema:
+          type: string
+        description: Resume after this event
+      - name: away
+        in: query
+        description: 1 to open a connection that starts away (the app in the background)
+        schema:
+          type: string
+          enum: ['1']
+      responses:
+        '200':
+          description: Server-sent events
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        default:
+          $ref: '#/components/responses/Error'
   /v1/me/presence:
     post:
       operationId: myPresence
@@ -23734,7 +23886,9 @@ paths:
       summary: Say you are here, or away
       description: 'The app''s heartbeat while it is in front (`online: true`, about every 30 seconds; online for 75
         seconds after each) and its goodbye when it goes to the background (`online: false`). Both set last seen.
-        Shown to others by their and the person''s last seen settings.'
+        Shown to others by their and the person''s last seen settings. With `connection` (a live connection''s id,
+        from `GET /v1/me/live`''s ready event), it says that connection is in front or away instead, and needs no
+        heartbeat: you are away only when none of your connections is in front.'
       security:
       - sessionCookie: []
         csrfHeader: []
@@ -23751,6 +23905,10 @@ paths:
               properties:
                 online:
                   type: boolean
+                connection:
+                  type: [string, 'null']
+                  format: uuid
+                  description: One of your open live connections (GET /v1/me/live)
       responses:
         '204':
           $ref: '#/components/responses/NoContent'
@@ -41189,6 +41347,20 @@ components:
         photo:
           $ref: '#/components/schemas/OrderPhoto'
           description: 'A business chat: the business''s photo (its logo; sizes by width in `urls`), as Orders on You and one chat''s header show it. None without one, or while the business is not taking your messages.'
+        verified:
+          type: object
+          additionalProperties: false
+          required: [phone, business, payments, months]
+          description: 'A business chat: its trust line, what the business has proved, the same as the business chat''s header (`GET /v1/me/chats/{id}`''s `verified`): its phone, a check of the business, a payment provider connected, and whole months on Taskiem. None while the business is not taking your messages.'
+          properties:
+            phone:
+              type: boolean
+            business:
+              type: boolean
+            payments:
+              type: boolean
+            months:
+              type: integer
         person_id:
           type: string
           format: uuid
@@ -41220,6 +41392,26 @@ components:
         person:
           $ref: '#/components/schemas/PersonCard'
           description: 'A people chat''s other person as their settings let you see them: photo, last seen and online. None once they deleted their account.'
+    PeopleFound:
+      type: object
+      additionalProperties: false
+      required: [chat_id, chat, message]
+      description: A message of your own people chats, found by search or starred, with its chat.
+      properties:
+        chat_id:
+          type: string
+          format: uuid
+        chat:
+          $ref: '#/components/schemas/PeopleChat'
+        message:
+          $ref: '#/components/schemas/PeopleMessage'
+        snippet:
+          type: string
+          description: 'Search: a little of the message around what was searched for (up to 120 characters, with … where cut).'
+        starred_at:
+          type: string
+          format: date-time
+          description: 'Starred: when you starred it.'
     PeopleChat:
       type: object
       additionalProperties: false

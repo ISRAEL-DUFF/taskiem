@@ -62,12 +62,16 @@ const peopleGoneName = "Deleted account"
 // peopleChatRoutes are the person's routes (peopleChatPersonRoutes lists
 // them).
 func (s *Server) peopleChatRoutes(r chi.Router) {
+	// You's live connection keeps the person's presence itself.
+	r.Get("/me/live", s.peopleLive)
 	r = r.With(s.peopleHere)
 	r.Get("/me/conversations", s.listAllChats)
 	r.Get("/me/people", s.listPeopleChats)
 	r.Post("/me/people", s.startPeopleChat)
 	r.Get("/me/people/requests", s.listPeopleRequests)
 	r.Get("/me/people/blocked", s.listPeopleBlocked)
+	r.Get("/me/people/search", s.searchPeople)
+	r.Get("/me/people/starred", s.starredPeople)
 	r.Post("/me/people/forward", s.forwardPeopleMessage)
 	r.Get("/me/people/{id}", s.getPeopleChat)
 	r.Put("/me/people/{id}", s.putPeopleChat)
@@ -78,6 +82,7 @@ func (s *Server) peopleChatRoutes(r chi.Router) {
 	r.Delete("/me/people/{id}/block", s.unblockPerson)
 	r.Post("/me/people/{id}/report", s.reportPerson)
 	r.Post("/me/people/{id}/read", s.readPeopleChat)
+	r.Post("/me/people/{id}/typing", s.typingPeople)
 	r.Get("/me/people/{id}/messages", s.peopleMessages)
 	r.Post("/me/people/{id}/messages", s.sendPeopleMessage)
 	r.Post("/me/people/{id}/files", s.sendPeopleFile)
@@ -93,8 +98,8 @@ func (s *Server) peopleChatRoutes(r chi.Router) {
 
 // peopleChatPersonRoutes are the people chats' routes a personal session
 // reaches (personalAllowed).
-var peopleChatPersonRoutes = regexp.MustCompile(`^(GET /v1/me/conversations|(GET|POST) /v1/me/people|GET /v1/me/people/(requests|blocked)|POST /v1/me/people/forward|` +
-	`(GET|PUT|DELETE) /v1/me/people/[^/]+|POST /v1/me/people/[^/]+/(accept|decline|block|report|read|messages|files)|DELETE /v1/me/people/[^/]+/block|` +
+var peopleChatPersonRoutes = regexp.MustCompile(`^(GET /v1/me/(conversations|live)|(GET|POST) /v1/me/people|GET /v1/me/people/(requests|blocked|search|starred)|POST /v1/me/people/forward|` +
+	`(GET|PUT|DELETE) /v1/me/people/[^/]+|POST /v1/me/people/[^/]+/(accept|decline|block|report|read|typing|messages|files)|DELETE /v1/me/people/[^/]+/block|` +
 	`GET /v1/me/people/[^/]+/(messages|files/[^/]+|messages/[^/]+/card)|(PUT|DELETE) /v1/me/people/[^/]+/messages/[^/]+|POST /v1/me/people/[^/]+/messages/[^/]+/paid|` +
 	`(GET|PUT|DELETE) /v1/me/payout-account)$`)
 
@@ -614,18 +619,24 @@ type chatItem struct {
 	BusinessID *uuid.UUID `json:"business_id,omitempty"`
 	// Photo: a business chat's business's photo (its logo), as Orders on
 	// You shows it; none while the business is not taking your messages.
-	Photo     *orderPhoto `json:"photo,omitempty"`
-	PersonID  *uuid.UUID  `json:"person_id,omitempty"`
-	Gone      bool        `json:"gone,omitempty"`
-	Suspended bool        `json:"suspended,omitempty"`
-	Last      string      `json:"last"`
-	LastMine  bool        `json:"last_mine"`
-	LastAt    time.Time   `json:"last_at"`
-	Unread    int         `json:"unread"`
-	Muted     bool        `json:"muted"`
-	Archived  bool        `json:"archived"`
-	Blocked   bool        `json:"blocked"`
-	Waiting   bool        `json:"waiting,omitempty"`
+	Photo *orderPhoto `json:"photo,omitempty"`
+	// Verified: a business chat's trust line, what the business has
+	// proved, as the business chat's head shows it (GET
+	// /v1/me/chats/{id}'s verified: a phone, a check of the business, a
+	// payment provider, months on Taskiem); none while the business is not
+	// taking your messages.
+	Verified  *businessTrust `json:"verified,omitempty"`
+	PersonID  *uuid.UUID     `json:"person_id,omitempty"`
+	Gone      bool           `json:"gone,omitempty"`
+	Suspended bool           `json:"suspended,omitempty"`
+	Last      string         `json:"last"`
+	LastMine  bool           `json:"last_mine"`
+	LastAt    time.Time      `json:"last_at"`
+	Unread    int            `json:"unread"`
+	Muted     bool           `json:"muted"`
+	Archived  bool           `json:"archived"`
+	Blocked   bool           `json:"blocked"`
+	Waiting   bool           `json:"waiting,omitempty"`
 	// Person: a people chat's other person, as GET /v1/me/people shows
 	// them (photo, last seen and online by their settings).
 	Person *personCardOut `json:"person,omitempty"`
@@ -676,12 +687,16 @@ func (s *Server) listAllChats(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
+		trust, err := businessTrustTx(ctx, tx, biz)
+		if err != nil {
+			return err
+		}
 		for _, c := range biz {
 			b := c.Business
 			it := chatItem{Kind: "business", ID: c.ID, Name: c.Name, BusinessID: &b, Last: c.Last, LastMine: c.LastMine, LastAt: c.LastAt,
 				Unread: c.Unread, Muted: c.Muted, Archived: c.Archived, Blocked: c.Blocked}
 			if !c.BlockedYou {
-				it.Photo = photos[b]
+				it.Photo, it.Verified = photos[b], trust[b]
 			}
 			items = append(items, it)
 		}
@@ -756,6 +771,37 @@ func businessPhotosTx(ctx context.Context, tx pgx.Tx, chats []personChat) (map[u
 		if len(urls) > 0 {
 			out[id] = &orderPhoto{URLs: urls}
 		}
+	}
+	return out, rows.Err()
+}
+
+// businessTrustTx is what each chat's business has proved (the trust
+// line of the business chat's head, businessHead), through
+// taskiem_customer_business_trust.
+func businessTrustTx(ctx context.Context, tx pgx.Tx, chats []personChat) (map[uuid.UUID]*businessTrust, error) {
+	out := map[uuid.UUID]*businessTrust{}
+	if len(chats) == 0 {
+		return out, nil
+	}
+	ids := make([]uuid.UUID, len(chats))
+	for i, c := range chats {
+		ids[i] = c.Business
+	}
+	rows, err := tx.Query(ctx, `SELECT tenant_id, phone, business, payments, since FROM taskiem_customer_business_trust($1)`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	now := time.Now()
+	for rows.Next() {
+		var id uuid.UUID
+		var t businessTrust
+		var since time.Time
+		if err := rows.Scan(&id, &t.Phone, &t.Business, &t.Payments, &since); err != nil {
+			return nil, err
+		}
+		t.Months = monthsSince(since, now)
+		out[id] = &t
 	}
 	return out, rows.Err()
 }
@@ -1051,8 +1097,10 @@ func declineTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, c peopleCopy) e
 			return err
 		}
 	}
-	_, err := tx.Exec(ctx, `DELETE FROM people_chats WHERE person_id = $1 AND id = $2`, person, c.ID)
-	return err
+	if _, err := tx.Exec(ctx, `DELETE FROM people_chats WHERE person_id = $1 AND id = $2`, person, c.ID); err != nil {
+		return err
+	}
+	return goneTx(ctx, tx, person, c.ID, uuid.Nil)
 }
 
 // acceptPeopleRequest is POST /v1/me/people/{id}/accept: the request moves

@@ -262,7 +262,8 @@ func (s *Server) addChatContact(ctx context.Context, person, peer uuid.UUID) boo
 // /v1/me/presence) does the rest, and says when they leave.
 func (s *Server) peopleHere(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if person, err := personOf(r); err == nil && s.limiter("people-here:"+person.String(), 30*time.Second, 1).Allow() {
+		// Not while the person's live connections are open and all away.
+		if person, err := personOf(r); err == nil && s.limiter("people-here:"+person.String(), 30*time.Second, 1).Allow() && !s.liveAway(r.Context(), person) {
 			if err := s.people().Touch(r.Context(), person); err != nil {
 				s.Logger.Warn("people: presence", "err", err)
 			}

@@ -104,6 +104,9 @@ type Server struct {
 	diary         diaryQueue
 	// chatGate caps the open Chat page streams (chat_stream.go).
 	chatGate chatStreamGate
+	// liveGate caps the open live connections of You (people_live.go), per
+	// person and per server.
+	liveGate chatStreamGate
 	// ChatStreamPing is how often an open chat stream says something when it
 	// has nothing to say (zero: ten seconds).
 	ChatStreamPing time.Duration

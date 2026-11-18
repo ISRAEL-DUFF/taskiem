@@ -371,6 +371,11 @@ func (s *Server) deletePerson(ctx context.Context, person uuid.UUID, how, ip str
 			// account and their key (people-chatting §14): the other
 			// person's copy keeps the messages, shown as from "Deleted
 			// account".
+			`DELETE FROM people_search WHERE person_id = $1`,
+			`DELETE FROM people_search_ready WHERE person_id = $1`,
+			`DELETE FROM people_gone WHERE person_id = $1`,
+			`DELETE FROM people_typing WHERE person_id = $1`,
+			`DELETE FROM person_live WHERE person_id = $1`,
 			`DELETE FROM people_files WHERE person_id = $1`,
 			`DELETE FROM people_messages WHERE person_id = $1`,
 			`DELETE FROM people_chats WHERE person_id = $1`,

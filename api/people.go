@@ -784,6 +784,9 @@ func (s *Server) myPresence(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Online bool `json:"online"`
+		// Connection: one of the person's live connections (GET
+		// /v1/me/live's ready event): it is in front (online) or away.
+		Connection *uuid.UUID `json:"connection"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		s.fail(w, r, err)
@@ -792,6 +795,19 @@ func (s *Server) myPresence(w http.ResponseWriter, r *http.Request) {
 	if !s.limiter("presence:"+person.String(), 5*time.Second, 6).Allow() {
 		w.WriteHeader(http.StatusNoContent) // a heartbeat too soon changes nothing
 		return
+	}
+	if req.Connection != nil {
+		// Away is the person's only when none of their connections is in
+		// front; a connection no longer open is said as the heartbeat is.
+		found, err := s.liveFront(r.Context(), person, *req.Connection, req.Online)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if found {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 	}
 	p := s.people()
 	if req.Online {

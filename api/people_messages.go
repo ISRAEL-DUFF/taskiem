@@ -75,10 +75,13 @@ type peopleRow struct {
 	screen string
 }
 
-func scanPeopleRow(r pgx.Row) (peopleRow, error) {
+// scanPeopleRow scans peopleMessageCols, then any extra columns selected
+// after them into extra.
+func scanPeopleRow(r pgx.Row, extra ...any) (peopleRow, error) {
 	var m peopleRow
-	err := r.Scan(&m.ID, &m.Mine, &m.Kind, &m.sealed, &m.attach, &m.cardType, &m.ReplyTo, &m.forwards, &m.delivered, &m.ReadAt, &m.Starred,
-		&m.MyReaction, &m.TheirReaction, &m.Deleted, &m.screen, &m.paidAt, &m.paidByMe, &m.CreatedAt)
+	dest := append([]any{&m.ID, &m.Mine, &m.Kind, &m.sealed, &m.attach, &m.cardType, &m.ReplyTo, &m.forwards, &m.delivered, &m.ReadAt, &m.Starred,
+		&m.MyReaction, &m.TheirReaction, &m.Deleted, &m.screen, &m.paidAt, &m.paidByMe, &m.CreatedAt}, extra...)
+	err := r.Scan(dest...)
 	m.Warn = m.screen != ""
 	return m, err
 }
@@ -396,6 +399,10 @@ func (s *Server) peopleSend(ctx context.Context, me uuid.UUID, chatID string, d 
 			if _, err := tx.Exec(ctx, `UPDATE people_messages SET delivered_at = now() WHERE person_id = $1 AND id = $2`, me, id); err != nil {
 				return err
 			}
+			// A message sent ends its typing on their side.
+			if _, err := tx.Exec(ctx, `DELETE FROM people_typing WHERE person_id = $1 AND chat_id = $2`, peer, pcID); err != nil {
+				return err
+			}
 			if !pcMuted {
 				owed = &peoplePush{to: peer, chat: pcID, request: asRequest, title: name,
 					words: previewOf(d.kind, attachKind(attach), content)}
@@ -473,6 +480,9 @@ func insertPeopleMessage(ctx context.Context, tx pgx.Tx, key []byte, owner, chat
 	if _, err := tx.Exec(ctx, `INSERT INTO people_messages (person_id, id, chat_id, conversation_id, mine, kind, sealed, attachment, card_type, reply_to, forwards, client_id, screen)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
 		owner, id, chat, conv, mine, d.kind, sealed, attach, cardType, d.replyTo, d.forwards, clientID, mark); err != nil {
+		return err
+	}
+	if err := indexPeopleMessageTx(ctx, tx, key, owner, conv, id, content); err != nil {
 		return err
 	}
 	if d.file == nil {
@@ -923,6 +933,9 @@ func forgetMessageTx(ctx context.Context, tx pgx.Tx, owner, id uuid.UUID) error 
 	if _, err := tx.Exec(ctx, `DELETE FROM people_files WHERE person_id = $1 AND message_id = $2`, owner, id); err != nil {
 		return err
 	}
+	if _, err := tx.Exec(ctx, `DELETE FROM people_search WHERE person_id = $1 AND message_id = $2`, owner, id); err != nil {
+		return err
+	}
 	_, err := tx.Exec(ctx, `UPDATE people_messages SET deleted_at = now(), sealed = NULL, attachment = NULL, my_reaction = NULL, their_reaction = NULL,
 		starred_at = NULL WHERE person_id = $1 AND id = $2`, owner, id)
 	return err
@@ -955,8 +968,10 @@ func (s *Server) deletePeopleMessage(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if !everyone {
-			_, err := tx.Exec(ctx, `DELETE FROM people_messages WHERE person_id = $1 AND id = $2`, person, m.ID)
-			return err
+			if _, err := tx.Exec(ctx, `DELETE FROM people_messages WHERE person_id = $1 AND id = $2`, person, m.ID); err != nil {
+				return err
+			}
+			return goneTx(ctx, tx, person, c.ID, m.ID)
 		}
 		if !m.Mine {
 			return customerSendErr{http.StatusForbidden, "Only your own messages can be deleted for everyone."}
