@@ -23,6 +23,8 @@ import 'package:taskiem/chat/people_contacts.dart';
 import 'package:taskiem/chat/people_settings.dart';
 import 'package:taskiem/chat/people_find.dart' show PeopleRequestsScreen;
 import 'package:taskiem/screens/you.dart' show YouHome;
+import 'package:taskiem/chat/people_search.dart' show PeopleSearchScreen;
+import 'package:taskiem/kit/load_more.dart' show TkLoadMore;
 import 'package:taskiem/chat/attachments.dart' show PickedFile;
 import 'package:taskiem/chat/composer.dart' show Pickers;
 import 'package:taskiem/chat/people_chat.dart';
@@ -415,6 +417,36 @@ void main() {
       expect(reads(), n + 1, reason: 'on top again: read once');
       await drain(t);
       live.dispose();
+    });
+  });
+
+  group('8. search pages its own words', () {
+    testWidgets('Show more pages the words searched, not new words typed but not yet searched', (t) async {
+      phone(t, 700);
+      final api = Api();
+      api.routes['GET /v1/me/people/search'] = (r) => {
+        // A long first page: Show more is far below, not read by itself.
+        'results': [
+          for (var i = 0; i < 30; i++) {'chat_id': 'pc1', 'chat': peopleChat(), 'message': msg('${r.url.queryParameters['before'] ?? 'p'}$i', body: 'cake')},
+        ],
+        'more': r.url.queryParameters['before'] == null,
+        'next': 'n1',
+      };
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleSearchScreen(auth: api.auth(), now: () => at, openAt: (c, m) async {}, wait: const Duration(seconds: 2))));
+      await settle(t);
+      await typeIn(t, find.byKey(const ValueKey('people-search')), 'cake');
+      await t.pump(const Duration(seconds: 3));
+      await settle(t);
+      final firsts = api.sent('GET', '/v1/me/people/search').where((r) => r.url.queryParameters['before'] == null).toList();
+      expect(firsts.map((r) => r.url.queryParameters['q']), ['cake']);
+      await typeIn(t, find.byKey(const ValueKey('people-search')), 'bread');
+      expect(api.sent('GET', '/v1/me/people/search').where((r) => r.url.queryParameters['before'] != null), isEmpty, reason: 'not yet in view');
+      await t.runAsync(() => t.widget<TkLoadMore>(find.byType(TkLoadMore, skipOffstage: false).first).onMore());
+      await t.pump();
+      final pages = api.sent('GET', '/v1/me/people/search').where((r) => r.url.queryParameters['before'] == 'n1').toList();
+      expect(pages, isNotEmpty);
+      expect(pages.map((r) => r.url.queryParameters['q']).toSet(), {'cake'});
+      await drain(t);
     });
   });
 }

@@ -174,8 +174,10 @@ class PeopleSearchScreen extends StatefulWidget {
 
 class _PeopleSearchScreenState extends State<PeopleSearchScreen> {
   final _q = TextEditingController();
+  // The words last searched, not the box's: Show more pages what is shown
+  // even while new words are being typed (not yet searched).
   late final FoundList _list = FoundList((before) async {
-    final r = await widget.auth.api.searchPeople(q: _q.text.trim(), chat: widget.chat, before: before);
+    final r = await widget.auth.api.searchPeople(q: _searched, chat: widget.chat, before: before);
     return (found: r.results, more: r.more, next: r.next);
   });
   Timer? _soon;
