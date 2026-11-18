@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -183,4 +184,179 @@ func TestGroupClosedRefusesChanges(t *testing.T) {
 	if after := events(); after != before+1 {
 		t.Fatalf("events: %d before, %d after (only the leave's)", before, after)
 	}
+}
+
+// reportedBy is the person's ReportedBy signal, as their own transaction
+// reads it.
+func reportedBy(t *testing.T, w *peopleWorld, id uuid.UUID) int {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := w.env.DB.Admin.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `SELECT set_config('app.person_scope', $1, true)`, id.String()); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := tx.QueryRow(ctx, `SELECT reported_by FROM taskiem_people_sender_signals()`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// A report of a member from a group weighs in their signals only from a
+// reporter past their first week, in the group a day or more, about a
+// member who wrote within what they see; and then half. Accounts made to
+// join a group by its link and report a long-standing member weigh
+// nothing; genuine reports from the group still count.
+func TestGroupReportsWeighHalf(t *testing.T) {
+	w := safetyWorld(t)
+	ada, adaID := w.many(t, "+2348031159701", "Ada Obi")
+	bola, bolaID := w.many(t, "+2348031159702", "Bola Ade")
+	w.older(t, adaID)
+	w.older(t, bolaID)
+	adds(t, ada, bola)
+	adds(t, bola, ada)
+	gid, _ := newGroup(t, ada, "Street", bolaID)
+	code := groupLink(t, ada, gid)
+	join := func(number, name string, old bool) *client {
+		t.Helper()
+		c, id := w.many(t, number, name)
+		if old {
+			w.older(t, id)
+		}
+		c.must(200, "POST", "/v1/me/group-links/"+code+"/join", nil)
+		return c
+	}
+	report := func(c *client) map[string]any {
+		t.Helper()
+		return c.must(201, "POST", "/v1/me/groups/"+gid+"/report", map[string]any{"reason": "abuse", "consent": true, "person_id": bolaID})
+	}
+	// Five new accounts and two older ones join, Bola writes, they report.
+	var attackers []*client
+	for i := 0; i < 5; i++ {
+		attackers = append(attackers, join(fmt.Sprintf("+23480311597%02d", 10+i), fmt.Sprintf("New %d", i), false))
+	}
+	attackers = append(attackers, join("+2348031159720", "Old 1", true), join("+2348031159721", "Old 2", true))
+	gsend(t, bola, gid, "Morning all")
+	for _, c := range attackers {
+		report(c)
+	}
+	if n := reportedBy(t, w, bolaID); n != 0 {
+		t.Fatalf("join and report weighed: %d", n)
+	}
+	if n := w.adminCount(t, `SELECT count(*)::int FROM people_reports WHERE reported_id = $1 AND group_member AND NOT peer_wrote`, bolaID); n != 7 {
+		t.Fatalf("the reports kept, not earned: %d", n)
+	}
+	// Bola's requests are not slowed by them: a stranger's chat opens.
+	_, dayoID := w.many(t, "+2348031159730", "Dayo Ola")
+	w.older(t, dayoID)
+	bola.must(201, "POST", "/v1/me/people", map[string]any{"person_id": dayoID})
+
+	// Members of a day and more, past their first week: half each.
+	genuine := []*client{join("+2348031159740", "Real 1", true), join("+2348031159741", "Real 2", true), join("+2348031159742", "Real 3", true)}
+	if _, err := w.env.DB.Admin.Exec(context.Background(), `UPDATE group_members SET joined_at = joined_at - interval '2 days',
+		visible = visible + tstzmultirange(tstzrange(joined_at - interval '2 days', joined_at)) WHERE group_id = $1 AND person_id <> ALL ($2)`,
+		gid, []uuid.UUID{adaID, bolaID}); err != nil {
+		t.Fatal(err)
+	}
+	gsend(t, bola, gid, "Still here")
+	report(genuine[0])
+	if n := reportedBy(t, w, bolaID); n != 0 {
+		t.Fatalf("one reporter from a group is half a person: %d", n)
+	}
+	report(genuine[1])
+	if n := reportedBy(t, w, bolaID); n != 1 {
+		t.Fatalf("two reporters from a group are one: %d", n)
+	}
+	// A reporter twice counts once.
+	report(genuine[1])
+	report(genuine[2])
+	if n := reportedBy(t, w, bolaID); n != 1 {
+		t.Fatalf("three reporters from a group: %d", n)
+	}
+	// One who reports one to one too counts whole: Bola wrote to them.
+	g0 := genuine[0]
+	chat, _ := friends(t, g0, bola, bolaID)
+	g0.must(201, "POST", "/v1/me/people/"+chat+"/report", map[string]any{"reason": "abuse", "consent": true})
+	if n := reportedBy(t, w, bolaID); n != 2 {
+		t.Fatalf("a whole reporter and two halves: %d", n)
+	}
+}
+
+// A report of a member is one of a member after their account goes (never
+// shown or counted as a report of the whole group); a member whose time
+// in the group never met the reporter's is answered as an unknown id; a
+// moderator's action names only a report of that group.
+func TestGroupReportsMembersAndReach(t *testing.T) {
+	ctx := context.Background()
+	w := safetyWorld(t)
+	ada, adaID := w.many(t, "+2348031159801", "Ada Obi")
+	bola, bolaID := w.many(t, "+2348031159802", "Bola Ade")
+	chidi, chidiID := w.many(t, "+2348031159803", "Chidi Eze")
+	dayo, dayoID := w.many(t, "+2348031159804", "Dayo Ola")
+	for _, id := range []uuid.UUID{adaID, bolaID, chidiID, dayoID} {
+		w.older(t, id)
+	}
+	mod := newModerator(t, w, "mod@taskiem.test")
+	for _, c := range []*client{bola, chidi} {
+		adds(t, ada, c)
+		adds(t, c, ada)
+	}
+	gid, _ := newGroup(t, ada, "Club", bolaID, chidiID)
+	gsend(t, chidi, gid, "Chidi was here")
+	// Bola leaves; then Dayo comes in.
+	bola.must(200, "POST", "/v1/me/groups/"+gid+"/leave", nil)
+	adds(t, ada, dayo)
+	ada.must(200, "POST", "/v1/me/groups/"+gid+"/members", map[string]any{"person_ids": []uuid.UUID{dayoID}})
+	unknown := bola.must(404, "POST", "/v1/me/groups/"+gid+"/report", map[string]any{"reason": "abuse", "consent": true, "person_id": uuid.New()})
+	if e := bola.must(404, "POST", "/v1/me/groups/"+gid+"/report", map[string]any{"reason": "abuse", "consent": true, "person_id": dayoID}); e["error"] != unknown["error"] {
+		t.Fatalf("someone Bola never met: %v", e)
+	}
+	member := bola.must(201, "POST", "/v1/me/groups/"+gid+"/report", map[string]any{"reason": "abuse", "consent": true, "person_id": chidiID})["id"].(string)
+	whole := ada.must(201, "POST", "/v1/me/groups/"+gid+"/report", map[string]any{"reason": "spam", "consent": true})["id"].(string)
+
+	// Chidi's account gone for good: the report is still a member's.
+	if _, err := w.env.DB.Admin.Exec(ctx, `UPDATE people_reports SET reported_id = NULL WHERE id = $1`, member); err != nil {
+		t.Fatal(err)
+	}
+	var reports []any
+	for _, r := range mod.must(200, "GET", "/v1/ops/people/reports", nil)["reports"].([]any) {
+		if r.(map[string]any)["group_id"] == gid {
+			reports = append(reports, r)
+		}
+	}
+	for _, r := range reports {
+		m := r.(map[string]any)
+		switch m["id"] {
+		case member:
+			if m["group_member"] != true || m["reported_id"] != nil {
+				t.Fatalf("the member's report: %v", m)
+			}
+		case whole:
+			if m["group_member"] != false || m["reports_against"] != float64(1) {
+				t.Fatalf("the group's report, counted once: %v", m)
+			}
+		}
+	}
+	if len(reports) != 2 {
+		t.Fatalf("the group's reports: %v", reports)
+	}
+	if r := mod.must(200, "GET", "/v1/ops/people/reports/"+member+"?why=Check", nil)["report"].(map[string]any); r["group_member"] != true {
+		t.Fatalf("the report opened: %v", r)
+	}
+	page := mod.must(200, "GET", "/v1/ops/people/groups/"+gid+"?why=Check", nil)
+	for _, r := range page["reports"].([]any) {
+		if m := r.(map[string]any); (m["id"] == member) != (m["group_member"] == true) {
+			t.Fatalf("the group's page: %v", m)
+		}
+	}
+
+	// An action names a report of this group only.
+	other, _ := newGroup(t, chidi, "Other")
+	elsewhere := chidi.must(201, "POST", "/v1/me/groups/"+other+"/report", map[string]any{"reason": "spam", "consent": true})["id"].(string)
+	mod.write(422, "ops.people.group.link_off", gid, "/v1/ops/people/groups/"+gid+"/actions", map[string]any{"action": "link_off", "reason": "Spam", "report_id": elsewhere})
+	mod.write(201, "ops.people.group.link_off", gid, "/v1/ops/people/groups/"+gid+"/actions", map[string]any{"action": "link_off", "reason": "Spam", "report_id": whole})
 }

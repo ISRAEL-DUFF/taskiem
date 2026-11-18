@@ -171,7 +171,7 @@ func TestGroupReports(t *testing.T) {
 		t.Fatalf("said: %v", rep)
 	}
 	if n := w.adminCount(t, `SELECT count(*) FROM people_reports WHERE id = $1 AND group_id = $2 AND reported_id = $3 AND messages = '[]' AND sealed IS NOT NULL
-		AND group_sealed IS NOT NULL AND peer_wrote AND position(convert_to('Bola', 'UTF8') in sealed) = 0
+		AND group_sealed IS NOT NULL AND NOT peer_wrote AND position(convert_to('Bola', 'UTF8') in sealed) = 0
 		AND position(convert_to('Market', 'UTF8') in group_sealed) = 0`, repID, gid, bolaID); n != 1 {
 		t.Fatal("the report is not kept sealed, with its group")
 	}

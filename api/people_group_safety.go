@@ -331,9 +331,16 @@ func (s *Server) reportGroup(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if in.PersonID != nil {
+			// Someone the reporter was in the group with: their times in it
+			// overlap (as a block's), or the reporter sees a message of
+			// theirs (a deleted account's stay). Anyone else is answered as
+			// an unknown id: who joined after the reporter left is not
+			// theirs to know.
 			var ok bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM group_members WHERE group_id = $1 AND person_id = $2)
-				OR EXISTS (SELECT 1 FROM group_messages WHERE group_id = $1 AND sender_id = $2)`, g.ID, *in.PersonID).Scan(&ok); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM group_members t JOIN group_members c ON c.group_id = t.group_id AND c.person_id = $3
+				  WHERE t.group_id = $1 AND t.person_id = $2
+				    AND (tstzrange(t.joined_at, t.left_at) && tstzrange(c.joined_at, c.left_at) OR t.visible && c.visible))
+				OR EXISTS (SELECT 1 FROM group_messages WHERE group_id = $1 AND sender_id = $2 AND kind <> 'event')`, g.ID, *in.PersonID, person).Scan(&ok); err != nil {
 				return err
 			}
 			if !ok {
@@ -416,7 +423,6 @@ func (s *Server) groupReportTx(ctx context.Context, tx pgx.Tx, person uuid.UUID,
 	if err != nil {
 		return uuid.Nil, err
 	}
-	peerWrote := false
 	for i := range msgs {
 		m := &msgs[i]
 		switch {
@@ -432,9 +438,10 @@ func (s *Server) groupReportTx(ctx context.Context, tx pgx.Tx, person uuid.UUID,
 				m.Sender = c.Name
 			}
 		}
-		if member != nil && m.SenderID != nil && *m.SenderID == *member {
-			peerWrote = true
-		}
+	}
+	peerWrote, err := groupReportEarnedTx(ctx, tx, person, g, member)
+	if err != nil {
+		return uuid.Nil, err
 	}
 	id := uuid.Must(uuid.NewV7())
 	box, err := peoplesafety.NewBox(ctx, s.Vault, peoplesafety.ReportPurpose(id), id)
@@ -499,8 +506,8 @@ func (s *Server) groupReportTx(ctx context.Context, tx pgx.Tx, person uuid.UUID,
 		return uuid.Nil, err
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO people_reports (id, person_id, reported_id, reason, note, consent, messages, from_request, sealed, box_key, kms_key, files,
-		reporter_mark, peer_wrote, group_id, group_sealed) VALUES ($1, $2, $3, $4, $5, true, '[]', false, $6, $7, $8, $9, $10, $11, $12, $13)`,
-		id, person, member, in.Reason, in.Note, sealed, box.Sealed, box.KMSKey, len(out), s.reporterMark(person), peerWrote, g.ID, groupSealed); err != nil {
+		reporter_mark, peer_wrote, group_id, group_sealed, group_member) VALUES ($1, $2, $3, $4, $5, true, '[]', false, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+		id, person, member, in.Reason, in.Note, sealed, box.Sealed, box.KMSKey, len(out), s.reporterMark(person), peerWrote, g.ID, groupSealed, member != nil); err != nil {
 		return uuid.Nil, err
 	}
 	for _, f := range out {
@@ -510,6 +517,34 @@ func (s *Server) groupReportTx(ctx context.Context, tx pgx.Tx, person uuid.UUID,
 		}
 	}
 	return id, nil
+}
+
+// groupReportEarnedTx is whether a report of a member from a group
+// weighs in the member's signals (peer_wrote; taskiem_people_sender_signals
+// counts it half): only from a reporter whose account is past its first
+// week, who had been in the group a day or more when reporting (their
+// latest time in it), about a member who wrote within what the reporter
+// sees. Joining a group to report someone in it, from accounts made for
+// it, weighs nothing.
+func groupReportEarnedTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, g groupRow, member *uuid.UUID) (bool, error) {
+	if member == nil {
+		return false, nil
+	}
+	newWeek, err := personNewWeek(ctx, tx, person)
+	if err != nil || newWeek {
+		return false, err
+	}
+	until := time.Now()
+	if g.LeftAt != nil {
+		until = *g.LeftAt
+	}
+	if until.Sub(g.JoinedAt) < peoplesafety.GroupReportAfter {
+		return false, nil
+	}
+	// Row-level security keeps this to the reporter's own times in it.
+	var wrote bool
+	err = tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM group_messages WHERE group_id = $1 AND sender_id = $2 AND kind <> 'event')`, g.ID, *member).Scan(&wrote)
+	return wrote, err
 }
 
 // --- the admins' appeal ---

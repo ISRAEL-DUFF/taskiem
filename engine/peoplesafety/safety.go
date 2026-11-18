@@ -125,7 +125,8 @@ type Signals struct {
 	Age time.Duration
 	// Accepted and Refused (deleted or blocked) requests they sent.
 	Accepted, Refused int
-	// ReportedBy: how many people reported them in the last 30 days.
+	// ReportedBy: how many people reported them in the last 30 days (a
+	// reporter only from groups counts half: GroupReportAfter).
 	ReportedBy int
 	// DeviceAccounts: how many accounts used the devices they signed in
 	// on (they included).
