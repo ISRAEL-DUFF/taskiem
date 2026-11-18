@@ -185,7 +185,7 @@ void main() {
     expect(find.text('Mama’s Kitchen'), findsOneWidget);
     expect(find.text('Yes! Big pack today.'), findsOneWidget);
     expect(find.text('2'), findsNWidgets(2), reason: 'two unread, on the row and on the Chats tab');
-    expect(find.text('Archived'), findsOneWidget);
+    expect(find.text('Archived · 1'), findsOneWidget, reason: 'the Archived chip, with its count');
     expect(find.text('Bola Stores'), findsNothing, reason: 'archived chats are apart');
     expect(find.text('No chats yet'), findsNothing);
 

@@ -199,7 +199,9 @@ void main() {
     await press(t, 'Continue');
     expect(auth.transport.token, 'tok-s');
     expect(find.byType(YouHome), findsOneWidget);
-    expect(find.bySemanticsLabel('Switch'), findsOneWidget, reason: 'in a business: the switcher');
+    await t.tap(find.bySemanticsLabel('More'));
+    await settle(t);
+    expect(find.text('Switch to a business'), findsOneWidget, reason: 'in a business: the switcher, in ⋯');
   });
 
   testWidgets('a locked business asks for a second proof (the chat PIN), then opens; a 401 there signs nobody out', (t) async {
@@ -354,8 +356,10 @@ void main() {
     expect(find.text('Invited you as staff'), findsOneWidget);
     await snap(t, 'you-invited');
 
-    // Settings: name, phone, Change number.
-    await t.tap(find.bySemanticsLabel('Settings'));
+    // Settings (in ⋯): name, phone, Change number.
+    await t.tap(find.bySemanticsLabel('More'));
+    await settle(t);
+    await t.tap(find.text('Settings'));
     await settle(t);
     expect(find.text('Tolu Ade'), findsOneWidget);
     expect(find.text('+234 803 123 0000'), findsOneWidget);

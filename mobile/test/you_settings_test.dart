@@ -21,7 +21,7 @@ import 'package:taskiem/theme/theme.dart';
 
 import 'guidelines.dart';
 import 'my_chats_test.dart' show Api, answer, at, chat, drain, phone, press, settle, typeIn;
-import 'support.dart' show loadFonts;
+import 'support.dart' show loadFonts, snap;
 import 'you_stage3_test.dart' show you;
 
 class _Pick extends Pickers {
@@ -43,6 +43,7 @@ Map<String, dynamic> me({Object? photo}) => {
 Future<void> settings(WidgetTester t, Api api, {Pickers pickers = const _Pick()}) async {
   await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouSettingsScreen(auth: api.auth(), pickers: pickers, now: () => at)));
   await settle(t);
+  await snap(t, 'you-settings');
 }
 
 void main() {
@@ -121,6 +122,7 @@ void main() {
     api.routes['POST /v1/me/chats'] = (_) => chat(id: 'c1', offers: 'no', ask: false);
     await settings(t, api);
     await press(t, find.text('Privacy'));
+    await snap(t, 'you-privacy');
     expect(find.text('Never. Only you see it.'), findsOneWidget);
     expect(find.text('2 orders · last 15 Nov'), findsOneWidget);
     expect(find.text('Each business keeps its own records. Ask each one in its chat to erase your details.'), findsOneWidget);
@@ -150,7 +152,9 @@ void main() {
     await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: DeleteAccountScreen(auth: auth)));
     await settle(t);
     expect(find.textContaining('This customer left Taskiem'), findsOneWidget);
+    await snap(t, 'you-delete');
     await press(t, find.textContaining('Send a code to'));
+    await snap(t, 'you-delete-code');
     expect(api.body(api.sent('POST', '/v1/me/delete/start').single), <String, dynamic>{});
     expect(find.textContaining('on WhatsApp'), findsOneWidget);
     await typeIn(t, find.byKey(const ValueKey('delete-code')), '123456');

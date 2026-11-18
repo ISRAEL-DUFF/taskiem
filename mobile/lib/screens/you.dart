@@ -46,7 +46,9 @@ import '../kit/load_more.dart';
 import '../kit/polling.dart';
 import '../kit/mobile.dart';
 import '../kit/modal.dart' show showTkConfirm, showTkToast;
+import '../kit/look.dart';
 import '../kit/page.dart';
+import '../chat/groups.dart' show pickAction;
 import '../kit/sheet.dart' show TkKitField, TkCta;
 import 'sign_in.dart' show CodeBoxes;
 import '../theme/theme.dart';
@@ -96,6 +98,10 @@ class YouHome extends StatefulWidget {
 
 class _YouHomeState extends State<YouHome> with Polling {
   List<Invitation> _invitations = const [];
+
+  /// The list shown: all chats, the unread ones, or the archived ones (as
+  /// main's Chats: All, Unread, Archived).
+  _Show _show = _Show.all;
   String? _error;
   bool _busy = false;
   /// You's live connection: open while the app is in front (Presence opens
@@ -490,6 +496,29 @@ class _YouHomeState extends State<YouHome> with Polling {
     ],
   );
 
+  /// ⋯ on Chats: Settings, the switcher (with a business), Start something.
+  Future<void> _more(List<BusinessEntry> businesses) async {
+    final auth = widget.auth;
+    final k = await pickAction(
+      context,
+      title: 'You',
+      actions: [
+        ('settings', 'Settings', 'settings', false),
+        if (businesses.isNotEmpty) ('switch', 'Switch to a business', 'loop', false),
+        ('start', 'Start something', 'b-plus', false),
+      ],
+    );
+    if (!mounted || k == null) return;
+    switch (k) {
+      case 'settings':
+        await tkPush<void>(context, YouSettingsScreen(auth: auth, notify: widget.notify, onOpenChat: _openId, onOpenPerson: _openPerson, now: widget.now, prefs: widget.prefs));
+      case 'switch':
+        await showSwitcher(context, auth);
+      case 'start':
+        await tkPush<void>(context, StartSomethingScreen(auth: auth));
+    }
+  }
+
   Widget _chatsTab(BuildContext context) {
     final auth = widget.auth;
     final t = TkTheme.tokens(context);
@@ -499,11 +528,18 @@ class _YouHomeState extends State<YouHome> with Polling {
       builder: (context, _) => TkScreen(
         title: 'Chats',
         back: false,
-        head: Row(
+        // As main's Chats: "Chats" large with whose they are under it, ⋯
+        // for the rest, + (New chat) as the main round button.
+        head: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Chats', style: tkDisplay(size: 30, letterSpacing: -1.1, color: t.text)),
-            const SizedBox(width: 8),
-            Text('You', style: tkText(size: 13, color: t.muted)),
+            Semantics(header: true, child: Text('Chats', style: tkDisplay(size: 30, lineHeight: 1.15, letterSpacing: -1.1, color: t.text))),
+            Text(
+              (auth.me?.user?.name?.trim().isNotEmpty ?? false) ? auth.me!.user!.name!.trim() : 'You',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: tkText(size: 13, lineHeight: 1.35, color: t.muted),
+            ),
           ],
         ),
         onRefresh: () async {
@@ -511,10 +547,9 @@ class _YouHomeState extends State<YouHome> with Polling {
           await _load();
         },
         actions: [
-          TkHeadButton(icon: 'b-plus', label: 'New chat', onTap: _newChat),
-          const SizedBox(width: 6),
-          if (businesses.isNotEmpty) ...[TkHeadButton(icon: 'loop', label: 'Switch', onTap: () => showSwitcher(context, auth)), const SizedBox(width: 6)],
-          TkHeadButton(icon: 'settings', label: 'Settings', onTap: () => tkPush<void>(context, YouSettingsScreen(auth: auth, notify: widget.notify, onOpenChat: _openId, onOpenPerson: _openPerson, now: widget.now, prefs: widget.prefs))),
+          TkHeadButton(icon: 'b-more', label: 'More', onTap: () => _more(businesses)),
+          const SizedBox(width: 8),
+          TkHeadButton(icon: 'b-plus', label: 'New chat', primary: true, onTap: _newChat),
         ],
         children: [
           if (_invitations.isNotEmpty)
@@ -528,7 +563,8 @@ class _YouHomeState extends State<YouHome> with Polling {
                 ),
               ],
             ),
-          // Search across chats with people, and the starred messages.
+          // Search across chats with people, and the starred messages: the
+          // app's search box (main's Chats), opening the search.
           Semantics(
             button: true,
             label: 'Search chats with people',
@@ -537,14 +573,14 @@ class _YouHomeState extends State<YouHome> with Polling {
               behavior: HitTestBehavior.opaque,
               onTap: () => tkPush<void>(context, PeopleSearchScreen(auth: auth, openAt: _openPersonAt, openGroupAt: _openGroupAt, now: widget.now)),
               child: Container(
-                constraints: const BoxConstraints(minHeight: 44),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(999)),
+                height: 42,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(color: TkLook.of(context).card, borderRadius: BorderRadius.circular(14)),
                 child: Row(
                   children: [
-                    TkIcon('b-search', size: 18, stroke: 2, color: t.muted),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text('Search chats with people', maxLines: 2, overflow: TextOverflow.ellipsis, style: tkText(size: 15, color: t.muted))),
+                    TkIcon('search', size: 16, color: t.muted),
+                    const SizedBox(width: 7),
+                    Expanded(child: Text('Search chats and messages', maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 15, weight: 500, color: cssMix(t.muted, const Color(0x00000000), 0.72)))),
                   ],
                 ),
               ),
@@ -553,24 +589,16 @@ class _YouHomeState extends State<YouHome> with Polling {
           if (_error != null) TkErrorBox(_error!),
           if ((_standing?.unseen ?? 0) > 0) StandingNotice(standing: _standing!, onOpen: _openStanding),
           if (auth.me?.secondProof?.required == true)
-            TkPanel(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Semantics(
-                      liveRegion: true,
-                      child: Text(
-                        'You signed in on a new device, so your businesses are locked until you prove it\'s you.',
-                        style: tkText(size: 14, color: t.text),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TkButton(label: 'Prove it\'s you', onPressed: _prove),
-                  ],
-                ),
-              ],
+            Semantics(
+              liveRegion: true,
+              child: TkCallout(
+                leading: TkSquare('b-lock', color: TkLook.of(context).orange),
+                title: 'Your businesses are locked',
+                sub: 'You signed in on a new device, so your businesses are locked until you prove it\'s you.',
+                color: TkLook.of(context).orange,
+                button: 'Prove it\'s you',
+                onPressed: _prove,
+              ),
             ),
           ListenableBuilder(
             listenable: Listenable.merge([_chats, ?_live]),
@@ -578,9 +606,31 @@ class _YouHomeState extends State<YouHome> with Polling {
               final chats = _chats.chats;
               final archived = _chats.archived;
               final requests = _chats.requests + _chats.invites;
+              final shown = switch (_show) {
+                _Show.all => chats ?? const <ChatListItem>[],
+                _Show.unread => (chats ?? const <ChatListItem>[]).where((c) => c.unread > 0).toList(),
+                _Show.archived => archived,
+              };
+              final all = _show == _Show.all;
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // All, Unread, Archived: as main's Chats.
+                  if (chats != null && (chats.isNotEmpty || archived.isNotEmpty))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: TkChips<_Show>(
+                        label: 'Show',
+                        padding: EdgeInsets.zero,
+                        chips: [
+                          (_Show.all, 'All'),
+                          (_Show.unread, _chats.unread > 0 ? 'Unread · ${_chats.unread}' : 'Unread'),
+                          (_Show.archived, archived.isNotEmpty ? 'Archived · ${archived.length}${_chats.moreArchived ? '+' : ''}' : 'Archived'),
+                        ],
+                        on: _show,
+                        onPick: (v) => setState(() => _show = v),
+                      ),
+                    ),
                   if (_chats.error != null && chats == null) TkErrorBox(_chats.error!),
                   if (chats != null && chats.isEmpty && archived.isEmpty && requests == 0 && _fromContacts.isEmpty)
                     const TkPanel(
@@ -592,11 +642,11 @@ class _YouHomeState extends State<YouHome> with Polling {
                         ),
                       ],
                     ),
-                  if (chats != null && (chats.isNotEmpty || archived.isNotEmpty || requests > 0 || _fromContacts.isNotEmpty))
+                  if (chats != null && (all ? (chats.isNotEmpty || requests > 0 || _fromContacts.isNotEmpty) : shown.isNotEmpty))
                     TkPanel(
                       inset: 76,
                       children: [
-                        if (requests > 0)
+                        if (all && requests > 0)
                           TkListRow(
                             title: _chats.requests == 0 ? 'Invites to groups' : 'Message requests',
                             sub: _chats.invites == 0
@@ -610,7 +660,7 @@ class _YouHomeState extends State<YouHome> with Polling {
                               await _chats.load();
                             },
                           ),
-                        if (_fromContacts.isNotEmpty)
+                        if (all && _fromContacts.isNotEmpty)
                           TkListRow(
                             title: _fromContacts.length == 1 ? '1 of your contacts is on Taskiem' : '${_fromContacts.length} of your contacts are on Taskiem',
                             sub: 'Found from your phone’s contacts today',
@@ -620,30 +670,31 @@ class _YouHomeState extends State<YouHome> with Polling {
                               if (mounted) setState(() => _fromContacts = const []);
                             },
                           ),
-                        if (archived.isNotEmpty)
-                          TkListRow(
-                            title: 'Archived',
-                            icon: 'archive',
-                            amount: '${archived.length}${_chats.moreArchived ? '+' : ''}',
-                            semanticsLabel: 'Archived chats, ${archived.length}${_chats.moreArchived ? ' or more' : ''}',
-                            onTap: () => tkPush<void>(context, ArchivedChatsScreen(data: _chats, now: widget.now, onOpen: _openItem)),
-                          ),
-                        MyChatRows(chats: chats, now: widget.now(), onOpen: _openItem, transport: auth.transport, live: _live),
+                        MyChatRows(chats: shown, now: widget.now(), onOpen: _openItem, transport: auth.transport, live: _live),
                       ],
                     ),
+                  if (chats != null && _show != _Show.all && shown.isEmpty)
+                    TkPanel(children: [TkEmpty(icon: 'chat', title: _show == _Show.unread ? 'Nothing unread' : 'No archived chats', line: _show == _Show.unread ? 'Chats with new messages show here.' : 'Chats you archive show here.')]),
                   // The next page as the list is scrolled to its end.
-                  if (chats != null && _chats.more) TkLoadMore(label: 'Show more chats', onMore: _chats.loadMore),
+                  if (chats != null && _show != _Show.unread && (_show == _Show.archived ? _chats.moreArchived : _chats.more))
+                    TkLoadMore(label: 'Show more chats', onMore: () => _chats.loadMore(archivedOnes: _show == _Show.archived)),
                 ],
               );
             },
           ),
-          TkButton(
-            label: 'Start something',
-            primary: true,
-            minHeight: 44,
-            onPressed: () => tkPush<void>(context, StartSomethingScreen(auth: auth)),
+          // Start something, as a row of the app's (with Your businesses).
+          TkSection(
+            inset: 56,
+            children: [
+              TkListRow(
+                title: 'Start something',
+                sub: 'A business, or workflows to automate your work',
+                icon: 'b-plus',
+                square: TkLook.of(context).lime,
+                onTap: () => tkPush<void>(context, StartSomethingScreen(auth: auth)),
+              ),
+            ],
           ),
-          Text('A business, or workflows to automate your work.', textAlign: TextAlign.center, style: tkHint(t)),
           // The web's Your businesses: the switcher's rows, on You.
           if (businesses.isNotEmpty)
             TkSection(
@@ -682,20 +733,18 @@ class _InvitationRow extends StatelessWidget {
     final t = TkTheme.tokens(context);
     final roles = inv.roles.isEmpty ? '' : ' as ${inv.roles.join(', ')}';
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(inv.tenant, style: tkText(size: 15, weight: 600, color: t.text)),
-          Text('Invited you$roles', style: tkHint(t)),
+          Text(inv.tenant, style: tkText(size: 15.5, weight: 500, color: t.text)),
+          Text('Invited you$roles', style: tkText(size: 12.5, color: t.muted)),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(child: TkButton(label: 'Join', primary: true, enabled: !busy, onPressed: onJoin)),
-              const SizedBox(width: 8),
-              Expanded(child: TkButton(label: 'Decline', enabled: !busy, onPressed: onDecline)),
-            ],
-          ),
+          // The app's buttons, as a card's.
+          TkButtonRow([
+            TkSmallButton(label: 'Join', primary: true, onPressed: busy ? null : onJoin),
+            TkSmallButton(label: 'Decline', onPressed: busy ? null : onDecline),
+          ]),
         ],
       ),
     );
@@ -728,47 +777,39 @@ class YouSettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
     return ListenableBuilder(
       listenable: auth,
       builder: (context, _) {
         final user = auth.me?.user;
         final phone = user?.phone as String?;
         final email = user?.emailPlaceholder == true ? null : user?.email;
-        Widget line(String label, String value) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [Text(label, style: tkHint(t)), Text(value, style: tkText(size: 15, weight: 500, color: t.text))],
-              ),
-            );
         final look = TkLook.of(context);
         return TkScreen(
           title: 'Settings',
           children: [
-            TkPanel(
-              inset: 16,
+            // As main's Settings: you at the top (your photo, only yours),
+            // then your account's rows.
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: look.card, borderRadius: BorderRadius.circular(22)),
+              child: MyPhotoCard(
+                auth: auth,
+                pickers: pickers,
+                name: (user?.name ?? '').trim().isEmpty ? 'You' : user!.name!.trim(),
+                lines: [?email],
+              ),
+            ),
+            TkSection(
+              title: 'Your account',
+              inset: 56,
               children: [
-                Padding(padding: const EdgeInsets.all(16), child: MyPhotoCard(auth: auth, pickers: pickers)),
-                line('Name', user?.name ?? ''),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [Text('Phone', style: tkHint(t)), Text(phone == null ? 'No phone yet: add one to sign in with a code.' : showPhone(phone), style: tkText(size: 15, weight: 500, color: t.text))],
-                        ),
-                      ),
-                      TkButton(
-                        label: phone == null ? 'Add a phone' : 'Change number',
-                        onPressed: () => tkPush<void>(context, ChangeNumberScreen(auth: auth)),
-                      ),
-                    ],
-                  ),
+                TkListRow(
+                  title: phone == null ? 'Add a phone' : 'Change number',
+                  sub: phone == null ? 'To sign in with a code' : showPhone(phone),
+                  icon: 'b-phone',
+                  square: look.teal,
+                  onTap: () => tkPush<void>(context, ChangeNumberScreen(auth: auth)),
                 ),
-                if (email != null) line('Email', email),
               ],
             ),
             // Saved addresses (§13): kept on your side, offered when ordering.
@@ -867,10 +908,11 @@ class YouSettingsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            TkButton(label: 'Sign out', minHeight: 44, onPressed: auth.signOut),
+            // As main's Settings: signing out a red row.
             TkSection(
               inset: 56,
               children: [
+                TkListRow(title: 'Sign out', icon: 'b-out', square: look.red, onTap: auth.signOut),
                 TkListRow(title: 'Delete your account', icon: 'b-x-ring', square: look.red, onTap: () => tkPush<void>(context, DeleteAccountScreen(auth: auth))),
               ],
             ),
@@ -1060,9 +1102,9 @@ class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
               if (_left > 0)
                 Text('You can ask for a new code in ${countdown(_left)}.', style: tkHint(t))
               else
-                Center(child: TkLink(label: 'Send a new code', onTap: _busy ? null : () => _run(() => _start(_e164, confirmOld: _needsOld)))),
+                Center(child: TkLink(bold: true, label: 'Send a new code', onTap: _busy ? null : () => _run(() => _start(_e164, confirmOld: _needsOld)))),
               if (sent?.sentVia != 'sms')
-                Center(child: TkLink(label: 'Send by SMS instead', onTap: _busy ? null : () => _run(() => _start(_e164, confirmOld: _needsOld, sms: true)))),
+                Center(child: TkLink(bold: true, label: 'Send by SMS instead', onTap: _busy ? null : () => _run(() => _start(_e164, confirmOld: _needsOld, sms: true)))),
             ],
           ),
           if (_needsOld)
@@ -1082,3 +1124,5 @@ class _ChangeNumberScreenState extends State<ChangeNumberScreen> {
     );
   }
 }
+
+enum _Show { all, unread, archived }

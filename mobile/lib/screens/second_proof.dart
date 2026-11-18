@@ -186,7 +186,7 @@ class _SecondProofState extends State<SecondProof> with WidgetsBindingObserver {
               ),
             ),
             TkCta(label: _busy ? 'Checking…' : 'I’ve opened the link', onTap: _busy ? null : _opened),
-            Center(child: TkLink(label: 'Send it again', onTap: _busy ? null : _emailLink)),
+            Center(child: TkLink(bold: true, label: 'Send it again', onTap: _busy ? null : _emailLink)),
           ]
         : [
             Text(

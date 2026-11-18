@@ -25,7 +25,8 @@ import '../kit/list.dart' show TkEmpty, TkLoading;
 import '../kit/look.dart';
 import '../kit/mobile.dart';
 import '../kit/modal.dart';
-import '../kit/sheet.dart' show TkKitField;
+import '../kit/sheet.dart' show TkCta, TkKitField, TkLines;
+import 'sign_in.dart' show CodeBoxes;
 import '../theme/look.dart';
 import '../theme/theme.dart';
 import 'second_proof.dart';
@@ -65,9 +66,14 @@ class MyFace extends StatelessWidget {
 /// The photo on You's settings: change it, or take it away. Only the
 /// person sees it.
 class MyPhotoCard extends StatefulWidget {
-  const MyPhotoCard({super.key, required this.auth, this.pickers = const Pickers()});
+  const MyPhotoCard({super.key, required this.auth, this.pickers = const Pickers(), this.name, this.lines = const []});
   final Auth auth;
   final Pickers pickers;
+
+  /// As the top of Settings (main's YouCard): the name beside the face,
+  /// and lines under it (the phone, the email).
+  final String? name;
+  final List<String> lines;
 
   @override
   State<MyPhotoCard> createState() => _MyPhotoCardState();
@@ -125,6 +131,11 @@ class _MyPhotoCardState extends State<MyPhotoCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (widget.name != null) ...[
+                Text(widget.name!, maxLines: 2, overflow: TextOverflow.ellipsis, style: tkDisplay(size: 19, letterSpacing: -0.3, color: t.text)),
+                for (final l in widget.lines) Text(l, maxLines: 1, overflow: TextOverflow.ellipsis, style: tkText(size: 13, color: t.muted)),
+                const SizedBox(height: 8),
+              ],
               Wrap(
                 spacing: 8,
                 runSpacing: 6,
@@ -363,9 +374,12 @@ class _YouPrivacyPageState extends State<YouPrivacyPage> {
           SettingsCard(
             title: 'What businesses see',
             children: [
-              _Fact(label: 'Your name', value: p.shownToBusinesses.name.isEmpty ? 'No name yet' : p.shownToBusinesses.name),
-              _Fact(label: 'Your phone', value: phone is String && phone.isNotEmpty ? showPhone(phone) : 'No phone on your account'),
-              const _Fact(label: 'Your photo', value: 'Never. Only you see it.'),
+              // The app's label and value lines.
+              TkLines([
+                ('Your name', p.shownToBusinesses.name.isEmpty ? 'No name yet' : p.shownToBusinesses.name),
+                ('Your phone', phone is String && phone.isNotEmpty ? showPhone(phone) : 'No phone on your account'),
+                ('Your photo', 'Never. Only you see it.'),
+              ]),
               Text('A business sees these when you chat with it or order from it.', style: tkText(size: 13, lineHeight: 1.4, color: t.muted)),
             ],
           ),
@@ -421,26 +435,6 @@ String dayLabelOf(DateTime d, DateTime now) {
   final l = d.toLocal(), n = now.toLocal();
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return '${l.day} ${months[l.month - 1]}${l.year == n.year ? '' : ' ${l.year}'}';
-}
-
-class _Fact extends StatelessWidget {
-  const _Fact({required this.label, required this.value});
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = TkTheme.tokens(context);
-    return MergeSemantics(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(width: 96, child: Text(label, style: tkText(size: 14, color: t.muted))),
-          Expanded(child: Text(value, style: tkText(size: 14.5, weight: 500, color: t.text))),
-        ],
-      ),
-    );
-  }
 }
 
 // --- deleting the account ---
@@ -607,46 +601,41 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
         if (_blocked != null)
           Semantics(
             liveRegion: true,
-            child: TkPanel(
-              padding: const EdgeInsets.all(14),
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ExcludeSemantics(child: TkSquare('b-alert', color: look.orangeInk, size: 30)),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(_blocked!, style: tkText(size: 14, lineHeight: 1.4, color: t.text))),
-                  ],
-                ),
-              ],
-            ),
+            child: TkCallout(leading: TkSquare('b-alert', color: look.orange), title: 'Not yet', sub: _blocked!, color: look.orange),
           )
         else ...[
           SettingsCard(
             title: 'Confirm it is you',
             children: [
-              if (_way == null) ...[
-                if (_hasPhone) TkButton(label: _busy ? 'Sending…' : 'Send a code to ${showPhone(phone)}', minHeight: 44, enabled: !_busy, onPressed: _sendCode),
-                TkButton(label: 'Use my passkey', minHeight: 44, enabled: !_busy, onPressed: _withPasskey),
-                TkButton(label: 'Use my password', minHeight: 44, enabled: !_busy, onPressed: () => setState(() => _way = _Proof.password)),
-              ],
+              // The ways to confirm as the app's rows; the code as six
+              // boxes; deleting is red.
+              if (_way == null)
+                TkSection(
+                  inset: 56,
+                  children: [
+                    if (_hasPhone)
+                      TkListRow(title: _busy ? 'Sending…' : 'Send a code to ${showPhone(phone)}', icon: 'b-phone', square: look.teal, onTap: _busy ? null : _sendCode),
+                    TkListRow(title: 'Use my passkey', icon: 'b-key', square: look.lime, onTap: _busy ? null : _withPasskey),
+                    TkListRow(title: 'Use my password', icon: 'b-lock', square: look.blue, onTap: _busy ? null : () => setState(() => _way = _Proof.password)),
+                  ],
+                ),
               if (_way == _Proof.code) ...[
                 Semantics(
                   liveRegion: true,
                   child: Text(
                     'We sent a code to ${showPhone(phone)}${_sentVia == 'sms' ? ' by SMS' : (_sentVia == null ? '' : ' on ${_sentVia == 'telegram' ? 'Telegram' : 'WhatsApp'}')}.',
-                    style: tkText(size: 14, color: t.text),
+                    style: tkText(size: 14, lineHeight: 1.45, color: t.muted),
                   ),
                 ),
-                TkKitField(label: 'Code', child: TkTextBox(key: const ValueKey('delete-code'), controller: _code, digits: 6)),
-                if (_sentVia != 'sms') TkLinkButton(label: 'Send by SMS instead', onPressed: _busy ? null : () => _sendCode(sms: true)),
-                TkButton(label: _busy ? 'Deleting…' : 'Delete my account', primary: true, minHeight: 44, enabled: !_busy, onPressed: _withCode),
+                TkKitField(label: 'Code', field: false, child: CodeBoxes(key: const ValueKey('delete-code'), controller: _code)),
+                if (_sentVia != 'sms') Center(child: TkLink(bold: true, label: 'Send by SMS instead', onTap: _busy ? null : () => _sendCode(sms: true))),
+                TkCta(label: _busy ? 'Deleting…' : 'Delete my account', danger: true, onTap: _busy ? null : _withCode),
               ],
               if (_way == _Proof.password) ...[
-                TkKitField(label: 'Your password', child: TkTextBox(key: const ValueKey('delete-password'), controller: _password, secret: true)),
-                TkButton(label: _busy ? 'Deleting…' : 'Delete my account', primary: true, minHeight: 44, enabled: !_busy, onPressed: _withPassword),
+                TkKitField(label: 'Your password', child: TkTextBox(key: const ValueKey('delete-password'), controller: _password, secret: true, size: 15, height: 46)),
+                TkCta(label: _busy ? 'Deleting…' : 'Delete my account', danger: true, onTap: _busy ? null : _withPassword),
               ],
-              if (_way != null) TkLinkButton(label: 'Another way', onPressed: _busy ? null : () => setState(() => (_way = null, _error = null))),
+              if (_way != null) Center(child: TkLink(bold: true, label: 'Another way', onTap: _busy ? null : () => setState(() => (_way = null, _error = null)))),
             ],
           ),
           if (_error != null) Semantics(liveRegion: true, child: TkErrorBox(_error!)),
