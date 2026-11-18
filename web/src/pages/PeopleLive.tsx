@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { post } from "../api";
+import { typingByGroup, type LiveGroup, type LiveGroupInvite, type LiveGroupMessage, type LiveGroupReceipts, type LiveGroupTyping } from "../lib/groups";
 import { NO_PRESENCE, readySays, shownPresence, withPresence, type LiveChat, type LiveGone, type LiveMessage, type LivePresence, type PeopleLiveEvent, type PresenceMap } from "../lib/peoplelive";
 
 // You's live connection (docs/spec/people-chatting.md, "As built: stage 5a
@@ -32,6 +33,8 @@ interface PeopleLive {
   connected: boolean;
   /** The chats whose other person is typing now. */
   typing: ReadonlySet<string>;
+  /** Who is typing in each group now (person ids, never the viewer). */
+  groupTyping: ReadonlyMap<string, string[]>;
   /** Who is online and when last seen, by person, as the connection told. */
   presence: PresenceMap;
   /** Hears each event; returns how to stop. */
@@ -39,7 +42,8 @@ interface PeopleLive {
 }
 
 const EMPTY = new Set<string>();
-const NONE: PeopleLive = { connected: false, typing: EMPTY, presence: NO_PRESENCE, subscribe: () => () => undefined };
+const NO_GROUP_TYPING: ReadonlyMap<string, string[]> = new Map();
+const NONE: PeopleLive = { connected: false, typing: EMPTY, groupTyping: NO_GROUP_TYPING, presence: NO_PRESENCE, subscribe: () => () => undefined };
 const Ctx = createContext<PeopleLive>(NONE);
 export const usePeopleLive = () => useContext(Ctx);
 
@@ -49,6 +53,7 @@ export { livePoll } from "../lib/peoplelive";
 export function PeopleLiveProvider({ on, children }: { on: boolean; children: ReactNode }) {
   const [connected, setConnected] = useState(false);
   const [typing, setTyping] = useState<ReadonlySet<string>>(EMPTY);
+  const [groupTyping, setGroupTyping] = useState<ReadonlyMap<string, string[]>>(NO_GROUP_TYPING);
   const [presence, setPresence] = useState<PresenceMap>(NO_PRESENCE);
   const subs = useRef(new Set<(e: PeopleLiveEvent) => void>());
   const subscribe = useCallback((fn: (e: PeopleLiveEvent) => void) => {
@@ -97,6 +102,7 @@ export function PeopleLiveProvider({ on, children }: { on: boolean; children: Re
       connection = undefined;
       setConnected(false);
       setTyping(EMPTY);
+      setGroupTyping(NO_GROUP_TYPING);
       // Who is online is known only while connected.
       setPresence(NO_PRESENCE);
     };
@@ -142,6 +148,28 @@ export function PeopleLiveProvider({ on, children }: { on: boolean; children: Re
         const t = data<{ typing: string[] }>(ev).typing ?? [];
         setTyping(t.length > 0 ? new Set(t) : EMPTY);
       });
+      // Groups (stage 5b).
+      es.addEventListener("group_message", (ev) => {
+        hear();
+        emit({ type: "group_message", data: data<LiveGroupMessage>(ev) });
+      });
+      es.addEventListener("group", (ev) => {
+        hear();
+        emit({ type: "group", data: data<LiveGroup>(ev) });
+      });
+      es.addEventListener("group_receipts", (ev) => {
+        hear();
+        emit({ type: "group_receipts", data: data<LiveGroupReceipts>(ev) });
+      });
+      es.addEventListener("group_invite", (ev) => {
+        hear();
+        emit({ type: "group_invite", data: data<LiveGroupInvite>(ev) });
+      });
+      es.addEventListener("group_typing", (ev) => {
+        hear();
+        const t = typingByGroup(data<LiveGroupTyping>(ev));
+        setGroupTyping(t.size > 0 ? t : NO_GROUP_TYPING);
+      });
       es.addEventListener("presence", (ev) => {
         hear();
         setPresence((cur) => withPresence(cur, data<LivePresence>(ev)));
@@ -149,6 +177,7 @@ export function PeopleLiveProvider({ on, children }: { on: boolean; children: Re
       es.onerror = () => {
         setConnected(false);
         setTyping(EMPTY);
+        setGroupTyping(NO_GROUP_TYPING);
         // The browser reconnects by itself (with Last-Event-ID), but not
         // after a refusal (too many open, 429): try again later, polling
         // meanwhile.
@@ -174,5 +203,5 @@ export function PeopleLiveProvider({ on, children }: { on: boolean; children: Re
 
   // Presence is applied only while connected; the open chat's head is read
   // again on `ready`.
-  return <Ctx.Provider value={{ connected, typing, presence: shownPresence(connected, presence), subscribe }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ connected, typing, groupTyping, presence: shownPresence(connected, presence), subscribe }}>{children}</Ctx.Provider>;
 }
