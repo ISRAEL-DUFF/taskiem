@@ -96,6 +96,9 @@ CREATE TABLE group_members (
   left_at         timestamptz,
   left_how        text CHECK (left_how IN ('left', 'removed')),
   removed_by      uuid,
+  -- The group's name and description as they were when the person left
+  -- (sealed as people_groups.sealed): what they see of it from then (A5).
+  left_sealed     bytea,
   -- The times whose messages they see: each time they were in the group,
   -- less what they deleted for themselves.
   visible         tstzmultirange NOT NULL,
@@ -501,10 +504,12 @@ CREATE POLICY admin_all ON group_links TO taskiem_app
   USING (taskiem_group_admin(group_id)) WITH CHECK (taskiem_group_admin(group_id));
 GRANT SELECT, INSERT, UPDATE, DELETE ON group_links TO taskiem_app;
 
--- The photo: seen as the group is; changed by a current member (the API
+-- The photo: seen by its members now (not by those who left: A5) and
+-- someone invited; changed by a current member (the API
 -- decides who may edit).
 CREATE POLICY member_read ON group_photos FOR SELECT TO taskiem_app
-  USING (taskiem_group_member(group_id) OR taskiem_group_invited(group_id));
+  USING (taskiem_group_invited(group_id) OR (taskiem_person_business() IS NULL AND EXISTS (SELECT 1 FROM group_members m
+    WHERE m.group_id = group_photos.group_id AND m.person_id = taskiem_person_scope() AND m.left_at IS NULL)));
 CREATE POLICY member_write ON group_photos FOR ALL TO taskiem_app
   USING (taskiem_person_business() IS NULL AND EXISTS (SELECT 1 FROM group_members m WHERE m.group_id = group_photos.group_id
     AND m.person_id = taskiem_person_scope() AND m.left_at IS NULL))
@@ -622,7 +627,7 @@ BEGIN
     RETURN;
   END IF;
   IF v_found THEN
-    UPDATE group_members m SET left_at = NULL, left_how = NULL, removed_by = NULL, how = 'link', added_by = NULL, role = 'member',
+    UPDATE group_members m SET left_at = NULL, left_how = NULL, removed_by = NULL, left_sealed = NULL, how = 'link', added_by = NULL, role = 'member',
            joined_at = clock_timestamp(), hidden_at = NULL, visible = m.visible + tstzmultirange(tstzrange(clock_timestamp(), NULL))
      WHERE m.group_id = v_group AND m.person_id = v_me;
   ELSE
@@ -666,7 +671,7 @@ BEGIN
     RETURN 'full';
   END IF;
   IF v_found THEN
-    UPDATE group_members m SET left_at = NULL, left_how = NULL, removed_by = NULL, how = 'invite', added_by = v_by, role = 'member',
+    UPDATE group_members m SET left_at = NULL, left_how = NULL, removed_by = NULL, left_sealed = NULL, how = 'invite', added_by = v_by, role = 'member',
            joined_at = clock_timestamp(), hidden_at = NULL, visible = m.visible + tstzmultirange(tstzrange(clock_timestamp(), NULL))
      WHERE m.group_id = p_group AND m.person_id = v_me;
   ELSE

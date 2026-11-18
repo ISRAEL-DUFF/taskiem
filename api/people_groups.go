@@ -172,6 +172,8 @@ type groupRow struct {
 	Muted, Archived, Mentions                    bool
 	HiddenAt                                     *time.Time
 	ReadUpto, DeliveredUpto                      time.Time
+	// leftSealed: the name and description when the person left.
+	leftSealed []byte
 	// From the lists: the last message the person sees, how many current
 	// members, the unread count and whether one mentions them.
 	Members, Unread int
@@ -183,12 +185,12 @@ func (g groupRow) current() bool { return g.LeftAt == nil }
 func (g groupRow) admin() bool   { return g.current() && g.Role == "admin" }
 
 const groupRowCols = `g.id, g.sealed, g.admins_only_post, g.admins_only_edit, g.approve_joins, g.photo_at, g.created_at,
-	m.role, m.how, m.joined_at, m.left_at, m.left_how, m.muted, m.archived, m.mentions, m.hidden_at, m.read_upto, m.delivered_upto`
+	m.role, m.how, m.joined_at, m.left_at, m.left_how, m.muted, m.archived, m.mentions, m.hidden_at, m.read_upto, m.delivered_upto, m.left_sealed`
 
 func scanGroupRow(r pgx.Row, extra ...any) (groupRow, error) {
 	var g groupRow
 	dest := append([]any{&g.ID, &g.sealed, &g.AdminsOnlyPost, &g.AdminsOnlyEdit, &g.ApproveJoins, &g.PhotoAt, &g.CreatedAt,
-		&g.Role, &g.How, &g.JoinedAt, &g.LeftAt, &g.LeftHow, &g.Muted, &g.Archived, &g.Mentions, &g.HiddenAt, &g.ReadUpto, &g.DeliveredUpto}, extra...)
+		&g.Role, &g.How, &g.JoinedAt, &g.LeftAt, &g.LeftHow, &g.Muted, &g.Archived, &g.Mentions, &g.HiddenAt, &g.ReadUpto, &g.DeliveredUpto, &g.leftSealed}, extra...)
 	err := r.Scan(dest...)
 	return g, err
 }
@@ -417,13 +419,22 @@ func (s *Server) groupViewsTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, 
 		if err != nil && !errors.Is(err, peoplechats.ErrNoKey) {
 			return nil, err
 		}
-		info := openGroupInfo(key, g.ID, g.sealed)
+		// Someone who left sees the group as it was then (A5): its name
+		// and description then, no photo, no count.
+		sealed := g.sealed
+		if !g.current() && g.leftSealed != nil {
+			sealed = g.leftSealed
+		}
+		info := openGroupInfo(key, g.ID, sealed)
 		v := groupView{ID: g.ID, Kind: "group", Name: info.Name, Description: info.Description, Photo: groupPhotoRef(g.ID, g.PhotoAt),
 			Members: g.Members, Role: g.Role, Left: !g.current(), AdminsOnlyPost: g.AdminsOnlyPost, AdminsOnlyEdit: g.AdminsOnlyEdit,
 			ApproveJoins: g.ApproveJoins, Muted: g.Muted, Archived: g.Archived, Mentions: g.Mentions, Unread: g.Unread, Mentioned: g.Mentioned,
 			LastAt: g.JoinedAt, JoinedAt: g.JoinedAt}
 		if g.LeftHow != nil {
 			v.LeftHow = *g.LeftHow
+		}
+		if !g.current() {
+			v.Photo, v.Members = nil, 0
 		}
 		v.CanPost = g.current() && (!g.AdminsOnlyPost || g.Role == "admin")
 		v.CanEdit = g.current() && (!g.AdminsOnlyEdit || g.Role == "admin")
@@ -916,7 +927,7 @@ func leaveGroupTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, g groupRow) 
 	if _, err := tx.Exec(ctx, `DELETE FROM group_typing WHERE group_id = $1 AND person_id = $2`, g.ID, person); err != nil {
 		return false, err
 	}
-	_, err := tx.Exec(ctx, `UPDATE group_members SET left_at = clock_timestamp(), left_how = 'left',
+	_, err := tx.Exec(ctx, `UPDATE group_members SET left_at = clock_timestamp(), left_how = 'left', left_sealed = (SELECT sealed FROM people_groups WHERE id = $1),
 		visible = visible - tstzmultirange(tstzrange(clock_timestamp(), NULL)) WHERE group_id = $1 AND person_id = $2`, g.ID, person)
 	return false, err
 }
@@ -1385,7 +1396,7 @@ func (s *Server) addPeopleTx(ctx context.Context, tx pgx.Tx, admin uuid.UUID, g 
 			continue
 		}
 		if found {
-			if _, err := tx.Exec(ctx, `UPDATE group_members SET left_at = NULL, left_how = NULL, removed_by = NULL, how = 'added', added_by = $3, role = 'member',
+			if _, err := tx.Exec(ctx, `UPDATE group_members SET left_at = NULL, left_how = NULL, removed_by = NULL, left_sealed = NULL, how = 'added', added_by = $3, role = 'member',
 				joined_at = clock_timestamp(), hidden_at = NULL, visible = visible + tstzmultirange(tstzrange(clock_timestamp(), NULL))
 				WHERE group_id = $1 AND person_id = $2`, g.ID, id, admin); err != nil {
 				return nil, nil, err
@@ -1558,7 +1569,7 @@ func (s *Server) removeGroupMember(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `UPDATE group_members SET left_at = clock_timestamp(), left_how = 'removed', removed_by = $3,
-			visible = visible - tstzmultirange(tstzrange(clock_timestamp(), NULL)) WHERE group_id = $1 AND person_id = $2`, g.ID, target, person); err != nil {
+			left_sealed = (SELECT sealed FROM people_groups WHERE id = $1), visible = visible - tstzmultirange(tstzrange(clock_timestamp(), NULL)) WHERE group_id = $1 AND person_id = $2`, g.ID, target, person); err != nil {
 			return err
 		}
 		_, err = tx.Exec(ctx, `DELETE FROM group_typing WHERE group_id = $1 AND person_id = $2`, g.ID, target)
@@ -2335,7 +2346,7 @@ func (s *Server) approveGroupJoin(w http.ResponseWriter, r *http.Request) {
 		case left == nil:
 			return nil
 		default:
-			if _, err := tx.Exec(ctx, `UPDATE group_members SET left_at = NULL, left_how = NULL, removed_by = NULL, how = 'link', added_by = $3, role = 'member',
+			if _, err := tx.Exec(ctx, `UPDATE group_members SET left_at = NULL, left_how = NULL, removed_by = NULL, left_sealed = NULL, how = 'link', added_by = $3, role = 'member',
 				joined_at = clock_timestamp(), hidden_at = NULL, visible = visible + tstzmultirange(tstzrange(clock_timestamp(), NULL))
 				WHERE group_id = $1 AND person_id = $2`, g.ID, target, person); err != nil {
 				return err

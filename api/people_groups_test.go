@@ -338,6 +338,17 @@ func TestGroupsHistoryLeaveAndRemove(t *testing.T) {
 	if g := chidi.must(200, "GET", "/v1/me/groups/"+gid, nil); g["left"] != true || g["left_how"] != "removed" || g["can_post"] != false {
 		t.Fatalf("Chidi's group: %v", g)
 	}
+	// Nothing new of the group either: its name as it was, no photo.
+	ada.must(200, "PUT", "/v1/me/groups/"+gid, map[string]any{"name": "Book club (new)"})
+	if code, _ := ada.putFile(t, "/v1/me/groups/"+gid+"/photo", "p.png", pngPhoto(t, 30)); code != 200 {
+		t.Fatalf("photo: %d", code)
+	}
+	if g := chidi.must(200, "GET", "/v1/me/groups/"+gid, nil); g["name"] != "Book club" || g["photo"] != nil || g["members"] != float64(0) {
+		t.Fatalf("Chidi sees the group as it was: %v", g)
+	}
+	if c, _, _ := rawGet(t, w.base+"/v1/me/groups/"+gid+"/photo", chidi.token); c != 404 {
+		t.Fatalf("the photo after leaving: %d", c)
+	}
 	chidi.must(403, "POST", "/v1/me/groups/"+gid+"/messages", map[string]any{"text": "let me in"})
 	// Bola deletes the copy: gone from the list for good.
 	bola.must(204, "DELETE", "/v1/me/groups/"+gid, nil)
