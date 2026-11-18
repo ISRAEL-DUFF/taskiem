@@ -572,8 +572,9 @@ class _PeopleRequestsScreenState extends State<PeopleRequestsScreen> with Pollin
       };
       if (!about) return;
       _soon?.cancel();
+      // Covered by a request opened: read once when it is on top again.
       _soon = Timer(const Duration(milliseconds: 300), () {
-        if (mounted) _load();
+        if (mounted) readWhenSeen(_load);
       });
     });
     // Polled slowly as the fallback while the connection is not open.

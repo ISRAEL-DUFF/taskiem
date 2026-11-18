@@ -154,10 +154,21 @@ class MyChats extends ChangeNotifier {
     _events = live?.events.listen((_) {
       _soon?.cancel();
       _soon = Timer(const Duration(milliseconds: 400), () {
-        if (!_disposed) unawaited(load());
+        if (_disposed) return;
+        final when = whenSeen;
+        if (when == null) {
+          unawaited(load());
+        } else {
+          when(() => unawaited(load()));
+        }
       });
     });
   }
+
+  /// The screen showing the list (You): a change the connection tells is
+  /// read at once while it is seen, else once when it is on top again
+  /// (Polling's readWhenSeen). Unset, it is read at once.
+  void Function(VoidCallback read)? whenSeen;
   final Auth auth;
   final PeopleLive? live;
   StreamSubscription<PeopleLiveEvent>? _events;

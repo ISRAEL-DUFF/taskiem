@@ -21,6 +21,8 @@ import 'package:taskiem/app/prefs.dart';
 import 'package:taskiem/app/session.dart' show MemoryKeyStore;
 import 'package:taskiem/chat/people_contacts.dart';
 import 'package:taskiem/chat/people_settings.dart';
+import 'package:taskiem/chat/people_find.dart' show PeopleRequestsScreen;
+import 'package:taskiem/screens/you.dart' show YouHome;
 import 'package:taskiem/chat/attachments.dart' show PickedFile;
 import 'package:taskiem/chat/composer.dart' show Pickers;
 import 'package:taskiem/chat/people_chat.dart';
@@ -354,6 +356,65 @@ void main() {
 
     test('the explainer says how to turn it off', () {
       expect(contactsAskWords.join(' '), contains('Check my contacts daily in Privacy with people'));
+    });
+  });
+
+  group('7. covered screens read once when on top again', () {
+    /// A screen pushed over what is shown, and taken away.
+    Future<void> cover(WidgetTester t) async {
+      unawaited(t.state<NavigatorState>(find.byType(Navigator).first).push(PageRouteBuilder<void>(pageBuilder: (_, _, _) => const ColoredBox(color: Color(0xFFFFFFFF), child: SizedBox.expand()))));
+      await settle(t);
+    }
+
+    Future<void> uncover(WidgetTester t) async {
+      t.state<NavigatorState>(find.byType(Navigator).first).pop();
+      await settle(t);
+    }
+
+    testWidgets('Requests: events while a request covers it read nothing; one read when it is on top', (t) async {
+      phone(t);
+      final api = Api();
+      api.routes['GET /v1/me/people/requests'] = (_) => {'requests': <Object>[], 'more': false};
+      final live = PeopleLive(api.auth().transport);
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: PeopleRequestsScreen(auth: api.auth(), openChat: (id, {started}) async {}, now: () => at, live: live)));
+      await settle(t);
+      int reads() => api.sent('GET', '/v1/me/people/requests').length;
+      final n = reads();
+      await cover(t);
+      for (var i = 0; i < 3; i++) {
+        hear(live, 'message', {'chat_id': 'pc9', 'request': true, 'message': msg('r$i')});
+        await settle(t);
+      }
+      expect(reads(), n, reason: 'covered: nothing read');
+      await uncover(t);
+      expect(reads(), n + 1, reason: 'on top again: read once');
+      hear(live, 'message', {'chat_id': 'pc9', 'request': true, 'message': msg('r9')});
+      await settle(t);
+      expect(reads(), n + 2, reason: 'seen: read at once');
+      await drain(t);
+      live.dispose();
+    });
+
+    testWidgets('You’s Chats: events while a chat covers it read nothing; one read when it is on top', (t) async {
+      phone(t);
+      final api = adaChat();
+      api.routes['GET /v1/me/conversations'] = (_) => {'chats': <Object>[], 'unread': 0, 'requests': 0, 'more': false};
+      api.routes['GET /v1/me/invitations'] = (_) => {'invitations': <Object>[]};
+      final live = PeopleLive(api.auth().transport);
+      await t.pumpWidget(TaskiemApp(mode: TkMode.light, home: YouHome(auth: api.auth(), now: () => at, presence: false, live: live)));
+      await settle(t);
+      int reads() => api.sent('GET', '/v1/me/conversations').where((r) => r.url.queryParameters['archived'] == null).length;
+      final n = reads();
+      await cover(t);
+      for (var i = 0; i < 3; i++) {
+        hear(live, 'message', {'chat_id': 'pc1', 'request': false, 'message': msg('m$i')});
+        await settle(t);
+      }
+      expect(reads(), n, reason: 'covered: nothing read');
+      await uncover(t);
+      expect(reads(), n + 1, reason: 'on top again: read once');
+      await drain(t);
+      live.dispose();
     });
   });
 }

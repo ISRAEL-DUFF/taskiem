@@ -137,6 +137,9 @@ class _YouHomeState extends State<YouHome> with Polling {
     startPolling(const Duration(seconds: 10), () {
       if (_slow.due(_live)) _chats.load();
     });
+    // What the connection tells is read while the list is seen; covered by
+    // a chat, once when it is on top again.
+    _chats.whenSeen = readWhenSeen;
     // Notifications on this phone, on the person's own side: a tapped one
     // opens its chat; one that comes with the app open is a toast; asked
     // once.

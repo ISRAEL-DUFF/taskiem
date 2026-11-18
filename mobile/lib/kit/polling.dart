@@ -22,6 +22,47 @@ mixin Polling<T extends StatefulWidget> on State<T> {
   Timer? _soon;
   bool _awake = true;
 
+  /// Whether the screen was on top when last looked at.
+  bool _wasCurrent = true;
+
+  /// Something it shows changed while it was not seen: read once it is.
+  VoidCallback? _staleRead;
+
+  /// Whether the screen is seen now: the app in front and the screen on
+  /// top.
+  bool get seenNow => mounted && _awake && appInFront() && ModalRoute.of(context)?.isCurrent != false;
+
+  /// Something the screen shows changed (the live connection said so):
+  /// [read] now while it is seen; else nothing is read until it is on top
+  /// again (or the app back in front), and then once.
+  void readWhenSeen(VoidCallback read) {
+    if (seenNow) {
+      _staleRead = null;
+      read();
+      return;
+    }
+    _staleRead = read;
+  }
+
+  /// Reads what changed while it was not seen; true when there was any.
+  bool _readStale() {
+    final r = _staleRead;
+    if (r == null || !mounted || !_awake) return false;
+    _staleRead = null;
+    r();
+    return true;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Depends on whether the route is on top: told when the screen over
+    // it closes.
+    final current = ModalRoute.isCurrentOf(context) ?? true;
+    if (current && !_wasCurrent) _readStale();
+    _wasCurrent = current;
+  }
+
   /// Calls [read] every [every] while the screen is seen; and once when the
   /// app comes back to the front.
   void startPolling(Duration every, VoidCallback read) {
@@ -47,7 +88,7 @@ mixin Polling<T extends StatefulWidget> on State<T> {
       onStateChange: (s) {
         final was = _awake;
         _awake = s == AppLifecycleState.resumed;
-        if (_awake && !was && mounted) read();
+        if (_awake && !was && mounted && !_readStale()) read();
       },
     );
   }
