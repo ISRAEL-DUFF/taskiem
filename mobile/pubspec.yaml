@@ -53,6 +53,12 @@ dependencies:
   flutter_contacts: 2.6.0
   # SHA-256 of a contact's number with the week's key (lib/chat/people_contacts.dart). BSD-3-Clause.
   crypto: 3.0.8
+  # Sending a place in a chat with a person, asked for only when the person taps
+  # Location (lib/chat/people_place.dart; docs/spec/people-chatting.md §7). MIT.
+  geolocator: 14.1.2
+  # Scanning a person's QR code in the app, the camera asked for only on tap
+  # (lib/chat/people_scan.dart; people-chatting §5.2). BSD-3-Clause.
+  mobile_scanner: 7.5.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
