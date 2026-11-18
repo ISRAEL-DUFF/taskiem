@@ -29,6 +29,13 @@ import (
 // before it expires (storefronts 6.4).
 const PaymentTTL = 30 * time.Minute
 
+// ShareTTL is how long an order paid in shares (people ordering together,
+// each paying their own share: Submission.InShares) waits for its shares
+// before it lapses: a day, so each member has time to pay (people-chatting
+// 5b C2). Parts paid before it lapses are not lost: the order goes to
+// refund_due for the business to send them back.
+const ShareTTL = 24 * time.Hour
+
 // PaymentSignal is the signal a run waiting for an order's payment gets,
 // with the order's reference as the correlation key.
 const PaymentSignal = "storefront.payment"
@@ -194,7 +201,10 @@ type Order struct {
 	// until the owner offers one (fronts F6).
 	Instalments int  `json:"instalments,omitempty"`
 	Waitlist    bool `json:"waitlist,omitempty"`
-	subject     string
+	// PaidInShares: paid only by its shares' own pay links (an order placed
+	// together, each paying their share; Submission.InShares).
+	PaidInShares bool `json:"paid_in_shares,omitempty"`
+	subject      string
 	storefront  uuid.UUID
 	action      uuid.UUID
 	paymentRef  string
@@ -218,7 +228,7 @@ const orderCols = `id, reference, kind, status, customer, subject_id, basket, to
 	  WHEN EXISTS (SELECT 1 FROM storefront_order_payments p WHERE p.order_id = storefront_orders.id AND p.undoes IS NULL
 	    AND p.by NOT LIKE 'system:paystack/%' AND NOT EXISTS (SELECT 1 FROM storefront_order_payments u WHERE u.undoes = p.id)) THEN 'other'
 	  WHEN payment_ref IS NOT NULL THEN 'card'
-	  ELSE 'other' END, storefront_orders.person_id`
+	  ELSE 'other' END, storefront_orders.person_id, storefront_orders.paid_in_shares`
 
 func scanOrder(r pgx.Row) (Order, error) {
 	var x Order
@@ -226,7 +236,7 @@ func scanOrder(r pgx.Row) (Order, error) {
 	err := r.Scan(&x.ID, &x.Reference, &x.Kind, &x.Status, &x.customerEnv, &x.subject, &basket, &x.TotalKobo, &x.Fulfilment, &x.Payment, &x.PaymentURL,
 		&x.paymentRef, &x.PaidAt, &x.RunID, &x.Note, &x.DecidedBy, &x.DecidedAt, &x.ExpiresAt, &x.CreatedAt, &x.storefront,
 		&x.ServiceID, &x.ServiceName, &x.StartsAt, &x.EndsAt, &x.Version, &x.DepositKobo, &change, &x.Zone, &x.DeliveryKobo, &x.action, &x.FrontID,
-		&x.ExtraKobo, &x.PaidKobo, &x.PayToKobo, &x.PayStepKobo, &x.PaySeq, &x.ReturnedAt, &x.Instalments, &x.Waitlist, &x.PaidBy, &x.PersonID)
+		&x.ExtraKobo, &x.PaidKobo, &x.PayToKobo, &x.PayStepKobo, &x.PaySeq, &x.ReturnedAt, &x.Instalments, &x.Waitlist, &x.PaidBy, &x.PersonID, &x.PaidInShares)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Order{}, ErrNoOrder
 	}
@@ -419,6 +429,8 @@ func (o *Orders) carryOn(ctx context.Context, tenant uuid.UUID, ord Order, slug,
 			return nil
 		}
 		return o.tell(ctx, tenant, ord.Reference, "Sorry, "+ord.Reference+" cannot go ahead: "+ord.Note+".", "gone:"+ord.Reference)
+	case ord.Status == "awaiting_payment" && ord.PaidInShares:
+		return nil // paid by its shares' own links (ShareLink), never one page for all
 	case ord.Status == "awaiting_payment" && ord.PaymentURL == "":
 		return o.createPayment(ctx, tenant, ord, c, statusKey, slug, connection) // the run starts once it is paid (CheckPayments)
 	case ord.Status == "received" && ord.RunID == nil:
@@ -513,9 +525,13 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	if payment == "on_delivery" && (sub.Kind != "order" || sub.Fulfilment != "delivery") {
 		payment = "after_accept"
 	}
+	inShares := sub.InShares && sub.Channel == "app" && (payment == "at_order" || payment == "after_accept")
 	if payment == "at_order" {
 		status = "awaiting_payment"
 		e := o.now().Add(PaymentTTL)
+		if inShares {
+			e = o.now().Add(ShareTTL)
+		}
 		expires = &e
 	}
 	var change []byte
@@ -604,12 +620,12 @@ func (o *Orders) record(ctx context.Context, tx pgx.Tx, x inboxRow, sub Submissi
 	// The submission names its action and front (fronts §5.5).
 	if tag, err := tx.Exec(ctx, `INSERT INTO storefront_orders (id, tenant_id, storefront_id, kind, reference, status_hash, status, customer, subject_id, basket,
 		total_kobo, fulfilment, payment, expires_at, status_key, deposit_kobo, service_id, service_name, starts_at, ends_at, price_change, note, zone, delivery_kobo,
-		action_id, front_id, answers, instalments, waitlist, person_id)
-		SELECT $1, $2, $3, $29, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, a.id, a.front_id, $26, $27, $28, $30
+		action_id, front_id, answers, instalments, waitlist, person_id, paid_in_shares)
+		SELECT $1, $2, $3, $29, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, a.id, a.front_id, $26, $27, $28, $30, $31
 		  FROM storefront_actions a WHERE a.storefront_id = $3 AND `+actionOf("$25", "$4"),
 		id, x.tenant, x.storefront, x.kind, x.reference, x.statusHash, status, customer, subject, basket, sub.TotalKobo, fulfilment, payment, expires,
 		key, deposit, serviceID, serviceName, starts, ends, change, noteArg, zone, delivery, x.action, answers, max(1, min(MaxInstalments, sub.Instalments)), sub.Waitlist,
-		storedKind, person); err != nil {
+		storedKind, person, inShares); err != nil {
 		return Order{}, err
 	} else if tag.RowsAffected() == 0 {
 		return Order{}, fmt.Errorf("storefront: no %s action for this storefront", x.kind)
@@ -1035,8 +1051,13 @@ func (o *Orders) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 		case d.expires != nil && o.now().After(*d.expires):
 			var decided bool
 			if err := db.InTenantTx(ctx, o.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
-				err := tx.QueryRow(ctx, `UPDATE storefront_orders SET status = 'expired', updated_at = now() WHERE tenant_id = $1 AND id = $2 AND status = 'awaiting_payment'
-					RETURNING decided_at IS NOT NULL`, tenant, d.id).Scan(&decided)
+				// Part paid (a share, a part matched to it) and not in full by
+				// now: never silently expired, but refund_due, the business
+				// told to send back what was paid (as a declined paid order).
+				var next string
+				err := tx.QueryRow(ctx, `UPDATE storefront_orders SET status = CASE WHEN paid_kobo > 0 THEN 'refund_due' ELSE 'expired' END, updated_at = now()
+					WHERE tenant_id = $1 AND id = $2 AND status = 'awaiting_payment'
+					RETURNING decided_at IS NOT NULL, status`, tenant, d.id).Scan(&decided, &next)
 				if errors.Is(err, pgx.ErrNoRows) {
 					return nil
 				}
@@ -1049,6 +1070,9 @@ func (o *Orders) checkTenant(ctx context.Context, tenant uuid.UUID) error {
 				// Accepted and never paid for: the stock it took goes back.
 				if err := o.returnStockTx(ctx, tx, tenant, Order{ID: d.id, Reference: d.reference, Kind: d.kind}); err != nil {
 					return err
+				}
+				if next == "refund_due" {
+					return o.refundDueTx(ctx, tx, tenant, d.id, d.reference, "lapsed")
 				}
 				return audit(ctx, tx, tenant, "storefront.order_expired", d.reference, nil)
 			}); err != nil {
@@ -1190,7 +1214,7 @@ func (o *Orders) DecideTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, refe
 				next = ord.Status
 			case "received", "accepted", "dispatched", "changed":
 				next = "declined"
-				if ord.PaidAt != nil {
+				if ord.PaidAt != nil || ord.PaidKobo > 0 {
 					next = "refund_due"
 				}
 			case "paid":
@@ -1218,7 +1242,7 @@ func (o *Orders) DecideTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, refe
 				next = ord.Status
 			case "received", "accepted", "awaiting_payment", "dispatched", "on_the_way", "arrived", "proposed", "changed":
 				next = "cancelled"
-				if ord.PaidAt != nil {
+				if ord.PaidAt != nil || ord.PaidKobo > 0 {
 					next = "refund_due"
 				}
 			}
@@ -1248,6 +1272,13 @@ func (o *Orders) DecideTx(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, refe
 			}
 			if err := audit(ctx, tx, tenant, "storefront.order_"+next, reference, map[string]any{"by": actor}); err != nil {
 				return err
+			}
+			// Part paid only (shares of an order placed together, a part
+			// matched to it): the business is told what to send back.
+			if next == "refund_due" && ord.PaidAt == nil {
+				if err := o.refundDueTx(ctx, tx, tenant, ord.ID, reference, decision); err != nil {
+					return err
+				}
 			}
 			// Its delivery (dispatch): completed by the owner, the rider who
 			// holds it delivered it; declined or cancelled, it is released
@@ -1369,6 +1400,10 @@ func (o *Orders) PaymentLink(ctx context.Context, tenant uuid.UUID, reference st
 	}
 	if amountKobo > 0 && amountKobo != ord.Payable() {
 		return nil, fmt.Errorf("%w: %s's first payment is its %s; ask for more once it is paid", ErrDecision, reference, FormatNaira(ord.Payable()))
+	}
+	if ord.PaidInShares {
+		// Paid by its shares' own links: no page for the whole of it.
+		return o.sharesStatusLink(ctx, tenant, ord)
 	}
 	if ord.PaymentURL != "" {
 		return map[string]any{"reference": reference, "url": ord.PaymentURL, "total": FormatNaira(ord.Payable()), "amount_kobo": ord.Payable(), "balance_kobo": ord.BalanceKobo()}, nil

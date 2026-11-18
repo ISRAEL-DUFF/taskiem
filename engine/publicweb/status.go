@@ -336,7 +336,12 @@ func statusWords(d *statusData, o OrderState) {
 		if o.AskedKobo > 0 {
 			pay = storefront.FormatNaira(o.AskedKobo)
 		}
-		if u := payLink(o.PaymentURL); u != "" {
+		if o.Payment == "shares" {
+			// Ordered together, each paying their share (people-chatting 5b
+			// C2): no page for the whole of it here, so no one pays it twice.
+			d.Headline = "Your order " + d.Reference + " is waiting for its shares"
+			d.Lines = []string{"Each person pays their own share from the basket in Taskiem. " + b + " gets the order once every share is paid."}
+		} else if u := payLink(o.PaymentURL); u != "" {
 			d.Headline = "Pay for your order " + d.Reference
 			// The card page charges what it was made for: the deposit, when
 			// the order has one.

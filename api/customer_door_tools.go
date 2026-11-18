@@ -430,6 +430,10 @@ func (s *Server) payLinkTx(ctx context.Context, tx pgx.Tx, business uuid.UUID, r
 	// each other refusal says why.
 	due := o.BalanceKobo()
 	switch {
+	case o.PaidInShares && slices.Contains(storefront.PayableStatuses, o.Status):
+		// Ordered together, each paying their share: its own link would
+		// take the whole of it again. Shares are paid from the basket.
+		return "", 0, customerSendErr{http.StatusConflict, "Each pays their own share of this order: pay from the basket in your chat or group."}
 	case o.PayableNow():
 	case o.Status == "price_changed":
 		return "", 0, customerSendErr{http.StatusConflict, "This order waits for you to confirm a new price. Ask them here in the chat."}
@@ -532,7 +536,7 @@ func (s *Server) doorPlaceOrder(w http.ResponseWriter, r *http.Request) {
 	var out doorOrder
 	var first bool
 	for range 3 {
-		out, first, err = s.placeAppOrder(ctx, person, chi.URLParam(r, "id"), key, *phone, in.Lines, in.Fulfilment, in.Zone, to, in.AddressID != nil, in.Note)
+		out, first, err = s.placeAppOrder(ctx, person, chi.URLParam(r, "id"), key, *phone, in.Lines, in.Fulfilment, in.Zone, to, in.AddressID != nil, in.Note, false)
 		if !errors.Is(err, errReferenceTaken) {
 			break
 		}
@@ -559,7 +563,7 @@ func (s *Server) doorPlaceOrder(w http.ResponseWriter, r *http.Request) {
 // placeAppOrder places an order in one transaction through the door: the
 // shop read as it is now, the lines priced, the sealed submission into
 // the inbox, and the order's card in both copies of the conversation.
-func (s *Server) placeAppOrder(ctx context.Context, person uuid.UUID, chatID, key, phone string, lines []orderLine, fulfilment, zone string, to deliverTo, saved bool, note string) (doorOrder, bool, error) {
+func (s *Server) placeAppOrder(ctx context.Context, person uuid.UUID, chatID, key, phone string, lines []orderLine, fulfilment, zone string, to deliverTo, saved bool, note string, inShares bool) (doorOrder, bool, error) {
 	var out doorOrder
 	first := false
 	address, landmark := to.Address, to.Landmark
@@ -674,7 +678,7 @@ func (s *Server) placeAppOrder(ctx context.Context, person uuid.UUID, chatID, ke
 		statusKey, hash := storefront.NewStatusKey()
 		sub := storefront.Submission{Kind: "order", Customer: storefront.Customer{Name: name, Phone: phone, Address: address, Landmark: landmark, Message: note},
 			Basket: basket, TotalKobo: total, Fulfilment: fulfilment, Zone: zone, DeliveryKobo: fee, Payment: shop.Payment, Channel: "app",
-			PersonID: person.String(), StatusKey: statusKey, Submitted: time.Now().UTC()}
+			PersonID: person.String(), StatusKey: statusKey, Submitted: time.Now().UTC(), InShares: inShares}
 		payload, err := storefront.SealSubmission(s.Orders.InboxKey, shop.sf, ref, sub)
 		if err != nil {
 			return err

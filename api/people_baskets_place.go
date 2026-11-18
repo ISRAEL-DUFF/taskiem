@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -82,9 +83,15 @@ func (s *Server) placeBasket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Hold it: closed → placing, the lines of people no longer in the
-	// group or chat taken out; the names for the business's note.
+	// 1. Hold it: closed → placing (with the way it is paid), the lines of
+	// people no longer in the group or chat taken out; the names for the
+	// business's note. An order already placed for it (a retry after a
+	// failure, or after the placing was cut off) is found first and
+	// finished, nothing checked again; a second place while the first is
+	// at work is refused.
+	key := "basket-" + chi.URLParam(r, "id")
 	var d basketData
+	var found *doorOrder
 	realName := map[uuid.UUID]string{}
 	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
 		if err := notSuspendedTx(ctx, tx, person); err != nil {
@@ -94,6 +101,7 @@ func (s *Server) placeBasket(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
+		key = "basket-" + b.ID.String()
 		if d, err = s.basketDataTx(ctx, tx, person, b); err != nil {
 			return err
 		}
@@ -106,6 +114,12 @@ func (s *Server) placeBasket(w http.ResponseWriter, r *http.Request) {
 			return customerSendErr{http.StatusConflict, "Close the basket first, so no one changes it while you place it."}
 		default:
 			return errBasketDone
+		}
+		if found, err = basketPlacedTx(ctx, tx, person, b.Business, key); err != nil || found != nil {
+			return err
+		}
+		if b.State == "placing" && b.PlacingAt != nil && time.Since(*b.PlacingAt) < basketPlacingBusy {
+			return customerSendErr{http.StatusConflict, "This basket's order is being placed. Wait a moment, then look at the basket again."}
 		}
 		if err := d.purgeTx(ctx, tx); err != nil {
 			return err
@@ -133,7 +147,11 @@ func (s *Server) placeBasket(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		realName[person] = mine
-		_, err = tx.Exec(ctx, `UPDATE people_baskets SET state = 'placing' WHERE id = $1`, b.ID)
+		// placing_at is set afresh (the guard), so a second place waits.
+		if _, err := tx.Exec(ctx, `UPDATE people_baskets SET state = 'closed' WHERE id = $1 AND state = 'placing'`, b.ID); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `UPDATE people_baskets SET state = 'placing', payment = $2 WHERE id = $1`, b.ID, in.Payment)
 		return err
 	})
 	if err != nil {
@@ -141,10 +159,19 @@ func (s *Server) placeBasket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b := d.b
+	if found != nil {
+		// Placed before: finished now, as it was chosen then.
+		payment := in.Payment
+		if b.Payment != nil {
+			payment = *b.Payment
+		}
+		s.basketPlacedAnswer(w, r, person, d, *found, payment)
+		return
+	}
 	// back puts it back to closed when it was not placed.
 	back := func() {
 		_ = db.InPersonTx(context.WithoutCancel(ctx), s.Store.Pool, person, func(tx pgx.Tx) error {
-			_, err := tx.Exec(ctx, `UPDATE people_baskets SET state = 'closed' WHERE id = $1 AND state = 'placing'`, b.ID)
+			_, err := tx.Exec(context.WithoutCancel(ctx), `UPDATE people_baskets SET state = 'closed' WHERE id = $1 AND state = 'placing'`, b.ID)
 			return err
 		})
 	}
@@ -154,7 +181,7 @@ func (s *Server) placeBasket(w http.ResponseWriter, r *http.Request) {
 	var shop theirShop
 	err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 		var err error
-		shop, err = basketShopTx(ctx, tx, b)
+		shop, err = basketShopTx(ctx, tx, b, "shop")
 		return err
 	})
 	if err != nil {
@@ -186,7 +213,9 @@ func (s *Server) placeBasket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Place it through the door, as the holder's own order, from their
-	// own chat with the business (started now if they have none).
+	// own chat with the business (started now if they have none). "Each
+	// pays" places it paid in shares: no page of its own for the whole,
+	// and a day for the shares (storefront.ShareTTL).
 	chat, _, err := s.openBusinessChat(ctx, person, b.Business, "basket", map[string]any{})
 	if err != nil {
 		back()
@@ -200,7 +229,7 @@ func (s *Server) placeBasket(w http.ResponseWriter, r *http.Request) {
 	note := basketNote(view, realName, in.Note)
 	var placed doorOrder
 	for range 3 {
-		placed, _, err = s.placeAppOrder(ctx, person, chat.ID.String(), "basket-"+b.ID.String(), *phone, lines, b.str(b.Fulfilment), b.str(b.Zone), to, in.AddressID != nil, note)
+		placed, _, err = s.placeAppOrder(ctx, person, chat.ID.String(), key, *phone, lines, b.str(b.Fulfilment), b.str(b.Zone), to, in.AddressID != nil, note, in.Payment == "each")
 		if !errors.Is(err, errReferenceTaken) {
 			break
 		}
@@ -220,11 +249,54 @@ func (s *Server) placeBasket(w http.ResponseWriter, r *http.Request) {
 		s.personFail(w, r, err)
 		return
 	}
+	s.basketPlacedAnswer(w, r, person, d, placed, in.Payment)
+}
 
-	// 4. Placed: each member's share kept (their items, and an equal part
-	// of the delivery; what is left over of it, the placer's).
+// basketPlacedTx is the order already placed for the basket's key from
+// the person's own chat with the business (its card there), or nil.
+func basketPlacedTx(ctx context.Context, tx pgx.Tx, person, business uuid.UUID, key string) (*doorOrder, error) {
+	var chat uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT id FROM person_conversations WHERE person_id = $1 AND tenant_id = $2`, person, business).Scan(&chat)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	again, err := personRepeat(ctx, tx, person, chat, "order:"+key)
+	if err != nil || again == nil || again.Card == nil || again.Card.Reference == "" {
+		return nil, err
+	}
+	out := doorOrder{Reference: again.Card.Reference, Kind: "order", Status: "sent", Summary: again.Card.Line, CreatedAt: again.CreatedAt}
+	if again.Card.TotalKobo != nil {
+		out.TotalKobo = *again.Card.TotalKobo
+	}
+	return &out, nil
+}
+
+// basketPlacedAnswer is step 4 of placing, and its answer: the basket
+// placed, each member's share kept (their items and an equal part of the
+// delivery; what is left over, and any difference the order came to, the
+// placer's, who carries it even with no items of their own). It runs to
+// the end even when the request is cut off (the order exists), and again
+// on a retry.
+func (s *Server) basketPlacedAnswer(w http.ResponseWriter, r *http.Request, person uuid.UUID, d basketData, placed doorOrder, payment string) {
+	ctx := context.WithoutCancel(r.Context())
+	b := d.b
+	view := d.view(person)
+	if d.shop == nil {
+		// Found placed on a retry: the prices as they are now, unchecked.
+		_ = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
+			shop, err := basketShopTx(ctx, tx, b, "look")
+			if err == nil {
+				d.shop = &shop
+				view = d.view(person)
+			}
+			return nil
+		})
+	}
 	shares := basketShares(view, person, placed.TotalKobo)
-	err = s.peopleTx(ctx, person, func(tx pgx.Tx) error {
+	err := s.peopleTx(ctx, person, func(tx pgx.Tx) error {
 		cur, err := basketTx(ctx, tx, b.ID.String(), true)
 		if err != nil {
 			return err
@@ -232,9 +304,10 @@ func (s *Server) placeBasket(w http.ResponseWriter, r *http.Request) {
 		if cur.State == "placed" {
 			return nil
 		}
-		if _, err := tx.Exec(ctx, `UPDATE people_baskets SET state = 'placed', payment = $2, order_reference = $3, placed_by = $4, placed_kobo = $5,
-			delivery_kobo = $6, placed_at = now() WHERE id = $1`, b.ID, in.Payment, placed.Reference, person, placed.TotalKobo, view.DeliveryKobo); err != nil {
-			return err
+		if cur.State != "placing" {
+			if _, err := tx.Exec(ctx, `UPDATE people_baskets SET state = 'placing' WHERE id = $1`, b.ID); err != nil {
+				return err
+			}
 		}
 		// The lines keep the prices they were placed at.
 		for _, p := range view.People {
@@ -250,7 +323,9 @@ func (s *Server) placeBasket(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 		}
-		return nil
+		_, err = tx.Exec(ctx, `UPDATE people_baskets SET state = 'placed', payment = $2, order_reference = $3, placed_by = $4, placed_kobo = $5,
+			delivery_kobo = $6, placed_at = now() WHERE id = $1`, b.ID, payment, placed.Reference, person, placed.TotalKobo, view.DeliveryKobo)
+		return err
 	})
 	if err != nil {
 		s.personFail(w, r, err)
@@ -294,9 +369,10 @@ func basketNote(v basketOut, names map[uuid.UUID]string, note string) string {
 }
 
 // basketShares splits what was placed: each person's items, and an equal
-// part of the delivery (the kobo left over to the placer, or the first);
-// a total the order came to that differs (a price moved as it was placed)
-// is the placer's to carry.
+// part of the delivery among those with items; the kobo left over, and a
+// total the order came to that differs (a price moved as it was placed),
+// are the placer's to carry, who has a share for it even with no items of
+// their own.
 func basketShares(v basketOut, placer uuid.UUID, placed int64) []basketShare {
 	n := int64(len(v.People))
 	if n == 0 {
@@ -304,15 +380,18 @@ func basketShares(v basketOut, placer uuid.UUID, placed int64) []basketShare {
 	}
 	part := v.DeliveryKobo / n
 	left := v.DeliveryKobo - part*n
-	out := make([]basketShare, 0, n)
-	extra := 0
+	out := make([]basketShare, 0, n+1)
+	extra := -1
 	var sum int64
 	for i, p := range v.People {
-		x := basketShare{Person: p.PersonID, Key: uuid.New(), Items: p.ItemsKobo, Delivery: part}
 		if p.PersonID == placer {
 			extra = i
 		}
-		out = append(out, x)
+		out = append(out, basketShare{Person: p.PersonID, Key: uuid.New(), Items: p.ItemsKobo, Delivery: part})
+	}
+	if extra < 0 {
+		out = append(out, basketShare{Person: placer, Key: uuid.New()})
+		extra = len(out) - 1
 	}
 	out[extra].Delivery += left
 	for i := range out {
@@ -424,6 +503,10 @@ func (s *Server) payBasketShare(w http.ResponseWriter, r *http.Request) {
 	sh := d.shares[i]
 	if d.order != nil && d.order.Shares[sh.Key.String()] != nil {
 		s.personFail(w, r, customerSendErr{http.StatusConflict, "This share is paid."})
+		return
+	}
+	if d.order != nil && d.order.Refunds[sh.Key.String()] != nil {
+		s.personFail(w, r, customerSendErr{http.StatusConflict, "This share was paid after the order could take it: the business is to send it back."})
 		return
 	}
 	if sh.Total < 100 {

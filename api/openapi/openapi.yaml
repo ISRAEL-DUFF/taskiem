@@ -44514,8 +44514,8 @@ components:
     BasketShare:
       type: object
       additionalProperties: false
-      required: [items_kobo, delivery_kobo, amount_kobo, paid, card_sent]
-      description: 'A member''s share once placed (C2): their items and an equal part of the delivery; paid by its own link ("each pays"), or a "Your share" card sent ("I''ll pay all").'
+      required: [items_kobo, delivery_kobo, amount_kobo, paid, refund_due, card_sent]
+      description: 'A member''s share once placed (C2): their items and an equal part of the delivery (the placer''s carries the kobo left over, even with no items of their own); paid by its own link ("each pays"), or a "Your share" card sent ("I''ll pay all").'
       properties:
         items_kobo:
           type: integer
@@ -44531,7 +44531,23 @@ components:
         paid_at:
           type: string
           format: date-time
+        refund_due:
+          type: boolean
+          description: Paid after the order could take it (it lapsed or closed, or had less left to pay); never counted, the business sends it back.
         card_sent:
+          type: boolean
+    BasketMember:
+      type: object
+      additionalProperties: false
+      required: [person_id, name, you]
+      description: Someone in the basket's group or chat now (the holder hands it to one of them).
+      properties:
+        person_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        you:
           type: boolean
     BasketPerson:
       type: object
@@ -44613,7 +44629,7 @@ components:
     Basket:
       type: object
       additionalProperties: false
-      required: [id, business_id, business, where, state, starter_id, holder_id, holder, you_hold, holder_gone, people, items_kobo, delivery_kobo, total_kobo, problems, created_at]
+      required: [id, business_id, business, you_id, members, where, state, starter_id, holder_id, holder, you_hold, holder_gone, people, items_kobo, delivery_kobo, total_kobo, problems, created_at]
       description: 'A shared basket (people-chatting §10.3, 5b C): ordering together from one business in a group or a chat between two people.'
       properties:
         id:
@@ -44624,6 +44640,15 @@ components:
           format: uuid
         business:
           type: string
+        you_id:
+          type: string
+          format: uuid
+          description: The person reading it (to compare with `placed_by` and `holder_id`).
+        members:
+          type: array
+          description: Who is in the group or the chat now (empty when you reach it only as its placer or one with lines in it, after leaving).
+          items:
+            $ref: '#/components/schemas/BasketMember'
         where:
           type: string
           enum: [group, person]

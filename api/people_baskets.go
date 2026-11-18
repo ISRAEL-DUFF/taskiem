@@ -88,15 +88,16 @@ type basketRow struct {
 	PlacedKobo, DeliveryKobo  *int64
 	CreatedAt                 time.Time
 	ClosedAt, PlacedAt        *time.Time
+	PlacingAt                 *time.Time
 }
 
 const basketCols = `id, business_id, business_name, group_id, conversation_id, starter_id, holder_id, state, fulfilment, zone, payment,
-	order_reference, placed_by, placed_kobo, delivery_kobo, created_at, closed_at, placed_at`
+	order_reference, placed_by, placed_kobo, delivery_kobo, created_at, closed_at, placed_at, placing_at`
 
 func scanBasket(r pgx.Row) (basketRow, error) {
 	var b basketRow
 	err := r.Scan(&b.ID, &b.Business, &b.BusinessName, &b.Group, &b.Conversation, &b.Starter, &b.Holder, &b.State, &b.Fulfilment, &b.Zone, &b.Payment,
-		&b.Reference, &b.PlacedBy, &b.PlacedKobo, &b.DeliveryKobo, &b.CreatedAt, &b.ClosedAt, &b.PlacedAt)
+		&b.Reference, &b.PlacedBy, &b.PlacedKobo, &b.DeliveryKobo, &b.CreatedAt, &b.ClosedAt, &b.PlacedAt, &b.PlacingAt)
 	return b, err
 }
 
@@ -123,6 +124,22 @@ func (b basketRow) str(p *string) string {
 		return ""
 	}
 	return *p
+}
+
+// basketPlacingStuck is how long a basket may be "placing" before it is
+// taken as stuck (its placer gone, or their request lost): a member may
+// then take it over (it goes back to closed), and the holder's place again
+// finishes it or starts again.
+const basketPlacingStuck = 10 * time.Minute
+
+// basketPlacingBusy is how long a second place waits for the first: a
+// place of a basket "placing" for less is refused, unless the order is
+// found placed (then it is finished).
+const basketPlacingBusy = 2 * time.Minute
+
+// stuck: placing for longer than basketPlacingStuck.
+func (b basketRow) stuck() bool {
+	return b.State == "placing" && (b.PlacingAt == nil || time.Since(*b.PlacingAt) > basketPlacingStuck)
 }
 
 // changeable: lines and settings may change (open or closed).
@@ -315,7 +332,18 @@ type basketShareOut struct {
 	AmountKobo   int64      `json:"amount_kobo"`
 	Paid         bool       `json:"paid"`
 	PaidAt       *time.Time `json:"paid_at,omitempty"`
-	CardSent     bool       `json:"card_sent"`
+	// RefundDue: paid after the order could take it (it lapsed or closed,
+	// or had less left): the business sends it back; never counted.
+	RefundDue bool `json:"refund_due"`
+	CardSent  bool `json:"card_sent"`
+}
+
+// basketMemberOut is someone in the basket's group or chat now (the
+// holder hands it to one of them).
+type basketMemberOut struct {
+	PersonID uuid.UUID `json:"person_id"`
+	Name     string    `json:"name"`
+	You      bool      `json:"you"`
 }
 
 type basketPersonOut struct {
@@ -352,12 +380,17 @@ type basketOrderOut struct {
 
 // basketOut is a basket as the person sees it (Basket in the API).
 type basketOut struct {
-	ID         uuid.UUID  `json:"id"`
-	BusinessID uuid.UUID  `json:"business_id"`
-	Business   string     `json:"business"`
-	Where      string     `json:"where"` // group or person
-	GroupID    *uuid.UUID `json:"group_id,omitempty"`
-	ChatID     *uuid.UUID `json:"chat_id,omitempty"`
+	ID         uuid.UUID `json:"id"`
+	BusinessID uuid.UUID `json:"business_id"`
+	Business   string    `json:"business"`
+	// YouID is the person reading it (compare placed_by, holder_id).
+	YouID uuid.UUID `json:"you_id"`
+	// Members: who is in the group or chat now (empty when the person
+	// reaches it only as its placer or one with lines in it).
+	Members []basketMemberOut `json:"members"`
+	Where   string            `json:"where"` // group or person
+	GroupID *uuid.UUID        `json:"group_id,omitempty"`
+	ChatID  *uuid.UUID        `json:"chat_id,omitempty"`
 	// State: open (members add), closed (the holder may reopen or place),
 	// placing, placed, cancelled.
 	State      string    `json:"state"`
@@ -399,7 +432,8 @@ type basketOrderSnap struct {
 		ArrivedAt   *time.Time `json:"arrived_at"`
 		DeliveredAt *time.Time `json:"delivered_at"`
 	} `json:"delivery"`
-	Shares map[string]*time.Time `json:"shares"`
+	Shares  map[string]*time.Time `json:"shares"`
+	Refunds map[string]*time.Time `json:"refunds"`
 }
 
 // orderLines are an order's states in a member's words.
@@ -452,6 +486,7 @@ func (s *Server) basketDataTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, 
 	for _, x := range d.shares {
 		ids = append(ids, x.Person)
 	}
+	ids = append(ids, d.members...)
 	if d.names, _, err = s.groupNamesTx(ctx, tx, person, ids); err != nil {
 		return d, err
 	}
@@ -472,9 +507,11 @@ func (s *Server) basketDataTx(ctx context.Context, tx pgx.Tx, person uuid.UUID, 
 }
 
 // basketShopTx reads the basket's business's shop through the basket door
-// (a transaction of its own: nothing of the person's is read after it).
-func basketShopTx(ctx context.Context, tx pgx.Tx, b basketRow) (theirShop, error) {
-	if _, err := tx.Exec(ctx, `SELECT taskiem_basket_enter($1, 'shop')`, b.ID); err != nil {
+// (a transaction of its own: nothing of the person's is read after it):
+// what is "look" for a view (not audited), "shop" for a real action
+// (adding items, placing: audited in the business's chain).
+func basketShopTx(ctx context.Context, tx pgx.Tx, b basketRow, what string) (theirShop, error) {
+	if _, err := tx.Exec(ctx, `SELECT taskiem_basket_enter($1, $2)`, b.ID, what); err != nil {
 		return theirShop{}, doorErr(err)
 	}
 	return theirShopTx(ctx, tx, b.Business, b.BusinessName)
@@ -504,7 +541,7 @@ func (d basketData) counted() []basketLine {
 // view makes the basket as the person sees it.
 func (d basketData) view(person uuid.UUID) basketOut {
 	b := d.b
-	out := basketOut{ID: b.ID, BusinessID: b.Business, Business: b.BusinessName, State: b.State, StarterID: b.Starter, HolderID: b.Holder,
+	out := basketOut{ID: b.ID, BusinessID: b.Business, Business: b.BusinessName, YouID: person, Members: []basketMemberOut{}, State: b.State, StarterID: b.Starter, HolderID: b.Holder,
 		Holder: d.names[b.Holder], YouHold: b.Holder == person, Fulfilment: b.str(b.Fulfilment), Zone: b.str(b.Zone), Payment: b.str(b.Payment),
 		People: []basketPersonOut{}, Problems: []string{}, PlacedBy: b.PlacedBy, CreatedAt: b.CreatedAt, ClosedAt: b.ClosedAt, PlacedAt: b.PlacedAt}
 	if b.Group != nil {
@@ -514,6 +551,9 @@ func (d basketData) view(person uuid.UUID) basketOut {
 	}
 	open := b.State == "open" || b.State == "closed" || b.State == "placing"
 	out.HolderGone = open && d.members != nil && !slices.Contains(d.members, b.Holder)
+	for _, m := range d.members {
+		out.Members = append(out.Members, basketMemberOut{PersonID: m, Name: d.names[m], You: m == person})
+	}
 	var price func(string) shopPrice
 	if d.shop != nil && open {
 		sh := *d.shop
@@ -580,6 +620,9 @@ func (d basketData) view(person uuid.UUID) basketOut {
 		if d.order != nil {
 			if at := d.order.Shares[x.Key.String()]; at != nil {
 				sh.Paid, sh.PaidAt = true, at
+			}
+			if at := d.order.Refunds[x.Key.String()]; at != nil {
+				sh.RefundDue = true
 			}
 		}
 		bp.Share = sh
@@ -659,14 +702,16 @@ func (s *Server) basketView(ctx context.Context, person, id uuid.UUID) (basketOu
 	}
 	if d.b.State == "open" || d.b.State == "closed" || d.b.State == "placing" {
 		err := db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
-			shop, err := basketShopTx(ctx, tx, d.b)
+			shop, err := basketShopTx(ctx, tx, d.b, "look")
 			if err == nil {
 				d.shop = &shop
 			}
 			return err
 		})
-		if errors.Is(err, errDoorNone) {
-			// The business no longer shows itself: the basket as kept.
+		if errors.Is(err, errDoorNone) || errors.Is(err, errDoorBlocked) {
+			// The business no longer shows itself, or blocked the person:
+			// the basket as kept, without its shop (adding to it and
+			// paying through the door are refused on their own).
 			err = nil
 		}
 		if err != nil {
@@ -834,7 +879,7 @@ func (s *Server) basketShop(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 			var err error
-			shop, err = basketShopTx(ctx, tx, b)
+			shop, err = basketShopTx(ctx, tx, b, "look")
 			return err
 		})
 	}
@@ -1013,7 +1058,7 @@ func (s *Server) putMyBasketLines(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		err = db.InPersonTx(ctx, s.Store.Pool, person, func(tx pgx.Tx) error {
 			var err error
-			shop, err = basketShopTx(ctx, tx, d.b)
+			shop, err = basketShopTx(ctx, tx, d.b, "shop")
 			return err
 		})
 	}
@@ -1181,10 +1226,13 @@ func (s *Server) handBasket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.basketWrite(w, r, func(tx pgx.Tx, person uuid.UUID, d basketData) error {
-		if err := d.b.changeable(); err != nil {
+		gone := d.members != nil && !slices.Contains(d.members, d.b.Holder)
+		// A basket stuck placing whose holder is gone is taken over, and
+		// goes back to closed (its holder never finished placing it).
+		takeStuck := d.b.stuck() && gone && in.PersonID == person
+		if err := d.b.changeable(); err != nil && !takeStuck {
 			return err
 		}
-		gone := d.members != nil && !slices.Contains(d.members, d.b.Holder)
 		switch {
 		case d.b.Holder == person:
 		case gone && in.PersonID == person:
@@ -1193,6 +1241,10 @@ func (s *Server) handBasket(w http.ResponseWriter, r *http.Request) {
 		}
 		if d.members == nil || !slices.Contains(d.members, in.PersonID) {
 			return customerSendErr{http.StatusConflict, "Hand it to someone in the group or the chat now."}
+		}
+		if takeStuck {
+			_, err := tx.Exec(r.Context(), `UPDATE people_baskets SET holder_id = $2, state = 'closed' WHERE id = $1`, d.b.ID, in.PersonID)
+			return err
 		}
 		_, err := tx.Exec(r.Context(), `UPDATE people_baskets SET holder_id = $2 WHERE id = $1`, d.b.ID, in.PersonID)
 		return err

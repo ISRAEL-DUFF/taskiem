@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"errors"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,7 +22,6 @@ import (
 
 const (
 	basketFollowEvery = 5 * time.Second
-	basketFollowDays  = 14
 	basketFollowMax   = 20
 )
 
@@ -33,16 +31,20 @@ type basketLive struct {
 	seen     map[liveSeen]struct{}
 	sent     map[uuid.UUID]string
 	followAt time.Time
+	// movedSince: placed baskets whose order moved after this are read
+	// again (taskiem_baskets_moved).
+	movedSince time.Time
 }
 
 func newBasketLive(since time.Time) *basketLive {
-	return &basketLive{win: liveWindow{since}, seen: map[liveSeen]struct{}{}, sent: map[uuid.UUID]string{}}
+	return &basketLive{win: liveWindow{since}, seen: map[liveSeen]struct{}{}, sent: map[uuid.UUID]string{}, movedSince: since}
 }
 
 // idsTx are the baskets to look at again, read in the person's own
-// transaction (row-level security: only those they reach).
+// transaction by their memberships (taskiem_baskets_changed: only those
+// they reach, without asking of every basket changed on the platform).
 func (bl *basketLive) idsTx(ctx context.Context, tx pgx.Tx) ([]uuid.UUID, bool, error) {
-	rows, err := tx.Query(ctx, `SELECT id, changed_at FROM people_baskets WHERE changed_at > $1 ORDER BY changed_at, id LIMIT `+strconv.Itoa(liveBatch), bl.win.since)
+	rows, err := tx.Query(ctx, `SELECT id, changed_at FROM taskiem_baskets_changed($1, $2)`, bl.win.since, liveBatch)
 	if err != nil {
 		return nil, false, err
 	}
@@ -75,9 +77,15 @@ func (bl *basketLive) idsTx(ctx context.Context, tx pgx.Tx) ([]uuid.UUID, bool, 
 		}
 	}
 	if time.Since(bl.followAt) >= basketFollowEvery {
-		bl.followAt = time.Now()
-		rows, err := tx.Query(ctx, `SELECT id FROM people_baskets WHERE state = 'placed' AND placed_at > now() - make_interval(days => $1)
-			ORDER BY placed_at DESC LIMIT $2`, basketFollowDays, basketFollowMax)
+		// Only placed baskets whose order moved since the last look (a
+		// second's overlap: what was sent is compared before sending).
+		var now time.Time
+		if err := tx.QueryRow(ctx, `SELECT now()`).Scan(&now); err != nil {
+			return nil, false, err
+		}
+		since := bl.movedSince.Add(-time.Second)
+		bl.followAt, bl.movedSince = time.Now(), now
+		rows, err := tx.Query(ctx, `SELECT id FROM taskiem_baskets_moved($1, $2)`, since, basketFollowMax)
 		if err != nil {
 			return nil, false, err
 		}

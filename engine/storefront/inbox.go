@@ -68,6 +68,11 @@ type Submission struct {
 	// (taskiem-for-everyone §8.4, Channel "app"): an order is then of the
 	// kind app, and either is linked to them.
 	PersonID string `json:"person_id,omitempty"`
+	// InShares: an order placed together in the app with "each pays their
+	// share" (people-chatting 5b C2): paid only by its shares' own links
+	// (ShareLink), never by a full-price page of its own, and waiting
+	// ShareTTL for them.
+	InShares bool `json:"in_shares,omitempty"`
 }
 
 // Booked is the slot a booking holds: Until is the end plus the service's

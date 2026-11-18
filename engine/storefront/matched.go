@@ -202,6 +202,11 @@ func (o *Orders) payOrder(ctx context.Context, tx pgx.Tx, tenant uuid.UUID, c *C
 	if !ord.Matchable() {
 		return nil, fmt.Errorf("%w: %s is not waiting for a payment (%s)", ErrDecision, ord.Reference, strings.ReplaceAll(ord.Status, "_", " "))
 	}
+	// An order paid in shares never takes more than is left: money over it
+	// is the payer's, to be sent back.
+	if ord.PaidInShares && ord.PaidKobo+p.AmountKobo > ord.Payable() {
+		return nil, fmt.Errorf("%w: %s has %s left to pay", ErrDecision, ord.Reference, FormatNaira(max(ord.Payable()-ord.PaidKobo, 0)))
+	}
 	// Less than the deposit or the total: a part, counted; the order waits
 	// for the rest.
 	if ord.PaidKobo+p.AmountKobo < ord.Payable() {

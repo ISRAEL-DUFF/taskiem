@@ -208,7 +208,7 @@ func (o *Orders) OwnerCancel(ctx context.Context, tenant uuid.UUID, reference, a
 			return err
 		}
 		next := "cancelled"
-		if ord.PaidAt != nil {
+		if ord.PaidAt != nil || ord.PaidKobo > 0 {
 			next = "refund_due"
 		}
 		if _, err := tx.Exec(ctx, `UPDATE storefront_orders SET status = $3, decided_by = COALESCE(decided_by, $4), updated_at = now() WHERE tenant_id = $1 AND id = $2`,

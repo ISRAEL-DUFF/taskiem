@@ -299,6 +299,32 @@ func (m *Matcher) exact(ctx context.Context, tenant uuid.UUID, e entry) (bool, e
 		case !errors.Is(err, storefront.ErrNoOrder):
 			return true, err
 		}
+		// Exact: the reference is a share's own checkout page (an order
+		// placed together, each paying their share): counted towards its
+		// order once, whichever of this and the payment check is first; a
+		// share its order cannot take is refund due, and a person decides.
+		var link uuid.UUID
+		err = db.InTenantTx(ctx, m.Invoices.Pool, []uuid.UUID{tenant}, func(tx pgx.Tx) error {
+			var err error
+			link, err = storefront.ForShare(ctx, tx, tenant, e.Channel, e.Reference)
+			return err
+		})
+		switch {
+		case err == nil:
+			if e.AmountKobo <= 0 {
+				return true, m.mark(ctx, tenant, e.ID, "unmatched")
+			}
+			counted, err := m.Orders.CountShare(ctx, tenant, link, e.ID, e.AmountKobo, func(tx pgx.Tx) error { return matched(ctx, tx, tenant, e.ID, m.now()) })
+			if err != nil && !errors.Is(err, storefront.ErrNoOrder) {
+				return true, err
+			}
+			if !counted {
+				return true, m.mark(ctx, tenant, e.ID, "unmatched")
+			}
+			return true, nil
+		case !errors.Is(err, storefront.ErrNoOrder):
+			return true, err
+		}
 	}
 	return false, nil
 }
